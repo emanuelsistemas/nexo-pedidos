@@ -24,7 +24,52 @@ const UserProfileFooter: React.FC = () => {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      window.close();
+      
+      // Como window.close() não funciona em navegadores modernos por questões de segurança,
+      // vamos usar outras abordagens:
+      
+      // 1. Substituir todo o conteúdo da página e redirecionar para a tela de login
+      document.body.innerHTML = '';
+      document.body.style.margin = '0';
+      document.body.style.padding = '0';
+      document.body.style.background = '#0a0a0c';
+      
+      // 2. Adicionar uma mensagem temporária
+      const messageDiv = document.createElement('div');
+      messageDiv.style.position = 'fixed';
+      messageDiv.style.top = '50%';
+      messageDiv.style.left = '50%';
+      messageDiv.style.transform = 'translate(-50%, -50%)';
+      messageDiv.style.color = 'white';
+      messageDiv.style.fontFamily = 'sans-serif';
+      messageDiv.style.textAlign = 'center';
+      messageDiv.innerHTML = `
+        <h2>Logout realizado com sucesso</h2>
+        <p>Redirecionando para a tela de login...</p>
+      `;
+      document.body.appendChild(messageDiv);
+      
+      // 3. Redirecionar para a página de login de forma mais robusta
+      setTimeout(() => {
+        try {
+          // Tenta usar o navigate do React Router
+          navigate('/entrar', { replace: true });
+          
+          // Como método alternativo, caso o navigate falhe
+          setTimeout(() => {
+            // Verifica se ainda estamos na mesma página
+            if (document.body.innerHTML.includes('Logout realizado')) {
+              // Redirecionamento direto via window.location
+              window.location.href = '/';
+            }
+          }, 500);
+        } catch (error) {
+          console.error('Erro ao redirecionar:', error);
+          // Redirecionamento alternativo caso o navigate falhe
+          window.location.href = '/';
+        }
+      }, 1000);
+      
     } catch (error) {
       console.error('Error logging out:', error);
     }

@@ -88,7 +88,7 @@ const tiposPagamento = [
 
 const ConfiguracoesPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios'>('usuarios');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -331,10 +331,84 @@ const ConfiguracoesPage: React.FC = () => {
 
   const handleTaxaModeChange = async (mode: 'bairro' | 'distancia') => {
     try {
+      // Obter usuário autenticado e empresa_id
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        showMessage('error', 'Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showMessage('error', 'Empresa não encontrada');
+        return;
+      }
+      
+      // Verificar se existem taxas cadastradas no sistema atual
+      const { data: taxasData, error: taxasError } = await supabase
+        .from('taxa_entrega')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id);
+        
+      if (taxasError) throw taxasError;
+      
+      // Se existirem taxas, não permitir a alteração do modo
+      if (taxasData && taxasData.length > 0) {
+        showMessage('error', 
+          `Não é possível alterar o modo de taxa de entrega porque existem ${taxasData.length} taxa(s) cadastrada(s). ` +
+          `Remova todas as taxas de entrega existentes antes de alterar o modo.`);
+        
+        // Não atualiza o estado local, já que a alteração não será permitida
+        return;
+      }
+      
+      // Atualiza o estado local somente após confirmar que não há taxas cadastradas
       setTaxaMode(mode);
+
+      // Verificar se já existe configuração para esta empresa
+      const { data: configData } = await supabase
+        .from('configuracoes')
+        .select('id, taxa_modo')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      let error;
+
+      // Atualizar ou inserir configuração
+      if (configData) {
+        // Se o modo atual for igual ao solicitado, não faz nada
+        if (configData.taxa_modo === mode) {
+          console.log(`Modo de taxa já está configurado como ${mode}`);
+          return;
+        }
+        
+        // Atualizar configuração existente
+        ({ error } = await supabase
+          .from('configuracoes')
+          .update({ taxa_modo: mode })
+          .eq('id', configData.id));
+      } else {
+        // Inserir nova configuração
+        ({ error } = await supabase
+          .from('configuracoes')
+          .insert([{ 
+            empresa_id: usuarioData.empresa_id,
+            taxa_modo: mode 
+          }]));
+      }
+
+      if (error) throw error;
+      
+      console.log(`Modo de taxa de entrega atualizado para: ${mode}`);
       showMessage('success', 'Modo de taxa de entrega atualizado com sucesso!');
     } catch (error: any) {
-      showMessage('error', 'Erro ao atualizar modo de taxa de entrega');
+      console.error('Erro ao atualizar modo de taxa:', error);
+      showMessage('error', `Erro ao atualizar modo de taxa de entrega: ${error.message}`);
     }
   };
 

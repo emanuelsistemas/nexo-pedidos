@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import Input from '../comum/Input';
 import Button from '../comum/Button';
 import { supabase } from '../../lib/supabase';
+import VerificacaoHumano from '../comum/VerificacaoHumano';
 
 const FormEntrar: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +12,17 @@ const FormEntrar: React.FC = () => {
   const [senha, setSenha] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [mostrarVerificacao, setMostrarVerificacao] = useState(false);
+  const [humanoVerificado, setHumanoVerificado] = useState(false);
+  
+  // Mostra a verificação após um curto delay quando a página carrega
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMostrarVerificacao(true);
+    }, 800);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,25 +37,50 @@ const FormEntrar: React.FC = () => {
 
       if (signInError) throw signInError;
 
-      // Open dashboard in a new window with kiosk mode
-      const features = [
-        'fullscreen=yes',
-        'kiosk=yes',
-        'width=' + window.screen.width,
-        'height=' + window.screen.height,
-        'top=0',
-        'left=0'
-      ].join(',');
-
-      const dashboardWindow = window.open('/dashboard', '_blank', features);
-      
-      if (dashboardWindow) {
-        // Focus the new window
-        dashboardWindow.focus();
-        // Close the current window after successful login
-        window.close();
+      if (humanoVerificado) {
+        // Em vez de tentar fechar a janela, vamos substituir o conteúdo da janela atual
+        // com um iframe que carrega o dashboard em tela cheia
+        
+        // Limpa todo o conteúdo do body
+        document.body.innerHTML = '';
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        document.body.style.overflow = 'hidden';
+        
+        // Cria um iframe que ocupa toda a tela
+        const iframe = document.createElement('iframe');
+        iframe.src = '/dashboard';
+        iframe.style.position = 'fixed';
+        iframe.style.top = '0';
+        iframe.style.left = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.style.margin = '0';
+        iframe.style.padding = '0';
+        iframe.style.overflow = 'hidden';
+        
+        // Configura modo de tela cheia
+        iframe.setAttribute('allowfullscreen', 'true');
+        iframe.onload = () => {
+          // Tenta ativar modo de tela cheia
+          try {
+            const requestFullscreen = iframe.requestFullscreen || 
+                                      (iframe as any).mozRequestFullScreen || 
+                                      (iframe as any).webkitRequestFullscreen || 
+                                      (iframe as any).msRequestFullscreen;
+            if (requestFullscreen) {
+              requestFullscreen.call(iframe);
+            }
+          } catch (e) {
+            console.error('Erro ao tentar ativar modo tela cheia:', e);
+          }
+        };
+        
+        // Adiciona o iframe ao body
+        document.body.appendChild(iframe);
       } else {
-        // Fallback if popup is blocked
+        // Se o usuário não verificou que é humano, usamos o método normal
         navigate('/dashboard', { replace: true });
       }
     } catch (err: any) {
@@ -53,8 +90,18 @@ const FormEntrar: React.FC = () => {
     }
   };
 
+  // Função chamada quando o usuário completa a verificação
+  const handleVerificacaoConcluida = () => {
+    setHumanoVerificado(true);
+    setMostrarVerificacao(false);
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <>
+      {mostrarVerificacao && (
+        <VerificacaoHumano onVerify={handleVerificacaoConcluida} />
+      )}
+      <form onSubmit={handleSubmit} className="space-y-6">
       <Input
         id="email"
         type="email"
@@ -107,6 +154,7 @@ const FormEntrar: React.FC = () => {
         </p>
       </div>
     </form>
+    </>
   );
 };
 
