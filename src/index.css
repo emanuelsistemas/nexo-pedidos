@@ -1,0 +1,95 @@
+@import '@fontsource/museomoderno/400.css';
+@import '@fontsource/museomoderno/700.css';
+@import 'react-toastify/dist/ReactToastify.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --primary: 214 100% 60%;
+  --primary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --accent: 12 90% 55%;
+  --accent-foreground: 0 0% 98%;
+  --ring: 240 4.9% 83.9%;
+}
+
+body {
+  @apply bg-[#0a0a0c] text-gray-100 font-sans;
+  min-height: 100vh;
+}
+
+.font-logo {
+  font-family: 'MuseoModerno', sans-serif;
+}
+
+.floating-label {
+  @apply absolute left-3 top-3 text-gray-400 pointer-events-none transition-all duration-300 transform origin-left;
+  background: linear-gradient(180deg, transparent 50%, #121218 50%);
+  padding: 0 4px;
+  margin-left: -4px;
+}
+
+.form-input:focus ~ .floating-label,
+.form-input:not(:placeholder-shown) ~ .floating-label {
+  @apply -translate-y-6 -translate-x-2 scale-75 text-primary-500;
+}
+
+.form-input {
+  @apply w-full bg-[#121218] border border-gray-700 rounded-lg py-3 px-3 text-white 
+    focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 
+    transition-all duration-300;
+}
+
+.primary-button {
+  @apply w-full bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg py-3 px-4 
+    transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-opacity-50;
+}
+
+.text-button {
+  @apply text-primary-400 hover:text-primary-300 font-medium transition-all duration-300;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease forwards;
+}
+
+.logo-highlight {
+  @apply text-accent-500 font-bold;
+}
+
+.form-container {
+  @apply bg-[#13131a] p-8 rounded-xl shadow-2xl w-full max-w-md;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* Custom Toast Styles */
+.Toastify__toast {
+  @apply bg-background-card text-white border border-gray-800 !important;
+}
+
+.Toastify__progress-bar {
+  @apply bg-primary-500 !important;
+}
+
+.Toastify__close-button {
+  @apply text-gray-400 hover:text-white !important;
+}
+
+.Toastify__toast-icon {
+  @apply text-primary-400 !important;
+}
