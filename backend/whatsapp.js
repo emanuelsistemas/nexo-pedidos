@@ -10,9 +10,8 @@ if (!fs.existsSync(sessionDir)) {
   fs.mkdirSync(sessionDir, { recursive: true });
 }
 
-// Arrays para armazenar callbacks para eventos
+// Array para armazenar callbacks para o evento QR
 let qrCallbacks = [];
-let statusCallbacks = [];
 
 // Cliente WhatsApp
 const client = new Client({
@@ -34,58 +33,35 @@ let connectionInfo = null;
 // Eventos do cliente
 client.on('qr', (qr) => {
   qrCode = qr;
-  connectionState = 'qr';
   console.log('QR Code recebido, escaneie para autenticar:');
   qrcode.generate(qr, { small: true });
   
-  // Notificar todos os callbacks registrados sobre o QR
+  // Notificar todos os callbacks registrados
   qrCallbacks.forEach(callback => callback(qr));
-  
-  // Notificar todos os callbacks registrados sobre a mudança de estado
-  const stateData = { type: 'status', data: getStatus() };
-  statusCallbacks.forEach(callback => callback(stateData));
-});
-
-client.on('loading_screen', (percent, message) => {
-  console.log(`Carregando WhatsApp: ${percent}% - ${message}`);
-  connectionState = 'loading';
 });
 
 client.on('ready', () => {
   console.log('Cliente WhatsApp conectado e pronto!');
   connectionState = 'connected';
-  qrCode = null;
-  
-  // Notificar todos os callbacks registrados sobre a mudança de estado
-  const stateData = { type: 'status', data: getStatus() };
-  statusCallbacks.forEach(callback => callback(stateData));
+  // Limpar explicitamente o QR code e notificar os clientes
+  qrCode = "";
+  // Notificar todos os callbacks registrados com QR vazio (sinal de conexão)
+  qrCallbacks.forEach(callback => callback(""));
 });
 
 client.on('authenticated', () => {
   console.log('Autenticado com sucesso no WhatsApp!');
   connectionState = 'authenticated';
-  
-  // Notificar todos os callbacks registrados sobre a mudança de estado
-  const stateData = { type: 'status', data: getStatus() };
-  statusCallbacks.forEach(callback => callback(stateData));
 });
 
 client.on('auth_failure', (error) => {
   console.error('Falha na autenticação do WhatsApp:', error);
   connectionState = 'auth_failure';
-  
-  // Notificar todos os callbacks registrados sobre a mudança de estado
-  const stateData = { type: 'status', data: getStatus() };
-  statusCallbacks.forEach(callback => callback(stateData));
 });
 
 client.on('disconnected', (reason) => {
   console.log('Cliente WhatsApp desconectado:', reason);
   connectionState = 'disconnected';
-  
-  // Notificar todos os callbacks registrados sobre a mudança de estado
-  const stateData = { type: 'status', data: getStatus() };
-  statusCallbacks.forEach(callback => callback(stateData));
   
   // Tentar reconectar após um tempo
   setTimeout(() => {
@@ -97,8 +73,12 @@ client.on('disconnected', (reason) => {
 // Inicializar o cliente
 const initialize = () => {
   connectionState = 'initializing';
+  // Inicialmente definir como null, não como string vazia
   qrCode = null;
   client.initialize();
+  
+  // Notificar sobre o status de inicialização
+  qrCallbacks.forEach(callback => callback(null));
 };
 
 // Função para reinicializar completamente o cliente
@@ -167,49 +147,6 @@ const onQR = (callback) => {
   };
 };
 
-// Função para obter informações detalhadas do telefone conectado ao WhatsApp
-const getPhoneInfo = async () => {
-  if (!client || connectionState !== 'connected') {
-    return { error: 'Cliente WhatsApp não está conectado' };
-  }
-
-  try {
-    // Obter informações do cliente
-    const info = await client.getState();
-    
-    // Obter informações mais detalhadas do dispositivo
-    const phoneInfo = {
-      number: client.info?.wid?.user || 'desconhecido', // Número de telefone
-      platform: client.info?.platform || 'desconhecido', // Plataforma
-      device: client.info?.phone?.device_manufacturer || 'desconhecido', // Dispositivo
-      wa_version: client.info?.phone?.wa_version || 'desconhecido', // Versão do WhatsApp
-      connected: client.info?.phone?.connected || false, // Status de conexão
-      battery: client.info?.battery || 'desconhecido', // Nível de bateria
-      sessionId: client.info?.me?.id?.user || null, // ID da sessão
-      state: info || 'desconhecido' // Estado atual
-    };
-    
-    return phoneInfo;
-  } catch (error) {
-    console.error('Erro ao obter informações do telefone:', error);
-    return { error: 'Erro ao obter informações do telefone' };
-  }
-};
-
-// Registrar callback para receber atualizações de status
-const onStatus = (callback) => {
-  statusCallbacks.push(callback);
-  
-  // Notificar imediatamente com o status atual
-  const stateData = { type: 'status', data: getStatus() };
-  callback(stateData);
-  
-  // Retornar função para remover callback
-  return () => {
-    statusCallbacks = statusCallbacks.filter(cb => cb !== callback);
-  };
-};
-
 // Obter status atual
 const getStatus = () => {
   return {
@@ -235,11 +172,8 @@ const setConnection = (connectionData) => {
 module.exports = {
   client,
   initialize,
-  reinitialize,
   sendMessage,
   onQR,
-  onStatus,
   getStatus,
-  getPhoneInfo,
   setConnection
 };

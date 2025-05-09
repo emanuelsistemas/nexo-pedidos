@@ -22,211 +22,72 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
   const [status, setStatus] = useState<'loading' | 'ready' | 'connected' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const eventSourceRef = useRef<EventSource | null>(null);
-  const statusUpdatedRef = useRef<boolean>(false);
-
-  // Efeito para fechar automaticamente o modal após conexão bem-sucedida
-  useEffect(() => {
-    if (status === 'connected') {
-      // Aguardar 1.5 segundos antes de fechar o modal para mostrar a animação do check
-      const timer = setTimeout(() => {
-        onConnect();
-        setTimeout(() => {
-          onClose();
-        }, 500);
-      }, 1500);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [status, onConnect, onClose]);
-
-  // Verificador de status a cada 1 segundo
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    // Reset o status quando o modal é aberto
-    statusUpdatedRef.current = false;
-    
-    // Verificar status inicial
-    checkStatus();
-    
-    // Configurar intervalo para verificar status a cada 1 segundo
-    const statusInterval = setInterval(() => {
-      checkStatus();
-    }, 1000);
-    
-    return () => {
-      clearInterval(statusInterval);
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (isOpen) {
-      // Inicializar conexão com eventos SSE
-      const source = new EventSource('http://localhost:3000/api/events');
-      // Salvar referência para poder fechar a conexão depois
-      eventSourceRef.current = source;
-
-      source.onopen = () => {
-        console.log('Conexão SSE estabelecida');
-      };
-
-      source.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('Evento recebido:', data);
-          
-          if (data.type === 'qr' && data.data) {
-            setQrCode(data.data);
-            setStatus('ready');
-          } else if (data.type === 'status' && data.data) {
-            if (data.data.state === 'connected') {
-              setStatus('connected');
-              // Quando conectado, atualizar status da conexão no backend
-              updateConnectionStatus();
-            } else if (data.data.state === 'auth_failure') {
-              setStatus('error');
-              setErrorMessage('Falha na autenticação do WhatsApp');
-            }
-          }
-        } catch (error) {
-          console.error('Erro ao processar evento:', error);
-        }
-      };
-
-      source.onerror = (error) => {
-        console.error('Erro na conexão SSE:', error);
-        setStatus('error');
-        setErrorMessage('Erro na conexão com o servidor WhatsApp');
-      };
-
-      // Verificar status inicial
-      checkStatus();
-
-      return () => {
-        // Limpar evento SSE ao fechar o modal
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
-        }
-      };
-    }
-  }, [isOpen, connectionId]);
-
-  const checkStatus = async () => {
-    try {
-      console.log('Verificando status da conexão...');
-      const response = await fetch('http://localhost:3000/api/status');
-      const data = await response.json();
-      
-      console.log('Status recebido:', data.whatsapp.state);
-      
-      // Detectar quando a conexão foi estabelecida
-      if (data.whatsapp.state === 'connected' || data.whatsapp.state === 'authenticated') {
-        console.log('WhatsApp conectado!');
-        if (status !== 'connected' && !statusUpdatedRef.current) {
-          setStatus('connected');
-          // Marcar que o status já foi atualizado para evitar múltiplas chamadas
-          statusUpdatedRef.current = true;
-          // Atualizar o status da conexão apenas uma vez
-          updateConnectionStatus();
-        }
-      } 
-      // Verificar o status de QR code apenas se ainda não estiver conectado
-      else if (status !== 'connected') {
-        if (data.whatsapp.hasQR && data.whatsapp.qrCode) {
-          // Se o servidor já tem o QR code, usar diretamente
-          setQrCode(data.whatsapp.qrCode);
-          setStatus('ready');
-        } else if (data.whatsapp.hasQR) {
-          // Se já existe um QR code disponível, solicitar ao backend
-          const qrResponse = await fetch('http://localhost:3000/api/qrcode');
-          const qrData = await qrResponse.json();
-          if (qrData.qrCode) {
-            setQrCode(qrData.qrCode);
-            setStatus('ready');
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao verificar status:', error);
-      setStatus('error');
-      setErrorMessage('Não foi possível se comunicar com o servidor WhatsApp');
-    }
-  };
-
+  const connectionNotifiedRef = useRef<boolean>(false);
+  
+  // Função para atualizar status no banco de dados quando conectado
   const updateConnectionStatus = async () => {
+    if (connectionNotifiedRef.current) {
+      console.log('Conexão já notificada, ignorando notificação duplicada');
+      return;
+    }
+    
+    console.log('Atualizando status da conexão para conectado');
     try {
-      // Obter o status atual do servidor WhatsApp com detalhes completos
-      const statusResponse = await fetch('http://localhost:3000/api/status?details=true');
-      const statusData = await statusResponse.json();
+      // Marcar que já notificamos, antes mesmo de fazer a requisição
+      // para evitar chamadas duplicadas devido a corridas
+      connectionNotifiedRef.current = true;
       
-      // Obter informações detalhadas do WhatsApp se disponível
-      let phoneInfo = {};
-      if (statusData.whatsapp.state === 'connected' || statusData.whatsapp.state === 'authenticated') {
-        try {
-          // Tentar obter informações adicionais do telefone
-          const phoneInfoResponse = await fetch('http://localhost:3000/api/phone-info');
-          if (phoneInfoResponse.ok) {
-            const phoneData = await phoneInfoResponse.json();
-            phoneInfo = {
-              phone_number: phoneData.number,
-              platform: phoneData.platform,
-              device_model: phoneData.device,
-              whatsapp_version: phoneData.wa_version
-            };
-            console.log('Informações do telefone obtidas:', phoneInfo);
-          }
-        } catch (phoneError) {
-          // Não bloquear o fluxo se não conseguir obter informações do telefone
-          console.warn('Não foi possível obter informações do telefone:', phoneError);
-        }
-      }
-      
-      // Preparar os dados para atualizar no banco com informações completas
-      const connectionData = {
-        connectionId,
-        status: 'connected',
-        lastConnection: new Date().toISOString(),
-        // Status de conexão
-        conectado: true,
-        ultima_verificacao: new Date().toISOString(),
-        // Se houver um ID de sessão disponível, salvá-lo
-        id_sessao: statusData.whatsapp.sessionId || statusData.whatsapp.clientId || null,
-        // Adicionar informações do telefone se disponíveis
-        ...phoneInfo
-      };
-      
-      console.log('Atualizando status da conexão com dados completos:', connectionData);
-      
-      // Chamada para API que atualizará o status no Supabase
       const response = await fetch(`http://localhost:3000/api/updateConnection`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(connectionData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectionId,
+          status: 'connected',
+          lastConnection: new Date().toISOString(),
+        }),
       });
 
       if (response.ok) {
-        const responseData = await response.json();
-        console.log('Conexão atualizada com sucesso:', responseData);
-        onConnect(); // Notificar o componente pai sobre a conexão
+        console.log('Status atualizado com sucesso no banco de dados');
+        // Notificar componente pai sobre a conexão
+        onConnect();
+        
+        // Fechar o modal após exibir o sucesso por um curto período
+        setTimeout(() => {
+          console.log('Fechando modal após conexão bem-sucedida');
+          onClose();
+        }, 1500);
       }
     } catch (error) {
       console.error('Erro ao atualizar status da conexão:', error);
     }
   };
 
+  // Reiniciar o cliente WhatsApp
   const handleReload = () => {
     setStatus('loading');
     setErrorMessage('');
     setQrCode(null);
     
-    // Realizar reinicialização completa do cliente WhatsApp
     fetch('http://localhost:3000/api/reinitialize', { method: 'POST' })
       .then(() => {
-        // Aguardar um pouco mais para a reinicialização completa ocorrer
-        setTimeout(checkStatus, 3000);
+        // Apenas verificamos o status uma vez após reinicialização
+        setTimeout(() => {
+          fetch('http://localhost:3000/api/status')
+            .then(res => res.json())
+            .then(data => {
+              if (data.whatsapp.hasQR) {
+                fetch('http://localhost:3000/api/qrcode')
+                  .then(res => res.json())
+                  .then(qrData => {
+                    if (qrData.qrCode) {
+                      setQrCode(qrData.qrCode);
+                      setStatus('ready');
+                    }
+                  });
+              }
+            });
+        }, 2000);
       })
       .catch((error) => {
         console.error('Erro ao reinicializar cliente:', error);
@@ -234,6 +95,92 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
         setErrorMessage('Não foi possível reinicializar o cliente WhatsApp');
       });
   };
+
+  // Configurar o EventSource quando o modal é aberto
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    // Resetar estado quando abrimos o modal
+    setStatus('loading');
+    setQrCode(null);
+    setErrorMessage('');
+    connectionNotifiedRef.current = false;
+    
+    // Verificar status inicial
+    fetch('http://localhost:3000/api/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.whatsapp.state === 'connected') {
+          setStatus('connected');
+          updateConnectionStatus();
+        } else if (data.whatsapp.hasQR) {
+          fetch('http://localhost:3000/api/qrcode')
+            .then(res => res.json())
+            .then(qrData => {
+              if (qrData.qrCode) {
+                setQrCode(qrData.qrCode);
+                setStatus('ready');
+              }
+            });
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao verificar status inicial:', error);
+        setStatus('error');
+        setErrorMessage('Não foi possível se comunicar com o servidor WhatsApp');
+      });
+    
+    // Configurar EventSource para atualizações em tempo real
+    const source = new EventSource('http://localhost:3000/api/events');
+    eventSourceRef.current = source;
+    
+    // Tratar mensagens recebidas
+    source.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'qr') {
+          // QR vazio ou null significa que o WhatsApp conectou
+          if (data.data === "" || data.data === null) {
+            console.log('QR code vazio detectado, indicando conexão bem-sucedida');
+            setStatus('connected');
+            updateConnectionStatus();
+          }
+          // QR code válido para ser exibido
+          else if (data.data) {
+            setQrCode(data.data);
+            setStatus('ready');
+          }
+        } 
+        else if (data.type === 'status' && data.data) {
+          if (data.data.state === 'connected') {
+            console.log('Status conectado recebido');
+            setStatus('connected');
+            updateConnectionStatus();
+          } 
+          else if (data.data.state === 'auth_failure') {
+            setStatus('error');
+            setErrorMessage('Falha na autenticação do WhatsApp');
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao processar evento:', error);
+      }
+    };
+    
+    source.onerror = () => {
+      setStatus('error');
+      setErrorMessage('Erro na conexão com o servidor WhatsApp');
+    };
+    
+    // Limpar recursos quando o modal é fechado
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, [isOpen, connectionId]);
 
   return (
     <AnimatePresence>
