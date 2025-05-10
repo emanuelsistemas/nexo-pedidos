@@ -10,12 +10,8 @@ interface Connection {
   id: string;
   nome: string;
   status: 'connected' | 'disconnected' | 'pending';
-  lastConnection: string;
+  last_connection: string;
   empresa_id?: string;
-  conectado?: boolean;
-  ultima_verificacao?: string;
-  id_sessao?: string;
-  created_at?: string;
 }
 
 const ConexaoPage: React.FC = () => {
@@ -48,16 +44,7 @@ const ConexaoPage: React.FC = () => {
         .select('*')
         .eq('empresa_id', usuarioData.empresa_id);
 
-      // Verifica o status real das conexões com base no campo conectado
-      const mappedConnections = conexoesData?.map(conn => ({
-        ...conn,
-        status: conn.conectado ? 'connected' : 'disconnected'
-      })) || [];
-      
-      setConnections(mappedConnections);
-      
-      // Verificar o status atual no servidor WhatsApp
-      checkWhatsAppStatus();
+      setConnections(conexoesData || []);
     } catch (error: any) {
       console.error('Error loading connections:', error);
       showMessage('error', 'Erro ao carregar conexões');
@@ -102,29 +89,54 @@ const ConexaoPage: React.FC = () => {
   };
 
   const handleConnect = (connection: Connection) => {
+    console.log('handleConnect chamado para conexão:', connection);
     setSelectedConnection(connection);
     setShowQrModal(true);
   };
 
+  // Flag para controlar se já mostramos a mensagem de sucesso
+  const [connectionNotified, setConnectionNotified] = useState(false);
+
   const handleConnectionSuccess = async () => {
+    console.log('handleConnectionSuccess chamado');
+    // Verificar se já mostramos a notificação para evitar duplicação
+    if (connectionNotified) {
+      console.log('Notificação já mostrada, retornando');
+      return;
+    }
+    
+    // Marcar que já notificamos para evitar chamadas repetidas
+    setConnectionNotified(true);
+    console.log('connectionNotified atualizado para true');
+    
     // Atualizar imediatamente o status visual da conexão selecionada
     if (selectedConnection) {
+      console.log('Atualizando status visual da conexão:', selectedConnection.id);
       setConnections(prev => prev.map(conn => {
         if (conn.id === selectedConnection.id) {
           return {
             ...conn,
             status: 'connected',
-            lastConnection: new Date().toISOString()
+            last_connection: new Date().toISOString()
           };
         }
         return conn;
       }));
     }
     
+    // Mostrar mensagem apenas uma vez
     showMessage('success', 'WhatsApp conectado com sucesso!');
     
     // Recarregar os dados do servidor para sincronizar com o banco de dados
-    setTimeout(() => loadConnections(), 500);
+    console.log('Iniciando recarga de conexões');
+    setTimeout(() => {
+      loadConnections();
+      // Resetar a flag após completar o processo
+      setTimeout(() => {
+        setConnectionNotified(false);
+        console.log('connectionNotified resetado para false');
+      }, 1000);
+    }, 500);
   };
 
   const handleRemoveConnection = async (connectionId: string) => {
@@ -145,88 +157,6 @@ const ConexaoPage: React.FC = () => {
     }
   };
 
-  // Função para verificar o status do servidor WhatsApp
-  const checkWhatsAppStatus = async () => {
-    try {
-      // Verificar se o servidor está online
-      const response = await fetch('http://localhost:3000/api/status');
-      const data = await response.json();
-      
-      if (data.whatsapp.state === 'connected' || data.whatsapp.state === 'authenticated') {
-        console.log('WhatsApp conectado no servidor. Sincronizando com banco de dados...');
-        
-        // Se o WhatsApp está conectado mas nenhuma conexão está marcada como ativa no banco,
-        // atualizar a última conexão marcada como ativa
-        const activeConn = connections.find(conn => conn.conectado === true);
-        
-        if (!activeConn && connections.length > 0) {
-          // Obter a conexão criada mais recentemente
-          const sortedConnections = [...connections].sort((a, b) => {
-            // Sort by creation date if available, otherwise by lastConnection
-            if (a.created_at && b.created_at) {
-              return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-            } else if (a.lastConnection && b.lastConnection) {
-              return new Date(b.lastConnection).getTime() - new Date(a.lastConnection).getTime();
-            }
-            return 0;
-          });
-          
-          if (sortedConnections.length > 0) {
-            const lastConn = sortedConnections[0];
-            console.log('Atualizando conexão mais recente como ativa:', lastConn.nome);
-            
-            // Atualizar a conexão no banco como ativa
-            const response = await fetch(`http://localhost:3000/api/updateConnection`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                connectionId: lastConn.id,
-                status: 'connected',
-                lastConnection: new Date().toISOString(),
-                conectado: true,
-                ultima_verificacao: new Date().toISOString()
-              }),
-            });
-            
-            if (response.ok) {
-              // Recarregar conexões após sincronização
-              loadConnections();
-            }
-          }
-        }
-      } else {
-        console.log('WhatsApp não está conectado no servidor. Status:', data.whatsapp.state);
-        
-        // Se o WhatsApp não está conectado, atualizar todas as conexões para desconectado
-        const activeConns = connections.filter(conn => conn.conectado === true);
-        
-        if (activeConns.length > 0) {
-          for (const conn of activeConns) {
-            await fetch(`http://localhost:3000/api/updateConnection`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                connectionId: conn.id,
-                status: 'disconnected',
-                conectado: false,
-                ultima_verificacao: new Date().toISOString()
-              }),
-            });
-          }
-          
-          // Recarregar conexões após sincronização
-          loadConnections();
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao verificar status do WhatsApp:', error);
-    }
-  };
-  
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -274,7 +204,7 @@ const ConexaoPage: React.FC = () => {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h3 className="text-lg font-medium text-white">{connection.nome}</h3>
-                  <p className="text-sm text-gray-400">Última conexão: {connection.lastConnection}</p>
+                  <p className="text-sm text-gray-400">Última conexão: {connection.last_connection}</p>
                 </div>
                 <div className={`px-3 py-1 rounded-full text-sm ${
                   connection.status === 'connected' 
@@ -383,7 +313,10 @@ const ConexaoPage: React.FC = () => {
       {selectedConnection && (
         <QRCodeModal 
           isOpen={showQrModal}
-          onClose={() => setShowQrModal(false)}
+          onClose={() => {
+            console.log('QRCodeModal onClose chamado');
+            setShowQrModal(false);
+          }}
           connectionId={selectedConnection.id}
           connectionName={selectedConnection.nome}
           onConnect={handleConnectionSuccess}
