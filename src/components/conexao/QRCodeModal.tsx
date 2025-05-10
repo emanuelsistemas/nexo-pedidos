@@ -150,7 +150,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
             // Atualizar status no banco de dados
             updateConnectionStatus();
             
-            // Fechar o modal imediatamente após conexão bem-sucedida
+            // Fechar o modal diretamente, como no whaticket-community
             onClose();
           }
           // QR code válido para ser exibido
