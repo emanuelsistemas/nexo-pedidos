@@ -3,6 +3,8 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+// Se Node < 18, descomente a linha abaixo após instalar node-fetch: npm install node-fetch@2
+// const fetch = require('node-fetch'); 
 
 // Variável para referência ao cliente Supabase
 let supabaseClient = null;
@@ -29,6 +31,66 @@ let client;
 let moduleConnectionState = 'disconnected';
 let currentQRCode = null;
 let currentConnectionId = null;
+
+// Função para chamar a API do LLM
+async function getAIResponse(userMessage, systemContentForAI, currentConvId) {
+  const apiToken = process.env.LLM_API_TOKEN;
+
+  if (!apiToken) {
+    console.error(`[${currentConvId || 'AI'}] LLM_API_TOKEN não configurado.`);
+    return "Desculpe, estou com problemas para acessar minha inteligência artificial no momento. Por favor, tente mais tarde.";
+  }
+
+  const apiUrl = 'https://api.llmapi.com/chat/completions';
+  const payload = {
+    model: "llama3-8b",
+    messages: [
+      {
+        role: "system",
+        content: systemContentForAI
+      },
+      {
+        role: "user",
+        content: userMessage
+      }
+      // TODO: Considerar adicionar histórico da conversa para melhor contexto
+    ],
+    // stream: false, // Definir como true se quiser lidar com streaming de resposta
+    // temperature: 0.7, // Ajustar conforme necessidade
+    // max_tokens: 1000, // Ajustar conforme necessidade
+  };
+
+  try {
+    console.log(`[${currentConvId || 'AI'}] Enviando para LLM API. User: "${userMessage.substring(0,50)}..."`);
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'accept': '*/*', // API pode ser flexível aqui, Curl usa '/'
+        'Authorization': `Bearer ${apiToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`[${currentConvId || 'AI'}] LLM API Error ${response.status}:`, errorBody);
+      return `Desculpe, encontrei um problema ao tentar gerar uma resposta (${response.status}). Tente novamente ou contate o suporte.`;
+    }
+
+    const data = await response.json();
+    if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
+      console.log(`[${currentConvId || 'AI'}] Resposta da LLM API recebida.`);
+      return data.choices[0].message.content.trim();
+    } else {
+      console.error("[${currentConvId || 'AI'}] Resposta inesperada da LLM API:", JSON.stringify(data, null, 2));
+      return "Não consegui gerar uma resposta no momento. Tente de novo.";
+    }
+  } catch (error) {
+    console.error(`[${currentConvId || 'AI'}] Exceção ao chamar LLM API:`, error);
+    return "Ocorreu um erro de comunicação com a inteligência artificial. Por favor, tente novamente.";
+  }
+}
 
 // Função para criar e configurar um novo cliente
 function createAndConfigureClient() {
@@ -99,6 +161,47 @@ function createAndConfigureClient() {
     moduleConnectionState = 'error';
     currentQRCode = null;
     // Atualizar DB e notificar frontend sobre o erro.
+  });
+
+  newClient.on('message', async msg => {
+    const chat = await msg.getChat();
+    // Ignorar mensagens de grupo e mensagens do próprio bot (se aplicável, baseado no ID)
+    if (chat.isGroup || msg.fromMe) return;
+
+    const userMessage = msg.body;
+    const from = msg.from; // Número do usuário (ex: 55119XXXXXXXX@c.us)
+    const connectionIdForAI = currentConnectionId; // Usar o ID da conexão atual do whatsapp.js
+
+    console.log(`[${connectionIdForAI || 'MSG'}] Mensagem recebida de ${from}: "${userMessage}"`);
+
+    // Obter o prompt do sistema. No futuro, isso pode vir do DB por empresa.
+    // Para agora, usaremos a variável de ambiente.
+    const systemPrompt = process.env.LLM_SYSTEM_PROMPT || "Você é um assistente virtual. Responda de forma concisa.";
+
+    if (!userMessage || userMessage.trim() === '/') return; // Ignorar comandos ou mensagens vazias (exemplo)
+
+    try {
+      // Sinalizar que o bot está "digitando" (opcional, mas bom para UX)
+      if (typeof client !== 'undefined' && client && typeof client.sendPresenceAvailable === 'function') {
+        chat.sendStateTyping();
+      }
+
+      const aiResponseMessage = await getAIResponse(userMessage, systemPrompt, connectionIdForAI);
+      
+      if (aiResponseMessage) {
+        console.log(`[${connectionIdForAI || 'MSG'}] Enviando resposta da IA para ${from}: "${aiResponseMessage.substring(0,50)}..."`);
+        newClient.sendMessage(from, aiResponseMessage); // Usar newClient aqui, pois estamos dentro do escopo de createAndConfigureClient
+      }
+      
+      // Limpar o estado de "digitando"
+       if (typeof client !== 'undefined' && client && typeof client.sendPresenceAvailable === 'function') {
+        chat.clearState();
+      }
+    } catch (error) {
+      // Erro já logado em getAIResponse, aqui apenas enviamos uma mensagem genérica
+      console.error(`[${connectionIdForAI || 'MSG'}] Erro final ao processar mensagem com IA para ${from}:`, error);
+      newClient.sendMessage(from, "Desculpe, não consegui processar sua solicitação no momento. Tente novamente.");
+    }
   });
 
   return newClient;
