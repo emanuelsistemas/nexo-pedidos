@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const { 
-  client, 
   initialize, 
   reinitialize, 
   sendMessage, 
@@ -10,8 +9,7 @@ const {
   setConnection, 
   setSupabaseClient,
   updateConnectionInDatabase,
-  logout,
-  forceNewQR
+  logout
 } = require('./whatsapp');
 const config = require('./config');
 const { createClient } = require('@supabase/supabase-js');
@@ -123,27 +121,21 @@ app.post('/api/reinitialize', async (req, res) => {
     
     if (connectionId) {
       console.log(`API /api/reinitialize chamada para connectionId: ${connectionId}`);
-      // Definir a conexão ATUAL no módulo whatsapp para que reinitialize saiba para quem é
       await setConnection({ id: connectionId }); 
     } else {
-      // Se não houver connectionId, a reinicialização será genérica (pode ser o caso de um erro inicial do sistema)
       console.log('API /api/reinitialize chamada sem connectionId específico.');
-      // O módulo whatsapp usará currentConnectionId = null se não foi setado
     }
 
-    // Em vez de fazer logout completo e reinicializar tudo,
-    // usamos nossa nova função que apenas regenera o QR code
-    // para essa conexão específica
-    const result = await forceNewQR();
+    // CHAMAR reinitialize() DIRETAMENTE
+    const result = await reinitialize();
     res.json(result);
     
-    // Notificar todos os clientes conectados que estamos esperando um novo QR
     const data = JSON.stringify({ 
       type: 'reload', 
       data: { 
         timestamp: Date.now(),
         connectionId,
-        message: 'Aguardando novo QR code'
+        message: 'Sessão reinicializada, aguardando novo QR code'
       } 
     });
     
@@ -151,39 +143,10 @@ app.post('/api/reinitialize', async (req, res) => {
       client.res.write(`data: ${data}\n\n`);
     });
   } catch (error) {
-    console.error('Erro ao solicitar novo QR code:', error);
+    console.error('Erro ao solicitar reinicialização da sessão:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message || 'Erro ao solicitar novo QR code' 
-    });
-  }
-});
-
-// Endpoint adicional específico para forçar novo QR code
-app.post('/api/force-new-qr', async (req, res) => {
-  try {
-    const { connectionId } = req.body;
-    
-    if (!connectionId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'ID da conexão é obrigatório para forçar novo QR code' 
-      });
-    }
-    
-    console.log(`API /api/force-new-qr chamada para connectionId: ${connectionId}`);
-    
-    // Definir a conexão atual
-    await setConnection({ id: connectionId });
-    
-    // Forçar novo QR code
-    const result = await forceNewQR();
-    res.json(result);
-  } catch (error) {
-    console.error('Erro ao forçar novo QR code:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Erro ao forçar novo QR code' 
+      error: error.message || 'Erro ao solicitar reinicialização da sessão' 
     });
   }
 });

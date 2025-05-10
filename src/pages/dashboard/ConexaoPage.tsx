@@ -139,7 +139,7 @@ const ConexaoPage: React.FC = () => {
       setTimeout(() => {
         setConnectionNotified(false);
         console.log('ConexaoPage: connectionNotified resetado para false após delay.');
-      }, 1000); 
+      }, 1000);
     }, 500);
   };
 

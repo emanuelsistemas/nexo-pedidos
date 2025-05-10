@@ -110,7 +110,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
     setQrCode(null);
     setErrorMessage('');
     connectionNotifiedRef.current = false;
-
+    
     const triggerReinitialize = () => {
       console.log(`[QRCodeModal] Disparando reinicialização para connectionId: ${connectionId}`);
       setStatus('loading'); 
@@ -146,12 +146,12 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
         if (backendStatus.connectionId === connectionId) {
           if (backendStatus.state === 'connected') {
             console.log('[QRCodeModal] Conexão já estabelecida para este ID. Notificando sucesso.');
-            setStatus('connected');
+          setStatus('connected');
             if (!connectionNotifiedRef.current) updateConnectionStatus();
           } else if ((backendStatus.state === 'pending_qr' || backendStatus.state === 'initializing') && backendStatus.hasQR && backendStatus.qrCode) {
             console.log('[QRCodeModal] Backend tem QR Code para este ID. Exibindo.');
             setQrCode(backendStatus.qrCode);
-            setStatus('ready');
+                setStatus('ready');
           } else {
             console.log(`[QRCodeModal] Estado inicial (${backendStatus.state}) não ideal ou sem QR para ${connectionId}. Forçando reinicialização.`);
             triggerReinitialize();
@@ -172,37 +172,37 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
     // Configurar EventSource somente se não existir um
     if (!eventSourceRef.current) {
         console.log('[QRCodeModal] Configurando novo EventSource...');
-        const source = new EventSource('http://localhost:3000/api/events');
-        eventSourceRef.current = source;
-
+    const source = new EventSource('http://localhost:3000/api/events');
+    eventSourceRef.current = source;
+    
         source.onopen = () => {
             console.log('[QRCodeModal] EventSource conectado.');
         };
     
-        source.onmessage = (event) => {
-          try {
+    source.onmessage = (event) => {
+      try {
             const eventData = JSON.parse(event.data);
-            
+        
             if (eventData.type === 'qr') {
               if (status !== 'connected') { 
                 if (eventData.data === "" || eventData.data === null) {
                   console.log('[QRCodeModal] Evento QR vazio/null recebido. Tratando como conectado.');
-                  setStatus('connected');
+            setStatus('connected');
                   if (!connectionNotifiedRef.current) {
-                    updateConnectionStatus();
-                  }
+            updateConnectionStatus();
+          }
                 } else if (eventData.data) {
                   console.log('[QRCodeModal] QR code válido recebido via SSE. Exibindo.');
                   setQrCode(eventData.data);
-                  setStatus('ready');
-                }
-              }
+            setStatus('ready');
+          }
+        } 
             } 
             else if (eventData.type === 'status' && eventData.data) {
               if (eventData.data.connectionId === connectionId) {
                 if (eventData.data.state === 'connected' && status !== 'connected') {
                   console.log(`[QRCodeModal] Evento de status 'connected' para ${connectionId}.`);
-                  setStatus('connected');
+            setStatus('connected');
                   if (!connectionNotifiedRef.current) updateConnectionStatus();
                 } else if (eventData.data.state === 'auth_failure') {
                   console.log(`[QRCodeModal] Evento de status 'auth_failure' para ${connectionId}.`);
@@ -224,17 +224,17 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
                   setStatus('loading');
                   setQrCode(null);
                 }
-              }
-            }
-          } catch (error) {
-            console.error('[QRCodeModal] Erro ao processar evento SSE:', error);
           }
-        };
-        
+        }
+      } catch (error) {
+            console.error('[QRCodeModal] Erro ao processar evento SSE:', error);
+      }
+    };
+    
         source.onerror = (err) => {
           console.error('[QRCodeModal] EventSource error:', err);
           if (status !== 'connected') {
-            setStatus('error');
+      setStatus('error');
             setErrorMessage('Erro na conexão com o servidor de eventos (SSE).');
           }
           // Fechar e limpar o EventSource em caso de erro para tentar recriar se o modal reabrir
@@ -267,146 +267,146 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
               className="w-full max-w-xs bg-background-card border border-gray-800 rounded-lg shadow-xl z-50"
               style={{ margin: '0 auto' }}
-            >
+          >
               <div className="p-3">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-base font-semibold text-white">
                     Conectar: {connectionName}
-                  </h2>
-                  <button
-                    onClick={onClose}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
+                </h2>
+                <button
+                  onClick={onClose}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
                     <X size={16} />
-                  </button>
-                </div>
+                </button>
+              </div>
 
                 <div className="space-y-3">
-                  {status === 'loading' && (
+                {status === 'loading' && (
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-10 h-10 border-3 border-gray-600 border-t-primary-500 rounded-full animate-spin mb-2" />
                       <p className="text-xs text-gray-300">Carregando QR Code...</p>
-                    </div>
-                  )}
+                  </div>
+                )}
 
-                  {status === 'ready' && qrCode && (
+                {status === 'ready' && qrCode && (
                     <div className="flex flex-col items-center justify-center py-1">
                       <div className="bg-white p-1 rounded-lg">
                         <QRCodeSVG value={qrCode} size={150} />
-                      </div>
+                    </div>
                       <div className="mt-2 text-center">
                         <p className="text-xs text-gray-300 mb-1">Escaneie o QR Code</p>
                         <p className="text-xs text-gray-400">
                           Abra o WhatsApp e selecione WhatsApp Web
-                        </p>
-                      </div>
+                      </p>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {status === 'connected' && (
-                    <motion.div 
+                {status === 'connected' && (
+                  <motion.div 
                       className="flex flex-col items-center justify-center py-4"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <motion.div 
                         className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mb-2"
-                        initial={{ scale: 0.5 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: 'spring', damping: 10, stiffness: 200 }}
-                      >
-                        <motion.svg 
+                      initial={{ scale: 0.5 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', damping: 10, stiffness: 200 }}
+                    >
+                      <motion.svg 
                           className="w-6 h-6 text-green-500" 
-                          fill="none" 
-                          viewBox="0 0 24 24" 
-                          stroke="currentColor"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1 }}
-                          transition={{ duration: 0.5, delay: 0.2 }}
-                        >
-                          <motion.path 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round" 
-                            strokeWidth={3} 
-                            d="M5 13l4 4L19 7" 
-                          />
-                        </motion.svg>
-                      </motion.div>
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: 1 }}
+                        transition={{ duration: 0.5, delay: 0.2 }}
+                      >
+                        <motion.path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          strokeWidth={3} 
+                          d="M5 13l4 4L19 7" 
+                        />
+                      </motion.svg>
+                    </motion.div>
                       <h3 className="text-sm font-medium text-white mb-1">Conectado com sucesso!</h3>
                       <p className="text-xs text-gray-400 text-center">
                         WhatsApp pronto para uso.
-                      </p>
-                    </motion.div>
-                  )}
+                    </p>
+                  </motion.div>
+                )}
 
-                  {status === 'error' && (
+                {status === 'error' && (
                     <div className="flex flex-col items-center justify-center py-4">
                       <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mb-2">
                         <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </div>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
                       <h3 className="text-sm font-medium text-white mb-1">Erro na conexão</h3>
                       <p className="text-xs text-gray-400 text-center mb-2">
                         {errorMessage || 'Não foi possível conectar ao WhatsApp'}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="primary"
+                    </p>
+                    <Button
+                      type="button"
+                      variant="primary"
                         className="flex items-center gap-1 text-xs py-1 px-2"
-                        onClick={handleReload}
-                      >
+                      onClick={handleReload}
+                    >
                         <RefreshCw size={12} />
-                        Tentar novamente
-                      </Button>
-                    </div>
-                  )}
+                      Tentar novamente
+                    </Button>
+                  </div>
+                )}
 
-                  {(status === 'ready' || status === 'loading') && (
+                {(status === 'ready' || status === 'loading') && (
                     <div className="flex justify-end gap-2 pt-2 border-t border-gray-800">
-                      <Button
-                        type="button"
-                        variant="text"
-                        onClick={onClose}
+                    <Button
+                      type="button"
+                      variant="text"
+                      onClick={onClose}
                         className="text-xs py-1 px-2"
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="primary"
-                        disabled={status === 'loading'}
-                        onClick={handleReload}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={status === 'loading'}
+                      onClick={handleReload}
                         className="flex items-center gap-1 text-xs py-1 px-2"
-                      >
+                    >
                         <RefreshCw size={12} />
                         Recarregar
-                      </Button>
-                    </div>
-                  )}
+                    </Button>
+                  </div>
+                )}
 
-                  {status === 'connected' && (
+                {status === 'connected' && (
                     <div className="flex justify-end pt-2 border-t border-gray-800">
-                      <Button
-                        type="button"
-                        variant="primary"
-                        onClick={onClose}
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={onClose}
                         className="text-xs py-1 px-2"
-                      >
-                        Fechar
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                    >
+                      Fechar
+                    </Button>
+                  </div>
+                )}
               </div>
+            </div>
             </motion.div>
           </motion.div>
         </>

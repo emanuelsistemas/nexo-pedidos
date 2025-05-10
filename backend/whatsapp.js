@@ -53,11 +53,7 @@ async function getAIResponse(userMessage, systemContentForAI, currentConvId) {
         role: "user",
         content: userMessage
       }
-      // TODO: Considerar adicionar histórico da conversa para melhor contexto
     ],
-    // stream: false, // Definir como true se quiser lidar com streaming de resposta
-    // temperature: 0.7, // Ajustar conforme necessidade
-    // max_tokens: 1000, // Ajustar conforme necessidade
   };
 
   try {
@@ -65,7 +61,7 @@ async function getAIResponse(userMessage, systemContentForAI, currentConvId) {
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'accept': '*/*', // API pode ser flexível aqui, Curl usa '/'
+        'accept': '*/*',
         'Authorization': `Bearer ${apiToken}`,
         'Content-Type': 'application/json'
       },
@@ -96,13 +92,13 @@ async function getAIResponse(userMessage, systemContentForAI, currentConvId) {
 function createAndConfigureClient() {
   console.log(`[${currentConnectionId || 'GLOBAL'}] Creating new WhatsApp client instance...`);
   const newClient = new Client({
-    authStrategy: new LocalAuth({
+  authStrategy: new LocalAuth({
       dataPath: sessionDir,
       // Se você usar multi-device e quiser sessões totalmente separadas por connectionId:
       // clientId: currentConnectionId 
-    }),
-    puppeteer: {
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  }),
+  puppeteer: {
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
       headless: true,
       // Se ainda houver problemas com AppState, pode ser necessário configurar userDataDir para isolar completamente as instâncias do Chrome
       // userDataDir: path.join(sessionDir, 'puppeteer_data', currentConnectionId || 'default') 
@@ -115,15 +111,64 @@ function createAndConfigureClient() {
     console.log(`[${currentConnectionId || 'GLOBAL'}] QR Code received.`);
     currentQRCode = qr;
     moduleConnectionState = 'pending_qr';
-    qrCallbacks.forEach(callback => callback(qr));
-  });
+  qrCallbacks.forEach(callback => callback(qr));
+});
 
-  newClient.on('ready', () => {
-    console.log(`[${currentConnectionId || 'GLOBAL'}] Client is ready!`);
+  newClient.on('ready', async () => {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Client is ready! WID: ${newClient.info ? newClient.info.wid._serialized : 'N/A'}`);
     moduleConnectionState = 'connected';
-    currentQRCode = ""; // Sinaliza conectado
+    currentQRCode = ""; 
+    
+    const sessionWID = newClient.info && newClient.info.wid ? newClient.info.wid._serialized : null;
+
+    if (sessionWID && supabaseClient) {
+        // Tentar encontrar uma conexão existente pelo WID ou usar currentConnectionId se já estiver definido
+        let connectionToUpdateId = currentConnectionId;
+
+        if (!connectionToUpdateId) {
+            console.log(`[WID:${sessionWID}] currentConnectionId não está definido. Tentando buscar conexão pelo WID.`);
+            try {
+                let { data: conexaoPorWID, error: errWID } = await supabaseClient
+                    .from('conexao')
+                    .select('id')
+                    .eq('whatsapp_id', sessionWID)
+                    // .order('updated_at', { ascending: false }) // Opcional: pegar a mais recente se houver duplicatas
+                    .limit(1)
+                    .single();
+
+                if (errWID && errWID.code !== 'PGRST116') { // PGRST116 = no rows found, o que é ok
+                    console.error(`[WID:${sessionWID}] Erro ao buscar conexão por WID:`, errWID);
+                } else if (conexaoPorWID) {
+                    console.log(`[WID:${sessionWID}] Conexão encontrada pelo WID. ID: ${conexaoPorWID.id}`);
+                    currentConnectionId = conexaoPorWID.id; // Define o currentConnectionId do módulo!
+                    connectionToUpdateId = conexaoPorWID.id;
+                } else {
+                    console.log(`[WID:${sessionWID}] Nenhuma conexão encontrada para este WID. Uma nova será criada/linkada se o usuário conectar via UI.`);
+                    // Se nenhuma conexão for encontrada, não podemos atualizar o DB aqui de forma significativa sem um ID.
+                    // A atualização ocorrerá quando o usuário interagir via UI e currentConnectionId for setado por setConnection.
+                }
+            } catch (e) {
+                console.error(`[WID:${sessionWID}] Exceção ao buscar conexão por WID:`, e);
+            }
+        }
+        
+        // Atualizar o whatsapp_id e outros campos se tivermos um ID de conexão para trabalhar
+        if (connectionToUpdateId) {
+            console.log(`[CONEX:${connectionToUpdateId}] WID da sessão: ${sessionWID}. Atualizando whatsapp_id no banco.`);
+            // Atualiza o whatsapp_id na conexão correspondente, junto com outros status
+            // A função updateConnectionInDatabase usará o currentConnectionId que acabamos de definir (se encontrado).
+            await updateConnectionInDatabase('connected', { whatsapp_id: sessionWID }); 
+        } else {
+            // Se não temos connectionToUpdateId (nem currentConnectionId inicial, nem encontrado por WID)
+            // apenas logamos. A atualização do banco para esta sessão WID específica dependerá
+            // de uma ação do usuário na UI que defina um currentConnectionId.
+            console.log(`[WID:${sessionWID}] Sessão pronta, mas sem currentConnectionId para associar/atualizar no DB imediatamente.`);
+        }
+    } else if (!supabaseClient) {
+      console.warn("Supabase client não disponível, não foi possível buscar/atualizar whatsapp_id na conexão.");
+    }
+
     qrCallbacks.forEach(callback => callback(""));
-    updateConnectionInDatabase();
   });
 
   newClient.on('authenticated', () => {
@@ -165,42 +210,160 @@ function createAndConfigureClient() {
 
   newClient.on('message', async msg => {
     const chat = await msg.getChat();
-    // Ignorar mensagens de grupo e mensagens do próprio bot (se aplicável, baseado no ID)
     if (chat.isGroup || msg.fromMe) return;
 
     const userMessage = msg.body;
-    const from = msg.from; // Número do usuário (ex: 55119XXXXXXXX@c.us)
-    const connectionIdForAI = currentConnectionId; // Usar o ID da conexão atual do whatsapp.js
+    const from = msg.from;
+    const connectionIdForMsgProcessing = currentConnectionId; // ID da tabela 'conexao'
 
-    console.log(`[${connectionIdForAI || 'MSG'}] Mensagem recebida de ${from}: "${userMessage}"`);
+    console.log(`[${connectionIdForMsgProcessing || 'MSG'}] Mensagem recebida de ${from}: "${userMessage}"`);
 
-    // Obter o prompt do sistema. No futuro, isso pode vir do DB por empresa.
-    // Para agora, usaremos a variável de ambiente.
-    const systemPrompt = process.env.LLM_SYSTEM_PROMPT || "Você é um assistente virtual. Responda de forma concisa.";
+    if (!userMessage || userMessage.trim() === '/') return;
 
-    if (!userMessage || userMessage.trim() === '/') return; // Ignorar comandos ou mensagens vazias (exemplo)
+    if (!supabaseClient) {
+      console.error(`[${connectionIdForMsgProcessing || 'MSG'}] Supabase client não disponível. Impossível buscar dados da empresa.`);
+      return newClient.sendMessage(from, "Desculpe, estou com um problema interno para obter informações e não posso processar seu pedido agora.");
+    }
+    
+    let systemPrompt = process.env.LLM_SYSTEM_PROMPT_DEFAULT || "Você é um assistente virtual prestativo."; // Fallback
 
     try {
-      // Sinalizar que o bot está "digitando" (opcional, mas bom para UX)
-      if (typeof client !== 'undefined' && client && typeof client.sendPresenceAvailable === 'function') {
-        chat.sendStateTyping();
+      // 1. Buscar empresa_id da tabela conexao (usa currentConnectionId que é o ID da conexão ativa)
+      let { data: conexaoData, error: conexaoError } = await supabaseClient
+        .from('conexao')
+        .select('empresa_id')
+        .eq('id', connectionIdForMsgProcessing)
+        .single();
+
+      if (conexaoError || !conexaoData || !conexaoData.empresa_id) {
+        console.error(`[${connectionIdForMsgProcessing || 'MSG'}] Erro ao buscar empresa_id:`, conexaoError);
+        return newClient.sendMessage(from, "Não consegui identificar a empresa associada a esta conversa. Por favor, contate o suporte.");
+      }
+      const empresaId = conexaoData.empresa_id;
+      console.log(`[CONEX:${connectionIdForMsgProcessing}] Empresa ID: ${empresaId} associada.`);
+
+      // 2. Buscar dados da empresa
+      let { data: empresaData, error: empresaError } = await supabaseClient
+        .from('empresas')
+        .select('nome_fantasia') // Removido informacoes_adicionais_prompt por enquanto
+        .eq('id', empresaId)
+        .single();
+
+      if (empresaError || !empresaData) {
+        console.error(`[EMP:${empresaId}] Erro ao buscar dados da empresa (nome_fantasia):`, empresaError);
+        return newClient.sendMessage(from, "Não encontrei os dados básicos da empresa para prosseguir."); // Mensagem de erro mais específica
+      }
+      
+      const nomeEmpresa = empresaData.nome_fantasia || "nosso estabelecimento";
+      systemPrompt = `Você é um atendente virtual para ${nomeEmpresa}. `;
+      
+      // Se você decidir adicionar a coluna 'informacoes_adicionais_prompt' no futuro, poderá descomentar esta parte:
+      /*
+      if (empresaData.informacoes_adicionais_prompt) { 
+          systemPrompt += empresaData.informacoes_adicionais_prompt + " ";
+      }
+      */
+
+      // 3. Buscar horário de atendimento
+      let { data: horariosData, error: horariosError } = await supabaseClient
+        .from('horario_atendimento')
+        .select('dia_semana, hora_abertura, hora_fechamento') // Reintroduzindo os campos de hora
+        .eq('empresa_id', empresaId);
+
+      if (horariosError) {
+        console.warn(`[EMP:${empresaId}] Erro ao buscar horários completos:`, horariosError);
+        systemPrompt += "Problema ao carregar horários detalhados. "; 
+      } else if (horariosData && horariosData.length > 0) {
+        let horariosStr = "Nossos horários de atendimento são: ";
+        horariosData.forEach(h => {
+          const dia = h.dia_semana;
+          const abertura = h.hora_abertura; // Formato HH:MM:SS
+          const fechamento = h.hora_fechamento; // Formato HH:MM:SS
+
+          let diaStr = "Dia não especificado";
+          // Mapear número do dia para nome, se necessário (ex: 0 para Domingo, 1 para Segunda...)
+          // Isso depende de como você armazena 'dia_semana' (0-6, 1-7, ou strings)
+          // Por enquanto, vamos apenas usar o número se for um número.
+          if (typeof dia === 'number') {
+            // Exemplo simples, você pode querer um mapeamento mais elaborado
+            const diasDaSemana = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+            diaStr = diasDaSemana[dia] || `Dia ${dia}`;
+          } else if (dia) {
+            diaStr = dia; // Se já for uma string
+          }
+
+          let horarioDia = `${diaStr}: `;
+          if (abertura && fechamento) {
+            // Extrair apenas HH:MM de HH:MM:SS
+            const aberturaSimples = abertura.substring(0, 5);
+            const fechamentoSimples = fechamento.substring(0, 5);
+            horarioDia += `${aberturaSimples} às ${fechamentoSimples}. `;
+          } else if (abertura) {
+            horarioDia += `abre às ${abertura.substring(0, 5)}. `;
+          } else if (fechamento) {
+            horarioDia += `fecha às ${fechamento.substring(0, 5)}. `;
+          } else {
+            horarioDia += "Horário não especificado. ";
+          }
+          horariosStr += horarioDia;
+        });
+        systemPrompt += horariosStr;
+      } else {
+        console.log(`[EMP:${empresaId}] Nenhum horário de atendimento encontrado.`);
+        systemPrompt += "Horário de atendimento não informado. ";
       }
 
-      const aiResponseMessage = await getAIResponse(userMessage, systemPrompt, connectionIdForAI);
+      // 4. Buscar cardápio
+      // Assumindo que 'grupos' tem 'empresa_id' e 'produtos' tem 'grupo_id' e 'empresa_id'
+      // A query abaixo busca grupos e seus produtos associados para a empresa específica
+      let { data: gruposData, error: gruposError } = await supabaseClient
+        .from('grupos')
+        .select(`
+          nome, 
+          produtos (nome, descricao, preco)
+        `)
+        .eq('empresa_id', empresaId);
+        // .order('ordem', { foreignTable: 'grupos' }) // Se tiver campo de ordenação
+        // .order('nome', { foreignTable: 'produtos' });
+
+      if (gruposError) {
+        console.warn(`[EMP:${empresaId}] Erro ao buscar cardápio (grupos/produtos):`, gruposError);
+        systemPrompt += "No momento, não consigo carregar o cardápio completo, mas posso tentar ajudar com itens específicos se você souber o nome.";
+      } else if (gruposData && gruposData.length > 0) {
+        let cardapioText = "\nNosso Cardápio:\n";
+        gruposData.forEach(grupo => {
+          if (grupo.produtos && grupo.produtos.length > 0) {
+            cardapioText += `\n**${grupo.nome}**:\n`;
+            grupo.produtos.forEach(produto => {
+              cardapioText += `- ${produto.nome}`; 
+              if (produto.descricao) cardapioText += ` (${produto.descricao})`;
+              if (produto.preco) cardapioText += ` - R$${parseFloat(produto.preco).toFixed(2)}`;
+              cardapioText += `\n`;
+            });
+          }
+        });
+        systemPrompt += cardapioText;
+      } else {
+        systemPrompt += "\nCardápio não disponível no momento. ";
+      }
+      
+      systemPrompt += "\nGuie o cliente pelo pedido. Seja claro sobre os itens e preços. Ao final, sempre recapitule o pedido completo e peça confirmação antes de finalizar.";
+
+      console.log(`[EMP:${empresaId}] System Prompt Final Gerado (primeiros 300 chars): ${systemPrompt.substring(0, 300)}...`);
+      
+      if (typeof newClient.sendPresenceAvailable === 'function') chat.sendStateTyping();
+      const aiResponseMessage = await getAIResponse(userMessage, systemPrompt, connectionIdForMsgProcessing);
+      if (typeof newClient.sendPresenceAvailable === 'function') chat.clearState();
       
       if (aiResponseMessage) {
-        console.log(`[${connectionIdForAI || 'MSG'}] Enviando resposta da IA para ${from}: "${aiResponseMessage.substring(0,50)}..."`);
-        newClient.sendMessage(from, aiResponseMessage); // Usar newClient aqui, pois estamos dentro do escopo de createAndConfigureClient
+        console.log(`[${connectionIdForMsgProcessing || 'MSG'}] Enviando resposta da IA para ${from}: "${aiResponseMessage.substring(0,50)}..."`);
+        newClient.sendMessage(from, aiResponseMessage);
       }
-      
-      // Limpar o estado de "digitando"
-       if (typeof client !== 'undefined' && client && typeof client.sendPresenceAvailable === 'function') {
-        chat.clearState();
-      }
-    } catch (error) {
-      // Erro já logado em getAIResponse, aqui apenas enviamos uma mensagem genérica
-      console.error(`[${connectionIdForAI || 'MSG'}] Erro final ao processar mensagem com IA para ${from}:`, error);
-      newClient.sendMessage(from, "Desculpe, não consegui processar sua solicitação no momento. Tente novamente.");
+
+    } catch (e) {
+      console.error(`[${connectionIdForMsgProcessing || 'MSG'}] Erro GERAL ao processar mensagem com IA para ${from}:`, e);
+      newClient.sendMessage(from, "Desculpe, tive um problema inesperado ao processar sua solicitação. Tente novamente.");
+       if (typeof newClient.sendPresenceAvailable === 'function') chat.clearState();
     }
   });
 
@@ -211,7 +374,7 @@ function createAndConfigureClient() {
 client = createAndConfigureClient();
 
 // Função para atualizar a conexão no banco de dados
-const updateConnectionInDatabase = async (customStatus) => {
+const updateConnectionInDatabase = async (customStatus, extraFields = {}) => {
   if (!currentConnectionId) {
     console.log('UPDATE_DB: No currentConnectionId. Skipping DB update.');
     return;
@@ -222,19 +385,23 @@ const updateConnectionInDatabase = async (customStatus) => {
   }
   try {
     const statusToUse = customStatus || moduleConnectionState;
-    console.log(`[${currentConnectionId}] UPDATE_DB: Updating connection with status: ${statusToUse}`);
+    const updatePayload = {
+      status: statusToUse,
+      qrcode: currentQRCode || "",
+      retries: 0,
+      last_connection: new Date().toISOString(),
+      battery: await getBatteryInfo(),
+      session: await getSessionData(),
+      updated_at: new Date().toISOString(),
+      ...extraFields // Incorpora campos extras como whatsapp_id
+    };
+    console.log(`[${currentConnectionId}] UPDATE_DB: Payload:`, updatePayload);
+    
     const { error } = await supabaseClient
       .from('conexao')
-      .update({
-        status: statusToUse,
-        qrcode: currentQRCode || "",
-        retries: 0,
-        last_connection: new Date().toISOString(),
-        battery: await getBatteryInfo(),
-        session: await getSessionData(),
-        updated_at: new Date().toISOString()
-      })
+      .update(updatePayload)
       .eq('id', currentConnectionId);
+    
     if (error) {
       console.error(`[${currentConnectionId}] UPDATE_DB: Error:`, error);
     } else {
@@ -249,8 +416,8 @@ const updateConnectionInDatabase = async (customStatus) => {
 async function getBatteryInfo() {
   if (client && client.info && typeof client.info.getBatteryStatus === 'function') {
     try { return JSON.stringify(await client.info.getBatteryStatus()); } catch { /* ignore */ }
-  }
-  return null;
+    }
+    return null;
 }
 
 // Função para obter dados da sessão (quando disponível)
