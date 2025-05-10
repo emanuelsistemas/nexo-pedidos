@@ -4,6 +4,15 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 
+// Variável para referência ao cliente Supabase
+let supabaseClient = null;
+
+// Função para definir o cliente Supabase
+const setSupabaseClient = (dbClient) => {
+  supabaseClient = dbClient;
+  console.log('Cliente Supabase definido no módulo WhatsApp');
+};
+
 // Garantir que o diretório de sessões existe
 const sessionDir = path.resolve(config.whatsapp.sessionDir);
 if (!fs.existsSync(sessionDir)) {
@@ -13,112 +22,239 @@ if (!fs.existsSync(sessionDir)) {
 // Array para armazenar callbacks para o evento QR
 let qrCallbacks = [];
 
-// Cliente WhatsApp
-const client = new Client({
-  authStrategy: new LocalAuth({
-    dataPath: sessionDir
-  }),
-  puppeteer: {
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    headless: true
-  }
-});
+// Variável para o cliente WhatsApp, será recriada
+let client;
 
-// Estado da conexão
-let connectionState = 'disconnected';
-let qrCode = null;
+// Estado do módulo (não diretamente do client.state)
+let moduleConnectionState = 'disconnected';
+let currentQRCode = null;
 let currentConnectionId = null;
-let connectionInfo = null;
 
-// Eventos do cliente
-client.on('qr', (qr) => {
-  qrCode = qr;
-  console.log('QR Code recebido, escaneie para autenticar:');
-  qrcode.generate(qr, { small: true });
-  
-  // Notificar todos os callbacks registrados
-  qrCallbacks.forEach(callback => callback(qr));
-});
+// Função para criar e configurar um novo cliente
+function createAndConfigureClient() {
+  console.log(`[${currentConnectionId || 'GLOBAL'}] Creating new WhatsApp client instance...`);
+  const newClient = new Client({
+    authStrategy: new LocalAuth({
+      dataPath: sessionDir,
+      // Se você usar multi-device e quiser sessões totalmente separadas por connectionId:
+      // clientId: currentConnectionId 
+    }),
+    puppeteer: {
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      headless: true,
+      // Se ainda houver problemas com AppState, pode ser necessário configurar userDataDir para isolar completamente as instâncias do Chrome
+      // userDataDir: path.join(sessionDir, 'puppeteer_data', currentConnectionId || 'default') 
+    },
+    // Parâmetros para tentar evitar o erro AppState em algumas versões
+    // qrMaxRetries: 1, // Tenta gerar QR no máximo 1 vez antes de talvez precisar de um restart do puppeteer
+  });
 
-client.on('ready', () => {
-  console.log('Cliente WhatsApp conectado e pronto!');
-  connectionState = 'connected';
-  // Limpar explicitamente o QR code e notificar os clientes
-  qrCode = "";
-  // Notificar todos os callbacks registrados com QR vazio (sinal de conexão)
-  qrCallbacks.forEach(callback => callback(""));
-});
+  newClient.on('qr', (qr) => {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] QR Code received.`);
+    currentQRCode = qr;
+    moduleConnectionState = 'pending_qr';
+    qrCallbacks.forEach(callback => callback(qr));
+  });
 
-client.on('authenticated', () => {
-  console.log('Autenticado com sucesso no WhatsApp!');
-  connectionState = 'authenticated';
-});
+  newClient.on('ready', () => {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Client is ready!`);
+    moduleConnectionState = 'connected';
+    currentQRCode = ""; // Sinaliza conectado
+    qrCallbacks.forEach(callback => callback(""));
+    updateConnectionInDatabase();
+  });
 
-client.on('auth_failure', (error) => {
-  console.error('Falha na autenticação do WhatsApp:', error);
-  connectionState = 'auth_failure';
-});
+  newClient.on('authenticated', () => {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Client authenticated.`);
+    moduleConnectionState = 'authenticated'; 
+    // Não necessariamente conectado ainda, 'ready' é o evento final.
+  });
 
-client.on('disconnected', (reason) => {
-  console.log('Cliente WhatsApp desconectado:', reason);
-  connectionState = 'disconnected';
-  
-  // Tentar reconectar após um tempo
-  setTimeout(() => {
-    console.log('Tentando reconectar...');
-    client.initialize();
-  }, config.whatsapp.reconnectTimeout);
-});
+  newClient.on('auth_failure', (msg) => {
+    console.error(`[${currentConnectionId || 'GLOBAL'}] Authentication failure: ${msg}`);
+    moduleConnectionState = 'auth_failure';
+    currentQRCode = null;
+    qrCallbacks.forEach(callback => callback(null)); // Notifica frontend que precisa de novo QR
+    updateConnectionInDatabase('auth_failure');
+    // Considerar destruir o cliente aqui se a falha for irrecuperável
+    // client?.destroy().catch(e => console.error('Error destroying client on auth_failure:', e));
+    // client = null;
+  });
 
-// Inicializar o cliente
-const initialize = () => {
-  connectionState = 'initializing';
-  // Inicialmente definir como null, não como string vazia
-  qrCode = null;
-  client.initialize();
-  
-  // Notificar sobre o status de inicialização
-  qrCallbacks.forEach(callback => callback(null));
-};
+  newClient.on('disconnected', (reason) => {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Client disconnected. Reason: ${reason}`);
+    moduleConnectionState = 'disconnected';
+    currentQRCode = null;
+    updateConnectionInDatabase('disconnected');
+    // Não recriar/reinicializar automaticamente aqui. O usuário fará via UI se desejar.
+  });
 
-// Função para reinicializar completamente o cliente
-const reinitialize = async () => {
-  console.log('Reinicializando cliente WhatsApp...');
-  
-  // Tentar desconectar o cliente atual
+  newClient.on('loading_screen', (percent, message) => {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Loading screen: ${percent}% - ${message}`);
+  });
+
+  newClient.on('error', (err) => {
+    console.error(`[${currentConnectionId || 'GLOBAL'}] Client error:`, err);
+    // Este é um erro genérico do cliente, pode ser grave.
+    moduleConnectionState = 'error';
+    currentQRCode = null;
+    // Atualizar DB e notificar frontend sobre o erro.
+  });
+
+  return newClient;
+}
+
+// Inicializa o primeiro cliente
+client = createAndConfigureClient();
+
+// Função para atualizar a conexão no banco de dados
+const updateConnectionInDatabase = async (customStatus) => {
+  if (!currentConnectionId) {
+    console.log('UPDATE_DB: No currentConnectionId. Skipping DB update.');
+    return;
+  }
+  if (!supabaseClient) {
+    console.warn('UPDATE_DB: Supabase client not available. Skipping DB update.');
+    return;
+  }
   try {
-    if (client.pupBrowser) {
-      await client.logout();
-      await client.destroy();
+    const statusToUse = customStatus || moduleConnectionState;
+    console.log(`[${currentConnectionId}] UPDATE_DB: Updating connection with status: ${statusToUse}`);
+    const { error } = await supabaseClient
+      .from('conexao')
+      .update({
+        status: statusToUse,
+        qrcode: currentQRCode || "",
+        retries: 0,
+        last_connection: new Date().toISOString(),
+        battery: await getBatteryInfo(),
+        session: await getSessionData(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', currentConnectionId);
+    if (error) {
+      console.error(`[${currentConnectionId}] UPDATE_DB: Error:`, error);
+    } else {
+      console.log(`[${currentConnectionId}] UPDATE_DB: Success.`);
     }
   } catch (error) {
-    console.error('Erro ao desconectar cliente anterior:', error);
+    console.error(`[${currentConnectionId}] UPDATE_DB: Exception:`, error);
+  }
+};
+
+// Função para obter informações de bateria (quando disponível)
+async function getBatteryInfo() {
+  if (client && client.info && typeof client.info.getBatteryStatus === 'function') {
+    try { return JSON.stringify(await client.info.getBatteryStatus()); } catch { /* ignore */ }
+  }
+  return null;
+}
+
+// Função para obter dados da sessão (quando disponível)
+async function getSessionData() {
+  if (client && client.pupPage) {
+    try { return JSON.stringify({ connected: moduleConnectionState === 'connected' }); } catch { /* ignore */ }
+  }
+  return null;
+}
+
+// Inicializar o cliente
+const initialize = async (isReinitialization = false) => {
+  console.log(`[${currentConnectionId || 'GLOBAL'}] INITIALIZE${isReinitialization ? '_RE' : ''} called.`);
+  if (!client) {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] No existing client. Creating new one.`);
+    client = createAndConfigureClient();
+  } else {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Existing client found.`);
+    // Se for uma reinicialização explícita e o cliente já existe, é melhor destruí-lo primeiro.
+    // No entanto, reinitialize() já deve cuidar disso.
+  }
+
+  moduleConnectionState = 'initializing';
+  currentQRCode = null;
+  
+  console.log(`[${currentConnectionId || 'GLOBAL'}] Calling client.initialize()...`);
+  try {
+    await client.initialize();
+    console.log(`[${currentConnectionId || 'GLOBAL'}] client.initialize() completed.`);
+  } catch (err) {
+    console.error(`[${currentConnectionId || 'GLOBAL'}] Error during client.initialize():`, err);
+    moduleConnectionState = 'error_initializing';
+    currentQRCode = null;
+    qrCallbacks.forEach(callback => callback(null));
+    // Se a inicialização falhar, pode ser necessário destruir o cliente para tentar de novo
+    if (client) {
+        try { await client.destroy(); } catch (e) { console.error('Error destroying client after init failure:', e); }
+        client = null;
+    }
+  }
+};
+
+// Registrar callback para receber QR code
+const onQR = (callback) => {
+  console.log(`[${currentConnectionId || 'GLOBAL'}] Registering QR callback.`);
+  qrCallbacks.push(callback);
+  if (currentQRCode) {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Existing QR code found. Calling callback immediately.`);
+    callback(currentQRCode);
+  }
+  return () => {
+    qrCallbacks = qrCallbacks.filter(cb => cb !== callback);
+  };
+};
+
+// Função para reinicializar completamente o cliente (forçar novo QR)
+const reinitialize = async () => {
+  console.log(`[${currentConnectionId || 'GLOBAL'}] REINITIALIZE called.`);
+  if (client) {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Existing client found. Destroying it...`);
+    try {
+      await client.destroy();
+      console.log(`[${currentConnectionId || 'GLOBAL'}] Previous client destroyed.`);
+    } catch (e) {
+      console.error(`[${currentConnectionId || 'GLOBAL'}] Error destroying previous client:`, e);
+    }
+    client = null; // Garante que a referência seja limpa
   }
   
-  // Resetar o estado
-  connectionState = 'disconnected';
-  qrCode = null;
-  currentConnectionId = null;
-  connectionInfo = null;
-  
-  // Aguardar um momento antes de reinicializar
-  setTimeout(() => {
-    console.log('Inicializando novo cliente...');
-    client.initialize();
-  }, 1000);
-  
+  // Cria e inicializa um novo cliente
+  await initialize(true); // Passa flag para indicar que é uma reinicialização
+  return { success: true }; // Sucesso aqui significa que o processo de reinicialização foi iniciado.
+};
+
+// Função para desconectar/logout do WhatsApp
+const logout = async () => {
+  console.log(`[${currentConnectionId || 'GLOBAL'}] LOGOUT called.`);
+  moduleConnectionState = 'disconnected';
+  currentQRCode = null;
+  await updateConnectionInDatabase('disconnected');
+
+  if (client) {
+    console.log(`[${currentConnectionId || 'GLOBAL'}] Client exists. Attempting logout and destroy...`);
+    try {
+      await client.logout();
+      console.log(`[${currentConnectionId || 'GLOBAL'}] client.logout() successful.`);
+    } catch (e) {
+      console.error(`[${currentConnectionId || 'GLOBAL'}] Error during client.logout():`, e);
+    }
+    try {
+      await client.destroy();
+      console.log(`[${currentConnectionId || 'GLOBAL'}] client.destroy() successful.`);
+    } catch (e) {
+      console.error(`[${currentConnectionId || 'GLOBAL'}] Error during client.destroy():`, e);
+    }
+    client = null; // Limpa a referência
+  }
+  console.log(`[${currentConnectionId || 'GLOBAL'}] Logout process finished.`);
   return { success: true };
 };
 
 // Métodos de interação com o WhatsApp
 const sendMessage = async (to, message) => {
-  if (connectionState !== 'connected') {
-    throw new Error('Cliente WhatsApp não está conectado');
+  if (moduleConnectionState !== 'connected' || !client) {
+    throw new Error('Client not connected or not initialized');
   }
-  
-  // Verificar formato do número e adicionar @c.us se necessário
   const chatId = to.includes('@c.us') ? to : `${to}@c.us`;
-  
   try {
     const response = await client.sendMessage(chatId, message);
     return {
@@ -132,48 +268,38 @@ const sendMessage = async (to, message) => {
   }
 };
 
-// Registrar callback para receber QR code
-const onQR = (callback) => {
-  qrCallbacks.push(callback);
-  
-  // Se já tiver um QR code, notificar imediatamente
-  if (qrCode) {
-    callback(qrCode);
-  }
-  
-  // Retornar função para remover callback
-  return () => {
-    qrCallbacks = qrCallbacks.filter(cb => cb !== callback);
-  };
-};
-
 // Obter status atual
 const getStatus = () => {
   return {
-    state: connectionState,
-    hasQR: qrCode !== null,
-    qrCode: qrCode,
+    state: moduleConnectionState,
+    hasQR: currentQRCode !== null && currentQRCode !== "",
+    qrCode: currentQRCode,
     connectionId: currentConnectionId,
-    connectionInfo
+    // connectionInfo: connectionInfo, // Este não está sendo muito usado/atualizado
+    pupPageExists: client ? !!client.pupPage : false
   };
 };
 
 // Definir conexão atual
-const setConnection = (connectionData) => {
+const setConnection = async (connectionData) => {
+  console.log(`[${connectionData.id}] SET_CONNECTION called.`);
   currentConnectionId = connectionData.id;
-  connectionInfo = connectionData;
-  console.log(`Conexão definida para: ${connectionData.nome} (ID: ${connectionData.id})`);
-  return {
-    success: true,
-    connectionId: currentConnectionId
-  };
+  // Não tentamos mais alinhar o estado do client com o DB aqui, pois é complexo.
+  // O estado do client será atualizado quando initialize/reinitialize/logout for chamado para este ID.
+  // Se o cliente já estiver conectado e este ID for o mesmo, getStatus() refletirá isso.
+  // Se for um ID diferente, o próximo reinitialize para este ID cuidará de criar/usar a sessão correta.
+  return { success: true, connectionId: currentConnectionId };
 };
 
 module.exports = {
-  client,
   initialize,
+  reinitialize,
+  logout,
   sendMessage,
   onQR,
   getStatus,
-  setConnection
+  setConnection,
+  setSupabaseClient,
+  updateConnectionInDatabase
+  // forceNewQR não é mais necessário, reinitialize faz o trabalho
 };

@@ -12,9 +12,11 @@
   "dependencies": {
     "@fontsource/museomoderno": "^5.0.8",
     "@supabase/supabase-js": "^2.39.7",
+    "@types/qrcode.react": "^1.0.5",
     "chart.js": "^4.4.1",
     "framer-motion": "^11.0.5",
     "lucide-react": "^0.331.0",
+    "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",

@@ -1,3 +1,2 @@
-2025/05/09-18:51:35.158 5fe13 Reusing MANIFEST /home/emanuel/Área de Trabalho/projetos/nexo/backend/sessions/session/Default/Service Worker/Database/MANIFEST-000001
-2025/05/09-18:51:35.158 5fe13 Recovering log #3
-2025/05/09-18:51:35.159 5fe13 Reusing old log /home/emanuel/Área de Trabalho/projetos/nexo/backend/sessions/session/Default/Service Worker/Database/000003.log 
+2025/05/10-05:25:19.477 e7c46 Creating DB /home/emanuel/Área de Trabalho/projetos/nexo/backend/sessions/session/Default/Service Worker/Database since it was missing.
+2025/05/10-05:25:19.481 e7c46 Reusing MANIFEST /home/emanuel/Área de Trabalho/projetos/nexo/backend/sessions/session/Default/Service Worker/Database/MANIFEST-000001

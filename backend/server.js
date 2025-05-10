@@ -1,12 +1,33 @@
 const express = require('express');
 const cors = require('cors');
-const { client, initialize, reinitialize, sendMessage, onQR, getStatus, setConnection } = require('./whatsapp');
+const { 
+  client, 
+  initialize, 
+  reinitialize, 
+  sendMessage, 
+  onQR, 
+  getStatus, 
+  setConnection, 
+  setSupabaseClient,
+  updateConnectionInDatabase,
+  logout,
+  forceNewQR
+} = require('./whatsapp');
 const config = require('./config');
 const { createClient } = require('@supabase/supabase-js');
+
+// Carregar variáveis de ambiente do arquivo .env do projeto principal
+require('dotenv').config({ path: '../.env' }); // Ajuste o caminho conforme necessário
 
 // Verificar se as variáveis de ambiente do Supabase estão definidas
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+
+console.log('Checking Supabase environment variables status:', {
+  hasUrl: !!supabaseUrl,
+  hasAnonKey: !!supabaseAnonKey,
+  supabaseUrlPrefix: supabaseUrl.substring(0, 10) + '...',
+});
 
 // Cliente Supabase opcional
 let supabase = null;
@@ -14,6 +35,9 @@ if (supabaseUrl && supabaseAnonKey) {
   try {
     supabase = createClient(supabaseUrl, supabaseAnonKey);
     console.log('Cliente Supabase inicializado com sucesso');
+    
+    // Passar o cliente Supabase para o módulo WhatsApp
+    setSupabaseClient(supabase);
   } catch (error) {
     console.error('Erro ao inicializar cliente Supabase:', error);
   }
@@ -39,21 +63,6 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Endpoint para obter informações detalhadas do telefone conectado
-app.get('/api/phone-info', async (req, res) => {
-  try {
-    const { getPhoneInfo } = require('./whatsapp');
-    const phoneInfo = await getPhoneInfo();
-    if (phoneInfo.error) {
-      return res.status(400).json(phoneInfo);
-    }
-    res.json(phoneInfo);
-  } catch (error) {
-    console.error('Erro ao obter informações do telefone:', error);
-    res.status(500).json({ error: 'Erro ao obter informações do telefone' });
-  }
-});
-
 // Endpoint para obter o QR code atual (caso exista)
 app.get('/api/qrcode', (req, res) => {
   const status = getStatus();
@@ -67,14 +76,7 @@ app.get('/api/qrcode', (req, res) => {
 // Endpoint para atualizar o status da conexão no Supabase
 app.post('/api/updateConnection', async (req, res) => {
   try {
-    const { 
-      connectionId, 
-      status, 
-      lastConnection,
-      conectado,
-      ultima_verificacao,
-      id_sessao 
-    } = req.body;
+    const { connectionId, status, last_connection } = req.body;
     
     if (!connectionId) {
       return res.status(400).json({ success: false, error: 'ID da conexão é obrigatório' });
@@ -89,37 +91,13 @@ app.post('/api/updateConnection', async (req, res) => {
       });
     }
     
-    console.log(`Atualizando conexão ${connectionId} com status ${status}, conectado: ${conectado}`);
+    // Primeiro, definimos a conexão atual para o módulo WhatsApp
+    await setConnection({ id: connectionId });
     
-    // Montar objeto de dados para atualizar
-    const updateData = {
-      status,
-      lastConnection
-    };
+    // Usando a função completa passando o status explicitamente
+    await updateConnectionInDatabase(status);
     
-    // Adicionar campos opcionais se fornecidos
-    if (conectado !== undefined) updateData.conectado = conectado;
-    if (ultima_verificacao) updateData.ultima_verificacao = ultima_verificacao;
-    if (id_sessao) updateData.id_sessao = id_sessao;
-    
-    // Atualizar a conexão no Supabase
-    const { error } = await supabase
-      .from('conexao')
-      .update(updateData)
-      .eq('id', connectionId);
-    
-    if (error) throw error;
-    
-    // Obter os dados atualizados da conexão
-    const { data: connectionData, error: getError } = await supabase
-      .from('conexao')
-      .select('*')
-      .eq('id', connectionId)
-      .single();
-      
-    if (getError) throw getError;
-    
-    res.json({ success: true, connection: connectionData });
+    res.json({ success: true });
   } catch (error) {
     console.error('Erro ao atualizar conexão:', error);
     res.status(500).json({ success: false, error: error.message || 'Erro ao atualizar conexão' });
@@ -141,18 +119,108 @@ app.post('/api/reload', (req, res) => {
 // Endpoint para reinicialização completa do cliente WhatsApp
 app.post('/api/reinitialize', async (req, res) => {
   try {
-    // Reinicialização completa, desconectando sessão atual
-    const result = await reinitialize();
+    const { connectionId } = req.body;
+    
+    if (connectionId) {
+      console.log(`API /api/reinitialize chamada para connectionId: ${connectionId}`);
+      // Definir a conexão ATUAL no módulo whatsapp para que reinitialize saiba para quem é
+      await setConnection({ id: connectionId }); 
+    } else {
+      // Se não houver connectionId, a reinicialização será genérica (pode ser o caso de um erro inicial do sistema)
+      console.log('API /api/reinitialize chamada sem connectionId específico.');
+      // O módulo whatsapp usará currentConnectionId = null se não foi setado
+    }
+
+    // Em vez de fazer logout completo e reinicializar tudo,
+    // usamos nossa nova função que apenas regenera o QR code
+    // para essa conexão específica
+    const result = await forceNewQR();
     res.json(result);
     
-    // Notificar todos os clientes conectados sobre a reinicialização
-    const data = JSON.stringify({ type: 'reload', data: { timestamp: Date.now() } });
+    // Notificar todos os clientes conectados que estamos esperando um novo QR
+    const data = JSON.stringify({ 
+      type: 'reload', 
+      data: { 
+        timestamp: Date.now(),
+        connectionId,
+        message: 'Aguardando novo QR code'
+      } 
+    });
+    
     clients.forEach(client => {
       client.res.write(`data: ${data}\n\n`);
     });
   } catch (error) {
-    console.error('Erro na reinicialização completa:', error);
-    res.status(500).json({ success: false, error: error.message || 'Erro ao reinicializar o cliente WhatsApp' });
+    console.error('Erro ao solicitar novo QR code:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao solicitar novo QR code' 
+    });
+  }
+});
+
+// Endpoint adicional específico para forçar novo QR code
+app.post('/api/force-new-qr', async (req, res) => {
+  try {
+    const { connectionId } = req.body;
+    
+    if (!connectionId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'ID da conexão é obrigatório para forçar novo QR code' 
+      });
+    }
+    
+    console.log(`API /api/force-new-qr chamada para connectionId: ${connectionId}`);
+    
+    // Definir a conexão atual
+    await setConnection({ id: connectionId });
+    
+    // Forçar novo QR code
+    const result = await forceNewQR();
+    res.json(result);
+  } catch (error) {
+    console.error('Erro ao forçar novo QR code:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao forçar novo QR code' 
+    });
+  }
+});
+
+// Endpoint para desconexão do WhatsApp (logout)
+app.post('/api/logout', async (req, res) => {
+  try {
+    const { connectionId } = req.body;
+    
+    // Definir a conexão atual se fornecida
+    if (connectionId) {
+      await setConnection({ id: connectionId });
+    }
+    
+    // Realizar logout
+    const result = await logout();
+    res.json(result);
+    
+    // Notificar todos os clientes conectados sobre a desconexão
+    const data = JSON.stringify({ 
+      type: 'status', 
+      data: { 
+        state: 'disconnected', 
+        timestamp: Date.now(),
+        connectionId
+      } 
+    });
+    
+    clients.forEach(client => {
+      client.res.write(`data: ${data}\n\n`);
+    });
+  } catch (error) {
+    console.error('Erro ao desconectar WhatsApp:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao desconectar o WhatsApp' 
+    });
   }
 });
 

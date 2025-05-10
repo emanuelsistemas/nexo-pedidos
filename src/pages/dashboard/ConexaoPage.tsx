@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, QrCode } from 'lucide-react';
+import { Plus, X, QrCode, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
@@ -98,20 +98,23 @@ const ConexaoPage: React.FC = () => {
   const [connectionNotified, setConnectionNotified] = useState(false);
 
   const handleConnectionSuccess = async () => {
-    console.log('handleConnectionSuccess chamado');
-    // Verificar se já mostramos a notificação para evitar duplicação
+    console.log('ConexaoPage: handleConnectionSuccess chamado');
+    
     if (connectionNotified) {
-      console.log('Notificação já mostrada, retornando');
+      console.log('ConexaoPage: Notificação de conexão já processada anteriormente, retornando.');
+      // Mesmo que já notificado, garantir que o modal seja fechado se ainda estiver aberto.
+      if (showQrModal) {
+        console.log('ConexaoPage: Fechando QRCodeModal pois conexão já foi notificada e modal ainda aberto.');
+        setShowQrModal(false);
+      }
       return;
     }
     
-    // Marcar que já notificamos para evitar chamadas repetidas
     setConnectionNotified(true);
-    console.log('connectionNotified atualizado para true');
+    console.log('ConexaoPage: connectionNotified atualizado para true.');
     
-    // Atualizar imediatamente o status visual da conexão selecionada
     if (selectedConnection) {
-      console.log('Atualizando status visual da conexão:', selectedConnection.id);
+      console.log('ConexaoPage: Atualizando status visual da conexão:', selectedConnection.id);
       setConnections(prev => prev.map(conn => {
         if (conn.id === selectedConnection.id) {
           return {
@@ -124,18 +127,19 @@ const ConexaoPage: React.FC = () => {
       }));
     }
     
-    // Mostrar mensagem apenas uma vez
     showMessage('success', 'WhatsApp conectado com sucesso!');
     
-    // Recarregar os dados do servidor para sincronizar com o banco de dados
-    console.log('Iniciando recarga de conexões');
+    // FECHAR O MODAL APÓS SUCESSO
+    console.log('ConexaoPage: Fechando QRCodeModal após sucesso da conexão.');
+    setShowQrModal(false);
+    
+    console.log('ConexaoPage: Iniciando recarga de conexões do servidor.');
     setTimeout(() => {
       loadConnections();
-      // Resetar a flag após completar o processo
       setTimeout(() => {
         setConnectionNotified(false);
-        console.log('connectionNotified resetado para false');
-      }, 1000);
+        console.log('ConexaoPage: connectionNotified resetado para false após delay.');
+      }, 1000); 
     }, 500);
   };
 
@@ -154,6 +158,44 @@ const ConexaoPage: React.FC = () => {
       loadConnections();
     } catch (error: any) {
       showMessage('error', 'Erro ao remover conexão: ' + error.message);
+    }
+  };
+
+  const handleDisconnect = async (connectionId: string) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ connectionId }),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        // Atualizar imediatamente o status visual da conexão para dar feedback ao usuário
+        setConnections(prev => prev.map(conn => {
+          if (conn.id === connectionId) {
+            return {
+              ...conn,
+              status: 'disconnected',
+              last_connection: new Date().toISOString()
+            };
+          }
+          return conn;
+        }));
+        
+        showMessage('success', 'WhatsApp desconectado com sucesso!');
+        
+        // Recarregar os dados para sincronizar com o banco de dados
+        setTimeout(loadConnections, 500);
+      } else {
+        showMessage('error', result.error || 'Erro ao desconectar WhatsApp');
+      }
+    } catch (error: any) {
+      console.error('Erro ao desconectar WhatsApp:', error);
+      showMessage('error', 'Erro ao desconectar WhatsApp: ' + error.message);
     }
   };
 
@@ -218,7 +260,7 @@ const ConexaoPage: React.FC = () => {
                 </div>
               </div>
               
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="text"
@@ -228,6 +270,17 @@ const ConexaoPage: React.FC = () => {
                   <QrCode size={16} />
                   {connection.status === 'connected' ? 'Reconectar' : 'Conectar'}
                 </Button>
+                {connection.status === 'connected' && (
+                  <Button
+                    type="button"
+                    variant="text"
+                    className="flex-1 flex items-center justify-center gap-2 text-yellow-400 hover:text-yellow-300"
+                    onClick={() => handleDisconnect(connection.id)}
+                  >
+                    <LogOut size={16} />
+                    Desconectar
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="text"

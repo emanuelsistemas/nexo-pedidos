@@ -94,101 +94,168 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
       });
   };
 
-  // Configurar o EventSource quando o modal é aberto
   useEffect(() => {
-    if (!isOpen) return;
-    
-    // Resetar estado quando abrimos o modal
+    if (!isOpen) {
+      // Se o modal não está aberto, garantir que o EventSource seja fechado se existir
+      if (eventSourceRef.current) {
+        console.log('[QRCodeModal] Modal não está aberto, fechando EventSource existente.');
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      return;
+    }
+
+    console.log(`[QRCodeModal] useEffect executado para connectionId: ${connectionId}, isOpen: ${isOpen}`);
     setStatus('loading');
     setQrCode(null);
     setErrorMessage('');
     connectionNotifiedRef.current = false;
+
+    const triggerReinitialize = () => {
+      console.log(`[QRCodeModal] Disparando reinicialização para connectionId: ${connectionId}`);
+      setStatus('loading'); 
+      setQrCode(null);      
+      fetch('http://localhost:3000/api/reinitialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectionId: connectionId })
+      })
+      .then(res => res.json())
+      .then(reinitData => {
+        if (reinitData.success) {
+          console.log('[QRCodeModal] Reinicialização solicitada com sucesso. Aguardando QR Code via SSE...');
+        } else {
+          console.error('[QRCodeModal] Falha ao solicitar reinicialização:', reinitData.error);
+          setStatus('error');
+          setErrorMessage(reinitData.error || 'Falha ao tentar obter QR Code.');
+        }
+      })
+      .catch(err => {
+        console.error('[QRCodeModal] Erro de rede ao solicitar reinicialização:', err);
+        setStatus('error');
+        setErrorMessage('Erro de rede ao tentar obter QR Code.');
+      });
+    };
     
-    // Verificar status inicial
     fetch('http://localhost:3000/api/status')
       .then(res => res.json())
       .then(data => {
-        if (data.whatsapp.state === 'connected') {
-          setStatus('connected');
-          updateConnectionStatus();
-        } else if (data.whatsapp.hasQR) {
-          fetch('http://localhost:3000/api/qrcode')
-            .then(res => res.json())
-            .then(qrData => {
-              if (qrData.qrCode) {
-                setQrCode(qrData.qrCode);
-                setStatus('ready');
-              }
-            });
+        const backendStatus = data.whatsapp;
+        console.log('[QRCodeModal] Status inicial recebido:', backendStatus, 'para connectionId:', connectionId);
+
+        if (backendStatus.connectionId === connectionId) {
+          if (backendStatus.state === 'connected') {
+            console.log('[QRCodeModal] Conexão já estabelecida para este ID. Notificando sucesso.');
+            setStatus('connected');
+            if (!connectionNotifiedRef.current) updateConnectionStatus();
+          } else if ((backendStatus.state === 'pending_qr' || backendStatus.state === 'initializing') && backendStatus.hasQR && backendStatus.qrCode) {
+            console.log('[QRCodeModal] Backend tem QR Code para este ID. Exibindo.');
+            setQrCode(backendStatus.qrCode);
+            setStatus('ready');
+          } else {
+            console.log(`[QRCodeModal] Estado inicial (${backendStatus.state}) não ideal ou sem QR para ${connectionId}. Forçando reinicialização.`);
+            triggerReinitialize();
+          }
+        } else {
+            // Se o connectionId do backend não bate, OU se o backend está focado em NENHUMA conexão (connectionId: null)
+            // E este modal foi aberto para uma connectionId específica, então precisamos reinicializar PARA ESTA connectionId.
+            console.log(`[QRCodeModal] Backend focado em outra conexão (${backendStatus.connectionId}) ou nenhuma. Forçando reinicialização para ${connectionId}.`);
+            triggerReinitialize();
         }
       })
       .catch(error => {
-        console.error('Erro ao verificar status inicial:', error);
-        setStatus('error');
-        setErrorMessage('Não foi possível se comunicar com o servidor WhatsApp');
+        console.error('[QRCodeModal] Erro ao verificar status inicial. Forçando reinicialização:', error);
+        setErrorMessage('Não foi possível verificar o status inicial. Tentando obter QR Code...');
+        triggerReinitialize();
       });
     
-    // Configurar EventSource para atualizações em tempo real
-    const source = new EventSource('http://localhost:3000/api/events');
-    eventSourceRef.current = source;
+    // Configurar EventSource somente se não existir um
+    if (!eventSourceRef.current) {
+        console.log('[QRCodeModal] Configurando novo EventSource...');
+        const source = new EventSource('http://localhost:3000/api/events');
+        eventSourceRef.current = source;
+
+        source.onopen = () => {
+            console.log('[QRCodeModal] EventSource conectado.');
+        };
     
-    // Tratar mensagens recebidas
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('Evento recebido:', data);
+        source.onmessage = (event) => {
+          try {
+            const eventData = JSON.parse(event.data);
+            
+            if (eventData.type === 'qr') {
+              if (status !== 'connected') { 
+                if (eventData.data === "" || eventData.data === null) {
+                  console.log('[QRCodeModal] Evento QR vazio/null recebido. Tratando como conectado.');
+                  setStatus('connected');
+                  if (!connectionNotifiedRef.current) {
+                    updateConnectionStatus();
+                  }
+                } else if (eventData.data) {
+                  console.log('[QRCodeModal] QR code válido recebido via SSE. Exibindo.');
+                  setQrCode(eventData.data);
+                  setStatus('ready');
+                }
+              }
+            } 
+            else if (eventData.type === 'status' && eventData.data) {
+              if (eventData.data.connectionId === connectionId) {
+                if (eventData.data.state === 'connected' && status !== 'connected') {
+                  console.log(`[QRCodeModal] Evento de status 'connected' para ${connectionId}.`);
+                  setStatus('connected');
+                  if (!connectionNotifiedRef.current) updateConnectionStatus();
+                } else if (eventData.data.state === 'auth_failure') {
+                  console.log(`[QRCodeModal] Evento de status 'auth_failure' para ${connectionId}.`);
+                  setStatus('error');
+                  setErrorMessage('Falha na autenticação do WhatsApp.');
+                } else if (eventData.data.state === 'disconnected' && status === 'connected'){
+                  console.log(`[QRCodeModal] Evento de status 'disconnected' para ${connectionId} que estava conectada. Fechando modal.`);
+                  onClose(); 
+                } else if (eventData.data.state === 'pending_qr' && eventData.data.hasQR && eventData.data.qrCode && status !== 'ready') {
+                  console.log(`[QRCodeModal] Evento de status 'pending_qr' com QR para ${connectionId}. Exibindo QR.`);
+                  setQrCode(eventData.data.qrCode);
+                  setStatus('ready');
+                }
+              }
+            } else if (eventData.type === 'reload') {
+              if (eventData.data.connectionId === connectionId || !eventData.data.connectionId) {
+                console.log('[QRCodeModal] Evento SSE de reload do backend. Modal aguardando novo QR.');
+                if(status !== 'connected') {
+                  setStatus('loading');
+                  setQrCode(null);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('[QRCodeModal] Erro ao processar evento SSE:', error);
+          }
+        };
         
-        if (data.type === 'qr') {
-          console.log('Evento QR recebido:', typeof data.data, data.data === "", data.data === null);
-          
-          // QR vazio ou null significa que o WhatsApp conectou
-          if (data.data === "" || data.data === null) {
-            console.log('QR code vazio detectado, indicando conexão bem-sucedida');
-            setStatus('connected');
-            console.log('Status atualizado para connected');
-            
-            // Atualizar status no banco de dados
-            updateConnectionStatus();
-            
-            // Fechar o modal diretamente, como no whaticket-community
-            onClose();
-          }
-          // QR code válido para ser exibido
-          else if (data.data) {
-            console.log('QR code válido recebido, exibindo para escaneamento');
-            setQrCode(data.data);
-            setStatus('ready');
-          }
-        } 
-        else if (data.type === 'status' && data.data) {
-          if (data.data.state === 'connected') {
-            console.log('Status conectado recebido');
-            setStatus('connected');
-            updateConnectionStatus();
-          } 
-          else if (data.data.state === 'auth_failure') {
+        source.onerror = (err) => {
+          console.error('[QRCodeModal] EventSource error:', err);
+          if (status !== 'connected') {
             setStatus('error');
-            setErrorMessage('Falha na autenticação do WhatsApp');
+            setErrorMessage('Erro na conexão com o servidor de eventos (SSE).');
           }
-        }
-      } catch (error) {
-        console.error('Erro ao processar evento:', error);
-      }
-    };
+          // Fechar e limpar o EventSource em caso de erro para tentar recriar se o modal reabrir
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+            console.log('[QRCodeModal] EventSource fechado devido a erro.');
+          }
+        };
+    } else {
+        console.log('[QRCodeModal] EventSource já existe. Não recriando.');
+    }
     
-    source.onerror = () => {
-      setStatus('error');
-      setErrorMessage('Erro na conexão com o servidor WhatsApp');
-    };
-    
-    // Limpar recursos quando o modal é fechado
     return () => {
       if (eventSourceRef.current) {
+        console.log('[QRCodeModal] Limpando EventSource no return do useEffect.');
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
     };
-  }, [isOpen, connectionId]);
+  }, [isOpen, connectionId, onConnect, onClose]); // Removido status da dependência por enquanto para evitar loops não intencionais com setStatus
 
   return (
     <AnimatePresence>
