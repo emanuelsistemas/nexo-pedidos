@@ -476,7 +476,7 @@ async function getAIResponse(userMessage, systemContentForAI, currentConvId, fro
 
   const apiUrl = 'https://api.llmapi.com/chat/completions';
   const payload = {
-    model: "llama3.1-405b", // Modelo mais avançado com menos alucinações
+    model: "llama3-8b", // Modelo Llama3 da LLM API
     messages: messages,
     temperature: 0.1, // Temperatura muito baixa para minimizar alucinações e garantir respostas determinísticas
   };
