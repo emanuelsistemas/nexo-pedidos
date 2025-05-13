@@ -11,12 +11,12 @@ echo "Iniciando todos os serviços Nexo..."
 
 # Iniciar o serviço principal do WhatsApp
 echo "Iniciando serviço WhatsApp API..."
-if pm2 list | grep -q "whatsapp"; then
+if pm2 list | grep -q "nexo-whatsapp"; then
   echo "Serviço WhatsApp já está rodando. Reiniciando..."
-  pm2 restart whatsapp
+  pm2 restart nexo-whatsapp
 else
   echo "Iniciando serviço WhatsApp com PM2..."
-  pm2 start server.js --name whatsapp
+  pm2 start ecosystem.whatsapp.config.js
 fi
 
 # Iniciar o serviço de horário de funcionamento
@@ -33,5 +33,5 @@ fi
 echo "Status dos processos PM2:"
 pm2 list
 
-echo "Para ver os logs do serviço WhatsApp, execute: pm2 logs whatsapp"
+echo "Para ver os logs do serviço WhatsApp, execute: pm2 logs nexo-whatsapp"
 echo "Para ver os logs do serviço de horário de funcionamento, execute: pm2 logs Horario-Funcionamento"
