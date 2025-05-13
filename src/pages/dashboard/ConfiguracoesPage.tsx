@@ -98,11 +98,19 @@ const ConfiguracoesPage: React.FC = () => {
   const [storeStatus, setStoreStatus] = useState<{
     modo_operacao: 'manual' | 'automatico';
   }>({ modo_operacao: 'manual' });
-  const [taxaMode, setTaxaMode] = useState<'bairro' | 'distancia'>('distancia');
+  const [taxaMode, setTaxaMode] = useState<'bairro' | 'distancia'>('bairro');
+  const [horarios, setHorarios] = useState<any[]>([]);
+  const [horarioForm, setHorarioForm] = useState({
+    id: '',
+    dia_semana: '0',
+    hora_abertura: '08:00',
+    hora_fechamento: '18:00'
+  });
+  const [isEditingHorario, setIsEditingHorario] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     itemId: string;
-    itemType: 'usuario' | 'perfil' | 'pagamento';
+    itemType: 'usuario' | 'perfil' | 'pagamento' | 'horario';
     title: string;
     message: string;
   }>({
@@ -196,6 +204,36 @@ const ConfiguracoesPage: React.FC = () => {
           setStoreStatus(statusData);
         }
       }
+
+      if (activeSection === 'taxa') {
+        // Carregar configuração de taxa de entrega
+        const { data: configData, error: configError } = await supabase
+          .from('configuracoes')
+          .select('taxa_modo')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        console.log('Taxa config data:', configData);
+
+        if (configData && configData.taxa_modo) {
+          setTaxaMode(configData.taxa_modo);
+        }
+      }
+
+      if (activeSection === 'horarios') {
+        const { data: horariosData, error: horariosError } = await supabase
+          .from('horario_atendimento')
+          .select('*')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .order('dia_semana');
+
+        if (horariosError) {
+          console.error('Erro ao carregar horários:', horariosError);
+          showMessage('error', 'Erro ao carregar horários de atendimento');
+        } else {
+          setHorarios(horariosData || []);
+        }
+      }
     } catch (error: any) {
       console.error('Error loading data:', error);
       showMessage('error', 'Erro ao carregar dados');
@@ -271,20 +309,46 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string, type: 'usuario' | 'perfil' | 'pagamento', nome: string) => {
+  const handleDelete = async (id: string, type: 'usuario' | 'perfil' | 'pagamento' | 'horario', nome: string) => {
+    let title, message;
+
+    if (type === 'usuario') {
+      title = 'Excluir Usuário';
+      message = `Tem certeza que deseja excluir o usuário "${nome}"? Esta ação não pode ser desfeita.`;
+    } else if (type === 'perfil') {
+      title = 'Excluir Perfil';
+      message = `Tem certeza que deseja excluir o perfil "${nome}"? Esta ação não pode ser desfeita.`;
+    } else if (type === 'pagamento') {
+      title = 'Excluir Forma de Pagamento';
+      message = `Tem certeza que deseja excluir a forma de pagamento "${nome}"? Esta ação não pode ser desfeita.`;
+    } else if (type === 'horario') {
+      title = 'Excluir Horário de Atendimento';
+      message = `Tem certeza que deseja excluir o horário de atendimento para ${nome}? Esta ação não pode ser desfeita.`;
+    }
+
     setDeleteConfirmation({
       isOpen: true,
       itemId: id,
       itemType: type,
-      title: `Excluir ${type === 'usuario' ? 'Usuário' : type === 'perfil' ? 'Perfil' : 'Forma de Pagamento'}`,
-      message: `Tem certeza que deseja excluir ${type === 'usuario' ? 'o usuário' : type === 'perfil' ? 'o perfil' : 'a forma de pagamento'} "${nome}"? Esta ação não pode ser desfeita.`,
+      title,
+      message,
     });
   };
 
   const handleConfirmDelete = async () => {
     try {
       const { itemId, itemType } = deleteConfirmation;
-      const table = itemType === 'usuario' ? 'usuarios' : itemType === 'perfil' ? 'perfis_acesso' : 'formas_pagamento';
+      let table;
+
+      if (itemType === 'usuario') {
+        table = 'usuarios';
+      } else if (itemType === 'perfil') {
+        table = 'perfis_acesso';
+      } else if (itemType === 'pagamento') {
+        table = 'formas_pagamento';
+      } else if (itemType === 'horario') {
+        table = 'horario_atendimento';
+      }
 
       const { error } = await supabase
         .from(table)
@@ -294,11 +358,124 @@ const ConfiguracoesPage: React.FC = () => {
       if (error) throw error;
 
       await loadData();
-      showMessage('success', `${itemType === 'usuario' ? 'Usuário' : itemType === 'perfil' ? 'Perfil' : 'Forma de pagamento'} excluído com sucesso!`);
+
+      let successMessage;
+      if (itemType === 'usuario') {
+        successMessage = 'Usuário excluído com sucesso!';
+      } else if (itemType === 'perfil') {
+        successMessage = 'Perfil excluído com sucesso!';
+      } else if (itemType === 'pagamento') {
+        successMessage = 'Forma de pagamento excluída com sucesso!';
+      } else if (itemType === 'horario') {
+        successMessage = 'Horário de atendimento excluído com sucesso!';
+      }
+
+      showMessage('success', successMessage);
     } catch (error: any) {
       showMessage('error', 'Erro ao excluir item: ' + error.message);
     } finally {
       setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
+    }
+  };
+
+  const handleEditHorario = (horario: any) => {
+    setHorarioForm({
+      id: horario.id,
+      dia_semana: horario.dia_semana.toString(),
+      hora_abertura: horario.hora_abertura.substring(0, 5),
+      hora_fechamento: horario.hora_fechamento.substring(0, 5)
+    });
+    setIsEditingHorario(true);
+    setShowSidebar(true);
+  };
+
+  const handleSubmitHorario = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validar se o horário de fechamento é maior que o horário de abertura
+    const abertura = new Date(`2000-01-01T${horarioForm.hora_abertura}`);
+    const fechamento = new Date(`2000-01-01T${horarioForm.hora_fechamento}`);
+
+    if (fechamento <= abertura) {
+      showMessage('error', 'O horário de fechamento deve ser maior que o horário de abertura.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Se estiver editando um horário existente
+      if (isEditingHorario) {
+        const { error } = await supabase
+          .from('horario_atendimento')
+          .update({
+            hora_abertura: horarioForm.hora_abertura,
+            hora_fechamento: horarioForm.hora_fechamento
+          })
+          .eq('id', horarioForm.id);
+
+        if (error) throw error;
+
+        setIsEditingHorario(false);
+        setShowSidebar(false);
+        loadData();
+        showMessage('success', 'Horário de atendimento atualizado com sucesso!');
+      }
+      // Se estiver adicionando um novo horário
+      else {
+        // Verificar se já existe um horário para este dia da semana
+        const { data: existingHorario } = await supabase
+          .from('horario_atendimento')
+          .select('id')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('dia_semana', parseInt(horarioForm.dia_semana))
+          .maybeSingle();
+
+        if (existingHorario) {
+          showMessage('error', 'Já existe um horário cadastrado para este dia da semana. Edite-o ou remova-o primeiro para adicionar um novo.');
+          setIsLoading(false);
+          return;
+        }
+
+        const { error } = await supabase
+          .from('horario_atendimento')
+          .insert([{
+            empresa_id: usuarioData.empresa_id,
+            dia_semana: parseInt(horarioForm.dia_semana),
+            hora_abertura: horarioForm.hora_abertura,
+            hora_fechamento: horarioForm.hora_fechamento
+          }]);
+
+        if (error) throw error;
+
+        // Resetar o formulário para o próximo dia da semana
+        const nextDay = (parseInt(horarioForm.dia_semana) + 1) % 7;
+        setHorarioForm({
+          id: '',
+          dia_semana: nextDay.toString(),
+          hora_abertura: '08:00',
+          hora_fechamento: '18:00'
+        });
+
+        setShowSidebar(false);
+        loadData();
+        showMessage('success', 'Horário de atendimento adicionado com sucesso!');
+      }
+    } catch (error: any) {
+      showMessage('error', `Erro ao ${isEditingHorario ? 'atualizar' : 'adicionar'} horário de atendimento: ` + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -348,25 +525,25 @@ const ConfiguracoesPage: React.FC = () => {
         showMessage('error', 'Empresa não encontrada');
         return;
       }
-      
+
       // Verificar se existem taxas cadastradas no sistema atual
       const { data: taxasData, error: taxasError } = await supabase
         .from('taxa_entrega')
         .select('id')
         .eq('empresa_id', usuarioData.empresa_id);
-        
+
       if (taxasError) throw taxasError;
-      
+
       // Se existirem taxas, não permitir a alteração do modo
       if (taxasData && taxasData.length > 0) {
-        showMessage('error', 
+        showMessage('error',
           `Não é possível alterar o modo de taxa de entrega porque existem ${taxasData.length} taxa(s) cadastrada(s). ` +
           `Remova todas as taxas de entrega existentes antes de alterar o modo.`);
-        
+
         // Não atualiza o estado local, já que a alteração não será permitida
         return;
       }
-      
+
       // Atualiza o estado local somente após confirmar que não há taxas cadastradas
       setTaxaMode(mode);
 
@@ -386,7 +563,7 @@ const ConfiguracoesPage: React.FC = () => {
           console.log(`Modo de taxa já está configurado como ${mode}`);
           return;
         }
-        
+
         // Atualizar configuração existente
         ({ error } = await supabase
           .from('configuracoes')
@@ -396,14 +573,14 @@ const ConfiguracoesPage: React.FC = () => {
         // Inserir nova configuração
         ({ error } = await supabase
           .from('configuracoes')
-          .insert([{ 
+          .insert([{
             empresa_id: usuarioData.empresa_id,
-            taxa_modo: mode 
+            taxa_modo: mode
           }]));
       }
 
       if (error) throw error;
-      
+
       console.log(`Modo de taxa de entrega atualizado para: ${mode}`);
       showMessage('success', 'Modo de taxa de entrega atualizado com sucesso!');
     } catch (error: any) {
@@ -448,7 +625,7 @@ const ConfiguracoesPage: React.FC = () => {
 
   const handleDocumentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const formattedValue = empresaForm.tipo_documento === 'CNPJ' 
+    const formattedValue = empresaForm.tipo_documento === 'CNPJ'
       ? formatCNPJ(value)
       : formatCPF(value);
 
@@ -631,7 +808,7 @@ const ConfiguracoesPage: React.FC = () => {
 
             <div className="bg-background-card p-6 rounded-lg border border-gray-800">
               <h3 className="text-lg font-medium text-white mb-4">Modo de Operação</h3>
-              
+
               <div className="space-y-4">
                 <label className="flex items-center p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                   <input
@@ -678,7 +855,7 @@ const ConfiguracoesPage: React.FC = () => {
 
             <div className="bg-background-card p-6 rounded-lg border border-gray-800">
               <h3 className="text-lg font-medium text-white mb-4">Modo de Cálculo</h3>
-              
+
               <div className="space-y-4">
                 <label className="flex items-center p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                   <input
@@ -713,6 +890,82 @@ const ConfiguracoesPage: React.FC = () => {
                 </label>
               </div>
             </div>
+          </div>
+        );
+
+      case 'horarios':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Horários de Atendimento</h2>
+                <p className="text-gray-400 mt-1">Defina os horários de funcionamento para cada dia da semana</p>
+              </div>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => setShowSidebar(true)}
+              >
+                + Adicionar Horário
+              </Button>
+            </div>
+
+            {horarios.length === 0 ? (
+              <div className="bg-background-card p-6 rounded-lg border border-gray-800 text-center">
+                <p className="text-gray-400">Nenhum horário de atendimento cadastrado.</p>
+                <p className="text-gray-500 text-sm mt-2">Adicione horários para cada dia da semana em que sua loja estará aberta.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {horarios.map(horario => {
+                  const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+                  const diaNome = diasSemana[horario.dia_semana];
+                  const horaAbertura = horario.hora_abertura.substring(0, 5);
+                  const horaFechamento = horario.hora_fechamento.substring(0, 5);
+
+                  return (
+                    <div
+                      key={horario.id}
+                      className="bg-background-card p-4 rounded-lg border border-gray-800"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-white font-medium">{diaNome}</h3>
+                          <p className="text-sm text-gray-400 mt-1">
+                            {horaAbertura} às {horaFechamento}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleEditHorario(horario)}
+                            className="p-2 text-blue-400 hover:text-blue-300 transition-colors"
+                            title="Editar horário"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(horario.id, 'horario', diaNome)}
+                            className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                            title="Remover horário"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {storeStatus.modo_operacao === 'automatico' && (
+              <div className="bg-yellow-900/20 border border-yellow-900/30 rounded-lg p-4 mt-6">
+                <p className="text-yellow-400 text-sm">
+                  <strong>Nota:</strong> Sua loja está configurada para abrir e fechar automaticamente de acordo com estes horários.
+                  Você pode alterar este comportamento na seção "Status Loja".
+                </p>
+              </div>
+            )}
           </div>
         );
 
@@ -956,9 +1209,21 @@ const ConfiguracoesPage: React.FC = () => {
                     {activeSection === 'usuarios'  && 'Novo Usuário'}
                     {activeSection === 'perfis' && 'Novo Perfil'}
                     {activeSection === 'geral' && 'Editar Dados da Empresa'}
+                    {activeSection === 'horarios' && (isEditingHorario ? 'Editar Horário de Atendimento' : 'Novo Horário de Atendimento')}
                   </h2>
                   <button
-                    onClick={() => setShowSidebar(false)}
+                    onClick={() => {
+                      setShowSidebar(false);
+                      if (activeSection === 'horarios' && isEditingHorario) {
+                        setIsEditingHorario(false);
+                        setHorarioForm({
+                          id: '',
+                          dia_semana: '0',
+                          hora_abertura: '08:00',
+                          hora_fechamento: '18:00'
+                        });
+                      }
+                    }}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     <X size={24} />
@@ -999,6 +1264,98 @@ const ConfiguracoesPage: React.FC = () => {
                         variant="primary"
                         className="flex-1"
                         disabled={isLoading || !selectedTipo}
+                      >
+                        {isLoading ? 'Salvando...' : 'Salvar'}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                {activeSection === 'horarios' && (
+                  <form onSubmit={handleSubmitHorario} className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Dia da Semana
+                      </label>
+                      <select
+                        value={horarioForm.dia_semana}
+                        onChange={(e) => setHorarioForm(prev => ({ ...prev, dia_semana: e.target.value }))}
+                        className={`w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 ${isEditingHorario ? 'opacity-60' : ''}`}
+                        disabled={isEditingHorario}
+                        required
+                      >
+                        <option value="0">Domingo</option>
+                        <option value="1">Segunda-feira</option>
+                        <option value="2">Terça-feira</option>
+                        <option value="3">Quarta-feira</option>
+                        <option value="4">Quinta-feira</option>
+                        <option value="5">Sexta-feira</option>
+                        <option value="6">Sábado</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Horário de Abertura
+                      </label>
+                      <input
+                        type="time"
+                        value={horarioForm.hora_abertura}
+                        onChange={(e) => setHorarioForm(prev => ({ ...prev, hora_abertura: e.target.value }))}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Horário de Fechamento
+                      </label>
+                      <input
+                        type="time"
+                        value={horarioForm.hora_fechamento}
+                        onChange={(e) => setHorarioForm(prev => ({ ...prev, hora_fechamento: e.target.value }))}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        required
+                      />
+                    </div>
+
+                    <div className="bg-gray-800/50 p-4 rounded-lg mt-2">
+                      <p className="text-sm text-yellow-400">
+                        <strong>Importante:</strong> O horário de fechamento deve ser maior que o horário de abertura. Caso contrário, não será possível salvar.
+                      </p>
+                      {isEditingHorario && (
+                        <p className="text-sm text-blue-400 mt-2">
+                          <strong>Modo de edição:</strong> Você está editando o horário para {['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][parseInt(horarioForm.dia_semana)]}.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex gap-4 pt-4">
+                      <Button
+                        type="button"
+                        variant="text"
+                        className="flex-1"
+                        onClick={() => {
+                          setShowSidebar(false);
+                          if (isEditingHorario) {
+                            setIsEditingHorario(false);
+                            setHorarioForm({
+                              id: '',
+                              dia_semana: '0',
+                              hora_abertura: '08:00',
+                              hora_fechamento: '18:00'
+                            });
+                          }
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        className="flex-1"
+                        disabled={isLoading}
                       >
                         {isLoading ? 'Salvando...' : 'Salvar'}
                       </Button>

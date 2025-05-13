@@ -71,6 +71,7 @@ const TaxaEntregaPage: React.FC = () => {
     bairro: '',
     valor: '',
     km: '',
+    tempo_entrega: '',
   });
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
@@ -176,8 +177,8 @@ const TaxaEntregaPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (taxaMode === 'bairro' && (!formData.cep.trim() || !formData.valor)) return;
-    if (taxaMode === 'distancia' && (!formData.km.trim() || !formData.valor)) return;
+    if (taxaMode === 'bairro' && (!formData.cep.trim() || !formData.valor || !formData.tempo_entrega)) return;
+    if (taxaMode === 'distancia' && (!formData.km.trim() || !formData.valor || !formData.tempo_entrega)) return;
 
     setIsLoading(true);
     try {
@@ -199,7 +200,8 @@ const TaxaEntregaPage: React.FC = () => {
             cep: taxaMode === 'bairro' ? formData.cep : null,
             bairro: taxaMode === 'bairro' ? formData.bairro : null,
             km: taxaMode === 'distancia' ? parseFloat(formData.km) : null,
-            valor: parseFloat(formData.valor)
+            valor: parseFloat(formData.valor),
+            tempo_entrega: parseInt(formData.tempo_entrega)
           })
           .eq('id', editingTaxa.id);
 
@@ -213,6 +215,7 @@ const TaxaEntregaPage: React.FC = () => {
             bairro: taxaMode === 'bairro' ? formData.bairro : null,
             km: taxaMode === 'distancia' ? parseFloat(formData.km) : null,
             valor: parseFloat(formData.valor),
+            tempo_entrega: parseInt(formData.tempo_entrega),
             empresa_id: usuarioData.empresa_id
           }]);
 
@@ -220,7 +223,7 @@ const TaxaEntregaPage: React.FC = () => {
         showMessage('success', 'Taxa cadastrada com sucesso!');
       }
 
-      setFormData({ cep: '', bairro: '', valor: '', km: '' });
+      setFormData({ cep: '', bairro: '', valor: '', km: '', tempo_entrega: '' });
       setEditingTaxa(null);
       setShowSidebar(false);
       loadTaxas();
@@ -270,7 +273,7 @@ const TaxaEntregaPage: React.FC = () => {
           variant="primary"
           onClick={() => {
             setEditingTaxa(null);
-            setFormData({ cep: '', bairro: '', valor: '', km: '' });
+            setFormData({ cep: '', bairro: '', valor: '', km: '', tempo_entrega: '' });
             setShowSidebar(true);
           }}
         >
@@ -298,9 +301,14 @@ const TaxaEntregaPage: React.FC = () => {
                   ) : (
                     <h3 className="text-white font-medium">Até {taxa.km}km</h3>
                   )}
-                  <p className="text-sm text-primary-400">
-                    R$ {taxa.valor.toFixed(2)}
-                  </p>
+                  <div>
+                    <p className="text-sm text-primary-400">
+                      R$ {taxa.valor.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Tempo: {taxa.tempo_entrega} min
+                    </p>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -312,6 +320,7 @@ const TaxaEntregaPage: React.FC = () => {
                       bairro: taxa.bairro || '',
                       valor: taxa.valor.toString(),
                       km: taxa.km?.toString() || '',
+                      tempo_entrega: taxa.tempo_entrega?.toString() || '',
                     });
                     setShowSidebar(true);
                   }}
@@ -347,7 +356,7 @@ const TaxaEntregaPage: React.FC = () => {
               className="mx-auto"
               onClick={() => {
                 setEditingTaxa(null);
-                setFormData({ cep: '', bairro: '', valor: '', km: '' });
+                setFormData({ cep: '', bairro: '', valor: '', km: '', tempo_entrega: '' });
                 setShowSidebar(true);
               }}
             >
@@ -452,6 +461,21 @@ const TaxaEntregaPage: React.FC = () => {
                       onChange={(e) => setFormData(prev => ({ ...prev, valor: e.target.value }))}
                       className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                       placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Tempo de Entrega (minutos)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={formData.tempo_entrega}
+                      onChange={(e) => setFormData(prev => ({ ...prev, tempo_entrega: e.target.value }))}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                      placeholder="30"
+                      required
                     />
                   </div>
 

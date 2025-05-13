@@ -5,6 +5,8 @@ export interface Produto {
   descricao?: string;
   codigo: string;
   grupo_id: string;
+  promocao?: boolean;
+  ativo?: boolean;
   created_at?: string;
   opcoes_adicionais?: OpcaoAdicional[];
 }

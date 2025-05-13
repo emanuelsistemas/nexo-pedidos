@@ -1,23 +1,18 @@
-2025/05/10-06:42:20.432 17306f Reusing MANIFEST /home/emanuel/Área de Trabalho/projetos/nexo/backend/sessions/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2025/05/10-06:42:20.432 17306f Recovering log #181
-2025/05/10-06:42:20.462 17306f Reusing old log /home/emanuel/Área de Trabalho/projetos/nexo/backend/sessions/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000181.log 
-2025/05/10-06:42:20.462 17306f Delete type=2 #183
-2025/05/10-06:42:20.462 17306f Delete type=2 #106
-2025/05/10-06:42:22.215 173129 Level-0 table #188: started
-2025/05/10-06:42:22.222 173129 Level-0 table #188: 203541 bytes OK
-2025/05/10-06:42:22.223 173129 Delete type=0 #181
-2025/05/10-06:42:22.223 173129 Manual compaction at level-0 from '\x00A\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00B\x00\x00\x00' @ 0 : 0; will stop at '\x00A\x00\x00\x05' @ 347187 : 1
-2025/05/10-06:42:22.223 173129 Compacting 1@0 + 1@1 files
-2025/05/10-06:42:22.278 173129 Generated table #189@0: 36228 keys, 1493377 bytes
-2025/05/10-06:42:22.278 173129 Compacted 1@0 + 1@1 files => 1493377 bytes
-2025/05/10-06:42:22.279 173129 compacted to: files[ 0 1 1 0 0 0 0 ]
-2025/05/10-06:42:22.279 173129 Delete type=2 #188
-2025/05/10-06:42:22.279 173129 Manual compaction at level-0 from '\x00A\x00\x00\x05' @ 347187 : 1 .. '\x00B\x00\x00\x00' @ 0 : 0; will stop at (end)
-2025/05/10-06:42:26.176 173129 Compacting 1@1 + 1@2 files
-2025/05/10-06:42:26.230 173129 Generated table #190@1: 44087 keys, 2203061 bytes
-2025/05/10-06:42:26.247 173129 Generated table #191@1: 16289 keys, 694390 bytes
-2025/05/10-06:42:26.247 173129 Compacted 1@1 + 1@2 files => 2897451 bytes
-2025/05/10-06:42:26.248 173129 compacted to: files[ 0 0 2 0 0 0 0 ]
-2025/05/10-06:42:26.248 173129 Delete type=2 #185
-2025/05/10-06:42:26.248 173129 Delete type=2 #189
-2025/05/10-06:42:26.248 173129 Delete type=2 #184
+2025/05/12-18:10:03.048 350761 Reusing MANIFEST /home/emanuel/Área de Trabalho/Projetos/nexo/backend/sessions/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/05/12-18:10:03.048 350761 Recovering log #86
+2025/05/12-18:10:03.066 350761 Reusing old log /home/emanuel/Área de Trabalho/Projetos/nexo/backend/sessions/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000086.log 
+2025/05/12-18:10:03.066 350761 Delete type=2 #87
+2025/05/12-18:10:03.066 350761 Delete type=2 #84
+2025/05/12-18:10:03.066 350761 Delete type=2 #83
+2025/05/12-18:10:05.068 3506ee Level-0 table #92: started
+2025/05/12-18:10:05.073 3506ee Level-0 table #92: 208949 bytes OK
+2025/05/12-18:10:05.075 3506ee Delete type=0 #86
+2025/05/12-18:10:05.075 3506ee Manual compaction at level-0 from '\x00\x1e\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x1f\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/05/12-18:10:08.203 350761 Compacting 1@1 + 2@2 files
+2025/05/12-18:10:08.294 350761 Generated table #93@1: 43954 keys, 2199186 bytes
+2025/05/12-18:10:08.380 350761 Generated table #94@1: 32996 keys, 1742021 bytes
+2025/05/12-18:10:08.380 350761 Compacted 1@1 + 2@2 files => 3941207 bytes
+2025/05/12-18:10:08.382 350761 compacted to: files[ 0 0 2 0 0 0 0 ]
+2025/05/12-18:10:08.382 350761 Delete type=2 #92
+2025/05/12-18:10:08.382 350761 Delete type=2 #89
+2025/05/12-18:10:08.382 350761 Delete type=2 #88

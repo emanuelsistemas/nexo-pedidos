@@ -4,6 +4,45 @@ import { X, RefreshCw } from 'lucide-react';
 import Button from '../comum/Button';
 import { QRCodeSVG } from 'qrcode.react';
 
+// Componente para mostrar mensagens alternadas durante o carregamento
+const LoadingMessages = () => {
+  const messages = [
+    "Inicializando WhatsApp...",
+    "Preparando QR Code...",
+    "Conectando ao servidor...",
+    "Configurando sessão...",
+    "Quase lá...",
+    "Gerando QR Code...",
+    "Estabelecendo conexão segura..."
+  ];
+
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    // Alternar entre as mensagens a cada 2.5 segundos
+    const interval = setInterval(() => {
+      setMessageIndex((prevIndex) => (prevIndex + 1) % messages.length);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [messages.length]);
+
+  return (
+    <AnimatePresence mode="wait">
+      <motion.p
+        key={messageIndex}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ duration: 0.3 }}
+        className="text-xs text-gray-300 text-center min-h-[1.5rem]"
+      >
+        {messages[messageIndex]}
+      </motion.p>
+    </AnimatePresence>
+  );
+};
+
 interface QRCodeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,23 +63,35 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const eventSourceRef = useRef<EventSource | null>(null);
   const connectionNotifiedRef = useRef<boolean>(false);
-  
+
   // Função para atualizar status no banco de dados quando conectado
   const updateConnectionStatus = async () => {
     console.log('Iniciando updateConnectionStatus, connectionNotifiedRef:', connectionNotifiedRef.current);
-    
+
     if (connectionNotifiedRef.current) {
       console.log('Conexão já notificada, ignorando notificação duplicada');
       return;
     }
-    
+
     console.log('Atualizando status da conexão para conectado');
     try {
+      // TRAVA DE SEGURANÇA: Verificar se o WhatsApp está realmente conectado
+      // antes de atualizar o status no banco de dados
+      const statusResponse = await fetch('http://localhost:3001/api/status');
+      const statusData = await statusResponse.json();
+
+      if (!statusData.whatsapp || statusData.whatsapp.state !== 'connected') {
+        console.error('TRAVA DE SEGURANÇA: WhatsApp não está realmente conectado!', statusData);
+        setStatus('error');
+        setErrorMessage('Erro: WhatsApp não está realmente conectado. Tente novamente.');
+        return;
+      }
+
       // Marcar que já notificamos, antes mesmo de fazer a requisição
       connectionNotifiedRef.current = true;
       console.log('connectionNotifiedRef atualizado para true');
-      
-      const response = await fetch(`http://localhost:3000/api/updateConnection`, {
+
+      const response = await fetch(`http://localhost:3001/api/updateConnection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -55,9 +106,19 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
         // Notificar componente pai sobre a conexão
         onConnect();
         console.log('onConnect chamado');
+      } else {
+        // Se a atualização falhar, reverter o flag
+        connectionNotifiedRef.current = false;
+        console.error('Falha ao atualizar status no banco de dados');
+        setStatus('error');
+        setErrorMessage('Erro ao atualizar status da conexão no banco de dados');
       }
     } catch (error) {
+      // Se ocorrer um erro, reverter o flag
+      connectionNotifiedRef.current = false;
       console.error('Erro ao atualizar status da conexão:', error);
+      setStatus('error');
+      setErrorMessage('Erro ao atualizar status da conexão');
     }
   };
 
@@ -66,16 +127,16 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
     setStatus('loading');
     setErrorMessage('');
     setQrCode(null);
-    
-    fetch('http://localhost:3000/api/reinitialize', { method: 'POST' })
+
+    fetch('http://localhost:3001/api/reinitialize', { method: 'POST' })
       .then(() => {
         // Apenas verificamos o status uma vez após reinicialização
         setTimeout(() => {
-          fetch('http://localhost:3000/api/status')
+          fetch('http://localhost:3001/api/status')
             .then(res => res.json())
             .then(data => {
               if (data.whatsapp.hasQR) {
-                fetch('http://localhost:3000/api/qrcode')
+                fetch('http://localhost:3001/api/qrcode')
                   .then(res => res.json())
                   .then(qrData => {
                     if (qrData.qrCode) {
@@ -110,20 +171,36 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
     setQrCode(null);
     setErrorMessage('');
     connectionNotifiedRef.current = false;
-    
+
     const triggerReinitialize = () => {
       console.log(`[QRCodeModal] Disparando reinicialização para connectionId: ${connectionId}`);
-      setStatus('loading'); 
-      setQrCode(null);      
-      fetch('http://localhost:3000/api/reinitialize', {
+      setStatus('loading');
+      setQrCode(null);
+
+      // Definir um timeout para mostrar uma mensagem se demorar muito
+      const timeoutId = setTimeout(() => {
+        if (status === 'loading') {
+          console.log('[QRCodeModal] Gerando QR Code está demorando mais que o esperado...');
+          setErrorMessage('Gerando QR Code... Isso pode levar alguns segundos.');
+        }
+      }, 3000); // 3 segundos
+
+      fetch('http://localhost:3001/api/reinitialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ connectionId: connectionId })
       })
       .then(res => res.json())
       .then(reinitData => {
+        clearTimeout(timeoutId); // Limpar o timeout
+
         if (reinitData.success) {
           console.log('[QRCodeModal] Reinicialização solicitada com sucesso. Aguardando QR Code via SSE...');
+
+          // Se já temos um QR code disponível imediatamente
+          if (reinitData.hasExistingQR) {
+            console.log('[QRCodeModal] QR code já disponível no backend, aguardando recebimento via SSE...');
+          }
         } else {
           console.error('[QRCodeModal] Falha ao solicitar reinicialização:', reinitData.error);
           setStatus('error');
@@ -131,36 +208,39 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
         }
       })
       .catch(err => {
+        clearTimeout(timeoutId); // Limpar o timeout
         console.error('[QRCodeModal] Erro de rede ao solicitar reinicialização:', err);
         setStatus('error');
         setErrorMessage('Erro de rede ao tentar obter QR Code.');
       });
     };
-    
-    fetch('http://localhost:3000/api/status')
+
+    fetch('http://localhost:3001/api/status')
       .then(res => res.json())
       .then(data => {
         const backendStatus = data.whatsapp;
         console.log('[QRCodeModal] Status inicial recebido:', backendStatus, 'para connectionId:', connectionId);
 
         if (backendStatus.connectionId === connectionId) {
+          // TRAVA DE SEGURANÇA: Mesmo que o backend diga que está conectado,
+          // vamos sempre forçar a exibição do QR code para garantir que o usuário escaneie novamente
           if (backendStatus.state === 'connected') {
-            console.log('[QRCodeModal] Conexão já estabelecida para este ID. Notificando sucesso.');
-          setStatus('connected');
-            if (!connectionNotifiedRef.current) updateConnectionStatus();
+            console.log('[QRCodeModal] Conexão parece estar estabelecida para este ID, mas vamos forçar reinicialização para garantir.');
+            // Forçar reinicialização para garantir que o usuário escaneie o QR code novamente
+            triggerReinitialize();
           } else if ((backendStatus.state === 'pending_qr' || backendStatus.state === 'initializing') && backendStatus.hasQR && backendStatus.qrCode) {
             console.log('[QRCodeModal] Backend tem QR Code para este ID. Exibindo.');
             setQrCode(backendStatus.qrCode);
-                setStatus('ready');
+            setStatus('ready');
           } else {
             console.log(`[QRCodeModal] Estado inicial (${backendStatus.state}) não ideal ou sem QR para ${connectionId}. Forçando reinicialização.`);
             triggerReinitialize();
           }
         } else {
-            // Se o connectionId do backend não bate, OU se o backend está focado em NENHUMA conexão (connectionId: null)
-            // E este modal foi aberto para uma connectionId específica, então precisamos reinicializar PARA ESTA connectionId.
-            console.log(`[QRCodeModal] Backend focado em outra conexão (${backendStatus.connectionId}) ou nenhuma. Forçando reinicialização para ${connectionId}.`);
-            triggerReinitialize();
+          // Se o connectionId do backend não bate, OU se o backend está focado em NENHUMA conexão (connectionId: null)
+          // E este modal foi aberto para uma connectionId específica, então precisamos reinicializar PARA ESTA connectionId.
+          console.log(`[QRCodeModal] Backend focado em outra conexão (${backendStatus.connectionId}) ou nenhuma. Forçando reinicialização para ${connectionId}.`);
+          triggerReinitialize();
         }
       })
       .catch(error => {
@@ -168,49 +248,68 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
         setErrorMessage('Não foi possível verificar o status inicial. Tentando obter QR Code...');
         triggerReinitialize();
       });
-    
+
     // Configurar EventSource somente se não existir um
     if (!eventSourceRef.current) {
         console.log('[QRCodeModal] Configurando novo EventSource...');
-    const source = new EventSource('http://localhost:3000/api/events');
+    const source = new EventSource('http://localhost:3001/api/events');
     eventSourceRef.current = source;
-    
+
         source.onopen = () => {
             console.log('[QRCodeModal] EventSource conectado.');
         };
-    
+
     source.onmessage = (event) => {
       try {
             const eventData = JSON.parse(event.data);
-        
+
             if (eventData.type === 'qr') {
-              if (status !== 'connected') { 
+              if (status !== 'connected') {
                 if (eventData.data === "" || eventData.data === null) {
                   console.log('[QRCodeModal] Evento QR vazio/null recebido. Tratando como conectado.');
-            setStatus('connected');
+                  setStatus('connected');
                   if (!connectionNotifiedRef.current) {
-            updateConnectionStatus();
-          }
+                    updateConnectionStatus();
+                  }
                 } else if (eventData.data) {
                   console.log('[QRCodeModal] QR code válido recebido via SSE. Exibindo.');
+                  // Limpar qualquer mensagem de erro que possa estar sendo exibida
+                  setErrorMessage('');
+                  // Definir o QR code e atualizar o status imediatamente
                   setQrCode(eventData.data);
-            setStatus('ready');
-          }
-        } 
-            } 
+                  setStatus('ready');
+                }
+              }
+            }
             else if (eventData.type === 'status' && eventData.data) {
               if (eventData.data.connectionId === connectionId) {
                 if (eventData.data.state === 'connected' && status !== 'connected') {
                   console.log(`[QRCodeModal] Evento de status 'connected' para ${connectionId}.`);
-            setStatus('connected');
-                  if (!connectionNotifiedRef.current) updateConnectionStatus();
+
+                  // TRAVA DE SEGURANÇA: Verificar se o WhatsApp está realmente conectado
+                  // antes de atualizar o status
+                  fetch('http://localhost:3001/api/status')
+                    .then(res => res.json())
+                    .then(statusData => {
+                      if (statusData.whatsapp && statusData.whatsapp.state === 'connected') {
+                        console.log('[QRCodeModal] Confirmado: WhatsApp realmente conectado.');
+                        setStatus('connected');
+                        if (!connectionNotifiedRef.current) updateConnectionStatus();
+                      } else {
+                        console.error('[QRCodeModal] TRAVA DE SEGURANÇA: Evento indica conexão, mas verificação mostra que não está conectado!');
+                        // Não atualizar o status para conectado
+                      }
+                    })
+                    .catch(err => {
+                      console.error('[QRCodeModal] Erro ao verificar status real do WhatsApp:', err);
+                    });
                 } else if (eventData.data.state === 'auth_failure') {
                   console.log(`[QRCodeModal] Evento de status 'auth_failure' para ${connectionId}.`);
                   setStatus('error');
                   setErrorMessage('Falha na autenticação do WhatsApp.');
                 } else if (eventData.data.state === 'disconnected' && status === 'connected'){
                   console.log(`[QRCodeModal] Evento de status 'disconnected' para ${connectionId} que estava conectada. Fechando modal.`);
-                  onClose(); 
+                  onClose();
                 } else if (eventData.data.state === 'pending_qr' && eventData.data.hasQR && eventData.data.qrCode && status !== 'ready') {
                   console.log(`[QRCodeModal] Evento de status 'pending_qr' com QR para ${connectionId}. Exibindo QR.`);
                   setQrCode(eventData.data.qrCode);
@@ -230,7 +329,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
             console.error('[QRCodeModal] Erro ao processar evento SSE:', error);
       }
     };
-    
+
         source.onerror = (err) => {
           console.error('[QRCodeModal] EventSource error:', err);
           if (status !== 'connected') {
@@ -247,7 +346,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
     } else {
         console.log('[QRCodeModal] EventSource já existe. Não recriando.');
     }
-    
+
     return () => {
       if (eventSourceRef.current) {
         console.log('[QRCodeModal] Limpando EventSource no return do useEffect.');
@@ -256,6 +355,8 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
       }
     };
   }, [isOpen, connectionId, onConnect, onClose]); // Removido status da dependência por enquanto para evitar loops não intencionais com setStatus
+
+  console.log('QRCodeModal renderizando com isOpen:', isOpen);
 
   return (
     <AnimatePresence>
@@ -291,52 +392,113 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({
                 <div className="space-y-3">
                 {status === 'loading' && (
                     <div className="flex flex-col items-center justify-center py-4">
-                      <div className="w-10 h-10 border-3 border-gray-600 border-t-primary-500 rounded-full animate-spin mb-2" />
-                      <p className="text-xs text-gray-300">Carregando QR Code...</p>
+                      {/* Loading animado mais interativo */}
+                      <div className="relative w-16 h-16 mb-3">
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-12 h-12 border-4 border-gray-600 border-t-primary-500 rounded-full animate-spin" />
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 border-3 border-gray-700 border-t-primary-400 rounded-full animate-spin-slow"
+                               style={{animationDirection: 'reverse'}} />
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-4 h-4 bg-primary-500 rounded-full animate-pulse" />
+                        </div>
+                      </div>
+
+                      {/* Mensagens alternadas */}
+                      <LoadingMessages />
+
+                      {/* Mensagem de erro, se houver */}
+                      {errorMessage && (
+                        <p className="text-xs text-gray-400 mt-2 max-w-[200px] text-center">
+                          {errorMessage}
+                        </p>
+                      )}
+
+                      {/* Barra de progresso animada */}
+                      <div className="w-48 h-1 bg-gray-800 rounded-full mt-3 overflow-hidden">
+                        <div className="h-full bg-primary-500 rounded-full animate-progress-bar" />
+                      </div>
+
+                      <div className="mt-3 text-xs text-gray-500">
+                        <p className="text-center">Aguarde enquanto preparamos sua conexão</p>
+                      </div>
                   </div>
                 )}
 
                 {status === 'ready' && qrCode && (
-                    <div className="flex flex-col items-center justify-center py-1">
-                      <div className="bg-white p-1 rounded-lg">
-                        <QRCodeSVG value={qrCode} size={150} />
-                    </div>
-                      <div className="mt-2 text-center">
-                        <p className="text-xs text-gray-300 mb-1">Escaneie o QR Code</p>
-                        <p className="text-xs text-gray-400">
-                          Abra o WhatsApp e selecione WhatsApp Web
-                      </p>
-                    </div>
-                  </div>
+                    <motion.div
+                      className="flex flex-col items-center justify-center py-1"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ type: "spring", duration: 0.5 }}
+                    >
+                      <div className="relative">
+                        {/* Moldura animada em volta do QR code */}
+                        <div className="absolute -inset-2 rounded-lg bg-gradient-to-r from-primary-500 via-accent-500 to-primary-500 opacity-75 blur-sm animate-pulse"></div>
+
+                        {/* QR code com fundo branco */}
+                        <div className="relative bg-white p-2 rounded-lg shadow-lg">
+                          <QRCodeSVG value={qrCode} size={120} />
+
+                          {/* Indicador de escaneamento */}
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-20 h-20 border-2 border-primary-500 opacity-50 animate-ping rounded-sm"></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 text-center">
+                        <motion.p
+                          className="text-sm font-medium text-white mb-1"
+                          initial={{ opacity: 0, y: 5 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.2 }}
+                        >
+                          QR Code pronto!
+                        </motion.p>
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.3 }}
+                        >
+                          <p className="text-xs text-gray-300 mb-1">Escaneie o QR Code</p>
+                          <p className="text-xs text-gray-400">
+                            Abra o WhatsApp e selecione WhatsApp Web
+                          </p>
+                        </motion.div>
+                      </div>
+                    </motion.div>
                 )}
 
                 {status === 'connected' && (
-                  <motion.div 
+                  <motion.div
                       className="flex flex-col items-center justify-center py-4"
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <motion.div 
+                    <motion.div
                         className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mb-2"
                       initial={{ scale: 0.5 }}
                       animate={{ scale: 1 }}
                       transition={{ type: 'spring', damping: 10, stiffness: 200 }}
                     >
-                      <motion.svg 
-                          className="w-6 h-6 text-green-500" 
-                        fill="none" 
-                        viewBox="0 0 24 24" 
+                      <motion.svg
+                          className="w-6 h-6 text-green-500"
+                        fill="none"
+                        viewBox="0 0 24 24"
                         stroke="currentColor"
                         initial={{ pathLength: 0 }}
                         animate={{ pathLength: 1 }}
                         transition={{ duration: 0.5, delay: 0.2 }}
                       >
-                        <motion.path 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                          strokeWidth={3} 
-                          d="M5 13l4 4L19 7" 
+                        <motion.path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={3}
+                          d="M5 13l4 4L19 7"
                         />
                       </motion.svg>
                     </motion.div>

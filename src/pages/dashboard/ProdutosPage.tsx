@@ -119,6 +119,8 @@ const ProdutosPage: React.FC = () => {
     preco: 0,
     descricao: '',
     codigo: '',
+    promocao: false,
+    ativo: true,
   });
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -162,11 +164,19 @@ const ProdutosPage: React.FC = () => {
 
       const { data: opcoesData } = await supabase
         .from('opcoes_adicionais')
-        .select('*')
+        .select(`
+          *,
+          itens:opcoes_adicionais_itens(*)
+        `)
         .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
 
-      setAvailableOpcoes(opcoesData || []);
+      // Filtrar apenas opções que têm pelo menos um item
+      const opcoesComItens = (opcoesData || []).filter(opcao =>
+        opcao.itens && opcao.itens.length > 0
+      );
+
+      setAvailableOpcoes(opcoesComItens);
     } catch (error: any) {
       console.error('Error loading available options:', error);
     }
@@ -188,13 +198,15 @@ const ProdutosPage: React.FC = () => {
       const { data: gruposData, error: gruposError } = await supabase
         .from('grupos')
         .select('*')
-        .eq('empresa_id', usuarioData.empresa_id);
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false);
 
       if (gruposError) throw gruposError;
 
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
-        .select('*');
+        .select('*')
+        .eq('deletado', false);
 
       if (produtosError) throw produtosError;
 
@@ -207,7 +219,8 @@ const ProdutosPage: React.FC = () => {
             nome,
             itens:opcoes_adicionais_itens (*)
           )
-        `);
+        `)
+        .eq('deletado', false);
 
       if (produtoOpcoesError) throw produtoOpcoesError;
 
@@ -247,7 +260,7 @@ const ProdutosPage: React.FC = () => {
 
       let nextCode = 1;
       codes.sort((a, b) => a - b);
-      
+
       for (const code of codes) {
         if (code !== nextCode) break;
         nextCode++;
@@ -285,6 +298,8 @@ const ProdutosPage: React.FC = () => {
       preco: 0,
       descricao: '',
       codigo: nextCode,
+      promocao: false,
+      ativo: true,
     });
     setShowSidebar(true);
   };
@@ -298,6 +313,8 @@ const ProdutosPage: React.FC = () => {
       preco: produto.preco,
       descricao: produto.descricao,
       codigo: produto.codigo,
+      promocao: produto.promocao || false,
+      ativo: produto.ativo !== false, // Se não estiver definido, assume true
     });
 
     try {
@@ -341,8 +358,8 @@ const ProdutosPage: React.FC = () => {
 
         if (error) throw error;
 
-        setGrupos(grupos.map(grupo => 
-          grupo.id === selectedGrupo.id 
+        setGrupos(grupos.map(grupo =>
+          grupo.id === selectedGrupo.id
             ? { ...data, produtos: grupo.produtos }
             : grupo
         ));
@@ -408,6 +425,8 @@ const ProdutosPage: React.FC = () => {
             preco: novoProduto.preco,
             descricao: novoProduto.descricao,
             codigo: novoProduto.codigo,
+            promocao: novoProduto.promocao,
+            ativo: novoProduto.ativo,
             empresa_id: usuarioData.empresa_id
           })
           .eq('id', editingProduto.id)
@@ -475,7 +494,7 @@ const ProdutosPage: React.FC = () => {
       type: 'grupo',
       id: grupoId,
       title: 'Excluir Grupo',
-      message: 'Tem certeza que deseja excluir este grupo? Esta ação não pode ser desfeita.',
+      message: 'Tem certeza que deseja excluir este grupo? Você poderá restaurá-lo posteriormente se necessário.',
     });
   };
 
@@ -497,16 +516,26 @@ const ProdutosPage: React.FC = () => {
       id: produtoId,
       grupoId,
       title: 'Excluir Produto',
-      message: 'Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.',
+      message: 'Tem certeza que deseja excluir este produto? Você poderá restaurá-lo posteriormente se necessário.',
     });
   };
 
   const handleConfirmDelete = async () => {
     try {
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const now = new Date().toISOString();
+
       if (deleteConfirmation.type === 'grupo') {
         const { error } = await supabase
           .from('grupos')
-          .delete()
+          .update({
+            deletado: true,
+            deletado_em: now,
+            deletado_por: userData.user.id
+          })
           .eq('id', deleteConfirmation.id);
 
         if (error) throw error;
@@ -516,7 +545,11 @@ const ProdutosPage: React.FC = () => {
       } else {
         const { error } = await supabase
           .from('produtos')
-          .delete()
+          .update({
+            deletado: true,
+            deletado_em: now,
+            deletado_por: userData.user.id
+          })
           .eq('id', deleteConfirmation.id);
 
         if (error) throw error;
@@ -537,9 +570,19 @@ const ProdutosPage: React.FC = () => {
 
   const handleRemoveAdicional = async (produtoId: string, opcaoId: string) => {
     try {
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const now = new Date().toISOString();
+
       const { error } = await supabase
         .from('produtos_opcoes_adicionais')
-        .delete()
+        .update({
+          deletado: true,
+          deletado_em: now,
+          deletado_por: userData.user.id
+        })
         .eq('produto_id', produtoId)
         .eq('opcao_id', opcaoId);
 
@@ -593,7 +636,7 @@ const ProdutosPage: React.FC = () => {
   };
 
   const filteredAndSortedGrupos = grupos
-    .filter(grupo => 
+    .filter(grupo =>
       grupo.nome.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
@@ -655,7 +698,7 @@ const ProdutosPage: React.FC = () => {
                   )}
                 </div>
               </div>
-              
+
               <AnimatePresence>
                 {expandedOpcoes[`${produto.id}-${opcao.id}`] && (
                   <motion.div
@@ -691,7 +734,7 @@ const ProdutosPage: React.FC = () => {
   const renderProduto = (grupo: Grupo, produto: Produto) => (
     <div
       key={produto.id}
-      className="p-3 bg-gray-800/50 rounded-lg"
+      className={`p-3 bg-gray-800/50 rounded-lg ${produto.ativo === false ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
@@ -699,6 +742,16 @@ const ProdutosPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <h4 className="text-white font-medium">{produto.nome}</h4>
               <span className="text-sm text-gray-400">#{produto.codigo}</span>
+              {produto.promocao && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-primary-500/20 text-primary-400 rounded-full">
+                  Promoção
+                </span>
+              )}
+              {produto.ativo === false && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
+                  Inativo
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -773,7 +826,7 @@ const ProdutosPage: React.FC = () => {
             {searchTerm ? 'Nenhum grupo encontrado' : 'Nenhum grupo cadastrado'}
           </h3>
           <p className="text-gray-400 mb-6">
-            {searchTerm 
+            {searchTerm
               ? 'Tente buscar com outros termos'
               : 'Crie seu primeiro grupo de produtos para começar.'
             }
@@ -820,7 +873,7 @@ const ProdutosPage: React.FC = () => {
                   </button>
                 </div>
               </div>
-              
+
               <div className="p-4">
                 <div className="mb-4 flex gap-4">
                   <div className="flex-1 relative">
@@ -983,6 +1036,34 @@ const ProdutosPage: React.FC = () => {
                         rows={4}
                         placeholder="Digite a descrição adicional do produto"
                       />
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="promocao"
+                          checked={novoProduto.promocao}
+                          onChange={(e) => setNovoProduto({ ...novoProduto, promocao: e.target.checked })}
+                          className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                        />
+                        <label htmlFor="promocao" className="text-sm font-medium text-white cursor-pointer">
+                          Produto em Promoção
+                        </label>
+                      </div>
+
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="ativo"
+                          checked={novoProduto.ativo}
+                          onChange={(e) => setNovoProduto({ ...novoProduto, ativo: e.target.checked })}
+                          className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                        />
+                        <label htmlFor="ativo" className="text-sm font-medium text-white cursor-pointer">
+                          Produto Ativo
+                        </label>
+                      </div>
                     </div>
 
                     <div>

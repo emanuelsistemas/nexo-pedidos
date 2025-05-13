@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exemplos de Animações - Modal QR Code</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            400: '#4f46e5',
+                            500: '#4338ca',
+                        },
+                        accent: {
+                            500: '#8b5cf6',
+                        },
+                        gray: {
+                            300: '#d1d5db',
+                            400: '#9ca3af',
+                            500: '#6b7280',
+                            600: '#4b5563',
+                            700: '#374151',
+                            800: '#1f2937',
+                            900: '#111827',
+                        }
+                    },
+                    animation: {
+                        'spin-slow': 'spin 3s linear infinite',
+                        'progress-bar': 'progressBar 2.5s ease-in-out infinite',
+                        'message-fade': 'messageFade 5s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        progressBar: {
+                            '0%': { width: '0%' },
+                            '50%': { width: '70%' },
+                            '70%': { width: '85%' },
+                            '90%': { width: '95%' },
+                            '100%': { width: '0%' },
+                        },
+                        messageFade: {
+                            '0%': { opacity: 0, transform: 'translateY(10px)' },
+                            '10%': { opacity: 1, transform: 'translateY(0)' },
+                            '90%': { opacity: 1, transform: 'translateY(0)' },
+                            '100%': { opacity: 0, transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #111827;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .example-container {
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .code-block {
+            background-color: #1f2937;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+            color: #d1d5db;
+        }
+        .demo-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background-color: #1f2937;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+        h1, h2, h3 {
+            color: white;
+        }
+        .qr-code-placeholder {
+            width: 150px;
+            height: 150px;
+            background-color: white;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            gap: 5px;
+            padding: 10px;
+        }
+        .qr-bit {
+            background-color: black;
+            border-radius: 2px;
+        }
+        .empty {
+            background-color: transparent;
+        }
+    </style>
+</head>
+<body class="p-8 max-w-4xl mx-auto">
+    <h1 class="text-3xl font-bold mb-6">Exemplos de Animações - Modal QR Code</h1>
+    <p class="mb-8">Esta página demonstra as animações e efeitos visuais implementados no modal de QR Code do sistema Nexo.</p>
+
+    <!-- Animações de Carregamento -->
+    <div class="example-container">
+        <h2 class="text-2xl font-bold mb-4">1. Animações de Carregamento</h2>
+        
+        <h3 class="text-xl font-semibold mt-6 mb-2">Loading Animado em Camadas</h3>
+        <div class="demo-section">
+            <div class="relative w-16 h-16 mb-3">
+                <!-- Camada externa -->
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="w-12 h-12 border-4 border-gray-600 border-t-primary-500 rounded-full animate-spin"></div>
+                </div>
+                <!-- Camada média -->
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="w-8 h-8 border-3 border-gray-700 border-t-primary-400 rounded-full animate-spin-slow" style="animation-direction: reverse;"></div>
+                </div>
+                <!-- Camada interna -->
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="w-4 h-4 bg-primary-500 rounded-full animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+        
+        <h3 class="text-xl font-semibold mt-6 mb-2">Barra de Progresso Animada</h3>
+        <div class="demo-section">
+            <div class="w-48 h-1 bg-gray-800 rounded-full overflow-hidden">
+                <div class="h-full bg-primary-500 rounded-full animate-progress-bar"></div>
+            </div>
+        </div>
+        
+        <h3 class="text-xl font-semibold mt-6 mb-2">Mensagens Alternadas</h3>
+        <div class="demo-section">
+            <p class="text-xs text-gray-300 text-center min-h-[1.5rem] animate-message-fade">Inicializando WhatsApp...</p>
+        </div>
+    </div>
+
+    <!-- Efeitos do QR Code -->
+    <div class="example-container">
+        <h2 class="text-2xl font-bold mb-4">2. Efeitos do QR Code</h2>
+        
+        <h3 class="text-xl font-semibold mt-6 mb-2">Moldura com Gradiente Animado</h3>
+        <div class="demo-section">
+            <div class="relative">
+                <!-- Moldura animada -->
+                <div class="absolute -inset-2 rounded-lg bg-gradient-to-r from-primary-500 via-accent-500 to-primary-500 opacity-75 blur-sm animate-pulse"></div>
+                
+                <!-- QR code simulado -->
+                <div class="relative bg-white p-2 rounded-lg shadow-lg">
+                    <div class="qr-code-placeholder">
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="empty"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <h3 class="text-xl font-semibold mt-6 mb-2">Indicador de Escaneamento</h3>
+        <div class="demo-section">
+            <div class="relative">
+                <!-- QR code simulado -->
+                <div class="bg-white p-2 rounded-lg shadow-lg">
+                    <div class="qr-code-placeholder">
+                        <!-- Conteúdo do QR code simulado -->
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="empty"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="empty"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                        <div class="qr-bit"></div>
+                    </div>
+                    
+                    <!-- Indicador de escaneamento -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="w-24 h-24 border-2 border-primary-500 opacity-50 animate-ping rounded-sm"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 text-center text-gray-400 text-sm">
+        <p>Documentação de animações e efeitos visuais - Sistema Nexo</p>
+    </div>
+
+    <script>
+        // Simulação de mensagens alternadas
+        const messages = [
+            "Inicializando WhatsApp...",
+            "Preparando QR Code...",
+            "Conectando ao servidor...",
+            "Configurando sessão...",
+            "Quase lá...",
+            "Gerando QR Code...",
+            "Estabelecendo conexão segura..."
+        ];
+        
+        const messageElement = document.querySelector('.animate-message-fade');
+        let currentIndex = 0;
+        
+        setInterval(() => {
+            messageElement.style.opacity = 0;
+            setTimeout(() => {
+                currentIndex = (currentIndex + 1) % messages.length;
+                messageElement.textContent = messages[currentIndex];
+                messageElement.style.opacity = 1;
+            }, 500);
+        }, 5000);
+    </script>
+</body>
+</html>

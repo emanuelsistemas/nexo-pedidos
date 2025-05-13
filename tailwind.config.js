@@ -37,6 +37,21 @@ export default {
       },
       animation: {
         'fade-in': 'fadeIn 0.6s ease forwards',
+        'spin-slow': 'spin 3s linear infinite',
+        'progress-bar': 'progressBar 2.5s ease-in-out infinite',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: 0 },
+          '100%': { opacity: 1 },
+        },
+        progressBar: {
+          '0%': { width: '0%' },
+          '50%': { width: '70%' },
+          '70%': { width: '85%' },
+          '90%': { width: '95%' },
+          '100%': { width: '0%' },
+        },
       },
     },
   },

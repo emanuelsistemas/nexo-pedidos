@@ -4,10 +4,10 @@
 module.exports = {
   // Configurações do servidor Express
   server: {
-    port: 3000,
+    port: 3001,
     host: 'localhost'
   },
-  
+
   // Configurações do WhatsApp Web.js
   whatsapp: {
     // Diretório para armazenar dados da sessão

@@ -65,8 +65,10 @@ const AdicionaisPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [opcoes, setOpcoes] = useState<any[]>([]);
   const [editingOpcao, setEditingOpcao] = useState<any>(null);
-  const [novaOpcao, setNovaOpcao] = useState({ nome: '' });
+  const [novaOpcao, setNovaOpcao] = useState({ nome: '', quantidade_minima: 0 });
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
+  const [isAddingItem, setIsAddingItem] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     itemId: string;
@@ -102,9 +104,10 @@ const AdicionaisPage: React.FC = () => {
         .from('opcoes_adicionais')
         .select(`
           *,
-          itens:opcoes_adicionais_itens(*)
+          itens:opcoes_adicionais_itens(deletado.eq.false)
         `)
         .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false)
         .order('nome');
 
       setOpcoes(opcoesData || []);
@@ -134,7 +137,10 @@ const AdicionaisPage: React.FC = () => {
       if (editingOpcao) {
         const { error } = await supabase
           .from('opcoes_adicionais')
-          .update({ nome: novaOpcao.nome })
+          .update({
+            nome: novaOpcao.nome,
+            quantidade_minima: novaOpcao.quantidade_minima
+          })
           .eq('id', editingOpcao.id);
 
         if (error) throw error;
@@ -144,6 +150,7 @@ const AdicionaisPage: React.FC = () => {
           .from('opcoes_adicionais')
           .insert([{
             nome: novaOpcao.nome,
+            quantidade_minima: novaOpcao.quantidade_minima,
             empresa_id: usuarioData.empresa_id
           }]);
 
@@ -151,7 +158,7 @@ const AdicionaisPage: React.FC = () => {
         showMessage('success', 'Opção criada com sucesso!');
       }
 
-      setNovaOpcao({ nome: '' });
+      setNovaOpcao({ nome: '', quantidade_minima: 0 });
       setEditingOpcao(null);
       setShowSidebar(false);
       loadData();
@@ -164,7 +171,12 @@ const AdicionaisPage: React.FC = () => {
 
   const handleSubmitItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novoItem.nome.trim() || !novoItem.preco) return;
+    if (!novoItem.nome.trim()) return;
+
+    // Se o campo de preço estiver vazio, considerar como zero
+    // Caso contrário, converter para número
+    const preco = novoItem.preco === '' ? 0 : parseFloat(novoItem.preco);
+    if (isNaN(preco)) return;
 
     setIsLoading(true);
     try {
@@ -179,25 +191,61 @@ const AdicionaisPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
-      const { error } = await supabase
-        .from('opcoes_adicionais_itens')
-        .insert([{
-          nome: novoItem.nome,
-          preco: parseFloat(novoItem.preco),
-          opcao_id: editingOpcao.id,
-          empresa_id: usuarioData.empresa_id
-        }]);
+      if (editingItem) {
+        // Atualizar item existente
+        const { error } = await supabase
+          .from('opcoes_adicionais_itens')
+          .update({
+            nome: novoItem.nome,
+            preco: preco
+          })
+          .eq('id', editingItem.id);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setNovoItem({ nome: '', preco: '' });
-      loadData();
-      showMessage('success', 'Item adicionado com sucesso!');
+        setNovoItem({ nome: '', preco: '' });
+        setEditingItem(null);
+        setIsAddingItem(false);
+        setEditingOpcao(null);
+        setShowSidebar(false);
+        loadData();
+        showMessage('success', 'Item atualizado com sucesso!');
+      } else {
+        // Adicionar novo item
+        const { error } = await supabase
+          .from('opcoes_adicionais_itens')
+          .insert([{
+            nome: novoItem.nome,
+            preco: preco,
+            opcao_id: editingOpcao.id,
+            empresa_id: usuarioData.empresa_id
+          }]);
+
+        if (error) throw error;
+
+        setNovoItem({ nome: '', preco: '' });
+        setIsAddingItem(false);
+        setEditingOpcao(null);
+        setShowSidebar(false);
+        loadData();
+        showMessage('success', 'Item adicionado com sucesso!');
+      }
     } catch (error: any) {
-      showMessage('error', 'Erro ao adicionar item: ' + error.message);
+      showMessage('error', `Erro ao ${editingItem ? 'atualizar' : 'adicionar'} item: ` + error.message);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleEditItem = (item: any, opcao: any) => {
+    setEditingOpcao(opcao);
+    setEditingItem(item);
+    setNovoItem({
+      nome: item.nome,
+      preco: item.preco.toString()
+    });
+    setIsAddingItem(true);
+    setShowSidebar(true);
   };
 
   const handleDelete = async (id: string, type: 'opcao' | 'item', nome: string) => {
@@ -206,18 +254,27 @@ const AdicionaisPage: React.FC = () => {
       itemId: id,
       itemType: type,
       title: `Excluir ${type === 'opcao' ? 'Opção' : 'Item'}`,
-      message: `Tem certeza que deseja excluir ${type === 'opcao' ? 'a opção' : 'o item'} "${nome}"? Esta ação não pode ser desfeita.`,
+      message: `Tem certeza que deseja excluir ${type === 'opcao' ? 'a opção' : 'o item'} "${nome}"? Você poderá restaurá-${type === 'opcao' ? 'la' : 'lo'} posteriormente se necessário.`,
     });
   };
 
   const handleConfirmDelete = async () => {
     try {
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const now = new Date().toISOString();
       const { itemId, itemType } = deleteConfirmation;
       const table = itemType === 'opcao' ? 'opcoes_adicionais' : 'opcoes_adicionais_itens';
 
       const { error } = await supabase
         .from(table)
-        .delete()
+        .update({
+          deletado: true,
+          deletado_em: now,
+          deletado_por: userData.user.id
+        })
         .eq('id', itemId);
 
       if (error) throw error;
@@ -243,7 +300,8 @@ const AdicionaisPage: React.FC = () => {
           variant="primary"
           onClick={() => {
             setEditingOpcao(null);
-            setNovaOpcao({ nome: '' });
+            setNovaOpcao({ nome: '', quantidade_minima: 0 });
+            setIsAddingItem(false);
             setShowSidebar(true);
           }}
         >
@@ -258,12 +316,36 @@ const AdicionaisPage: React.FC = () => {
             className="bg-background-card rounded-lg border border-gray-800"
           >
             <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-              <h3 className="text-lg font-medium text-white">{opcao.nome}</h3>
+              <div>
+                <h3 className="text-lg font-medium text-white">{opcao.nome}</h3>
+                {opcao.quantidade_minima > 0 && (
+                  <p className="text-xs text-primary-400 mt-1">
+                    Mínimo: {opcao.quantidade_minima} {opcao.quantidade_minima === 1 ? 'item' : 'itens'}
+                  </p>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
                     setEditingOpcao(opcao);
-                    setNovaOpcao({ nome: opcao.nome });
+                    setNovoItem({ nome: '', preco: '0' });
+                    setIsAddingItem(true);
+                    setEditingItem(null);
+                    setShowSidebar(true);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary-500/10 rounded-md text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 transition-colors"
+                >
+                  <Plus size={14} />
+                  Adicionar Item
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingOpcao(opcao);
+                    setNovaOpcao({
+                      nome: opcao.nome,
+                      quantidade_minima: opcao.quantidade_minima || 0
+                    });
+                    setIsAddingItem(false);
                     setShowSidebar(true);
                   }}
                   className="p-1 text-gray-400 hover:text-white transition-colors"
@@ -293,6 +375,12 @@ const AdicionaisPage: React.FC = () => {
                           R$ {item.preco.toFixed(2)}
                         </span>
                         <button
+                          onClick={() => handleEditItem(item, opcao)}
+                          className="p-1 text-gray-400 hover:text-white transition-colors"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
                           onClick={() => handleDelete(item.id, 'item', item.nome)}
                           className="text-red-400 hover:text-red-300 transition-colors"
                         >
@@ -307,18 +395,6 @@ const AdicionaisPage: React.FC = () => {
                   <p className="text-gray-400">Nenhum item cadastrado</p>
                 </div>
               )}
-
-              <button
-                onClick={() => {
-                  setEditingOpcao(opcao);
-                  setNovoItem({ nome: '', preco: '' });
-                  setShowSidebar(true);
-                }}
-                className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 transition-colors"
-              >
-                <Plus size={16} />
-                Adicionar Item
-              </button>
             </div>
           </div>
         ))}
@@ -337,7 +413,8 @@ const AdicionaisPage: React.FC = () => {
               className="mx-auto"
               onClick={() => {
                 setEditingOpcao(null);
-                setNovaOpcao({ nome: '' });
+                setNovaOpcao({ nome: '', quantidade_minima: 0 });
+                setIsAddingItem(false);
                 setShowSidebar(true);
               }}
             >
@@ -355,7 +432,11 @@ const AdicionaisPage: React.FC = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setShowSidebar(false)}
+              onClick={() => {
+                setShowSidebar(false);
+                setIsAddingItem(false);
+                setEditingItem(null);
+              }}
             />
             <motion.div
               initial={{ x: '100%' }}
@@ -368,20 +449,24 @@ const AdicionaisPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-semibold text-white">
                     {editingOpcao
-                      ? novoItem.nome || novoItem.preco
-                        ? 'Novo Item'
+                      ? isAddingItem
+                        ? editingItem ? 'Editar Item' : 'Novo Item'
                         : 'Editar Opção'
                       : 'Nova Opção'}
                   </h2>
                   <button
-                    onClick={() => setShowSidebar(false)}
+                    onClick={() => {
+                      setShowSidebar(false);
+                      setIsAddingItem(false);
+                      setEditingItem(null);
+                    }}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     <X size={24} />
                   </button>
                 </div>
 
-                {(!editingOpcao || (editingOpcao && !novoItem.nome && !novoItem.preco)) && (
+                {(!editingOpcao || (editingOpcao && !isAddingItem)) && (
                   <form onSubmit={handleSubmitOpcao} className="space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-400 mb-2">
@@ -390,10 +475,27 @@ const AdicionaisPage: React.FC = () => {
                       <input
                         type="text"
                         value={novaOpcao.nome}
-                        onChange={(e) => setNovaOpcao({ nome: e.target.value })}
+                        onChange={(e) => setNovaOpcao({ ...novaOpcao, nome: e.target.value })}
                         className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                         placeholder="Digite o nome da opção"
                       />
+
+                      <label className="block text-sm font-medium text-gray-400 mt-4 mb-2">
+                        Quantidade Mínima
+                      </label>
+                      <div className="flex items-center">
+                        <input
+                          type="number"
+                          min="0"
+                          value={novaOpcao.quantidade_minima}
+                          onChange={(e) => setNovaOpcao({ ...novaOpcao, quantidade_minima: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          placeholder="0"
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Se maior que 0, o cliente deverá selecionar pelo menos esta quantidade de itens desta opção.
+                      </p>
                     </div>
 
                     <div className="flex gap-4 pt-4">
@@ -401,7 +503,11 @@ const AdicionaisPage: React.FC = () => {
                         type="button"
                         variant="text"
                         className="flex-1"
-                        onClick={() => setShowSidebar(false)}
+                        onClick={() => {
+                          setShowSidebar(false);
+                          setIsAddingItem(false);
+                          setEditingItem(null);
+                        }}
                       >
                         Cancelar
                       </Button>
@@ -417,7 +523,7 @@ const AdicionaisPage: React.FC = () => {
                   </form>
                 )}
 
-                {editingOpcao && (novoItem.nome || novoItem.preco) && (
+                {editingOpcao && isAddingItem && (
                   <form onSubmit={handleSubmitItem} className="space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-400 mb-2">
@@ -439,6 +545,7 @@ const AdicionaisPage: React.FC = () => {
                       <input
                         type="number"
                         step="0.01"
+                        min="0"
                         value={novoItem.preco}
                         onChange={(e) => setNovoItem({ ...novoItem, preco: e.target.value })}
                         className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
@@ -451,7 +558,11 @@ const AdicionaisPage: React.FC = () => {
                         type="button"
                         variant="text"
                         className="flex-1"
-                        onClick={() => setShowSidebar(false)}
+                        onClick={() => {
+                          setShowSidebar(false);
+                          setIsAddingItem(false);
+                          setEditingItem(null);
+                        }}
                       >
                         Cancelar
                       </Button>
@@ -461,7 +572,7 @@ const AdicionaisPage: React.FC = () => {
                         className="flex-1"
                         disabled={isLoading}
                       >
-                        {isLoading ? 'Salvando...' : 'Adicionar Item'}
+                        {isLoading ? 'Salvando...' : editingItem ? 'Salvar Item' : 'Adicionar Item'}
                       </Button>
                     </div>
                   </form>
