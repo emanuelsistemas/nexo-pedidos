@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Phone, Mail, MapPin, Building, Save, AlertCircle, Search } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, MapPin, Building, Save, AlertCircle, Search, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -12,11 +12,26 @@ interface Empresa {
 
 const UserNovoClientePage: React.FC = () => {
   const navigate = useNavigate();
+  interface Telefone {
+    numero: string;
+    tipo: 'Fixo' | 'Celular';
+    whatsapp: boolean;
+  }
+
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [tipoDocumento, setTipoDocumento] = useState<'CNPJ' | 'CPF'>('CNPJ');
+  const [documento, setDocumento] = useState('');
+  const [razaoSocial, setRazaoSocial] = useState('');
+  const [nomeFantasia, setNomeFantasia] = useState('');
   const [nome, setNome] = useState('');
-  const [telefone, setTelefone] = useState('');
+  const [telefones, setTelefones] = useState<Telefone[]>([]);
+  const [novoTelefone, setNovoTelefone] = useState({
+    numero: '',
+    tipo: 'Celular' as 'Fixo' | 'Celular',
+    whatsapp: false
+  });
   const [email, setEmail] = useState('');
   const [cep, setCep] = useState('');
   const [endereco, setEndereco] = useState('');
@@ -52,23 +67,275 @@ const UserNovoClientePage: React.FC = () => {
     }
   };
 
-  const formatarTelefone = (telefone: string) => {
+  const formatarTelefone = (telefone: string, tipo?: 'Fixo' | 'Celular') => {
+    if (!telefone) return '';
+
     // Remove todos os caracteres não numéricos
     const numeroLimpo = telefone.replace(/\D/g, '');
 
-    // Aplica a máscara de telefone
-    if (numeroLimpo.length <= 10) {
+    // Se o tipo for especificado, usa o formato correspondente
+    if (tipo === 'Fixo') {
       // Formato (XX) XXXX-XXXX para telefones fixos
-      return numeroLimpo.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+      return numeroLimpo.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*/, (_, ddd, parte1, parte2) => {
+        let resultado = '';
+        if (ddd) resultado += `(${ddd}`;
+        if (ddd && (parte1 || parte2)) resultado += ') ';
+        if (parte1) resultado += parte1;
+        if (parte1 && parte2) resultado += '-';
+        if (parte2) resultado += parte2;
+        return resultado;
+      });
+    } else if (tipo === 'Celular') {
+      // Formato (XX) X XXXX-XXXX para celulares
+      return numeroLimpo.replace(/^(\d{0,2})(\d{0,1})(\d{0,4})(\d{0,4}).*/, (_, ddd, digito9, parte1, parte2) => {
+        let resultado = '';
+        if (ddd) resultado += `(${ddd}`;
+        if (ddd && (digito9 || parte1 || parte2)) resultado += ') ';
+        if (digito9) resultado += `${digito9} `;
+        if (parte1) resultado += parte1;
+        if (parte1 && parte2) resultado += '-';
+        if (parte2) resultado += parte2;
+        return resultado;
+      });
     } else {
-      // Formato (XX) XXXXX-XXXX para celulares
-      return numeroLimpo.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+      // Se o tipo não for especificado, determina pelo tamanho
+      if (numeroLimpo.length <= 10) {
+        // Formato (XX) XXXX-XXXX para telefones fixos
+        return numeroLimpo.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+      } else {
+        // Formato (XX) X XXXX-XXXX para celulares
+        return numeroLimpo.replace(/(\d{2})(\d{1})(\d{4})(\d{4})/, '($1) $2 $3-$4');
+      }
     }
   };
 
-  const handleTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNovoTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = e.target.value;
-    setTelefone(formatarTelefone(valor));
+    setNovoTelefone({
+      ...novoTelefone,
+      numero: formatarTelefone(valor, novoTelefone.tipo)
+    });
+  };
+
+  const handleTipoTelefoneChange = (tipo: 'Fixo' | 'Celular') => {
+    // Se mudar o tipo, reformata o número de acordo com o novo tipo
+    setNovoTelefone({
+      ...novoTelefone,
+      tipo,
+      numero: novoTelefone.numero ? formatarTelefone(novoTelefone.numero.replace(/\D/g, ''), tipo) : ''
+    });
+  };
+
+  const handleWhatsappChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNovoTelefone({
+      ...novoTelefone,
+      whatsapp: e.target.checked
+    });
+  };
+
+  const adicionarTelefone = () => {
+    if (!novoTelefone.numero) {
+      showMessage('error', 'Digite um número de telefone');
+      return;
+    }
+
+    // Validar o número de telefone
+    const numeroLimpo = novoTelefone.numero.replace(/\D/g, '');
+    if ((novoTelefone.tipo === 'Fixo' && numeroLimpo.length !== 10) ||
+        (novoTelefone.tipo === 'Celular' && numeroLimpo.length !== 11)) {
+      showMessage('error', `Número de ${novoTelefone.tipo.toLowerCase()} inválido`);
+      return;
+    }
+
+    // Adicionar à lista de telefones
+    setTelefones([...telefones, { ...novoTelefone }]);
+
+    // Limpar o campo para adicionar outro telefone
+    setNovoTelefone({
+      numero: '',
+      tipo: 'Celular',
+      whatsapp: false
+    });
+  };
+
+  const removerTelefone = (index: number) => {
+    const novosTelefones = [...telefones];
+    novosTelefones.splice(index, 1);
+    setTelefones(novosTelefones);
+  };
+
+  const formatarCNPJ = (cnpj: string) => {
+    if (!cnpj) return '';
+
+    // Remove todos os caracteres não numéricos
+    const numeroLimpo = cnpj.replace(/\D/g, '');
+
+    // Aplica a máscara de CNPJ (XX.XXX.XXX/XXXX-XX)
+    return numeroLimpo
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2')
+      .substring(0, 18);
+  };
+
+  const formatarCPF = (cpf: string) => {
+    if (!cpf) return '';
+
+    // Remove todos os caracteres não numéricos
+    const numeroLimpo = cpf.replace(/\D/g, '');
+
+    // Aplica a máscara de CPF (XXX.XXX.XXX-XX)
+    return numeroLimpo
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+      .substring(0, 14);
+  };
+
+  const handleDocumentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    const formatado = tipoDocumento === 'CNPJ'
+      ? formatarCNPJ(valor)
+      : formatarCPF(valor);
+
+    setDocumento(formatado);
+  };
+
+  const validarCNPJ = (cnpj: string) => {
+    cnpj = cnpj.replace(/[^\d]+/g, '');
+
+    if (cnpj === '') return false;
+    if (cnpj.length !== 14) return false;
+
+    // Elimina CNPJs inválidos conhecidos
+    if (
+      cnpj === '00000000000000' ||
+      cnpj === '11111111111111' ||
+      cnpj === '22222222222222' ||
+      cnpj === '33333333333333' ||
+      cnpj === '44444444444444' ||
+      cnpj === '55555555555555' ||
+      cnpj === '66666666666666' ||
+      cnpj === '77777777777777' ||
+      cnpj === '88888888888888' ||
+      cnpj === '99999999999999'
+    ) {
+      return false;
+    }
+
+    // Valida DVs
+    let tamanho = cnpj.length - 2;
+    let numeros = cnpj.substring(0, tamanho);
+    const digitos = cnpj.substring(tamanho);
+    let soma = 0;
+    let pos = tamanho - 7;
+
+    for (let i = tamanho; i >= 1; i--) {
+      soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+      if (pos < 2) pos = 9;
+    }
+
+    let resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    if (resultado !== parseInt(digitos.charAt(0))) return false;
+
+    tamanho = tamanho + 1;
+    numeros = cnpj.substring(0, tamanho);
+    soma = 0;
+    pos = tamanho - 7;
+
+    for (let i = tamanho; i >= 1; i--) {
+      soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+      if (pos < 2) pos = 9;
+    }
+
+    resultado = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    if (resultado !== parseInt(digitos.charAt(1))) return false;
+
+    return true;
+  };
+
+  const validarCPF = (cpf: string) => {
+    cpf = cpf.replace(/[^\d]+/g, '');
+
+    if (cpf === '') return false;
+    if (cpf.length !== 11) return false;
+
+    // Elimina CPFs inválidos conhecidos
+    if (
+      cpf === '00000000000' ||
+      cpf === '11111111111' ||
+      cpf === '22222222222' ||
+      cpf === '33333333333' ||
+      cpf === '44444444444' ||
+      cpf === '55555555555' ||
+      cpf === '66666666666' ||
+      cpf === '77777777777' ||
+      cpf === '88888888888' ||
+      cpf === '99999999999'
+    ) {
+      return false;
+    }
+
+    // Valida 1o dígito
+    let add = 0;
+    for (let i = 0; i < 9; i++) {
+      add += parseInt(cpf.charAt(i)) * (10 - i);
+    }
+    let rev = 11 - (add % 11);
+    if (rev === 10 || rev === 11) rev = 0;
+    if (rev !== parseInt(cpf.charAt(9))) return false;
+
+    // Valida 2o dígito
+    add = 0;
+    for (let i = 0; i < 10; i++) {
+      add += parseInt(cpf.charAt(i)) * (11 - i);
+    }
+    rev = 11 - (add % 11);
+    if (rev === 10 || rev === 11) rev = 0;
+    if (rev !== parseInt(cpf.charAt(10))) return false;
+
+    return true;
+  };
+
+  const buscarCNPJ = async () => {
+    try {
+      // Remove caracteres não numéricos para a busca
+      const cnpjLimpo = documento.replace(/\D/g, '');
+
+      if (cnpjLimpo.length !== 14) {
+        showMessage('error', 'CNPJ inválido. O CNPJ deve conter 14 dígitos.');
+        return;
+      }
+
+      if (!validarCNPJ(cnpjLimpo)) {
+        showMessage('error', 'CNPJ inválido. Verifique os dígitos informados.');
+        return;
+      }
+
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setRazaoSocial(data.razao_social || '');
+        setNomeFantasia(data.nome_fantasia || '');
+        setNome(data.nome_fantasia || data.razao_social || '');
+        setCep(data.cep ? data.cep.replace(/(\d{5})(\d{3})/, '$1-$2') : '');
+        setEndereco(data.logradouro || '');
+        setNumero(data.numero || '');
+        setComplemento(data.complemento || '');
+        setBairro(data.bairro || '');
+        setCidade(data.municipio || '');
+        setEstado(data.uf || '');
+
+        showMessage('success', 'Dados do CNPJ carregados com sucesso!');
+      } else {
+        showMessage('error', data.message || 'CNPJ não encontrado');
+      }
+    } catch (error) {
+      console.error('Erro ao buscar CNPJ:', error);
+      showMessage('error', 'Erro ao buscar CNPJ. Tente novamente.');
+    }
   };
 
   const formatarCep = (cep: string) => {
@@ -152,6 +419,25 @@ const UserNovoClientePage: React.FC = () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Usuário não autenticado');
 
+      // Validar documento se preenchido
+      if (documento) {
+        const documentoLimpo = documento.replace(/\D/g, '');
+
+        if (tipoDocumento === 'CNPJ') {
+          if (!validarCNPJ(documentoLimpo)) {
+            setError('CNPJ inválido. Verifique os dígitos informados.');
+            setIsSaving(false);
+            return;
+          }
+        } else {
+          if (!validarCPF(documentoLimpo)) {
+            setError('CPF inválido. Verifique os dígitos informados.');
+            setIsSaving(false);
+            return;
+          }
+        }
+      }
+
       // Montar o endereço completo a partir dos campos individuais
       let enderecoCompleto = '';
 
@@ -165,12 +451,34 @@ const UserNovoClientePage: React.FC = () => {
         if (cep) enderecoCompleto += `, ${cep}`;
       }
 
+      // Validar telefones
+      if (telefones.length === 0) {
+        setError('Adicione pelo menos um telefone');
+        setIsSaving(false);
+        return;
+      }
+
+      // Preparar os telefones para salvar (remover formatação)
+      const telefonesParaSalvar = telefones.map(tel => ({
+        ...tel,
+        numero: tel.numero.replace(/\D/g, '')
+      }));
+
+      // Manter compatibilidade com o campo telefone antigo
+      // Usar o primeiro telefone da lista como telefone principal
+      const telefonePrincipal = telefonesParaSalvar.length > 0 ? telefonesParaSalvar[0].numero : '';
+
       // Criar cliente
       const { data: cliente, error: clienteError } = await supabase
         .from('clientes')
         .insert({
+          tipo_documento: tipoDocumento,
+          documento: documento ? documento.replace(/\D/g, '') : null,
+          razao_social: tipoDocumento === 'CNPJ' ? razaoSocial || null : null,
+          nome_fantasia: nomeFantasia || null,
           nome,
-          telefone: telefone.replace(/\D/g, ''),
+          telefone: telefonePrincipal,
+          telefones: telefonesParaSalvar,
           email: email || null,
           endereco: enderecoCompleto || null,
           empresa_id: empresaId,
@@ -214,6 +522,98 @@ const UserNovoClientePage: React.FC = () => {
         <div className="bg-background-card rounded-lg border border-gray-800 p-4 space-y-4">
           <h2 className="text-lg font-medium text-white mb-2">Dados do Cliente</h2>
 
+          {/* Tipo de Documento */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Tipo de Documento
+            </label>
+            <div className="flex gap-4 mb-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={tipoDocumento === 'CNPJ'}
+                  onChange={() => {
+                    setTipoDocumento('CNPJ');
+                    setDocumento('');
+                  }}
+                  className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                />
+                <span className="text-white">CNPJ</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  checked={tipoDocumento === 'CPF'}
+                  onChange={() => {
+                    setTipoDocumento('CPF');
+                    setDocumento('');
+                    setRazaoSocial('');
+                  }}
+                  className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                />
+                <span className="text-white">CPF</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Documento (CNPJ ou CPF) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              {tipoDocumento}
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FileText size={18} className="text-gray-500" />
+              </div>
+              <input
+                type="text"
+                value={documento}
+                onChange={handleDocumentoChange}
+                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-10 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                placeholder={tipoDocumento === 'CNPJ' ? 'XX.XXX.XXX/XXXX-XX' : 'XXX.XXX.XXX-XX'}
+              />
+              {tipoDocumento === 'CNPJ' && (
+                <button
+                  type="button"
+                  onClick={buscarCNPJ}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white"
+                >
+                  <Search size={18} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Razão Social (apenas para CNPJ) */}
+          {tipoDocumento === 'CNPJ' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">
+                Razão Social
+              </label>
+              <input
+                type="text"
+                value={razaoSocial}
+                onChange={(e) => setRazaoSocial(e.target.value)}
+                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                placeholder="Razão Social"
+              />
+            </div>
+          )}
+
+          {/* Nome Fantasia */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Nome Fantasia
+            </label>
+            <input
+              type="text"
+              value={nomeFantasia}
+              onChange={(e) => setNomeFantasia(e.target.value)}
+              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+              placeholder="Nome Fantasia"
+            />
+          </div>
+
           {/* Nome */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
@@ -234,24 +634,107 @@ const UserNovoClientePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Telefone */}
+          {/* Telefones */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
-              Telefone <span className="text-red-500">*</span>
+              Telefones <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Phone size={18} className="text-gray-500" />
+
+            {/* Lista de telefones adicionados */}
+            {telefones.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {telefones.map((tel, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between bg-gray-800/70 rounded-lg p-2 border border-gray-700"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Phone size={18} className={tel.whatsapp ? "text-green-500" : "text-gray-500"} />
+                      <div>
+                        <p className="text-white">{tel.numero}</p>
+                        <p className="text-xs text-gray-400">
+                          {tel.tipo}{tel.whatsapp ? " - WhatsApp" : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removerTelefone(index)}
+                      className="text-red-400 hover:text-red-300 p-1"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
               </div>
-              <input
-                type="text"
-                value={telefone}
-                onChange={handleTelefoneChange}
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                placeholder="(00) 00000-0000"
-                required
-              />
+            )}
+
+            {/* Formulário para adicionar novo telefone */}
+            <div className="space-y-3 bg-gray-800/30 p-3 rounded-lg border border-gray-700">
+              <h4 className="text-sm font-medium text-gray-300">Adicionar telefone</h4>
+
+              {/* Tipo de telefone */}
+              <div className="flex gap-4">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    checked={novoTelefone.tipo === 'Celular'}
+                    onChange={() => handleTipoTelefoneChange('Celular')}
+                    className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                  />
+                  <span className="text-white">Celular</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    checked={novoTelefone.tipo === 'Fixo'}
+                    onChange={() => handleTipoTelefoneChange('Fixo')}
+                    className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                  />
+                  <span className="text-white">Fixo</span>
+                </label>
+              </div>
+
+              {/* WhatsApp (apenas para celular) */}
+              {novoTelefone.tipo === 'Celular' && (
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={novoTelefone.whatsapp}
+                    onChange={handleWhatsappChange}
+                    className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                  />
+                  <span className="text-white">Este número tem WhatsApp</span>
+                </label>
+              )}
+
+              {/* Campo de telefone */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Phone size={18} className="text-gray-500" />
+                  </div>
+                  <input
+                    type="text"
+                    value={novoTelefone.numero}
+                    onChange={handleNovoTelefoneChange}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    placeholder={novoTelefone.tipo === 'Celular' ? "(00) 0 0000-0000" : "(00) 0000-0000"}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={adicionarTelefone}
+                  className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
             </div>
+
+            {error && error.includes('telefone') && (
+              <p className="text-red-500 text-xs mt-1">{error}</p>
+            )}
           </div>
 
           {/* Email */}

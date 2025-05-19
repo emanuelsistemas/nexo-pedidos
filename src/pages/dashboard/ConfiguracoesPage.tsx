@@ -853,6 +853,44 @@ const ConfiguracoesPage: React.FC = () => {
     }));
   };
 
+  const buscarCNPJ = async () => {
+    const cnpj = empresaForm.documento.replace(/\D/g, '');
+    if (cnpj.length !== 14) {
+      showMessage('error', 'CNPJ inválido. O CNPJ deve conter 14 dígitos.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+      const data = await response.json();
+
+      if (response.ok) {
+        setEmpresaForm(prev => ({
+          ...prev,
+          razao_social: data.razao_social || '',
+          nome_fantasia: data.nome_fantasia || '',
+          cep: formatCEP(data.cep || ''),
+          endereco: data.logradouro || '',
+          numero: data.numero || '',
+          complemento: data.complemento || '',
+          bairro: data.bairro || '',
+          cidade: data.municipio || '',
+          estado: data.uf || ''
+        }));
+
+        showMessage('success', 'Dados do CNPJ carregados com sucesso!');
+      } else {
+        showMessage('error', data.message || 'CNPJ não encontrado');
+      }
+    } catch (error) {
+      console.error('Erro ao buscar CNPJ:', error);
+      showMessage('error', 'Erro ao buscar CNPJ. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const buscarCEP = async () => {
     const cep = empresaForm.cep.replace(/\D/g, '');
     if (cep.length !== 8) return;

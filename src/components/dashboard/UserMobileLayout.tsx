@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, ShoppingBag, User, LogOut, Plus, Users } from 'lucide-react';
+import { Home, ShoppingBag, User, LogOut, Plus, Users, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import LoadingScreen from './LoadingScreen';
 import Logo from '../comum/Logo';
@@ -57,6 +57,7 @@ const UserMobileLayout: React.FC = () => {
   const menuItems = [
     { icon: Home, label: 'Dashboard', path: '/user/dashboard' },
     { icon: ShoppingBag, label: 'Pedidos', path: '/user/pedidos' },
+    { icon: Package, label: 'Produtos', path: '/user/produtos' },
     { icon: Users, label: 'Clientes', path: '/user/clientes' },
     { icon: User, label: 'Perfil', path: '/user/perfil' },
   ];
@@ -93,26 +94,26 @@ const UserMobileLayout: React.FC = () => {
 
       {/* Footer com menu de navegação */}
       <footer className="fixed bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-10">
-        <div className="flex justify-around items-center h-16">
+        <div className="flex justify-around items-center h-16 overflow-x-auto hide-scrollbar">
           {menuItems.map((item) => (
             <button
               key={item.path}
-              className={`flex flex-col items-center justify-center w-1/3 h-full ${
+              className={`flex flex-col items-center justify-center w-1/5 h-full ${
                 location.pathname.startsWith(item.path)
                   ? 'text-primary-400'
                   : 'text-gray-400'
               }`}
               onClick={() => navigate(item.path)}
             >
-              <item.icon size={20} />
+              <item.icon size={18} />
               <span className="text-xs mt-1">{item.label}</span>
             </button>
           ))}
           <button
-            className="flex flex-col items-center justify-center w-1/3 h-full text-red-400"
+            className="flex flex-col items-center justify-center w-1/5 h-full text-red-400"
             onClick={() => setShowConfirmation(true)}
           >
-            <LogOut size={20} />
+            <LogOut size={18} />
             <span className="text-xs mt-1">Sair</span>
           </button>
         </div>

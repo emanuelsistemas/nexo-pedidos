@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Grupo, Produto, OpcaoAdicional, ProdutoOpcao } from '../../types';
 import { showMessage } from '../../utils/toast';
 import Button from '../../components/comum/Button';
+import FotoGaleria from '../../components/comum/FotoGaleria';
 
 interface DeleteConfirmationProps {
   isOpen: boolean;
@@ -103,6 +104,14 @@ const WarningModal: React.FC<{
   );
 };
 
+interface ProdutoFoto {
+  id: string;
+  url: string;
+  storage_path: string;
+  principal: boolean;
+  empresa_id?: string;
+}
+
 const ProdutosPage: React.FC = () => {
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -128,11 +137,12 @@ const ProdutosPage: React.FC = () => {
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
-    type: 'grupo' | 'produto';
+    type: 'grupo' | 'produto' | 'foto';
     id: string;
     grupoId?: string;
     title: string;
     message: string;
+    fotoPath?: string;
   }>({
     isOpen: false,
     type: 'grupo',
@@ -146,6 +156,16 @@ const ProdutosPage: React.FC = () => {
   const [expandedOpcoes, setExpandedOpcoes] = useState<Record<string, boolean>>({});
   const [availableOpcoes, setAvailableOpcoes] = useState<OpcaoAdicional[]>([]);
   const [selectedOpcoes, setSelectedOpcoes] = useState<string[]>([]);
+
+  // Estados para a aba de fotos
+  const [activeTab, setActiveTab] = useState<'dados' | 'fotos'>('dados');
+  const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
+  const [isUploadingFoto, setIsUploadingFoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Estados para a galeria de fotos
+  const [isGaleriaOpen, setIsGaleriaOpen] = useState(false);
+  const [currentFotoIndex, setCurrentFotoIndex] = useState(0);
 
   useEffect(() => {
     loadGrupos();
@@ -349,11 +369,225 @@ const ProdutosPage: React.FC = () => {
         .eq('produto_id', produto.id);
 
       setSelectedOpcoes((opcoesData || []).map(o => o.opcao_id));
+
+      // Carregar fotos do produto
+      await loadProdutoFotos(produto.id);
     } catch (error) {
       console.error('Error loading product options:', error);
     }
 
     setShowSidebar(true);
+  };
+
+  const loadProdutoFotos = async (produtoId: string) => {
+    try {
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      const { data: fotosData, error } = await supabase
+        .from('produto_fotos')
+        .select('*')
+        .eq('produto_id', produtoId)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('principal', { ascending: false });
+
+      if (error) throw error;
+
+      setProdutoFotos(fotosData || []);
+    } catch (error) {
+      console.error('Erro ao carregar fotos do produto:', error);
+      showMessage('error', 'Erro ao carregar fotos do produto');
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0 || !editingProduto) return;
+
+    // Verificar se já tem 3 fotos
+    if (produtoFotos.length >= 3) {
+      showMessage('error', 'Limite máximo de 3 fotos por produto');
+      return;
+    }
+
+    setIsUploadingFoto(true);
+
+    try {
+      const file = files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `produtos/${editingProduto.id}/${fileName}`;
+
+      // Upload para o storage
+      const { error: uploadError } = await supabase.storage
+        .from('fotos')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Obter URL pública
+      const { data: urlData } = supabase.storage
+        .from('fotos')
+        .getPublicUrl(filePath);
+
+      if (!urlData) throw new Error('Erro ao obter URL da imagem');
+
+      // Definir como principal se for a primeira foto
+      const isPrincipal = produtoFotos.length === 0;
+
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Salvar na tabela produto_fotos
+      const { data: fotoData, error: fotoError } = await supabase
+        .from('produto_fotos')
+        .insert({
+          produto_id: editingProduto.id,
+          url: urlData.publicUrl,
+          storage_path: filePath,
+          principal: isPrincipal,
+          empresa_id: usuarioData.empresa_id
+        })
+        .select()
+        .single();
+
+      if (fotoError) throw fotoError;
+
+      // Atualizar a lista de fotos
+      setProdutoFotos(prev => [...prev, fotoData]);
+      showMessage('success', 'Foto adicionada com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao fazer upload da foto:', error);
+      showMessage('error', `Erro ao fazer upload da foto: ${error.message}`);
+    } finally {
+      setIsUploadingFoto(false);
+      // Limpar o input de arquivo
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSetFotoPrincipal = async (fotoId: string) => {
+    if (!editingProduto) return;
+
+    try {
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      // Primeiro, remove a marcação de principal de todas as fotos
+      await supabase
+        .from('produto_fotos')
+        .update({ principal: false })
+        .eq('produto_id', editingProduto.id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      // Depois, marca a foto selecionada como principal
+      const { error } = await supabase
+        .from('produto_fotos')
+        .update({ principal: true })
+        .eq('id', fotoId)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      // Atualiza a lista de fotos
+      await loadProdutoFotos(editingProduto.id);
+      showMessage('success', 'Foto principal definida com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao definir foto principal:', error);
+      showMessage('error', `Erro ao definir foto principal: ${error.message}`);
+    }
+  };
+
+  const handleConfirmDeleteFoto = (foto: ProdutoFoto) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      type: 'foto',
+      id: foto.id,
+      fotoPath: foto.storage_path,
+      title: 'Excluir Foto',
+      message: 'Tem certeza que deseja excluir esta foto? Esta ação não poderá ser desfeita.',
+    });
+  };
+
+  const handleOpenGaleria = (index: number) => {
+    setCurrentFotoIndex(index);
+    setIsGaleriaOpen(true);
+  };
+
+  const handleDeleteFoto = async () => {
+    if (!deleteConfirmation.id || !deleteConfirmation.fotoPath) return;
+
+    try {
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      // Primeiro, exclui o registro do banco de dados
+      const { error: dbError } = await supabase
+        .from('produto_fotos')
+        .delete()
+        .eq('id', deleteConfirmation.id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (dbError) throw dbError;
+
+      // Depois, exclui o arquivo do storage
+      const { error: storageError } = await supabase.storage
+        .from('fotos')
+        .remove([deleteConfirmation.fotoPath]);
+
+      if (storageError) throw storageError;
+
+      // Atualiza a lista de fotos
+      if (editingProduto) {
+        await loadProdutoFotos(editingProduto.id);
+      }
+
+      showMessage('success', 'Foto excluída com sucesso');
+    } catch (error: any) {
+      console.error('Erro ao excluir foto:', error);
+      showMessage('error', `Erro ao excluir foto: ${error.message}`);
+    } finally {
+      setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
+    }
   };
 
   const handleSubmitGrupo = async (e: React.FormEvent) => {
@@ -415,7 +649,10 @@ const ProdutosPage: React.FC = () => {
 
   const handleSubmitProduto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedGrupo || !novoProduto.nome || !novoProduto.preco || !novoProduto.codigo) return;
+    if (!selectedGrupo || !novoProduto.nome || !novoProduto.preco || !novoProduto.codigo) {
+      showMessage('error', 'Preencha todos os campos obrigatórios');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -495,8 +732,24 @@ const ProdutosPage: React.FC = () => {
       }
 
       await loadGrupos();
-      showMessage('success', `Produto ${editingProduto ? 'atualizado' : 'adicionado'} com sucesso!`);
-      setShowSidebar(false);
+
+      if (editingProduto) {
+        showMessage('success', 'Produto atualizado com sucesso!');
+        setShowSidebar(false);
+      } else {
+        // Se for um novo produto, mantém o sidebar aberto e muda para a aba de fotos
+        showMessage('success', 'Produto adicionado com sucesso! Agora você pode adicionar fotos.');
+        // Atualiza o editingProduto com o produto recém-criado
+        setEditingProduto({
+          ...novoProduto,
+          id: productId,
+          grupo_id: selectedGrupo.id,
+          empresa_id: usuarioData.empresa_id,
+          created_at: new Date().toISOString()
+        });
+        // Muda para a aba de fotos
+        setActiveTab('fotos');
+      }
     } catch (error: any) {
       showMessage('error', `Erro ao ${editingProduto ? 'atualizar' : 'criar'} produto: ` + error.message);
     } finally {
@@ -567,7 +820,7 @@ const ProdutosPage: React.FC = () => {
 
         setGrupos(grupos.filter(g => g.id !== deleteConfirmation.id));
         showMessage('success', 'Grupo excluído com sucesso!');
-      } else {
+      } else if (deleteConfirmation.type === 'produto') {
         const { error } = await supabase
           .from('produtos')
           .update({
@@ -585,6 +838,8 @@ const ProdutosPage: React.FC = () => {
             : grupo
         ));
         showMessage('success', 'Produto excluído com sucesso!');
+      } else if (deleteConfirmation.type === 'foto') {
+        await handleDeleteFoto();
       }
     } catch (error: any) {
       showMessage('error', `Erro ao excluir ${deleteConfirmation.type}: ` + error.message);
@@ -756,52 +1011,140 @@ const ProdutosPage: React.FC = () => {
     );
   };
 
-  const renderProduto = (grupo: Grupo, produto: Produto) => (
-    <div
-      key={produto.id}
-      className={`p-3 bg-gray-800/50 rounded-lg ${produto.ativo === false ? 'opacity-60' : ''}`}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <h4 className="text-white font-medium">{produto.nome}</h4>
-              <span className="text-sm text-gray-400">#{produto.codigo}</span>
-              {/* Indicador de promoção ocultado conforme solicitado */}
-              {produto.ativo === false && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
-                  Inativo
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                className="p-1 text-gray-400 hover:text-white transition-colors"
-                onClick={() => handleEditProduto(grupo, produto)}
-              >
-                <Pencil size={16} />
-              </button>
-              <button
-                className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                onClick={() => handleDeleteProduto(produto.id, grupo.id)}
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
+  // Função para buscar a foto principal do produto
+  const getProdutoFotoPrincipal = async (produtoId: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return null;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return null;
+
+      const { data: fotosData } = await supabase
+        .from('produto_fotos')
+        .select('*')
+        .eq('produto_id', produtoId)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('principal', true)
+        .limit(1);
+
+      return fotosData && fotosData.length > 0 ? fotosData[0] : null;
+    } catch (error) {
+      console.error('Erro ao buscar foto principal:', error);
+      return null;
+    }
+  };
+
+  // Estado para armazenar as fotos principais dos produtos
+  const [produtosFotosPrincipais, setProdutosFotosPrincipais] = useState<Record<string, ProdutoFoto | null>>({});
+
+  // Função para carregar as fotos principais de todos os produtos
+  const loadProdutosFotosPrincipais = async (produtos: Produto[]) => {
+    const fotosMap: Record<string, ProdutoFoto | null> = {};
+
+    for (const produto of produtos) {
+      const foto = await getProdutoFotoPrincipal(produto.id);
+      fotosMap[produto.id] = foto;
+    }
+
+    setProdutosFotosPrincipais(fotosMap);
+  };
+
+  // Carregar fotos principais quando os produtos mudarem
+  useEffect(() => {
+    const allProdutos = grupos.flatMap(grupo => grupo.produtos);
+    if (allProdutos.length > 0) {
+      loadProdutosFotosPrincipais(allProdutos);
+    }
+  }, [grupos]);
+
+  const handleOpenProdutoGaleria = async (produto: Produto) => {
+    // Carregar todas as fotos do produto
+    await loadProdutoFotos(produto.id);
+
+    // Abrir a galeria com a primeira foto
+    if (produtoFotos.length > 0) {
+      setCurrentFotoIndex(0);
+      setIsGaleriaOpen(true);
+    } else {
+      showMessage('info', 'Este produto não possui fotos');
+    }
+  };
+
+  const renderProduto = (grupo: Grupo, produto: Produto) => {
+    const fotoPrincipal = produtosFotosPrincipais[produto.id];
+
+    return (
+      <div
+        key={produto.id}
+        className={`p-3 bg-gray-800/50 rounded-lg ${produto.ativo === false ? 'opacity-60' : ''}`}
+      >
+        <div className="flex items-start gap-4">
+          {/* Foto principal do produto */}
+          <div
+            className="w-24 h-24 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
+            onClick={() => handleOpenProdutoGaleria(produto)}
+          >
+            {fotoPrincipal ? (
+              <img
+                src={fotoPrincipal.url}
+                alt={produto.nome}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-500">
+                <Image size={24} />
+              </div>
+            )}
           </div>
-          <p className="text-sm text-primary-400">
-            {formatarPreco(produto.preco)}
-          </p>
-          {produto.descricao && (
-            <p className="text-sm text-gray-400 mt-1">
-              {produto.descricao}
+
+          {/* Informações do produto */}
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <h4 className="text-white font-medium">{produto.nome}</h4>
+                <span className="text-sm text-gray-400">#{produto.codigo}</span>
+                {/* Indicador de promoção ocultado conforme solicitado */}
+                {produto.ativo === false && (
+                  <span className="px-2 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
+                    Inativo
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  className="p-1 text-gray-400 hover:text-white transition-colors"
+                  onClick={() => handleEditProduto(grupo, produto)}
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                  onClick={() => handleDeleteProduto(produto.id, grupo.id)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+            <p className="text-sm text-primary-400">
+              {formatarPreco(produto.preco)}
             </p>
-          )}
-          {renderProdutoOpcoes(produto)}
+            {produto.descricao && (
+              <p className="text-sm text-gray-400 mt-1">
+                {produto.descricao}
+              </p>
+            )}
+            {renderProdutoOpcoes(produto)}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -1007,105 +1350,287 @@ const ProdutosPage: React.FC = () => {
                     </div>
                   </form>
                 ) : (
-                  <form onSubmit={handleSubmitProduto} className="space-y-6">
-                    <div className="mb-4">
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="ativo"
-                          checked={novoProduto.ativo}
-                          onChange={(e) => setNovoProduto({ ...novoProduto, ativo: e.target.checked })}
-                          className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
-                        />
-                        <label htmlFor="ativo" className="text-sm font-medium text-white cursor-pointer">
-                          Produto Ativo
-                        </label>
+                  <div>
+                    {/* Abas */}
+                    <div className="flex border-b border-gray-700 mb-6">
+                      <button
+                        className={`px-4 py-2 font-medium text-sm ${
+                          activeTab === 'dados'
+                            ? 'text-primary-500 border-b-2 border-primary-500'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                        onClick={() => setActiveTab('dados')}
+                      >
+                        Dados Gerais
+                      </button>
+                      <button
+                        className={`px-4 py-2 font-medium text-sm ${
+                          activeTab === 'fotos'
+                            ? 'text-primary-500 border-b-2 border-primary-500'
+                            : editingProduto
+                              ? 'text-gray-400 hover:text-white'
+                              : 'text-gray-600 cursor-not-allowed'
+                        }`}
+                        onClick={() => {
+                          if (editingProduto) {
+                            setActiveTab('fotos');
+                          } else {
+                            showMessage('info', 'Salve o produto primeiro para adicionar fotos');
+                          }
+                        }}
+                      >
+                        Fotos {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
+                      </button>
+                    </div>
+
+                    {activeTab === 'dados' ? (
+                      <form onSubmit={handleSubmitProduto} className="space-y-6">
+                        <div className="mb-4">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="ativo"
+                              checked={novoProduto.ativo}
+                              onChange={(e) => setNovoProduto({ ...novoProduto, ativo: e.target.checked })}
+                              className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                            />
+                            <label htmlFor="ativo" className="text-sm font-medium text-white cursor-pointer">
+                              Produto Ativo
+                            </label>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Código do Produto
+                          </label>
+                          <input
+                            type="text"
+                            value={novoProduto.codigo}
+                            onChange={(e) => setNovoProduto({ ...novoProduto, codigo: e.target.value })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Código do produto"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Nome do Produto
+                          </label>
+                          <input
+                            type="text"
+                            value={novoProduto.nome}
+                            onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Digite o nome do produto"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Preço
+                          </label>
+                          <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                              R$
+                            </span>
+                            <input
+                              type="text"
+                              value={precoFormatado}
+                              onChange={(e) => {
+                                setPrecoFormatado(e.target.value);
+                                // Atualiza o valor numérico no estado do produto
+                                const valorNumerico = desformatarPreco(e.target.value);
+                                setNovoProduto({ ...novoProduto, preco: valorNumerico });
+                              }}
+                              onBlur={() => {
+                                // Ao perder o foco, formata corretamente o valor
+                                const valorNumerico = desformatarPreco(precoFormatado);
+                                setPrecoFormatado(formatarPreco(valorNumerico));
+                              }}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="0,00"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Descrição Adicional
+                          </label>
+                          <textarea
+                            value={novoProduto.descricao}
+                            onChange={(e) => setNovoProduto({ ...novoProduto, descricao: e.target.value })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            rows={4}
+                            placeholder="Digite a descrição adicional do produto"
+                          />
+                        </div>
+
+                        {/* Opção "Produto em Promoção" ocultada conforme solicitado */}
+
+                        {/* Seção de Opções Adicionais ocultada conforme solicitado */}
+
+                        <div className="flex gap-4 pt-4">
+                          <Button
+                            type="button"
+                            variant="text"
+                            className="flex-1"
+                            onClick={() => setShowSidebar(false)}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button
+                            type="submit"
+                            variant="primary"
+                            className="flex-1"
+                            disabled={isLoading}
+                          >
+                            {isLoading ? 'Salvando...' : editingProduto ? 'Salvar' : 'Criar'}
+                          </Button>
+                        </div>
+
+                        {editingProduto && (
+                          <div className="mt-4 pt-4 border-t border-gray-700">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="w-full flex items-center justify-center gap-2"
+                              onClick={() => setActiveTab('fotos')}
+                            >
+                              <Camera size={16} />
+                              <span>Gerenciar Fotos do Produto</span>
+                            </Button>
+                          </div>
+                        )}
+                      </form>
+                    ) : (
+                      <div className="space-y-6">
+                        {!editingProduto ? (
+                          <div className="text-center py-8">
+                            <AlertCircle size={32} className="mx-auto text-gray-500 mb-2" />
+                            <p className="text-gray-400">Salve o produto primeiro para adicionar fotos</p>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('dados')}
+                              className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                            >
+                              Voltar para Dados Gerais
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-white font-medium">Fotos do Produto</h3>
+                                <div className="text-sm text-gray-400">
+                                  {produtoFotos.length}/3 fotos
+                                </div>
+                              </div>
+
+                              {produtoFotos.length === 0 ? (
+                                <div className="text-center py-6">
+                                  <Image size={32} className="mx-auto text-gray-500 mb-2" />
+                                  <p className="text-gray-400 mb-4">Nenhuma foto adicionada</p>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-3 gap-4">
+                                  {produtoFotos.map((foto) => (
+                                    <div
+                                      key={foto.id}
+                                      className={`relative rounded-lg overflow-hidden border-2 ${
+                                        foto.principal ? 'border-primary-500' : 'border-gray-700'
+                                      }`}
+                                    >
+                                      <img
+                                        src={foto.url}
+                                        alt="Foto do produto"
+                                        className="w-full h-32 object-cover cursor-pointer"
+                                        onClick={() => handleOpenGaleria(index)}
+                                      />
+                                      <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                                        {!foto.principal && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSetFotoPrincipal(foto.id)}
+                                            className="p-1.5 bg-primary-500 rounded-full text-white hover:bg-primary-600 transition-colors"
+                                            title="Definir como principal"
+                                          >
+                                            <Star size={16} />
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleConfirmDeleteFoto(foto)}
+                                          className="p-1.5 bg-red-500 rounded-full text-white hover:bg-red-600 transition-colors"
+                                          title="Excluir foto"
+                                        >
+                                          <Trash2 size={16} />
+                                        </button>
+                                      </div>
+                                      {foto.principal && (
+                                        <div className="absolute top-1 right-1 bg-primary-500 text-white text-xs px-1.5 py-0.5 rounded">
+                                          Principal
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {produtoFotos.length < 3 && (
+                                <div className="mt-4">
+                                  <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileUpload}
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={isUploadingFoto}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploadingFoto}
+                                    className="w-full py-2 px-4 border border-dashed border-gray-600 rounded-lg flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:border-gray-500 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                                  >
+                                    {isUploadingFoto ? (
+                                      <>
+                                        <div className="w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin"></div>
+                                        <span>Enviando...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Upload size={18} />
+                                        <span>Adicionar Foto</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                              <Button
+                                type="button"
+                                variant="text"
+                                className="flex-1"
+                                onClick={() => setActiveTab('dados')}
+                              >
+                                Voltar
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                className="flex-1"
+                                onClick={() => setShowSidebar(false)}
+                              >
+                                Concluir
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Código do Produto
-                      </label>
-                      <input
-                        type="text"
-                        value={novoProduto.codigo}
-                        onChange={(e) => setNovoProduto({ ...novoProduto, codigo: e.target.value })}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="Código do produto"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Nome do Produto
-                      </label>
-                      <input
-                        type="text"
-                        value={novoProduto.nome}
-                        onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="Digite o nome do produto"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Preço
-                      </label>
-                      <input
-                        type="text"
-                        value={precoFormatado}
-                        onChange={(e) => {
-                          setPrecoFormatado(e.target.value);
-                          // Atualiza o valor numérico no estado do produto
-                          const valorNumerico = desformatarPreco(e.target.value);
-                          setNovoProduto({ ...novoProduto, preco: valorNumerico });
-                        }}
-                        onBlur={() => {
-                          // Ao perder o foco, formata corretamente o valor
-                          const valorNumerico = desformatarPreco(precoFormatado);
-                          setPrecoFormatado(formatarPreco(valorNumerico));
-                        }}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="R$ 0,00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Descrição Adicional
-                      </label>
-                      <textarea
-                        value={novoProduto.descricao}
-                        onChange={(e) => setNovoProduto({ ...novoProduto, descricao: e.target.value })}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        rows={4}
-                        placeholder="Digite a descrição adicional do produto"
-                      />
-                    </div>
-
-                    {/* Opção "Produto em Promoção" ocultada conforme solicitado */}
-
-                    {/* Seção de Opções Adicionais ocultada conforme solicitado */}
-
-                    <div className="flex gap-4 pt-4">
-                      <Button
-                        type="button"
-                        variant="text"
-                        className="flex-1"
-                        onClick={() => setShowSidebar(false)}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        className="flex-1"
-                        disabled={isLoading}
-                      >
-                        {isLoading ? 'Salvando...' : editingProduto ? 'Salvar' : 'Criar'}
-                      </Button>
-                    </div>
-                  </form>
+                    )}
+                  </div>
                 )}
               </div>
             </motion.div>
@@ -1125,6 +1650,14 @@ const ProdutosPage: React.FC = () => {
         isOpen={showWarning}
         onClose={() => setShowWarning(false)}
         message={warningMessage}
+      />
+
+      {/* Galeria de fotos */}
+      <FotoGaleria
+        fotos={produtoFotos}
+        isOpen={isGaleriaOpen}
+        onClose={() => setIsGaleriaOpen(false)}
+        initialFotoIndex={currentFotoIndex}
       />
     </div>
   );

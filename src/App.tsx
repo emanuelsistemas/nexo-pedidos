@@ -21,6 +21,7 @@ import UserMobileLayout from './components/dashboard/UserMobileLayout';
 import UserDashboardPage from './pages/user/UserDashboardPage';
 import UserPedidosPage from './pages/user/UserPedidosPage';
 import UserNovoPedidoPage from './pages/user/UserNovoPedidoPage';
+import UserProdutosPage from './pages/user/UserProdutosPage';
 import UserClientesPage from './pages/user/UserClientesPage';
 import UserNovoClientePage from './pages/user/UserNovoClientePage';
 import UserPerfilPage from './pages/user/UserPerfilPage';
@@ -51,6 +52,7 @@ function App() {
           <Route path="dashboard" element={<UserDashboardPage />} />
           <Route path="pedidos" element={<UserPedidosPage />} />
           <Route path="pedidos/novo" element={<UserNovoPedidoPage />} />
+          <Route path="produtos" element={<UserProdutosPage />} />
           <Route path="clientes" element={<UserClientesPage />} />
           <Route path="clientes/novo" element={<UserNovoClientePage />} />
           <Route path="perfil" element={<UserPerfilPage />} />
