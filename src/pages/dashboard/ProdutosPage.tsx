@@ -457,16 +457,19 @@ const ProdutosPage: React.FC = () => {
       if (usuarioError) throw usuarioError;
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
-      // Salvar na tabela produto_fotos
+      // Salvar na tabela produto_fotos com os campos mínimos necessários
+      const fotoObj = {
+        produto_id: editingProduto.id,
+        url: urlData.publicUrl,
+        storage_path: filePath,
+        principal: isPrincipal,
+        empresa_id: usuarioData.empresa_id
+      };
+
+      // Inserir na tabela produto_fotos
       const { data: fotoData, error: fotoError } = await supabase
         .from('produto_fotos')
-        .insert({
-          produto_id: editingProduto.id,
-          url: urlData.publicUrl,
-          storage_path: filePath,
-          principal: isPrincipal,
-          empresa_id: usuarioData.empresa_id
-        })
+        .insert(fotoObj)
         .select()
         .single();
 
@@ -474,6 +477,37 @@ const ProdutosPage: React.FC = () => {
 
       // Atualizar a lista de fotos
       setProdutoFotos(prev => [...prev, fotoData]);
+
+      // Se for a foto principal, atualizar também a lista de fotos principais
+      if (isPrincipal && editingProduto) {
+        // Atualizar imediatamente a foto principal na lista
+        setProdutosFotosPrincipais(prev => ({
+          ...prev,
+          [editingProduto.id]: fotoData
+        }));
+
+        // Forçar a atualização da lista de grupos para refletir a nova foto
+        const grupoAtual = grupos.find(g => g.id === editingProduto.grupo_id);
+        if (grupoAtual) {
+          const gruposAtualizados = grupos.map(g => {
+            if (g.id === grupoAtual.id) {
+              // Atualizar o produto com a nova foto
+              const produtosAtualizados = g.produtos.map(p => {
+                if (p.id === editingProduto.id) {
+                  return { ...p }; // Força a atualização do produto
+                }
+                return p;
+              });
+              return { ...g, produtos: produtosAtualizados };
+            }
+            return g;
+          });
+
+          // Atualizar os grupos para forçar a renderização
+          setGrupos([...gruposAtualizados]);
+        }
+      }
+
       showMessage('success', 'Foto adicionada com sucesso');
     } catch (error: any) {
       console.error('Erro ao fazer upload da foto:', error);
@@ -521,6 +555,41 @@ const ProdutosPage: React.FC = () => {
 
       // Atualiza a lista de fotos
       await loadProdutoFotos(editingProduto.id);
+
+      // Encontrar a foto que foi definida como principal
+      const novaPrincipal = produtoFotos.find(foto => foto.id === fotoId);
+      if (novaPrincipal) {
+        // Criar uma cópia da foto com principal = true
+        const fotoPrincipalAtualizada = { ...novaPrincipal, principal: true };
+
+        // Atualizar a foto principal na lista de fotos principais
+        setProdutosFotosPrincipais(prev => ({
+          ...prev,
+          [editingProduto.id]: fotoPrincipalAtualizada
+        }));
+
+        // Forçar a atualização da lista de grupos para refletir a nova foto principal
+        const grupoAtual = grupos.find(g => g.id === editingProduto.grupo_id);
+        if (grupoAtual) {
+          const gruposAtualizados = grupos.map(g => {
+            if (g.id === grupoAtual.id) {
+              // Atualizar o produto com a nova foto principal
+              const produtosAtualizados = g.produtos.map(p => {
+                if (p.id === editingProduto.id) {
+                  return { ...p }; // Força a atualização do produto
+                }
+                return p;
+              });
+              return { ...g, produtos: produtosAtualizados };
+            }
+            return g;
+          });
+
+          // Atualizar os grupos para forçar a renderização
+          setGrupos([...gruposAtualizados]);
+        }
+      }
+
       showMessage('success', 'Foto principal definida com sucesso');
     } catch (error: any) {
       console.error('Erro ao definir foto principal:', error);
@@ -578,7 +647,60 @@ const ProdutosPage: React.FC = () => {
 
       // Atualiza a lista de fotos
       if (editingProduto) {
+        // Guardar referência à foto excluída antes de recarregar
+        const fotoDeletada = produtoFotos.find(f => f.id === deleteConfirmation.id);
+        const eraPrincipal = fotoDeletada?.principal || false;
+
+        // Recarregar a lista de fotos
         await loadProdutoFotos(editingProduto.id);
+
+        // Verificar se a foto excluída era a principal
+        if (eraPrincipal) {
+          // Se a foto excluída era a principal, verificar se há outras fotos
+          if (produtoFotos.length > 0) {
+            // Encontrar a primeira foto que não é a que foi excluída
+            const novaFotoPrincipal = produtoFotos.find(f => f.id !== deleteConfirmation.id);
+            if (novaFotoPrincipal) {
+              // Atualizar a foto principal na lista
+              setProdutosFotosPrincipais(prev => ({
+                ...prev,
+                [editingProduto.id]: novaFotoPrincipal
+              }));
+
+              // Se necessário, definir esta foto como principal no banco de dados
+              if (!novaFotoPrincipal.principal) {
+                await handleSetFotoPrincipal(novaFotoPrincipal.id);
+              }
+            }
+          } else {
+            // Se não houver mais fotos, remover a foto principal
+            setProdutosFotosPrincipais(prev => ({
+              ...prev,
+              [editingProduto.id]: null
+            }));
+          }
+        }
+
+        // Forçar a atualização da lista de grupos para refletir a mudança
+        const grupoAtual = grupos.find(g => g.id === editingProduto.grupo_id);
+        if (grupoAtual) {
+          const gruposAtualizados = grupos.map(g => {
+            if (g.id === grupoAtual.id) {
+              // Atualizar o produto
+              const produtosAtualizados = g.produtos.map(p => {
+                if (p.id === editingProduto.id) {
+                  return { ...p }; // Força a atualização do produto
+                }
+                return p;
+              });
+              return { ...g, produtos: produtosAtualizados };
+            }
+            return g;
+          });
+
+          // Atualizar os grupos para forçar a renderização
+          setGrupos([...gruposAtualizados]);
+        }
       }
 
       showMessage('success', 'Foto excluída com sucesso');
