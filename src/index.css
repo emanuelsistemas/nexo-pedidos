@@ -44,13 +44,13 @@ body {
 }
 
 .form-input {
-  @apply w-full bg-[#121218] border border-gray-700 rounded-lg py-3 px-3 text-white 
-    focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 
+  @apply w-full bg-[#121218] border border-gray-700 rounded-lg py-3 px-3 text-white
+    focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20
     transition-all duration-300;
 }
 
 .primary-button {
-  @apply w-full bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg py-3 px-4 
+  @apply w-full bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg py-3 px-4
     transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-opacity-50;
 }
 
@@ -92,4 +92,34 @@ body {
 
 .Toastify__toast-icon {
   @apply text-primary-400 !important;
+}
+
+/* Animações para o dashboard mobile */
+@keyframes spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes progress-bar {
+  0% { width: 0%; }
+  50% { width: 70%; }
+  100% { width: 100%; }
+}
+
+@keyframes message-fade {
+  0%, 20% { opacity: 0; }
+  50% { opacity: 1; }
+  90%, 100% { opacity: 0; }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}
+
+.animate-progress-bar {
+  animation: progress-bar 2s ease-in-out forwards;
+}
+
+.animate-message-fade {
+  animation: message-fade 2s ease-in-out infinite;
 }

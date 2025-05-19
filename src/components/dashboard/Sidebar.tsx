@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin } from 'lucide-react';
+import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
@@ -13,21 +13,29 @@ const menuItems = [
     label: 'Produtos',
     tooltip: 'Produtos',
     submenu: [
-      { icon: ListOrdered, label: 'Itens', path: '/dashboard/produtos', tooltip: 'Lista de Produtos' },
-      { icon: PlusCircle, label: 'Adicionais', path: '/dashboard/produtos/adicionais', tooltip: 'Opções Adicionais' }
+      { icon: ListOrdered, label: 'Itens', path: '/dashboard/produtos', tooltip: 'Lista de Produtos' }
+      // Submenu "Adicionais" ocultado
     ]
   },
-  { icon: MessageSquare, label: 'Gestor', path: '/dashboard/gestor', tooltip: 'Gestor de Pedidos' },
-  { icon: QrCode, label: 'Conexão', path: '/dashboard/conexao', tooltip: 'Conexão WhatsApp' },
-  {
-    icon: Bike,
-    label: 'Entregadores',
-    tooltip: 'Entregadores',
-    submenu: [
-      { icon: Bike, label: 'Motoboy', path: '/dashboard/entregador', tooltip: 'Motoboys' },
-      { icon: MapPin, label: 'Taxa de Entrega', path: '/dashboard/entregador/taxa', tooltip: 'Taxa de Entrega' }
-    ]
-  },
+  { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
+  { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
+  // Item "Gestor" ocultado
+  // { icon: MessageSquare, label: 'Gestor', path: '/dashboard/gestor', tooltip: 'Gestor de Pedidos' },
+
+  // Item "Conexão" ocultado
+  // { icon: QrCode, label: 'Conexão', path: '/dashboard/conexao', tooltip: 'Conexão WhatsApp' },
+
+  // Item "Entregadores" ocultado
+  // {
+  //   icon: Bike,
+  //   label: 'Entregadores',
+  //   tooltip: 'Entregadores',
+  //   submenu: [
+  //     { icon: Bike, label: 'Motoboy', path: '/dashboard/entregador', tooltip: 'Motoboys' },
+  //     { icon: MapPin, label: 'Taxa de Entrega', path: '/dashboard/entregador/taxa', tooltip: 'Taxa de Entrega' }
+  //   ]
+  // },
+
   { icon: Settings, label: 'Configurações', path: '/dashboard/configuracoes', tooltip: 'Configurações' },
 ];
 
@@ -169,7 +177,7 @@ const Sidebar: React.FC = () => {
           {menuItems.map(renderMenuItem)}
         </nav>
       </div>
-      
+
       <UserProfileFooter />
     </motion.div>
   );

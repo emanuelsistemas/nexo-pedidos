@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import { showMessage } from '../../utils/toast';
@@ -94,10 +94,33 @@ const ConfiguracoesPage: React.FC = () => {
   const [empresa, setEmpresa] = useState<any>(null);
   const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [usuarioLogado, setUsuarioLogado] = useState<{id: string, tipo: string} | null>(null);
   const [selectedTipo, setSelectedTipo] = useState('');
   const [storeStatus, setStoreStatus] = useState<{
     modo_operacao: 'manual' | 'automatico';
   }>({ modo_operacao: 'manual' });
+
+  // Estado para o formulário de usuário
+  const [usuarioForm, setUsuarioForm] = useState({
+    id: '',
+    nome: '',
+    email: '',
+    senha: '',
+    confirmarSenha: ''
+  });
+
+  // Estado para controlar a visibilidade da senha
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
+
+  // Estado para erros de validação
+  const [formErrors, setFormErrors] = useState({
+    senha: '',
+    email: ''
+  });
+
+  // Estado para controlar o modo de edição
+  const [isEditingUsuario, setIsEditingUsuario] = useState(false);
   const [taxaMode, setTaxaMode] = useState<'bairro' | 'distancia'>('bairro');
   const [horarios, setHorarios] = useState<any[]>([]);
   const [horarioForm, setHorarioForm] = useState({
@@ -146,22 +169,38 @@ const ConfiguracoesPage: React.FC = () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
+      // Obter dados do usuário logado, incluindo o tipo
       const { data: usuarioData } = await supabase
         .from('usuarios')
-        .select('empresa_id')
+        .select('id, empresa_id, tipo')
         .eq('id', userData.user.id)
         .single();
 
       if (!usuarioData?.empresa_id) return;
 
+      // Armazenar o tipo do usuário logado
+      setUsuarioLogado({
+        id: usuarioData.id,
+        tipo: usuarioData.tipo || 'user' // Valor padrão 'user' caso não tenha tipo definido
+      });
+
       if (activeSection === 'usuarios') {
-        const { data: usuariosData } = await supabase
+        // Se o usuário for do tipo 'user', mostrar apenas o próprio usuário
+        // Se for 'admin', mostrar todos os usuários da empresa
+        let query = supabase
           .from('usuarios')
           .select(`
             *,
             perfil:perfis_acesso(nome)
           `)
           .eq('empresa_id', usuarioData.empresa_id);
+
+        // Filtrar apenas o próprio usuário se for do tipo 'user'
+        if (usuarioData.tipo === 'user') {
+          query = query.eq('id', usuarioData.id);
+        }
+
+        const { data: usuariosData } = await query;
         setUsuarios(usuariosData || []);
       }
 
@@ -386,6 +425,31 @@ const ConfiguracoesPage: React.FC = () => {
       hora_fechamento: horario.hora_fechamento.substring(0, 5)
     });
     setIsEditingHorario(true);
+    setShowSidebar(true);
+  };
+
+  // Função para carregar os dados do usuário para edição
+  const handleEditUsuario = (usuario: any) => {
+    // Limpar erros anteriores
+    setFormErrors({
+      senha: '',
+      email: ''
+    });
+
+    // Carregar os dados do usuário no formulário
+    setUsuarioForm({
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      senha: '', // Campos de senha vazios na edição
+      confirmarSenha: ''
+    });
+
+    // Ativar o modo de edição
+    setIsEditingUsuario(true);
+
+    // Abrir o sidebar
+    setActiveSection('usuarios');
     setShowSidebar(true);
   };
 
@@ -623,6 +687,160 @@ const ConfiguracoesPage: React.FC = () => {
       .substring(0, 15);
   };
 
+  // Função para lidar com o envio do formulário de usuário
+  const handleSubmitUsuario = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Limpar erros anteriores
+    setFormErrors({
+      senha: '',
+      email: ''
+    });
+
+    // Validar os campos obrigatórios
+    // No modo de edição, apenas o nome é obrigatório
+    // No modo de criação, todos os campos são obrigatórios
+    if (!usuarioForm.nome) {
+      showMessage('error', 'O nome é obrigatório');
+      return;
+    }
+
+    if (!isEditingUsuario && !usuarioForm.email) {
+      showMessage('error', 'O email é obrigatório');
+      return;
+    }
+
+    if (!isEditingUsuario && (!usuarioForm.senha || !usuarioForm.confirmarSenha)) {
+      showMessage('error', 'A senha e a confirmação são obrigatórias para novos usuários');
+      return;
+    }
+
+    // Validar se as senhas coincidem (apenas se uma senha foi fornecida)
+    if (usuarioForm.senha && usuarioForm.senha !== usuarioForm.confirmarSenha) {
+      setFormErrors(prev => ({ ...prev, senha: 'As senhas não coincidem' }));
+      return;
+    }
+
+    // Validar tamanho mínimo da senha (apenas se uma senha foi fornecida)
+    if (usuarioForm.senha && usuarioForm.senha.length < 6) {
+      setFormErrors(prev => ({ ...prev, senha: 'A senha deve ter pelo menos 6 caracteres' }));
+      return;
+    }
+
+    // Validar formato de email (apenas no modo de criação)
+    if (!isEditingUsuario) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(usuarioForm.email)) {
+        setFormErrors(prev => ({ ...prev, email: 'Email inválido' }));
+        return;
+      }
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Obter o ID da empresa do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Modo de edição
+      if (isEditingUsuario) {
+        // 1. Atualizar o nome do usuário na tabela usuarios
+        const { error: updateError } = await supabase
+          .from('usuarios')
+          .update({ nome: usuarioForm.nome })
+          .eq('id', usuarioForm.id);
+
+        if (updateError) throw updateError;
+
+        // 2. Se uma nova senha foi fornecida, atualizar a senha na autenticação
+        if (usuarioForm.senha) {
+          const { error: passwordError } = await supabase.auth.updateUser({
+            password: usuarioForm.senha
+          });
+
+          if (passwordError) throw passwordError;
+        }
+
+        showMessage('success', 'Usuário atualizado com sucesso!');
+      }
+      // Modo de criação
+      else {
+        // Verificar se o email já está cadastrado na empresa
+        const { data: emailExistente } = await supabase
+          .from('usuarios')
+          .select('id')
+          .eq('email', usuarioForm.email)
+          .eq('empresa_id', usuarioData.empresa_id)
+          .maybeSingle();
+
+        if (emailExistente) {
+          setFormErrors(prev => ({ ...prev, email: 'Este email já está cadastrado nesta empresa' }));
+          setIsLoading(false);
+          return;
+        }
+
+        // 1. Criar o usuário na autenticação do Supabase
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: usuarioForm.email,
+          password: usuarioForm.senha,
+        });
+
+        if (authError) {
+          // Verificar se o erro é de email já existente
+          if (authError.message.includes('email already registered')) {
+            setFormErrors(prev => ({ ...prev, email: 'Este email já está cadastrado no sistema' }));
+            setIsLoading(false);
+            return;
+          }
+          throw authError;
+        }
+
+        if (!authData.user) throw new Error('Erro ao criar usuário');
+
+        // 2. Inserir o usuário na tabela usuarios com tipo 'user'
+        const { error: insertError } = await supabase
+          .from('usuarios')
+          .insert([{
+            id: authData.user.id,
+            nome: usuarioForm.nome,
+            email: usuarioForm.email,
+            empresa_id: usuarioData.empresa_id,
+            tipo: 'user'
+          }]);
+
+        if (insertError) throw insertError;
+
+        showMessage('success', 'Usuário adicionado com sucesso!');
+      }
+
+      // Limpar o formulário e resetar o modo de edição
+      setUsuarioForm({
+        id: '',
+        nome: '',
+        email: '',
+        senha: '',
+        confirmarSenha: ''
+      });
+      setIsEditingUsuario(false);
+
+      setShowSidebar(false);
+      loadData();
+    } catch (error: any) {
+      showMessage('error', `Erro ao ${isEditingUsuario ? 'atualizar' : 'adicionar'} usuário: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDocumentoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const formattedValue = empresaForm.tipo_documento === 'CNPJ'
@@ -708,13 +926,16 @@ const ConfiguracoesPage: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-white">Usuários</h2>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => setShowSidebar(true)}
-              >
-                + Adicionar Usuário
-              </Button>
+              {/* Mostrar o botão apenas se o usuário for admin */}
+              {usuarioLogado?.tipo === 'admin' && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => setShowSidebar(true)}
+                >
+                  + Adicionar Usuário
+                </Button>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -734,18 +955,27 @@ const ConfiguracoesPage: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {}}
-                        className="p-2 text-gray-400 hover:text-white transition-colors"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(usuario.id, 'usuario', usuario.nome)}
-                        className="p-2 text-red-400 hover:text-red-300 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {/* Botão de edição - visível para admin (todos os usuários) ou para o próprio usuário */}
+                      {(usuarioLogado?.tipo === 'admin' || usuarioLogado?.id === usuario.id) && (
+                        <button
+                          onClick={() => handleEditUsuario(usuario)}
+                          className="p-2 text-gray-400 hover:text-white transition-colors"
+                          title="Editar usuário"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                      )}
+
+                      {/* Botão de exclusão - visível apenas para admin */}
+                      {usuarioLogado?.tipo === 'admin' && (
+                        <button
+                          onClick={() => handleDelete(usuario.id, 'usuario', usuario.nome)}
+                          className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                          title="Excluir usuário"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -974,31 +1204,34 @@ const ConfiguracoesPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-white">Dados da Empresa</h2>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() => {
-                  setEmpresaForm(empresa || {
-                    segmento: '',
-                    tipo_documento: 'CNPJ',
-                    documento: '',
-                    razao_social: '',
-                    nome_fantasia: '',
-                    nome_proprietario: '',
-                    whatsapp: '',
-                    cep: '',
-                    endereco: '',
-                    numero: '',
-                    complemento: '',
-                    bairro: '',
-                    cidade: '',
-                    estado: ''
-                  });
-                  setShowSidebar(true);
-                }}
-              >
-                Editar Dados
-              </Button>
+              {/* Mostrar o botão apenas se o usuário for admin */}
+              {usuarioLogado?.tipo === 'admin' && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => {
+                    setEmpresaForm(empresa || {
+                      segmento: '',
+                      tipo_documento: 'CNPJ',
+                      documento: '',
+                      razao_social: '',
+                      nome_fantasia: '',
+                      nome_proprietario: '',
+                      whatsapp: '',
+                      cep: '',
+                      endereco: '',
+                      numero: '',
+                      complemento: '',
+                      bairro: '',
+                      cidade: '',
+                      estado: ''
+                    });
+                    setShowSidebar(true);
+                  }}
+                >
+                  Editar Dados
+                </Button>
+              )}
             </div>
 
             {empresa && (
@@ -1122,61 +1355,11 @@ const ConfiguracoesPage: React.FC = () => {
               <Users size={18} />
               <span className="text-sm whitespace-nowrap">Usuários</span>
             </button>
-            <button
-              onClick={() => setActiveSection('perfis')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
-                activeSection === 'perfis'
-                  ? 'bg-primary-500/10 text-primary-400'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-              }`}
-            >
-              <Shield size={18} />
-              <span className="text-sm whitespace-nowrap">Perfis</span>
-            </button>
-            <button
-              onClick={() => setActiveSection('pagamentos')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
-                activeSection === 'pagamentos'
-                  ? 'bg-primary-500/10 text-primary-400'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-              }`}
-            >
-              <CreditCard size={18} />
-              <span className="text-sm whitespace-nowrap">Pagamentos</span>
-            </button>
-            <button
-              onClick={() => setActiveSection('status')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
-                activeSection === 'status'
-                  ? 'bg-primary-500/10 text-primary-400'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-              }`}
-            >
-              <Store size={18} />
-              <span className="text-sm whitespace-nowrap">Status Loja</span>
-            </button>
-            <button
-              onClick={() => setActiveSection('taxa')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
-                activeSection === 'taxa'
-                  ? 'bg-primary-500/10 text-primary-400'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-              }`}
-            >
-              <Bike size={18} />
-              <span className="text-sm whitespace-nowrap">Taxa Entrega</span>
-            </button>
-            <button
-              onClick={() => setActiveSection('horarios')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
-                activeSection === 'horarios'
-                  ? 'bg-primary-500/10 text-primary-400'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-              }`}
-            >
-              <Clock size={18} />
-              <span className="text-sm whitespace-nowrap">Horários</span>
-            </button>
+            {/* Aba "Perfis" ocultada */}
+            {/* Aba "Pagamentos" ocultada */}
+            {/* Aba "Status Loja" ocultada */}
+            {/* Aba "Taxa Entrega" ocultada */}
+            {/* Aba "Horários" ocultada */}
           </div>
         </div>
       </div>
@@ -1206,7 +1389,7 @@ const ConfiguracoesPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-semibold text-white">
                     {activeSection === 'pagamentos' && 'Nova Forma de Pagamento'}
-                    {activeSection === 'usuarios'  && 'Novo Usuário'}
+                    {activeSection === 'usuarios'  && (isEditingUsuario ? 'Editar Usuário' : 'Novo Usuário')}
                     {activeSection === 'perfis' && 'Novo Perfil'}
                     {activeSection === 'geral' && 'Editar Dados da Empresa'}
                     {activeSection === 'horarios' && (isEditingHorario ? 'Editar Horário de Atendimento' : 'Novo Horário de Atendimento')}
@@ -1222,6 +1405,21 @@ const ConfiguracoesPage: React.FC = () => {
                           hora_abertura: '08:00',
                           hora_fechamento: '18:00'
                         });
+                      }
+                      // Limpar erros e formulário de usuário quando fechar o sidebar
+                      if (activeSection === 'usuarios') {
+                        setFormErrors({
+                          senha: '',
+                          email: ''
+                        });
+                        setUsuarioForm({
+                          id: '',
+                          nome: '',
+                          email: '',
+                          senha: '',
+                          confirmarSenha: ''
+                        });
+                        setIsEditingUsuario(false); // Resetar o modo de edição
                       }
                     }}
                     className="text-gray-400 hover:text-white transition-colors"
@@ -1266,6 +1464,154 @@ const ConfiguracoesPage: React.FC = () => {
                         disabled={isLoading || !selectedTipo}
                       >
                         {isLoading ? 'Salvando...' : 'Salvar'}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+
+                {activeSection === 'usuarios' && (
+                  <form onSubmit={handleSubmitUsuario} className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Nome
+                      </label>
+                      <input
+                        type="text"
+                        value={usuarioForm.nome}
+                        onChange={(e) => setUsuarioForm(prev => ({ ...prev, nome: e.target.value }))}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        placeholder="Digite o nome completo"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={usuarioForm.email}
+                        onChange={(e) => {
+                          setUsuarioForm(prev => ({ ...prev, email: e.target.value }));
+                          // Limpar erro de email quando o usuário digita
+                          if (formErrors.email) {
+                            setFormErrors(prev => ({ ...prev, email: '' }));
+                          }
+                        }}
+                        className={`w-full bg-gray-800/50 border ${formErrors.email ? 'border-red-500' : 'border-gray-700'} rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20`}
+                        placeholder="Digite o email"
+                        required={!isEditingUsuario}
+                        disabled={isEditingUsuario} // Desabilitar o campo de email no modo de edição
+                        readOnly={isEditingUsuario} // Somente leitura no modo de edição
+                      />
+                      {formErrors.email && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
+                      )}
+                      {isEditingUsuario && (
+                        <p className="text-blue-400 text-xs mt-1">O email não pode ser alterado</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Senha {isEditingUsuario && <span className="text-gray-500 text-xs">(opcional)</span>}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={mostrarSenha ? "text" : "password"}
+                          value={usuarioForm.senha}
+                          onChange={(e) => {
+                            setUsuarioForm(prev => ({ ...prev, senha: e.target.value }));
+                            // Limpar erro de senha quando o usuário digita
+                            if (formErrors.senha) {
+                              setFormErrors(prev => ({ ...prev, senha: '' }));
+                            }
+                          }}
+                          className={`w-full bg-gray-800/50 border ${formErrors.senha ? 'border-red-500' : 'border-gray-700'} rounded-lg py-2 pl-3 pr-10 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20`}
+                          placeholder={isEditingUsuario ? "Digite para alterar a senha" : "Digite a senha"}
+                          required={!isEditingUsuario}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMostrarSenha(!mostrarSenha)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                        >
+                          {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                      {isEditingUsuario && (
+                        <p className="text-blue-400 text-xs mt-1">Deixe em branco para manter a senha atual</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Confirmar Senha {isEditingUsuario && <span className="text-gray-500 text-xs">(opcional)</span>}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={mostrarConfirmarSenha ? "text" : "password"}
+                          value={usuarioForm.confirmarSenha}
+                          onChange={(e) => {
+                            setUsuarioForm(prev => ({ ...prev, confirmarSenha: e.target.value }));
+                            // Limpar erro de senha quando o usuário digita
+                            if (formErrors.senha) {
+                              setFormErrors(prev => ({ ...prev, senha: '' }));
+                            }
+                          }}
+                          className={`w-full bg-gray-800/50 border ${formErrors.senha ? 'border-red-500' : 'border-gray-700'} rounded-lg py-2 pl-3 pr-10 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20`}
+                          placeholder={isEditingUsuario ? "Confirme a nova senha" : "Confirme a senha"}
+                          required={!isEditingUsuario}
+                          disabled={isEditingUsuario && !usuarioForm.senha} // Desabilitar se estiver editando e não tiver senha
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMostrarConfirmarSenha(!mostrarConfirmarSenha)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                        >
+                          {mostrarConfirmarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                      {formErrors.senha && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.senha}</p>
+                      )}
+                    </div>
+
+                    <div className="flex gap-4 pt-4">
+                      <Button
+                        type="button"
+                        variant="text"
+                        className="flex-1"
+                        onClick={() => {
+                          setShowSidebar(false);
+                          // Limpar erros e formulário
+                          setFormErrors({
+                            senha: '',
+                            email: ''
+                          });
+                          setUsuarioForm({
+                            id: '',
+                            nome: '',
+                            email: '',
+                            senha: '',
+                            confirmarSenha: ''
+                          });
+                          setIsEditingUsuario(false); // Resetar o modo de edição
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        className="flex-1"
+                        disabled={isLoading}
+                      >
+                        {isLoading
+                          ? (isEditingUsuario ? 'Salvando...' : 'Criando...')
+                          : (isEditingUsuario ? 'Salvar Alterações' : 'Criar Usuário')
+                        }
                       </Button>
                     </div>
                   </form>

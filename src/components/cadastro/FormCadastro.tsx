@@ -67,7 +67,7 @@ const FormCadastro: React.FC = () => {
 
       if (empresaError) throw empresaError;
 
-      // 3. Create usuario record
+      // 3. Create usuario record with admin type
       const { error: usuarioError } = await supabase
         .from('usuarios')
         .insert([
@@ -76,6 +76,7 @@ const FormCadastro: React.FC = () => {
             nome,
             email,
             empresa_id: empresaData.id,
+            tipo: 'admin', // Define o usuário como administrador
           },
         ]);
 
@@ -107,7 +108,7 @@ const FormCadastro: React.FC = () => {
       await supabase.auth.signOut();
 
       // Redirect to login page
-      navigate('/entrar', { 
+      navigate('/entrar', {
         replace: true,
         state: { message: 'Conta criada com sucesso! Por favor, faça login.' }
       });
@@ -130,7 +131,7 @@ const FormCadastro: React.FC = () => {
         required
         autoComplete="name"
       />
-      
+
       <Input
         id="email"
         type="email"
@@ -140,7 +141,7 @@ const FormCadastro: React.FC = () => {
         required
         autoComplete="email"
       />
-      
+
       <Input
         id="senha"
         type="password"
@@ -150,7 +151,7 @@ const FormCadastro: React.FC = () => {
         required
         autoComplete="new-password"
       />
-      
+
       <Input
         id="confirmarSenha"
         type="password"
@@ -160,7 +161,7 @@ const FormCadastro: React.FC = () => {
         required
         autoComplete="new-password"
       />
-      
+
       {senhaError && (
         <p className="text-red-500 text-sm mt-2">{senhaError}</p>
       )}
@@ -168,23 +169,23 @@ const FormCadastro: React.FC = () => {
       {error && (
         <p className="text-red-500 text-sm mt-2">{error}</p>
       )}
-      
+
       <div className="pt-2">
-        <Button 
-          type="submit" 
-          variant="primary" 
+        <Button
+          type="submit"
+          variant="primary"
           fullWidth
           disabled={!isFormValid || isLoading}
         >
           {isLoading ? 'Criando conta...' : 'Criar conta'}
         </Button>
       </div>
-      
+
       <div className="mt-6 text-center">
         <p className="text-gray-400">
           Já possui uma conta?{' '}
-          <Link 
-            to="/entrar" 
+          <Link
+            to="/entrar"
             className="text-primary-400 hover:text-primary-300 inline-flex items-center gap-1 transition-colors"
           >
             <ArrowLeft size={16} />

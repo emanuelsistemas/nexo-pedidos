@@ -187,7 +187,7 @@ const DashboardPage: React.FC = () => {
 
   const updateStoreStatus = async (aberto: boolean, manual: boolean) => {
     if (isLoading) return;
-    
+
     try {
       setIsLoading(true);
       updateStatusRef.current = true;
@@ -369,36 +369,7 @@ const DashboardPage: React.FC = () => {
   };
 
   const cards = [
-    {
-      title: 'Status da Loja',
-      value: (
-        <div className="flex flex-col items-start gap-2">
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${storeStatus.aberto ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span>{storeStatus.aberto ? 'Aberta' : 'Fechada'}</span>
-          </div>
-          <Button
-            type="button"
-            variant="primary"
-            className={`text-sm ${storeStatus.aberto ? '!bg-red-500 hover:!bg-red-600' : '!bg-green-500 hover:!bg-green-600'}`}
-            onClick={toggleStoreStatus}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Atualizando...' : storeStatus.aberto ? 'Fechar Loja' : 'Abrir Loja'}
-          </Button>
-        </div>
-      ),
-      icon: Store,
-      color: 'bg-purple-500/10',
-      iconColor: 'text-purple-500',
-      borderColor: 'border-purple-500/20',
-      customContent: (
-        <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
-          <Clock size={14} />
-          <span>{currentTime.toLocaleTimeString()}</span>
-        </div>
-      ),
-    },
+    // Card "Status da Loja" removido
     {
       title: 'Pedidos Hoje',
       value: data.pedidosHoje,
@@ -497,9 +468,9 @@ const DashboardPage: React.FC = () => {
       >
         <h2 className="text-lg font-medium text-white mb-6">Faturamento dos Últimos 7 Dias</h2>
         <div className="h-[300px]">
-          <Line 
-            options={chartOptions} 
-            data={chartData} 
+          <Line
+            options={chartOptions}
+            data={chartData}
             ref={chartRef}
           />
         </div>

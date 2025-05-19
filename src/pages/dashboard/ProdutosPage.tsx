@@ -122,6 +122,9 @@ const ProdutosPage: React.FC = () => {
     promocao: false,
     ativo: true,
   });
+
+  // Estado para controlar o valor formatado do preço
+  const [precoFormatado, setPrecoFormatado] = useState('');
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
@@ -273,6 +276,23 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
+  // Função para formatar o preço no formato da moeda brasileira
+  const formatarPreco = (valor: number): string => {
+    return valor.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  // Função para converter o valor formatado para número
+  const desformatarPreco = (valorFormatado: string): number => {
+    // Remove todos os caracteres não numéricos, exceto o ponto decimal
+    const valorLimpo = valorFormatado.replace(/[^\d,]/g, '').replace(',', '.');
+    return parseFloat(valorLimpo) || 0;
+  };
+
   const handleAddGrupo = () => {
     setIsGrupoForm(true);
     setSelectedGrupo(null);
@@ -301,6 +321,8 @@ const ProdutosPage: React.FC = () => {
       promocao: false,
       ativo: true,
     });
+    // Inicializa o preço formatado
+    setPrecoFormatado(formatarPreco(0));
     setShowSidebar(true);
   };
 
@@ -316,6 +338,9 @@ const ProdutosPage: React.FC = () => {
       promocao: produto.promocao || false,
       ativo: produto.ativo !== false, // Se não estiver definido, assume true
     });
+
+    // Define o preço formatado
+    setPrecoFormatado(formatarPreco(produto.preco));
 
     try {
       const { data: opcoesData } = await supabase
@@ -716,7 +741,7 @@ const ProdutosPage: React.FC = () => {
                         >
                           <span className="text-sm text-gray-300">{item.nome}</span>
                           <span className="text-sm text-primary-400">
-                            R$ {item.preco.toFixed(2)}
+                            {formatarPreco(item.preco)}
                           </span>
                         </div>
                       ))}
@@ -742,11 +767,7 @@ const ProdutosPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <h4 className="text-white font-medium">{produto.nome}</h4>
               <span className="text-sm text-gray-400">#{produto.codigo}</span>
-              {produto.promocao && (
-                <span className="px-2 py-0.5 text-xs font-medium bg-primary-500/20 text-primary-400 rounded-full">
-                  Promoção
-                </span>
-              )}
+              {/* Indicador de promoção ocultado conforme solicitado */}
               {produto.ativo === false && (
                 <span className="px-2 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
                   Inativo
@@ -769,7 +790,7 @@ const ProdutosPage: React.FC = () => {
             </div>
           </div>
           <p className="text-sm text-primary-400">
-            R$ {produto.preco.toFixed(2)}
+            {formatarPreco(produto.preco)}
           </p>
           {produto.descricao && (
             <p className="text-sm text-gray-400 mt-1">
@@ -987,6 +1008,21 @@ const ProdutosPage: React.FC = () => {
                   </form>
                 ) : (
                   <form onSubmit={handleSubmitProduto} className="space-y-6">
+                    <div className="mb-4">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="ativo"
+                          checked={novoProduto.ativo}
+                          onChange={(e) => setNovoProduto({ ...novoProduto, ativo: e.target.checked })}
+                          className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                        />
+                        <label htmlFor="ativo" className="text-sm font-medium text-white cursor-pointer">
+                          Produto Ativo
+                        </label>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-400 mb-2">
                         Código do Produto
@@ -1017,12 +1053,21 @@ const ProdutosPage: React.FC = () => {
                         Preço
                       </label>
                       <input
-                        type="number"
-                        step="0.01"
-                        value={novoProduto.preco}
-                        onChange={(e) => setNovoProduto({ ...novoProduto, preco: parseFloat(e.target.value) })}
+                        type="text"
+                        value={precoFormatado}
+                        onChange={(e) => {
+                          setPrecoFormatado(e.target.value);
+                          // Atualiza o valor numérico no estado do produto
+                          const valorNumerico = desformatarPreco(e.target.value);
+                          setNovoProduto({ ...novoProduto, preco: valorNumerico });
+                        }}
+                        onBlur={() => {
+                          // Ao perder o foco, formata corretamente o valor
+                          const valorNumerico = desformatarPreco(precoFormatado);
+                          setPrecoFormatado(formatarPreco(valorNumerico));
+                        }}
                         className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="0,00"
+                        placeholder="R$ 0,00"
                       />
                     </div>
                     <div>
@@ -1038,55 +1083,9 @@ const ProdutosPage: React.FC = () => {
                       />
                     </div>
 
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="promocao"
-                          checked={novoProduto.promocao}
-                          onChange={(e) => setNovoProduto({ ...novoProduto, promocao: e.target.checked })}
-                          className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
-                        />
-                        <label htmlFor="promocao" className="text-sm font-medium text-white cursor-pointer">
-                          Produto em Promoção
-                        </label>
-                      </div>
+                    {/* Opção "Produto em Promoção" ocultada conforme solicitado */}
 
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="ativo"
-                          checked={novoProduto.ativo}
-                          onChange={(e) => setNovoProduto({ ...novoProduto, ativo: e.target.checked })}
-                          className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
-                        />
-                        <label htmlFor="ativo" className="text-sm font-medium text-white cursor-pointer">
-                          Produto Ativo
-                        </label>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Opções Adicionais
-                      </label>
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
-                        {availableOpcoes.map((opcao) => (
-                          <label
-                            key={opcao.id}
-                            className="flex items-center p-2 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedOpcoes.includes(opcao.id)}
-                              onChange={() => handleOpcaoChange(opcao.id)}
-                              className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
-                            />
-                            <span className="text-white">{opcao.nome}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+                    {/* Seção de Opções Adicionais ocultada conforme solicitado */}
 
                     <div className="flex gap-4 pt-4">
                       <Button
