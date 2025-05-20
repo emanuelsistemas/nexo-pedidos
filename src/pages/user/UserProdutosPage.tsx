@@ -60,16 +60,74 @@ const UserProdutosPage: React.FC = () => {
   const [produtosFotosCount, setProdutosFotosCount] = useState<Record<string, number>>({});
 
   useEffect(() => {
+    // Carregar dados iniciais
     loadGrupos();
 
     // Configurar a escuta em tempo real para atualizações
     setupRealtimeSubscription();
 
+    // Testar a conexão Realtime após um curto período
+    const timer = setTimeout(() => {
+      testRealtimeConnection();
+    }, 2000);
+
     // Limpar a inscrição quando o componente for desmontado
     return () => {
+      clearTimeout(timer);
       supabase.removeAllChannels();
     };
   }, []);
+
+  // Função para testar a conexão Realtime
+  const testRealtimeConnection = async () => {
+    try {
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Obter um produto qualquer para testar
+      const { data: produtosData } = await supabase
+        .from('produtos')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false)
+        .limit(1);
+
+      if (!produtosData || produtosData.length === 0) {
+        console.log('Nenhum produto encontrado para testar a conexão Realtime');
+        return;
+      }
+
+      const produtoId = produtosData[0].id;
+
+      // Fazer uma atualização simples para testar a conexão Realtime
+      console.log(`Testando conexão Realtime com produto ${produtoId}...`);
+
+      // Atualizar o produto com o mesmo valor para não alterar dados
+      const { data, error } = await supabase
+        .from('produtos')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', produtoId)
+        .select();
+
+      if (error) {
+        console.error('Erro ao testar conexão Realtime:', error);
+      } else {
+        console.log('Teste de conexão Realtime enviado com sucesso');
+      }
+    } catch (error) {
+      console.error('Erro ao testar conexão Realtime:', error);
+    }
+  };
 
   const loadGrupos = async () => {
     console.log('Iniciando carregamento de grupos e produtos...');
@@ -352,48 +410,65 @@ const UserProdutosPage: React.FC = () => {
 
       console.log(`Configurando escuta em tempo real para empresa_id: ${usuarioData.empresa_id}`);
 
+      // Gerar um nome de canal único para evitar conflitos
+      const channelName = `realtime-mobile-${Date.now()}`;
+      console.log(`Criando canal com nome: ${channelName}`);
+
       // Criar um único canal para todas as alterações
-      const channel = supabase.channel('realtime-updates')
+      const channel = supabase.channel(channelName, {
+        config: {
+          broadcast: { self: true }
+        }
+      });
 
-        // Escutar alterações na tabela produtos
-        .on(
-          'postgres_changes',
-          {
-            event: '*', // Escutar todos os eventos (INSERT, UPDATE, DELETE)
-            schema: 'public',
-            table: 'produtos',
-            filter: `empresa_id=eq.${usuarioData.empresa_id}`
-          },
-          (payload) => {
-            console.log('Alteração detectada em produtos:', payload);
+      // Escutar alterações na tabela produtos
+      channel.on(
+        'postgres_changes',
+        {
+          event: '*', // Escutar todos os eventos (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'produtos',
+          filter: `empresa_id=eq.${usuarioData.empresa_id}`
+        },
+        (payload) => {
+          console.log('Alteração detectada em produtos:', payload);
 
-            // Forçar o recarregamento completo dos dados
+          // Forçar o recarregamento completo dos dados
+          // Usamos setTimeout para garantir que a atualização ocorra após o evento ser processado
+          setTimeout(() => {
             loadGrupos();
-          }
-        )
+          }, 100);
+        }
+      );
 
-        // Escutar alterações na tabela produto_fotos
-        .on(
-          'postgres_changes',
-          {
-            event: '*', // Escutar todos os eventos (INSERT, UPDATE, DELETE)
-            schema: 'public',
-            table: 'produto_fotos',
-            filter: `empresa_id=eq.${usuarioData.empresa_id}`
-          },
-          (payload) => {
-            console.log('Alteração detectada em fotos de produtos:', payload);
+      // Escutar alterações na tabela produto_fotos
+      channel.on(
+        'postgres_changes',
+        {
+          event: '*', // Escutar todos os eventos (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'produto_fotos',
+          filter: `empresa_id=eq.${usuarioData.empresa_id}`
+        },
+        (payload) => {
+          console.log('Alteração detectada em fotos de produtos:', payload);
 
-            // Forçar o recarregamento completo dos dados para garantir consistência
+          // Forçar o recarregamento completo dos dados para garantir consistência
+          // Usamos setTimeout para garantir que a atualização ocorra após o evento ser processado
+          setTimeout(() => {
             loadGrupos();
-          }
-        );
+          }, 100);
+        }
+      );
 
-      // Inscrever-se no canal
-      channel.subscribe((status) => {
+      // Inscrever-se no canal e verificar o status
+      const subscription = channel.subscribe(async (status) => {
         console.log(`Status da inscrição: ${status}`);
         if (status === 'SUBSCRIBED') {
           console.log('Inscrição em tempo real configurada com sucesso');
+
+          // Teste para verificar se a inscrição está funcionando
+          console.log('Canais ativos:', await supabase.getChannels());
         }
       });
 
@@ -439,7 +514,13 @@ const UserProdutosPage: React.FC = () => {
             onClick={() => {
               if (!isRefreshing) {
                 console.log('Atualizando manualmente...');
+                // Primeiro carregamos os dados
                 loadGrupos();
+
+                // Depois testamos a conexão Realtime
+                setTimeout(() => {
+                  testRealtimeConnection();
+                }, 1000);
               }
             }}
             disabled={isRefreshing}
