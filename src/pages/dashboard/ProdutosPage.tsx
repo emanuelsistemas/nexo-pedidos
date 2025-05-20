@@ -1362,6 +1362,9 @@ const ProdutosPage: React.FC = () => {
   // Estado para armazenar as fotos principais dos produtos
   const [produtosFotosPrincipais, setProdutosFotosPrincipais] = useState<Record<string, ProdutoFoto | null>>({});
 
+  // Estado para armazenar a contagem de fotos por produto
+  const [produtosFotosCount, setProdutosFotosCount] = useState<Record<string, number>>({});
+
   // Função para carregar as fotos principais de todos os produtos
   const loadProdutosFotosPrincipais = async (produtos: Produto[]) => {
     const fotosMap: Record<string, ProdutoFoto | null> = {};
@@ -1374,11 +1377,48 @@ const ProdutosPage: React.FC = () => {
     setProdutosFotosPrincipais(fotosMap);
   };
 
+  // Função para carregar a contagem de fotos de cada produto
+  const loadProdutosFotosCount = async (produtos: Produto[]) => {
+    try {
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Obter todas as fotos de todos os produtos
+      const { data: fotosData } = await supabase
+        .from('produto_fotos')
+        .select('produto_id')
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (!fotosData) return;
+
+      // Contar fotos por produto_id
+      const fotosCount: Record<string, number> = {};
+      produtos.forEach(produto => {
+        const count = fotosData.filter(f => f.produto_id === produto.id).length;
+        fotosCount[produto.id] = count;
+      });
+
+      setProdutosFotosCount(fotosCount);
+    } catch (error) {
+      console.error('Erro ao carregar contagem de fotos dos produtos:', error);
+    }
+  };
+
   // Carregar fotos principais quando os produtos mudarem
   useEffect(() => {
     const allProdutos = grupos.flatMap(grupo => grupo.produtos);
     if (allProdutos.length > 0) {
       loadProdutosFotosPrincipais(allProdutos);
+      loadProdutosFotosCount(allProdutos);
     }
   }, [grupos]);
 
@@ -1426,7 +1466,7 @@ const ProdutosPage: React.FC = () => {
         <div className="flex items-start gap-4">
           {/* Foto principal do produto */}
           <div
-            className="w-24 h-24 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
+            className="w-24 h-24 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer relative"
             onClick={() => handleOpenProdutoGaleria(produto)}
           >
             {fotoPrincipal ? (
@@ -1438,6 +1478,13 @@ const ProdutosPage: React.FC = () => {
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-500">
                 <Image size={24} />
+              </div>
+            )}
+
+            {/* Contador de fotos */}
+            {produtosFotosCount[produto.id] > 0 && (
+              <div className="absolute top-1 right-1 bg-background-dark px-1.5 py-0.5 rounded-full text-xs font-medium text-white">
+                {produtosFotosCount[produto.id]} {produtosFotosCount[produto.id] === 1 ? 'foto' : 'fotos'}
               </div>
             )}
           </div>
