@@ -664,6 +664,15 @@ const ProdutosPage: React.FC = () => {
         }
       }
 
+      // Definir um sinalizador no localStorage para notificar a versão mobile
+      localStorage.setItem('produto_atualizado', JSON.stringify({
+        timestamp: new Date().getTime(),
+        produto_id: editingProduto.id,
+        acao: 'foto_adicionada'
+      }));
+
+      console.log(`Foto adicionada com sucesso! Sinalizador definido para versão mobile.`);
+
       showMessage('success', 'Foto adicionada com sucesso');
     } catch (error: any) {
       console.error('Erro ao fazer upload da foto:', error);
@@ -745,6 +754,15 @@ const ProdutosPage: React.FC = () => {
           setGrupos([...gruposAtualizados]);
         }
       }
+
+      // Definir um sinalizador no localStorage para notificar a versão mobile
+      localStorage.setItem('produto_atualizado', JSON.stringify({
+        timestamp: new Date().getTime(),
+        produto_id: editingProduto.id,
+        acao: 'foto_principal_alterada'
+      }));
+
+      console.log(`Foto principal definida com sucesso! Sinalizador definido para versão mobile.`);
 
       showMessage('success', 'Foto principal definida com sucesso');
     } catch (error: any) {
@@ -858,6 +876,15 @@ const ProdutosPage: React.FC = () => {
           setGrupos([...gruposAtualizados]);
         }
       }
+
+      // Definir um sinalizador no localStorage para notificar a versão mobile
+      localStorage.setItem('produto_atualizado', JSON.stringify({
+        timestamp: new Date().getTime(),
+        produto_id: editingProduto.id,
+        acao: 'foto_excluida'
+      }));
+
+      console.log(`Foto excluída com sucesso! Sinalizador definido para versão mobile.`);
 
       showMessage('success', 'Foto excluída com sucesso');
     } catch (error: any) {
@@ -1052,6 +1079,15 @@ const ProdutosPage: React.FC = () => {
 
       await loadGrupos();
 
+      // Definir um sinalizador no localStorage para notificar a versão mobile
+      localStorage.setItem('produto_atualizado', JSON.stringify({
+        timestamp: new Date().getTime(),
+        produto_id: productId,
+        acao: editingProduto ? 'atualizado' : 'criado'
+      }));
+
+      console.log(`Produto ${editingProduto ? 'atualizado' : 'criado'} com sucesso! Sinalizador definido para versão mobile.`);
+
       if (editingProduto) {
         showMessage('success', 'Produto atualizado com sucesso!');
         setShowSidebar(false);
@@ -1156,6 +1192,16 @@ const ProdutosPage: React.FC = () => {
             ? { ...grupo, produtos: grupo.produtos.filter(p => p.id !== deleteConfirmation.id) }
             : grupo
         ));
+
+        // Definir um sinalizador no localStorage para notificar a versão mobile
+        localStorage.setItem('produto_atualizado', JSON.stringify({
+          timestamp: new Date().getTime(),
+          produto_id: deleteConfirmation.id,
+          acao: 'excluido'
+        }));
+
+        console.log(`Produto excluído com sucesso! Sinalizador definido para versão mobile.`);
+
         showMessage('success', 'Produto excluído com sucesso!');
       } else if (deleteConfirmation.type === 'foto') {
         await handleDeleteFoto();

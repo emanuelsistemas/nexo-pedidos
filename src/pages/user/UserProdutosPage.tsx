@@ -59,12 +59,52 @@ const UserProdutosPage: React.FC = () => {
   // Estado para armazenar a contagem de fotos por produto
   const [produtosFotosCount, setProdutosFotosCount] = useState<Record<string, number>>({});
 
+  // Verificar se há atualizações no localStorage
+  const checkLocalStorageUpdates = () => {
+    const produtoAtualizado = localStorage.getItem('produto_atualizado');
+    if (produtoAtualizado) {
+      try {
+        const data = JSON.parse(produtoAtualizado);
+        console.log('Atualização detectada via localStorage:', data);
+
+        // Verificar se a atualização é recente (menos de 5 segundos)
+        const now = new Date().getTime();
+        if (now - data.timestamp < 5000) {
+          console.log('Atualização recente, recarregando dados...');
+
+          // Limpar os estados para forçar um recarregamento completo
+          setGrupos([]);
+          setProdutosFotos({});
+          setProdutosFotosCount({});
+
+          // Carregar dados novamente
+          loadGrupos();
+
+          // Limpar o sinalizador após processar
+          localStorage.removeItem('produto_atualizado');
+        }
+      } catch (error) {
+        console.error('Erro ao processar atualização do localStorage:', error);
+        // Limpar o sinalizador em caso de erro
+        localStorage.removeItem('produto_atualizado');
+      }
+    }
+  };
+
   useEffect(() => {
     // Carregar dados iniciais
     loadGrupos();
 
     // Configurar a escuta em tempo real para atualizações
     setupRealtimeSubscription();
+
+    // Verificar atualizações no localStorage
+    checkLocalStorageUpdates();
+
+    // Configurar um intervalo para verificar atualizações no localStorage
+    const localStorageInterval = setInterval(() => {
+      checkLocalStorageUpdates();
+    }, 1000);
 
     // Testar a conexão Realtime após um curto período
     const timer = setTimeout(() => {
@@ -74,6 +114,7 @@ const UserProdutosPage: React.FC = () => {
     // Limpar a inscrição quando o componente for desmontado
     return () => {
       clearTimeout(timer);
+      clearInterval(localStorageInterval);
       supabase.removeAllChannels();
     };
   }, []);
