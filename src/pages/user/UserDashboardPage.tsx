@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ShoppingBag, TrendingUp, Calendar, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShoppingBag, TrendingUp, Calendar, Clock, CheckCircle, AlertCircle, Filter, User, RefreshCw, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface DashboardData {
@@ -11,6 +11,13 @@ interface DashboardData {
   valorTotalSemana: number;
   valorTotalMes: number;
   ultimosPedidos: any[];
+}
+
+interface Usuario {
+  id: string;
+  nome: string;
+  email: string;
+  tipo: string;
 }
 
 const UserDashboardPage: React.FC = () => {
@@ -24,10 +31,70 @@ const UserDashboardPage: React.FC = () => {
     valorTotalMes: 0,
     ultimosPedidos: []
   });
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuarioSelecionado, setUsuarioSelecionado] = useState<string>('todos');
+  const [showFilters, setShowFilters] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   useEffect(() => {
     loadDashboardData();
+    checkUserType();
+    loadUsuarios();
   }, []);
+
+  // Recarregar dados quando o usuário selecionado mudar
+  useEffect(() => {
+    loadDashboardData();
+  }, [usuarioSelecionado]);
+
+  // Verificar se o usuário é admin
+  const checkUserType = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('tipo')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioData) {
+        setIsAdmin(usuarioData.tipo === 'admin');
+      }
+    } catch (error) {
+      console.error('Erro ao verificar tipo de usuário:', error);
+    }
+  };
+
+  // Carregar lista de usuários (apenas para admin)
+  const loadUsuarios = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id, tipo')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id || usuarioData.tipo !== 'admin') return;
+
+      const { data: usuariosData } = await supabase
+        .from('usuarios')
+        .select('id, nome, email, tipo')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('nome');
+
+      if (usuariosData) {
+        setUsuarios(usuariosData);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -37,17 +104,43 @@ const UserDashboardPage: React.FC = () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
-      // Obter pedidos do usuário
-      const { data: pedidos } = await supabase
+      // Obter informações do usuário (tipo e empresa_id)
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id, tipo')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Construir a query base
+      let query = supabase
         .from('pedidos')
         .select('*')
-        .eq('usuario_id', userData.user.id)
-        .order('created_at', { ascending: false });
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      // Se um usuário específico estiver selecionado e o usuário atual for admin
+      if (usuarioSelecionado !== 'todos' && usuarioData.tipo === 'admin') {
+        query = query.eq('usuario_id', usuarioSelecionado);
+      }
+      // Se o usuário atual não for admin, mostrar apenas seus próprios pedidos
+      else if (usuarioData.tipo !== 'admin') {
+        query = query.eq('usuario_id', userData.user.id);
+      }
+
+      // Ordenar por data de criação (mais recentes primeiro)
+      query = query.order('created_at', { ascending: false });
+
+      // Executar a query
+      const { data: pedidos } = await query;
 
       if (!pedidos) {
         setIsLoading(false);
         return;
       }
+
+      // Atualizar timestamp da última atualização
+      setLastUpdate(new Date());
 
       // Calcular datas
       const hoje = new Date();
@@ -187,9 +280,120 @@ const UserDashboardPage: React.FC = () => {
     },
   ];
 
+  // Função para formatar a data da última atualização
+  const formatLastUpdate = () => {
+    const now = new Date();
+    const diff = now.getTime() - lastUpdate.getTime();
+
+    // Se for menos de 1 minuto
+    if (diff < 60000) {
+      return 'agora mesmo';
+    }
+
+    // Se for menos de 1 hora
+    if (diff < 3600000) {
+      const minutes = Math.floor(diff / 60000);
+      return `há ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`;
+    }
+
+    // Se for menos de 1 dia
+    if (diff < 86400000) {
+      const hours = Math.floor(diff / 3600000);
+      return `há ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+    }
+
+    // Se for mais de 1 dia
+    const days = Math.floor(diff / 86400000);
+    return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+  };
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-white mb-4">Meu Dashboard</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold text-white">Meu Dashboard</h1>
+
+        {/* Indicador de última atualização */}
+        <div className="text-xs text-gray-400 flex items-center gap-1">
+          <span>Atualizado: {formatLastUpdate()}</span>
+          <button
+            onClick={() => loadDashboardData()}
+            className="p-1 hover:bg-gray-800/50 rounded-full transition-colors"
+            title="Atualizar dados"
+            disabled={isLoading}
+          >
+            <RefreshCw size={12} className={isLoading ? "animate-spin" : ""} />
+          </button>
+        </div>
+      </div>
+
+      {/* Filtro de usuários - visível apenas para admin */}
+      {isAdmin && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-1 px-2 py-1 bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-300 text-sm transition-colors"
+            >
+              <Filter size={16} />
+              <span>Filtrar por usuário</span>
+            </button>
+          </div>
+
+          {/* Área de filtros - visível apenas quando showFilters é true */}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 mt-2 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-white text-sm font-medium flex items-center gap-1">
+                      <User size={14} />
+                      Usuários
+                    </h3>
+                    <button
+                      onClick={() => setShowFilters(false)}
+                      className="p-1 hover:bg-gray-700/50 rounded-full text-gray-400"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setUsuarioSelecionado('todos')}
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        usuarioSelecionado === 'todos'
+                          ? 'bg-primary-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Todos
+                    </button>
+
+                    {usuarios.map((usuario) => (
+                      <button
+                        key={usuario.id}
+                        onClick={() => setUsuarioSelecionado(usuario.id)}
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          usuarioSelecionado === usuario.id
+                            ? 'bg-primary-500 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        {usuario.nome}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {isLoading ? (
         <>
@@ -254,7 +458,19 @@ const UserDashboardPage: React.FC = () => {
             transition={{ delay: 0.4 }}
             className="bg-background-card rounded-lg border border-gray-800 p-4"
           >
-            <h2 className="text-lg font-medium text-white mb-4">Últimos Pedidos</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-white">Últimos Pedidos</h2>
+
+              {/* Indicador de usuário selecionado - visível apenas para admin */}
+              {isAdmin && usuarioSelecionado !== 'todos' && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-primary-500/10 rounded-full">
+                  <User size={12} className="text-primary-400" />
+                  <span className="text-xs text-primary-400">
+                    {usuarios.find(u => u.id === usuarioSelecionado)?.nome || 'Usuário'}
+                  </span>
+                </div>
+              )}
+            </div>
             {data.ultimosPedidos.length === 0 ? (
               <div className="text-center py-6">
                 <AlertCircle size={24} className="text-gray-500 mx-auto mb-2" />

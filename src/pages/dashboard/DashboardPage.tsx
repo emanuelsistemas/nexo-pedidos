@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp,
   Package,
@@ -11,6 +11,9 @@ import {
   ArrowDownRight,
   Store,
   Clock,
+  Filter,
+  User,
+  RefreshCw,
 } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
@@ -46,6 +49,13 @@ interface StoreStatus {
   modo_operacao: 'manual' | 'automatico';
 }
 
+interface Usuario {
+  id: string;
+  nome: string;
+  email: string;
+  tipo: string;
+}
+
 const DashboardPage: React.FC = () => {
   const chartRef = useRef<ChartJS | null>(null);
   const [data, setData] = useState<DashboardData>({
@@ -66,6 +76,11 @@ const DashboardPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const updateStatusRef = useRef(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [usuarioSelecionado, setUsuarioSelecionado] = useState<string>('todos');
+  const [showFilters, setShowFilters] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const [chartData, setChartData] = useState({
     labels: [],
@@ -76,6 +91,8 @@ const DashboardPage: React.FC = () => {
     loadDashboardData();
     loadStoreStatus();
     checkStoreStatus();
+    checkUserType();
+    loadUsuarios();
 
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -89,6 +106,59 @@ const DashboardPage: React.FC = () => {
       }
     };
   }, []);
+
+  // Recarregar dados quando o usuário selecionado mudar
+  useEffect(() => {
+    loadDashboardData();
+  }, [usuarioSelecionado]);
+
+  // Verificar se o usuário é admin
+  const checkUserType = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('tipo')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioData) {
+        setIsAdmin(usuarioData.tipo === 'admin');
+      }
+    } catch (error) {
+      console.error('Erro ao verificar tipo de usuário:', error);
+    }
+  };
+
+  // Carregar lista de usuários (apenas para admin)
+  const loadUsuarios = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id, tipo')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id || usuarioData.tipo !== 'admin') return;
+
+      const { data: usuariosData } = await supabase
+        .from('usuarios')
+        .select('id, nome, email, tipo')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('nome');
+
+      if (usuariosData) {
+        setUsuarios(usuariosData);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+    }
+  };
 
   const loadStoreStatus = async () => {
     try {
@@ -236,24 +306,40 @@ const DashboardPage: React.FC = () => {
 
   const loadDashboardData = async () => {
     try {
+      setIsLoading(true);
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
       const { data: usuarioData } = await supabase
         .from('usuarios')
-        .select('empresa_id')
+        .select('empresa_id, tipo')
         .eq('id', userData.user.id)
         .single();
 
       if (!usuarioData?.empresa_id) return;
 
-      // Get all orders
-      const { data: pedidos } = await supabase
+      // Construir a query base
+      let query = supabase
         .from('pedidos')
         .select('*')
         .eq('empresa_id', usuarioData.empresa_id);
 
+      // Se um usuário específico estiver selecionado e o usuário atual for admin
+      if (usuarioSelecionado !== 'todos' && usuarioData.tipo === 'admin') {
+        query = query.eq('usuario_id', usuarioSelecionado);
+      }
+      // Se o usuário atual não for admin, mostrar apenas seus próprios pedidos
+      else if (usuarioData.tipo !== 'admin') {
+        query = query.eq('usuario_id', userData.user.id);
+      }
+
+      // Executar a query
+      const { data: pedidos } = await query;
+
       if (!pedidos) return;
+
+      // Atualizar timestamp da última atualização
+      setLastUpdate(new Date());
 
       // Calculate metrics
       const hoje = new Date();
@@ -326,6 +412,8 @@ const DashboardPage: React.FC = () => {
       });
     } catch (error) {
       console.error('Error loading dashboard data:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -421,8 +509,108 @@ const DashboardPage: React.FC = () => {
     },
   ];
 
+  // Função para formatar a data da última atualização
+  const formatLastUpdate = () => {
+    const now = new Date();
+    const diff = now.getTime() - lastUpdate.getTime();
+
+    // Se for menos de 1 minuto
+    if (diff < 60000) {
+      return 'agora mesmo';
+    }
+
+    // Se for menos de 1 hora
+    if (diff < 3600000) {
+      const minutes = Math.floor(diff / 60000);
+      return `há ${minutes} ${minutes === 1 ? 'minuto' : 'minutos'}`;
+    }
+
+    // Se for menos de 1 dia
+    if (diff < 86400000) {
+      const hours = Math.floor(diff / 3600000);
+      return `há ${hours} ${hours === 1 ? 'hora' : 'horas'}`;
+    }
+
+    // Se for mais de 1 dia
+    const days = Math.floor(diff / 86400000);
+    return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+  };
+
   return (
     <div className="space-y-6">
+      {/* Cabeçalho com filtros - visível apenas para admin */}
+      {isAdmin && (
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-800/50 hover:bg-gray-800 rounded-lg text-gray-300 transition-colors"
+            >
+              <Filter size={18} />
+              <span>Filtros</span>
+            </button>
+
+            <div className="text-sm text-gray-400 flex items-center gap-1">
+              <span>Atualizado: {formatLastUpdate()}</span>
+              <button
+                onClick={() => loadDashboardData()}
+                className="p-1 hover:bg-gray-800/50 rounded-full transition-colors"
+                title="Atualizar dados"
+                disabled={isLoading}
+              >
+                <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Área de filtros - visível apenas quando showFilters é true */}
+      <AnimatePresence>
+        {isAdmin && showFilters && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
+              <h3 className="text-white font-medium mb-3 flex items-center gap-2">
+                <User size={18} />
+                Filtrar por Usuário
+              </h3>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setUsuarioSelecionado('todos')}
+                  className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    usuarioSelecionado === 'todos'
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  Todos
+                </button>
+
+                {usuarios.map((usuario) => (
+                  <button
+                    key={usuario.id}
+                    onClick={() => setUsuarioSelecionado(usuario.id)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      usuarioSelecionado === usuario.id
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                  >
+                    {usuario.nome}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {cards.map((card, index) => (
           <motion.div
@@ -466,7 +654,19 @@ const DashboardPage: React.FC = () => {
         transition={{ delay: 0.4 }}
         className="bg-background-card rounded-lg border border-gray-800 p-6"
       >
-        <h2 className="text-lg font-medium text-white mb-6">Faturamento dos Últimos 7 Dias</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-medium text-white">Faturamento dos Últimos 7 Dias</h2>
+
+          {/* Indicador de usuário selecionado - visível apenas para admin */}
+          {isAdmin && usuarioSelecionado !== 'todos' && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-primary-500/10 rounded-full">
+              <User size={14} className="text-primary-400" />
+              <span className="text-xs text-primary-400">
+                {usuarios.find(u => u.id === usuarioSelecionado)?.nome || 'Usuário'}
+              </span>
+            </div>
+          )}
+        </div>
         <div className="h-[300px]">
           <Line
             options={chartOptions}

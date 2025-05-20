@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CircleUserRound, LogOut } from 'lucide-react';
+import { CircleUserRound, LogOut, Smartphone } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useSidebarStore } from '../../store/sidebarStore';
 
@@ -10,30 +10,45 @@ const UserProfileFooter: React.FC = () => {
   const { isExpanded } = useSidebarStore();
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserEmail(user.email || '');
+
+        // Verificar se o usuário é admin
+        const { data: userData } = await supabase
+          .from('usuarios')
+          .select('tipo')
+          .eq('id', user.id)
+          .single();
+
+        setIsAdmin(userData?.tipo === 'admin');
       }
     };
     getUser();
   }, []);
 
+  // Função para redirecionar para a versão mobile como admin
+  const handleMobileMode = () => {
+    navigate('/user/dashboard');
+  };
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      
+
       // Como window.close() não funciona em navegadores modernos por questões de segurança,
       // vamos usar outras abordagens:
-      
+
       // 1. Substituir todo o conteúdo da página e redirecionar para a tela de login
       document.body.innerHTML = '';
       document.body.style.margin = '0';
       document.body.style.padding = '0';
       document.body.style.background = '#0a0a0c';
-      
+
       // 2. Adicionar uma mensagem temporária
       const messageDiv = document.createElement('div');
       messageDiv.style.position = 'fixed';
@@ -48,13 +63,13 @@ const UserProfileFooter: React.FC = () => {
         <p>Redirecionando para a tela de login...</p>
       `;
       document.body.appendChild(messageDiv);
-      
+
       // 3. Redirecionar para a página de login de forma mais robusta
       setTimeout(() => {
         try {
           // Tenta usar o navigate do React Router
           navigate('/entrar', { replace: true });
-          
+
           // Como método alternativo, caso o navigate falhe
           setTimeout(() => {
             // Verifica se ainda estamos na mesma página
@@ -69,7 +84,7 @@ const UserProfileFooter: React.FC = () => {
           window.location.href = '/';
         }
       }, 1000);
-      
+
     } catch (error) {
       console.error('Error logging out:', error);
     }
@@ -91,6 +106,27 @@ const UserProfileFooter: React.FC = () => {
             </motion.span>
           )}
         </div>
+
+        {/* Botão Modo Mobile - apenas para usuários admin */}
+        {isAdmin && (
+          <button
+            onClick={handleMobileMode}
+            className="w-full flex items-center px-4 py-2 my-1 mx-2 rounded-lg text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
+          >
+            <Smartphone size={20} />
+            {isExpanded && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
+                className="ml-3 text-sm"
+              >
+                Modo Mobile
+              </motion.span>
+            )}
+          </button>
+        )}
+
         <button
           onClick={() => setShowConfirmation(true)}
           className="w-full flex items-center px-4 py-2 my-1 mx-2 rounded-lg text-red-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"

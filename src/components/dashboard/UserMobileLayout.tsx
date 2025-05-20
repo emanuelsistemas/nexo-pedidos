@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, ShoppingBag, User, LogOut, Plus, Users, Package } from 'lucide-react';
+import { Home, ShoppingBag, User, LogOut, Plus, Users, Package, Monitor } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import LoadingScreen from './LoadingScreen';
 import Logo from '../comum/Logo';
@@ -10,6 +10,7 @@ const UserMobileLayout: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [userName, setUserName] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -20,12 +21,13 @@ const UserMobileLayout: React.FC = () => {
       if (user) {
         const { data: userData } = await supabase
           .from('usuarios')
-          .select('nome')
+          .select('nome, tipo')
           .eq('id', user.id)
           .single();
 
         if (userData) {
           setUserName(userData.nome);
+          setIsAdmin(userData.tipo === 'admin');
         }
       }
     };
@@ -39,6 +41,11 @@ const UserMobileLayout: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Função para retornar à versão web (dashboard admin)
+  const handleWebMode = () => {
+    navigate('/dashboard');
+  };
 
   const handleLogout = async () => {
     try {
@@ -64,7 +71,7 @@ const UserMobileLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background-dark flex flex-col">
-      {/* Header com logo, saudação e botão de sair */}
+      {/* Header com logo, saudação e botões */}
       <header className="bg-background-card border-b border-gray-800 p-4 flex items-center justify-between">
         <div className="flex items-center">
           <Logo size="sm" />
@@ -73,9 +80,22 @@ const UserMobileLayout: React.FC = () => {
           <div className="text-white text-sm">
             Olá, <span className="font-medium">{userName}</span>
           </div>
+
+          {/* Botão para retornar à versão web (apenas para admin) */}
+          {isAdmin && (
+            <button
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500/10 text-blue-400"
+              onClick={handleWebMode}
+              title="Voltar para versão web"
+            >
+              <Monitor size={16} />
+            </button>
+          )}
+
           <button
             className="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10 text-red-400"
             onClick={() => setShowConfirmation(true)}
+            title="Sair do sistema"
           >
             <LogOut size={16} />
           </button>
