@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 
 interface Pedido {
   id: string;
-  numero_pedido: string;
+  numero: string;
   cliente_nome: string;
   valor_total: number;
   status: string;
@@ -88,24 +88,51 @@ const FaturamentoPage: React.FC = () => {
   const loadPedidos = async () => {
     try {
       setIsLoading(true);
-      
+
+      // Primeiro, carregamos os pedidos
       const { data: pedidosData, error } = await supabase
         .from('pedidos')
         .select(`
           *,
-          usuario:usuarios(nome),
           empresa:empresas(nome)
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Formatar dados dos pedidos
-      const formattedPedidos = pedidosData?.map(pedido => ({
+      // Se não temos pedidos, retornamos uma lista vazia
+      if (!pedidosData || pedidosData.length === 0) {
+        setPedidos([]);
+        setFilteredPedidos([]);
+        return;
+      }
+
+      // Extraímos os IDs de usuários únicos dos pedidos
+      const usuarioIds = [...new Set(pedidosData.filter(p => p.usuario_id).map(p => p.usuario_id))];
+
+      // Se temos IDs de usuários, buscamos seus nomes
+      let usuariosMap = {};
+      if (usuarioIds.length > 0) {
+        const { data: usuariosData, error: usuariosError } = await supabase
+          .from('usuarios')
+          .select('id, nome')
+          .in('id', usuarioIds);
+
+        if (!usuariosError && usuariosData) {
+          // Criamos um mapa de ID -> nome para fácil acesso
+          usuariosMap = usuariosData.reduce((acc, user) => {
+            acc[user.id] = user.nome;
+            return acc;
+          }, {});
+        }
+      }
+
+      // Formatar dados dos pedidos com os nomes de usuários
+      const formattedPedidos = pedidosData.map(pedido => ({
         ...pedido,
-        usuario_nome: pedido.usuario?.nome,
+        usuario_nome: usuarioIds.includes(pedido.usuario_id) ? usuariosMap[pedido.usuario_id] : undefined,
         empresa_nome: pedido.empresa?.nome
-      })) || [];
+      }));
 
       setPedidos(formattedPedidos);
       setFilteredPedidos(formattedPedidos);
@@ -124,9 +151,9 @@ const FaturamentoPage: React.FC = () => {
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(
-        pedido => 
+        pedido =>
           pedido.cliente_nome?.toLowerCase().includes(searchLower) ||
-          pedido.numero_pedido?.toLowerCase().includes(searchLower) ||
+          pedido.numero?.toLowerCase().includes(searchLower) ||
           pedido.usuario_nome?.toLowerCase().includes(searchLower)
       );
     }
@@ -199,7 +226,7 @@ const FaturamentoPage: React.FC = () => {
     if (status === 'entregue' && dataFaturamento) {
       return 'bg-green-500/10 text-green-500';
     }
-    
+
     switch (status) {
       case 'pendente': return 'bg-yellow-500/10 text-yellow-500';
       case 'confirmado': return 'bg-blue-500/10 text-blue-500';
@@ -215,7 +242,7 @@ const FaturamentoPage: React.FC = () => {
     if (status === 'entregue' && dataFaturamento) {
       return 'Faturado';
     }
-    
+
     switch (status) {
       case 'pendente': return 'Pendente';
       case 'confirmado': return 'Confirmado';
@@ -235,12 +262,12 @@ const FaturamentoPage: React.FC = () => {
 
   const handleConfirmarFaturamento = async () => {
     if (!pedidoSelecionado) return;
-    
+
     setIsFaturando(true);
-    
+
     try {
       const dataFaturamento = new Date().toISOString();
-      
+
       const { error } = await supabase
         .from('pedidos')
         .update({
@@ -248,9 +275,9 @@ const FaturamentoPage: React.FC = () => {
           observacao_faturamento: observacaoFaturamento || null
         })
         .eq('id', pedidoSelecionado.id);
-        
+
       if (error) throw error;
-      
+
       toast.success('Pedido faturado com sucesso!');
       setShowModal(false);
       loadPedidos();
@@ -455,38 +482,38 @@ const FaturamentoPage: React.FC = () => {
               <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-white font-medium">#{pedido.numero_pedido}</span>
+                    <span className="text-white font-medium">#{pedido.numero}</span>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(pedido.status, pedido.data_faturamento)}`}>
                       {getStatusText(pedido.status, pedido.data_faturamento)}
                     </span>
                   </div>
-                  
+
                   <div className="flex items-center gap-1 text-gray-400 text-sm">
                     <User size={14} />
                     <span>Cliente: {pedido.cliente_nome}</span>
                   </div>
-                  
+
                   {pedido.usuario_nome && (
                     <div className="flex items-center gap-1 text-gray-400 text-sm mt-1">
                       <User size={14} />
                       <span>Vendedor: {pedido.usuario_nome}</span>
                     </div>
                   )}
-                  
+
                   {pedido.empresa_nome && (
                     <div className="flex items-center gap-1 text-gray-400 text-sm mt-1">
                       <Building size={14} />
                       <span>Empresa: {pedido.empresa_nome}</span>
                     </div>
                   )}
-                  
+
                   <div className="flex items-center gap-1 text-gray-500 text-xs mt-2">
                     <Calendar size={12} />
                     <span>{formatDate(pedido.created_at)}</span>
                     <Clock size={12} className="ml-1" />
                     <span>{formatTime(pedido.created_at)}</span>
                   </div>
-                  
+
                   {pedido.data_faturamento && (
                     <div className="flex items-center gap-1 text-green-500 text-xs mt-1">
                       <FileText size={12} />
@@ -494,12 +521,12 @@ const FaturamentoPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex flex-col items-end">
                   <p className="text-primary-400 font-medium text-lg">
                     {formatCurrency(pedido.valor_total)}
                   </p>
-                  
+
                   {pedido.status === 'entregue' && !pedido.data_faturamento && (
                     <button
                       onClick={() => handleFaturar(pedido)}
@@ -550,7 +577,7 @@ const FaturamentoPage: React.FC = () => {
                   Você está prestes a faturar o pedido:
                 </p>
                 <div className="bg-gray-800/50 p-3 rounded-lg">
-                  <p className="text-white"><strong>Pedido:</strong> #{pedidoSelecionado.numero_pedido}</p>
+                  <p className="text-white"><strong>Pedido:</strong> #{pedidoSelecionado.numero}</p>
                   <p className="text-white"><strong>Cliente:</strong> {pedidoSelecionado.cliente_nome}</p>
                   <p className="text-white"><strong>Valor:</strong> {formatCurrency(pedidoSelecionado.valor_total)}</p>
                 </div>

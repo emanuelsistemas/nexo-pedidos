@@ -67,7 +67,7 @@ const FormCadastro: React.FC = () => {
 
       if (empresaError) throw empresaError;
 
-      // 3. Create usuario record with admin type
+      // 3. Create usuario record with admin type and active status
       const { error: usuarioError } = await supabase
         .from('usuarios')
         .insert([
@@ -77,6 +77,7 @@ const FormCadastro: React.FC = () => {
             email,
             empresa_id: empresaData.id,
             tipo: 'admin', // Define o usuário como administrador
+            status: true, // Define o status como ativo por padrão
           },
         ]);
 

@@ -17,29 +17,32 @@ const UserMobileLayout: React.FC = () => {
   useEffect(() => {
     // Carregar dados do usuário
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: userData } = await supabase
-          .from('usuarios')
-          .select('nome, tipo')
-          .eq('id', user.id)
-          .single();
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: userData } = await supabase
+            .from('usuarios')
+            .select('nome, tipo')
+            .eq('id', user.id)
+            .single();
 
-        if (userData) {
-          setUserName(userData.nome);
-          setIsAdmin(userData.tipo === 'admin');
+          if (userData) {
+            setUserName(userData.nome);
+            setIsAdmin(userData.tipo === 'admin');
+          }
         }
+
+        // Remover o loading assim que os dados forem carregados
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Erro ao carregar dados do usuário:', error);
+        // Mesmo em caso de erro, remover o loading para não bloquear a interface
+        setIsLoading(false);
       }
     };
 
+    // Iniciar o carregamento dos dados
     getUser();
-
-    // Simular tempo de carregamento com animação
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
-
-    return () => clearTimeout(timer);
   }, []);
 
   // Função para retornar à versão web (dashboard admin)

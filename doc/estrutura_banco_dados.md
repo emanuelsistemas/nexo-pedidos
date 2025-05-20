@@ -217,7 +217,7 @@ Pedidos realizados.
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | id | uuid | Chave primária |
-| numero_pedido | text | Número do pedido (exibido ao usuário) |
+| numero | text | Número do pedido (exibido ao usuário) |
 | cliente_id | uuid | Referência ao cliente |
 | usuario_id | uuid | Usuário que criou o pedido |
 | valor_total | numeric | Valor total do pedido |

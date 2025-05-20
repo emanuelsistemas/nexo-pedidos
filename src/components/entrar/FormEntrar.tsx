@@ -25,12 +25,19 @@ const FormEntrar: React.FC = () => {
 
       if (signInError) throw signInError;
 
-      // Verificar o tipo de usuário para redirecionar corretamente
+      // Verificar o tipo e status do usuário
       const { data: userData } = await supabase
         .from('usuarios')
-        .select('tipo')
+        .select('tipo, status')
         .eq('id', (await supabase.auth.getUser()).data.user?.id)
         .single();
+
+      // Verificar se o usuário está bloqueado
+      if (userData?.status === false) {
+        // Fazer logout para limpar a sessão
+        await supabase.auth.signOut();
+        throw new Error('Sua conta está bloqueada. Entre em contato com o administrador do sistema.');
+      }
 
       // Se for usuário do tipo "user", redirecionar para o dashboard mobile
       // Caso contrário, redirecionar para o dashboard normal

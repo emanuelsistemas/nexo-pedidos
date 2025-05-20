@@ -60,6 +60,39 @@ const ClientesPage: React.FC = () => {
     empresa_id: ''
   });
 
+  // Estado para controlar a aba ativa no formulário
+  const [activeTab, setActiveTab] = useState<'dados-gerais' | 'descontos'>('dados-gerais');
+
+  // Estado para os descontos por prazo
+  const [descontosPrazo, setDescontosPrazo] = useState<Array<{
+    id?: string;
+    prazo_dias: number;
+    percentual: number;
+    tipo: 'desconto' | 'acrescimo';
+  }>>([]);
+
+  // Estado para os descontos por valor
+  const [descontosValor, setDescontosValor] = useState<Array<{
+    id?: string;
+    valor_minimo: number;
+    percentual: number;
+    tipo: 'desconto' | 'acrescimo';
+  }>>([]);
+
+  // Estado para novo desconto por prazo
+  const [novoDescontoPrazo, setNovoDescontoPrazo] = useState({
+    prazo_dias: 30,
+    percentual: 0,
+    tipo: 'desconto' as 'desconto' | 'acrescimo'
+  });
+
+  // Estado para novo desconto por valor
+  const [novoDescontoValor, setNovoDescontoValor] = useState({
+    valor_minimo: 0,
+    percentual: 0,
+    tipo: 'desconto' as 'desconto' | 'acrescimo'
+  });
+
   const [novoTelefone, setNovoTelefone] = useState({
     numero: '',
     tipo: 'Celular' as 'Fixo' | 'Celular',
@@ -110,24 +143,57 @@ const ClientesPage: React.FC = () => {
     try {
       setIsLoading(true);
 
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar apenas os clientes da empresa do usuário
       const { data: clientesData, error } = await supabase
         .from('clientes')
-        .select(`
-          *,
-          empresa:empresas(nome)
-        `)
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .or('deletado.is.null,deletado.eq.false')
         .order('nome');
+
+      console.log('Clientes encontrados:', clientesData?.length);
 
       if (error) throw error;
 
-      // Formatar dados dos clientes
-      const formattedClientes = clientesData?.map(cliente => ({
-        ...cliente,
-        empresa_nome: cliente.empresa?.nome
-      })) || [];
+      if (clientesData && clientesData.length > 0) {
+        // Buscar todas as empresas para associar aos clientes
+        const { data: empresasData } = await supabase
+          .from('empresas')
+          .select('id, nome');
 
-      setClientes(formattedClientes);
-      setFilteredClientes(formattedClientes);
+        // Criar um mapa de empresas para facilitar a busca
+        const empresasMap = new Map();
+        if (empresasData) {
+          empresasData.forEach(empresa => {
+            empresasMap.set(empresa.id, empresa.nome);
+          });
+        }
+
+        // Formatar dados dos clientes com os nomes das empresas
+        const formattedClientes = clientesData.map(cliente => ({
+          ...cliente,
+          empresa_nome: empresasMap.get(cliente.empresa_id) || 'Empresa não encontrada'
+        }));
+
+        setClientes(formattedClientes);
+        setFilteredClientes(formattedClientes);
+      } else {
+        setClientes([]);
+        setFilteredClientes([]);
+      }
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
       toast.error('Erro ao carregar clientes');
@@ -593,6 +659,8 @@ const ClientesPage: React.FC = () => {
         usuario_id: (await supabase.auth.getUser()).data.user?.id
       };
 
+      let clienteId: string;
+
       if (editingCliente) {
         // Atualizar cliente existente
         const { error } = await supabase
@@ -601,15 +669,71 @@ const ClientesPage: React.FC = () => {
           .eq('id', editingCliente.id);
 
         if (error) throw error;
+        clienteId = editingCliente.id;
+
+        // Excluir descontos existentes para recriar
+        const { error: deleteDescontosPrazoError } = await supabase
+          .from('cliente_descontos_prazo')
+          .delete()
+          .eq('cliente_id', clienteId);
+
+        if (deleteDescontosPrazoError) throw deleteDescontosPrazoError;
+
+        const { error: deleteDescontosValorError } = await supabase
+          .from('cliente_descontos_valor')
+          .delete()
+          .eq('cliente_id', clienteId);
+
+        if (deleteDescontosValorError) throw deleteDescontosValorError;
+
         toast.success('Cliente atualizado com sucesso!');
       } else {
         // Criar novo cliente
-        const { error } = await supabase
+        const { data: novoCliente, error } = await supabase
           .from('clientes')
-          .insert(clienteData);
+          .insert(clienteData)
+          .select('id')
+          .single();
 
         if (error) throw error;
+        if (!novoCliente) throw new Error('Erro ao obter ID do cliente criado');
+
+        clienteId = novoCliente.id;
         toast.success('Cliente cadastrado com sucesso!');
+      }
+
+      // Salvar descontos por prazo
+      if (descontosPrazo.length > 0) {
+        const descontosPrazoData = descontosPrazo.map(desconto => ({
+          cliente_id: clienteId,
+          empresa_id: formData.empresa_id,
+          prazo_dias: desconto.prazo_dias,
+          percentual: desconto.percentual,
+          tipo: desconto.tipo
+        }));
+
+        const { error: descontosPrazoError } = await supabase
+          .from('cliente_descontos_prazo')
+          .insert(descontosPrazoData);
+
+        if (descontosPrazoError) throw descontosPrazoError;
+      }
+
+      // Salvar descontos por valor
+      if (descontosValor.length > 0) {
+        const descontosValorData = descontosValor.map(desconto => ({
+          cliente_id: clienteId,
+          empresa_id: formData.empresa_id,
+          valor_minimo: desconto.valor_minimo,
+          percentual: desconto.percentual,
+          tipo: desconto.tipo
+        }));
+
+        const { error: descontosValorError } = await supabase
+          .from('cliente_descontos_valor')
+          .insert(descontosValorData);
+
+        if (descontosValorError) throw descontosValorError;
       }
 
       // Recarregar a lista e fechar o sidebar
@@ -624,7 +748,7 @@ const ClientesPage: React.FC = () => {
     }
   };
 
-  const handleEdit = (cliente: Cliente) => {
+  const handleEdit = async (cliente: Cliente) => {
     // Extrair informações de endereço do campo endereco, se existir
     let cep = '';
     let endereco = '';
@@ -712,6 +836,10 @@ const ClientesPage: React.FC = () => {
       estado,
       empresa_id: cliente.empresa_id
     });
+
+    // Carregar os descontos do cliente
+    await loadDescontos(cliente.id);
+
     setShowSidebar(true);
   };
 
@@ -766,7 +894,133 @@ const ClientesPage: React.FC = () => {
       telefone: '',
       email: ''
     });
+
+    // Resetar os descontos
+    setDescontosPrazo([]);
+    setDescontosValor([]);
+    setNovoDescontoPrazo({
+      prazo_dias: 30,
+      percentual: 0,
+      tipo: 'desconto'
+    });
+    setNovoDescontoValor({
+      valor_minimo: 0,
+      percentual: 0,
+      tipo: 'desconto'
+    });
+
+    // Resetar a aba ativa
+    setActiveTab('dados-gerais');
+
     setEditingCliente(null);
+  };
+
+  // Função para carregar os descontos do cliente
+  const loadDescontos = async (clienteId: string) => {
+    try {
+      // Carregar descontos por prazo
+      const { data: descontosPrazoData, error: descontosPrazoError } = await supabase
+        .from('cliente_descontos_prazo')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('prazo_dias');
+
+      if (descontosPrazoError) throw descontosPrazoError;
+      setDescontosPrazo(descontosPrazoData || []);
+
+      // Carregar descontos por valor
+      const { data: descontosValorData, error: descontosValorError } = await supabase
+        .from('cliente_descontos_valor')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('valor_minimo');
+
+      if (descontosValorError) throw descontosValorError;
+      setDescontosValor(descontosValorData || []);
+    } catch (error) {
+      console.error('Erro ao carregar descontos:', error);
+      toast.error('Erro ao carregar descontos do cliente');
+    }
+  };
+
+  // Função para adicionar desconto por prazo
+  const adicionarDescontoPrazo = () => {
+    if (novoDescontoPrazo.prazo_dias <= 0) {
+      toast.error('O prazo deve ser maior que zero');
+      return;
+    }
+
+    if (novoDescontoPrazo.percentual <= 0) {
+      toast.error('O percentual deve ser maior que zero');
+      return;
+    }
+
+    // Verificar se já existe um desconto para este prazo
+    const existente = descontosPrazo.find(d => d.prazo_dias === novoDescontoPrazo.prazo_dias);
+    if (existente) {
+      toast.error(`Já existe um ${existente.tipo} para o prazo de ${existente.prazo_dias} dias`);
+      return;
+    }
+
+    setDescontosPrazo([...descontosPrazo, { ...novoDescontoPrazo }]);
+
+    // Resetar o formulário de novo desconto
+    setNovoDescontoPrazo({
+      prazo_dias: 30,
+      percentual: 0,
+      tipo: 'desconto'
+    });
+  };
+
+  // Função para remover desconto por prazo
+  const removerDescontoPrazo = (index: number) => {
+    const novosDescontos = [...descontosPrazo];
+    novosDescontos.splice(index, 1);
+    setDescontosPrazo(novosDescontos);
+  };
+
+  // Função para adicionar desconto por valor
+  const adicionarDescontoValor = () => {
+    if (novoDescontoValor.valor_minimo <= 0) {
+      toast.error('O valor mínimo deve ser maior que zero');
+      return;
+    }
+
+    if (novoDescontoValor.percentual <= 0) {
+      toast.error('O percentual deve ser maior que zero');
+      return;
+    }
+
+    // Verificar se já existe um desconto para este valor
+    const existente = descontosValor.find(d => d.valor_minimo === novoDescontoValor.valor_minimo);
+    if (existente) {
+      toast.error(`Já existe um ${existente.tipo} para o valor mínimo de ${formatarPreco(existente.valor_minimo)}`);
+      return;
+    }
+
+    setDescontosValor([...descontosValor, { ...novoDescontoValor }]);
+
+    // Resetar o formulário de novo desconto
+    setNovoDescontoValor({
+      valor_minimo: 0,
+      percentual: 0,
+      tipo: 'desconto'
+    });
+  };
+
+  // Função para remover desconto por valor
+  const removerDescontoValor = (index: number) => {
+    const novosDescontos = [...descontosValor];
+    novosDescontos.splice(index, 1);
+    setDescontosValor(novosDescontos);
+  };
+
+  // Função para formatar preço
+  const formatarPreco = (valor: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(valor);
   };
 
   const handleAddNew = () => {
@@ -889,7 +1143,7 @@ const ClientesPage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           {filteredClientes.map((cliente) => (
             <motion.div
               key={cliente.id}
@@ -1001,32 +1255,61 @@ const ClientesPage: React.FC = () => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* Tipo de Documento */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1">
-                      Tipo de Documento
-                    </label>
-                    <div className="flex gap-4 mb-2">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          checked={formData.tipo_documento === 'CNPJ'}
-                          onChange={() => setFormData({ ...formData, tipo_documento: 'CNPJ', documento: '' })}
-                          className="mr-2 text-primary-500 focus:ring-primary-500/20"
-                        />
-                        <span className="text-white">CNPJ</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          checked={formData.tipo_documento === 'CPF'}
-                          onChange={() => setFormData({ ...formData, tipo_documento: 'CPF', documento: '', razao_social: '' })}
-                          className="mr-2 text-primary-500 focus:ring-primary-500/20"
-                        />
-                        <span className="text-white">CPF</span>
-                      </label>
-                    </div>
+                  {/* Abas */}
+                  <div className="flex border-b border-gray-700 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('dados-gerais')}
+                      className={`py-2 px-4 font-medium text-sm border-b-2 ${
+                        activeTab === 'dados-gerais'
+                          ? 'border-primary-500 text-primary-500'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      } transition-colors`}
+                    >
+                      Dados Gerais
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('descontos')}
+                      className={`py-2 px-4 font-medium text-sm border-b-2 ${
+                        activeTab === 'descontos'
+                          ? 'border-primary-500 text-primary-500'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      } transition-colors`}
+                    >
+                      Descontos / Acréscimos
+                    </button>
                   </div>
+
+                  {/* Conteúdo da aba Dados Gerais */}
+                  {activeTab === 'dados-gerais' ? (
+                    <div className="space-y-4">
+                      {/* Tipo de Documento */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                          Tipo de Documento
+                        </label>
+                        <div className="flex gap-4 mb-2">
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              checked={formData.tipo_documento === 'CNPJ'}
+                              onChange={() => setFormData({ ...formData, tipo_documento: 'CNPJ', documento: '' })}
+                              className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                            />
+                            <span className="text-white">CNPJ</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              checked={formData.tipo_documento === 'CPF'}
+                              onChange={() => setFormData({ ...formData, tipo_documento: 'CPF', documento: '', razao_social: '' })}
+                              className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                            />
+                            <span className="text-white">CPF</span>
+                          </label>
+                        </div>
+                      </div>
 
                   {/* Documento (CNPJ ou CPF) */}
                   <div>
@@ -1355,6 +1638,263 @@ const ClientesPage: React.FC = () => {
 
                   {/* Campo oculto para empresa - selecionada automaticamente */}
                   <input type="hidden" value={formData.empresa_id} />
+
+                    </div>
+                  ) : null}
+
+                  {/* Conteúdo da aba Descontos */}
+                  {activeTab === 'descontos' && (
+                    <div className="space-y-6">
+                      {/* Descontos por Prazo de Faturamento */}
+                      <div className="space-y-4">
+                        <h3 className="text-white font-medium">Descontos por Prazo de Faturamento</h3>
+                        <p className="text-sm text-gray-400">
+                          Configure descontos ou acréscimos de acordo com o prazo de faturamento.
+                        </p>
+
+                        {/* Lista de descontos por prazo */}
+                        {descontosPrazo.length > 0 && (
+                          <div className="space-y-2 mb-4">
+                            {descontosPrazo.map((desconto, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between bg-gray-800/70 rounded-lg p-3 border border-gray-700"
+                              >
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-white font-medium">{desconto.prazo_dias} dias</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                      desconto.tipo === 'desconto'
+                                        ? 'bg-green-500/20 text-green-400'
+                                        : 'bg-red-500/20 text-red-400'
+                                    }`}>
+                                      {desconto.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-400">
+                                    {desconto.percentual}% de {desconto.tipo}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removerDescontoPrazo(index)}
+                                  className="text-red-400 hover:text-red-300 p-1"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Formulário para adicionar novo desconto por prazo */}
+                        <div className="space-y-3 bg-gray-800/30 p-4 rounded-lg border border-gray-700">
+                          <h4 className="text-sm font-medium text-gray-300">Adicionar desconto por prazo</h4>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-1">
+                                Prazo (dias)
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={novoDescontoPrazo.prazo_dias}
+                                onChange={(e) => setNovoDescontoPrazo({
+                                  ...novoDescontoPrazo,
+                                  prazo_dias: parseInt(e.target.value) || 0
+                                })}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-1">
+                                Percentual (%)
+                              </label>
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={novoDescontoPrazo.percentual}
+                                onChange={(e) => setNovoDescontoPrazo({
+                                  ...novoDescontoPrazo,
+                                  percentual: parseFloat(e.target.value) || 0
+                                })}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">
+                              Tipo
+                            </label>
+                            <div className="flex gap-4">
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  checked={novoDescontoPrazo.tipo === 'desconto'}
+                                  onChange={() => setNovoDescontoPrazo({
+                                    ...novoDescontoPrazo,
+                                    tipo: 'desconto'
+                                  })}
+                                  className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                                />
+                                <span className="text-white">Desconto</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  checked={novoDescontoPrazo.tipo === 'acrescimo'}
+                                  onChange={() => setNovoDescontoPrazo({
+                                    ...novoDescontoPrazo,
+                                    tipo: 'acrescimo'
+                                  })}
+                                  className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                                />
+                                <span className="text-white">Acréscimo</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={adicionarDescontoPrazo}
+                            className="w-full mt-2 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Plus size={16} />
+                            <span>Adicionar</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Descontos por Valor do Pedido */}
+                      <div className="space-y-4 mt-8">
+                        <h3 className="text-white font-medium">Descontos por Valor do Pedido</h3>
+                        <p className="text-sm text-gray-400">
+                          Configure descontos ou acréscimos de acordo com o valor total do pedido.
+                        </p>
+
+                        {/* Lista de descontos por valor */}
+                        {descontosValor.length > 0 && (
+                          <div className="space-y-2 mb-4">
+                            {descontosValor.map((desconto, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between bg-gray-800/70 rounded-lg p-3 border border-gray-700"
+                              >
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-white font-medium">A partir de {formatarPreco(desconto.valor_minimo)}</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                      desconto.tipo === 'desconto'
+                                        ? 'bg-green-500/20 text-green-400'
+                                        : 'bg-red-500/20 text-red-400'
+                                    }`}>
+                                      {desconto.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-400">
+                                    {desconto.percentual}% de {desconto.tipo}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removerDescontoValor(index)}
+                                  className="text-red-400 hover:text-red-300 p-1"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Formulário para adicionar novo desconto por valor */}
+                        <div className="space-y-3 bg-gray-800/30 p-4 rounded-lg border border-gray-700">
+                          <h4 className="text-sm font-medium text-gray-300">Adicionar desconto por valor</h4>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-1">
+                                Valor Mínimo (R$)
+                              </label>
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={novoDescontoValor.valor_minimo}
+                                onChange={(e) => setNovoDescontoValor({
+                                  ...novoDescontoValor,
+                                  valor_minimo: parseFloat(e.target.value) || 0
+                                })}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-1">
+                                Percentual (%)
+                              </label>
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={novoDescontoValor.percentual}
+                                onChange={(e) => setNovoDescontoValor({
+                                  ...novoDescontoValor,
+                                  percentual: parseFloat(e.target.value) || 0
+                                })}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">
+                              Tipo
+                            </label>
+                            <div className="flex gap-4">
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  checked={novoDescontoValor.tipo === 'desconto'}
+                                  onChange={() => setNovoDescontoValor({
+                                    ...novoDescontoValor,
+                                    tipo: 'desconto'
+                                  })}
+                                  className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                                />
+                                <span className="text-white">Desconto</span>
+                              </label>
+                              <label className="flex items-center">
+                                <input
+                                  type="radio"
+                                  checked={novoDescontoValor.tipo === 'acrescimo'}
+                                  onChange={() => setNovoDescontoValor({
+                                    ...novoDescontoValor,
+                                    tipo: 'acrescimo'
+                                  })}
+                                  className="mr-2 text-primary-500 focus:ring-primary-500/20"
+                                />
+                                <span className="text-white">Acréscimo</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={adicionarDescontoValor}
+                            className="w-full mt-2 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Plus size={16} />
+                            <span>Adicionar</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex gap-4 pt-4">
                     <button

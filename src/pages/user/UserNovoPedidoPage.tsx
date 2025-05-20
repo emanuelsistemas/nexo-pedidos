@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search } from 'lucide-react';
+import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import ClienteDropdown from '../../components/comum/ClienteDropdown';
@@ -491,7 +491,7 @@ const UserNovoPedidoPage: React.FC = () => {
           cliente_telefone: clienteTelefone.replace(/\D/g, ''),
           valor_total: valorTotal,
           status: 'pendente',
-          numero_pedido: numeroPedido
+          numero: numeroPedido
         })
         .select()
         .single();
@@ -819,9 +819,72 @@ const UserNovoPedidoPage: React.FC = () => {
                 </motion.div>
               ))}
 
-              <div className="flex justify-between items-center pt-4 border-t border-gray-700 mt-4">
-                <span className="text-white font-medium">Total:</span>
-                <span className="text-xl font-semibold text-primary-400">{formatarPreco(valorTotal)}</span>
+              {/* Área de subtotais */}
+              <div className="space-y-3 pt-4 border-t border-gray-700 mt-4">
+                {/* Resumo do pedido */}
+                <div className="bg-gray-800/50 rounded-lg p-3">
+                  <h3 className="text-white font-medium mb-2">Resumo do Pedido</h3>
+
+                  <div className="space-y-2">
+                    {/* Quantidade de itens */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Quantidade de itens:</span>
+                      <span className="text-white">{itensPedido.reduce((acc, item) => acc + item.quantidade, 0)}</span>
+                    </div>
+
+                    {/* Subtotal */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Subtotal:</span>
+                      <span className="text-white">{formatarPreco(valorTotal)}</span>
+                    </div>
+
+                    {/* Linha divisória */}
+                    <div className="border-t border-gray-700 my-2"></div>
+
+                    {/* Total */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-white font-medium">Total:</span>
+                      <span className="text-xl font-semibold text-primary-400">{formatarPreco(valorTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Opções de desconto/acréscimo */}
+                {clienteId && clienteData && (
+                  <div className="bg-gray-800/50 rounded-lg p-3">
+                    <h3 className="text-white font-medium mb-2">Opções de Faturamento</h3>
+
+                    <div className="space-y-3">
+                      {/* Botão para aplicar descontos por prazo */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Aqui você pode implementar a lógica para mostrar um modal com as opções de prazo
+                          // Por enquanto, apenas mostramos uma mensagem
+                          showMessage('info', 'Funcionalidade em desenvolvimento');
+                        }}
+                        className="w-full flex items-center justify-center gap-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-2 px-4 rounded-lg transition-colors"
+                      >
+                        <Calendar size={18} />
+                        <span>Aplicar Desconto por Prazo</span>
+                      </button>
+
+                      {/* Botão para aplicar descontos por valor */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Aqui você pode implementar a lógica para mostrar um modal com as opções de valor
+                          // Por enquanto, apenas mostramos uma mensagem
+                          showMessage('info', 'Funcionalidade em desenvolvimento');
+                        }}
+                        className="w-full flex items-center justify-center gap-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 py-2 px-4 rounded-lg transition-colors"
+                      >
+                        <DollarSign size={18} />
+                        <span>Aplicar Desconto por Valor</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

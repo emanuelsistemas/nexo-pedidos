@@ -90,7 +90,7 @@ O sistema utiliza o Supabase como backend, com as seguintes tabelas principais:
 
 12. **pedidos**
     - Pedidos realizados
-    - Campos principais: id, numero_pedido, cliente_id, usuario_id, valor_total, status, empresa_id
+    - Campos principais: id, numero, cliente_id, usuario_id, valor_total, status, empresa_id
 
 13. **pedido_itens**
     - Itens de cada pedido

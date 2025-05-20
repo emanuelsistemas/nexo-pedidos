@@ -93,11 +93,52 @@ const UserProdutosPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // Carregar dados iniciais
-    loadGrupos();
+    // Tentar carregar dados do localStorage primeiro
+    const loadFromLocalStorage = () => {
+      try {
+        // Verificar se há dados em cache e se não estão expirados (30 minutos)
+        const cachedData = localStorage.getItem('produtos_cache');
+        const cachedEstoque = localStorage.getItem('produtos_estoque_cache');
+        const cachedTimestamp = localStorage.getItem('produtos_cache_timestamp');
 
-    // Carregar informações de estoque
-    loadProdutosEstoque();
+        if (cachedData && cachedTimestamp) {
+          const timestamp = parseInt(cachedTimestamp);
+          const now = new Date().getTime();
+          const thirtyMinutesInMs = 30 * 60 * 1000;
+
+          // Se o cache for válido (menos de 30 minutos)
+          if (now - timestamp < thirtyMinutesInMs) {
+            console.log('Carregando dados de produtos do cache local');
+            setGrupos(JSON.parse(cachedData));
+
+            if (cachedEstoque) {
+              setProdutosEstoque(JSON.parse(cachedEstoque));
+            }
+
+            // Ainda carregamos os dados do servidor, mas não mostramos o loading
+            loadGrupos(false);
+            loadProdutosEstoque();
+            return true;
+          } else {
+            console.log('Cache de produtos expirado, carregando do servidor');
+            // Limpar cache expirado
+            localStorage.removeItem('produtos_cache');
+            localStorage.removeItem('produtos_estoque_cache');
+            localStorage.removeItem('produtos_cache_timestamp');
+          }
+        }
+        return false;
+      } catch (error) {
+        console.error('Erro ao carregar dados do localStorage:', error);
+        return false;
+      }
+    };
+
+    // Se não conseguir carregar do localStorage, carregar do servidor com loading
+    if (!loadFromLocalStorage()) {
+      loadGrupos(true);
+      loadProdutosEstoque();
+    }
 
     // Configurar a escuta em tempo real para atualizações
     setupRealtimeSubscription();
@@ -174,16 +215,16 @@ const UserProdutosPage: React.FC = () => {
     }
   };
 
-  const loadGrupos = async () => {
+  const loadGrupos = async (showLoading = true) => {
     console.log('Iniciando carregamento de grupos e produtos...');
     try {
       // Verificar se é o carregamento inicial ou uma atualização
       const isInitialLoad = grupos.length === 0;
 
       // Definir o estado de carregamento apropriado
-      if (isInitialLoad) {
+      if (isInitialLoad && showLoading) {
         setIsLoading(true);
-      } else {
+      } else if (!isInitialLoad) {
         setIsRefreshing(true);
       }
 
@@ -295,6 +336,15 @@ const UserProdutosPage: React.FC = () => {
 
       // Atualizar o timestamp da última atualização
       setLastUpdate(new Date());
+
+      // Salvar dados no localStorage para acesso rápido na próxima vez
+      try {
+        localStorage.setItem('produtos_cache', JSON.stringify(gruposComProdutos));
+        localStorage.setItem('produtos_cache_timestamp', new Date().getTime().toString());
+        console.log('Dados de produtos salvos no cache local');
+      } catch (cacheError) {
+        console.error('Erro ao salvar dados no localStorage:', cacheError);
+      }
 
       console.log('Carregamento de dados concluído com sucesso');
 
@@ -413,6 +463,14 @@ const UserProdutosPage: React.FC = () => {
 
       // Atualizar o estado com as informações de estoque de todos os produtos
       setProdutosEstoque(estoqueInfo);
+
+      // Salvar dados de estoque no localStorage
+      try {
+        localStorage.setItem('produtos_estoque_cache', JSON.stringify(estoqueInfo));
+        console.log('Dados de estoque salvos no cache local');
+      } catch (cacheError) {
+        console.error('Erro ao salvar dados de estoque no localStorage:', cacheError);
+      }
     } catch (error) {
       console.error('Erro ao carregar estoque dos produtos:', error);
     }
@@ -672,7 +730,7 @@ const UserProdutosPage: React.FC = () => {
 
   // Renderizar skeleton loader para os cards de produtos
   const renderSkeletonCards = () => {
-    return Array(6).fill(0).map((_, index) => (
+    return Array(4).fill(0).map((_, index) => (
       <div key={index} className="bg-background-card rounded-lg overflow-hidden border border-gray-800">
         <div className="h-32 bg-gray-800 animate-pulse"></div>
         <div className="p-3 space-y-2">

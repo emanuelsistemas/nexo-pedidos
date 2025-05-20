@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 
 interface Pedido {
   id: string;
-  numero_pedido: string;
+  numero: string;
   cliente_nome: string;
   cliente_telefone: string;
   valor_total: number;
@@ -25,23 +25,64 @@ const UserPedidosPage: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   useEffect(() => {
-    // Simular tempo de carregamento inicial com animação
-    const timer = setTimeout(() => {
-      setIsInitialLoading(false);
-    }, 2000);
+    // Tentar carregar dados do localStorage primeiro
+    const loadFromLocalStorage = () => {
+      try {
+        // Verificar se há dados em cache e se não estão expirados (15 minutos)
+        const cachedPedidos = localStorage.getItem('pedidos_cache');
+        const cachedTimestamp = localStorage.getItem('pedidos_cache_timestamp');
 
-    loadPedidos();
+        if (cachedPedidos && cachedTimestamp) {
+          const timestamp = parseInt(cachedTimestamp);
+          const now = new Date().getTime();
+          const fifteenMinutesInMs = 15 * 60 * 1000; // Pedidos precisam ser mais atualizados
 
-    return () => clearTimeout(timer);
+          // Se o cache for válido (menos de 15 minutos)
+          if (now - timestamp < fifteenMinutesInMs) {
+            console.log('Carregando dados de pedidos do cache local');
+            setPedidos(JSON.parse(cachedPedidos));
+            setIsInitialLoading(false);
+
+            // Ainda carregamos os dados do servidor, mas não mostramos o loading
+            loadPedidos(false);
+            return true;
+          } else {
+            console.log('Cache de pedidos expirado, carregando do servidor');
+            // Limpar cache expirado
+            localStorage.removeItem('pedidos_cache');
+            localStorage.removeItem('pedidos_cache_timestamp');
+          }
+        }
+        return false;
+      } catch (error) {
+        console.error('Erro ao carregar dados do localStorage:', error);
+        return false;
+      }
+    };
+
+    // Se não conseguir carregar do localStorage, carregar do servidor com loading
+    if (!loadFromLocalStorage()) {
+      loadPedidos(true);
+
+      // Definir um timeout para remover o loading inicial após 2 segundos
+      // mesmo se os dados ainda não tiverem sido carregados
+      const timer = setTimeout(() => {
+        setIsInitialLoading(false);
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   useEffect(() => {
     applyFilters();
   }, [pedidos, searchTerm, statusFilter, dataFilter]);
 
-  const loadPedidos = async () => {
+  const loadPedidos = async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
 
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
@@ -66,6 +107,15 @@ const UserPedidosPage: React.FC = () => {
       })) || [];
 
       setPedidos(formattedPedidos);
+
+      // Salvar dados no localStorage
+      try {
+        localStorage.setItem('pedidos_cache', JSON.stringify(formattedPedidos));
+        localStorage.setItem('pedidos_cache_timestamp', new Date().getTime().toString());
+        console.log('Dados de pedidos salvos no cache local');
+      } catch (cacheError) {
+        console.error('Erro ao salvar pedidos no localStorage:', cacheError);
+      }
     } catch (error) {
       console.error('Erro ao carregar pedidos:', error);
     } finally {
@@ -82,7 +132,7 @@ const UserPedidosPage: React.FC = () => {
       filtered = filtered.filter(
         pedido =>
           pedido.cliente_nome?.toLowerCase().includes(searchLower) ||
-          pedido.numero_pedido?.toLowerCase().includes(searchLower)
+          pedido.numero?.toLowerCase().includes(searchLower)
       );
     }
 
@@ -174,12 +224,9 @@ const UserPedidosPage: React.FC = () => {
         <div className="h-10 w-full bg-gray-800 rounded-lg animate-pulse"></div>
 
         {/* Cards skeleton */}
-        {[1, 2, 3, 4].map((item) => (
-          <motion.div
+        {[1, 2, 3].map((item) => (
+          <div
             key={item}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: item * 0.1 }}
             className="p-4 bg-background-card rounded-lg border border-gray-800"
           >
             <div className="flex justify-between items-start">
@@ -193,7 +240,7 @@ const UserPedidosPage: React.FC = () => {
                 <div className="h-4 w-28 bg-gray-700 rounded animate-pulse"></div>
               </div>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
     );
@@ -333,7 +380,7 @@ const UserPedidosPage: React.FC = () => {
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-white font-medium">#{pedido.numero_pedido || index + 1}</span>
+                    <span className="text-white font-medium">#{pedido.numero || index + 1}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(pedido.status)} bg-opacity-20`}>
                       {getStatusText(pedido.status)}
                     </span>

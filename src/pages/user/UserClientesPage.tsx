@@ -27,15 +27,58 @@ const UserClientesPage: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   useEffect(() => {
-    // Simular tempo de carregamento inicial com animação
-    const timer = setTimeout(() => {
-      setIsInitialLoading(false);
-    }, 2000);
+    // Tentar carregar dados do localStorage primeiro
+    const loadFromLocalStorage = () => {
+      try {
+        // Verificar se há dados em cache e se não estão expirados (30 minutos)
+        const cachedClientes = localStorage.getItem('clientes_cache');
+        const cachedEmpresas = localStorage.getItem('empresas_cache');
+        const cachedTimestamp = localStorage.getItem('clientes_cache_timestamp');
 
-    loadClientes();
-    loadEmpresas();
+        if (cachedClientes && cachedEmpresas && cachedTimestamp) {
+          const timestamp = parseInt(cachedTimestamp);
+          const now = new Date().getTime();
+          const thirtyMinutesInMs = 30 * 60 * 1000;
 
-    return () => clearTimeout(timer);
+          // Se o cache for válido (menos de 30 minutos)
+          if (now - timestamp < thirtyMinutesInMs) {
+            console.log('Carregando dados de clientes do cache local');
+            setClientes(JSON.parse(cachedClientes));
+            setEmpresas(JSON.parse(cachedEmpresas));
+            setIsInitialLoading(false);
+
+            // Ainda carregamos os dados do servidor, mas não mostramos o loading
+            loadClientes(false);
+            loadEmpresas();
+            return true;
+          } else {
+            console.log('Cache de clientes expirado, carregando do servidor');
+            // Limpar cache expirado
+            localStorage.removeItem('clientes_cache');
+            localStorage.removeItem('empresas_cache');
+            localStorage.removeItem('clientes_cache_timestamp');
+          }
+        }
+        return false;
+      } catch (error) {
+        console.error('Erro ao carregar dados do localStorage:', error);
+        return false;
+      }
+    };
+
+    // Se não conseguir carregar do localStorage, carregar do servidor com loading
+    if (!loadFromLocalStorage()) {
+      loadClientes(true);
+      loadEmpresas();
+
+      // Definir um timeout para remover o loading inicial após 2 segundos
+      // mesmo se os dados ainda não tiverem sido carregados
+      const timer = setTimeout(() => {
+        setIsInitialLoading(false);
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   useEffect(() => {
@@ -56,39 +99,83 @@ const UserClientesPage: React.FC = () => {
 
       if (empresasData) {
         setEmpresas(empresasData);
+
+        // Salvar dados no localStorage
+        try {
+          localStorage.setItem('empresas_cache', JSON.stringify(empresasData));
+        } catch (cacheError) {
+          console.error('Erro ao salvar empresas no localStorage:', cacheError);
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar empresas:', error);
     }
   };
 
-  const loadClientes = async () => {
+  const loadClientes = async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
 
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
-      // Obter clientes
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Obter clientes da empresa
       const { data: clientesData, error } = await supabase
         .from('clientes')
-        .select(`
-          *,
-          empresa:empresas(nome)
-        `)
-        .eq('usuario_id', userData.user.id)
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .or('deletado.is.null,deletado.eq.false')
         .order('nome');
+
+      console.log('Clientes encontrados (mobile):', clientesData?.length);
 
       if (error) throw error;
 
-      // Formatar dados dos clientes
-      const formattedClientes = clientesData?.map(cliente => ({
-        ...cliente,
-        empresa_nome: cliente.empresa?.nome
-      })) || [];
+      if (clientesData && clientesData.length > 0) {
+        // Buscar todas as empresas para associar aos clientes
+        const { data: empresasData } = await supabase
+          .from('empresas')
+          .select('id, nome');
 
-      setClientes(formattedClientes);
+        // Criar um mapa de empresas para facilitar a busca
+        const empresasMap = new Map();
+        if (empresasData) {
+          empresasData.forEach(empresa => {
+            empresasMap.set(empresa.id, empresa.nome);
+          });
+        }
+
+        // Formatar dados dos clientes com os nomes das empresas
+        const formattedClientes = clientesData.map(cliente => ({
+          ...cliente,
+          empresa_nome: empresasMap.get(cliente.empresa_id) || 'Empresa não encontrada'
+        }));
+
+        setClientes(formattedClientes);
+
+        // Salvar dados no localStorage
+        try {
+          localStorage.setItem('clientes_cache', JSON.stringify(formattedClientes));
+          localStorage.setItem('clientes_cache_timestamp', new Date().getTime().toString());
+          console.log('Dados de clientes salvos no cache local');
+        } catch (cacheError) {
+          console.error('Erro ao salvar clientes no localStorage:', cacheError);
+        }
+      } else {
+        setClientes([]);
+      }
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
     } finally {
@@ -157,12 +244,9 @@ const UserClientesPage: React.FC = () => {
         <div className="h-10 w-full bg-gray-800 rounded-lg animate-pulse"></div>
 
         {/* Cards skeleton */}
-        {[1, 2, 3, 4].map((item) => (
-          <motion.div
+        {[1, 2, 3].map((item) => (
+          <div
             key={item}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: item * 0.1 }}
             className="p-4 bg-background-card rounded-lg border border-gray-800"
           >
             <div className="flex justify-between items-start">
@@ -176,7 +260,7 @@ const UserClientesPage: React.FC = () => {
                 <div className="h-4 w-20 bg-gray-700 rounded animate-pulse"></div>
               </div>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
     );
@@ -322,11 +406,7 @@ const UserClientesPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-500">
-                    Cadastrado em: {formatarData(cliente.created_at)}
-                  </div>
-                </div>
+
               </div>
             </motion.div>
           ))}

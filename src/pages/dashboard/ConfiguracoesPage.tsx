@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import { showMessage } from '../../utils/toast';
@@ -21,6 +21,13 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
   message,
 }) => {
   if (!isOpen) return null;
+
+  // Verificar se é uma ação de bloquear/desbloquear para ajustar o texto do botão
+  const isToggleStatus = title.includes('Bloquear') || title.includes('Desbloquear');
+  const buttonText = isToggleStatus ? 'Confirmar' : 'Excluir';
+  const buttonClass = isToggleStatus
+    ? 'flex-1 !bg-blue-500 hover:!bg-blue-600'
+    : 'flex-1 !bg-red-500 hover:!bg-red-600';
 
   return (
     <motion.div
@@ -49,10 +56,10 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
           <Button
             type="button"
             variant="primary"
-            className="flex-1 !bg-red-500 hover:!bg-red-600"
+            className={buttonClass}
             onClick={onConfirm}
           >
-            Excluir
+            {buttonText}
           </Button>
         </div>
       </motion.div>
@@ -135,7 +142,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     itemId: string;
-    itemType: 'usuario' | 'perfil' | 'pagamento' | 'horario';
+    itemType: 'usuario' | 'perfil' | 'pagamento' | 'horario' | 'toggle_status';
     title: string;
     message: string;
   }>({
@@ -481,6 +488,61 @@ const ConfiguracoesPage: React.FC = () => {
       showMessage('success', successMessage);
     } catch (error: any) {
       showMessage('error', 'Erro ao excluir item: ' + error.message);
+    } finally {
+      setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
+    }
+  };
+
+  // Função para alternar o status do usuário (bloquear/desbloquear)
+  const handleToggleUserStatus = async (userId: string, userName: string, currentStatus: boolean) => {
+    // Definir a mensagem de confirmação com base no status atual
+    const action = currentStatus ? 'bloquear' : 'desbloquear';
+    const title = `${action.charAt(0).toUpperCase() + action.slice(1)} Usuário`;
+    const message = `Tem certeza que deseja ${action} o usuário "${userName}"?`;
+
+    // Mostrar diálogo de confirmação
+    setDeleteConfirmation({
+      isOpen: true,
+      itemId: userId,
+      itemType: 'toggle_status',
+      title,
+      message,
+    });
+  };
+
+  // Função para confirmar a alteração de status do usuário
+  const handleConfirmToggleStatus = async () => {
+    try {
+      const userId = deleteConfirmation.itemId;
+
+      // Obter o status atual do usuário
+      const { data: userData, error: fetchError } = await supabase
+        .from('usuarios')
+        .select('status')
+        .eq('id', userId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Alternar o status (true -> false ou false -> true)
+      const newStatus = !(userData?.status);
+
+      // Atualizar o status no banco de dados
+      const { error: updateError } = await supabase
+        .from('usuarios')
+        .update({ status: newStatus })
+        .eq('id', userId);
+
+      if (updateError) throw updateError;
+
+      // Recarregar os dados
+      await loadData();
+
+      // Mostrar mensagem de sucesso
+      const actionDone = newStatus ? 'desbloqueado' : 'bloqueado';
+      showMessage('success', `Usuário ${actionDone} com sucesso!`);
+    } catch (error: any) {
+      showMessage('error', `Erro ao alterar status do usuário: ${error.message}`);
     } finally {
       setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
     }
@@ -1009,7 +1071,7 @@ const ConfiguracoesPage: React.FC = () => {
 
         if (!authData.user) throw new Error('Erro ao criar usuário');
 
-        // 2. Inserir o usuário na tabela usuarios com tipo 'user'
+        // 2. Inserir o usuário na tabela usuarios com tipo 'user' e status ativo
         const { error: insertError } = await supabase
           .from('usuarios')
           .insert([{
@@ -1017,7 +1079,8 @@ const ConfiguracoesPage: React.FC = () => {
             nome: usuarioForm.nome,
             email: usuarioForm.email,
             empresa_id: usuarioData.empresa_id,
-            tipo: 'user'
+            tipo: 'user',
+            status: true // Definir o status como ativo por padrão
           }]);
 
         if (insertError) throw insertError;
@@ -1187,13 +1250,27 @@ const ConfiguracoesPage: React.FC = () => {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-white font-medium">{usuario.nome}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-white font-medium">{usuario.nome}</h3>
+                        {usuario.tipo !== 'admin' && (
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                            usuario.status ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                          }`}>
+                            {usuario.status ? 'Ativo' : 'Bloqueado'}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-gray-400 text-sm">{usuario.email}</p>
-                      {usuario.perfil && (
-                        <span className="mt-2 inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-500/10 text-primary-400">
-                          {usuario.perfil.nome}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">
+                          {usuario.tipo === 'admin' ? 'Administrador' : 'Usuário'}
                         </span>
-                      )}
+                        {usuario.perfil && (
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-500/10 text-primary-400">
+                            {usuario.perfil.nome}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {/* Botão de edição - visível para admin (todos os usuários) ou para o próprio usuário */}
@@ -1204,6 +1281,17 @@ const ConfiguracoesPage: React.FC = () => {
                           title="Editar usuário"
                         >
                           <Pencil size={16} />
+                        </button>
+                      )}
+
+                      {/* Botão de bloquear/desbloquear - visível apenas para admin e apenas para usuários não-admin */}
+                      {usuarioLogado?.tipo === 'admin' && usuario.tipo !== 'admin' && (
+                        <button
+                          onClick={() => handleToggleUserStatus(usuario.id, usuario.nome, usuario.status)}
+                          className={`p-2 ${usuario.status ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'} transition-colors`}
+                          title={usuario.status ? 'Bloquear usuário' : 'Desbloquear usuário'}
+                        >
+                          {usuario.status ? <Lock size={16} /> : <Unlock size={16} />}
                         </button>
                       )}
 
@@ -2307,7 +2395,7 @@ const ConfiguracoesPage: React.FC = () => {
       <DeleteConfirmation
         isOpen={deleteConfirmation.isOpen}
         onClose={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}
-        onConfirm={handleConfirmDelete}
+        onConfirm={deleteConfirmation.itemType === 'toggle_status' ? handleConfirmToggleStatus : handleConfirmDelete}
         title={deleteConfirmation.title}
         message={deleteConfirmation.message}
       />
