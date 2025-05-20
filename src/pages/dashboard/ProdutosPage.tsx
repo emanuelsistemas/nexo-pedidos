@@ -130,6 +130,10 @@ const ProdutosPage: React.FC = () => {
     codigo: '',
     promocao: false,
     ativo: true,
+    desconto_quantidade: false,
+    quantidade_minima: 0,
+    tipo_desconto_quantidade: 'percentual',
+    valor_desconto_quantidade: 0,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -167,10 +171,64 @@ const ProdutosPage: React.FC = () => {
   const [isGaleriaOpen, setIsGaleriaOpen] = useState(false);
   const [currentFotoIndex, setCurrentFotoIndex] = useState(0);
 
+  // Estado para unidades de medida
+  const [unidadesMedida, setUnidadesMedida] = useState<UnidadeMedida[]>([]);
+
+  // Estado para o valor formatado do desconto
+  const [descontoFormatado, setDescontoFormatado] = useState('');
+
+  // Estado para o valor final após o desconto
+  const [valorFinalFormatado, setValorFinalFormatado] = useState('');
+
+  // Estado para o valor formatado do desconto por quantidade
+  const [descontoQuantidadeFormatado, setDescontoQuantidadeFormatado] = useState('');
+
   useEffect(() => {
     loadGrupos();
     loadAvailableOpcoes();
+    loadUnidadesMedida();
   }, []);
+
+  // Efeito para atualizar o valor final quando o preço, tipo de desconto ou valor do desconto mudar
+  useEffect(() => {
+    if (novoProduto.promocao && novoProduto.preco && novoProduto.tipo_desconto && novoProduto.valor_desconto !== undefined) {
+      const valorFinal = calcularValorFinal(
+        novoProduto.preco,
+        novoProduto.tipo_desconto,
+        novoProduto.valor_desconto
+      );
+      setValorFinalFormatado(formatarPreco(valorFinal));
+    } else {
+      setValorFinalFormatado('');
+    }
+  }, [novoProduto.preco, novoProduto.promocao, novoProduto.tipo_desconto, novoProduto.valor_desconto]);
+
+  const loadUnidadesMedida = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data, error } = await supabase
+        .from('unidade_medida')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('sigla', { ascending: true });
+
+      if (error) throw error;
+      setUnidadesMedida(data || []);
+    } catch (error: any) {
+      console.error('Erro ao carregar unidades de medida:', error);
+      showMessage('error', 'Erro ao carregar unidades de medida');
+    }
+  };
 
   const loadAvailableOpcoes = async () => {
     try {
@@ -228,8 +286,16 @@ const ProdutosPage: React.FC = () => {
 
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
-        .select('*')
-        .eq('deletado', false);
+        .select(`
+          *,
+          unidade_medida:unidade_medida (
+            id,
+            sigla,
+            nome
+          )
+        `)
+        .eq('deletado', false)
+        .eq('empresa_id', usuarioData.empresa_id);
 
       if (produtosError) throw produtosError;
 
@@ -271,21 +337,36 @@ const ProdutosPage: React.FC = () => {
 
   const getNextAvailableCode = async () => {
     try {
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      // Buscar apenas produtos não deletados (deletado = false) da empresa atual
       const { data: produtos } = await supabase
         .from('produtos')
         .select('codigo')
+        .eq('deletado', false)
+        .eq('empresa_id', usuarioData.empresa_id)
         .order('codigo');
 
       if (!produtos || produtos.length === 0) return '1';
 
+      // Converter códigos para números e filtrar valores não numéricos
       const codes = produtos.map(p => parseInt(p.codigo)).filter(c => !isNaN(c));
+
       if (codes.length === 0) return '1';
 
+      // Encontrar o primeiro número disponível na sequência
       let nextCode = 1;
-      codes.sort((a, b) => a - b);
-
-      for (const code of codes) {
-        if (code !== nextCode) break;
+      while (codes.includes(nextCode)) {
         nextCode++;
       }
 
@@ -296,11 +377,15 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
-  // Função para formatar o preço no formato da moeda brasileira
-  const formatarPreco = (valor: number): string => {
+  // Função para formatar o preço no formato da moeda brasileira (sem o símbolo R$)
+  const formatarPreco = (valor: number | null | undefined): string => {
+    // Verificar se o valor é nulo ou indefinido
+    if (valor === null || valor === undefined) {
+      return '0,00';
+    }
+
+    // Usando toLocaleString sem o estilo 'currency' para evitar o símbolo R$
     return valor.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
@@ -308,9 +393,23 @@ const ProdutosPage: React.FC = () => {
 
   // Função para converter o valor formatado para número
   const desformatarPreco = (valorFormatado: string): number => {
-    // Remove todos os caracteres não numéricos, exceto o ponto decimal
-    const valorLimpo = valorFormatado.replace(/[^\d,]/g, '').replace(',', '.');
+    // Remove todos os caracteres não numéricos, exceto a vírgula decimal
+    // Primeiro remove qualquer símbolo R$ que possa ter sido digitado manualmente
+    const semRS = valorFormatado.replace(/R\$\s?/g, '');
+    // Depois remove todos os caracteres não numéricos, exceto a vírgula
+    const valorLimpo = semRS.replace(/[^\d,]/g, '').replace(',', '.');
     return parseFloat(valorLimpo) || 0;
+  };
+
+  // Função para calcular o valor final com base no tipo de desconto
+  const calcularValorFinal = (preco: number, tipoDesconto: 'percentual' | 'valor', valorDesconto: number): number => {
+    if (tipoDesconto === 'percentual') {
+      // Desconto percentual (ex: 10% de desconto)
+      return preco - (preco * (valorDesconto / 100));
+    } else {
+      // Desconto em valor fixo (ex: R$ 10,00 de desconto)
+      return Math.max(0, preco - valorDesconto); // Garante que o valor não seja negativo
+    }
   };
 
   const handleAddGrupo = () => {
@@ -339,28 +438,84 @@ const ProdutosPage: React.FC = () => {
       descricao: '',
       codigo: nextCode,
       promocao: false,
+      tipo_desconto: 'percentual',
+      valor_desconto: 0,
       ativo: true,
+      unidade_medida_id: unidadesMedida.length > 0 ? unidadesMedida[0].id : undefined,
+      desconto_quantidade: false,
+      quantidade_minima: 5,
+      tipo_desconto_quantidade: 'percentual',
+      valor_desconto_quantidade: 10,
     });
     // Inicializa o preço formatado
     setPrecoFormatado(formatarPreco(0));
+
+    // Inicializa o valor do desconto formatado
+    setDescontoFormatado('0');
+
+    // Inicializa o valor do desconto por quantidade formatado
+    setDescontoQuantidadeFormatado('10');
     setShowSidebar(true);
   };
 
   const handleEditProduto = async (grupo: Grupo, produto: Produto) => {
+    console.log('handleEditProduto chamado com:', { grupo, produto });
+
+    // Primeiro, definir o estado para o formulário de produto (não de grupo)
     setIsGrupoForm(false);
+
+    // Definir o grupo selecionado
     setSelectedGrupo(grupo);
+
+    // Definir o produto que está sendo editado
     setEditingProduto(produto);
-    setNovoProduto({
+
+    // Definir o estado do novo produto com os valores do produto existente
+    const produtoState = {
       nome: produto.nome,
       preco: produto.preco,
       descricao: produto.descricao,
       codigo: produto.codigo,
       promocao: produto.promocao || false,
+      tipo_desconto: produto.tipo_desconto || 'percentual',
+      valor_desconto: produto.valor_desconto || 0,
       ativo: produto.ativo !== false, // Se não estiver definido, assume true
-    });
+      unidade_medida_id: produto.unidade_medida_id,
+      desconto_quantidade: produto.desconto_quantidade || false,
+      quantidade_minima: produto.quantidade_minima || 5,
+      tipo_desconto_quantidade: produto.tipo_desconto_quantidade || 'percentual',
+      valor_desconto_quantidade: produto.valor_desconto_quantidade || 10,
+    };
 
-    // Define o preço formatado
+    console.log('Definindo novoProduto com:', produtoState);
+
+    // Definir o estado do novo produto
+    setNovoProduto(produtoState);
+
+    // Definir o preço formatado
     setPrecoFormatado(formatarPreco(produto.preco));
+
+    // Definir o desconto formatado
+    if (produto.valor_desconto !== undefined) {
+      if (produto.tipo_desconto === 'percentual') {
+        setDescontoFormatado(produto.valor_desconto.toString());
+      } else {
+        setDescontoFormatado(formatarPreco(produto.valor_desconto));
+      }
+    }
+
+    // Definir o desconto por quantidade formatado
+    if (produto.valor_desconto_quantidade !== undefined) {
+      if (produto.tipo_desconto_quantidade === 'percentual') {
+        setDescontoQuantidadeFormatado(produto.valor_desconto_quantidade.toString());
+      } else {
+        setDescontoQuantidadeFormatado(formatarPreco(produto.valor_desconto_quantidade));
+      }
+    }
+
+    // Abrir o sidebar imediatamente
+    console.log('Abrindo sidebar imediatamente');
+    setShowSidebar(true);
 
     try {
       const { data: opcoesData } = await supabase
@@ -376,6 +531,7 @@ const ProdutosPage: React.FC = () => {
       console.error('Error loading product options:', error);
     }
 
+    console.log('Abrindo sidebar para edição de produto');
     setShowSidebar(true);
   };
 
@@ -771,9 +927,30 @@ const ProdutosPage: React.FC = () => {
 
   const handleSubmitProduto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedGrupo || !novoProduto.nome || !novoProduto.preco || !novoProduto.codigo) {
+    if (!selectedGrupo || !novoProduto.nome || !novoProduto.preco || !novoProduto.codigo || !novoProduto.unidade_medida_id) {
       showMessage('error', 'Preencha todos os campos obrigatórios');
       return;
+    }
+
+    // Validar se o produto em promoção tem um valor de desconto maior que zero
+    if (novoProduto.promocao) {
+      if (!novoProduto.valor_desconto || novoProduto.valor_desconto <= 0) {
+        showMessage('error', 'Para produtos em promoção, é necessário informar um valor de desconto maior que zero');
+        return;
+      }
+    }
+
+    // Validar se o produto com desconto por quantidade tem um valor de desconto maior que zero
+    if (novoProduto.desconto_quantidade) {
+      if (!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0) {
+        showMessage('error', 'Para produtos com desconto por quantidade, é necessário informar um valor de desconto maior que zero');
+        return;
+      }
+
+      if (!novoProduto.quantidade_minima || novoProduto.quantidade_minima <= 0) {
+        showMessage('error', 'Para produtos com desconto por quantidade, é necessário informar uma quantidade mínima maior que zero');
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -789,10 +966,13 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
+      // Verificar se o código já está sendo usado por outro produto não deletado
       const { data: existingProducts } = await supabase
         .from('produtos')
         .select('id')
-        .eq('codigo', novoProduto.codigo);
+        .eq('codigo', novoProduto.codigo)
+        .eq('deletado', false)
+        .eq('empresa_id', usuarioData.empresa_id);
 
       if (existingProducts && existingProducts.length > 0 && (!editingProduto || existingProducts[0].id !== editingProduto.id)) {
         showMessage('error', 'Este código já está sendo utilizado por outro produto');
@@ -810,7 +990,14 @@ const ProdutosPage: React.FC = () => {
             descricao: novoProduto.descricao,
             codigo: novoProduto.codigo,
             promocao: novoProduto.promocao,
+            tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
+            valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
             ativo: novoProduto.ativo,
+            unidade_medida_id: novoProduto.unidade_medida_id,
+            desconto_quantidade: novoProduto.desconto_quantidade,
+            quantidade_minima: novoProduto.desconto_quantidade ? novoProduto.quantidade_minima : null,
+            tipo_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.tipo_desconto_quantidade : null,
+            valor_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.valor_desconto_quantidade : null,
             empresa_id: usuarioData.empresa_id
           })
           .eq('id', editingProduto.id)
@@ -825,13 +1012,23 @@ const ProdutosPage: React.FC = () => {
           .delete()
           .eq('produto_id', productId);
       } else {
+        // Preparar os dados do produto com os novos campos
+        const produtoData = {
+          ...novoProduto,
+          grupo_id: selectedGrupo.id,
+          empresa_id: usuarioData.empresa_id,
+          // Garantir que os campos de desconto por quantidade sejam null quando não habilitados
+          quantidade_minima: novoProduto.desconto_quantidade ? novoProduto.quantidade_minima : null,
+          tipo_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.tipo_desconto_quantidade : null,
+          valor_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.valor_desconto_quantidade : null,
+          // Garantir que os campos de promoção sejam null quando não habilitados
+          tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
+          valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
+        };
+
         const { data, error } = await supabase
           .from('produtos')
-          .insert([{
-            ...novoProduto,
-            grupo_id: selectedGrupo.id,
-            empresa_id: usuarioData.empresa_id
-          }])
+          .insert([produtoData])
           .select()
           .single();
 
@@ -1200,6 +1397,26 @@ const ProdutosPage: React.FC = () => {
 
   const renderProduto = (grupo: Grupo, produto: Produto) => {
     const fotoPrincipal = produtosFotosPrincipais[produto.id];
+    const unidadeMedida = unidadesMedida.find(u => u.id === produto.unidade_medida_id);
+
+    // Calcular o valor final se o produto estiver em promoção
+    let valorFinal = produto.preco;
+    let descontoExibicao = '';
+
+    if (produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined) {
+      valorFinal = calcularValorFinal(
+        produto.preco,
+        produto.tipo_desconto,
+        produto.valor_desconto
+      );
+
+      // Formatar o desconto para exibição
+      if (produto.tipo_desconto === 'percentual') {
+        descontoExibicao = `${produto.valor_desconto}% OFF`;
+      } else {
+        descontoExibicao = `- R$ ${formatarPreco(produto.valor_desconto)}`;
+      }
+    }
 
     return (
       <div
@@ -1231,7 +1448,16 @@ const ProdutosPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <h4 className="text-white font-medium">{produto.nome}</h4>
                 <span className="text-sm text-gray-400">#{produto.codigo}</span>
-                {/* Indicador de promoção ocultado conforme solicitado */}
+                {produto.promocao && (
+                  <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
+                    Promoção
+                  </span>
+                )}
+                {produto.desconto_quantidade && (
+                  <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded-full">
+                    Desconto {produto.quantidade_minima}+ unid.
+                  </span>
+                )}
                 {produto.ativo === false && (
                   <span className="px-2 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
                     Inativo
@@ -1241,7 +1467,10 @@ const ProdutosPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   className="p-1 text-gray-400 hover:text-white transition-colors"
-                  onClick={() => handleEditProduto(grupo, produto)}
+                  onClick={() => {
+                    console.log('Botão de edição clicado para produto:', produto);
+                    handleEditProduto(grupo, produto);
+                  }}
                 >
                   <Pencil size={16} />
                 </button>
@@ -1253,9 +1482,35 @@ const ProdutosPage: React.FC = () => {
                 </button>
               </div>
             </div>
-            <p className="text-sm text-primary-400">
-              {formatarPreco(produto.preco)}
-            </p>
+            <div className="flex flex-col mb-1">
+              <div className="flex items-center gap-2">
+                {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined ? (
+                  <>
+                    <p className="text-sm text-gray-400 line-through">
+                      {produto.preco.toFixed(2)}
+                    </p>
+                    <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
+                      {descontoExibicao}
+                    </span>
+                  </>
+                ) : (
+                  <p className="text-sm text-primary-400">
+                    {produto.preco.toFixed(2)}
+                  </p>
+                )}
+                {unidadeMedida && (
+                  <span className="px-2 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                    {unidadeMedida.sigla} - {unidadeMedida.nome}
+                  </span>
+                )}
+              </div>
+
+              {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined && (
+                <p className="text-sm text-green-400 font-medium mt-1">
+                  Valor final: {valorFinal.toFixed(2)}
+                </p>
+              )}
+            </div>
             {produto.descricao && (
               <p className="text-sm text-gray-400 mt-1">
                 {produto.descricao}
@@ -1547,6 +1802,25 @@ const ProdutosPage: React.FC = () => {
                             placeholder="Digite o nome do produto"
                           />
                         </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Unidade de Medida <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={novoProduto.unidade_medida_id || ''}
+                            onChange={(e) => setNovoProduto({ ...novoProduto, unidade_medida_id: e.target.value })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 dark-select"
+                            required
+                          >
+                            <option value="" disabled>Selecione uma unidade de medida</option>
+                            {unidadesMedida.map((unidade) => (
+                              <option key={unidade.id} value={unidade.id}>
+                                {unidade.sigla} - {unidade.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-2">
                             Preço
@@ -1587,7 +1861,349 @@ const ProdutosPage: React.FC = () => {
                           />
                         </div>
 
-                        {/* Opção "Produto em Promoção" ocultada conforme solicitado */}
+                        <div className="mb-4">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="promocao"
+                              checked={novoProduto.promocao}
+                              onChange={(e) => {
+                                const isChecked = e.target.checked;
+                                // Se estiver habilitando a promoção, inicializa com valores padrão
+                                if (isChecked && (!novoProduto.valor_desconto || novoProduto.valor_desconto <= 0)) {
+                                  // Valor padrão: 10% de desconto
+                                  setNovoProduto({
+                                    ...novoProduto,
+                                    promocao: isChecked,
+                                    tipo_desconto: 'percentual',
+                                    valor_desconto: 10
+                                  });
+                                  setDescontoFormatado('10');
+                                } else {
+                                  setNovoProduto({ ...novoProduto, promocao: isChecked });
+                                }
+                              }}
+                              className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                            />
+                            <label htmlFor="promocao" className="text-sm font-medium text-white cursor-pointer">
+                              Produto em Promoção
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="desconto_quantidade"
+                              checked={novoProduto.desconto_quantidade}
+                              onChange={(e) => {
+                                const isChecked = e.target.checked;
+                                // Se estiver habilitando o desconto por quantidade, inicializa com valores padrão
+                                if (isChecked && (!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0)) {
+                                  // Valor padrão: 10% de desconto para quantidade mínima de 5
+                                  setNovoProduto({
+                                    ...novoProduto,
+                                    desconto_quantidade: isChecked,
+                                    quantidade_minima: 5,
+                                    tipo_desconto_quantidade: 'percentual',
+                                    valor_desconto_quantidade: 10
+                                  });
+                                  setDescontoQuantidadeFormatado('10');
+                                } else {
+                                  setNovoProduto({ ...novoProduto, desconto_quantidade: isChecked });
+                                }
+                              }}
+                              className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                            />
+                            <label htmlFor="desconto_quantidade" className="text-sm font-medium text-white cursor-pointer">
+                              Desconto por Quantidade Mínima
+                            </label>
+                          </div>
+                        </div>
+
+                        {novoProduto.promocao && (
+                          <>
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Tipo de Desconto <span className="text-red-500">*</span>
+                              </label>
+                              <div className="flex gap-4">
+                                <div className="flex items-center">
+                                  <input
+                                    type="radio"
+                                    id="percentual"
+                                    name="tipo_desconto"
+                                    value="percentual"
+                                    checked={novoProduto.tipo_desconto === 'percentual'}
+                                    onChange={() => {
+                                      // Se não tinha tipo de desconto definido, inicializa com 10%
+                                      const novoValorDesconto = !novoProduto.tipo_desconto || novoProduto.tipo_desconto !== 'percentual'
+                                        ? 10
+                                        : novoProduto.valor_desconto;
+
+                                      setNovoProduto({
+                                        ...novoProduto,
+                                        tipo_desconto: 'percentual',
+                                        valor_desconto: novoValorDesconto || 10
+                                      });
+
+                                      // Atualizar o formato do desconto quando mudar o tipo
+                                      setDescontoFormatado((novoValorDesconto || 10).toString());
+                                    }}
+                                    className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                    required
+                                  />
+                                  <label htmlFor="percentual" className="text-sm text-white cursor-pointer">
+                                    Percentual (%)
+                                  </label>
+                                </div>
+                                <div className="flex items-center">
+                                  <input
+                                    type="radio"
+                                    id="valor"
+                                    name="tipo_desconto"
+                                    value="valor"
+                                    checked={novoProduto.tipo_desconto === 'valor'}
+                                    onChange={() => {
+                                      // Se não tinha tipo de desconto definido ou era percentual, inicializa com valor equivalente a 10% do preço
+                                      let novoValorDesconto = novoProduto.valor_desconto;
+
+                                      if (!novoProduto.tipo_desconto || novoProduto.tipo_desconto !== 'valor') {
+                                        // Calcula 10% do preço como valor padrão
+                                        novoValorDesconto = novoProduto.preco * 0.1;
+                                      }
+
+                                      setNovoProduto({
+                                        ...novoProduto,
+                                        tipo_desconto: 'valor',
+                                        valor_desconto: novoValorDesconto || (novoProduto.preco * 0.1)
+                                      });
+
+                                      // Atualizar o formato do desconto quando mudar o tipo
+                                      setDescontoFormatado(formatarPreco(novoValorDesconto || (novoProduto.preco * 0.1)));
+                                    }}
+                                    className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                    required
+                                  />
+                                  <label htmlFor="valor" className="text-sm text-white cursor-pointer">
+                                    Valor (R$)
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                {novoProduto.tipo_desconto === 'percentual' ? 'Percentual de Desconto (%)' : 'Valor do Desconto (R$)'} <span className="text-red-500">*</span>
+                              </label>
+                              <div className="relative">
+                                {novoProduto.tipo_desconto === 'valor' && (
+                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                    R$
+                                  </span>
+                                )}
+                                <input
+                                  type="text"
+                                  value={descontoFormatado}
+                                  onChange={(e) => {
+                                    setDescontoFormatado(e.target.value);
+                                    // Atualiza o valor numérico no estado do produto
+                                    const valorNumerico = desformatarPreco(e.target.value);
+                                    setNovoProduto({ ...novoProduto, valor_desconto: valorNumerico });
+                                  }}
+                                  onBlur={() => {
+                                    // Ao perder o foco, formata corretamente o valor
+                                    const valorNumerico = desformatarPreco(descontoFormatado);
+                                    if (novoProduto.tipo_desconto === 'percentual') {
+                                      // Para percentual, não usamos formatação de moeda
+                                      setDescontoFormatado(valorNumerico.toString());
+                                    } else {
+                                      // Para valor, usamos formatação de moeda
+                                      setDescontoFormatado(formatarPreco(valorNumerico));
+                                    }
+                                  }}
+                                  className={`w-full bg-gray-800/50 border ${
+                                    !novoProduto.valor_desconto || novoProduto.valor_desconto <= 0
+                                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                                      : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                                  } rounded-lg py-2 ${novoProduto.tipo_desconto === 'valor' ? 'pl-8' : 'pl-3'} pr-3 text-white focus:outline-none focus:ring-1`}
+                                  placeholder={novoProduto.tipo_desconto === 'percentual' ? '10' : '0,00'}
+                                  required
+                                />
+                                {novoProduto.tipo_desconto === 'percentual' && (
+                                  <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                    %
+                                  </span>
+                                )}
+                              </div>
+                              {(!novoProduto.valor_desconto || novoProduto.valor_desconto <= 0) && (
+                                <p className="text-red-500 text-xs mt-1">
+                                  É necessário informar um valor de desconto maior que zero
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Valor Final
+                              </label>
+                              <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                  R$
+                                </span>
+                                <input
+                                  type="text"
+                                  value={valorFinalFormatado}
+                                  className="w-full bg-gray-700/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none"
+                                  readOnly
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        {novoProduto.desconto_quantidade && (
+                          <>
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Quantidade Mínima <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                value={novoProduto.quantidade_minima || 5}
+                                onChange={(e) => {
+                                  const valor = parseInt(e.target.value);
+                                  setNovoProduto({ ...novoProduto, quantidade_minima: valor > 0 ? valor : 1 });
+                                }}
+                                min="1"
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                placeholder="5"
+                                required
+                              />
+                            </div>
+
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Tipo de Desconto por Quantidade <span className="text-red-500">*</span>
+                              </label>
+                              <div className="flex gap-4">
+                                <div className="flex items-center">
+                                  <input
+                                    type="radio"
+                                    id="percentual_quantidade"
+                                    name="tipo_desconto_quantidade"
+                                    value="percentual"
+                                    checked={novoProduto.tipo_desconto_quantidade === 'percentual'}
+                                    onChange={() => {
+                                      // Se não tinha tipo de desconto definido, inicializa com 10%
+                                      const novoValorDesconto = !novoProduto.tipo_desconto_quantidade || novoProduto.tipo_desconto_quantidade !== 'percentual'
+                                        ? 10
+                                        : novoProduto.valor_desconto_quantidade;
+
+                                      setNovoProduto({
+                                        ...novoProduto,
+                                        tipo_desconto_quantidade: 'percentual',
+                                        valor_desconto_quantidade: novoValorDesconto || 10
+                                      });
+
+                                      // Atualizar o formato do desconto quando mudar o tipo
+                                      setDescontoQuantidadeFormatado((novoValorDesconto || 10).toString());
+                                    }}
+                                    className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                    required
+                                  />
+                                  <label htmlFor="percentual_quantidade" className="text-sm text-white cursor-pointer">
+                                    Percentual (%)
+                                  </label>
+                                </div>
+                                <div className="flex items-center">
+                                  <input
+                                    type="radio"
+                                    id="valor_quantidade"
+                                    name="tipo_desconto_quantidade"
+                                    value="valor"
+                                    checked={novoProduto.tipo_desconto_quantidade === 'valor'}
+                                    onChange={() => {
+                                      // Se não tinha tipo de desconto definido ou era percentual, inicializa com valor equivalente a 10% do preço
+                                      let novoValorDesconto = novoProduto.valor_desconto_quantidade;
+
+                                      if (!novoProduto.tipo_desconto_quantidade || novoProduto.tipo_desconto_quantidade !== 'valor') {
+                                        // Calcula 10% do preço como valor padrão
+                                        novoValorDesconto = novoProduto.preco * 0.1;
+                                      }
+
+                                      setNovoProduto({
+                                        ...novoProduto,
+                                        tipo_desconto_quantidade: 'valor',
+                                        valor_desconto_quantidade: novoValorDesconto || (novoProduto.preco * 0.1)
+                                      });
+
+                                      // Atualizar o formato do desconto quando mudar o tipo
+                                      setDescontoQuantidadeFormatado(formatarPreco(novoValorDesconto || (novoProduto.preco * 0.1)));
+                                    }}
+                                    className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                    required
+                                  />
+                                  <label htmlFor="valor_quantidade" className="text-sm text-white cursor-pointer">
+                                    Valor (R$)
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                {novoProduto.tipo_desconto_quantidade === 'percentual' ? 'Percentual de Desconto (%)' : 'Valor do Desconto (R$)'} <span className="text-red-500">*</span>
+                              </label>
+                              <div className="relative">
+                                {novoProduto.tipo_desconto_quantidade === 'valor' && (
+                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                    R$
+                                  </span>
+                                )}
+                                <input
+                                  type="text"
+                                  value={descontoQuantidadeFormatado}
+                                  onChange={(e) => {
+                                    setDescontoQuantidadeFormatado(e.target.value);
+                                    // Atualiza o valor numérico no estado do produto
+                                    const valorNumerico = desformatarPreco(e.target.value);
+                                    setNovoProduto({ ...novoProduto, valor_desconto_quantidade: valorNumerico });
+                                  }}
+                                  onBlur={() => {
+                                    // Ao perder o foco, formata corretamente o valor
+                                    const valorNumerico = desformatarPreco(descontoQuantidadeFormatado);
+                                    if (novoProduto.tipo_desconto_quantidade === 'percentual') {
+                                      // Para percentual, não usamos formatação de moeda
+                                      setDescontoQuantidadeFormatado(valorNumerico.toString());
+                                    } else {
+                                      // Para valor, usamos formatação de moeda
+                                      setDescontoQuantidadeFormatado(formatarPreco(valorNumerico));
+                                    }
+                                  }}
+                                  className={`w-full bg-gray-800/50 border ${
+                                    !novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0
+                                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                                      : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                                  } rounded-lg py-2 ${novoProduto.tipo_desconto_quantidade === 'valor' ? 'pl-8' : 'pl-3'} pr-3 text-white focus:outline-none focus:ring-1`}
+                                  placeholder={novoProduto.tipo_desconto_quantidade === 'percentual' ? '10' : '0,00'}
+                                  required
+                                />
+                                {novoProduto.tipo_desconto_quantidade === 'percentual' && (
+                                  <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                    %
+                                  </span>
+                                )}
+                              </div>
+                              {(!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0) && (
+                                <p className="text-red-500 text-xs mt-1">
+                                  É necessário informar um valor de desconto maior que zero
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        )}
 
                         {/* Seção de Opções Adicionais ocultada conforme solicitado */}
 
