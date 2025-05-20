@@ -104,6 +104,24 @@ const FormCadastro: React.FC = () => {
 
       if (statusError) throw statusError;
 
+      // 6. Create initial stock control configuration
+      try {
+        const { error: estoqueConfigError } = await supabase
+          .from('tipo_controle_estoque_config')
+          .insert([{
+            empresa_id: empresaData.id,
+            tipo_controle: 'pedidos',
+            bloqueia_sem_estoque: false
+          }]);
+
+        if (estoqueConfigError) {
+          console.error('Erro ao criar configuração de estoque:', estoqueConfigError);
+        }
+      } catch (estoqueError) {
+        console.error('Exceção ao criar configuração de estoque:', estoqueError);
+        // Não interrompe o fluxo de cadastro se houver erro na configuração de estoque
+      }
+
       // Sign out the user since we want them to confirm their email first
       await supabase.auth.signOut();
 

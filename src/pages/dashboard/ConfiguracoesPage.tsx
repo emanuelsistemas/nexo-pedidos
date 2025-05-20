@@ -124,6 +124,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [taxaMode, setTaxaMode] = useState<'bairro' | 'distancia'>('bairro');
   const [horarios, setHorarios] = useState<any[]>([]);
   const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos'>('pedidos');
+  const [bloqueiaSemEstoque, setBloqueiaSemEstoque] = useState<boolean>(false);
   const [horarioForm, setHorarioForm] = useState({
     id: '',
     dia_semana: '0',
@@ -276,19 +277,69 @@ const ConfiguracoesPage: React.FC = () => {
       }
 
       if (activeSection === 'estoque') {
-        // Carregar configuração de controle de estoque
-        const { data: estoqueConfigData, error: estoqueConfigError } = await supabase
-          .from('tipo_controle_estoque_config')
-          .select('tipo_controle')
-          .eq('empresa_id', usuarioData.empresa_id)
-          .single();
+        try {
+          // Carregar configuração de controle de estoque
+          const { data: estoqueConfigData, error: estoqueConfigError } = await supabase
+            .from('tipo_controle_estoque_config')
+            .select('*')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .single();
 
-        if (estoqueConfigError && estoqueConfigError.code !== 'PGRST116') {
-          // PGRST116 é o código para "nenhum resultado encontrado"
-          console.error('Erro ao carregar configuração de estoque:', estoqueConfigError);
-          showMessage('error', 'Erro ao carregar configuração de controle de estoque');
-        } else if (estoqueConfigData && estoqueConfigData.tipo_controle) {
-          setTipoControleEstoque(estoqueConfigData.tipo_controle as 'faturamento' | 'pedidos');
+          if (estoqueConfigError) {
+            // Se não encontrou configuração, criar uma nova com valores padrão
+            if (estoqueConfigError.code === 'PGRST116') {
+              console.log('Configuração de estoque não encontrada, criando uma nova...');
+
+              const { error: insertError, data: insertData } = await supabase
+                .from('tipo_controle_estoque_config')
+                .insert({
+                  empresa_id: usuarioData.empresa_id,
+                  tipo_controle: 'pedidos',
+                  bloqueia_sem_estoque: false
+                })
+                .select();
+
+              console.log('Nova configuração criada:', insertData);
+
+              if (insertError) {
+                throw insertError;
+              }
+
+              // Definir valores padrão nos estados
+              setTipoControleEstoque('pedidos');
+              setBloqueiaSemEstoque(false);
+            } else {
+              // Se for outro erro, mostrar mensagem
+              console.error('Erro ao carregar configuração de estoque:', estoqueConfigError);
+              showMessage('error', 'Erro ao carregar configuração de controle de estoque');
+            }
+          } else if (estoqueConfigData) {
+            // Se encontrou configuração, atualizar os estados
+            console.log('Configuração de estoque encontrada:', estoqueConfigData);
+
+            // Definir tipo de controle (pedidos ou faturamento)
+            if (estoqueConfigData.tipo_controle) {
+              setTipoControleEstoque(estoqueConfigData.tipo_controle as 'faturamento' | 'pedidos');
+            } else {
+              console.log('tipo_controle não definido, usando padrão "pedidos"');
+              setTipoControleEstoque('pedidos');
+
+              // Atualizar no banco de dados
+              await supabase
+                .from('tipo_controle_estoque_config')
+                .update({ tipo_controle: 'pedidos' })
+                .eq('id', estoqueConfigData.id);
+            }
+
+            // Garantir que bloqueia_sem_estoque seja um booleano
+            // Se o campo não existir ou for null, definir como false
+            const bloqueiaEstoque = estoqueConfigData.bloqueia_sem_estoque === true;
+            console.log('Valor de bloqueia_sem_estoque:', bloqueiaEstoque);
+            setBloqueiaSemEstoque(bloqueiaEstoque);
+          }
+        } catch (error) {
+          console.error('Erro ao processar configuração de estoque:', error);
+          showMessage('error', 'Erro ao processar configuração de controle de estoque');
         }
       }
     } catch (error: any) {
@@ -672,6 +723,7 @@ const ConfiguracoesPage: React.FC = () => {
   };
 
   const handleTipoControleEstoqueChange = async (tipo: 'faturamento' | 'pedidos') => {
+    console.log('Alterando tipo de controle de estoque para:', tipo);
     setIsLoading(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -684,6 +736,8 @@ const ConfiguracoesPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      console.log('Empresa ID:', usuarioData.empresa_id);
 
       // Verificar se já existe uma configuração
       const { data: existingConfig } = await supabase
@@ -698,7 +752,11 @@ const ConfiguracoesPage: React.FC = () => {
         // Atualizar configuração existente
         const { error: updateError } = await supabase
           .from('tipo_controle_estoque_config')
-          .update({ tipo_controle: tipo })
+          .update({
+            tipo_controle: tipo,
+            // Manter o valor atual de bloqueia_sem_estoque
+            bloqueia_sem_estoque: bloqueiaSemEstoque
+          })
           .eq('id', existingConfig.id);
 
         error = updateError;
@@ -708,7 +766,8 @@ const ConfiguracoesPage: React.FC = () => {
           .from('tipo_controle_estoque_config')
           .insert({
             empresa_id: usuarioData.empresa_id,
-            tipo_controle: tipo
+            tipo_controle: tipo,
+            bloqueia_sem_estoque: bloqueiaSemEstoque
           });
 
         error = insertError;
@@ -720,6 +779,78 @@ const ConfiguracoesPage: React.FC = () => {
       showMessage('success', 'Configuração de controle de estoque atualizada com sucesso!');
     } catch (error: any) {
       showMessage('error', 'Erro ao atualizar configuração de estoque: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBloqueiaSemEstoqueChange = async (bloqueia: boolean) => {
+    console.log('Alterando configuração de bloqueio de estoque para:', bloqueia);
+    setIsLoading(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      console.log('Empresa ID:', usuarioData.empresa_id);
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('tipo_controle_estoque_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      let error;
+
+      if (existingConfig) {
+        console.log('Atualizando configuração existente:', existingConfig.id);
+        // Atualizar configuração existente
+        const { error: updateError, data: updateData } = await supabase
+          .from('tipo_controle_estoque_config')
+          .update({
+            bloqueia_sem_estoque: bloqueia,
+            // Manter o valor atual de tipo_controle
+            tipo_controle: tipoControleEstoque
+          })
+          .eq('id', existingConfig.id)
+          .select();
+
+        console.log('Resultado da atualização:', updateData);
+        error = updateError;
+      } else {
+        console.log('Criando nova configuração para empresa:', usuarioData.empresa_id);
+        // Criar nova configuração
+        const { error: insertError, data: insertData } = await supabase
+          .from('tipo_controle_estoque_config')
+          .insert({
+            empresa_id: usuarioData.empresa_id,
+            tipo_controle: tipoControleEstoque,
+            bloqueia_sem_estoque: bloqueia
+          })
+          .select();
+
+        console.log('Resultado da inserção:', insertData);
+        error = insertError;
+      }
+
+      if (error) {
+        console.error('Erro ao salvar configuração:', error);
+        throw error;
+      }
+
+      setBloqueiaSemEstoque(bloqueia);
+      showMessage('success', 'Configuração de bloqueio de estoque atualizada com sucesso!');
+    } catch (error: any) {
+      console.error('Exceção ao atualizar configuração de bloqueio de estoque:', error);
+      showMessage('error', 'Erro ao atualizar configuração de bloqueio de estoque: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -1475,6 +1606,32 @@ const ConfiguracoesPage: React.FC = () => {
                     </p>
                   </div>
                 </label>
+              </div>
+
+              <div className="mt-6 border-t border-gray-800 pt-6">
+                <h3 className="text-lg font-medium text-white mb-4">Controle de Estoque</h3>
+
+                <div className="p-4 bg-gray-800/50 rounded-lg">
+                  <div className="flex items-center">
+                    <input
+                      id="bloqueia_sem_estoque"
+                      type="checkbox"
+                      checked={bloqueiaSemEstoque}
+                      onChange={(e) => handleBloqueiaSemEstoqueChange(e.target.checked)}
+                      className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                    />
+                    <label htmlFor="bloqueia_sem_estoque" className="ml-3 cursor-pointer">
+                      <h4 className="text-white font-medium">Bloquear pedidos sem estoque suficiente</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Quando ativado, não permite que sejam feitos pedidos de produtos sem estoque suficiente disponível.
+                      </p>
+                    </label>
+                  </div>
+                  <div className="mt-3 text-xs text-gray-400 flex items-center">
+                    <span className="inline-block w-3 h-3 rounded-full bg-gray-600 mr-2"></span>
+                    <span>Status atual: {bloqueiaSemEstoque ? 'Ativado' : 'Desativado'}</span>
+                  </div>
+                </div>
               </div>
 
               <div className="mt-6 p-4 bg-blue-900/20 border border-blue-800/30 rounded-lg">

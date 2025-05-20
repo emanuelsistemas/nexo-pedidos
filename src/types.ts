@@ -46,5 +46,6 @@ export interface TipoControleEstoqueConfig {
   id: string;
   empresa_id: string;
   tipo_controle: 'faturamento' | 'pedidos';
+  bloqueia_sem_estoque?: boolean;
   created_at?: string;
 }

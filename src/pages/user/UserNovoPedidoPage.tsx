@@ -27,6 +27,9 @@ interface ItemPedido {
   observacao: string;
   valorUnitario: number;
   valorTotal: number;
+  valorOriginal?: number;
+  temDesconto?: boolean;
+  tipoDesconto?: string;
 }
 
 const UserNovoPedidoPage: React.FC = () => {
@@ -125,54 +128,129 @@ const UserNovoPedidoPage: React.FC = () => {
     }
   };
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!produtoSelecionadoObj || quantidade <= 0) return;
 
-    // Calcular preço com desconto se for produto em promoção
-    let valorUnitario = produtoSelecionadoObj.preco;
-
-    if (produtoSelecionadoObj.promocao && produtoSelecionadoObj.valor_desconto) {
-      if (produtoSelecionadoObj.tipo_desconto === 'percentual') {
-        valorUnitario = produtoSelecionadoObj.preco * (1 - produtoSelecionadoObj.valor_desconto / 100);
-      } else {
-        valorUnitario = produtoSelecionadoObj.preco - produtoSelecionadoObj.valor_desconto;
+    try {
+      // Verificar se há estoque suficiente
+      const temEstoqueSuficiente = await verificarEstoqueSuficiente(produtoSelecionadoObj.id, quantidade);
+      if (!temEstoqueSuficiente) {
+        return;
       }
+
+      // Calcular preço considerando promoção e desconto por quantidade
+      const { valorUnitario, temDesconto, valorOriginal, tipoDesconto } = calcularPrecoUnitario(produtoSelecionadoObj, quantidade);
+      const valorTotal = valorUnitario * quantidade;
+
+      const novoItem: ItemPedido = {
+        id: Date.now().toString(), // ID temporário
+        produto: produtoSelecionadoObj,
+        quantidade,
+        observacao,
+        valorUnitario,
+        valorTotal,
+        valorOriginal,
+        temDesconto,
+        tipoDesconto
+      };
+
+      // Mostrar mensagem informativa sobre o desconto aplicado
+      if (temDesconto) {
+        if (tipoDesconto === 'quantidade') {
+          const descontoInfo = produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual'
+            ? `${produtoSelecionadoObj.valor_desconto_quantidade}%`
+            : formatarPreco(produtoSelecionadoObj.valor_desconto_quantidade || 0);
+
+          showMessage('info', `Desconto por quantidade aplicado! (${descontoInfo}) - De ${formatarPreco(valorOriginal)} para ${formatarPreco(valorUnitario)} por unidade.`);
+        } else if (tipoDesconto === 'promocao') {
+          showMessage('info', `Produto em promoção! - De ${formatarPreco(valorOriginal)} para ${formatarPreco(valorUnitario)} por unidade.`);
+        }
+      }
+
+      setItensPedido([...itensPedido, novoItem]);
+
+      // Limpar campos
+      setProdutoSelecionado('');
+      setProdutoSelecionadoObj(null);
+      setQuantidade(1);
+      setObservacao('');
+    } catch (error) {
+      console.error('Erro ao adicionar item:', error);
+      showMessage('error', 'Erro ao adicionar item ao pedido');
     }
-
-    const valorTotal = valorUnitario * quantidade;
-
-    const novoItem: ItemPedido = {
-      id: Date.now().toString(), // ID temporário
-      produto: produtoSelecionadoObj,
-      quantidade,
-      observacao,
-      valorUnitario,
-      valorTotal
-    };
-
-    setItensPedido([...itensPedido, novoItem]);
-
-    // Limpar campos
-    setProdutoSelecionado('');
-    setProdutoSelecionadoObj(null);
-    setQuantidade(1);
-    setObservacao('');
   };
 
   const handleRemoveItem = (id: string) => {
     setItensPedido(itensPedido.filter(item => item.id !== id));
   };
 
-  const handleUpdateQuantidade = (id: string, novaQuantidade: number) => {
+  const handleUpdateQuantidade = async (id: string, novaQuantidade: number) => {
     if (novaQuantidade <= 0) return;
 
-    setItensPedido(itensPedido.map(item => {
-      if (item.id === id) {
-        const valorTotal = item.valorUnitario * novaQuantidade;
-        return { ...item, quantidade: novaQuantidade, valorTotal };
+    try {
+      // Encontrar o item que está sendo atualizado
+      const itemAtual = itensPedido.find(item => item.id === id);
+      if (!itemAtual) return;
+
+      // Se a nova quantidade é maior que a atual, verificar estoque
+      if (novaQuantidade > itemAtual.quantidade) {
+        // Verificar se há estoque suficiente
+        const temEstoqueSuficiente = await verificarEstoqueSuficiente(
+          itemAtual.produto.id,
+          novaQuantidade,
+          itemAtual.quantidade
+        );
+
+        if (!temEstoqueSuficiente) {
+          return;
+        }
       }
-      return item;
-    }));
+
+      // Atualizar a quantidade do item e recalcular o preço
+      setItensPedido(itensPedido.map(item => {
+        if (item.id === id) {
+          // Recalcular o preço considerando promoção e desconto por quantidade
+          const { valorUnitario, temDesconto, valorOriginal, tipoDesconto } = calcularPrecoUnitario(item.produto, novaQuantidade);
+          const valorTotal = valorUnitario * novaQuantidade;
+
+          // Verificar se o desconto mudou
+          const descontoMudou = (item.temDesconto !== temDesconto) ||
+                               (item.valorUnitario !== valorUnitario) ||
+                               (item.tipoDesconto !== tipoDesconto);
+
+          // Mostrar mensagem informativa se o desconto mudou
+          if (descontoMudou) {
+            if (temDesconto) {
+              if (tipoDesconto === 'quantidade') {
+                const descontoInfo = item.produto.tipo_desconto_quantidade === 'percentual'
+                  ? `${item.produto.valor_desconto_quantidade}%`
+                  : formatarPreco(item.produto.valor_desconto_quantidade || 0);
+
+                showMessage('info', `Desconto por quantidade aplicado! (${descontoInfo}) - De ${formatarPreco(valorOriginal)} para ${formatarPreco(valorUnitario)} por unidade.`);
+              } else if (tipoDesconto === 'promocao') {
+                showMessage('info', `Produto em promoção! - De ${formatarPreco(valorOriginal)} para ${formatarPreco(valorUnitario)} por unidade.`);
+              }
+            } else if (item.temDesconto) {
+              showMessage('info', `Desconto removido. Preço unitário: ${formatarPreco(valorUnitario)}`);
+            }
+          }
+
+          return {
+            ...item,
+            quantidade: novaQuantidade,
+            valorUnitario,
+            valorTotal,
+            valorOriginal,
+            temDesconto,
+            tipoDesconto
+          };
+        }
+        return item;
+      }));
+    } catch (error) {
+      console.error('Erro ao atualizar quantidade:', error);
+      showMessage('error', 'Erro ao atualizar quantidade do item');
+    }
   };
 
   const formatarTelefone = (telefone: string) => {
@@ -201,6 +279,50 @@ const UserNovoPedidoPage: React.FC = () => {
     }).format(valor);
   };
 
+  // Função para calcular o preço unitário considerando promoção e desconto por quantidade
+  const calcularPrecoUnitario = (produto: Produto, quantidade: number): { valorUnitario: number, temDesconto: boolean, valorOriginal: number, tipoDesconto: string } => {
+    let valorUnitario = produto.preco;
+    let temDesconto = false;
+    let tipoDesconto = '';
+    const valorOriginal = produto.preco;
+
+    // Verificar se o produto está em promoção
+    if (produto.promocao && produto.valor_desconto) {
+      if (produto.tipo_desconto === 'percentual') {
+        valorUnitario = produto.preco * (1 - produto.valor_desconto / 100);
+      } else {
+        valorUnitario = produto.preco - produto.valor_desconto;
+      }
+      temDesconto = true;
+      tipoDesconto = 'promocao';
+    }
+
+    // Verificar se a quantidade atinge o mínimo para desconto por quantidade
+    if (produto.desconto_quantidade &&
+        produto.quantidade_minima &&
+        produto.valor_desconto_quantidade &&
+        quantidade >= produto.quantidade_minima) {
+
+      // Se já tem desconto de promoção, usar o menor valor entre os dois
+      let valorComDescontoQuantidade = produto.preco;
+
+      if (produto.tipo_desconto_quantidade === 'percentual') {
+        valorComDescontoQuantidade = produto.preco * (1 - produto.valor_desconto_quantidade / 100);
+      } else {
+        valorComDescontoQuantidade = produto.preco - produto.valor_desconto_quantidade;
+      }
+
+      // Se o desconto por quantidade for maior que o desconto de promoção, usar o desconto por quantidade
+      if (!temDesconto || valorComDescontoQuantidade < valorUnitario) {
+        valorUnitario = valorComDescontoQuantidade;
+        temDesconto = true;
+        tipoDesconto = 'quantidade';
+      }
+    }
+
+    return { valorUnitario, temDesconto, valorOriginal, tipoDesconto };
+  };
+
   const formatarDocumento = (documento?: string, tipo?: 'CNPJ' | 'CPF') => {
     if (!documento) return '';
 
@@ -225,6 +347,105 @@ const UserNovoPedidoPage: React.FC = () => {
     return cepLimpo.replace(/^(\d{5})(\d{3})$/, '$1-$2');
   };
 
+  // Função para verificar se há estoque suficiente para um produto
+  const verificarEstoqueSuficiente = async (produtoId: string, quantidade: number, quantidadeAtual: number = 0): Promise<boolean> => {
+    try {
+      // Verificar se a empresa controla estoque e se há estoque suficiente
+      const { data: configData, error: configError } = await supabase
+        .from('tipo_controle_estoque_config')
+        .select('tipo_controle, bloqueia_sem_estoque')
+        .eq('empresa_id', empresaSelecionada)
+        .single();
+
+      if (configError && configError.code !== 'PGRST116') {
+        console.error('Erro ao verificar configuração de estoque:', configError);
+        showMessage('error', 'Erro ao verificar configuração de estoque');
+        return true; // Permitir continuar em caso de erro na verificação
+      }
+
+      // Se a empresa não bloqueia pedidos sem estoque suficiente, permitir continuar
+      if (!configData?.bloqueia_sem_estoque) {
+        return true;
+      }
+
+      // Se o tipo de controle for por faturamento, permitir continuar
+      if (configData.tipo_controle !== 'pedidos') {
+        return true;
+      }
+
+      // Buscar movimentações de estoque do produto
+      const { data: movimentosData, error: movimentosError } = await supabase
+        .from('produto_estoque')
+        .select('tipo_movimento, quantidade')
+        .eq('produto_id', produtoId)
+        .eq('empresa_id', empresaSelecionada);
+
+      if (movimentosError) {
+        console.error('Erro ao verificar estoque do produto:', movimentosError);
+        showMessage('error', 'Erro ao verificar estoque do produto');
+        return true; // Permitir continuar em caso de erro na verificação
+      }
+
+      // Calcular o saldo total (entradas - saídas)
+      let saldoTotal = 0;
+      if (movimentosData) {
+        movimentosData.forEach(movimento => {
+          if (movimento.tipo_movimento === 'entrada') {
+            saldoTotal += parseFloat(movimento.quantidade);
+          } else {
+            saldoTotal -= parseFloat(movimento.quantidade);
+          }
+        });
+      }
+
+      // Buscar itens de pedidos pendentes para este produto
+      const { data: pedidosData, error: pedidosError } = await supabase
+        .from('pedidos_itens')
+        .select(`
+          quantidade,
+          pedido:pedido_id (
+            status
+          )
+        `)
+        .eq('produto_id', produtoId);
+
+      if (pedidosError) {
+        console.error('Erro ao verificar pedidos do produto:', pedidosError);
+        showMessage('error', 'Erro ao verificar pedidos do produto');
+        return true; // Permitir continuar em caso de erro na verificação
+      }
+
+      // Calcular a quantidade total de produtos em pedidos pendentes (não faturados)
+      let quantidadeNaoFaturada = 0;
+
+      if (pedidosData && pedidosData.length > 0) {
+        pedidosData.forEach((item: any) => {
+          // Verificar se o pedido está pendente (não faturado)
+          if (item.pedido && item.pedido.status !== 'faturado') {
+            quantidadeNaoFaturada += parseFloat(item.quantidade);
+          }
+        });
+      }
+
+      // Subtrair a quantidade atual do item para não contar duas vezes
+      quantidadeNaoFaturada -= quantidadeAtual;
+
+      // Verificar se há estoque suficiente
+      const estoqueDisponivel = saldoTotal - quantidadeNaoFaturada;
+
+      if (estoqueDisponivel < quantidade) {
+        showMessage('error', `Estoque insuficiente. Disponível: ${estoqueDisponivel.toFixed(2)}`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro ao verificar estoque:', error);
+      showMessage('error', 'Erro ao verificar estoque do produto');
+      return true; // Permitir continuar em caso de erro na verificação
+    }
+  };
+
   const handleProdutoSelect = (produto: Produto) => {
     setProdutoSelecionado(produto.id);
     setProdutoSelecionadoObj(produto);
@@ -232,6 +453,16 @@ const UserNovoPedidoPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Verificar se o botão que acionou o submit é o botão de finalizar pedido
+    // Isso garante que a validação só ocorra quando o usuário tenta finalizar o pedido
+    const target = e.target as HTMLFormElement;
+    const submitButton = target.querySelector('button[type="submit"]');
+
+    // Se o evento não foi acionado pelo botão de submit, não validar
+    if (document.activeElement !== submitButton && e.type === 'submit') {
+      return;
+    }
 
     if (!clienteNome || !clienteTelefone || itensPedido.length === 0) {
       showMessage('error', 'Preencha todos os campos obrigatórios e adicione pelo menos um item ao pedido');
@@ -297,8 +528,12 @@ const UserNovoPedidoPage: React.FC = () => {
     <div className="space-y-6 pb-20">
       <div className="flex items-center gap-2">
         <button
-          onClick={() => navigate('/user/pedidos')}
+          onClick={() => {
+            // Navegar sem validação
+            navigate('/user/pedidos');
+          }}
           className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors"
+          type="button" // Importante: tipo button para não acionar o submit do formulário
         >
           <ArrowLeft size={18} />
         </button>
@@ -393,10 +628,23 @@ const UserNovoPedidoPage: React.FC = () => {
                   <p className="text-sm text-gray-400">
                     {produtoSelecionadoObj.codigo} - {formatarPreco(produtoSelecionadoObj.preco)}
                   </p>
+                  {produtoSelecionadoObj.desconto_quantidade && produtoSelecionadoObj.quantidade_minima && (
+                    <p className="text-xs text-green-400 mt-1">
+                      Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades:
+                      {produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual'
+                        ? ` ${produtoSelecionadoObj.valor_desconto_quantidade}%`
+                        : ` ${formatarPreco(produtoSelecionadoObj.valor_desconto_quantidade || 0)}`
+                      }
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsProdutoModalOpen(true)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsProdutoModalOpen(true);
+                  }}
                   className="p-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white"
                 >
                   <Search size={18} />
@@ -405,7 +653,11 @@ const UserNovoPedidoPage: React.FC = () => {
             ) : (
               <button
                 type="button"
-                onClick={() => setIsProdutoModalOpen(true)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsProdutoModalOpen(true);
+                }}
                 className="w-full flex items-center justify-center gap-2 bg-gray-800/50 border border-gray-700 rounded-lg py-3 px-4 text-gray-300 hover:bg-gray-700 hover:text-white"
               >
                 <Search size={18} />
@@ -416,7 +668,10 @@ const UserNovoPedidoPage: React.FC = () => {
             {/* Modal de seleção de produto */}
             <ProdutoSeletorModal
               isOpen={isProdutoModalOpen}
-              onClose={() => setIsProdutoModalOpen(false)}
+              onClose={() => {
+                // Fechar o modal sem acionar validações
+                setIsProdutoModalOpen(false);
+              }}
               onSelect={handleProdutoSelect}
               empresaId={empresaSelecionada}
             />
@@ -427,13 +682,33 @@ const UserNovoPedidoPage: React.FC = () => {
             <label className="block text-sm font-medium text-gray-400 mb-2">
               Quantidade
             </label>
-            <input
-              type="number"
-              min="1"
-              value={quantidade}
-              onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
-              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-            />
+            <div className="relative">
+              <input
+                type="number"
+                min="1"
+                value={quantidade}
+                onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
+                className={`w-full bg-gray-800/50 border ${
+                  produtoSelecionadoObj?.desconto_quantidade &&
+                  produtoSelecionadoObj?.quantidade_minima &&
+                  quantidade >= produtoSelecionadoObj.quantidade_minima
+                    ? 'border-green-500'
+                    : 'border-gray-700'
+                } rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20`}
+              />
+              {produtoSelecionadoObj?.desconto_quantidade && produtoSelecionadoObj?.quantidade_minima && (
+                <div className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-xs ${
+                  quantidade >= produtoSelecionadoObj.quantidade_minima
+                    ? 'text-green-400'
+                    : 'text-gray-500'
+                }`}>
+                  {quantidade >= produtoSelecionadoObj.quantidade_minima
+                    ? 'Desconto aplicado!'
+                    : `Mín. ${produtoSelecionadoObj.quantidade_minima} para desconto`
+                  }
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Observação */}
@@ -482,9 +757,32 @@ const UserNovoPedidoPage: React.FC = () => {
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="text-white font-medium">{item.produto.nome}</h3>
-                      <p className="text-sm text-gray-400">
-                        {formatarPreco(item.valorUnitario)} x {item.quantidade} = {formatarPreco(item.valorTotal)}
-                      </p>
+                      {item.temDesconto && item.valorOriginal ? (
+                        <div>
+                          <p className="text-sm">
+                            <span className="text-gray-400 line-through">{formatarPreco(item.valorOriginal)}</span>
+                            <span className="text-primary-400 ml-2">{formatarPreco(item.valorUnitario)}</span>
+                            <span className="text-gray-400"> x {item.quantidade} = {formatarPreco(item.valorTotal)}</span>
+                          </p>
+                          <p className="text-xs text-green-400">
+                            {item.tipoDesconto === 'quantidade' ? (
+                              <>
+                                Desconto por quantidade:
+                                {item.produto.tipo_desconto_quantidade === 'percentual'
+                                  ? ` ${item.produto.valor_desconto_quantidade}%`
+                                  : ` ${formatarPreco(item.produto.valor_desconto_quantidade || 0)}`
+                                }
+                              </>
+                            ) : (
+                              'Produto em promoção'
+                            )}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400">
+                          {formatarPreco(item.valorUnitario)} x {item.quantidade} = {formatarPreco(item.valorTotal)}
+                        </p>
+                      )}
                       {item.observacao && (
                         <p className="text-xs text-gray-500 mt-1">
                           Obs: {item.observacao}

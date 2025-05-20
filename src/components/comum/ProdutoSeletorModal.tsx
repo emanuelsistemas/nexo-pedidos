@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, ShoppingBag, Tag, Check, ChevronLeft, Image as ImageIcon } from 'lucide-react';
+import { X, Search, ShoppingBag, Tag, Check, ChevronLeft, Image as ImageIcon, Package, Percent, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Produto {
@@ -14,6 +14,18 @@ interface Produto {
   tipo_desconto?: string;
   valor_desconto?: number;
   fotos?: ProdutoFoto[];
+  // Campos adicionais para estoque e descontos por quantidade
+  estoque_inicial?: number;
+  desconto_quantidade?: boolean;
+  quantidade_minima?: number;
+  tipo_desconto_quantidade?: 'percentual' | 'valor';
+  valor_desconto_quantidade?: number;
+  unidade_medida_id?: string;
+  unidade_medida?: {
+    id: string;
+    sigla: string;
+    nome: string;
+  };
 }
 
 interface ProdutoFoto {
@@ -49,7 +61,9 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
   const [produtoEmVisualizacao, setProdutoEmVisualizacao] = useState<Produto | null>(null);
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
-  
+  const [produtosEstoque, setProdutosEstoque] = useState<Record<string, { total: number, naoFaturado: number }>>({});
+  const [unidadesMedida, setUnidadesMedida] = useState<{id: string, sigla: string, nome: string}[]>([]);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -58,7 +72,9 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
     if (isOpen && empresaId) {
       loadGrupos();
       loadProdutos();
-      
+      loadUnidadesMedida();
+      loadProdutosEstoque();
+
       // Focar no campo de busca quando o modal abrir
       setTimeout(() => {
         if (searchInputRef.current) {
@@ -71,24 +87,24 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
   // Filtrar produtos quando o termo de busca ou grupo selecionado mudar
   useEffect(() => {
     if (!produtos.length) return;
-    
+
     let filtered = [...produtos];
-    
+
     // Filtrar por termo de busca
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(produto => 
-        produto.nome.toLowerCase().includes(term) || 
+      filtered = filtered.filter(produto =>
+        produto.nome.toLowerCase().includes(term) ||
         produto.codigo.toLowerCase().includes(term) ||
         (produto.descricao && produto.descricao.toLowerCase().includes(term))
       );
     }
-    
+
     // Filtrar por grupo
     if (selectedGrupo) {
       filtered = filtered.filter(produto => produto.grupo_id === selectedGrupo);
     }
-    
+
     setFilteredProdutos(filtered);
   }, [searchTerm, selectedGrupo, produtos]);
 
@@ -102,11 +118,13 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           setProdutoEmVisualizacao(null);
           setFotoAtualIndex(0);
         } else {
+          // Prevenir qualquer comportamento padrão antes de fechar
+          e.preventDefault();
           onClose();
         }
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, fotoAmpliada, produtoEmVisualizacao]);
@@ -119,7 +137,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
         .eq('empresa_id', empresaId)
         .eq('deletado', false)
         .order('nome');
-        
+
       if (error) throw error;
       setGrupos(data || []);
     } catch (error) {
@@ -130,36 +148,47 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
   const loadProdutos = async () => {
     try {
       setIsLoading(true);
-      
-      // Buscar produtos
+
+      // Buscar produtos com informações adicionais
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
         .select(`
-          id, 
-          nome, 
-          preco, 
-          codigo, 
-          descricao, 
+          id,
+          nome,
+          preco,
+          codigo,
+          descricao,
           grupo_id,
           promocao,
           tipo_desconto,
-          valor_desconto
+          valor_desconto,
+          estoque_inicial,
+          desconto_quantidade,
+          quantidade_minima,
+          tipo_desconto_quantidade,
+          valor_desconto_quantidade,
+          unidade_medida_id,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome
+          )
         `)
         .eq('empresa_id', empresaId)
         .eq('ativo', true)
         .eq('deletado', false)
         .order('nome');
-        
+
       if (produtosError) throw produtosError;
-      
+
       // Buscar fotos dos produtos
       const { data: fotosData, error: fotosError } = await supabase
         .from('produto_fotos')
         .select('id, produto_id, url, principal')
         .eq('empresa_id', empresaId);
-        
+
       if (fotosError) throw fotosError;
-      
+
       // Associar fotos aos produtos
       const produtosComFotos = produtosData?.map(produto => {
         const fotosDoProduto = fotosData?.filter(foto => foto.produto_id === produto.id) || [];
@@ -168,7 +197,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           fotos: fotosDoProduto
         };
       }) || [];
-      
+
       setProdutos(produtosComFotos);
       setFilteredProdutos(produtosComFotos);
     } catch (error) {
@@ -178,9 +207,116 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
     }
   };
 
+  // Carregar unidades de medida
+  const loadUnidadesMedida = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('unidade_medida')
+        .select('id, sigla, nome')
+        .eq('empresa_id', empresaId)
+        .order('nome');
+
+      if (error) throw error;
+      setUnidadesMedida(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar unidades de medida:', error);
+    }
+  };
+
+  // Carregar informações de estoque dos produtos
+  const loadProdutosEstoque = async () => {
+    try {
+      // Buscar todos os produtos da empresa
+      const { data: produtosData, error: produtosError } = await supabase
+        .from('produtos')
+        .select('id')
+        .eq('empresa_id', empresaId)
+        .eq('deletado', false)
+        .eq('ativo', true);
+
+      if (produtosError) throw produtosError;
+      if (!produtosData || produtosData.length === 0) return;
+
+      // Criar um objeto para armazenar as informações de estoque de cada produto
+      const estoqueInfo: Record<string, { total: number, naoFaturado: number }> = {};
+
+      // Para cada produto, buscar as movimentações de estoque e calcular o saldo
+      for (const produto of produtosData) {
+        // Buscar movimentações de estoque
+        const { data: movimentosData, error: movimentosError } = await supabase
+          .from('produto_estoque')
+          .select('tipo_movimento, quantidade')
+          .eq('produto_id', produto.id)
+          .eq('empresa_id', empresaId);
+
+        if (movimentosError) {
+          console.error(`Erro ao carregar movimentos do produto ${produto.id}:`, movimentosError);
+          continue;
+        }
+
+        // Calcular o saldo total (entradas - saídas)
+        let saldoTotal = 0;
+        if (movimentosData) {
+          movimentosData.forEach(movimento => {
+            if (movimento.tipo_movimento === 'entrada') {
+              saldoTotal += parseFloat(movimento.quantidade);
+            } else {
+              saldoTotal -= parseFloat(movimento.quantidade);
+            }
+          });
+        }
+
+        // Buscar itens de pedidos pendentes para este produto
+        const { data: pedidosData, error: pedidosError } = await supabase
+          .from('pedidos_itens')
+          .select(`
+            quantidade,
+            pedido:pedido_id (
+              status
+            )
+          `)
+          .eq('produto_id', produto.id);
+
+        if (pedidosError) {
+          console.error(`Erro ao carregar pedidos do produto ${produto.id}:`, pedidosError);
+          continue;
+        }
+
+        // Calcular a quantidade total de produtos em pedidos pendentes (não faturados)
+        let quantidadeNaoFaturada = 0;
+
+        if (pedidosData && pedidosData.length > 0) {
+          pedidosData.forEach((item: any) => {
+            // Verificar se o pedido está pendente (não faturado)
+            if (item.pedido && item.pedido.status !== 'faturado') {
+              quantidadeNaoFaturada += parseFloat(item.quantidade);
+            }
+          });
+        }
+
+        // Armazenar as informações de estoque do produto
+        estoqueInfo[produto.id] = {
+          total: saldoTotal,
+          naoFaturado: quantidadeNaoFaturada
+        };
+      }
+
+      // Atualizar o estado com as informações de estoque de todos os produtos
+      setProdutosEstoque(estoqueInfo);
+    } catch (error) {
+      console.error('Erro ao carregar estoque dos produtos:', error);
+    }
+  };
+
   const handleSelectProduto = (produto: Produto) => {
+    // Selecionar o produto e fechar o modal sem acionar validações
     onSelect(produto);
-    onClose();
+
+    // Usar setTimeout para garantir que o fechamento do modal ocorra após a seleção do produto
+    // Isso ajuda a evitar problemas de timing que podem acionar validações indesejadas
+    setTimeout(() => {
+      onClose();
+    }, 0);
   };
 
   const handleGrupoClick = (grupoId: string) => {
@@ -204,14 +340,14 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
 
   const getFotoPrincipal = (produto: Produto) => {
     if (!produto.fotos || produto.fotos.length === 0) return null;
-    
+
     const fotoPrincipal = produto.fotos.find(foto => foto.principal);
     return fotoPrincipal || produto.fotos[0];
   };
 
   const calcularPrecoFinal = (produto: Produto) => {
     if (!produto.promocao || !produto.valor_desconto) return produto.preco;
-    
+
     if (produto.tipo_desconto === 'percentual') {
       return produto.preco * (1 - produto.valor_desconto / 100);
     } else {
@@ -229,16 +365,25 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
-      <div 
+    <div
+      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+      onClick={(e) => e.stopPropagation()} // Impedir propagação de eventos para o formulário principal
+    >
+      <div
         ref={modalRef}
         className="w-full h-full bg-gray-900 flex flex-col"
       >
         {/* Cabeçalho */}
         <div className="p-4 border-b border-gray-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <button 
-              onClick={onClose}
+            <button
+              onClick={(e) => {
+                // Prevenir qualquer comportamento padrão antes de fechar
+                e.preventDefault();
+                e.stopPropagation();
+                onClose();
+              }}
+              type="button"
               className="p-2 rounded-full bg-gray-800 text-gray-400 hover:text-white"
             >
               <X size={20} />
@@ -310,7 +455,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                   <div
                     key={produto.id}
                     onClick={() => handleProdutoClick(produto)}
-                    className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer"
+                    className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer flex flex-col h-full"
                   >
                     {/* Imagem do produto */}
                     <div className="aspect-square bg-gray-900 relative">
@@ -325,24 +470,31 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                           <ImageIcon size={48} className="text-gray-700" />
                         </div>
                       )}
-                      
+
                       {/* Badge de promoção */}
                       {produto.promocao && (
                         <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
-                          {produto.tipo_desconto === 'percentual' 
-                            ? `-${produto.valor_desconto}%` 
+                          {produto.tipo_desconto === 'percentual'
+                            ? `-${produto.valor_desconto}%`
                             : formatarPreco(produto.valor_desconto || 0)}
                         </div>
                       )}
                     </div>
-                    
+
                     {/* Informações do produto */}
-                    <div className="p-3">
+                    <div className="p-3 flex-1 flex flex-col">
                       <h3 className="text-white font-medium line-clamp-2">{produto.nome}</h3>
-                      <p className="text-gray-400 text-sm mt-1">{produto.codigo}</p>
-                      
+                      <div className="flex justify-between items-center">
+                        <p className="text-gray-400 text-sm mt-1">{produto.codigo}</p>
+                        {produto.unidade_medida && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                            {produto.unidade_medida.sigla}
+                          </span>
+                        )}
+                      </div>
+
                       {/* Preço */}
-                      <div className="mt-2">
+                      <div className="mt-2 mb-auto">
                         {produto.promocao ? (
                           <div>
                             <span className="text-gray-400 line-through text-sm">
@@ -358,6 +510,35 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                           </span>
                         )}
                       </div>
+
+                      {/* Informações de estoque */}
+                      {produtosEstoque[produto.id] && (
+                        <div className="flex flex-wrap items-center gap-1 mt-2">
+                          <span className="px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded-full flex items-center gap-1">
+                            <Package size={12} />
+                            <span>{produtosEstoque[produto.id].total.toFixed(2)}</span>
+                          </span>
+                          {produtosEstoque[produto.id].naoFaturado > 0 && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-yellow-900/30 text-yellow-400 rounded-full flex items-center gap-1">
+                              <AlertCircle size={12} />
+                              <span>Pendente: {produtosEstoque[produto.id].naoFaturado.toFixed(2)}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Desconto por quantidade */}
+                      {produto.desconto_quantidade && produto.quantidade_minima && produto.valor_desconto_quantidade && (
+                        <div className="mt-2 text-xs text-green-400 bg-green-900/20 px-2 py-1 rounded flex items-center gap-1">
+                          <Percent size={12} />
+                          <span>
+                            {produto.quantidade_minima}+ unid:
+                            {produto.tipo_desconto_quantidade === 'percentual'
+                              ? ` -${produto.valor_desconto_quantidade}%`
+                              : ` -${formatarPreco(produto.valor_desconto_quantidade)}`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -378,8 +559,13 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           >
             {/* Cabeçalho */}
             <div className="p-4 flex items-center justify-between">
-              <button 
-                onClick={() => setProdutoEmVisualizacao(null)}
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setProdutoEmVisualizacao(null);
+                }}
+                type="button"
                 className="p-2 rounded-full bg-gray-800 text-gray-400 hover:text-white"
               >
                 <ChevronLeft size={20} />
@@ -394,7 +580,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
               <div className="relative flex-1 flex items-center justify-center">
                 {produtoEmVisualizacao.fotos && produtoEmVisualizacao.fotos.length > 0 ? (
                   <>
-                    <div 
+                    <div
                       className="w-full h-full flex items-center justify-center"
                       onClick={() => setFotoAmpliada(produtoEmVisualizacao.fotos![fotoAtualIndex].url)}
                     >
@@ -404,7 +590,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                         className="max-w-full max-h-full object-contain"
                       />
                     </div>
-                    
+
                     {/* Controles de navegação */}
                     {produtoEmVisualizacao.fotos.length > 1 && (
                       <>
@@ -422,7 +608,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                         </button>
                       </>
                     )}
-                    
+
                     {/* Indicadores de fotos */}
                     {produtoEmVisualizacao.fotos.length > 1 && (
                       <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-2">
@@ -447,12 +633,49 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                   </div>
                 )}
               </div>
-              
+
               {/* Informações e botão de seleção */}
               <div className="p-4 bg-gray-900 border-t border-gray-800">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <p className="text-gray-400 text-sm">Código: {produtoEmVisualizacao.codigo}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-gray-400 text-sm">Código: {produtoEmVisualizacao.codigo}</p>
+                      {produtoEmVisualizacao.unidade_medida && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                          {produtoEmVisualizacao.unidade_medida.sigla}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Informações de estoque */}
+                    {produtosEstoque[produtoEmVisualizacao.id] && (
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded-full flex items-center gap-1">
+                          <Package size={12} />
+                          <span>Estoque: {produtosEstoque[produtoEmVisualizacao.id].total.toFixed(2)}</span>
+                        </span>
+                        {produtosEstoque[produtoEmVisualizacao.id].naoFaturado > 0 && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-yellow-900/30 text-yellow-400 rounded-full flex items-center gap-1">
+                            <AlertCircle size={12} />
+                            <span>Pendente: {produtosEstoque[produtoEmVisualizacao.id].naoFaturado.toFixed(2)}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Desconto por quantidade */}
+                    {produtoEmVisualizacao.desconto_quantidade && produtoEmVisualizacao.quantidade_minima && produtoEmVisualizacao.valor_desconto_quantidade && (
+                      <div className="mt-2 text-sm text-green-400 bg-green-900/20 px-2 py-1 rounded flex items-center gap-1">
+                        <Percent size={14} />
+                        <span>
+                          Desconto para {produtoEmVisualizacao.quantidade_minima}+ unidades:
+                          {produtoEmVisualizacao.tipo_desconto_quantidade === 'percentual'
+                            ? ` ${produtoEmVisualizacao.valor_desconto_quantidade}%`
+                            : ` ${formatarPreco(produtoEmVisualizacao.valor_desconto_quantidade)}`}
+                        </span>
+                      </div>
+                    )}
+
                     {produtoEmVisualizacao.descricao && (
                       <p className="text-gray-300 mt-2">{produtoEmVisualizacao.descricao}</p>
                     )}
@@ -466,6 +689,11 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                         <p className="text-primary-400 text-xl font-bold">
                           {formatarPreco(calcularPrecoFinal(produtoEmVisualizacao))}
                         </p>
+                        <p className="text-xs text-green-400">
+                          {produtoEmVisualizacao.tipo_desconto === 'percentual'
+                            ? `${produtoEmVisualizacao.valor_desconto}% de desconto`
+                            : `${formatarPreco(produtoEmVisualizacao.valor_desconto || 0)} de desconto`}
+                        </p>
                       </>
                     ) : (
                       <p className="text-primary-400 text-xl font-bold">
@@ -474,9 +702,14 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                     )}
                   </div>
                 </div>
-                
+
                 <button
-                  onClick={() => handleSelectProduto(produtoEmVisualizacao)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSelectProduto(produtoEmVisualizacao);
+                  }}
+                  type="button"
                   className="w-full py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium flex items-center justify-center gap-2"
                 >
                   <Check size={20} />
@@ -498,8 +731,13 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
             className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center"
             onClick={() => setFotoAmpliada(null)}
           >
-            <button 
-              onClick={() => setFotoAmpliada(null)}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setFotoAmpliada(null);
+              }}
+              type="button"
               className="absolute top-4 right-4 p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
             >
               <X size={24} />
