@@ -18,6 +18,19 @@ interface Produto {
   codigo: string;
   ativo: boolean;
   grupo_id: string;
+  promocao?: boolean;
+  tipo_desconto?: 'percentual' | 'valor';
+  valor_desconto?: number;
+  desconto_quantidade?: boolean;
+  quantidade_minima?: number;
+  tipo_desconto_quantidade?: 'percentual' | 'valor';
+  valor_desconto_quantidade?: number;
+  unidade_medida?: {
+    id: string;
+    sigla: string;
+    nome: string;
+  };
+  unidade_medida_id?: string;
 }
 
 interface ProdutoFoto {
@@ -34,7 +47,7 @@ const UserProdutosPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeGrupo, setActiveGrupo] = useState<string | null>(null);
   const [produtosFotos, setProdutosFotos] = useState<Record<string, ProdutoFoto | null>>({});
-  
+
   // Estados para a galeria de fotos
   const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
   const [isGaleriaOpen, setIsGaleriaOpen] = useState(false);
@@ -47,20 +60,20 @@ const UserProdutosPage: React.FC = () => {
   const loadGrupos = async () => {
     try {
       setIsLoading(true);
-      
+
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
-      
+
       // Obter a empresa do usuário
       const { data: usuarioData } = await supabase
         .from('usuarios')
         .select('empresa_id')
         .eq('id', userData.user.id)
         .single();
-        
+
       if (!usuarioData?.empresa_id) return;
-      
+
       // Obter grupos da empresa
       const { data: gruposData } = await supabase
         .from('grupos')
@@ -68,101 +81,108 @@ const UserProdutosPage: React.FC = () => {
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false)
         .order('nome');
-        
+
       if (!gruposData) {
         setIsLoading(false);
         return;
       }
-      
+
       // Obter produtos de cada grupo
       const { data: produtosData } = await supabase
         .from('produtos')
-        .select('*')
+        .select(`
+          *,
+          unidade_medida:unidade_medida (
+            id,
+            sigla,
+            nome
+          )
+        `)
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false)
         .eq('ativo', true)
         .order('nome');
-        
+
       if (!produtosData) {
         setIsLoading(false);
         return;
       }
-      
+
       // Organizar produtos por grupo
       const gruposComProdutos = gruposData.map(grupo => ({
         ...grupo,
         produtos: produtosData.filter(produto => produto.grupo_id === grupo.id)
       })).filter(grupo => grupo.produtos.length > 0); // Filtrar apenas grupos com produtos
-      
+
       setGrupos(gruposComProdutos);
-      
+
       // Se houver grupos, definir o primeiro como ativo
       if (gruposComProdutos.length > 0) {
         setActiveGrupo(gruposComProdutos[0].id);
       }
-      
+
       // Carregar fotos principais dos produtos
       await loadProdutosFotos(produtosData);
-      
+
     } catch (error) {
       console.error('Erro ao carregar grupos e produtos:', error);
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   const loadProdutosFotos = async (produtos: Produto[]) => {
     try {
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
-      
+
       // Obter a empresa do usuário
       const { data: usuarioData } = await supabase
         .from('usuarios')
         .select('empresa_id')
         .eq('id', userData.user.id)
         .single();
-        
+
       if (!usuarioData?.empresa_id) return;
-      
+
       // Obter fotos principais de todos os produtos
       const { data: fotosData } = await supabase
         .from('produto_fotos')
         .select('*')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('principal', true);
-        
+
       if (!fotosData) return;
-      
+
       // Mapear fotos por produto_id
       const fotosMap: Record<string, ProdutoFoto | null> = {};
       produtos.forEach(produto => {
         const foto = fotosData.find(f => f.produto_id === produto.id);
         fotosMap[produto.id] = foto || null;
       });
-      
+
       setProdutosFotos(fotosMap);
     } catch (error) {
       console.error('Erro ao carregar fotos dos produtos:', error);
     }
   };
-  
+
   const loadProdutoFotos = async (produtoId: string) => {
     try {
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
-      
+
       // Obter a empresa do usuário
       const { data: usuarioData } = await supabase
         .from('usuarios')
         .select('empresa_id')
         .eq('id', userData.user.id)
         .single();
-        
+
       if (!usuarioData?.empresa_id) return;
-      
+
       // Obter todas as fotos do produto
       const { data: fotosData } = await supabase
         .from('produto_fotos')
@@ -170,11 +190,11 @@ const UserProdutosPage: React.FC = () => {
         .eq('produto_id', produtoId)
         .eq('empresa_id', usuarioData.empresa_id)
         .order('principal', { ascending: false });
-        
+
       if (!fotosData || fotosData.length === 0) {
         return;
       }
-      
+
       setProdutoFotos(fotosData);
       setCurrentFotoIndex(0);
       setIsGaleriaOpen(true);
@@ -182,14 +202,25 @@ const UserProdutosPage: React.FC = () => {
       console.error('Erro ao carregar fotos do produto:', error);
     }
   };
-  
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
   };
-  
+
+  // Calcular o valor final após aplicar o desconto
+  const calcularValorFinal = (preco: number, tipoDesconto?: string, valorDesconto?: number) => {
+    if (!tipoDesconto || valorDesconto === undefined) return preco;
+
+    if (tipoDesconto === 'percentual') {
+      return preco - (preco * (valorDesconto / 100));
+    } else {
+      return preco - valorDesconto;
+    }
+  };
+
   const filteredGrupos = searchTerm
     ? grupos.map(grupo => ({
         ...grupo,
@@ -200,7 +231,7 @@ const UserProdutosPage: React.FC = () => {
         )
       })).filter(grupo => grupo.produtos.length > 0)
     : grupos;
-  
+
   // Renderizar skeleton loader para os cards de produtos
   const renderSkeletonCards = () => {
     return Array(6).fill(0).map((_, index) => (
@@ -214,11 +245,11 @@ const UserProdutosPage: React.FC = () => {
       </div>
     ));
   };
-  
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-white mb-4">Produtos</h1>
-      
+
       {/* Barra de busca */}
       <div className="relative">
         <input
@@ -230,7 +261,7 @@ const UserProdutosPage: React.FC = () => {
         />
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
       </div>
-      
+
       {isLoading ? (
         <>
           {/* Skeleton para abas de grupos */}
@@ -239,7 +270,7 @@ const UserProdutosPage: React.FC = () => {
               <div key={index} className="h-8 w-24 bg-gray-700 rounded-full mr-2 flex-shrink-0 animate-pulse"></div>
             ))}
           </div>
-          
+
           {/* Skeleton para cards de produtos */}
           <div className="grid grid-cols-2 gap-4">
             {renderSkeletonCards()}
@@ -277,7 +308,7 @@ const UserProdutosPage: React.FC = () => {
                   </button>
                 ))}
               </div>
-              
+
               {/* Cards de produtos */}
               <div className="grid grid-cols-2 gap-4">
                 {filteredGrupos
@@ -292,13 +323,13 @@ const UserProdutosPage: React.FC = () => {
                       className="bg-background-card rounded-lg overflow-hidden border border-gray-800"
                     >
                       {/* Foto do produto */}
-                      <div 
+                      <div
                         className="h-32 bg-gray-800 relative cursor-pointer"
                         onClick={() => loadProdutoFotos(produto.id)}
                       >
                         {produtosFotos[produto.id] ? (
-                          <img 
-                            src={produtosFotos[produto.id]?.url} 
+                          <img
+                            src={produtosFotos[produto.id]?.url}
                             alt={produto.nome}
                             className="w-full h-full object-cover"
                           />
@@ -307,18 +338,66 @@ const UserProdutosPage: React.FC = () => {
                             <Package size={32} />
                           </div>
                         )}
-                        <div className="absolute bottom-0 right-0 bg-background-dark/80 px-2 py-1 text-primary-400 text-sm font-medium">
-                          {formatCurrency(produto.preco)}
+
+                        {/* Badges de status */}
+                        <div className="absolute top-2 left-2 flex flex-col gap-1">
+                          {produto.promocao && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
+                              Promoção
+                            </span>
+                          )}
+                          {produto.desconto_quantidade && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded-full">
+                              Desconto {produto.quantidade_minima}+ unid.
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Preço */}
+                        <div className="absolute bottom-0 right-0 bg-background-dark/80 px-2 py-1 text-sm font-medium">
+                          {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-gray-400 line-through text-xs">
+                                {formatCurrency(produto.preco)}
+                              </span>
+                              <span className="text-green-400">
+                                {formatCurrency(calcularValorFinal(produto.preco, produto.tipo_desconto, produto.valor_desconto))}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-primary-400">
+                              {formatCurrency(produto.preco)}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      
+
                       {/* Informações do produto */}
                       <div className="p-3">
                         <h3 className="text-white font-medium line-clamp-1">{produto.nome}</h3>
-                        <div className="flex items-center gap-1 text-gray-400 text-xs mt-1">
-                          <Tag size={12} />
-                          <span>#{produto.codigo}</span>
+
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          <div className="flex items-center gap-1 text-gray-400 text-xs">
+                            <Tag size={12} />
+                            <span>#{produto.codigo}</span>
+                          </div>
+
+                          {produto.unidade_medida && (
+                            <span className="px-2 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                              {produto.unidade_medida.sigla} - {produto.unidade_medida.nome}
+                            </span>
+                          )}
                         </div>
+
+                        {/* Informações de desconto */}
+                        {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined && (
+                          <div className="mt-1 text-xs text-green-400">
+                            {produto.tipo_desconto === 'percentual'
+                              ? `${produto.valor_desconto}% OFF`
+                              : `- ${formatCurrency(produto.valor_desconto)}`}
+                          </div>
+                        )}
+
                         {produto.descricao && (
                           <p className="text-gray-400 text-xs mt-2 line-clamp-2">
                             {produto.descricao}
@@ -332,7 +411,7 @@ const UserProdutosPage: React.FC = () => {
           )}
         </>
       )}
-      
+
       {/* Galeria de fotos */}
       <FotoGaleria
         fotos={produtoFotos}
