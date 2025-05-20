@@ -48,6 +48,7 @@ const UserProdutosPage: React.FC = () => {
   const [activeGrupo, setActiveGrupo] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'todos' | 'promocao' | 'grupo'>('todos');
   const [produtosFotos, setProdutosFotos] = useState<Record<string, ProdutoFoto | null>>({});
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   // Estados para a galeria de fotos
   const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
@@ -59,6 +60,14 @@ const UserProdutosPage: React.FC = () => {
 
   useEffect(() => {
     loadGrupos();
+
+    // Configurar a escuta em tempo real para atualizações
+    setupRealtimeSubscription();
+
+    // Limpar a inscrição quando o componente for desmontado
+    return () => {
+      supabase.removeAllChannels();
+    };
   }, []);
 
   const loadGrupos = async () => {
@@ -133,6 +142,9 @@ const UserProdutosPage: React.FC = () => {
 
       // Carregar contagem de fotos para cada produto
       await loadProdutosFotosCount(produtosData);
+
+      // Atualizar o timestamp da última atualização
+      setLastUpdate(new Date());
 
     } catch (error) {
       console.error('Erro ao carregar grupos e produtos:', error);
@@ -268,6 +280,92 @@ const UserProdutosPage: React.FC = () => {
     }
   };
 
+  // Configurar a escuta em tempo real para atualizações de produtos
+  const setupRealtimeSubscription = async () => {
+    try {
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Escutar alterações na tabela produtos
+      const produtosChannel = supabase
+        .channel('produtos-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Escutar todos os eventos (INSERT, UPDATE, DELETE)
+            schema: 'public',
+            table: 'produtos',
+            filter: `empresa_id=eq.${usuarioData.empresa_id}`
+          },
+          async (payload) => {
+            console.log('Alteração detectada em produtos:', payload);
+
+            // Recarregar os dados quando houver alterações
+            await loadGrupos();
+          }
+        )
+        .subscribe();
+
+      // Escutar alterações na tabela produto_fotos
+      const fotosChannel = supabase
+        .channel('fotos-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Escutar todos os eventos (INSERT, UPDATE, DELETE)
+            schema: 'public',
+            table: 'produto_fotos',
+            filter: `empresa_id=eq.${usuarioData.empresa_id}`
+          },
+          async (payload) => {
+            console.log('Alteração detectada em fotos de produtos:', payload);
+
+            // Se for uma nova foto ou alteração em uma foto existente
+            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+              const produtoId = payload.new.produto_id;
+
+              // Atualizar apenas as fotos do produto específico
+              const { data: fotosData } = await supabase
+                .from('produto_fotos')
+                .select('*')
+                .eq('produto_id', produtoId)
+                .eq('empresa_id', usuarioData.empresa_id);
+
+              if (fotosData) {
+                // Atualizar a contagem de fotos para este produto
+                setProdutosFotosCount(prev => ({
+                  ...prev,
+                  [produtoId]: fotosData.length
+                }));
+
+                // Atualizar a foto principal se necessário
+                const fotoPrincipal = fotosData.find(f => f.principal);
+                if (fotoPrincipal) {
+                  setProdutosFotos(prev => ({
+                    ...prev,
+                    [produtoId]: fotoPrincipal
+                  }));
+                }
+              }
+            }
+          }
+        )
+        .subscribe();
+    } catch (error) {
+      console.error('Erro ao configurar escuta em tempo real:', error);
+    }
+  };
+
   const filteredGrupos = searchTerm
     ? grupos.map(grupo => ({
         ...grupo,
@@ -295,7 +393,12 @@ const UserProdutosPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-white mb-4">Produtos</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold text-white">Produtos</h1>
+        <div className="text-xs text-gray-400">
+          Atualizado: {lastUpdate.toLocaleTimeString()}
+        </div>
+      </div>
 
       {/* Barra de busca */}
       <div className="relative">
