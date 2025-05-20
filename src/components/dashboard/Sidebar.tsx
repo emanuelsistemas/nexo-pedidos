@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign } from 'lucide-react';
+import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
@@ -13,7 +13,8 @@ const menuItems = [
     label: 'Produtos',
     tooltip: 'Produtos',
     submenu: [
-      { icon: ListOrdered, label: 'Itens', path: '/dashboard/produtos', tooltip: 'Lista de Produtos' }
+      { icon: ListOrdered, label: 'Itens', path: '/dashboard/produtos', tooltip: 'Lista de Produtos' },
+      { icon: Ruler, label: 'Unidade', path: '/dashboard/unidade-medida', tooltip: 'Unidades de Medida' }
       // Submenu "Adicionais" ocultado
     ]
   },

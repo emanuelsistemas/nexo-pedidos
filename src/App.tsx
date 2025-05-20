@@ -9,6 +9,7 @@ import DashboardPage from './pages/dashboard/DashboardPage';
 import ConexaoPage from './pages/dashboard/ConexaoPage';
 import ProdutosPage from './pages/dashboard/ProdutosPage';
 import AdicionaisPage from './pages/dashboard/AdicionaisPage';
+import UnidadeMedidaPage from './pages/dashboard/UnidadeMedidaPage';
 import ClientesPage from './pages/dashboard/ClientesPage';
 import FaturamentoPage from './pages/dashboard/FaturamentoPage';
 import GestorPage from './pages/dashboard/GestorPage';
@@ -37,6 +38,7 @@ function App() {
           <Route index element={<DashboardPage />} />
           <Route path="produtos" element={<ProdutosPage />} />
           <Route path="produtos/adicionais" element={<AdicionaisPage />} />
+          <Route path="unidade-medida" element={<UnidadeMedidaPage />} />
           <Route path="clientes" element={<ClientesPage />} />
           <Route path="faturamento" element={<FaturamentoPage />} />
           <Route path="gestor" element={<GestorPage />} />
