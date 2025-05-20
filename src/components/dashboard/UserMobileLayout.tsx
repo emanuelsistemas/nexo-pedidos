@@ -64,13 +64,21 @@ const UserMobileLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background-dark flex flex-col">
-      {/* Header com logo e saudação */}
+      {/* Header com logo, saudação e botão de sair */}
       <header className="bg-background-card border-b border-gray-800 p-4 flex items-center justify-between">
         <div className="flex items-center">
           <Logo size="sm" />
         </div>
-        <div className="text-white text-sm">
-          Olá, <span className="font-medium">{userName}</span>
+        <div className="flex items-center gap-3">
+          <div className="text-white text-sm">
+            Olá, <span className="font-medium">{userName}</span>
+          </div>
+          <button
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10 text-red-400"
+            onClick={() => setShowConfirmation(true)}
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </header>
 
@@ -109,13 +117,6 @@ const UserMobileLayout: React.FC = () => {
               <span className="text-xs mt-1">{item.label}</span>
             </button>
           ))}
-          <button
-            className="flex flex-col items-center justify-center w-1/5 h-full text-red-400"
-            onClick={() => setShowConfirmation(true)}
-          >
-            <LogOut size={18} />
-            <span className="text-xs mt-1">Sair</span>
-          </button>
         </div>
       </footer>
 
