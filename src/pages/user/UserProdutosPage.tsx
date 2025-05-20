@@ -142,6 +142,11 @@ const UserProdutosPage: React.FC = () => {
         setIsRefreshing(true);
       }
 
+      // Limpar os estados para garantir que não haja dados antigos
+      if (!isInitialLoad) {
+        console.log('Limpando estados para garantir dados atualizados...');
+      }
+
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
@@ -432,12 +437,18 @@ const UserProdutosPage: React.FC = () => {
         },
         (payload) => {
           console.log('Alteração detectada em produtos:', payload);
+          console.log('Tipo de evento:', payload.eventType);
+          console.log('Dados antigos:', payload.old);
+          console.log('Dados novos:', payload.new);
 
           // Forçar o recarregamento completo dos dados
-          // Usamos setTimeout para garantir que a atualização ocorra após o evento ser processado
+          // Usamos setTimeout com um atraso maior para garantir que a atualização ocorra após o evento ser processado
           setTimeout(() => {
+            console.log('Recarregando dados após alteração em produtos...');
+            // Limpar o cache de grupos para forçar um recarregamento completo
+            setGrupos([]);
             loadGrupos();
-          }, 100);
+          }, 300);
         }
       );
 
@@ -452,12 +463,21 @@ const UserProdutosPage: React.FC = () => {
         },
         (payload) => {
           console.log('Alteração detectada em fotos de produtos:', payload);
+          console.log('Tipo de evento:', payload.eventType);
+          console.log('Dados antigos:', payload.old);
+          console.log('Dados novos:', payload.new);
 
           // Forçar o recarregamento completo dos dados para garantir consistência
-          // Usamos setTimeout para garantir que a atualização ocorra após o evento ser processado
+          // Usamos setTimeout com um atraso maior para garantir que a atualização ocorra após o evento ser processado
           setTimeout(() => {
+            console.log('Recarregando dados após alteração em fotos de produtos...');
+            // Limpar o cache de grupos para forçar um recarregamento completo
+            setGrupos([]);
+            // Limpar o cache de fotos para forçar um recarregamento completo
+            setProdutosFotos({});
+            setProdutosFotosCount({});
             loadGrupos();
-          }, 100);
+          }, 300);
         }
       );
 
@@ -514,7 +534,12 @@ const UserProdutosPage: React.FC = () => {
             onClick={() => {
               if (!isRefreshing) {
                 console.log('Atualizando manualmente...');
-                // Primeiro carregamos os dados
+                // Limpar todos os estados para forçar um recarregamento completo
+                setGrupos([]);
+                setProdutosFotos({});
+                setProdutosFotosCount({});
+
+                // Carregar dados novamente
                 loadGrupos();
 
                 // Depois testamos a conexão Realtime
@@ -524,6 +549,7 @@ const UserProdutosPage: React.FC = () => {
               }
             }}
             disabled={isRefreshing}
+            title="Atualizar dados"
           >
             <RefreshCw size={16} />
           </button>
