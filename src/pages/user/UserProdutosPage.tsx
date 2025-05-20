@@ -46,6 +46,7 @@ const UserProdutosPage: React.FC = () => {
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeGrupo, setActiveGrupo] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'todos' | 'promocao' | 'grupo'>('todos');
   const [produtosFotos, setProdutosFotos] = useState<Record<string, ProdutoFoto | null>>({});
 
   // Estados para a galeria de fotos
@@ -119,7 +120,10 @@ const UserProdutosPage: React.FC = () => {
 
       setGrupos(gruposComProdutos);
 
-      // Se houver grupos, definir o primeiro como ativo
+      // Definir o filtro inicial como "todos"
+      setActiveFilter('todos');
+
+      // Se houver grupos, armazenar o ID do primeiro grupo para uso posterior
       if (gruposComProdutos.length > 0) {
         setActiveGrupo(gruposComProdutos[0].id);
       }
@@ -335,17 +339,52 @@ const UserProdutosPage: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Abas de grupos */}
+              {/* Abas de filtros e grupos */}
               <div className="flex overflow-x-auto pb-2 hide-scrollbar">
+                {/* Filtro Todos */}
+                <button
+                  className={`px-4 py-1 rounded-full mr-2 flex-shrink-0 transition-colors ${
+                    activeFilter === 'todos'
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                  onClick={() => {
+                    setActiveFilter('todos');
+                  }}
+                >
+                  Todos
+                </button>
+
+                {/* Filtro Promoção */}
+                <button
+                  className={`px-4 py-1 rounded-full mr-2 flex-shrink-0 transition-colors ${
+                    activeFilter === 'promocao'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                  onClick={() => {
+                    setActiveFilter('promocao');
+                  }}
+                >
+                  Promoção
+                </button>
+
+                {/* Separador */}
+                <div className="h-6 border-l border-gray-700 mx-1 my-auto"></div>
+
+                {/* Abas de grupos */}
                 {filteredGrupos.map((grupo) => (
                   <button
                     key={grupo.id}
                     className={`px-4 py-1 rounded-full mr-2 flex-shrink-0 transition-colors ${
-                      activeGrupo === grupo.id
+                      activeFilter === 'grupo' && activeGrupo === grupo.id
                         ? 'bg-primary-500 text-white'
                         : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                     }`}
-                    onClick={() => setActiveGrupo(grupo.id)}
+                    onClick={() => {
+                      setActiveFilter('grupo');
+                      setActiveGrupo(grupo.id);
+                    }}
                   >
                     {grupo.nome}
                   </button>
@@ -355,8 +394,18 @@ const UserProdutosPage: React.FC = () => {
               {/* Cards de produtos */}
               <div className="grid grid-cols-2 gap-4">
                 {filteredGrupos
-                  .filter(grupo => !activeGrupo || grupo.id === activeGrupo)
-                  .flatMap(grupo => grupo.produtos)
+                  .flatMap(grupo => {
+                    // Se o filtro for por grupo, mostrar apenas produtos do grupo selecionado
+                    if (activeFilter === 'grupo') {
+                      return grupo.id === activeGrupo ? grupo.produtos : [];
+                    }
+                    // Se o filtro for por promoção, mostrar apenas produtos em promoção
+                    else if (activeFilter === 'promocao') {
+                      return grupo.produtos.filter(produto => produto.promocao);
+                    }
+                    // Se o filtro for "todos", mostrar todos os produtos
+                    return grupo.produtos;
+                  })
                   .map((produto, index) => (
                     <motion.div
                       key={produto.id}
