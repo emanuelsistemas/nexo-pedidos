@@ -24,7 +24,7 @@ import UserPedidosPage from './pages/user/UserPedidosPage';
 import UserNovoPedidoPage from './pages/user/UserNovoPedidoPage';
 import UserProdutosPage from './pages/user/UserProdutosPage';
 import UserClientesPage from './pages/user/UserClientesPage';
-import UserNovoClientePage from './pages/user/UserNovoClientePage';
+import UserNovoClienteCompleto from './pages/user/UserNovoClienteCompleto';
 import UserPerfilPage from './pages/user/UserPerfilPage';
 
 function App() {
@@ -56,7 +56,7 @@ function App() {
           <Route path="pedidos/novo" element={<UserNovoPedidoPage />} />
           <Route path="produtos" element={<UserProdutosPage />} />
           <Route path="clientes" element={<UserClientesPage />} />
-          <Route path="clientes/novo" element={<UserNovoClientePage />} />
+          <Route path="clientes/novo" element={<UserNovoClienteCompleto />} />
           <Route path="perfil" element={<UserPerfilPage />} />
         </Route>
       </Routes>

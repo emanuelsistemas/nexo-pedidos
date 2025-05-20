@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2 } from 'lucide-react';
+import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
+import ClienteDropdown from '../../components/comum/ClienteDropdown';
+import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 
 interface Empresa {
   id: string;
@@ -34,13 +36,27 @@ const UserNovoPedidoPage: React.FC = () => {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [empresaSelecionada, setEmpresaSelecionada] = useState<string>('');
+  const [clienteId, setClienteId] = useState('');
   const [clienteNome, setClienteNome] = useState('');
   const [clienteTelefone, setClienteTelefone] = useState('');
+  const [clienteData, setClienteData] = useState<{
+    documento?: string;
+    tipo_documento?: string;
+    endereco?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
+    cep?: string;
+    complemento?: string;
+  }>();
   const [itensPedido, setItensPedido] = useState<ItemPedido[]>([]);
   const [produtoSelecionado, setProdutoSelecionado] = useState<string>('');
+  const [produtoSelecionadoObj, setProdutoSelecionadoObj] = useState<Produto | null>(null);
   const [quantidade, setQuantidade] = useState(1);
   const [observacao, setObservacao] = useState('');
   const [valorTotal, setValorTotal] = useState(0);
+  const [isProdutoModalOpen, setIsProdutoModalOpen] = useState(false);
 
   useEffect(() => {
     loadEmpresas();
@@ -53,13 +69,8 @@ const UserNovoPedidoPage: React.FC = () => {
     }
   }, [empresas]);
 
-  useEffect(() => {
-    if (empresaSelecionada) {
-      loadProdutos(empresaSelecionada);
-    } else {
-      setProdutos([]);
-    }
-  }, [empresaSelecionada]);
+  // Não carregamos mais todos os produtos automaticamente
+  // Os produtos serão carregados apenas quando o modal for aberto
 
   useEffect(() => {
     // Calcular o valor total do pedido
@@ -115,17 +126,24 @@ const UserNovoPedidoPage: React.FC = () => {
   };
 
   const handleAddItem = () => {
-    if (!produtoSelecionado || quantidade <= 0) return;
+    if (!produtoSelecionadoObj || quantidade <= 0) return;
 
-    const produto = produtos.find(p => p.id === produtoSelecionado);
-    if (!produto) return;
+    // Calcular preço com desconto se for produto em promoção
+    let valorUnitario = produtoSelecionadoObj.preco;
 
-    const valorUnitario = produto.preco;
+    if (produtoSelecionadoObj.promocao && produtoSelecionadoObj.valor_desconto) {
+      if (produtoSelecionadoObj.tipo_desconto === 'percentual') {
+        valorUnitario = produtoSelecionadoObj.preco * (1 - produtoSelecionadoObj.valor_desconto / 100);
+      } else {
+        valorUnitario = produtoSelecionadoObj.preco - produtoSelecionadoObj.valor_desconto;
+      }
+    }
+
     const valorTotal = valorUnitario * quantidade;
 
     const novoItem: ItemPedido = {
       id: Date.now().toString(), // ID temporário
-      produto,
+      produto: produtoSelecionadoObj,
       quantidade,
       observacao,
       valorUnitario,
@@ -136,6 +154,7 @@ const UserNovoPedidoPage: React.FC = () => {
 
     // Limpar campos
     setProdutoSelecionado('');
+    setProdutoSelecionadoObj(null);
     setQuantidade(1);
     setObservacao('');
   };
@@ -182,6 +201,35 @@ const UserNovoPedidoPage: React.FC = () => {
     }).format(valor);
   };
 
+  const formatarDocumento = (documento?: string, tipo?: 'CNPJ' | 'CPF') => {
+    if (!documento) return '';
+
+    if (tipo === 'CNPJ') {
+      // Formato XX.XXX.XXX/XXXX-XX
+      return documento.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    } else if (tipo === 'CPF') {
+      // Formato XXX.XXX.XXX-XX
+      return documento.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+    }
+
+    return documento;
+  };
+
+  const formatarCep = (cep?: string) => {
+    if (!cep) return '';
+
+    // Remove caracteres não numéricos
+    const cepLimpo = cep.replace(/\D/g, '');
+
+    // Formato XXXXX-XXX
+    return cepLimpo.replace(/^(\d{5})(\d{3})$/, '$1-$2');
+  };
+
+  const handleProdutoSelect = (produto: Produto) => {
+    setProdutoSelecionado(produto.id);
+    setProdutoSelecionadoObj(produto);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -207,6 +255,7 @@ const UserNovoPedidoPage: React.FC = () => {
         .insert({
           empresa_id: empresaSelecionada,
           usuario_id: userData.user.id,
+          cliente_id: clienteId || null, // Incluir ID do cliente se disponível
           cliente_nome: clienteNome,
           cliente_telefone: clienteTelefone.replace(/\D/g, ''),
           valor_total: valorTotal,
@@ -264,45 +313,67 @@ const UserNovoPedidoPage: React.FC = () => {
           {/* Empresa - Campo oculto */}
           <input type="hidden" value={empresaSelecionada} />
 
-          {/* Nome do Cliente */}
+          {/* Cliente */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
-              Nome do Cliente <span className="text-red-500">*</span>
+              Cliente <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User size={18} className="text-gray-500" />
-              </div>
-              <input
-                type="text"
-                value={clienteNome}
-                onChange={(e) => setClienteNome(e.target.value)}
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                placeholder="Nome do cliente"
-                required
-              />
-            </div>
+            <ClienteDropdown
+              value={clienteId}
+              onChange={(id, nome, telefone, data) => {
+                setClienteId(id);
+                setClienteNome(nome);
+                setClienteTelefone(formatarTelefone(telefone));
+                setClienteData(data);
+              }}
+              empresaId={empresaSelecionada}
+              placeholder="Selecione ou busque um cliente"
+              required={true}
+            />
           </div>
 
-          {/* Telefone do Cliente */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Telefone do Cliente <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Phone size={18} className="text-gray-500" />
+          {/* Dados complementares do cliente (visíveis apenas quando um cliente é selecionado) */}
+          {clienteId && clienteTelefone && (
+            <div className="mt-3 p-3 bg-gray-800/30 rounded-lg border border-gray-700">
+              <h3 className="text-sm font-medium text-gray-300 mb-2">Dados do cliente</h3>
+              <div className="space-y-2">
+                {/* Telefone */}
+                <div className="flex items-start gap-2">
+                  <Phone size={16} className="text-gray-500 mt-0.5" />
+                  <span className="text-sm text-gray-300">{clienteTelefone}</span>
+                </div>
+
+                {/* Documento */}
+                {clienteData?.documento && (
+                  <div className="flex items-start gap-2">
+                    <FileText size={16} className="text-gray-500 mt-0.5" />
+                    <span className="text-sm text-gray-300">
+                      {clienteData.tipo_documento}: {formatarDocumento(clienteData.documento, clienteData.tipo_documento as 'CNPJ' | 'CPF')}
+                    </span>
+                  </div>
+                )}
+
+                {/* Endereço */}
+                {clienteData?.endereco && (
+                  <div className="flex items-start gap-2">
+                    <MapPin size={16} className="text-gray-500 mt-0.5" />
+                    <div className="text-sm text-gray-300">
+                      <p>{clienteData.endereco}, {clienteData.numero || 'S/N'}{clienteData.complemento ? ` - ${clienteData.complemento}` : ''}</p>
+                      {clienteData.bairro && <p>{clienteData.bairro}</p>}
+                      {(clienteData.cidade || clienteData.estado) && (
+                        <p>
+                          {clienteData.cidade}
+                          {clienteData.cidade && clienteData.estado ? ' - ' : ''}
+                          {clienteData.estado}
+                          {clienteData.cep ? ` - CEP: ${formatarCep(clienteData.cep)}` : ''}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <input
-                type="text"
-                value={clienteTelefone}
-                onChange={handleTelefoneChange}
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                placeholder="(00) 00000-0000"
-                required
-              />
             </div>
-          </div>
+          )}
         </div>
 
         {/* Adicionar itens */}
@@ -314,18 +385,41 @@ const UserNovoPedidoPage: React.FC = () => {
             <label className="block text-sm font-medium text-gray-400 mb-2">
               Produto
             </label>
-            <select
-              value={produtoSelecionado}
-              onChange={(e) => setProdutoSelecionado(e.target.value)}
-              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-            >
-              <option value="">Selecione um produto</option>
-              {produtos.map(produto => (
-                <option key={produto.id} value={produto.id}>
-                  {produto.nome} - {formatarPreco(produto.preco)}
-                </option>
-              ))}
-            </select>
+
+            {produtoSelecionadoObj ? (
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 flex justify-between items-center">
+                <div>
+                  <h3 className="text-white font-medium">{produtoSelecionadoObj.nome}</h3>
+                  <p className="text-sm text-gray-400">
+                    {produtoSelecionadoObj.codigo} - {formatarPreco(produtoSelecionadoObj.preco)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsProdutoModalOpen(true)}
+                  className="p-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white"
+                >
+                  <Search size={18} />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsProdutoModalOpen(true)}
+                className="w-full flex items-center justify-center gap-2 bg-gray-800/50 border border-gray-700 rounded-lg py-3 px-4 text-gray-300 hover:bg-gray-700 hover:text-white"
+              >
+                <Search size={18} />
+                <span>Buscar produto</span>
+              </button>
+            )}
+
+            {/* Modal de seleção de produto */}
+            <ProdutoSeletorModal
+              isOpen={isProdutoModalOpen}
+              onClose={() => setIsProdutoModalOpen(false)}
+              onSelect={handleProdutoSelect}
+              empresaId={empresaSelecionada}
+            />
           </div>
 
           {/* Quantidade */}
@@ -360,7 +454,7 @@ const UserNovoPedidoPage: React.FC = () => {
           <button
             type="button"
             onClick={handleAddItem}
-            disabled={!produtoSelecionado}
+            disabled={!produtoSelecionadoObj}
             className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus size={18} />
