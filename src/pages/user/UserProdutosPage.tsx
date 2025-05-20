@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, AlertCircle, Image, Tag, Package } from 'lucide-react';
+import { Search, AlertCircle, Image, Tag, Package, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FotoGaleria from '../../components/comum/FotoGaleria';
 
@@ -43,6 +43,7 @@ interface ProdutoFoto {
 
 const UserProdutosPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeGrupo, setActiveGrupo] = useState<string | null>(null);
@@ -71,12 +72,24 @@ const UserProdutosPage: React.FC = () => {
   }, []);
 
   const loadGrupos = async () => {
+    console.log('Iniciando carregamento de grupos e produtos...');
     try {
-      setIsLoading(true);
+      // Verificar se é o carregamento inicial ou uma atualização
+      const isInitialLoad = grupos.length === 0;
+
+      // Definir o estado de carregamento apropriado
+      if (isInitialLoad) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
 
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      if (!userData.user) {
+        console.log('Usuário não autenticado, não é possível carregar dados');
+        return;
+      }
 
       // Obter a empresa do usuário
       const { data: usuarioData } = await supabase
@@ -85,23 +98,37 @@ const UserProdutosPage: React.FC = () => {
         .eq('id', userData.user.id)
         .single();
 
-      if (!usuarioData?.empresa_id) return;
+      if (!usuarioData?.empresa_id) {
+        console.log('Empresa não encontrada, não é possível carregar dados');
+        return;
+      }
+
+      console.log(`Carregando dados para empresa_id: ${usuarioData.empresa_id}`);
 
       // Obter grupos da empresa
-      const { data: gruposData } = await supabase
+      const { data: gruposData, error: gruposError } = await supabase
         .from('grupos')
         .select('*')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false)
         .order('nome');
 
-      if (!gruposData) {
+      if (gruposError) {
+        console.error('Erro ao carregar grupos:', gruposError);
+        return;
+      }
+
+      if (!gruposData || gruposData.length === 0) {
+        console.log('Nenhum grupo encontrado');
+        setGrupos([]);
         setIsLoading(false);
         return;
       }
 
+      console.log(`${gruposData.length} grupos encontrados`);
+
       // Obter produtos de cada grupo
-      const { data: produtosData } = await supabase
+      const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
         .select(`
           *,
@@ -116,10 +143,19 @@ const UserProdutosPage: React.FC = () => {
         .eq('ativo', true)
         .order('nome');
 
-      if (!produtosData) {
+      if (produtosError) {
+        console.error('Erro ao carregar produtos:', produtosError);
+        return;
+      }
+
+      if (!produtosData || produtosData.length === 0) {
+        console.log('Nenhum produto encontrado');
+        setGrupos([]);
         setIsLoading(false);
         return;
       }
+
+      console.log(`${produtosData.length} produtos encontrados`);
 
       // Organizar produtos por grupo
       const gruposComProdutos = gruposData.map(grupo => ({
@@ -127,14 +163,20 @@ const UserProdutosPage: React.FC = () => {
         produtos: produtosData.filter(produto => produto.grupo_id === grupo.id)
       })).filter(grupo => grupo.produtos.length > 0); // Filtrar apenas grupos com produtos
 
+      console.log(`${gruposComProdutos.length} grupos com produtos`);
+
+      // Atualizar o estado com os novos dados
       setGrupos(gruposComProdutos);
 
-      // Definir o filtro inicial como "todos"
-      setActiveFilter('todos');
+      // Se for o carregamento inicial, definir o filtro e o grupo ativo
+      if (isInitialLoad) {
+        // Definir o filtro inicial como "todos"
+        setActiveFilter('todos');
 
-      // Se houver grupos, armazenar o ID do primeiro grupo para uso posterior
-      if (gruposComProdutos.length > 0) {
-        setActiveGrupo(gruposComProdutos[0].id);
+        // Se houver grupos, armazenar o ID do primeiro grupo para uso posterior
+        if (gruposComProdutos.length > 0) {
+          setActiveGrupo(gruposComProdutos[0].id);
+        }
       }
 
       // Carregar fotos principais dos produtos
@@ -146,10 +188,13 @@ const UserProdutosPage: React.FC = () => {
       // Atualizar o timestamp da última atualização
       setLastUpdate(new Date());
 
+      console.log('Carregamento de dados concluído com sucesso');
+
     } catch (error) {
       console.error('Erro ao carregar grupos e produtos:', error);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -283,9 +328,15 @@ const UserProdutosPage: React.FC = () => {
   // Configurar a escuta em tempo real para atualizações de produtos
   const setupRealtimeSubscription = async () => {
     try {
+      // Remover todos os canais existentes para evitar duplicação
+      supabase.removeAllChannels();
+
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      if (!userData.user) {
+        console.log('Usuário não autenticado, não é possível configurar escuta em tempo real');
+        return;
+      }
 
       // Obter a empresa do usuário
       const { data: usuarioData } = await supabase
@@ -294,11 +345,17 @@ const UserProdutosPage: React.FC = () => {
         .eq('id', userData.user.id)
         .single();
 
-      if (!usuarioData?.empresa_id) return;
+      if (!usuarioData?.empresa_id) {
+        console.log('Empresa não encontrada, não é possível configurar escuta em tempo real');
+        return;
+      }
 
-      // Escutar alterações na tabela produtos
-      const produtosChannel = supabase
-        .channel('produtos-changes')
+      console.log(`Configurando escuta em tempo real para empresa_id: ${usuarioData.empresa_id}`);
+
+      // Criar um único canal para todas as alterações
+      const channel = supabase.channel('realtime-updates')
+
+        // Escutar alterações na tabela produtos
         .on(
           'postgres_changes',
           {
@@ -307,18 +364,15 @@ const UserProdutosPage: React.FC = () => {
             table: 'produtos',
             filter: `empresa_id=eq.${usuarioData.empresa_id}`
           },
-          async (payload) => {
+          (payload) => {
             console.log('Alteração detectada em produtos:', payload);
 
-            // Recarregar os dados quando houver alterações
-            await loadGrupos();
+            // Forçar o recarregamento completo dos dados
+            loadGrupos();
           }
         )
-        .subscribe();
 
-      // Escutar alterações na tabela produto_fotos
-      const fotosChannel = supabase
-        .channel('fotos-changes')
+        // Escutar alterações na tabela produto_fotos
         .on(
           'postgres_changes',
           {
@@ -327,40 +381,24 @@ const UserProdutosPage: React.FC = () => {
             table: 'produto_fotos',
             filter: `empresa_id=eq.${usuarioData.empresa_id}`
           },
-          async (payload) => {
+          (payload) => {
             console.log('Alteração detectada em fotos de produtos:', payload);
 
-            // Se for uma nova foto ou alteração em uma foto existente
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              const produtoId = payload.new.produto_id;
-
-              // Atualizar apenas as fotos do produto específico
-              const { data: fotosData } = await supabase
-                .from('produto_fotos')
-                .select('*')
-                .eq('produto_id', produtoId)
-                .eq('empresa_id', usuarioData.empresa_id);
-
-              if (fotosData) {
-                // Atualizar a contagem de fotos para este produto
-                setProdutosFotosCount(prev => ({
-                  ...prev,
-                  [produtoId]: fotosData.length
-                }));
-
-                // Atualizar a foto principal se necessário
-                const fotoPrincipal = fotosData.find(f => f.principal);
-                if (fotoPrincipal) {
-                  setProdutosFotos(prev => ({
-                    ...prev,
-                    [produtoId]: fotoPrincipal
-                  }));
-                }
-              }
-            }
+            // Forçar o recarregamento completo dos dados para garantir consistência
+            loadGrupos();
           }
-        )
-        .subscribe();
+        );
+
+      // Inscrever-se no canal
+      channel.subscribe((status) => {
+        console.log(`Status da inscrição: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          console.log('Inscrição em tempo real configurada com sucesso');
+        }
+      });
+
+      console.log('Canal de escuta em tempo real configurado');
+
     } catch (error) {
       console.error('Erro ao configurar escuta em tempo real:', error);
     }
@@ -395,8 +433,22 @@ const UserProdutosPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-white">Produtos</h1>
-        <div className="text-xs text-gray-400">
-          Atualizado: {lastUpdate.toLocaleTimeString()}
+        <div className="flex items-center gap-2">
+          <button
+            className={`p-1.5 rounded-full bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors ${isRefreshing ? 'animate-spin text-primary-400' : ''}`}
+            onClick={() => {
+              if (!isRefreshing) {
+                console.log('Atualizando manualmente...');
+                loadGrupos();
+              }
+            }}
+            disabled={isRefreshing}
+          >
+            <RefreshCw size={16} />
+          </button>
+          <div className="text-xs text-gray-400">
+            Atualizado: {lastUpdate.toLocaleTimeString()}
+          </div>
         </div>
       </div>
 
