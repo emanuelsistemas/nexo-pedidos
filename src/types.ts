@@ -7,6 +7,7 @@ export interface Produto {
   grupo_id: string;
   promocao?: boolean;
   ativo?: boolean;
+  estoque_inicial?: number;
   created_at?: string;
   opcoes_adicionais?: OpcaoAdicional[];
 }

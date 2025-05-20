@@ -134,6 +134,7 @@ const ProdutosPage: React.FC = () => {
     quantidade_minima: 0,
     tipo_desconto_quantidade: 'percentual',
     valor_desconto_quantidade: 0,
+    estoque_inicial: 0,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -161,8 +162,8 @@ const ProdutosPage: React.FC = () => {
   const [availableOpcoes, setAvailableOpcoes] = useState<OpcaoAdicional[]>([]);
   const [selectedOpcoes, setSelectedOpcoes] = useState<string[]>([]);
 
-  // Estados para a aba de fotos
-  const [activeTab, setActiveTab] = useState<'dados' | 'fotos'>('dados');
+  // Estados para as abas
+  const [activeTab, setActiveTab] = useState<'dados' | 'fotos' | 'estoque'>('dados');
   const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -182,6 +183,20 @@ const ProdutosPage: React.FC = () => {
 
   // Estado para o valor formatado do desconto por quantidade
   const [descontoQuantidadeFormatado, setDescontoQuantidadeFormatado] = useState('');
+
+  // Estados para a aba de Estoque
+  const [estoqueMovimentos, setEstoqueMovimentos] = useState<any[]>([]);
+  const [estoqueAtual, setEstoqueAtual] = useState<number>(0);
+  const [novoMovimento, setNovoMovimento] = useState<{
+    tipo: 'entrada' | 'saida';
+    quantidade: number;
+    observacao: string;
+  }>({
+    tipo: 'entrada',
+    quantidade: 0,
+    observacao: ''
+  });
+  const [isLoadingEstoque, setIsLoadingEstoque] = useState(false);
 
   useEffect(() => {
     loadGrupos();
@@ -446,6 +461,7 @@ const ProdutosPage: React.FC = () => {
       quantidade_minima: 5,
       tipo_desconto_quantidade: 'percentual',
       valor_desconto_quantidade: 10,
+      estoque_inicial: 0,
     });
     // Inicializa o preço formatado
     setPrecoFormatado(formatarPreco(0));
@@ -456,6 +472,83 @@ const ProdutosPage: React.FC = () => {
     // Inicializa o valor do desconto por quantidade formatado
     setDescontoQuantidadeFormatado('10');
     setShowSidebar(true);
+  };
+
+  // Função para carregar os movimentos de estoque de um produto
+  const loadEstoqueMovimentos = async (produtoId: string) => {
+    if (!produtoId) return;
+
+    setIsLoadingEstoque(true);
+    try {
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      // Buscar todos os movimentos de estoque do produto
+      const { data: movimentosData, error: movimentosError } = await supabase
+        .from('produto_estoque')
+        .select(`
+          id,
+          tipo_movimento,
+          quantidade,
+          data_hora_movimento,
+          observacao,
+          usuario:usuario_id (nome)
+        `)
+        .eq('produto_id', produtoId)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('data_hora_movimento', { ascending: false });
+
+      if (movimentosError) throw movimentosError;
+
+      // Calcular o estoque atual
+      // Primeiro, calculamos o saldo total
+      let saldoTotal = 0;
+      movimentosData.forEach((movimento: any) => {
+        if (movimento.tipo_movimento === 'entrada') {
+          saldoTotal += parseFloat(movimento.quantidade);
+        } else {
+          saldoTotal -= parseFloat(movimento.quantidade);
+        }
+      });
+
+      // Depois, calculamos o saldo para cada movimento, começando do saldo atual
+      // e subtraindo cada movimento (já que estamos em ordem decrescente)
+      let saldoAtual = saldoTotal;
+      const movimentosComSaldo = movimentosData.map((movimento: any, index: number) => {
+        // Para o primeiro item (mais recente), o saldo é o saldo atual
+        if (index > 0) {
+          // Para os demais itens, ajustamos o saldo removendo o efeito do movimento anterior
+          const movimentoAnterior = movimentosData[index - 1];
+          if (movimentoAnterior.tipo_movimento === 'entrada') {
+            saldoAtual -= parseFloat(movimentoAnterior.quantidade);
+          } else {
+            saldoAtual += parseFloat(movimentoAnterior.quantidade);
+          }
+        }
+
+        return {
+          ...movimento,
+          saldo: saldoAtual
+        };
+      });
+
+      setEstoqueMovimentos(movimentosComSaldo);
+      setEstoqueAtual(saldoAtual);
+    } catch (error: any) {
+      console.error('Erro ao carregar movimentos de estoque:', error);
+      showMessage('error', 'Erro ao carregar movimentos de estoque: ' + error.message);
+    } finally {
+      setIsLoadingEstoque(false);
+    }
   };
 
   const handleEditProduto = async (grupo: Grupo, produto: Produto) => {
@@ -485,6 +578,7 @@ const ProdutosPage: React.FC = () => {
       quantidade_minima: produto.quantidade_minima || 5,
       tipo_desconto_quantidade: produto.tipo_desconto_quantidade || 'percentual',
       valor_desconto_quantidade: produto.valor_desconto_quantidade || 10,
+      estoque_inicial: produto.estoque_inicial || 0,
     };
 
     console.log('Definindo novoProduto com:', produtoState);
@@ -527,6 +621,9 @@ const ProdutosPage: React.FC = () => {
 
       // Carregar fotos do produto
       await loadProdutoFotos(produto.id);
+
+      // Carregar movimentos de estoque do produto
+      await loadEstoqueMovimentos(produto.id);
     } catch (error) {
       console.error('Error loading product options:', error);
     }
@@ -785,6 +882,67 @@ const ProdutosPage: React.FC = () => {
   const handleOpenGaleria = (index: number) => {
     setCurrentFotoIndex(index);
     setIsGaleriaOpen(true);
+  };
+
+  // Função para registrar um novo movimento de estoque
+  const handleRegistrarMovimentoEstoque = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingProduto) return;
+    if (novoMovimento.quantidade <= 0) {
+      showMessage('error', 'A quantidade deve ser maior que zero');
+      return;
+    }
+
+    try {
+      // Obter a empresa_id e o id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      // Verificar se há estoque suficiente para saída
+      if (novoMovimento.tipo === 'saida' && novoMovimento.quantidade > estoqueAtual) {
+        showMessage('error', 'Estoque insuficiente para esta saída');
+        return;
+      }
+
+      // Registrar o movimento
+      const { error: movimentoError } = await supabase
+        .from('produto_estoque')
+        .insert([{
+          empresa_id: usuarioData.empresa_id,
+          usuario_id: userData.user.id,
+          produto_id: editingProduto.id,
+          tipo_movimento: novoMovimento.tipo,
+          quantidade: novoMovimento.quantidade,
+          data_hora_movimento: new Date().toISOString(),
+          observacao: novoMovimento.observacao || (novoMovimento.tipo === 'entrada' ? 'Entrada de estoque' : 'Saída de estoque')
+        }]);
+
+      if (movimentoError) throw movimentoError;
+
+      // Recarregar os movimentos
+      await loadEstoqueMovimentos(editingProduto.id);
+
+      // Limpar o formulário
+      setNovoMovimento({
+        tipo: 'entrada',
+        quantidade: 0,
+        observacao: ''
+      });
+
+      showMessage('success', `${novoMovimento.tipo === 'entrada' ? 'Entrada' : 'Saída'} de estoque registrada com sucesso!`);
+    } catch (error: any) {
+      console.error('Erro ao registrar movimento de estoque:', error);
+      showMessage('error', 'Erro ao registrar movimento de estoque: ' + error.message);
+    }
   };
 
   const handleDeleteFoto = async () => {
@@ -1051,6 +1209,8 @@ const ProdutosPage: React.FC = () => {
           // Garantir que os campos de promoção sejam null quando não habilitados
           tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
           valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
+          // Incluir o estoque inicial
+          estoque_inicial: novoProduto.estoque_inicial || 0,
         };
 
         const { data, error } = await supabase
@@ -1061,6 +1221,26 @@ const ProdutosPage: React.FC = () => {
 
         if (error) throw error;
         productId = data.id;
+
+        // Se tiver estoque inicial, criar um registro na tabela produto_estoque
+        if (novoProduto.estoque_inicial && novoProduto.estoque_inicial > 0) {
+          const { error: estoqueError } = await supabase
+            .from('produto_estoque')
+            .insert([{
+              empresa_id: usuarioData.empresa_id,
+              usuario_id: userData.user.id,
+              produto_id: productId,
+              tipo_movimento: 'entrada',
+              quantidade: novoProduto.estoque_inicial,
+              data_hora_movimento: new Date().toISOString(),
+              observacao: 'Estoque inicial'
+            }]);
+
+          if (estoqueError) {
+            console.error('Erro ao registrar estoque inicial:', estoqueError);
+            // Não interrompe o fluxo, apenas loga o erro
+          }
+        }
       }
 
       if (selectedOpcoes.length > 0) {
@@ -1851,6 +2031,24 @@ const ProdutosPage: React.FC = () => {
                       >
                         Fotos {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
                       </button>
+                      <button
+                        className={`px-4 py-2 font-medium text-sm ${
+                          activeTab === 'estoque'
+                            ? 'text-primary-500 border-b-2 border-primary-500'
+                            : editingProduto
+                              ? 'text-gray-400 hover:text-white'
+                              : 'text-gray-600 cursor-not-allowed'
+                        }`}
+                        onClick={() => {
+                          if (editingProduto) {
+                            setActiveTab('estoque');
+                          } else {
+                            showMessage('info', 'Salve o produto primeiro para gerenciar o estoque');
+                          }
+                        }}
+                      >
+                        Estoque {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
+                      </button>
                     </div>
 
                     {activeTab === 'dados' ? (
@@ -1953,6 +2151,27 @@ const ProdutosPage: React.FC = () => {
                             placeholder="Digite a descrição adicional do produto"
                           />
                         </div>
+
+                        {/* Campo de Estoque Inicial - apenas visível para novos produtos */}
+                        {!editingProduto && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              Estoque Inicial
+                            </label>
+                            <input
+                              type="number"
+                              value={novoProduto.estoque_inicial || 0}
+                              onChange={(e) => {
+                                const valor = parseFloat(e.target.value);
+                                setNovoProduto({ ...novoProduto, estoque_inicial: valor >= 0 ? valor : 0 });
+                              }}
+                              min="0"
+                              step="0.01"
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="0"
+                            />
+                          </div>
+                        )}
 
                         <div className="mb-4">
                           <div className="flex items-center">
@@ -2333,7 +2552,7 @@ const ProdutosPage: React.FC = () => {
                           </div>
                         )}
                       </form>
-                    ) : (
+                    ) : activeTab === 'fotos' ? (
                       <div className="space-y-6">
                         {!editingProduto ? (
                           <div className="text-center py-8">
@@ -2437,6 +2656,211 @@ const ProdutosPage: React.FC = () => {
                                   </button>
                                 </div>
                               )}
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                              <Button
+                                type="button"
+                                variant="text"
+                                className="flex-1"
+                                onClick={() => setActiveTab('dados')}
+                              >
+                                Voltar
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                className="flex-1"
+                                onClick={() => setShowSidebar(false)}
+                              >
+                                Concluir
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {!editingProduto ? (
+                          <div className="text-center py-8">
+                            <AlertCircle size={32} className="mx-auto text-gray-500 mb-2" />
+                            <p className="text-gray-400">Salve o produto primeiro para gerenciar o estoque</p>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('dados')}
+                              className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                            >
+                              Voltar para Dados Gerais
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-white font-medium">Controle de Estoque</h3>
+                                <div className="text-sm text-gray-400">
+                                  Estoque Atual: <span className="font-semibold text-white">{estoqueAtual.toFixed(2)}</span>
+                                </div>
+                              </div>
+
+                              <div className="mb-6">
+                                <form onSubmit={handleRegistrarMovimentoEstoque} className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+                                  <h4 className="text-white font-medium mb-4">Registrar Movimentação</h4>
+
+                                  {/* Layout ajustado para evitar sobreposição em telas pequenas */}
+                                  <div className="space-y-4">
+                                    {/* Tipo de Movimento */}
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                                        Tipo de Movimento
+                                      </label>
+                                      <div className="flex gap-6">
+                                        <div className="flex items-center">
+                                          <input
+                                            type="radio"
+                                            id="tipo_entrada"
+                                            name="tipo_movimento"
+                                            value="entrada"
+                                            checked={novoMovimento.tipo === 'entrada'}
+                                            onChange={() => setNovoMovimento({...novoMovimento, tipo: 'entrada'})}
+                                            className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                          />
+                                          <label htmlFor="tipo_entrada" className="text-sm text-white cursor-pointer">
+                                            Entrada
+                                          </label>
+                                        </div>
+                                        <div className="flex items-center">
+                                          <input
+                                            type="radio"
+                                            id="tipo_saida"
+                                            name="tipo_movimento"
+                                            value="saida"
+                                            checked={novoMovimento.tipo === 'saida'}
+                                            onChange={() => setNovoMovimento({...novoMovimento, tipo: 'saida'})}
+                                            className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                          />
+                                          <label htmlFor="tipo_saida" className="text-sm text-white cursor-pointer">
+                                            Saída
+                                          </label>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Quantidade */}
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                                        Quantidade
+                                      </label>
+                                      <input
+                                        type="number"
+                                        value={novoMovimento.quantidade}
+                                        onChange={(e) => {
+                                          const valor = parseFloat(e.target.value);
+                                          setNovoMovimento({
+                                            ...novoMovimento,
+                                            quantidade: valor >= 0 ? valor : 0
+                                          });
+                                        }}
+                                        min="0.01"
+                                        step="0.01"
+                                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                        placeholder="0,00"
+                                        required
+                                      />
+                                    </div>
+
+                                    {/* Observação */}
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                                        Observação
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={novoMovimento.observacao}
+                                        onChange={(e) => setNovoMovimento({...novoMovimento, observacao: e.target.value})}
+                                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                        placeholder="Motivo da movimentação"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex justify-end mt-4">
+                                    <Button
+                                      type="submit"
+                                      variant="primary"
+                                      disabled={novoMovimento.quantidade <= 0 || isLoadingEstoque}
+                                    >
+                                      {isLoadingEstoque ? 'Registrando...' : 'Registrar Movimento'}
+                                    </Button>
+                                  </div>
+                                </form>
+                              </div>
+
+                              <div>
+                                <h4 className="text-white font-medium mb-4">Histórico de Movimentações</h4>
+
+                                {isLoadingEstoque ? (
+                                  <div className="text-center py-8">
+                                    <div className="w-8 h-8 border-2 border-gray-500 border-t-white rounded-full animate-spin mx-auto mb-2"></div>
+                                    <p className="text-gray-400">Carregando movimentações...</p>
+                                  </div>
+                                ) : estoqueMovimentos.length === 0 ? (
+                                  <div className="text-center py-8">
+                                    <p className="text-gray-400">Nenhuma movimentação registrada</p>
+                                  </div>
+                                ) : (
+                                  <div className="border border-gray-800 rounded-lg overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm text-left text-gray-300">
+                                        <thead className="text-xs uppercase bg-gray-900/50 text-gray-400 sticky top-0">
+                                          <tr>
+                                            <th scope="col" className="px-4 py-3">Data/Hora</th>
+                                            <th scope="col" className="px-4 py-3">Tipo</th>
+                                            <th scope="col" className="px-4 py-3">Quantidade</th>
+                                            <th scope="col" className="px-4 py-3">Saldo</th>
+                                            <th scope="col" className="px-4 py-3">Usuário</th>
+                                            <th scope="col" className="px-4 py-3">Observação</th>
+                                          </tr>
+                                        </thead>
+                                      </table>
+                                    </div>
+                                    <div className="overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-900">
+                                      <table className="w-full text-sm text-left text-gray-300">
+                                        <tbody>
+                                          {estoqueMovimentos.map((movimento) => (
+                                            <tr key={movimento.id} className="border-b border-gray-800 hover:bg-gray-800/30">
+                                              <td className="px-4 py-3 w-[140px]">
+                                                {new Date(movimento.data_hora_movimento).toLocaleString('pt-BR')}
+                                              </td>
+                                              <td className="px-4 py-3 w-[80px]">
+                                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                                  movimento.tipo_movimento === 'entrada'
+                                                    ? 'bg-green-900/30 text-green-400'
+                                                    : 'bg-red-900/30 text-red-400'
+                                                }`}>
+                                                  {movimento.tipo_movimento === 'entrada' ? 'Entrada' : 'Saída'}
+                                                </span>
+                                              </td>
+                                              <td className="px-4 py-3 w-[100px]">
+                                                {parseFloat(movimento.quantidade).toFixed(2)}
+                                              </td>
+                                              <td className="px-4 py-3 font-medium w-[100px]">
+                                                {parseFloat(movimento.saldo).toFixed(2)}
+                                              </td>
+                                              <td className="px-4 py-3 w-[120px]">
+                                                {movimento.usuario?.nome || 'Sistema'}
+                                              </td>
+                                              <td className="px-4 py-3">
+                                                {movimento.observacao || '-'}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
 
                             <div className="flex gap-4 pt-4">
