@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Phone, Mail, MapPin, Building, Save, AlertCircle, Search, FileText } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, MapPin, Building, Save, AlertCircle, Search, FileText, X, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -397,8 +397,8 @@ const UserNovoClientePage: React.FC = () => {
       return;
     }
 
-    if (!telefone.trim()) {
-      setError('O telefone do cliente é obrigatório');
+    if (telefones.length === 0) {
+      setError('Adicione pelo menos um telefone');
       return;
     }
 

@@ -120,6 +120,19 @@ const UserMobileLayout: React.FC = () => {
         </motion.button>
       )}
 
+      {/* Botão flutuante de adicionar cliente (apenas na página de clientes) */}
+      {location.pathname === '/user/clientes' && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          whileTap={{ scale: 0.95 }}
+          className="fixed right-4 bottom-20 w-14 h-14 rounded-full bg-primary-500 text-white flex items-center justify-center shadow-lg z-20"
+          onClick={() => navigate('/user/clientes/novo')}
+        >
+          <Plus size={24} />
+        </motion.button>
+      )}
+
       {/* Footer com menu de navegação */}
       <footer className="fixed bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-10">
         <div className="flex justify-around items-center h-16 overflow-x-auto hide-scrollbar">

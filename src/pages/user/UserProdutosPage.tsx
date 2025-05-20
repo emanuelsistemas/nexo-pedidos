@@ -50,6 +50,7 @@ const UserProdutosPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<'todos' | 'promocao' | 'grupo'>('todos');
   const [produtosFotos, setProdutosFotos] = useState<Record<string, ProdutoFoto | null>>({});
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [produtosEstoque, setProdutosEstoque] = useState<Record<string, { total: number, naoFaturado: number }>>({});
 
   // Estados para a galeria de fotos
   const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
@@ -94,6 +95,9 @@ const UserProdutosPage: React.FC = () => {
   useEffect(() => {
     // Carregar dados iniciais
     loadGrupos();
+
+    // Carregar informações de estoque
+    loadProdutosEstoque();
 
     // Configurar a escuta em tempo real para atualizações
     setupRealtimeSubscription();
@@ -303,6 +307,117 @@ const UserProdutosPage: React.FC = () => {
   };
 
   // Função para carregar a contagem de fotos de cada produto
+  const loadProdutosEstoque = async () => {
+    try {
+      console.log('Carregando informações de estoque dos produtos...');
+
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar todos os produtos da empresa
+      const { data: produtosData, error: produtosError } = await supabase
+        .from('produtos')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false)
+        .eq('ativo', true);
+
+      if (produtosError) {
+        console.error('Erro ao carregar produtos para estoque:', produtosError);
+        return;
+      }
+
+      if (!produtosData || produtosData.length === 0) {
+        console.log('Nenhum produto encontrado para carregar estoque');
+        return;
+      }
+
+      console.log(`Carregando estoque para ${produtosData.length} produtos...`);
+
+      // Criar um objeto para armazenar as informações de estoque de cada produto
+      const estoqueInfo: Record<string, { total: number, naoFaturado: number }> = {};
+
+      // Para cada produto, buscar as movimentações de estoque e calcular o saldo
+      for (const produto of produtosData) {
+        // Buscar movimentações de estoque
+        const { data: movimentosData, error: movimentosError } = await supabase
+          .from('produto_estoque')
+          .select('tipo_movimento, quantidade')
+          .eq('produto_id', produto.id)
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (movimentosError) {
+          console.error(`Erro ao carregar movimentos do produto ${produto.id}:`, movimentosError);
+          continue;
+        }
+
+        // Calcular o saldo total
+        let saldoTotal = 0;
+        if (movimentosData && movimentosData.length > 0) {
+          movimentosData.forEach((movimento: any) => {
+            if (movimento.tipo_movimento === 'entrada') {
+              saldoTotal += parseFloat(movimento.quantidade);
+            } else {
+              saldoTotal -= parseFloat(movimento.quantidade);
+            }
+          });
+        }
+
+        // Buscar pedidos pendentes que contêm este produto
+        const { data: pedidosData, error: pedidosError } = await supabase
+          .from('pedidos_itens')
+          .select(`
+            quantidade,
+            pedido:pedido_id (
+              status
+            )
+          `)
+          .eq('produto_id', produto.id)
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (pedidosError) {
+          console.error(`Erro ao carregar pedidos do produto ${produto.id}:`, pedidosError);
+          continue;
+        }
+
+        // Calcular a quantidade total de produtos em pedidos pendentes (não faturados)
+        let quantidadeNaoFaturada = 0;
+
+        if (pedidosData && pedidosData.length > 0) {
+          pedidosData.forEach((item: any) => {
+            // Verificar se o pedido está pendente (não faturado)
+            if (item.pedido && item.pedido.status !== 'faturado') {
+              quantidadeNaoFaturada += parseFloat(item.quantidade);
+            }
+          });
+        }
+
+        // Armazenar as informações de estoque do produto
+        estoqueInfo[produto.id] = {
+          total: saldoTotal,
+          naoFaturado: quantidadeNaoFaturada
+        };
+      }
+
+      console.log('Informações de estoque carregadas com sucesso');
+
+      // Atualizar o estado com as informações de estoque de todos os produtos
+      setProdutosEstoque(estoqueInfo);
+    } catch (error) {
+      console.error('Erro ao carregar estoque dos produtos:', error);
+    }
+  };
+
   const loadProdutosFotosCount = async (produtos: Produto[]) => {
     try {
       // Obter o usuário atual
@@ -488,7 +603,9 @@ const UserProdutosPage: React.FC = () => {
             console.log('Recarregando dados após alteração em produtos...');
             // Limpar o cache de grupos para forçar um recarregamento completo
             setGrupos([]);
+            setProdutosEstoque({});
             loadGrupos();
+            loadProdutosEstoque();
           }, 300);
         }
       );
@@ -517,7 +634,9 @@ const UserProdutosPage: React.FC = () => {
             // Limpar o cache de fotos para forçar um recarregamento completo
             setProdutosFotos({});
             setProdutosFotosCount({});
+            setProdutosEstoque({});
             loadGrupos();
+            loadProdutosEstoque();
           }, 300);
         }
       );
@@ -579,9 +698,11 @@ const UserProdutosPage: React.FC = () => {
                 setGrupos([]);
                 setProdutosFotos({});
                 setProdutosFotosCount({});
+                setProdutosEstoque({});
 
                 // Carregar dados novamente
                 loadGrupos();
+                loadProdutosEstoque();
 
                 // Depois testamos a conexão Realtime
                 setTimeout(() => {
@@ -797,6 +918,20 @@ const UserProdutosPage: React.FC = () => {
                             {produto.tipo_desconto === 'percentual'
                               ? `${produto.valor_desconto}% OFF`
                               : `- ${formatCurrency(produto.valor_desconto)}`}
+                          </div>
+                        )}
+
+                        {/* Informações de estoque */}
+                        {produtosEstoque[produto.id] && (
+                          <div className="flex flex-wrap items-center gap-1 mt-2">
+                            <span className="px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded-full">
+                              Estoque: {produtosEstoque[produto.id].total.toFixed(2)}
+                            </span>
+                            {produtosEstoque[produto.id].naoFaturado > 0 && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-yellow-900/30 text-yellow-400 rounded-full">
+                                Não Faturado: {produtosEstoque[produto.id].naoFaturado.toFixed(2)}
+                              </span>
+                            )}
                           </div>
                         )}
 

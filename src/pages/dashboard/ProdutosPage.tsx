@@ -187,6 +187,10 @@ const ProdutosPage: React.FC = () => {
   // Estados para a aba de Estoque
   const [estoqueMovimentos, setEstoqueMovimentos] = useState<any[]>([]);
   const [estoqueAtual, setEstoqueAtual] = useState<number>(0);
+  const [estoqueNaoFaturado, setEstoqueNaoFaturado] = useState<number>(0);
+  const [tipoVisualizacaoEstoque, setTipoVisualizacaoEstoque] = useState<'total' | 'nao-faturado'>('total');
+  const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos'>('pedidos');
+  const [produtosEstoque, setProdutosEstoque] = useState<Record<string, { total: number, naoFaturado: number }>>({});
   const [novoMovimento, setNovoMovimento] = useState<{
     tipo: 'entrada' | 'saida';
     quantidade: number;
@@ -202,6 +206,8 @@ const ProdutosPage: React.FC = () => {
     loadGrupos();
     loadAvailableOpcoes();
     loadUnidadesMedida();
+    loadTipoControleEstoque();
+    loadProdutosEstoque();
   }, []);
 
   // Efeito para atualizar o valor final quando o preço, tipo de desconto ou valor do desconto mudar
@@ -242,6 +248,138 @@ const ProdutosPage: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao carregar unidades de medida:', error);
       showMessage('error', 'Erro ao carregar unidades de medida');
+    }
+  };
+
+  const loadTipoControleEstoque = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data, error } = await supabase
+        .from('tipo_controle_estoque_config')
+        .select('tipo_controle')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (error) {
+        // Se o erro for "não encontrado", usamos o valor padrão 'pedidos'
+        if (error.code === 'PGRST116') {
+          setTipoControleEstoque('pedidos');
+        } else {
+          console.error('Erro ao carregar configuração de estoque:', error);
+        }
+        return;
+      }
+
+      if (data && data.tipo_controle) {
+        setTipoControleEstoque(data.tipo_controle as 'faturamento' | 'pedidos');
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar configuração de estoque:', error);
+    }
+  };
+
+  const loadProdutosEstoque = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar todos os produtos da empresa
+      const { data: produtosData, error: produtosError } = await supabase
+        .from('produtos')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false);
+
+      if (produtosError) throw produtosError;
+      if (!produtosData || produtosData.length === 0) return;
+
+      // Criar um objeto para armazenar as informações de estoque de cada produto
+      const estoqueInfo: Record<string, { total: number, naoFaturado: number }> = {};
+
+      // Para cada produto, buscar as movimentações de estoque e calcular o saldo
+      for (const produto of produtosData) {
+        // Buscar movimentações de estoque
+        const { data: movimentosData, error: movimentosError } = await supabase
+          .from('produto_estoque')
+          .select('tipo_movimento, quantidade')
+          .eq('produto_id', produto.id)
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (movimentosError) {
+          console.error(`Erro ao carregar movimentos do produto ${produto.id}:`, movimentosError);
+          continue;
+        }
+
+        // Calcular o saldo total
+        let saldoTotal = 0;
+        if (movimentosData && movimentosData.length > 0) {
+          movimentosData.forEach((movimento: any) => {
+            if (movimento.tipo_movimento === 'entrada') {
+              saldoTotal += parseFloat(movimento.quantidade);
+            } else {
+              saldoTotal -= parseFloat(movimento.quantidade);
+            }
+          });
+        }
+
+        // Buscar pedidos pendentes que contêm este produto
+        const { data: pedidosData, error: pedidosError } = await supabase
+          .from('pedidos_itens')
+          .select(`
+            quantidade,
+            pedido:pedido_id (
+              status
+            )
+          `)
+          .eq('produto_id', produto.id)
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (pedidosError) {
+          console.error(`Erro ao carregar pedidos do produto ${produto.id}:`, pedidosError);
+          continue;
+        }
+
+        // Calcular a quantidade total de produtos em pedidos pendentes (não faturados)
+        let quantidadeNaoFaturada = 0;
+
+        if (pedidosData && pedidosData.length > 0) {
+          pedidosData.forEach((item: any) => {
+            // Verificar se o pedido está pendente (não faturado)
+            if (item.pedido && item.pedido.status !== 'faturado') {
+              quantidadeNaoFaturada += parseFloat(item.quantidade);
+            }
+          });
+        }
+
+        // Armazenar as informações de estoque do produto
+        estoqueInfo[produto.id] = {
+          total: saldoTotal,
+          naoFaturado: quantidadeNaoFaturada
+        };
+      }
+
+      // Atualizar o estado com as informações de estoque de todos os produtos
+      setProdutosEstoque(estoqueInfo);
+    } catch (error: any) {
+      console.error('Erro ao carregar estoque dos produtos:', error);
     }
   };
 
@@ -541,8 +679,36 @@ const ProdutosPage: React.FC = () => {
         };
       });
 
+      // Calcular o estoque não faturado (pedidos pendentes)
+      // Buscar pedidos pendentes que contêm este produto
+      const { data: pedidosData, error: pedidosError } = await supabase
+        .from('pedidos_itens')
+        .select(`
+          quantidade,
+          pedido:pedido_id (
+            status
+          )
+        `)
+        .eq('produto_id', produtoId)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (pedidosError) throw pedidosError;
+
+      // Calcular a quantidade total de produtos em pedidos pendentes (não faturados)
+      let quantidadeNaoFaturada = 0;
+
+      if (pedidosData && pedidosData.length > 0) {
+        pedidosData.forEach((item: any) => {
+          // Verificar se o pedido está pendente (não faturado)
+          if (item.pedido && item.pedido.status !== 'faturado') {
+            quantidadeNaoFaturada += parseFloat(item.quantidade);
+          }
+        });
+      }
+
       setEstoqueMovimentos(movimentosComSaldo);
       setEstoqueAtual(saldoAtual);
+      setEstoqueNaoFaturado(quantidadeNaoFaturada);
     } catch (error: any) {
       console.error('Erro ao carregar movimentos de estoque:', error);
       showMessage('error', 'Erro ao carregar movimentos de estoque: ' + error.message);
@@ -1684,6 +1850,9 @@ const ProdutosPage: React.FC = () => {
       }
     }
 
+    // Obter informações de estoque
+    const estoqueInfo = produtosEstoque[produto.id] || { total: 0, naoFaturado: 0 };
+
     return (
       <div
         key={produto.id}
@@ -1782,6 +1951,20 @@ const ProdutosPage: React.FC = () => {
                 <p className="text-sm text-green-400 font-medium mt-1">
                   Valor final: {valorFinal.toFixed(2)}
                 </p>
+              )}
+
+              {/* Exibição do estoque */}
+              {estoqueInfo && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                    Estoque: {estoqueInfo.total.toFixed(2)}
+                  </span>
+                  {estoqueInfo.naoFaturado > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400">
+                      Não Faturado: {estoqueInfo.naoFaturado.toFixed(2)}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             {produto.descricao && (
@@ -2696,10 +2879,56 @@ const ProdutosPage: React.FC = () => {
                         ) : (
                           <>
                             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-                              <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-white font-medium">Controle de Estoque</h3>
-                                <div className="text-sm text-gray-400">
-                                  Estoque Atual: <span className="font-semibold text-white">{estoqueAtual.toFixed(2)}</span>
+                              <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
+                                <div>
+                                  <h3 className="text-white font-medium">Controle de Estoque</h3>
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    Modo de controle: {tipoControleEstoque === 'pedidos' ? 'Por Pedidos' : 'Por Faturamento'}
+                                  </p>
+                                </div>
+
+                                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                  {/* Seletor de visualização de estoque */}
+                                  <div className="flex items-center gap-3 bg-gray-900/50 border border-gray-800 rounded-lg p-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setTipoVisualizacaoEstoque('total')}
+                                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                                        tipoVisualizacaoEstoque === 'total'
+                                          ? 'bg-primary-500/20 text-primary-400'
+                                          : 'text-gray-400 hover:text-white'
+                                      }`}
+                                    >
+                                      Estoque Total
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setTipoVisualizacaoEstoque('nao-faturado')}
+                                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                                        tipoVisualizacaoEstoque === 'nao-faturado'
+                                          ? 'bg-primary-500/20 text-primary-400'
+                                          : 'text-gray-400 hover:text-white'
+                                      }`}
+                                    >
+                                      Não Faturado
+                                    </button>
+                                  </div>
+
+                                  {/* Exibição do estoque */}
+                                  <div className="text-sm text-gray-400 bg-gray-900/50 border border-gray-800 rounded-lg p-2 px-3">
+                                    {tipoVisualizacaoEstoque === 'total' ? (
+                                      <>
+                                        Estoque Atual: <span className="font-semibold text-white">{estoqueAtual.toFixed(2)}</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        Estoque Não Faturado: <span className="font-semibold text-white">{estoqueNaoFaturado.toFixed(2)}</span>
+                                        <span className="text-xs ml-2 text-gray-500">
+                                          (Disponível: {(estoqueAtual - estoqueNaoFaturado).toFixed(2)})
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
 

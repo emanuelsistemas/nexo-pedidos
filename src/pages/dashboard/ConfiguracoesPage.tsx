@@ -88,7 +88,7 @@ const tiposPagamento = [
 
 const ConfiguracoesPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -123,6 +123,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [isEditingUsuario, setIsEditingUsuario] = useState(false);
   const [taxaMode, setTaxaMode] = useState<'bairro' | 'distancia'>('bairro');
   const [horarios, setHorarios] = useState<any[]>([]);
+  const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos'>('pedidos');
   const [horarioForm, setHorarioForm] = useState({
     id: '',
     dia_semana: '0',
@@ -271,6 +272,23 @@ const ConfiguracoesPage: React.FC = () => {
           showMessage('error', 'Erro ao carregar horários de atendimento');
         } else {
           setHorarios(horariosData || []);
+        }
+      }
+
+      if (activeSection === 'estoque') {
+        // Carregar configuração de controle de estoque
+        const { data: estoqueConfigData, error: estoqueConfigError } = await supabase
+          .from('tipo_controle_estoque_config')
+          .select('tipo_controle')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        if (estoqueConfigError && estoqueConfigError.code !== 'PGRST116') {
+          // PGRST116 é o código para "nenhum resultado encontrado"
+          console.error('Erro ao carregar configuração de estoque:', estoqueConfigError);
+          showMessage('error', 'Erro ao carregar configuração de controle de estoque');
+        } else if (estoqueConfigData && estoqueConfigData.tipo_controle) {
+          setTipoControleEstoque(estoqueConfigData.tipo_controle as 'faturamento' | 'pedidos');
         }
       }
     } catch (error: any) {
@@ -650,6 +668,60 @@ const ConfiguracoesPage: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao atualizar modo de taxa:', error);
       showMessage('error', `Erro ao atualizar modo de taxa de entrega: ${error.message}`);
+    }
+  };
+
+  const handleTipoControleEstoqueChange = async (tipo: 'faturamento' | 'pedidos') => {
+    setIsLoading(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('tipo_controle_estoque_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      let error;
+
+      if (existingConfig) {
+        // Atualizar configuração existente
+        const { error: updateError } = await supabase
+          .from('tipo_controle_estoque_config')
+          .update({ tipo_controle: tipo })
+          .eq('id', existingConfig.id);
+
+        error = updateError;
+      } else {
+        // Criar nova configuração
+        const { error: insertError } = await supabase
+          .from('tipo_controle_estoque_config')
+          .insert({
+            empresa_id: usuarioData.empresa_id,
+            tipo_controle: tipo
+          });
+
+        error = insertError;
+      }
+
+      if (error) throw error;
+
+      setTipoControleEstoque(tipo);
+      showMessage('success', 'Configuração de controle de estoque atualizada com sucesso!');
+    } catch (error: any) {
+      showMessage('error', 'Erro ao atualizar configuração de estoque: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1361,6 +1433,71 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'estoque':
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Configurações de Estoque</h2>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <h3 className="text-lg font-medium text-white mb-4">Tipo de Controle de Estoque</h3>
+
+              <div className="space-y-4">
+                <label className="flex items-center p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                  <input
+                    type="radio"
+                    name="tipo_controle_estoque"
+                    checked={tipoControleEstoque === 'pedidos'}
+                    onChange={() => handleTipoControleEstoqueChange('pedidos')}
+                    className="mr-3"
+                  />
+                  <div>
+                    <h4 className="text-white font-medium">Controle por Pedidos</h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      O estoque é atualizado quando um pedido é criado, permitindo reservar produtos antes do faturamento.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-center p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                  <input
+                    type="radio"
+                    name="tipo_controle_estoque"
+                    checked={tipoControleEstoque === 'faturamento'}
+                    onChange={() => handleTipoControleEstoqueChange('faturamento')}
+                    className="mr-3"
+                  />
+                  <div>
+                    <h4 className="text-white font-medium">Controle por Faturamento</h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      O estoque é atualizado apenas quando um pedido é faturado, mantendo o estoque disponível até a confirmação final.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className="mt-6 p-4 bg-blue-900/20 border border-blue-800/30 rounded-lg">
+                <div className="flex items-start">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400 mr-3 mt-0.5">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 16v-4"></path>
+                    <path d="M12 8h.01"></path>
+                  </svg>
+                  <div>
+                    <h4 className="text-blue-300 font-medium">Informação</h4>
+                    <p className="text-sm text-blue-200/70 mt-1">
+                      Esta configuração afeta como o estoque é gerenciado em todo o sistema. No modo "Controle por Pedidos",
+                      o estoque é reservado assim que um pedido é criado. No modo "Controle por Faturamento", o estoque só é
+                      deduzido quando o pedido é efetivamente faturado.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -1392,6 +1529,21 @@ const ConfiguracoesPage: React.FC = () => {
             >
               <Users size={18} />
               <span className="text-sm whitespace-nowrap">Usuários</span>
+            </button>
+            <button
+              onClick={() => setActiveSection('estoque')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+                activeSection === 'estoque'
+                  ? 'bg-primary-500/10 text-primary-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 20h20"></path>
+                <path d="M5 20V7a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v13"></path>
+                <path d="M13 20V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v17"></path>
+              </svg>
+              <span className="text-sm whitespace-nowrap">Estoque</span>
             </button>
             {/* Aba "Perfis" ocultada */}
             {/* Aba "Pagamentos" ocultada */}

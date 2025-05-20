@@ -41,3 +41,10 @@ export interface ProdutoOpcao {
   opcao_id: string;
   opcao?: OpcaoAdicional;
 }
+
+export interface TipoControleEstoqueConfig {
+  id: string;
+  empresa_id: string;
+  tipo_controle: 'faturamento' | 'pedidos';
+  created_at?: string;
+}
