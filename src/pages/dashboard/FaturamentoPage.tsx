@@ -257,7 +257,7 @@ const FaturamentoPage: React.FC = () => {
 
   const getStatusText = (status: string, dataFaturamento?: string) => {
     if (status === 'entregue' && dataFaturamento) {
-      return 'Faturado';
+      return 'FATURADO';
     }
 
     switch (status) {
@@ -316,6 +316,7 @@ const FaturamentoPage: React.FC = () => {
       const { error } = await supabase
         .from('pedidos')
         .update({
+          status: 'faturado',
           data_faturamento: dataFaturamento,
           observacao_faturamento: observacaoFaturamento || null
         })
@@ -657,14 +658,19 @@ const FaturamentoPage: React.FC = () => {
                       </button>
                     )}
 
-                    {/* Botão para copiar link do pedido */}
+                    {/* Botão para abrir o pedido em uma nova página */}
                     <button
-                      onClick={() => copiarLinkPedido(pedido)}
+                      onClick={async () => {
+                        const url = await gerarLinkPedido(pedido);
+                        if (url) {
+                          window.open(url, '_blank');
+                        }
+                      }}
                       className="px-3 py-1.5 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors flex items-center gap-1.5"
-                      title="Copiar link do pedido"
+                      title="Abrir nota de pedido em nova página"
                     >
-                      <Copy size={16} />
-                      <span className="hidden sm:inline">Link</span>
+                      <FileText size={16} />
+                      <span className="hidden sm:inline">Abrir</span>
                     </button>
                   </div>
                 </div>

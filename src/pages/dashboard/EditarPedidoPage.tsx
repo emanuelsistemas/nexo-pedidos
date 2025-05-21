@@ -688,7 +688,7 @@ const EditarPedidoPage: React.FC = () => {
       const subtotal = itensPedido.reduce((acc, item) => acc + item.valorTotal, 0);
       const dataFaturamento = new Date().toISOString();
 
-      // Atualizar o pedido para status 'entregue' e adicionar data de faturamento
+      // Atualizar o pedido para status 'faturado' e adicionar data de faturamento
       const { error: pedidoError } = await supabase
         .from('pedidos')
         .update({
@@ -696,7 +696,7 @@ const EditarPedidoPage: React.FC = () => {
           valor_desconto: valorDesconto,
           valor_acrescimo: valorAcrescimo,
           valor_total: valorTotal,
-          status: 'entregue',
+          status: 'faturado',
           data_faturamento: dataFaturamento,
           desconto_prazo_id: descontoPrazoSelecionado,
           desconto_valor_id: descontoValorSelecionado,
@@ -789,6 +789,38 @@ const EditarPedidoPage: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao cancelar pedido:', error);
       toast.error('Erro ao cancelar pedido: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReverterParaPendente = async () => {
+    if (!confirm('Tem certeza que deseja reverter este pedido para pendente? Esta ação removerá o status de faturado.')) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      // Atualizar o status do pedido para 'pendente' e remover data de faturamento
+      const { error } = await supabase
+        .from('pedidos')
+        .update({
+          status: 'pendente',
+          data_faturamento: null
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Atualizar o estado local
+      setStatus('pendente');
+      setDataFaturamento(null);
+
+      toast.success('Pedido revertido para pendente com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao reverter pedido:', error);
+      toast.error('Erro ao reverter pedido: ' + error.message);
     } finally {
       setIsSaving(false);
     }
@@ -933,53 +965,75 @@ const EditarPedidoPage: React.FC = () => {
           <h1 className="text-2xl font-semibold text-white">Editar Pedido #{pedido?.numero}</h1>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleSalvarPedido}
-            disabled={isSaving}
-            className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {isSaving ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                <span>Salvando...</span>
-              </>
-            ) : (
-              <>
-                <Save size={18} />
-                <span>Salvar Alterações</span>
-              </>
-            )}
-          </button>
+          {dataFaturamento ? (
+            <>
+              {/* Botão para reverter para pendente quando estiver faturado */}
+              <button
+                onClick={handleReverterParaPendente}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <ArrowLeft size={18} />
+                <span>Reverter para Pendente</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Botão de Salvar - apenas visível quando não estiver faturado */}
+              <button
+                onClick={handleSalvarPedido}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    <span>Salvar Alterações</span>
+                  </>
+                )}
+              </button>
 
-          {/* Botão de Faturar */}
-          <button
-            onClick={handleFaturarPedido}
-            disabled={isSaving}
-            className="px-4 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            <DollarSign size={18} />
-            <span>Faturar</span>
-          </button>
+              {/* Botão de Faturar - apenas visível quando não estiver faturado */}
+              <button
+                onClick={handleFaturarPedido}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <DollarSign size={18} />
+                <span>Faturar</span>
+              </button>
 
-          {/* Botão de Cancelar */}
-          <button
-            onClick={handleCancelarPedido}
-            disabled={isSaving}
-            className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            <XCircle size={18} />
-            <span>Cancelar</span>
-          </button>
+              {/* Botão de Cancelar - apenas visível quando não estiver faturado */}
+              <button
+                onClick={handleCancelarPedido}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <XCircle size={18} />
+                <span>Cancelar</span>
+              </button>
+            </>
+          )}
 
-          {/* Botão para copiar link do pedido */}
+          {/* Botão para abrir o pedido em uma nova página - sempre visível */}
           <button
-            onClick={copiarLinkPedido}
+            onClick={async () => {
+              const url = await gerarLinkPedido();
+              if (url) {
+                window.open(url, '_blank');
+              }
+            }}
             disabled={isSaving}
             className="px-4 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-            title="Copiar link do pedido"
+            title="Abrir nota de pedido em nova página"
           >
-            <Link size={18} />
-            <span>Copiar Link</span>
+            <FileText size={18} />
+            <span>Abrir Nota</span>
           </button>
         </div>
       </div>
@@ -1264,27 +1318,33 @@ const EditarPedidoPage: React.FC = () => {
                         )}
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center">
-                          <button
-                            onClick={() => handleUpdateQuantidade(item.id, item.quantidade - 1)}
-                            className="p-1 rounded-l-lg bg-gray-700 text-gray-300 hover:bg-gray-600"
-                          >
-                            <Minus size={16} />
-                          </button>
+                        {dataFaturamento ? (
                           <span className="px-3 py-1 bg-gray-800 text-white">{item.quantidade}</span>
+                        ) : (
+                          <div className="flex items-center">
+                            <button
+                              onClick={() => handleUpdateQuantidade(item.id, item.quantidade - 1)}
+                              className="p-1 rounded-l-lg bg-gray-700 text-gray-300 hover:bg-gray-600"
+                            >
+                              <Minus size={16} />
+                            </button>
+                            <span className="px-3 py-1 bg-gray-800 text-white">{item.quantidade}</span>
+                            <button
+                              onClick={() => handleUpdateQuantidade(item.id, item.quantidade + 1)}
+                              className="p-1 rounded-r-lg bg-gray-700 text-gray-300 hover:bg-gray-600"
+                            >
+                              <Plus size={16} />
+                            </button>
+                          </div>
+                        )}
+                        {!dataFaturamento && (
                           <button
-                            onClick={() => handleUpdateQuantidade(item.id, item.quantidade + 1)}
-                            className="p-1 rounded-r-lg bg-gray-700 text-gray-300 hover:bg-gray-600"
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
                           >
-                            <Plus size={16} />
+                            <Trash2 size={16} />
                           </button>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        )}
                       </div>
                     </div>
                     <div className="flex justify-end mt-2">
@@ -1295,76 +1355,78 @@ const EditarPedidoPage: React.FC = () => {
               </div>
             )}
 
-            {/* Adicionar novo item */}
-            <div className="bg-gray-800/30 rounded-lg p-4">
-              <h3 className="text-white font-medium mb-3">Adicionar Item</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Produto
-                  </label>
+            {/* Adicionar novo item - apenas visível quando não estiver faturado */}
+            {!dataFaturamento && (
+              <div className="bg-gray-800/30 rounded-lg p-4">
+                <h3 className="text-white font-medium mb-3">Adicionar Item</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Produto
+                    </label>
+                    <button
+                      onClick={() => setIsProdutoModalOpen(true)}
+                      className="w-full flex items-center justify-between bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    >
+                      <span className={produtoSelecionadoObj ? 'text-white' : 'text-gray-500'}>
+                        {produtoSelecionadoObj ? produtoSelecionadoObj.nome : 'Selecione um produto'}
+                      </span>
+                      <Search size={18} className="text-gray-500" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Quantidade
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={quantidade}
+                        onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                      />
+                      {produtoSelecionadoObj && produtoSelecionadoObj.desconto_quantidade && produtoSelecionadoObj.quantidade_minima && (
+                        <div className="mt-1 text-xs text-green-400">
+                          {produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual' ? (
+                            <span>Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades: {produtoSelecionadoObj.percentual_desconto_quantidade}%</span>
+                          ) : (
+                            <span>Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades: {formatarPreco(produtoSelecionadoObj.valor_desconto_quantidade || 0)}</span>
+                          )}
+                        </div>
+                      )}
+                      {produtoSelecionadoObj && produtoSelecionadoObj.quantidade_minima && quantidade < produtoSelecionadoObj.quantidade_minima && (
+                        <div className="mt-1 text-xs text-gray-400">
+                          Min. {produtoSelecionadoObj.quantidade_minima} para desconto
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Observação
+                      </label>
+                      <input
+                        type="text"
+                        value={observacao}
+                        onChange={(e) => setObservacao(e.target.value)}
+                        placeholder="Opcional"
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                      />
+                    </div>
+                  </div>
+
                   <button
-                    onClick={() => setIsProdutoModalOpen(true)}
-                    className="w-full flex items-center justify-between bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    onClick={handleAddItem}
+                    disabled={!produtoSelecionadoObj}
+                    className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className={produtoSelecionadoObj ? 'text-white' : 'text-gray-500'}>
-                      {produtoSelecionadoObj ? produtoSelecionadoObj.nome : 'Selecione um produto'}
-                    </span>
-                    <Search size={18} className="text-gray-500" />
+                    <Plus size={18} />
+                    <span>Adicionar Item</span>
                   </button>
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Quantidade
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={quantidade}
-                      onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
-                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                    />
-                    {produtoSelecionadoObj && produtoSelecionadoObj.desconto_quantidade && produtoSelecionadoObj.quantidade_minima && (
-                      <div className="mt-1 text-xs text-green-400">
-                        {produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual' ? (
-                          <span>Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades: {produtoSelecionadoObj.percentual_desconto_quantidade}%</span>
-                        ) : (
-                          <span>Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades: {formatarPreco(produtoSelecionadoObj.valor_desconto_quantidade || 0)}</span>
-                        )}
-                      </div>
-                    )}
-                    {produtoSelecionadoObj && produtoSelecionadoObj.quantidade_minima && quantidade < produtoSelecionadoObj.quantidade_minima && (
-                      <div className="mt-1 text-xs text-gray-400">
-                        Min. {produtoSelecionadoObj.quantidade_minima} para desconto
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Observação
-                    </label>
-                    <input
-                      type="text"
-                      value={observacao}
-                      onChange={(e) => setObservacao(e.target.value)}
-                      placeholder="Opcional"
-                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleAddItem}
-                  disabled={!produtoSelecionadoObj}
-                  className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Plus size={18} />
-                  <span>Adicionar Item</span>
-                </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -1410,16 +1472,22 @@ const EditarPedidoPage: React.FC = () => {
               <label className="block text-sm font-medium text-gray-400 mb-2">
                 Forma de Pagamento
               </label>
-              <select
-                value={formaPagamentoSelecionada || ''}
-                onChange={(e) => setFormaPagamentoSelecionada(e.target.value || null)}
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-              >
-                <option value="">Selecione</option>
-                {formasPagamento.map(forma => (
-                  <option key={forma.id} value={forma.id}>{forma.nome}</option>
-                ))}
-              </select>
+              {dataFaturamento ? (
+                <div className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white">
+                  {formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.nome || 'Não especificada'}
+                </div>
+              ) : (
+                <select
+                  value={formaPagamentoSelecionada || ''}
+                  onChange={(e) => setFormaPagamentoSelecionada(e.target.value || null)}
+                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                >
+                  <option value="">Selecione</option>
+                  {formasPagamento.map(forma => (
+                    <option key={forma.id} value={forma.id}>{forma.nome}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Descontos por prazo */}
@@ -1428,22 +1496,31 @@ const EditarPedidoPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   Desconto por Prazo
                 </label>
-                <select
-                  value={descontoPrazoSelecionado || ''}
-                  onChange={(e) => {
-                    const id = e.target.value || null;
-                    setDescontoPrazoSelecionado(id);
-                    setDescontoPrazoObj(id ? descontosPrazo.find(d => d.id === id) || null : null);
-                  }}
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                >
-                  <option value="">Nenhum</option>
-                  {descontosPrazo.map(desconto => (
-                    <option key={desconto.id} value={desconto.id}>
-                      {desconto.prazo_dias} dias - {desconto.percentual}% de {desconto.tipo === 'desconto' ? 'desconto' : 'acréscimo'}
-                    </option>
-                  ))}
-                </select>
+                {dataFaturamento ? (
+                  <div className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white">
+                    {descontoPrazoObj ?
+                      `${descontoPrazoObj.prazo_dias} dias - ${descontoPrazoObj.percentual}% de ${descontoPrazoObj.tipo === 'desconto' ? 'desconto' : 'acréscimo'}` :
+                      'Nenhum'
+                    }
+                  </div>
+                ) : (
+                  <select
+                    value={descontoPrazoSelecionado || ''}
+                    onChange={(e) => {
+                      const id = e.target.value || null;
+                      setDescontoPrazoSelecionado(id);
+                      setDescontoPrazoObj(id ? descontosPrazo.find(d => d.id === id) || null : null);
+                    }}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  >
+                    <option value="">Nenhum</option>
+                    {descontosPrazo.map(desconto => (
+                      <option key={desconto.id} value={desconto.id}>
+                        {desconto.prazo_dias} dias - {desconto.percentual}% de {desconto.tipo === 'desconto' ? 'desconto' : 'acréscimo'}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
 
@@ -1453,22 +1530,31 @@ const EditarPedidoPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   Desconto por Valor
                 </label>
-                <select
-                  value={descontoValorSelecionado || ''}
-                  onChange={(e) => {
-                    const id = e.target.value || null;
-                    setDescontoValorSelecionado(id);
-                    setDescontoValorObj(id ? descontosValor.find(d => d.id === id) || null : null);
-                  }}
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                >
-                  <option value="">Nenhum</option>
-                  {descontosValor.map(desconto => (
-                    <option key={desconto.id} value={desconto.id}>
-                      {formatarPreco(desconto.valor_minimo)} - {desconto.percentual}% de {desconto.tipo === 'desconto' ? 'desconto' : 'acréscimo'}
-                    </option>
-                  ))}
-                </select>
+                {dataFaturamento ? (
+                  <div className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white">
+                    {descontoValorObj ?
+                      `${formatarPreco(descontoValorObj.valor_minimo)} - ${descontoValorObj.percentual}% de ${descontoValorObj.tipo === 'desconto' ? 'desconto' : 'acréscimo'}` :
+                      'Nenhum'
+                    }
+                  </div>
+                ) : (
+                  <select
+                    value={descontoValorSelecionado || ''}
+                    onChange={(e) => {
+                      const id = e.target.value || null;
+                      setDescontoValorSelecionado(id);
+                      setDescontoValorObj(id ? descontosValor.find(d => d.id === id) || null : null);
+                    }}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  >
+                    <option value="">Nenhum</option>
+                    {descontosValor.map(desconto => (
+                      <option key={desconto.id} value={desconto.id}>
+                        {formatarPreco(desconto.valor_minimo)} - {desconto.percentual}% de {desconto.tipo === 'desconto' ? 'desconto' : 'acréscimo'}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
           </div>

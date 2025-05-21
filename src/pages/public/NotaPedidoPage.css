@@ -1,0 +1,54 @@
+/* Estilos específicos para a página de nota de pedido */
+body {
+  background-color: white !important;
+  color: #333 !important;
+}
+
+html {
+  background-color: white !important;
+}
+
+#root {
+  background-color: white !important;
+  color: #333 !important;
+  min-height: 100vh;
+}
+
+.nota-pedido-container {
+  background-color: white !important;
+  color: #333 !important;
+  min-height: 100vh;
+}
+
+.nota-pedido-card {
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Sobrescrever qualquer estilo dark que possa estar afetando a página */
+.nota-pedido-container * {
+  color: inherit;
+}
+
+.nota-pedido-container h1,
+.nota-pedido-container h2,
+.nota-pedido-container h3 {
+  color: #333;
+}
+
+.nota-pedido-container p,
+.nota-pedido-container span,
+.nota-pedido-container div {
+  color: #333;
+}
+
+.nota-pedido-container table {
+  color: #333;
+}
+
+.nota-pedido-container th,
+.nota-pedido-container td {
+  color: #333;
+}

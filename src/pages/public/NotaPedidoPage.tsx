@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { formatarPreco, formatarDataHora, formatarTelefone, formatarDocumento } from '../../utils/formatters';
+import PageTitle from '../../components/comum/PageTitle';
+import './NotaPedidoPage.css';
+
+// Forçar o fundo branco
+document.body.style.backgroundColor = 'white';
+document.body.style.color = 'black';
 
 // Interfaces
 interface ItemPedido {
@@ -91,6 +97,30 @@ const NotaPedidoPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Forçar o fundo branco
+    document.documentElement.style.backgroundColor = 'white';
+    document.body.style.backgroundColor = 'white';
+    document.body.style.color = '#333';
+
+    const rootElement = document.getElementById('root');
+    if (rootElement) {
+      rootElement.style.backgroundColor = 'white';
+      rootElement.style.color = '#333';
+    }
+
+    // Adicionar classe ao body para aplicar estilos específicos
+    document.body.classList.add('pedido-publico');
+
+    // Remover a classe quando o componente for desmontado
+    return () => {
+      document.body.classList.remove('pedido-publico');
+    };
+  }, []);
+
+  // Não redirecionamos mais para a página estática
+  // Agora vamos exibir os dados reais do pedido
+
+  useEffect(() => {
     const loadPedido = async () => {
       try {
         setIsLoading(true);
@@ -137,10 +167,12 @@ const NotaPedidoPage: React.FC = () => {
         }
 
         if (empresaError || !empresaData) {
+          console.log('Erro ao carregar empresa:', empresaError);
           setError('Empresa não encontrada');
           return;
         }
 
+        console.log('Empresa carregada:', empresaData);
         setEmpresa(empresaData);
 
         // Buscar o pedido pelo número e empresa_id
@@ -167,10 +199,31 @@ const NotaPedidoPage: React.FC = () => {
           .eq('numero', numeroPedido)
           .single();
 
+        console.log('Query pedido:', {
+          empresa_id: empresaData.id,
+          numero: numeroPedido,
+          resultado: pedidoData,
+          erro: pedidoError
+        });
+
         if (pedidoError || !pedidoData) {
           setError('Pedido não encontrado');
           return;
         }
+
+        console.log('Pedido carregado:', pedidoData);
+
+        // Garantir que pedido.itens é um array
+        if (!pedidoData.itens || !Array.isArray(pedidoData.itens)) {
+          console.warn('Itens do pedido não é um array:', pedidoData.itens);
+          pedidoData.itens = [];
+        }
+
+        // Garantir que todos os campos necessários existem
+        if (!pedidoData.valor_subtotal) pedidoData.valor_subtotal = 0;
+        if (!pedidoData.valor_desconto) pedidoData.valor_desconto = 0;
+        if (!pedidoData.valor_acrescimo) pedidoData.valor_acrescimo = 0;
+        if (!pedidoData.valor_total) pedidoData.valor_total = 0;
 
         setPedido(pedidoData);
 
@@ -183,7 +236,10 @@ const NotaPedidoPage: React.FC = () => {
             .single();
 
           if (!clienteError && clienteData) {
+            console.log('Cliente carregado:', clienteData);
             setCliente(clienteData);
+          } else {
+            console.log('Erro ao carregar cliente:', clienteError);
           }
         }
 
@@ -196,7 +252,10 @@ const NotaPedidoPage: React.FC = () => {
             .single();
 
           if (!formaPagamentoError && formaPagamentoData) {
+            console.log('Forma de pagamento carregada:', formaPagamentoData);
             setFormaPagamento(formaPagamentoData);
+          } else {
+            console.log('Erro ao carregar forma de pagamento:', formaPagamentoError);
           }
         }
 
@@ -207,11 +266,14 @@ const NotaPedidoPage: React.FC = () => {
           .eq('empresa_id', empresaData.id);
 
         if (!unidadesError && unidadesData) {
+          console.log('Unidades de medida carregadas:', unidadesData);
           const unidadesMap: Record<string, string> = {};
           unidadesData.forEach((unidade) => {
             unidadesMap[unidade.id] = unidade.sigla;
           });
           setUnidadesMedida(unidadesMap);
+        } else {
+          console.log('Erro ao carregar unidades de medida:', unidadesError);
         }
 
       } catch (error: any) {
@@ -235,9 +297,19 @@ const NotaPedidoPage: React.FC = () => {
     }
   };
 
+  // Log para depuração
+  console.log('Estado atual:', { isLoading, error, pedido, empresa, cliente, formaPagamento, unidadesMedida });
+
+  // Verificar se os dados do pedido estão completos
+  if (pedido && !pedido.data_criacao) {
+    console.warn('Pedido sem data de criação:', pedido);
+    pedido.data_criacao = new Date().toISOString();
+  }
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white text-black flex items-center justify-center" style={{ backgroundColor: 'white' }}>
+      <div className="nota-pedido-container flex items-center justify-center">
+        <PageTitle title="Carregando pedido..." bgColor="#ffffff" />
         <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
         <span className="ml-2 text-gray-600">Carregando pedido...</span>
       </div>
@@ -246,19 +318,34 @@ const NotaPedidoPage: React.FC = () => {
 
   if (error || !pedido || !empresa) {
     return (
-      <div className="min-h-screen bg-white text-black flex flex-col items-center justify-center p-4" style={{ backgroundColor: 'white' }}>
+      <div className="nota-pedido-container flex flex-col items-center justify-center p-4">
+        <PageTitle title="Pedido não encontrado" bgColor="#ffffff" />
         <div className="max-w-md w-full text-center">
           <h1 className="text-xl font-bold text-gray-800 mb-2">Pedido não encontrado</h1>
           <p className="text-gray-600 mb-6">{error || 'Não foi possível encontrar as informações deste pedido.'}</p>
+
+          {/* Mostrar detalhes do erro para depuração */}
+          <div className="text-left text-xs text-gray-500 mt-4 p-4 bg-gray-100 rounded-md overflow-auto">
+            <p>Detalhes para depuração:</p>
+            <pre>Error: {error || 'Nenhum erro específico'}</pre>
+            <pre>Pedido: {pedido ? 'Carregado' : 'Não carregado'}</pre>
+            <pre>Empresa: {empresa ? 'Carregada' : 'Não carregada'}</pre>
+            <pre>Código do Pedido: {codigoPedido}</pre>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white text-black p-4 md:p-8 max-w-4xl mx-auto" style={{ backgroundColor: 'white' }}>
+    <div className="nota-pedido-container p-4 md:p-8 max-w-4xl mx-auto">
+      <PageTitle
+        title={`Pedido #${pedido.numero} - ${empresa.nome}`}
+        description={`Detalhes do pedido #${pedido.numero} de ${empresa.nome}`}
+        bgColor="#ffffff"
+      />
       {/* Nota de Pedido */}
-      <div className="border border-gray-300 p-6 md:p-8 rounded-md bg-white text-black">
+      <div className="nota-pedido-card p-6 md:p-8">
         {/* Cabeçalho */}
         <div className="text-center border-b border-gray-300 pb-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-800">{empresa.nome}</h1>
@@ -298,14 +385,14 @@ const NotaPedidoPage: React.FC = () => {
         <div className="border-b border-gray-300 pb-6 mb-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
             <div>
-              <h2 className="text-xl font-bold text-gray-800">PEDIDO #{pedido.numero}</h2>
+              <h2 className="text-xl font-bold text-gray-800">PEDIDO #{pedido.numero || 'N/A'}</h2>
               <p className="text-gray-600">Data: {formatarDataHora(pedido.data_criacao)}</p>
             </div>
             <div className="mt-2 md:mt-0 text-right">
               <span className="inline-block px-3 py-1 bg-gray-200 text-gray-800 font-bold rounded-full">
-                {getStatusText(pedido.status)}
+                {pedido.data_faturamento ? 'FATURADO' : getStatusText(pedido.status || 'pendente')}
               </span>
-              {pedido.status === 'faturado' && pedido.data_faturamento && (
+              {pedido.data_faturamento && (
                 <p className="text-gray-600 text-sm mt-1">
                   Faturado em: {formatarDataHora(pedido.data_faturamento)}
                 </p>
@@ -358,27 +445,35 @@ const NotaPedidoPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {pedido.itens.map((item) => (
-                <tr key={item.id} className="border-b border-gray-300">
-                  <td className="py-2 px-4 text-left border border-gray-300">{item.produto.codigo}</td>
-                  <td className="py-2 px-4 text-left border border-gray-300">
-                    <div>
-                      <p>{item.produto.nome}</p>
-                      {item.observacao && (
-                        <p className="text-xs text-gray-500 mt-1">{item.observacao}</p>
+              {pedido.itens && pedido.itens.length > 0 ? (
+                pedido.itens.map((item) => (
+                  <tr key={item.id} className="border-b border-gray-300">
+                    <td className="py-2 px-4 text-left border border-gray-300">{item.produto?.codigo || 'N/A'}</td>
+                    <td className="py-2 px-4 text-left border border-gray-300">
+                      <div>
+                        <p>{item.produto?.nome || 'Produto não encontrado'}</p>
+                        {item.observacao && (
+                          <p className="text-xs text-gray-500 mt-1">{item.observacao}</p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2 px-4 text-center border border-gray-300">
+                      {item.quantidade}
+                      {item.produto?.unidade_medida_id && unidadesMedida[item.produto.unidade_medida_id] && (
+                        <span className="text-gray-500 ml-1">{unidadesMedida[item.produto.unidade_medida_id]}</span>
                       )}
-                    </div>
+                    </td>
+                    <td className="py-2 px-4 text-right border border-gray-300">{formatarPreco(item.valor_unitario)}</td>
+                    <td className="py-2 px-4 text-right border border-gray-300 font-medium">{formatarPreco(item.valor_total)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="py-4 text-center text-gray-500 border border-gray-300">
+                    Nenhum item encontrado neste pedido.
                   </td>
-                  <td className="py-2 px-4 text-center border border-gray-300">
-                    {item.quantidade}
-                    {item.produto.unidade_medida_id && unidadesMedida[item.produto.unidade_medida_id] && (
-                      <span className="text-gray-500 ml-1">{unidadesMedida[item.produto.unidade_medida_id]}</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-4 text-right border border-gray-300">{formatarPreco(item.valor_unitario)}</td>
-                  <td className="py-2 px-4 text-right border border-gray-300 font-medium">{formatarPreco(item.valor_total)}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

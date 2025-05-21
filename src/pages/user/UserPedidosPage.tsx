@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, Edit } from 'lucide-react';
+import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, Edit, MessageCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
@@ -28,6 +28,7 @@ const UserPedidosPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [dataFilter, setDataFilter] = useState<string>('');
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [empresaWhatsapp, setEmpresaWhatsapp] = useState<string>('');
 
   useEffect(() => {
     // Tentar carregar dados do localStorage primeiro
@@ -77,7 +78,40 @@ const UserPedidosPage: React.FC = () => {
 
       return () => clearTimeout(timer);
     }
+
+    // Carregar o WhatsApp da empresa
+    loadEmpresaWhatsapp();
   }, []);
+
+  const loadEmpresaWhatsapp = async () => {
+    try {
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Obter o WhatsApp da empresa
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('whatsapp')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      if (empresaData && empresaData.whatsapp) {
+        setEmpresaWhatsapp(empresaData.whatsapp);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar WhatsApp da empresa:', error);
+    }
+  };
 
   useEffect(() => {
     applyFilters();
@@ -193,6 +227,19 @@ const UserPedidosPage: React.FC = () => {
     });
   };
 
+  const formatWhatsAppNumber = (phone: string) => {
+    // Remove todos os caracteres não numéricos
+    const cleanNumber = phone.replace(/\D/g, '');
+
+    // Verifica se o número já tem o código do país
+    if (cleanNumber.startsWith('55')) {
+      return cleanNumber;
+    }
+
+    // Adiciona o código do Brasil (55) se não tiver
+    return `55${cleanNumber}`;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pendente': return 'text-yellow-500';
@@ -220,6 +267,67 @@ const UserPedidosPage: React.FC = () => {
   const handleEditarPedido = (pedidoId: string) => {
     // Navegar para a página de edição de pedido
     navigate(`/user/pedidos/editar/${pedidoId}`);
+  };
+
+  const handleEnviarWhatsApp = async (pedido: Pedido) => {
+    try {
+      if (!empresaWhatsapp) {
+        alert('Número de WhatsApp da empresa não configurado');
+        return;
+      }
+
+      // Gerar o link do pedido
+      const url = await gerarLinkPedido(pedido);
+      if (!url) {
+        alert('Não foi possível gerar o link do pedido');
+        return;
+      }
+
+      // Formatar o número para o WhatsApp
+      const whatsappNumber = formatWhatsAppNumber(empresaWhatsapp);
+
+      // Criar a mensagem
+      const mensagem = `Olá! Segue o link do pedido #${pedido.numero}: ${url}`;
+
+      // Criar o link do WhatsApp
+      const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(mensagem)}`;
+
+      // Abrir o link
+      window.open(whatsappUrl, '_blank');
+    } catch (error) {
+      console.error('Erro ao enviar WhatsApp:', error);
+      alert('Erro ao enviar mensagem pelo WhatsApp');
+    }
+  };
+
+  const gerarLinkPedido = async (pedido: Pedido) => {
+    try {
+      // Buscar o CNPJ da empresa
+      const { data: empresaData, error: empresaError } = await supabase
+        .from('empresas')
+        .select('documento')
+        .eq('id', pedido.empresa_id)
+        .single();
+
+      if (empresaError || !empresaData || !empresaData.documento) {
+        throw new Error('Não foi possível obter o CNPJ da empresa');
+      }
+
+      // Remover caracteres não numéricos do CNPJ (pontos, traços, barras)
+      const cnpjLimpo = empresaData.documento.replace(/[^\d]/g, '');
+
+      // Gerar o código do pedido (CNPJ + número do pedido)
+      const codigoPedido = `${cnpjLimpo}${pedido.numero}`;
+
+      // Gerar a URL completa
+      const baseUrl = window.location.origin;
+      const url = `${baseUrl}/pedido/${codigoPedido}`;
+
+      return url;
+    } catch (error: any) {
+      console.error('Erro ao gerar link do pedido:', error);
+      return null;
+    }
   };
 
   // Animação de carregamento de cards
@@ -418,8 +526,16 @@ const UserPedidosPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Botão de edição */}
-              <div className="mt-3 pt-3 border-t border-gray-800 flex justify-end">
+              {/* Botões de ação */}
+              <div className="mt-3 pt-3 border-t border-gray-800 flex justify-between">
+                <button
+                  onClick={() => handleEnviarWhatsApp(pedido)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
+                >
+                  <MessageCircle size={14} />
+                  <span className="text-sm">Enviar</span>
+                </button>
+
                 <button
                   onClick={() => handleEditarPedido(pedido.id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"

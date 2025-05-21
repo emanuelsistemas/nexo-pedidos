@@ -24,13 +24,13 @@ export const formatarPreco = (valor: number): string => {
 export const desformatarPreco = (valorFormatado: string): number => {
   // Remove todos os caracteres não numéricos, exceto vírgula e ponto
   const valorLimpo = valorFormatado.replace(/[^\d,\.]/g, '');
-  
+
   // Substitui vírgula por ponto para conversão correta
   const valorComPonto = valorLimpo.replace(',', '.');
-  
+
   // Converte para número
   const valorNumerico = parseFloat(valorComPonto);
-  
+
   // Retorna 0 se não for um número válido
   return isNaN(valorNumerico) ? 0 : valorNumerico;
 };
@@ -44,7 +44,7 @@ export const desformatarPreco = (valorFormatado: string): number => {
 export const formatarDocumento = (documento: string, tipo: 'cpf' | 'cnpj'): string => {
   // Remove caracteres não numéricos
   const apenasNumeros = documento.replace(/\D/g, '');
-  
+
   if (tipo === 'cpf') {
     // Formato: 000.000.000-00
     return apenasNumeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
@@ -62,7 +62,7 @@ export const formatarDocumento = (documento: string, tipo: 'cpf' | 'cnpj'): stri
 export const formatarTelefone = (telefone: string): string => {
   // Remove caracteres não numéricos
   const apenasNumeros = telefone.replace(/\D/g, '');
-  
+
   if (apenasNumeros.length === 11) {
     // Celular: (00) 0 0000-0000
     return apenasNumeros.replace(/(\d{2})(\d{1})(\d{4})(\d{4})/, '($1) $2 $3-$4');
@@ -70,7 +70,7 @@ export const formatarTelefone = (telefone: string): string => {
     // Fixo: (00) 0000-0000
     return apenasNumeros.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
   }
-  
+
   // Retorna o original se não se encaixar nos padrões
   return telefone;
 };
@@ -83,7 +83,7 @@ export const formatarTelefone = (telefone: string): string => {
 export const formatarCEP = (cep: string): string => {
   // Remove caracteres não numéricos
   const apenasNumeros = cep.replace(/\D/g, '');
-  
+
   // Formato: 00000-000
   return apenasNumeros.replace(/(\d{5})(\d{3})/, '$1-$2');
 };
@@ -93,9 +93,24 @@ export const formatarCEP = (cep: string): string => {
  * @param data Data a ser formatada (string ISO ou objeto Date)
  * @returns String formatada da data (DD/MM/YYYY)
  */
-export const formatarData = (data: Date | string): string => {
-  const dataObj = typeof data === 'string' ? new Date(data) : data;
-  return dataObj.toLocaleDateString('pt-BR');
+export const formatarData = (data: Date | string | undefined | null): string => {
+  if (!data) {
+    return 'Data não disponível';
+  }
+
+  try {
+    const dataObj = typeof data === 'string' ? new Date(data) : data;
+
+    // Verificar se a data é válida
+    if (isNaN(dataObj.getTime())) {
+      return 'Data inválida';
+    }
+
+    return dataObj.toLocaleDateString('pt-BR');
+  } catch (error) {
+    console.error('Erro ao formatar data:', error, data);
+    return 'Erro ao formatar data';
+  }
 };
 
 /**
@@ -103,13 +118,28 @@ export const formatarData = (data: Date | string): string => {
  * @param data Data a ser formatada (string ISO ou objeto Date)
  * @returns String formatada da data e hora (DD/MM/YYYY HH:MM)
  */
-export const formatarDataHora = (data: Date | string): string => {
-  const dataObj = typeof data === 'string' ? new Date(data) : data;
-  return dataObj.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+export const formatarDataHora = (data: Date | string | undefined | null): string => {
+  if (!data) {
+    return 'Data não disponível';
+  }
+
+  try {
+    const dataObj = typeof data === 'string' ? new Date(data) : data;
+
+    // Verificar se a data é válida
+    if (isNaN(dataObj.getTime())) {
+      return 'Data inválida';
+    }
+
+    return dataObj.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.error('Erro ao formatar data e hora:', error, data);
+    return 'Erro ao formatar data';
+  }
 };

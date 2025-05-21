@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedido #20250521164833 - Teste</title>
+  <style>
+    body {
+      background-color: white;
+      color: #333;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .nota-pedido {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 30px;
+      background-color: white;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .cabecalho {
+      text-align: center;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .cabecalho h1 {
+      font-size: 24px;
+      margin: 0 0 5px;
+      color: #333;
+    }
+    
+    .cabecalho p {
+      margin: 5px 0;
+      color: #666;
+    }
+    
+    .info-pedido {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 20px;
+    }
+    
+    .status {
+      display: inline-block;
+      padding: 5px 10px;
+      background-color: #f0f0f0;
+      border-radius: 20px;
+      font-weight: bold;
+    }
+    
+    .cliente {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    
+    .cliente h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
+    
+    th {
+      background-color: #f5f5f5;
+      font-weight: bold;
+    }
+    
+    .text-right {
+      text-align: right;
+    }
+    
+    .text-center {
+      text-align: center;
+    }
+    
+    .resumo {
+      display: flex;
+      gap: 20px;
+    }
+    
+    .pagamento, .totais {
+      flex: 1;
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    
+    .totais {
+      max-width: 250px;
+    }
+    
+    .total-linha {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    
+    .total-final {
+      border-top: 1px solid #ddd;
+      margin-top: 10px;
+      padding-top: 10px;
+      font-weight: bold;
+    }
+    
+    .rodape {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #ddd;
+      text-align: center;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nota-pedido">
+      <!-- Cabeçalho -->
+      <div class="cabecalho">
+        <h1>Empresa Teste LTDA</h1>
+        <p>CNPJ: 24.163.237/0001-51</p>
+        <p>Rua Exemplo, 123 - Centro, São Paulo - SP</p>
+        <p>Telefone: (11) 9 8765-4321</p>
+        <p>Email: contato@empresateste.com.br</p>
+      </div>
+      
+      <!-- Informações do Pedido -->
+      <div class="info-pedido">
+        <div>
+          <h2>PEDIDO #20250521164833</h2>
+          <p>Data: 21/05/2025 16:48</p>
+        </div>
+        <div style="text-align: right;">
+          <span class="status">FATURADO</span>
+          <p>Faturado em: 22/05/2025 10:30</p>
+        </div>
+      </div>
+      
+      <!-- Cliente -->
+      <div class="cliente">
+        <h3>CLIENTE</h3>
+        <p><strong>João da Silva</strong></p>
+        <p>CPF: 123.456.789-00</p>
+        <p>Telefone: (11) 9 8765-4321</p>
+        <p>Endereço: Av. Cliente, 456 - Apto 101, Bairro Exemplo, São Paulo - SP</p>
+      </div>
+      
+      <!-- Itens do Pedido -->
+      <h3>ITENS DO PEDIDO</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Produto</th>
+            <th class="text-center">Qtde</th>
+            <th class="text-right">Valor Unit.</th>
+            <th class="text-right">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>001</td>
+            <td>Produto Exemplo 1</td>
+            <td class="text-center">2 UN</td>
+            <td class="text-right">R$ 50,00</td>
+            <td class="text-right">R$ 100,00</td>
+          </tr>
+          <tr>
+            <td>002</td>
+            <td>Produto Exemplo 2</td>
+            <td class="text-center">1 UN</td>
+            <td class="text-right">R$ 75,00</td>
+            <td class="text-right">R$ 75,00</td>
+          </tr>
+          <tr>
+            <td>003</td>
+            <td>Produto Exemplo 3</td>
+            <td class="text-center">3 KG</td>
+            <td class="text-right">R$ 25,00</td>
+            <td class="text-right">R$ 75,00</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <!-- Resumo e Forma de Pagamento -->
+      <div class="resumo">
+        <!-- Forma de Pagamento -->
+        <div class="pagamento">
+          <h3>FORMA DE PAGAMENTO</h3>
+          <p><strong>Cartão de Crédito</strong></p>
+          <p>3x de R$ 83,33</p>
+        </div>
+        
+        <!-- Totais -->
+        <div class="totais">
+          <h3>RESUMO</h3>
+          <div class="total-linha">
+            <span>Subtotal:</span>
+            <span>R$ 250,00</span>
+          </div>
+          <div class="total-linha">
+            <span>Desconto:</span>
+            <span style="color: green;">-R$ 10,00</span>
+          </div>
+          <div class="total-linha">
+            <span>Acréscimo:</span>
+            <span style="color: red;">+R$ 10,00</span>
+          </div>
+          <div class="total-linha total-final">
+            <span>Total:</span>
+            <span>R$ 250,00</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Rodapé -->
+      <div class="rodape">
+        <p>Este é um comprovante digital de pedido.</p>
+        <p>Documento gerado em 22/05/2025 10:35</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
