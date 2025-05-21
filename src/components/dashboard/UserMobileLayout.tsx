@@ -11,6 +11,7 @@ const UserMobileLayout: React.FC = () => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [userName, setUserName] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [empresaNomeFantasia, setEmpresaNomeFantasia] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -22,13 +23,26 @@ const UserMobileLayout: React.FC = () => {
         if (user) {
           const { data: userData } = await supabase
             .from('usuarios')
-            .select('nome, tipo')
+            .select('nome, tipo, empresa_id')
             .eq('id', user.id)
             .single();
 
           if (userData) {
             setUserName(userData.nome);
             setIsAdmin(userData.tipo === 'admin');
+
+            // Buscar o nome fantasia da empresa
+            if (userData.empresa_id) {
+              const { data: empresaData } = await supabase
+                .from('empresas')
+                .select('nome_fantasia')
+                .eq('id', userData.empresa_id)
+                .single();
+
+              if (empresaData && empresaData.nome_fantasia) {
+                setEmpresaNomeFantasia(empresaData.nome_fantasia);
+              }
+            }
           }
         }
 
@@ -74,13 +88,20 @@ const UserMobileLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background-dark flex flex-col">
-      {/* Header com logo, saudação e botões */}
-      <header className="bg-background-card border-b border-gray-800 p-4 flex items-center justify-between">
-        <div className="flex items-center">
-          <Logo size="sm" />
+      {/* Header com logo, nome fantasia, saudação e botões */}
+      <header className="bg-background-card border-b border-gray-800 p-3 flex items-center justify-between">
+        <div className="flex items-center gap-1 flex-shrink-0 max-w-[45%]">
+          <div className="flex-shrink-0">
+            <Logo size="sm" />
+          </div>
+          {empresaNomeFantasia && (
+            <span className="text-white text-xs font-medium ml-1 truncate">
+              {empresaNomeFantasia}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-white text-sm">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="text-white text-xs truncate max-w-[70px]">
             Olá, <span className="font-medium">{userName}</span>
           </div>
 

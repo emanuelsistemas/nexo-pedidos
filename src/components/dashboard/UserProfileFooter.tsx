@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CircleUserRound, LogOut, Smartphone } from 'lucide-react';
+import { CircleUserRound, LogOut, Smartphone, Building } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useSidebarStore } from '../../store/sidebarStore';
 
@@ -11,21 +11,39 @@ const UserProfileFooter: React.FC = () => {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [empresaNomeFantasia, setEmpresaNomeFantasia] = useState('');
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserEmail(user.email || '');
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUserEmail(user.email || '');
 
-        // Verificar se o usuário é admin
-        const { data: userData } = await supabase
-          .from('usuarios')
-          .select('tipo')
-          .eq('id', user.id)
-          .single();
+          // Verificar se o usuário é admin e obter empresa_id
+          const { data: userData } = await supabase
+            .from('usuarios')
+            .select('tipo, empresa_id')
+            .eq('id', user.id)
+            .single();
 
-        setIsAdmin(userData?.tipo === 'admin');
+          setIsAdmin(userData?.tipo === 'admin');
+
+          // Buscar o nome fantasia da empresa
+          if (userData?.empresa_id) {
+            const { data: empresaData } = await supabase
+              .from('empresas')
+              .select('nome_fantasia')
+              .eq('id', userData.empresa_id)
+              .single();
+
+            if (empresaData && empresaData.nome_fantasia) {
+              setEmpresaNomeFantasia(empresaData.nome_fantasia);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar dados do usuário:', error);
       }
     };
     getUser();
@@ -93,6 +111,24 @@ const UserProfileFooter: React.FC = () => {
   return (
     <>
       <div className="mt-auto border-t border-gray-800">
+        {/* Nome Fantasia da Empresa */}
+        {empresaNomeFantasia && (
+          <div className="flex items-center px-4 py-2 my-1 mx-2 rounded-lg text-primary-400 transition-colors">
+            <Building size={20} />
+            {isExpanded && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.2 }}
+                className="ml-3 text-sm font-medium truncate"
+              >
+                {empresaNomeFantasia}
+              </motion.span>
+            )}
+          </div>
+        )}
+
+        {/* Email do Usuário */}
         <div className="flex items-center px-4 py-2 my-1 mx-2 rounded-lg text-gray-400 hover:bg-gray-800/50 hover:text-white transition-colors">
           <CircleUserRound size={20} />
           {isExpanded && (

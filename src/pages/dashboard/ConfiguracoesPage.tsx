@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
+import SearchableSelect from '../../components/comum/SearchableSelect';
 import { showMessage } from '../../utils/toast';
 
 interface DeleteConfirmationProps {
@@ -101,6 +102,8 @@ const ConfiguracoesPage: React.FC = () => {
   const [empresa, setEmpresa] = useState<any>(null);
   const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
+  const [isCepLoading, setIsCepLoading] = useState(false);
   const [usuarioLogado, setUsuarioLogado] = useState<{id: string, tipo: string} | null>(null);
   const [selectedTipo, setSelectedTipo] = useState('');
   const [storeStatus, setStoreStatus] = useState<{
@@ -1127,7 +1130,8 @@ const ConfiguracoesPage: React.FC = () => {
     }
 
     try {
-      setIsLoading(true);
+      // Usar o estado específico para o loading do CNPJ
+      setIsCnpjLoading(true);
       const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
       const data = await response.json();
 
@@ -1153,7 +1157,8 @@ const ConfiguracoesPage: React.FC = () => {
       console.error('Erro ao buscar CNPJ:', error);
       showMessage('error', 'Erro ao buscar CNPJ. Tente novamente.');
     } finally {
-      setIsLoading(false);
+      // Desativar o loading específico do CNPJ
+      setIsCnpjLoading(false);
     }
   };
 
@@ -1162,6 +1167,7 @@ const ConfiguracoesPage: React.FC = () => {
     if (cep.length !== 8) return;
 
     try {
+      setIsCepLoading(true);
       const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
       const data = await response.json();
 
@@ -1173,9 +1179,15 @@ const ConfiguracoesPage: React.FC = () => {
           cidade: data.localidade,
           estado: data.uf
         }));
+        showMessage('success', 'Endereço carregado com sucesso!');
+      } else {
+        showMessage('error', 'CEP não encontrado');
       }
     } catch (error) {
       console.error('Erro ao buscar CEP:', error);
+      showMessage('error', 'Erro ao buscar CEP. Tente novamente.');
+    } finally {
+      setIsCepLoading(false);
     }
   };
 
@@ -2147,21 +2159,13 @@ const ConfiguracoesPage: React.FC = () => {
                 {activeSection === 'geral' && (
                   <form onSubmit={handleSubmitEmpresa} className="space-y-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Segmento
-                      </label>
-                      <select
+                      <SearchableSelect
+                        label="Segmento"
                         value={empresaForm.segmento}
-                        onChange={(e) => setEmpresaForm(prev => ({ ...prev, segmento: e.target.value }))}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                      >
-                        <option value="">Selecione um segmento</option>
-                        {segmentos.map(segmento => (
-                          <option key={segmento} value={segmento}>
-                            {segmento}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(value) => setEmpresaForm(prev => ({ ...prev, segmento: value }))}
+                        options={segmentos.map(segmento => ({ value: segmento, label: segmento }))}
+                        placeholder="Selecione um segmento"
+                      />
                     </div>
 
                     <div>
@@ -2199,10 +2203,15 @@ const ConfiguracoesPage: React.FC = () => {
                         {empresaForm.tipo_documento === 'CNPJ' && (
                           <button
                             type="button"
-                            onClick={() => {}}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                            onClick={buscarCNPJ}
+                            disabled={isCnpjLoading}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white disabled:opacity-50"
                           >
-                            <Search size={18} />
+                            {isCnpjLoading ? (
+                              <div className="w-4 h-4 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin"></div>
+                            ) : (
+                              <Search size={18} />
+                            )}
                           </button>
                         )}
                       </div>
@@ -2278,9 +2287,14 @@ const ConfiguracoesPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={buscarCEP}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                          disabled={isCepLoading}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white disabled:opacity-50"
                         >
-                          <Search size={18} />
+                          {isCepLoading ? (
+                            <div className="w-4 h-4 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin"></div>
+                          ) : (
+                            <Search size={18} />
+                          )}
                         </button>
                       </div>
                     </div>
