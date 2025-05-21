@@ -1542,58 +1542,69 @@ const UserNovoPedidoPage: React.FC = () => {
                       <p className="text-gray-400 text-sm">Nenhuma condição de pagamento disponível para este cliente</p>
                     )}
 
-                    {/* Formas de Pagamento */}
-                    <div className="mt-4">
-                      <h4 className="text-sm text-gray-400 mb-2">Forma de Pagamento</h4>
+                    {/* Formas de Pagamento - Seção Redesenhada */}
+                    <div className="mt-6 bg-gray-800/30 rounded-lg p-4 border border-gray-700">
+                      <h3 className="text-white font-medium mb-4 text-base border-b border-gray-700 pb-2">Forma de Pagamento</h3>
 
                       {/* Opções de tipo de pagamento */}
-                      <div className="flex gap-4 mb-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <label className="flex items-center gap-3 cursor-pointer bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors">
                           <input
                             type="radio"
                             name="tipoPagamento"
                             checked={tipoPagamento === 'unico'}
                             onChange={() => setTipoPagamento('unico')}
-                            className="w-4 h-4 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
                           />
-                          <span className="text-white">À Vista (uma forma)</span>
+                          <div>
+                            <span className="text-white font-medium">À Vista</span>
+                            <p className="text-gray-400 text-xs mt-1">Uma única forma de pagamento</p>
+                          </div>
                         </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
+                        <label className="flex items-center gap-3 cursor-pointer bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors">
                           <input
                             type="radio"
                             name="tipoPagamento"
                             checked={tipoPagamento === 'parcial'}
                             onChange={() => setTipoPagamento('parcial')}
-                            className="w-4 h-4 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
                           />
-                          <span className="text-white">Diversos (múltiplas formas)</span>
+                          <div>
+                            <span className="text-white font-medium">Diversos</span>
+                            <p className="text-gray-400 text-xs mt-1">Múltiplas formas de pagamento</p>
+                          </div>
                         </label>
                       </div>
 
                       {/* Pagamento único */}
                       {tipoPagamento === 'unico' && (
-                        <div className="space-y-3">
-                          <select
-                            value={formaPagamentoSelecionada || ''}
-                            onChange={(e) => setFormaPagamentoSelecionada(e.target.value || null)}
-                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                          >
-                            <option value="">Selecione uma forma de pagamento</option>
-                            {formasPagamento.map(forma => (
-                              <option key={forma.id} value={forma.id}>{forma.nome}</option>
-                            ))}
-                          </select>
+                        <div className="space-y-4 mt-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Selecione a forma de pagamento
+                            </label>
+                            <select
+                              value={formaPagamentoSelecionada || ''}
+                              onChange={(e) => setFormaPagamentoSelecionada(e.target.value || null)}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            >
+                              <option value="">Selecione uma forma de pagamento</option>
+                              {formasPagamento.map(forma => (
+                                <option key={forma.id} value={forma.id}>{forma.nome}</option>
+                              ))}
+                            </select>
+                          </div>
 
                           {/* Campo de parcelas para cartão de crédito na opção À Vista */}
                           {formaPagamentoSelecionada && formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.tipo === 'cartao_credito' && (
                             <div>
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                              <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Número de Parcelas
                               </label>
                               <select
                                 value={novaFormaPagamentoParcelas}
                                 onChange={(e) => setNovaFormaPagamentoParcelas(Number(e.target.value))}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               >
                                 {Array.from(
                                   { length: formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.max_parcelas || 12 },
@@ -1609,89 +1620,105 @@ const UserNovoPedidoPage: React.FC = () => {
 
                       {/* Pagamento parcial */}
                       {tipoPagamento === 'parcial' && (
-                        <div className="space-y-3">
+                        <div className="space-y-4 mt-4">
                           {/* Lista de formas de pagamento adicionadas */}
                           {formasPagamentoParciais.length > 0 && (
-                            <div className="space-y-2 mb-3">
-                              {formasPagamentoParciais.map((forma) => (
-                                <div key={forma.id} className="flex justify-between items-center bg-gray-800/50 border border-gray-700 rounded-lg p-2">
-                                  <div className="flex items-center gap-2">
-                                    <DollarSign size={16} className="text-primary-400" />
-                                    <span className="text-white">
-                                      {forma.forma_pagamento_nome}
-                                      {forma.parcelas && forma.parcelas > 1 && (
-                                        <span className="text-primary-400 ml-2">({forma.parcelas}x)</span>
-                                      )}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-primary-400">{formatarPreco(forma.valor)}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => removerFormaPagamentoParcial(forma.id)}
-                                      className="p-1 text-red-400 hover:text-red-300"
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
+                            <div className="space-y-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                              <h4 className="text-sm font-medium text-gray-300 mb-2">Formas de pagamento adicionadas</h4>
 
-                              {/* Valor restante */}
-                              <div className="flex justify-between items-center p-2">
-                                <span className="text-gray-400">Valor restante:</span>
-                                <span className={calcularValorRestante() > 0 ? "text-red-400" : "text-green-400"}>
-                                  {formatarPreco(calcularValorRestante())}
-                                </span>
+                              <div className="space-y-3">
+                                {formasPagamentoParciais.map((forma) => (
+                                  <div key={forma.id} className="flex justify-between items-center bg-gray-800 border border-gray-700 rounded-lg p-3">
+                                    <div className="flex items-center gap-2">
+                                      <DollarSign size={18} className="text-primary-400" />
+                                      <span className="text-white">
+                                        {forma.forma_pagamento_nome}
+                                        {forma.parcelas && forma.parcelas > 1 && (
+                                          <span className="text-primary-400 ml-2">({forma.parcelas}x)</span>
+                                        )}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-primary-400 font-medium">{formatarPreco(forma.valor)}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => removerFormaPagamentoParcial(forma.id)}
+                                        className="p-1.5 bg-red-500/10 rounded-lg text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {/* Valor restante */}
+                                <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg border border-gray-700 mt-3">
+                                  <span className="text-gray-300 font-medium">Valor restante:</span>
+                                  <span className={`font-medium ${calcularValorRestante() > 0 ? "text-red-400" : "text-green-400"}`}>
+                                    {formatarPreco(calcularValorRestante())}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                           )}
 
                           {/* Adicionar nova forma de pagamento */}
-                          <div className={`grid ${formaPagamentoSelecionadaObj?.tipo === 'cartao_credito' ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}>
-                            <div className="col-span-1">
-                              <select
-                                value={novaFormaPagamentoId}
-                                onChange={(e) => setNovaFormaPagamentoId(e.target.value)}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                              >
-                                <option value="">Selecione</option>
-                                {formasPagamento.map(forma => (
-                                  <option key={forma.id} value={forma.id}>{forma.nome}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="col-span-1">
-                              <input
-                                type="text"
-                                value={novaFormaPagamentoValor}
-                                onChange={handleValorChange}
-                                placeholder="Valor"
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                              />
-                            </div>
-                            {/* Campo de parcelas para cartão de crédito */}
-                            {formaPagamentoSelecionadaObj?.tipo === 'cartao_credito' && (
+                          <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                            <h4 className="text-sm font-medium text-gray-300 mb-3">Adicionar forma de pagamento</h4>
+
+                            <div className={`grid ${formaPagamentoSelecionadaObj?.tipo === 'cartao_credito' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'} gap-3`}>
                               <div className="col-span-1">
+                                <label className="block text-xs text-gray-400 mb-1">Forma de pagamento</label>
                                 <select
-                                  value={novaFormaPagamentoParcelas}
-                                  onChange={(e) => setNovaFormaPagamentoParcelas(Number(e.target.value))}
-                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  value={novaFormaPagamentoId}
+                                  onChange={(e) => setNovaFormaPagamentoId(e.target.value)}
+                                  className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                 >
-                                  {Array.from({ length: formaPagamentoSelecionadaObj.max_parcelas || 12 }, (_, i) => i + 1).map(parcela => (
-                                    <option key={parcela} value={parcela}>{parcela}x</option>
+                                  <option value="">Selecione</option>
+                                  {formasPagamento.map(forma => (
+                                    <option key={forma.id} value={forma.id}>{forma.nome}</option>
                                   ))}
                                 </select>
                               </div>
-                            )}
-                            <div className="col-span-1">
-                              <button
-                                type="button"
-                                onClick={adicionarFormaPagamentoParcial}
-                                className="w-full bg-primary-500 hover:bg-primary-600 text-white py-2 px-3 rounded-lg transition-colors"
-                              >
-                                Adicionar
-                              </button>
+
+                              <div className="col-span-1">
+                                <label className="block text-xs text-gray-400 mb-1">Valor</label>
+                                <input
+                                  type="text"
+                                  value={novaFormaPagamentoValor}
+                                  onChange={handleValorChange}
+                                  placeholder="R$ 0,00"
+                                  className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                />
+                              </div>
+
+                              {/* Campo de parcelas para cartão de crédito */}
+                              {formaPagamentoSelecionadaObj?.tipo === 'cartao_credito' && (
+                                <div className="col-span-1">
+                                  <label className="block text-xs text-gray-400 mb-1">Parcelas</label>
+                                  <select
+                                    value={novaFormaPagamentoParcelas}
+                                    onChange={(e) => setNovaFormaPagamentoParcelas(Number(e.target.value))}
+                                    className="w-full bg-gray-800 border border-gray-700 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  >
+                                    {Array.from({ length: formaPagamentoSelecionadaObj.max_parcelas || 12 }, (_, i) => i + 1).map(parcela => (
+                                      <option key={parcela} value={parcela}>{parcela}x</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+
+                              <div className="col-span-1">
+                                <label className="block text-xs text-gray-400 mb-1 opacity-0">Ação</label>
+                                <button
+                                  type="button"
+                                  onClick={adicionarFormaPagamentoParcial}
+                                  className="w-full bg-primary-500 hover:bg-primary-600 text-white py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                                >
+                                  <Plus size={16} />
+                                  <span>Adicionar</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
