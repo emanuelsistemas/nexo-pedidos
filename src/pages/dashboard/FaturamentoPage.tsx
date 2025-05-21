@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, DollarSign, User, Building, FileText, Edit } from 'lucide-react';
+import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, DollarSign, User, Building, FileText, Edit, Share2, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -360,6 +360,53 @@ const FaturamentoPage: React.FC = () => {
     return filteredPedidos.reduce((total, pedido) => total + pedido.valor_total, 0);
   };
 
+  // Função para gerar o link público do pedido
+  const gerarLinkPedido = async (pedido: Pedido) => {
+    try {
+      // Buscar o CNPJ da empresa
+      const { data: empresaData, error: empresaError } = await supabase
+        .from('empresas')
+        .select('documento')
+        .eq('id', pedido.empresa_id)
+        .single();
+
+      if (empresaError || !empresaData || !empresaData.documento) {
+        throw new Error('Não foi possível obter o CNPJ da empresa');
+      }
+
+      // Remover caracteres não numéricos do CNPJ (pontos, traços, barras)
+      const cnpjLimpo = empresaData.documento.replace(/[^\d]/g, '');
+
+      // Gerar o código do pedido (CNPJ + número do pedido)
+      const codigoPedido = `${cnpjLimpo}${pedido.numero}`;
+
+      // Gerar a URL completa
+      const baseUrl = window.location.origin;
+      const url = `${baseUrl}/pedido/${codigoPedido}`;
+
+      return url;
+    } catch (error: any) {
+      console.error('Erro ao gerar link do pedido:', error);
+      toast.error(`Erro ao gerar link: ${error.message}`);
+      return null;
+    }
+  };
+
+  // Função para copiar o link para a área de transferência
+  const copiarLinkPedido = async (pedido: Pedido) => {
+    const url = await gerarLinkPedido(pedido);
+
+    if (url) {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copiado para a área de transferência!');
+      } catch (error) {
+        console.error('Erro ao copiar link:', error);
+        toast.error('Não foi possível copiar o link');
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
@@ -609,6 +656,16 @@ const FaturamentoPage: React.FC = () => {
                         <span>Faturar</span>
                       </button>
                     )}
+
+                    {/* Botão para copiar link do pedido */}
+                    <button
+                      onClick={() => copiarLinkPedido(pedido)}
+                      className="px-3 py-1.5 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors flex items-center gap-1.5"
+                      title="Copiar link do pedido"
+                    >
+                      <Copy size={16} />
+                      <span className="hidden sm:inline">Link</span>
+                    </button>
                   </div>
                 </div>
               </div>

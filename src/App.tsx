@@ -29,7 +29,7 @@ import UserNovoClienteCompleto from './pages/user/UserNovoClienteCompleto';
 import UserPerfilPage from './pages/user/UserPerfilPage';
 
 // Páginas públicas
-import PedidoPublicoPage from './pages/public/PedidoPublicoPage';
+import NotaPedidoPage from './pages/public/NotaPedidoPage';
 
 function App() {
   return (
@@ -38,6 +38,10 @@ function App() {
         <Route path="/" element={<Navigate to="/entrar" replace />} />
         <Route path="/entrar" element={<EntrarPage />} />
         <Route path="/cadastrar" element={<CadastrarPage />} />
+
+        {/* Rota pública para visualização de pedidos */}
+        <Route path="/pedido/:codigoPedido" element={<NotaPedidoPage />} />
+
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="produtos" element={<ProdutosPage />} />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search, Calendar, Edit, CheckCircle, XCircle, Copy, Check } from 'lucide-react';
+import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search, Calendar, Edit, CheckCircle, XCircle, Copy, Check, Share2, Link } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
@@ -820,6 +820,62 @@ const EditarPedidoPage: React.FC = () => {
     });
   };
 
+  // Função para gerar o link público do pedido
+  const gerarLinkPedido = async () => {
+    try {
+      if (!pedido) return null;
+
+      // Buscar o CNPJ da empresa
+      const { data: empresaData, error: empresaError } = await supabase
+        .from('empresas')
+        .select('documento')
+        .eq('id', pedido.empresa_id)
+        .single();
+
+      if (empresaError || !empresaData || !empresaData.documento) {
+        throw new Error('Não foi possível obter o CNPJ da empresa');
+      }
+
+      // Remover caracteres não numéricos do CNPJ (pontos, traços, barras)
+      const cnpjLimpo = empresaData.documento.replace(/[^\d]/g, '');
+
+      // Gerar o código do pedido (CNPJ + número do pedido)
+      const codigoPedido = `${cnpjLimpo}${pedido.numero}`;
+
+      // Gerar a URL completa
+      const baseUrl = window.location.origin;
+      const url = `${baseUrl}/pedido/${codigoPedido}`;
+
+      return url;
+    } catch (error: any) {
+      console.error('Erro ao gerar link do pedido:', error);
+      toast.error(`Erro ao gerar link: ${error.message}`);
+      return null;
+    }
+  };
+
+  // Função para copiar o link para a área de transferência
+  const copiarLinkPedido = async () => {
+    const url = await gerarLinkPedido();
+
+    if (url) {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link do pedido copiado para a área de transferência!', {
+          position: "top-center",
+          autoClose: 1500,
+          hideProgressBar: true,
+          closeOnClick: true,
+          pauseOnHover: false,
+          draggable: true,
+        });
+      } catch (error) {
+        console.error('Erro ao copiar link:', error);
+        toast.error('Não foi possível copiar o link');
+      }
+    }
+  };
+
   const formatarTelefone = (telefone: string, tipo?: string) => {
     if (!telefone) return '';
 
@@ -913,6 +969,17 @@ const EditarPedidoPage: React.FC = () => {
           >
             <XCircle size={18} />
             <span>Cancelar</span>
+          </button>
+
+          {/* Botão para copiar link do pedido */}
+          <button
+            onClick={copiarLinkPedido}
+            disabled={isSaving}
+            className="px-4 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+            title="Copiar link do pedido"
+          >
+            <Link size={18} />
+            <span>Copiar Link</span>
           </button>
         </div>
       </div>

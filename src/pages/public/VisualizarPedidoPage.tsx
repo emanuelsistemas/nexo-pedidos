@@ -1,11 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { ArrowLeft, FileText, Package, DollarSign, Calendar, User, Phone, MapPin, Truck, CheckCircle } from 'lucide-react';
-import { toast } from 'react-toastify';
-import { formatarPreco } from '../../utils/formatters';
+import { formatarPreco, formatarDataHora, formatarTelefone } from '../../utils/formatters';
 import Logo from '../../components/comum/Logo';
 
+// Ícones
+import { 
+  FileText, 
+  Package, 
+  DollarSign, 
+  Calendar, 
+  User, 
+  Phone, 
+  MapPin, 
+  CheckCircle 
+} from 'lucide-react';
+
+// Interfaces
 interface ItemPedido {
   id: string;
   produto: {
@@ -81,8 +92,8 @@ interface FormaPagamento {
   tipo?: string;
 }
 
-const PedidoPublicoPage: React.FC = () => {
-  const { cnpjPedido } = useParams<{ cnpjPedido: string }>();
+const VisualizarPedidoPage: React.FC = () => {
+  const { codigoPedido } = useParams<{ codigoPedido: string }>();
   const navigate = useNavigate();
   
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -98,7 +109,7 @@ const PedidoPublicoPage: React.FC = () => {
       try {
         setIsLoading(true);
         
-        if (!cnpjPedido) {
+        if (!codigoPedido) {
           setError('Código de pedido inválido');
           return;
         }
@@ -107,7 +118,7 @@ const PedidoPublicoPage: React.FC = () => {
         // Formato esperado: CNPJ+NUMEROPEDIDO (sem separadores)
         // Exemplo: 12345678901234202505211648
         const cnpjRegex = /^(\d{14})(\d+)$/;
-        const match = cnpjPedido.match(cnpjRegex);
+        const match = codigoPedido.match(cnpjRegex);
         
         if (!match) {
           setError('Formato de código inválido');
@@ -210,29 +221,7 @@ const PedidoPublicoPage: React.FC = () => {
     };
     
     loadPedido();
-  }, [cnpjPedido]);
-
-  const formatarData = (dataString: string) => {
-    const data = new Date(dataString);
-    return data.toLocaleDateString('pt-BR') + ' ' + data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const formatarTelefone = (telefone?: string) => {
-    if (!telefone) return '';
-    
-    // Remover todos os caracteres não numéricos
-    const numeroLimpo = telefone.replace(/\D/g, '');
-    
-    if (numeroLimpo.length === 11) {
-      // Formato para celular: (XX) X XXXX-XXXX
-      return numeroLimpo.replace(/^(\d{2})(\d)(\d{4})(\d{4})$/, '($1) $2 $3-$4');
-    } else if (numeroLimpo.length === 10) {
-      // Formato para telefone fixo: (XX) XXXX-XXXX
-      return numeroLimpo.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
-    }
-    
-    return telefone;
-  };
+  }, [codigoPedido]);
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -328,7 +317,7 @@ const PedidoPublicoPage: React.FC = () => {
             </div>
             <div className="flex items-center mt-1">
               <Calendar size={16} className="text-gray-400 mr-2" />
-              <span className="text-sm text-gray-400">{formatarData(pedido.data_criacao)}</span>
+              <span className="text-sm text-gray-400">{formatarDataHora(pedido.data_criacao)}</span>
             </div>
             <div className="flex items-center mt-1">
               <CheckCircle size={16} className={`${getStatusColor(pedido.status)} mr-2`} />
@@ -504,7 +493,7 @@ const PedidoPublicoPage: React.FC = () => {
         <div className="p-6 border-t border-gray-800 text-center">
           <p className="text-sm text-gray-400">
             Este é um comprovante digital de pedido. 
-            {pedido.status === 'faturado' && ' O pedido foi faturado em ' + formatarData(pedido.data_faturamento || '')}
+            {pedido.status === 'faturado' && ' O pedido foi faturado em ' + formatarDataHora(pedido.data_faturamento || '')}
           </p>
           {empresa.telefone && (
             <p className="text-sm text-gray-400 mt-2">
@@ -517,4 +506,4 @@ const PedidoPublicoPage: React.FC = () => {
   );
 };
 
-export default PedidoPublicoPage;
+export default VisualizarPedidoPage;
