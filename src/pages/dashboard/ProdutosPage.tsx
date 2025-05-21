@@ -195,6 +195,9 @@ const ProdutosPage: React.FC = () => {
   // Estado para controlar quando o campo de estoque inicial está vazio
   const [estoqueInputVazio, setEstoqueInputVazio] = useState(false);
 
+  // Estado para controlar quando o campo de quantidade mínima está vazio
+  const [quantidadeMinimaVazia, setQuantidadeMinimaVazia] = useState(false);
+
   // Estado para controlar quando o formulário foi resetado
   const [formularioResetado, setFormularioResetado] = useState(false);
 
@@ -1821,6 +1824,7 @@ const ProdutosPage: React.FC = () => {
     setDescontoFormatado('0');
     setDescontoQuantidadeFormatado('10');
     setEstoqueInputVazio(false);
+    setQuantidadeMinimaVazia(false);
     setEditingProduto(null);
     setSelectedOpcoes([]);
     setActiveTab('dados');
@@ -2868,13 +2872,35 @@ const ProdutosPage: React.FC = () => {
                                   Quantidade Mínima <span className="text-red-500">*</span>
                                 </label>
                                 <input
-                                  type="number"
-                                  value={novoProduto.quantidade_minima || 5}
+                                  type="text"
+                                  value={novoProduto.quantidade_minima === 0 && quantidadeMinimaVazia ? '' : novoProduto.quantidade_minima}
                                   onChange={(e) => {
-                                    const valor = parseInt(e.target.value);
-                                    setNovoProduto({ ...novoProduto, quantidade_minima: valor > 0 ? valor : 1 });
+                                    // Se o campo estiver vazio
+                                    if (e.target.value === '') {
+                                      setQuantidadeMinimaVazia(true);
+                                      setNovoProduto({ ...novoProduto, quantidade_minima: 0 });
+                                      return;
+                                    }
+
+                                    setQuantidadeMinimaVazia(false);
+
+                                    // Remover caracteres não numéricos
+                                    const valorLimpo = e.target.value.replace(/[^\d]/g, '');
+
+                                    // Se não for um número válido, não atualiza
+                                    if (isNaN(parseInt(valorLimpo))) {
+                                      return;
+                                    }
+
+                                    const valor = parseInt(valorLimpo);
+                                    setNovoProduto({ ...novoProduto, quantidade_minima: valor > 0 ? valor : 0 });
                                   }}
-                                  min="1"
+                                  onBlur={() => {
+                                    // Se o campo estiver vazio ao perder o foco, mantém vazio
+                                    if (!quantidadeMinimaVazia && novoProduto.quantidade_minima === 0) {
+                                      setNovoProduto({ ...novoProduto, quantidade_minima: 1 });
+                                    }
+                                  }}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   placeholder="5"
                                   required

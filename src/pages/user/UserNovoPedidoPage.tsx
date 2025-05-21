@@ -20,6 +20,20 @@ interface Produto {
   descricao?: string;
 }
 
+interface DescontoPrazo {
+  id: string;
+  prazo_dias: number;
+  percentual: number;
+  tipo: 'desconto' | 'acrescimo';
+}
+
+interface DescontoValor {
+  id: string;
+  valor_minimo: number;
+  percentual: number;
+  tipo: 'desconto' | 'acrescimo';
+}
+
 interface ItemPedido {
   id: string;
   produto: Produto;
@@ -57,9 +71,18 @@ const UserNovoPedidoPage: React.FC = () => {
   const [produtoSelecionado, setProdutoSelecionado] = useState<string>('');
   const [produtoSelecionadoObj, setProdutoSelecionadoObj] = useState<Produto | null>(null);
   const [quantidade, setQuantidade] = useState(1);
+  const [quantidadeVazia, setQuantidadeVazia] = useState(false);
   const [observacao, setObservacao] = useState('');
   const [valorTotal, setValorTotal] = useState(0);
   const [isProdutoModalOpen, setIsProdutoModalOpen] = useState(false);
+  const [descontosPrazo, setDescontosPrazo] = useState<DescontoPrazo[]>([]);
+  const [descontosValor, setDescontosValor] = useState<DescontoValor[]>([]);
+  const [descontoPrazoSelecionado, setDescontoPrazoSelecionado] = useState<string | null>(null);
+  const [descontoValorSelecionado, setDescontoValorSelecionado] = useState<string | null>(null);
+  const [valorDesconto, setValorDesconto] = useState(0);
+  const [valorAcrescimo, setValorAcrescimo] = useState(0);
+  const [descontoPrazoObj, setDescontoPrazoObj] = useState<DescontoPrazo | null>(null);
+  const [descontoValorObj, setDescontoValorObj] = useState<DescontoValor | null>(null);
 
   useEffect(() => {
     loadEmpresas();
@@ -76,10 +99,64 @@ const UserNovoPedidoPage: React.FC = () => {
   // Os produtos serão carregados apenas quando o modal for aberto
 
   useEffect(() => {
-    // Calcular o valor total do pedido
-    const total = itensPedido.reduce((acc, item) => acc + item.valorTotal, 0);
-    setValorTotal(total);
-  }, [itensPedido]);
+    // Calcular o subtotal do pedido (soma dos itens)
+    const subtotal = itensPedido.reduce((acc, item) => acc + item.valorTotal, 0);
+
+    // Calcular o valor total considerando descontos e acréscimos
+    const total = subtotal + valorAcrescimo - valorDesconto;
+    setValorTotal(total > 0 ? total : 0); // Garantir que o total não seja negativo
+  }, [itensPedido, valorDesconto, valorAcrescimo]);
+
+  // Efeito para atualizar o objeto de desconto por prazo quando a seleção mudar
+  useEffect(() => {
+    if (descontoPrazoSelecionado) {
+      const desconto = descontosPrazo.find(d => d.id === descontoPrazoSelecionado) || null;
+      setDescontoPrazoObj(desconto);
+    } else {
+      setDescontoPrazoObj(null);
+    }
+  }, [descontoPrazoSelecionado, descontosPrazo]);
+
+  // Efeito para atualizar o objeto de desconto por valor quando a seleção mudar
+  useEffect(() => {
+    if (descontoValorSelecionado) {
+      const desconto = descontosValor.find(d => d.id === descontoValorSelecionado) || null;
+      setDescontoValorObj(desconto);
+    } else {
+      setDescontoValorObj(null);
+    }
+  }, [descontoValorSelecionado, descontosValor]);
+
+  // Efeito para calcular os valores de desconto e acréscimo
+  useEffect(() => {
+    // Calcular o subtotal (sem descontos/acréscimos)
+    const subtotal = itensPedido.reduce((acc, item) => acc + item.valorTotal, 0);
+    let novoValorDesconto = 0;
+    let novoValorAcrescimo = 0;
+
+    // Calcular desconto/acréscimo por prazo
+    if (descontoPrazoObj) {
+      const valor = subtotal * (descontoPrazoObj.percentual / 100);
+      if (descontoPrazoObj.tipo === 'desconto') {
+        novoValorDesconto += valor;
+      } else {
+        novoValorAcrescimo += valor;
+      }
+    }
+
+    // Calcular desconto/acréscimo por valor
+    if (descontoValorObj && subtotal >= descontoValorObj.valor_minimo) {
+      const valor = subtotal * (descontoValorObj.percentual / 100);
+      if (descontoValorObj.tipo === 'desconto') {
+        novoValorDesconto += valor;
+      } else {
+        novoValorAcrescimo += valor;
+      }
+    }
+
+    setValorDesconto(novoValorDesconto);
+    setValorAcrescimo(novoValorAcrescimo);
+  }, [itensPedido, descontoPrazoObj, descontoValorObj]);
 
   const loadEmpresas = async () => {
     try {
@@ -173,6 +250,7 @@ const UserNovoPedidoPage: React.FC = () => {
       setProdutoSelecionado('');
       setProdutoSelecionadoObj(null);
       setQuantidade(1);
+      setQuantidadeVazia(false);
       setObservacao('');
     } catch (error) {
       console.error('Erro ao adicionar item:', error);
@@ -451,6 +529,51 @@ const UserNovoPedidoPage: React.FC = () => {
     setProdutoSelecionadoObj(produto);
   };
 
+  // Função para carregar os descontos disponíveis para o cliente
+  const loadFormasPagamento = async (clienteId: string, empresaId: string) => {
+    try {
+      setIsLoading(true);
+
+      // Carregar descontos por prazo
+      const { data: descontosPrazoData, error: descontosPrazoError } = await supabase
+        .from('cliente_descontos_prazo')
+        .select('id, prazo_dias, percentual, tipo')
+        .eq('cliente_id', clienteId)
+        .eq('empresa_id', empresaId)
+        .order('prazo_dias');
+
+      if (descontosPrazoError) {
+        console.error('Erro ao carregar descontos por prazo:', descontosPrazoError);
+      } else if (descontosPrazoData) {
+        setDescontosPrazo(descontosPrazoData);
+
+        // Limpar seleção anterior
+        setDescontoPrazoSelecionado(null);
+      }
+
+      // Carregar descontos por valor
+      const { data: descontosValorData, error: descontosValorError } = await supabase
+        .from('cliente_descontos_valor')
+        .select('id, valor_minimo, percentual, tipo')
+        .eq('cliente_id', clienteId)
+        .eq('empresa_id', empresaId)
+        .order('valor_minimo');
+
+      if (descontosValorError) {
+        console.error('Erro ao carregar descontos por valor:', descontosValorError);
+      } else if (descontosValorData) {
+        setDescontosValor(descontosValorData);
+
+        // Limpar seleção anterior
+        setDescontoValorSelecionado(null);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar descontos:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -480,6 +603,9 @@ const UserNovoPedidoPage: React.FC = () => {
       const agora = new Date();
       const numeroPedido = `${agora.getFullYear()}${(agora.getMonth() + 1).toString().padStart(2, '0')}${agora.getDate().toString().padStart(2, '0')}${agora.getHours().toString().padStart(2, '0')}${agora.getMinutes().toString().padStart(2, '0')}${agora.getSeconds().toString().padStart(2, '0')}`;
 
+      // Calcular o subtotal (soma dos itens sem descontos/acréscimos)
+      const subtotal = itensPedido.reduce((acc, item) => acc + item.valorTotal, 0);
+
       // Criar pedido
       const { data: pedido, error: pedidoError } = await supabase
         .from('pedidos')
@@ -489,9 +615,14 @@ const UserNovoPedidoPage: React.FC = () => {
           cliente_id: clienteId || null, // Incluir ID do cliente se disponível
           cliente_nome: clienteNome,
           cliente_telefone: clienteTelefone.replace(/\D/g, ''),
+          valor_subtotal: subtotal,
+          valor_desconto: valorDesconto,
+          valor_acrescimo: valorAcrescimo,
           valor_total: valorTotal,
           status: 'pendente',
-          numero: numeroPedido
+          numero: numeroPedido,
+          desconto_prazo_id: descontoPrazoSelecionado,
+          desconto_valor_id: descontoValorSelecionado
         })
         .select()
         .single();
@@ -560,6 +691,11 @@ const UserNovoPedidoPage: React.FC = () => {
                 setClienteNome(nome);
                 setClienteTelefone(formatarTelefone(telefone));
                 setClienteData(data);
+
+                // Carregar formas de pagamento do cliente quando um cliente for selecionado
+                if (id && empresaSelecionada) {
+                  loadFormasPagamento(id, empresaSelecionada);
+                }
               }}
               empresaId={empresaSelecionada}
               placeholder="Selecione ou busque um cliente"
@@ -684,10 +820,36 @@ const UserNovoPedidoPage: React.FC = () => {
             </label>
             <div className="relative">
               <input
-                type="number"
-                min="1"
-                value={quantidade}
-                onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
+                type="text"
+                value={quantidade === 0 && quantidadeVazia ? '' : quantidade}
+                onChange={(e) => {
+                  // Se o campo estiver vazio
+                  if (e.target.value === '') {
+                    setQuantidadeVazia(true);
+                    setQuantidade(0);
+                    return;
+                  }
+
+                  setQuantidadeVazia(false);
+
+                  // Remover caracteres não numéricos
+                  const valorLimpo = e.target.value.replace(/[^\d]/g, '');
+
+                  // Se não for um número válido, não atualiza
+                  if (isNaN(parseInt(valorLimpo))) {
+                    return;
+                  }
+
+                  const valor = parseInt(valorLimpo);
+                  setQuantidade(valor > 0 ? valor : 0);
+                }}
+                onBlur={() => {
+                  // Se o campo estiver vazio ao perder o foco, define como 1
+                  if (quantidadeVazia || quantidade === 0) {
+                    setQuantidadeVazia(false);
+                    setQuantidade(1);
+                  }
+                }}
                 className={`w-full bg-gray-800/50 border ${
                   produtoSelecionadoObj?.desconto_quantidade &&
                   produtoSelecionadoObj?.quantidade_minima &&
@@ -695,6 +857,7 @@ const UserNovoPedidoPage: React.FC = () => {
                     ? 'border-green-500'
                     : 'border-gray-700'
                 } rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20`}
+                placeholder="1"
               />
               {produtoSelecionadoObj?.desconto_quantidade && produtoSelecionadoObj?.quantidade_minima && (
                 <div className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-xs ${
@@ -832,11 +995,27 @@ const UserNovoPedidoPage: React.FC = () => {
                       <span className="text-white">{itensPedido.reduce((acc, item) => acc + item.quantidade, 0)}</span>
                     </div>
 
-                    {/* Subtotal */}
+                    {/* Subtotal (soma dos itens) */}
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Subtotal:</span>
-                      <span className="text-white">{formatarPreco(valorTotal)}</span>
+                      <span className="text-white">{formatarPreco(itensPedido.reduce((acc, item) => acc + item.valorTotal, 0))}</span>
                     </div>
+
+                    {/* Desconto (se houver) */}
+                    {valorDesconto > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-green-400">Desconto:</span>
+                        <span className="text-green-400">-{formatarPreco(valorDesconto)}</span>
+                      </div>
+                    )}
+
+                    {/* Acréscimo (se houver) */}
+                    {valorAcrescimo > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-red-400">Acréscimo:</span>
+                        <span className="text-red-400">+{formatarPreco(valorAcrescimo)}</span>
+                      </div>
+                    )}
 
                     {/* Linha divisória */}
                     <div className="border-t border-gray-700 my-2"></div>
@@ -849,40 +1028,124 @@ const UserNovoPedidoPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Opções de desconto/acréscimo */}
+                {/* Opções de descontos */}
                 {clienteId && clienteData && (
                   <div className="bg-gray-800/50 rounded-lg p-3">
                     <h3 className="text-white font-medium mb-2">Opções de Faturamento</h3>
 
-                    <div className="space-y-3">
-                      {/* Botão para aplicar descontos por prazo */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // Aqui você pode implementar a lógica para mostrar um modal com as opções de prazo
-                          // Por enquanto, apenas mostramos uma mensagem
-                          showMessage('info', 'Funcionalidade em desenvolvimento');
-                        }}
-                        className="w-full flex items-center justify-center gap-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 py-2 px-4 rounded-lg transition-colors"
-                      >
-                        <Calendar size={18} />
-                        <span>Aplicar Desconto por Prazo</span>
-                      </button>
+                    {/* Descontos por prazo */}
+                    {descontosPrazo.length > 0 && (
+                      <div className="mb-3">
+                        <h4 className="text-sm text-gray-400 mb-2">Prazo de Faturamento</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {descontosPrazo.map((desconto) => {
+                            const isSelected = descontoPrazoSelecionado === desconto.id;
 
-                      {/* Botão para aplicar descontos por valor */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          // Aqui você pode implementar a lógica para mostrar um modal com as opções de valor
-                          // Por enquanto, apenas mostramos uma mensagem
-                          showMessage('info', 'Funcionalidade em desenvolvimento');
-                        }}
-                        className="w-full flex items-center justify-center gap-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 py-2 px-4 rounded-lg transition-colors"
-                      >
-                        <DollarSign size={18} />
-                        <span>Aplicar Desconto por Valor</span>
-                      </button>
-                    </div>
+                            // Definir cores com base no tipo (desconto ou acréscimo)
+                            const isDesconto = desconto.tipo === 'desconto';
+                            let bgColor = isSelected
+                              ? (isDesconto ? 'bg-green-500/20' : 'bg-red-500/20')
+                              : 'bg-gray-700/50';
+                            let hoverColor = isSelected
+                              ? (isDesconto ? 'hover:bg-green-500/30' : 'hover:bg-red-500/30')
+                              : 'hover:bg-gray-700/70';
+                            let textColor = isSelected
+                              ? (isDesconto ? 'text-green-400' : 'text-red-400')
+                              : 'text-gray-300';
+                            let Icon = isDesconto ? DollarSign : Calendar;
+
+                            return (
+                              <button
+                                key={desconto.id}
+                                type="button"
+                                onClick={() => {
+                                  // Se já está selecionado, remover da seleção
+                                  if (isSelected) {
+                                    setDescontoPrazoSelecionado(null);
+                                  } else {
+                                    // Selecionar este desconto
+                                    setDescontoPrazoSelecionado(desconto.id);
+                                  }
+                                }}
+                                className={`flex items-center justify-between gap-2 ${bgColor} ${hoverColor} ${textColor} py-2 px-3 rounded-lg transition-colors text-sm`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Icon size={16} />
+                                  <span>{desconto.prazo_dias} dias</span>
+                                </div>
+                                <span className={isDesconto ? 'text-green-400' : 'text-red-400'}>
+                                  {isDesconto ? '-' : '+'}{desconto.percentual}%
+                                </span>
+                                {isSelected && (
+                                  <span className="ml-1 bg-primary-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
+                                    ✓
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Descontos por valor */}
+                    {descontosValor.length > 0 && (
+                      <div>
+                        <h4 className="text-sm text-gray-400 mb-2">Valor Mínimo</h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {descontosValor.map((desconto) => {
+                            const isSelected = descontoValorSelecionado === desconto.id;
+
+                            // Definir cores com base no tipo (desconto ou acréscimo)
+                            const isDesconto = desconto.tipo === 'desconto';
+                            let bgColor = isSelected
+                              ? (isDesconto ? 'bg-green-500/20' : 'bg-red-500/20')
+                              : 'bg-gray-700/50';
+                            let hoverColor = isSelected
+                              ? (isDesconto ? 'hover:bg-green-500/30' : 'hover:bg-red-500/30')
+                              : 'hover:bg-gray-700/70';
+                            let textColor = isSelected
+                              ? (isDesconto ? 'text-green-400' : 'text-red-400')
+                              : 'text-gray-300';
+
+                            return (
+                              <button
+                                key={desconto.id}
+                                type="button"
+                                onClick={() => {
+                                  // Se já está selecionado, remover da seleção
+                                  if (isSelected) {
+                                    setDescontoValorSelecionado(null);
+                                  } else {
+                                    // Selecionar este desconto
+                                    setDescontoValorSelecionado(desconto.id);
+                                  }
+                                }}
+                                className={`flex items-center justify-between gap-2 ${bgColor} ${hoverColor} ${textColor} py-2 px-3 rounded-lg transition-colors text-sm`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <DollarSign size={16} />
+                                  <span>Min: {formatarPreco(desconto.valor_minimo)}</span>
+                                </div>
+                                <span className={isDesconto ? 'text-green-400' : 'text-red-400'}>
+                                  {isDesconto ? '-' : '+'}{desconto.percentual}%
+                                </span>
+                                {isSelected && (
+                                  <span className="ml-1 bg-primary-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
+                                    ✓
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mensagem quando não há descontos */}
+                    {descontosPrazo.length === 0 && descontosValor.length === 0 && (
+                      <p className="text-gray-400 text-sm">Nenhuma condição de pagamento disponível para este cliente</p>
+                    )}
                   </div>
                 )}
               </div>
