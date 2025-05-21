@@ -20,6 +20,7 @@ const UserNovoClientePage: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [tipoDocumento, setTipoDocumento] = useState<'CNPJ' | 'CPF'>('CNPJ');
   const [documento, setDocumento] = useState('');
@@ -313,6 +314,9 @@ const UserNovoClientePage: React.FC = () => {
         return;
       }
 
+      // Ativar o indicador de loading
+      setIsCnpjLoading(true);
+
       const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
       const data = await response.json();
 
@@ -335,6 +339,9 @@ const UserNovoClientePage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao buscar CNPJ:', error);
       showMessage('error', 'Erro ao buscar CNPJ. Tente novamente.');
+    } finally {
+      // Desativar o indicador de loading
+      setIsCnpjLoading(false);
     }
   };
 
@@ -438,19 +445,6 @@ const UserNovoClientePage: React.FC = () => {
         }
       }
 
-      // Montar o endereço completo a partir dos campos individuais
-      let enderecoCompleto = '';
-
-      if (endereco) {
-        enderecoCompleto = endereco;
-
-        if (numero) enderecoCompleto += `, ${numero}`;
-        if (complemento) enderecoCompleto += `, ${complemento}`;
-        if (bairro) enderecoCompleto += `, ${bairro}`;
-        if (cidade && estado) enderecoCompleto += `, ${cidade}/${estado}`;
-        if (cep) enderecoCompleto += `, ${cep}`;
-      }
-
       // Validar telefones
       if (telefones.length === 0) {
         setError('Adicione pelo menos um telefone');
@@ -480,7 +474,14 @@ const UserNovoClientePage: React.FC = () => {
           telefone: telefonePrincipal,
           telefones: telefonesParaSalvar,
           email: email || null,
-          endereco: enderecoCompleto || null,
+          // Salvar cada campo de endereço separadamente
+          endereco: endereco || null,
+          numero: numero || null,
+          complemento: complemento || null,
+          bairro: bairro || null,
+          cidade: cidade || null,
+          estado: estado || null,
+          cep: cep ? cep.replace(/\D/g, '') : null,
           empresa_id: empresaId,
           usuario_id: userData.user.id
         })
@@ -576,9 +577,14 @@ const UserNovoClientePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={buscarCNPJ}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white"
+                  disabled={isCnpjLoading}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Search size={18} />
+                  {isCnpjLoading ? (
+                    <div className="w-4 h-4 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin"></div>
+                  ) : (
+                    <Search size={18} />
+                  )}
                 </button>
               )}
             </div>

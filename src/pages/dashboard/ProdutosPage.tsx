@@ -214,6 +214,9 @@ const ProdutosPage: React.FC = () => {
     quantidade: 0,
     observacao: ''
   });
+
+  // Estado para controlar quando o campo de quantidade de movimento está vazio
+  const [quantidadeMovimentoVazia, setQuantidadeMovimentoVazia] = useState(false);
   const [isLoadingEstoque, setIsLoadingEstoque] = useState(false);
 
   useEffect(() => {
@@ -232,6 +235,20 @@ const ProdutosPage: React.FC = () => {
       setFormularioResetado(false);
     }
   }, [showSidebar, formularioResetado]);
+
+  // Efeito para garantir que o tipo de visualização seja compatível com o tipo de controle
+  useEffect(() => {
+    console.log('Tipo de controle de estoque alterado para:', tipoControleEstoque);
+
+    // Forçar uma atualização da interface quando o tipo de controle mudar
+    document.title = `Nexo - Produtos (${tipoControleEstoque})`;
+
+    // Se o tipo de controle for 'faturamento', forçar a visualização para 'total'
+    if (tipoControleEstoque === 'faturamento' && tipoVisualizacaoEstoque !== 'total') {
+      console.log('Forçando visualização para "total" devido ao tipo de controle "faturamento"');
+      setTipoVisualizacaoEstoque('total');
+    }
+  }, [tipoControleEstoque, tipoVisualizacaoEstoque]);
 
   // Efeito para atualizar o valor final quando o preço, tipo de desconto ou valor do desconto mudar
   useEffect(() => {
@@ -358,27 +375,86 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
+      console.log('Carregando configuração de estoque para empresa:', usuarioData.empresa_id);
+
+      // Consulta direta para verificar o tipo de controle
+      const { data: rawData, error: rawError } = await supabase
+        .rpc('execute_sql', {
+          query_text: `SELECT tipo_controle FROM tipo_controle_estoque_config WHERE empresa_id = '${usuarioData.empresa_id}' LIMIT 1;`
+        });
+
+      console.log('Resultado da consulta direta:', rawData);
+
       const { data, error } = await supabase
         .from('tipo_controle_estoque_config')
-        .select('tipo_controle')
+        .select('*')
         .eq('empresa_id', usuarioData.empresa_id)
         .single();
 
       if (error) {
         // Se o erro for "não encontrado", usamos o valor padrão 'pedidos'
         if (error.code === 'PGRST116') {
+          console.log('Configuração de estoque não encontrada, criando uma nova...');
+
+          // Criar uma nova configuração com valor padrão
+          const { data: insertData, error: insertError } = await supabase
+            .from('tipo_controle_estoque_config')
+            .insert({
+              empresa_id: usuarioData.empresa_id,
+              tipo_controle: 'pedidos',
+              bloqueia_sem_estoque: false
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            console.error('Erro ao criar configuração de estoque:', insertError);
+            setTipoControleEstoque('pedidos');
+            return;
+          }
+
+          console.log('Nova configuração criada:', insertData);
           setTipoControleEstoque('pedidos');
+
+          // Forçar atualização da interface
+          setTimeout(() => {
+            console.log('Forçando atualização da interface após criar configuração');
+            setTipoControleEstoque('pedidos');
+          }, 100);
+
+          return;
         } else {
           console.error('Erro ao carregar configuração de estoque:', error);
+          setTipoControleEstoque('pedidos');
+          return;
         }
-        return;
       }
 
-      if (data && data.tipo_controle) {
-        setTipoControleEstoque(data.tipo_controle as 'faturamento' | 'pedidos');
+      if (data) {
+        console.log('Configuração de estoque carregada:', data);
+        const novoTipoControle = data.tipo_controle as 'faturamento' | 'pedidos';
+        console.log('Tipo de controle de estoque:', novoTipoControle);
+
+        // Forçar atualização da interface
+        setTipoControleEstoque('faturamento');
+
+        // Pequeno atraso para garantir que a interface seja atualizada
+        setTimeout(() => {
+          console.log('Definindo tipo de controle para:', novoTipoControle);
+          setTipoControleEstoque(novoTipoControle);
+
+          // Se o tipo de controle for 'faturamento', forçar a visualização para 'total'
+          if (novoTipoControle === 'faturamento') {
+            setTipoVisualizacaoEstoque('total');
+          }
+        }, 100);
+      } else {
+        console.log('Configuração de estoque vazia, usando padrão "pedidos"');
+        setTipoControleEstoque('pedidos');
       }
     } catch (error: any) {
       console.error('Erro ao carregar configuração de estoque:', error);
+      setTipoControleEstoque('pedidos');
     }
   };
 
@@ -395,10 +471,10 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      // Buscar todos os produtos da empresa
+      // Buscar todos os produtos da empresa com seus valores de estoque atual
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
-        .select('id')
+        .select('id, estoque_atual')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false);
 
@@ -408,31 +484,10 @@ const ProdutosPage: React.FC = () => {
       // Criar um objeto para armazenar as informações de estoque de cada produto
       const estoqueInfo: Record<string, { total: number, naoFaturado: number }> = {};
 
-      // Para cada produto, buscar as movimentações de estoque e calcular o saldo
+      // Para cada produto, buscar os pedidos pendentes para calcular o estoque não faturado
       for (const produto of produtosData) {
-        // Buscar movimentações de estoque
-        const { data: movimentosData, error: movimentosError } = await supabase
-          .from('produto_estoque')
-          .select('tipo_movimento, quantidade')
-          .eq('produto_id', produto.id)
-          .eq('empresa_id', usuarioData.empresa_id);
-
-        if (movimentosError) {
-          console.error(`Erro ao carregar movimentos do produto ${produto.id}:`, movimentosError);
-          continue;
-        }
-
-        // Calcular o saldo total
-        let saldoTotal = 0;
-        if (movimentosData && movimentosData.length > 0) {
-          movimentosData.forEach((movimento: any) => {
-            if (movimento.tipo_movimento === 'entrada') {
-              saldoTotal += parseFloat(movimento.quantidade);
-            } else {
-              saldoTotal -= parseFloat(movimento.quantidade);
-            }
-          });
-        }
+        // Obter o estoque atual diretamente da tabela de produtos
+        const estoqueAtual = parseFloat(produto.estoque_atual || '0');
 
         // Buscar pedidos pendentes que contêm este produto
         const { data: pedidosData, error: pedidosError } = await supabase
@@ -465,7 +520,7 @@ const ProdutosPage: React.FC = () => {
 
         // Armazenar as informações de estoque do produto
         estoqueInfo[produto.id] = {
-          total: saldoTotal,
+          total: estoqueAtual,
           naoFaturado: quantidadeNaoFaturada
         };
       }
@@ -737,6 +792,16 @@ const ProdutosPage: React.FC = () => {
 
       if (usuarioError) throw usuarioError;
 
+      // Buscar o estoque atual diretamente da tabela de produtos
+      const { data: produtoData, error: produtoError } = await supabase
+        .from('produtos')
+        .select('estoque_atual')
+        .eq('id', produtoId)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (produtoError) throw produtoError;
+
       // Buscar todos os movimentos de estoque do produto
       const { data: movimentosData, error: movimentosError } = await supabase
         .from('produto_estoque')
@@ -754,20 +819,12 @@ const ProdutosPage: React.FC = () => {
 
       if (movimentosError) throw movimentosError;
 
-      // Calcular o estoque atual
-      // Primeiro, calculamos o saldo total
-      let saldoTotal = 0;
-      movimentosData.forEach((movimento: any) => {
-        if (movimento.tipo_movimento === 'entrada') {
-          saldoTotal += parseFloat(movimento.quantidade);
-        } else {
-          saldoTotal -= parseFloat(movimento.quantidade);
-        }
-      });
+      // Usar o estoque atual do banco de dados
+      const estoqueAtualDB = parseFloat(produtoData.estoque_atual || '0');
 
-      // Depois, calculamos o saldo para cada movimento, começando do saldo atual
+      // Calcular o saldo para cada movimento, começando do saldo atual
       // e subtraindo cada movimento (já que estamos em ordem decrescente)
-      let saldoAtual = saldoTotal;
+      let saldoAtual = estoqueAtualDB;
       const movimentosComSaldo = movimentosData.map((movimento: any, index: number) => {
         // Para o primeiro item (mais recente), o saldo é o saldo atual
         if (index > 0) {
@@ -814,7 +871,7 @@ const ProdutosPage: React.FC = () => {
       }
 
       setEstoqueMovimentos(movimentosComSaldo);
-      setEstoqueAtual(saldoAtual);
+      setEstoqueAtual(estoqueAtualDB);
       setEstoqueNaoFaturado(quantidadeNaoFaturada);
     } catch (error: any) {
       console.error('Erro ao carregar movimentos de estoque:', error);
@@ -1186,6 +1243,11 @@ const ProdutosPage: React.FC = () => {
         return;
       }
 
+      // Calcular o novo valor de estoque
+      const novoEstoque = novoMovimento.tipo === 'entrada'
+        ? estoqueAtual + parseFloat(novoMovimento.quantidade.toString())
+        : estoqueAtual - parseFloat(novoMovimento.quantidade.toString());
+
       // Registrar o movimento
       const { error: movimentoError } = await supabase
         .from('produto_estoque')
@@ -1201,8 +1263,23 @@ const ProdutosPage: React.FC = () => {
 
       if (movimentoError) throw movimentoError;
 
+      // Atualizar o estoque atual na tabela de produtos
+      const { error: updateError } = await supabase
+        .from('produtos')
+        .update({ estoque_atual: novoEstoque })
+        .eq('id', editingProduto.id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (updateError) throw updateError;
+
+      // Atualizar o estado local do estoque atual imediatamente
+      setEstoqueAtual(novoEstoque);
+
       // Recarregar os movimentos
       await loadEstoqueMovimentos(editingProduto.id);
+
+      // Atualizar o estoque na grid
+      await loadProdutosEstoque();
 
       // Limpar o formulário
       setNovoMovimento({
@@ -1210,6 +1287,9 @@ const ProdutosPage: React.FC = () => {
         quantidade: 0,
         observacao: ''
       });
+
+      // Resetar o estado de campo vazio
+      setQuantidadeMovimentoVazia(false);
 
       showMessage('success', `${novoMovimento.tipo === 'entrada' ? 'Entrada' : 'Saída'} de estoque registrada com sucesso!`);
     } catch (error: any) {
@@ -1547,14 +1627,22 @@ const ProdutosPage: React.FC = () => {
       } else {
         // Se for um novo produto, mantém o sidebar aberto e muda para a aba de fotos
         showMessage('success', 'Produto adicionado com sucesso! Agora você pode adicionar fotos.');
+
         // Atualiza o editingProduto com o produto recém-criado
-        setEditingProduto({
+        const novoProdutoCriado = {
           ...novoProduto,
           id: productId,
           grupo_id: selectedGrupo.id,
           empresa_id: usuarioData.empresa_id,
           created_at: new Date().toISOString()
-        });
+        };
+
+        setEditingProduto(novoProdutoCriado);
+
+        // Carrega os movimentos de estoque para o novo produto
+        // Isso garante que o estoque inicial seja exibido na aba de estoque
+        await loadEstoqueMovimentos(productId);
+
         // Muda para a aba de fotos
         setActiveTab('fotos');
       }
@@ -2085,7 +2173,8 @@ const ProdutosPage: React.FC = () => {
                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
                     Estoque: {estoqueInfo.total.toFixed(2)}
                   </span>
-                  {estoqueInfo.naoFaturado > 0 && (
+                  {/* Mostrar "Não Faturado" apenas quando o tipo de controle for por pedidos */}
+                  {tipoControleEstoque === 'pedidos' && estoqueInfo.naoFaturado > 0 && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400">
                       Não Faturado: {estoqueInfo.naoFaturado.toFixed(2)}
                     </span>
@@ -2257,7 +2346,7 @@ const ProdutosPage: React.FC = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.3 }}
-              className="fixed right-0 top-0 h-screen w-full max-w-md bg-background-card border-l border-gray-800 z-50 overflow-y-auto"
+              className={`fixed right-0 top-0 h-screen w-full ${activeTab === 'estoque' ? 'max-w-[50vw]' : 'max-w-md'} bg-background-card border-l border-gray-800 z-50 overflow-y-auto`}
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
@@ -2356,6 +2445,8 @@ const ProdutosPage: React.FC = () => {
                         }`}
                         onClick={() => {
                           if (editingProduto) {
+                            // Carrega os movimentos de estoque ao mudar para a aba de estoque
+                            loadEstoqueMovimentos(editingProduto.id);
                             setActiveTab('estoque');
                           } else {
                             showMessage('info', 'Salve o produto primeiro para gerenciar o estoque');
@@ -2563,8 +2654,9 @@ const ProdutosPage: React.FC = () => {
                           </div>
                         )}
 
-                        <div className="mb-4">
-                          <div className="flex items-center">
+                        {/* Seção de Produto em Promoção */}
+                        <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-gray-800/30">
+                          <div className="flex items-center mb-4">
                             <input
                               type="checkbox"
                               id="promocao"
@@ -2591,10 +2683,156 @@ const ProdutosPage: React.FC = () => {
                               Produto em Promoção
                             </label>
                           </div>
+
+                          {novoProduto.promocao && (
+                            <div className="pl-7 border-l-2 border-primary-500/30 ml-1.5">
+                              <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  Tipo de Desconto <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex gap-4">
+                                  <div className="flex items-center">
+                                    <input
+                                      type="radio"
+                                      id="percentual"
+                                      name="tipo_desconto"
+                                      value="percentual"
+                                      checked={novoProduto.tipo_desconto === 'percentual'}
+                                      onChange={() => {
+                                        // Se não tinha tipo de desconto definido, inicializa com 10%
+                                        const novoValorDesconto = !novoProduto.tipo_desconto || novoProduto.tipo_desconto !== 'percentual'
+                                          ? 10
+                                          : novoProduto.valor_desconto;
+
+                                        setNovoProduto({
+                                          ...novoProduto,
+                                          tipo_desconto: 'percentual',
+                                          valor_desconto: novoValorDesconto || 10
+                                        });
+
+                                        // Atualizar o formato do desconto quando mudar o tipo
+                                        setDescontoFormatado((novoValorDesconto || 10).toString());
+                                      }}
+                                      className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                      required
+                                    />
+                                    <label htmlFor="percentual" className="text-sm text-white cursor-pointer">
+                                      Percentual (%)
+                                    </label>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <input
+                                      type="radio"
+                                      id="valor"
+                                      name="tipo_desconto"
+                                      value="valor"
+                                      checked={novoProduto.tipo_desconto === 'valor'}
+                                      onChange={() => {
+                                        // Se não tinha tipo de desconto definido ou era percentual, inicializa com valor equivalente a 10% do preço
+                                        let novoValorDesconto = novoProduto.valor_desconto;
+
+                                        if (!novoProduto.tipo_desconto || novoProduto.tipo_desconto !== 'valor') {
+                                          // Calcula 10% do preço como valor padrão
+                                          novoValorDesconto = novoProduto.preco * 0.1;
+                                        }
+
+                                        setNovoProduto({
+                                          ...novoProduto,
+                                          tipo_desconto: 'valor',
+                                          valor_desconto: novoValorDesconto || (novoProduto.preco * 0.1)
+                                        });
+
+                                        // Atualizar o formato do desconto quando mudar o tipo
+                                        setDescontoFormatado(formatarPreco(novoValorDesconto || (novoProduto.preco * 0.1)));
+                                      }}
+                                      className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                      required
+                                    />
+                                    <label htmlFor="valor" className="text-sm text-white cursor-pointer">
+                                      Valor (R$)
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  {novoProduto.tipo_desconto === 'percentual' ? 'Percentual de Desconto (%)' : 'Valor do Desconto (R$)'} <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                  {novoProduto.tipo_desconto === 'valor' && (
+                                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                      R$
+                                    </span>
+                                  )}
+                                  <input
+                                    type="text"
+                                    value={descontoFormatado}
+                                    onChange={(e) => {
+                                      setDescontoFormatado(e.target.value);
+                                      // Atualiza o valor numérico no estado do produto
+                                      const valorNumerico = desformatarPreco(e.target.value);
+                                      setNovoProduto({ ...novoProduto, valor_desconto: valorNumerico });
+                                    }}
+                                    onFocus={() => {
+                                      // Ao receber o foco, limpa o campo para facilitar a digitação
+                                      setDescontoFormatado('');
+                                    }}
+                                    onBlur={() => {
+                                      // Ao perder o foco, formata corretamente o valor
+                                      const valorNumerico = desformatarPreco(descontoFormatado);
+                                      if (novoProduto.tipo_desconto === 'percentual') {
+                                        // Para percentual, não usamos formatação de moeda
+                                        setDescontoFormatado(valorNumerico.toString());
+                                      } else {
+                                        // Para valor, usamos formatação de moeda
+                                        setDescontoFormatado(formatarPreco(valorNumerico));
+                                      }
+                                    }}
+                                    className={`w-full bg-gray-800/50 border ${
+                                      !novoProduto.valor_desconto || novoProduto.valor_desconto <= 0
+                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                                        : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                                    } rounded-lg py-2 ${novoProduto.tipo_desconto === 'valor' ? 'pl-8' : 'pl-3'} pr-3 text-white focus:outline-none focus:ring-1`}
+                                    placeholder={novoProduto.tipo_desconto === 'percentual' ? '10' : '0,00'}
+                                    required
+                                  />
+                                  {novoProduto.tipo_desconto === 'percentual' && (
+                                    <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                      %
+                                    </span>
+                                  )}
+                                </div>
+                                {(!novoProduto.valor_desconto || novoProduto.valor_desconto <= 0) && (
+                                  <p className="text-red-500 text-xs mt-1">
+                                    É necessário informar um valor de desconto maior que zero
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="mb-2">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  Valor Final
+                                </label>
+                                <div className="relative">
+                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                    R$
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={valorFinalFormatado}
+                                    className="w-full bg-gray-700/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none"
+                                    readOnly
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="mb-4">
-                          <div className="flex items-center">
+                        {/* Seção de Desconto por Quantidade Mínima */}
+                        <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-gray-800/30">
+                          <div className="flex items-center mb-4">
                             <input
                               type="checkbox"
                               id="desconto_quantidade"
@@ -2622,298 +2860,153 @@ const ProdutosPage: React.FC = () => {
                               Desconto por Quantidade Mínima
                             </label>
                           </div>
+
+                          {novoProduto.desconto_quantidade && (
+                            <div className="pl-7 border-l-2 border-primary-500/30 ml-1.5">
+                              <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  Quantidade Mínima <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  value={novoProduto.quantidade_minima || 5}
+                                  onChange={(e) => {
+                                    const valor = parseInt(e.target.value);
+                                    setNovoProduto({ ...novoProduto, quantidade_minima: valor > 0 ? valor : 1 });
+                                  }}
+                                  min="1"
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder="5"
+                                  required
+                                />
+                              </div>
+
+                              <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  Tipo de Desconto por Quantidade <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex gap-4">
+                                  <div className="flex items-center">
+                                    <input
+                                      type="radio"
+                                      id="percentual_quantidade"
+                                      name="tipo_desconto_quantidade"
+                                      value="percentual"
+                                      checked={novoProduto.tipo_desconto_quantidade === 'percentual'}
+                                      onChange={() => {
+                                        // Se não tinha tipo de desconto definido, inicializa com 10%
+                                        const novoValorDesconto = !novoProduto.tipo_desconto_quantidade || novoProduto.tipo_desconto_quantidade !== 'percentual'
+                                          ? 10
+                                          : novoProduto.valor_desconto_quantidade;
+
+                                        setNovoProduto({
+                                          ...novoProduto,
+                                          tipo_desconto_quantidade: 'percentual',
+                                          valor_desconto_quantidade: novoValorDesconto || 10
+                                        });
+
+                                        // Atualizar o formato do desconto quando mudar o tipo
+                                        setDescontoQuantidadeFormatado((novoValorDesconto || 10).toString());
+                                      }}
+                                      className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                      required
+                                    />
+                                    <label htmlFor="percentual_quantidade" className="text-sm text-white cursor-pointer">
+                                      Percentual (%)
+                                    </label>
+                                  </div>
+                                  <div className="flex items-center">
+                                    <input
+                                      type="radio"
+                                      id="valor_quantidade"
+                                      name="tipo_desconto_quantidade"
+                                      value="valor"
+                                      checked={novoProduto.tipo_desconto_quantidade === 'valor'}
+                                      onChange={() => {
+                                        // Se não tinha tipo de desconto definido ou era percentual, inicializa com valor equivalente a 10% do preço
+                                        let novoValorDesconto = novoProduto.valor_desconto_quantidade;
+
+                                        if (!novoProduto.tipo_desconto_quantidade || novoProduto.tipo_desconto_quantidade !== 'valor') {
+                                          // Calcula 10% do preço como valor padrão
+                                          novoValorDesconto = novoProduto.preco * 0.1;
+                                        }
+
+                                        setNovoProduto({
+                                          ...novoProduto,
+                                          tipo_desconto_quantidade: 'valor',
+                                          valor_desconto_quantidade: novoValorDesconto || (novoProduto.preco * 0.1)
+                                        });
+
+                                        // Atualizar o formato do desconto quando mudar o tipo
+                                        setDescontoQuantidadeFormatado(formatarPreco(novoValorDesconto || (novoProduto.preco * 0.1)));
+                                      }}
+                                      className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                      required
+                                    />
+                                    <label htmlFor="valor_quantidade" className="text-sm text-white cursor-pointer">
+                                      Valor (R$)
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="mb-2">
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  {novoProduto.tipo_desconto_quantidade === 'percentual' ? 'Percentual de Desconto (%)' : 'Valor do Desconto (R$)'} <span className="text-red-500">*</span>
+                                </label>
+                                <div className="relative">
+                                  {novoProduto.tipo_desconto_quantidade === 'valor' && (
+                                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                      R$
+                                    </span>
+                                  )}
+                                  <input
+                                    type="text"
+                                    value={descontoQuantidadeFormatado}
+                                    onChange={(e) => {
+                                      setDescontoQuantidadeFormatado(e.target.value);
+                                      // Atualiza o valor numérico no estado do produto
+                                      const valorNumerico = desformatarPreco(e.target.value);
+                                      setNovoProduto({ ...novoProduto, valor_desconto_quantidade: valorNumerico });
+                                    }}
+                                    onFocus={() => {
+                                      // Ao receber o foco, limpa o campo para facilitar a digitação
+                                      setDescontoQuantidadeFormatado('');
+                                    }}
+                                    onBlur={() => {
+                                      // Ao perder o foco, formata corretamente o valor
+                                      const valorNumerico = desformatarPreco(descontoQuantidadeFormatado);
+                                      if (novoProduto.tipo_desconto_quantidade === 'percentual') {
+                                        // Para percentual, não usamos formatação de moeda
+                                        setDescontoQuantidadeFormatado(valorNumerico.toString());
+                                      } else {
+                                        // Para valor, usamos formatação de moeda
+                                        setDescontoQuantidadeFormatado(formatarPreco(valorNumerico));
+                                      }
+                                    }}
+                                    className={`w-full bg-gray-800/50 border ${
+                                      !novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0
+                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                                        : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                                    } rounded-lg py-2 ${novoProduto.tipo_desconto_quantidade === 'valor' ? 'pl-8' : 'pl-3'} pr-3 text-white focus:outline-none focus:ring-1`}
+                                    placeholder={novoProduto.tipo_desconto_quantidade === 'percentual' ? '10' : '0,00'}
+                                    required
+                                  />
+                                  {novoProduto.tipo_desconto_quantidade === 'percentual' && (
+                                    <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                      %
+                                    </span>
+                                  )}
+                                </div>
+                                {(!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0) && (
+                                  <p className="text-red-500 text-xs mt-1">
+                                    É necessário informar um valor de desconto maior que zero
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-
-                        {novoProduto.promocao && (
-                          <>
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Tipo de Desconto <span className="text-red-500">*</span>
-                              </label>
-                              <div className="flex gap-4">
-                                <div className="flex items-center">
-                                  <input
-                                    type="radio"
-                                    id="percentual"
-                                    name="tipo_desconto"
-                                    value="percentual"
-                                    checked={novoProduto.tipo_desconto === 'percentual'}
-                                    onChange={() => {
-                                      // Se não tinha tipo de desconto definido, inicializa com 10%
-                                      const novoValorDesconto = !novoProduto.tipo_desconto || novoProduto.tipo_desconto !== 'percentual'
-                                        ? 10
-                                        : novoProduto.valor_desconto;
-
-                                      setNovoProduto({
-                                        ...novoProduto,
-                                        tipo_desconto: 'percentual',
-                                        valor_desconto: novoValorDesconto || 10
-                                      });
-
-                                      // Atualizar o formato do desconto quando mudar o tipo
-                                      setDescontoFormatado((novoValorDesconto || 10).toString());
-                                    }}
-                                    className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
-                                    required
-                                  />
-                                  <label htmlFor="percentual" className="text-sm text-white cursor-pointer">
-                                    Percentual (%)
-                                  </label>
-                                </div>
-                                <div className="flex items-center">
-                                  <input
-                                    type="radio"
-                                    id="valor"
-                                    name="tipo_desconto"
-                                    value="valor"
-                                    checked={novoProduto.tipo_desconto === 'valor'}
-                                    onChange={() => {
-                                      // Se não tinha tipo de desconto definido ou era percentual, inicializa com valor equivalente a 10% do preço
-                                      let novoValorDesconto = novoProduto.valor_desconto;
-
-                                      if (!novoProduto.tipo_desconto || novoProduto.tipo_desconto !== 'valor') {
-                                        // Calcula 10% do preço como valor padrão
-                                        novoValorDesconto = novoProduto.preco * 0.1;
-                                      }
-
-                                      setNovoProduto({
-                                        ...novoProduto,
-                                        tipo_desconto: 'valor',
-                                        valor_desconto: novoValorDesconto || (novoProduto.preco * 0.1)
-                                      });
-
-                                      // Atualizar o formato do desconto quando mudar o tipo
-                                      setDescontoFormatado(formatarPreco(novoValorDesconto || (novoProduto.preco * 0.1)));
-                                    }}
-                                    className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
-                                    required
-                                  />
-                                  <label htmlFor="valor" className="text-sm text-white cursor-pointer">
-                                    Valor (R$)
-                                  </label>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                {novoProduto.tipo_desconto === 'percentual' ? 'Percentual de Desconto (%)' : 'Valor do Desconto (R$)'} <span className="text-red-500">*</span>
-                              </label>
-                              <div className="relative">
-                                {novoProduto.tipo_desconto === 'valor' && (
-                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                                    R$
-                                  </span>
-                                )}
-                                <input
-                                  type="text"
-                                  value={descontoFormatado}
-                                  onChange={(e) => {
-                                    setDescontoFormatado(e.target.value);
-                                    // Atualiza o valor numérico no estado do produto
-                                    const valorNumerico = desformatarPreco(e.target.value);
-                                    setNovoProduto({ ...novoProduto, valor_desconto: valorNumerico });
-                                  }}
-                                  onFocus={() => {
-                                    // Ao receber o foco, limpa o campo para facilitar a digitação
-                                    setDescontoFormatado('');
-                                  }}
-                                  onBlur={() => {
-                                    // Ao perder o foco, formata corretamente o valor
-                                    const valorNumerico = desformatarPreco(descontoFormatado);
-                                    if (novoProduto.tipo_desconto === 'percentual') {
-                                      // Para percentual, não usamos formatação de moeda
-                                      setDescontoFormatado(valorNumerico.toString());
-                                    } else {
-                                      // Para valor, usamos formatação de moeda
-                                      setDescontoFormatado(formatarPreco(valorNumerico));
-                                    }
-                                  }}
-                                  className={`w-full bg-gray-800/50 border ${
-                                    !novoProduto.valor_desconto || novoProduto.valor_desconto <= 0
-                                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
-                                      : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
-                                  } rounded-lg py-2 ${novoProduto.tipo_desconto === 'valor' ? 'pl-8' : 'pl-3'} pr-3 text-white focus:outline-none focus:ring-1`}
-                                  placeholder={novoProduto.tipo_desconto === 'percentual' ? '10' : '0,00'}
-                                  required
-                                />
-                                {novoProduto.tipo_desconto === 'percentual' && (
-                                  <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
-                                    %
-                                  </span>
-                                )}
-                              </div>
-                              {(!novoProduto.valor_desconto || novoProduto.valor_desconto <= 0) && (
-                                <p className="text-red-500 text-xs mt-1">
-                                  É necessário informar um valor de desconto maior que zero
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Valor Final
-                              </label>
-                              <div className="relative">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                                  R$
-                                </span>
-                                <input
-                                  type="text"
-                                  value={valorFinalFormatado}
-                                  className="w-full bg-gray-700/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none"
-                                  readOnly
-                                />
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {novoProduto.desconto_quantidade && (
-                          <>
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Quantidade Mínima <span className="text-red-500">*</span>
-                              </label>
-                              <input
-                                type="number"
-                                value={novoProduto.quantidade_minima || 5}
-                                onChange={(e) => {
-                                  const valor = parseInt(e.target.value);
-                                  setNovoProduto({ ...novoProduto, quantidade_minima: valor > 0 ? valor : 1 });
-                                }}
-                                min="1"
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                placeholder="5"
-                                required
-                              />
-                            </div>
-
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                Tipo de Desconto por Quantidade <span className="text-red-500">*</span>
-                              </label>
-                              <div className="flex gap-4">
-                                <div className="flex items-center">
-                                  <input
-                                    type="radio"
-                                    id="percentual_quantidade"
-                                    name="tipo_desconto_quantidade"
-                                    value="percentual"
-                                    checked={novoProduto.tipo_desconto_quantidade === 'percentual'}
-                                    onChange={() => {
-                                      // Se não tinha tipo de desconto definido, inicializa com 10%
-                                      const novoValorDesconto = !novoProduto.tipo_desconto_quantidade || novoProduto.tipo_desconto_quantidade !== 'percentual'
-                                        ? 10
-                                        : novoProduto.valor_desconto_quantidade;
-
-                                      setNovoProduto({
-                                        ...novoProduto,
-                                        tipo_desconto_quantidade: 'percentual',
-                                        valor_desconto_quantidade: novoValorDesconto || 10
-                                      });
-
-                                      // Atualizar o formato do desconto quando mudar o tipo
-                                      setDescontoQuantidadeFormatado((novoValorDesconto || 10).toString());
-                                    }}
-                                    className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
-                                    required
-                                  />
-                                  <label htmlFor="percentual_quantidade" className="text-sm text-white cursor-pointer">
-                                    Percentual (%)
-                                  </label>
-                                </div>
-                                <div className="flex items-center">
-                                  <input
-                                    type="radio"
-                                    id="valor_quantidade"
-                                    name="tipo_desconto_quantidade"
-                                    value="valor"
-                                    checked={novoProduto.tipo_desconto_quantidade === 'valor'}
-                                    onChange={() => {
-                                      // Se não tinha tipo de desconto definido ou era percentual, inicializa com valor equivalente a 10% do preço
-                                      let novoValorDesconto = novoProduto.valor_desconto_quantidade;
-
-                                      if (!novoProduto.tipo_desconto_quantidade || novoProduto.tipo_desconto_quantidade !== 'valor') {
-                                        // Calcula 10% do preço como valor padrão
-                                        novoValorDesconto = novoProduto.preco * 0.1;
-                                      }
-
-                                      setNovoProduto({
-                                        ...novoProduto,
-                                        tipo_desconto_quantidade: 'valor',
-                                        valor_desconto_quantidade: novoValorDesconto || (novoProduto.preco * 0.1)
-                                      });
-
-                                      // Atualizar o formato do desconto quando mudar o tipo
-                                      setDescontoQuantidadeFormatado(formatarPreco(novoValorDesconto || (novoProduto.preco * 0.1)));
-                                    }}
-                                    className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
-                                    required
-                                  />
-                                  <label htmlFor="valor_quantidade" className="text-sm text-white cursor-pointer">
-                                    Valor (R$)
-                                  </label>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-gray-400 mb-2">
-                                {novoProduto.tipo_desconto_quantidade === 'percentual' ? 'Percentual de Desconto (%)' : 'Valor do Desconto (R$)'} <span className="text-red-500">*</span>
-                              </label>
-                              <div className="relative">
-                                {novoProduto.tipo_desconto_quantidade === 'valor' && (
-                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                                    R$
-                                  </span>
-                                )}
-                                <input
-                                  type="text"
-                                  value={descontoQuantidadeFormatado}
-                                  onChange={(e) => {
-                                    setDescontoQuantidadeFormatado(e.target.value);
-                                    // Atualiza o valor numérico no estado do produto
-                                    const valorNumerico = desformatarPreco(e.target.value);
-                                    setNovoProduto({ ...novoProduto, valor_desconto_quantidade: valorNumerico });
-                                  }}
-                                  onFocus={() => {
-                                    // Ao receber o foco, limpa o campo para facilitar a digitação
-                                    setDescontoQuantidadeFormatado('');
-                                  }}
-                                  onBlur={() => {
-                                    // Ao perder o foco, formata corretamente o valor
-                                    const valorNumerico = desformatarPreco(descontoQuantidadeFormatado);
-                                    if (novoProduto.tipo_desconto_quantidade === 'percentual') {
-                                      // Para percentual, não usamos formatação de moeda
-                                      setDescontoQuantidadeFormatado(valorNumerico.toString());
-                                    } else {
-                                      // Para valor, usamos formatação de moeda
-                                      setDescontoQuantidadeFormatado(formatarPreco(valorNumerico));
-                                    }
-                                  }}
-                                  className={`w-full bg-gray-800/50 border ${
-                                    !novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0
-                                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
-                                      : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
-                                  } rounded-lg py-2 ${novoProduto.tipo_desconto_quantidade === 'valor' ? 'pl-8' : 'pl-3'} pr-3 text-white focus:outline-none focus:ring-1`}
-                                  placeholder={novoProduto.tipo_desconto_quantidade === 'percentual' ? '10' : '0,00'}
-                                  required
-                                />
-                                {novoProduto.tipo_desconto_quantidade === 'percentual' && (
-                                  <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
-                                    %
-                                  </span>
-                                )}
-                              </div>
-                              {(!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0) && (
-                                <p className="text-red-500 text-xs mt-1">
-                                  É necessário informar um valor de desconto maior que zero
-                                </p>
-                              )}
-                            </div>
-                          </>
-                        )}
 
                         {/* Seção de Opções Adicionais ocultada conforme solicitado */}
 
@@ -2939,19 +3032,7 @@ const ProdutosPage: React.FC = () => {
                           </Button>
                         </div>
 
-                        {editingProduto && (
-                          <div className="mt-4 pt-4 border-t border-gray-700">
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="w-full flex items-center justify-center gap-2"
-                              onClick={() => setActiveTab('fotos')}
-                            >
-                              <Camera size={16} />
-                              <span>Gerenciar Fotos do Produto</span>
-                            </Button>
-                          </div>
-                        )}
+
                       </form>
                     ) : activeTab === 'fotos' ? (
                       <div className="space-y-6">
@@ -3101,54 +3182,10 @@ const ProdutosPage: React.FC = () => {
                           <>
                             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
                               <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
-                                <div>
-                                  <h3 className="text-white font-medium">Controle de Estoque</h3>
-                                  <p className="text-xs text-gray-400 mt-1">
-                                    Modo de controle: {tipoControleEstoque === 'pedidos' ? 'Por Pedidos' : 'Por Faturamento'}
-                                  </p>
-                                </div>
-
                                 <div className="flex flex-col md:flex-row md:items-center gap-3">
-                                  {/* Seletor de visualização de estoque */}
-                                  <div className="flex items-center gap-3 bg-gray-900/50 border border-gray-800 rounded-lg p-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => setTipoVisualizacaoEstoque('total')}
-                                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                                        tipoVisualizacaoEstoque === 'total'
-                                          ? 'bg-primary-500/20 text-primary-400'
-                                          : 'text-gray-400 hover:text-white'
-                                      }`}
-                                    >
-                                      Estoque Total
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setTipoVisualizacaoEstoque('nao-faturado')}
-                                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                                        tipoVisualizacaoEstoque === 'nao-faturado'
-                                          ? 'bg-primary-500/20 text-primary-400'
-                                          : 'text-gray-400 hover:text-white'
-                                      }`}
-                                    >
-                                      Não Faturado
-                                    </button>
-                                  </div>
-
                                   {/* Exibição do estoque */}
                                   <div className="text-sm text-gray-400 bg-gray-900/50 border border-gray-800 rounded-lg p-2 px-3">
-                                    {tipoVisualizacaoEstoque === 'total' ? (
-                                      <>
-                                        Estoque Atual: <span className="font-semibold text-white">{estoqueAtual.toFixed(2)}</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        Estoque Não Faturado: <span className="font-semibold text-white">{estoqueNaoFaturado.toFixed(2)}</span>
-                                        <span className="text-xs ml-2 text-gray-500">
-                                          (Disponível: {(estoqueAtual - estoqueNaoFaturado).toFixed(2)})
-                                        </span>
-                                      </>
-                                    )}
+                                    Estoque Atual: <span className="font-semibold text-white">{estoqueAtual.toFixed(2)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -3201,22 +3238,72 @@ const ProdutosPage: React.FC = () => {
                                       <label className="block text-sm font-medium text-gray-400 mb-2">
                                         Quantidade
                                       </label>
-                                      <input
-                                        type="number"
-                                        value={novoMovimento.quantidade}
-                                        onChange={(e) => {
-                                          const valor = parseFloat(e.target.value);
-                                          setNovoMovimento({
-                                            ...novoMovimento,
-                                            quantidade: valor >= 0 ? valor : 0
-                                          });
-                                        }}
-                                        min="0.01"
-                                        step="0.01"
-                                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                        placeholder="0,00"
-                                        required
-                                      />
+                                      {/* Verificar se a unidade de medida é KG para definir o placeholder adequado */}
+                                      {(() => {
+                                        // Verificar se a unidade de medida é KG
+                                        const unidadeSelecionada = unidadesMedida.find(u => u.id === editingProduto?.unidade_medida_id);
+                                        const isKG = unidadeSelecionada?.sigla === 'KG';
+                                        const placeholder = isKG ? "0,000" : "0";
+
+                                        return (
+                                          <input
+                                            type="text"
+                                            value={novoMovimento.quantidade === 0 && quantidadeMovimentoVazia ? '' : novoMovimento.quantidade}
+                                            onChange={(e) => {
+                                              // Se o campo estiver vazio
+                                              if (e.target.value === '') {
+                                                setQuantidadeMovimentoVazia(true);
+                                                setNovoMovimento({
+                                                  ...novoMovimento,
+                                                  quantidade: 0
+                                                });
+                                                return;
+                                              }
+
+                                              setQuantidadeMovimentoVazia(false);
+
+                                              // Remover caracteres não numéricos, exceto ponto e vírgula
+                                              const valorLimpo = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+
+                                              // Se não for um número válido, não atualiza
+                                              if (isNaN(parseFloat(valorLimpo))) {
+                                                return;
+                                              }
+
+                                              const valor = parseFloat(valorLimpo);
+
+                                              // Se não for KG e o valor for fracionado, arredondar para inteiro
+                                              const valorFinal = !isKG && valor % 1 !== 0 ? Math.floor(valor) : valor;
+
+                                              setNovoMovimento({
+                                                ...novoMovimento,
+                                                quantidade: valorFinal >= 0 ? valorFinal : 0
+                                              });
+                                            }}
+                                            onFocus={() => {
+                                              // Ao receber o foco, garantir que o campo esteja vazio para facilitar a digitação
+                                              if (novoMovimento.quantidade === 0) {
+                                                setQuantidadeMovimentoVazia(true);
+                                              }
+                                            }}
+                                            onBlur={() => {
+                                              // Se o campo estiver vazio ao perder o foco, mantém vazio
+                                              if (!quantidadeMovimentoVazia) {
+                                                // Se tiver valor, formata para casas decimais adequadas
+                                                const casasDecimais = isKG ? 3 : 0;
+                                                setNovoMovimento({
+                                                  ...novoMovimento,
+                                                  quantidade: parseFloat(novoMovimento.quantidade.toFixed(casasDecimais))
+                                                });
+                                              }
+                                            }}
+                                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                            placeholder={placeholder}
+                                            required
+                                          />
+                                        );
+                                      })()}
+
                                     </div>
 
                                     {/* Observação */}

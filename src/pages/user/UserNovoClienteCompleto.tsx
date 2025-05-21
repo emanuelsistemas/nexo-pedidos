@@ -21,6 +21,7 @@ const UserNovoClienteCompleto: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [tipoDocumento, setTipoDocumento] = useState<'CNPJ' | 'CPF'>('CNPJ');
   const [documento, setDocumento] = useState('');
@@ -321,6 +322,9 @@ const UserNovoClienteCompleto: React.FC = () => {
         return;
       }
 
+      // Ativar o indicador de loading
+      setIsCnpjLoading(true);
+
       const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
       const data = await response.json();
 
@@ -343,6 +347,9 @@ const UserNovoClienteCompleto: React.FC = () => {
     } catch (error) {
       console.error('Erro ao buscar CNPJ:', error);
       showMessage('error', 'Erro ao buscar CNPJ. Tente novamente.');
+    } finally {
+      // Desativar o indicador de loading
+      setIsCnpjLoading(false);
     }
   };
 
@@ -542,9 +549,14 @@ const UserNovoClienteCompleto: React.FC = () => {
                 <button
                   type="button"
                   onClick={buscarCNPJ}
-                  className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors"
+                  disabled={isCnpjLoading}
+                  className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  <Search size={18} />
+                  {isCnpjLoading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <Search size={18} />
+                  )}
                 </button>
               )}
             </div>

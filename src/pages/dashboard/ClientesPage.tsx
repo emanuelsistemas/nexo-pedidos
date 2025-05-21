@@ -41,6 +41,7 @@ const ClientesPage: React.FC = () => {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     tipo_documento: 'CNPJ',
@@ -85,6 +86,9 @@ const ClientesPage: React.FC = () => {
     percentual: 0,
     tipo: 'desconto' as 'desconto' | 'acrescimo'
   });
+  // Estado para armazenar os valores dos campos como string para permitir campo vazio
+  const [prazoPercentualInput, setPrazoPercentualInput] = useState('0');
+  const [prazoDiasInput, setPrazoDiasInput] = useState('30');
 
   // Estado para novo desconto por valor
   const [novoDescontoValor, setNovoDescontoValor] = useState({
@@ -92,6 +96,9 @@ const ClientesPage: React.FC = () => {
     percentual: 0,
     tipo: 'desconto' as 'desconto' | 'acrescimo'
   });
+  // Estado para armazenar os valores dos campos como string para permitir campo vazio
+  const [valorPercentualInput, setValorPercentualInput] = useState('0');
+  const [valorMinimoInput, setValorMinimoInput] = useState('0');
 
   const [novoTelefone, setNovoTelefone] = useState({
     numero: '',
@@ -480,6 +487,9 @@ const ClientesPage: React.FC = () => {
         return;
       }
 
+      // Ativar o indicador de loading
+      setIsCnpjLoading(true);
+
       const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
       const data = await response.json();
 
@@ -505,6 +515,9 @@ const ClientesPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao buscar CNPJ:', error);
       toast.error('Erro ao buscar CNPJ. Tente novamente.');
+    } finally {
+      // Desativar o indicador de loading
+      setIsCnpjLoading(false);
     }
   };
 
@@ -622,19 +635,6 @@ const ClientesPage: React.FC = () => {
         }
       }
 
-      // Montar o endereço completo a partir dos campos individuais
-      let enderecoCompleto = '';
-
-      if (formData.endereco) {
-        enderecoCompleto = formData.endereco;
-
-        if (formData.numero) enderecoCompleto += `, ${formData.numero}`;
-        if (formData.complemento) enderecoCompleto += `, ${formData.complemento}`;
-        if (formData.bairro) enderecoCompleto += `, ${formData.bairro}`;
-        if (formData.cidade && formData.estado) enderecoCompleto += `, ${formData.cidade}/${formData.estado}`;
-        if (formData.cep) enderecoCompleto += `, ${formData.cep}`;
-      }
-
       // Preparar os telefones para salvar (remover formatação)
       const telefonesParaSalvar = formData.telefones.map(tel => ({
         ...tel,
@@ -654,7 +654,14 @@ const ClientesPage: React.FC = () => {
         telefone: telefonePrincipal,
         telefones: telefonesParaSalvar,
         email: formData.email || null,
-        endereco: enderecoCompleto || null,
+        // Salvar cada campo de endereço separadamente
+        endereco: formData.endereco || null,
+        numero: formData.numero || null,
+        complemento: formData.complemento || null,
+        bairro: formData.bairro || null,
+        cidade: formData.cidade || null,
+        estado: formData.estado || null,
+        cep: formData.cep ? formData.cep.replace(/\D/g, '') : null,
         empresa_id: formData.empresa_id,
         usuario_id: (await supabase.auth.getUser()).data.user?.id
       };
@@ -909,6 +916,12 @@ const ClientesPage: React.FC = () => {
       tipo: 'desconto'
     });
 
+    // Resetar os inputs de texto
+    setPrazoPercentualInput('0');
+    setPrazoDiasInput('30');
+    setValorPercentualInput('0');
+    setValorMinimoInput('0');
+
     // Resetar a aba ativa
     setActiveTab('dados-gerais');
 
@@ -937,6 +950,12 @@ const ClientesPage: React.FC = () => {
 
       if (descontosValorError) throw descontosValorError;
       setDescontosValor(descontosValorData || []);
+
+      // Resetar os inputs para os valores padrão
+      setPrazoPercentualInput('0');
+      setPrazoDiasInput('30');
+      setValorPercentualInput('0');
+      setValorMinimoInput('0');
     } catch (error) {
       console.error('Erro ao carregar descontos:', error);
       toast.error('Erro ao carregar descontos do cliente');
@@ -970,6 +989,10 @@ const ClientesPage: React.FC = () => {
       percentual: 0,
       tipo: 'desconto'
     });
+
+    // Resetar os inputs de texto
+    setPrazoPercentualInput('0');
+    setPrazoDiasInput('30');
   };
 
   // Função para remover desconto por prazo
@@ -1006,6 +1029,10 @@ const ClientesPage: React.FC = () => {
       percentual: 0,
       tipo: 'desconto'
     });
+
+    // Resetar os inputs de texto
+    setValorPercentualInput('0');
+    setValorMinimoInput('0');
   };
 
   // Função para remover desconto por valor
@@ -1331,9 +1358,14 @@ const ClientesPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={buscarCNPJ}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white"
+                          disabled={isCnpjLoading}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Search size={18} />
+                          {isCnpjLoading ? (
+                            <div className="w-4 h-4 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin"></div>
+                          ) : (
+                            <Search size={18} />
+                          )}
                         </button>
                       )}
                     </div>
@@ -1697,13 +1729,24 @@ const ClientesPage: React.FC = () => {
                                 Prazo (dias)
                               </label>
                               <input
-                                type="number"
-                                min="1"
-                                value={novoDescontoPrazo.prazo_dias}
-                                onChange={(e) => setNovoDescontoPrazo({
-                                  ...novoDescontoPrazo,
-                                  prazo_dias: parseInt(e.target.value) || 0
-                                })}
+                                type="text"
+                                inputMode="numeric"
+                                value={prazoDiasInput}
+                                onChange={(e) => {
+                                  // Permitir campo vazio ou valores válidos
+                                  const value = e.target.value;
+                                  // Aceitar apenas números inteiros
+                                  if (value === '' || /^[0-9]*$/.test(value)) {
+                                    setPrazoDiasInput(value);
+                                    // Atualizar o estado real apenas se houver um valor
+                                    const numValue = value === '' ? 0 : parseInt(value);
+                                    setNovoDescontoPrazo({
+                                      ...novoDescontoPrazo,
+                                      prazo_dias: numValue
+                                    });
+                                  }
+                                }}
+                                placeholder="30"
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               />
                             </div>
@@ -1713,14 +1756,24 @@ const ClientesPage: React.FC = () => {
                                 Percentual (%)
                               </label>
                               <input
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                value={novoDescontoPrazo.percentual}
-                                onChange={(e) => setNovoDescontoPrazo({
-                                  ...novoDescontoPrazo,
-                                  percentual: parseFloat(e.target.value) || 0
-                                })}
+                                type="text"
+                                inputMode="decimal"
+                                value={prazoPercentualInput}
+                                onChange={(e) => {
+                                  // Permitir campo vazio ou valores válidos
+                                  const value = e.target.value;
+                                  // Aceitar apenas números e ponto decimal
+                                  if (value === '' || /^[0-9]*[.]?[0-9]*$/.test(value)) {
+                                    setPrazoPercentualInput(value);
+                                    // Atualizar o estado real apenas se houver um valor
+                                    const numValue = value === '' ? 0 : parseFloat(value);
+                                    setNovoDescontoPrazo({
+                                      ...novoDescontoPrazo,
+                                      percentual: numValue
+                                    });
+                                  }
+                                }}
+                                placeholder="0,00"
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               />
                             </div>
@@ -1821,14 +1874,24 @@ const ClientesPage: React.FC = () => {
                                 Valor Mínimo (R$)
                               </label>
                               <input
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                value={novoDescontoValor.valor_minimo}
-                                onChange={(e) => setNovoDescontoValor({
-                                  ...novoDescontoValor,
-                                  valor_minimo: parseFloat(e.target.value) || 0
-                                })}
+                                type="text"
+                                inputMode="decimal"
+                                value={valorMinimoInput}
+                                onChange={(e) => {
+                                  // Permitir campo vazio ou valores válidos
+                                  const value = e.target.value;
+                                  // Aceitar apenas números e ponto decimal
+                                  if (value === '' || /^[0-9]*[.]?[0-9]*$/.test(value)) {
+                                    setValorMinimoInput(value);
+                                    // Atualizar o estado real apenas se houver um valor
+                                    const numValue = value === '' ? 0 : parseFloat(value);
+                                    setNovoDescontoValor({
+                                      ...novoDescontoValor,
+                                      valor_minimo: numValue
+                                    });
+                                  }
+                                }}
+                                placeholder="0,00"
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               />
                             </div>
@@ -1838,14 +1901,24 @@ const ClientesPage: React.FC = () => {
                                 Percentual (%)
                               </label>
                               <input
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                value={novoDescontoValor.percentual}
-                                onChange={(e) => setNovoDescontoValor({
-                                  ...novoDescontoValor,
-                                  percentual: parseFloat(e.target.value) || 0
-                                })}
+                                type="text"
+                                inputMode="decimal"
+                                value={valorPercentualInput}
+                                onChange={(e) => {
+                                  // Permitir campo vazio ou valores válidos
+                                  const value = e.target.value;
+                                  // Aceitar apenas números e ponto decimal
+                                  if (value === '' || /^[0-9]*[.]?[0-9]*$/.test(value)) {
+                                    setValorPercentualInput(value);
+                                    // Atualizar o estado real apenas se houver um valor
+                                    const numValue = value === '' ? 0 : parseFloat(value);
+                                    setNovoDescontoValor({
+                                      ...novoDescontoValor,
+                                      percentual: numValue
+                                    });
+                                  }
+                                }}
+                                placeholder="0,00"
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               />
                             </div>
