@@ -514,23 +514,68 @@ const EditarPedidoPage: React.FC = () => {
         return;
       }
 
+      // Verificar configuração de agrupar itens
+      const { data: configData, error: configError } = await supabase
+        .from('pedidos_config')
+        .select('agrupar_itens')
+        .eq('empresa_id', empresaId)
+        .single();
+
       // Calcular preço considerando promoção e desconto por quantidade
       const { valorUnitario, temDesconto, valorOriginal, tipoDesconto } = calcularPrecoUnitario(produtoSelecionadoObj, quantidade);
       const valorTotal = valorUnitario * quantidade;
 
-      const novoItem: ItemPedido = {
-        id: Date.now().toString(), // ID temporário
-        produto: produtoSelecionadoObj,
-        quantidade,
-        observacao,
-        valorUnitario,
-        valorTotal,
-        valorOriginal,
-        temDesconto,
-        tipoDesconto
-      };
+      // Verificar se deve agrupar itens
+      const agruparItens = configData?.agrupar_itens === true;
 
-      setItensPedido([...itensPedido, novoItem]);
+      // Verificar se o produto já existe no pedido e tem a mesma observação
+      const itemExistente = agruparItens ? itensPedido.find(
+        item => item.produto.id === produtoSelecionadoObj.id && item.observacao === observacao
+      ) : null;
+
+      if (agruparItens && itemExistente) {
+        // Atualizar a quantidade do item existente
+        setItensPedido(itensPedido.map(item => {
+          if (item.id === itemExistente.id) {
+            const novaQuantidade = item.quantidade + quantidade;
+
+            // Recalcular o preço considerando a nova quantidade
+            const { valorUnitario: novoValorUnitario, temDesconto: novoTemDesconto, valorOriginal: novoValorOriginal, tipoDesconto: novoTipoDesconto } =
+              calcularPrecoUnitario(item.produto, novaQuantidade);
+
+            const novoValorTotal = novoValorUnitario * novaQuantidade;
+
+            // Mostrar mensagem informando que o item foi agrupado
+            toast.info(`Quantidade do item "${item.produto.nome}" atualizada para ${novaQuantidade}`);
+
+            return {
+              ...item,
+              quantidade: novaQuantidade,
+              valorUnitario: novoValorUnitario,
+              valorTotal: novoValorTotal,
+              valorOriginal: novoValorOriginal,
+              temDesconto: novoTemDesconto,
+              tipoDesconto: novoTipoDesconto
+            };
+          }
+          return item;
+        }));
+      } else {
+        // Adicionar novo item
+        const novoItem: ItemPedido = {
+          id: Date.now().toString(), // ID temporário
+          produto: produtoSelecionadoObj,
+          quantidade,
+          observacao,
+          valorUnitario,
+          valorTotal,
+          valorOriginal,
+          temDesconto,
+          tipoDesconto
+        };
+
+        setItensPedido([...itensPedido, novoItem]);
+      }
 
       // Limpar campos
       setProdutoSelecionado('');

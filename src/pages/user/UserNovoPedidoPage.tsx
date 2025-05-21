@@ -320,24 +320,27 @@ const UserNovoPedidoPage: React.FC = () => {
         return;
       }
 
+      // Verificar configuração de agrupar itens
+      const { data: configData, error: configError } = await supabase
+        .from('pedidos_config')
+        .select('agrupar_itens')
+        .eq('empresa_id', empresaSelecionada)
+        .single();
+
       // Calcular preço considerando promoção e desconto por quantidade
       const { valorUnitario, temDesconto, valorOriginal, tipoDesconto } = calcularPrecoUnitario(produtoSelecionadoObj, quantidade);
       const valorTotal = valorUnitario * quantidade;
 
-      const novoItem: ItemPedido = {
-        id: Date.now().toString(), // ID temporário
-        produto: produtoSelecionadoObj,
-        quantidade,
-        observacao,
-        valorUnitario,
-        valorTotal,
-        valorOriginal,
-        temDesconto,
-        tipoDesconto
-      };
+      // Verificar se deve agrupar itens
+      const agruparItens = configData?.agrupar_itens === true;
+
+      // Verificar se o produto já existe no pedido e tem a mesma observação
+      const itemExistente = agruparItens ? itensPedido.find(
+        item => item.produto.id === produtoSelecionadoObj.id && item.observacao === observacao
+      ) : null;
 
       // Mostrar mensagem informativa sobre o desconto aplicado
-      if (temDesconto) {
+      if (temDesconto && !itemExistente) {
         if (tipoDesconto === 'quantidade') {
           const descontoInfo = produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual'
             ? `${produtoSelecionadoObj.percentual_desconto_quantidade}%`
@@ -349,7 +352,49 @@ const UserNovoPedidoPage: React.FC = () => {
         }
       }
 
-      setItensPedido([...itensPedido, novoItem]);
+      if (agruparItens && itemExistente) {
+        // Atualizar a quantidade do item existente
+        setItensPedido(itensPedido.map(item => {
+          if (item.id === itemExistente.id) {
+            const novaQuantidade = item.quantidade + quantidade;
+
+            // Recalcular o preço considerando a nova quantidade
+            const { valorUnitario: novoValorUnitario, temDesconto: novoTemDesconto, valorOriginal: novoValorOriginal, tipoDesconto: novoTipoDesconto } =
+              calcularPrecoUnitario(item.produto, novaQuantidade);
+
+            const novoValorTotal = novoValorUnitario * novaQuantidade;
+
+            // Mostrar mensagem informando que o item foi agrupado
+            showMessage('info', `Quantidade do item "${item.produto.nome}" atualizada para ${novaQuantidade}`);
+
+            return {
+              ...item,
+              quantidade: novaQuantidade,
+              valorUnitario: novoValorUnitario,
+              valorTotal: novoValorTotal,
+              valorOriginal: novoValorOriginal,
+              temDesconto: novoTemDesconto,
+              tipoDesconto: novoTipoDesconto
+            };
+          }
+          return item;
+        }));
+      } else {
+        // Adicionar novo item
+        const novoItem: ItemPedido = {
+          id: Date.now().toString(), // ID temporário
+          produto: produtoSelecionadoObj,
+          quantidade,
+          observacao,
+          valorUnitario,
+          valorTotal,
+          valorOriginal,
+          temDesconto,
+          tipoDesconto
+        };
+
+        setItensPedido([...itensPedido, novoItem]);
+      }
 
       // Limpar campos
       setProdutoSelecionado('');

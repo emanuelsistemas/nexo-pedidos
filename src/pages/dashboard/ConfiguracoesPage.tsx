@@ -96,7 +96,7 @@ const tiposPagamento = [
 
 const ConfiguracoesPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -135,6 +135,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [horarios, setHorarios] = useState<any[]>([]);
   const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos'>('pedidos');
   const [bloqueiaSemEstoque, setBloqueiaSemEstoque] = useState<boolean>(false);
+  const [agruparItens, setAgruparItens] = useState<boolean>(false);
   const [horarioForm, setHorarioForm] = useState({
     id: '',
     dia_semana: '0',
@@ -359,6 +360,57 @@ const ConfiguracoesPage: React.FC = () => {
         } catch (error) {
           console.error('Erro ao processar configuração de estoque:', error);
           showMessage('error', 'Erro ao processar configuração de controle de estoque');
+        }
+      }
+
+      if (activeSection === 'pedidos') {
+        try {
+          // Carregar configuração de pedidos
+          const { data: pedidosConfigData, error: pedidosConfigError } = await supabase
+            .from('pedidos_config')
+            .select('*')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .single();
+
+          if (pedidosConfigError) {
+            // Se não encontrou configuração, criar uma nova com valores padrão
+            if (pedidosConfigError.code === 'PGRST116') {
+              console.log('Configuração de pedidos não encontrada, criando uma nova...');
+
+              const { error: insertError, data: insertData } = await supabase
+                .from('pedidos_config')
+                .insert({
+                  empresa_id: usuarioData.empresa_id,
+                  agrupar_itens: false
+                })
+                .select();
+
+              console.log('Nova configuração de pedidos criada:', insertData);
+
+              if (insertError) {
+                throw insertError;
+              }
+
+              // Definir valores padrão nos estados
+              setAgruparItens(false);
+            } else {
+              // Se for outro erro, mostrar mensagem
+              console.error('Erro ao carregar configuração de pedidos:', pedidosConfigError);
+              showMessage('error', 'Erro ao carregar configuração de pedidos');
+            }
+          } else if (pedidosConfigData) {
+            // Se encontrou configuração, atualizar os estados
+            console.log('Configuração de pedidos encontrada:', pedidosConfigData);
+
+            // Garantir que agrupar_itens seja um booleano
+            // Se o campo não existir ou for null, definir como false
+            const agruparItensValue = pedidosConfigData.agrupar_itens === true;
+            console.log('Valor de agrupar_itens:', agruparItensValue);
+            setAgruparItens(agruparItensValue);
+          }
+        } catch (error) {
+          console.error('Erro ao processar configuração de pedidos:', error);
+          showMessage('error', 'Erro ao processar configuração de pedidos');
         }
       }
     } catch (error: any) {
@@ -925,6 +977,75 @@ const ConfiguracoesPage: React.FC = () => {
     } catch (error: any) {
       console.error('Exceção ao atualizar configuração de bloqueio de estoque:', error);
       showMessage('error', 'Erro ao atualizar configuração de bloqueio de estoque: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAgruparItensChange = async (agrupar: boolean) => {
+    console.log('Alterando configuração de agrupar itens para:', agrupar);
+    setIsLoading(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      console.log('Empresa ID:', usuarioData.empresa_id);
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('pedidos_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      let error;
+
+      if (existingConfig) {
+        console.log('Atualizando configuração existente:', existingConfig.id);
+        // Atualizar configuração existente
+        const { error: updateError, data: updateData } = await supabase
+          .from('pedidos_config')
+          .update({
+            agrupar_itens: agrupar
+          })
+          .eq('id', existingConfig.id)
+          .select();
+
+        console.log('Resultado da atualização:', updateData);
+        error = updateError;
+      } else {
+        console.log('Criando nova configuração para empresa:', usuarioData.empresa_id);
+        // Criar nova configuração
+        const { error: insertError, data: insertData } = await supabase
+          .from('pedidos_config')
+          .insert({
+            empresa_id: usuarioData.empresa_id,
+            agrupar_itens: agrupar
+          })
+          .select();
+
+        console.log('Resultado da inserção:', insertData);
+        error = insertError;
+      }
+
+      if (error) {
+        console.error('Erro ao salvar configuração:', error);
+        throw error;
+      }
+
+      setAgruparItens(agrupar);
+      showMessage('success', 'Configuração de agrupar itens atualizada com sucesso!');
+    } catch (error: any) {
+      console.error('Exceção ao atualizar configuração de agrupar itens:', error);
+      showMessage('error', 'Erro ao atualizar configuração de agrupar itens: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -1798,6 +1919,58 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'pedidos':
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Configurações de Pedidos</h2>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <h3 className="text-lg font-medium text-white mb-4">Opções de Pedidos</h3>
+
+              <div className="p-4 bg-gray-800/50 rounded-lg">
+                <div className="flex items-center">
+                  <input
+                    id="agrupar_itens"
+                    type="checkbox"
+                    checked={agruparItens}
+                    onChange={(e) => handleAgruparItensChange(e.target.checked)}
+                    className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                  />
+                  <label htmlFor="agrupar_itens" className="ml-3 cursor-pointer">
+                    <h4 className="text-white font-medium">Agrupar itens</h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Quando ativado, ao adicionar um produto que já existe no pedido, a quantidade será somada ao item existente em vez de criar um novo item.
+                    </p>
+                  </label>
+                </div>
+                <div className="mt-3 text-xs text-gray-400 flex items-center">
+                  <span className="inline-block w-3 h-3 rounded-full bg-gray-600 mr-2"></span>
+                  <span>Status atual: {agruparItens ? 'Ativado' : 'Desativado'}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 bg-blue-900/20 border border-blue-800/30 rounded-lg">
+                <div className="flex items-start">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400 mr-3 mt-0.5">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 16v-4"></path>
+                    <path d="M12 8h.01"></path>
+                  </svg>
+                  <div>
+                    <h4 className="text-blue-300 font-medium">Informação</h4>
+                    <p className="text-sm text-blue-200/70 mt-1">
+                      Esta configuração afeta como os itens são adicionados aos pedidos. Quando ativada, produtos idênticos serão agrupados automaticamente,
+                      facilitando a visualização e o gerenciamento dos pedidos. Esta opção se aplica tanto à versão web quanto à versão mobile.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -1844,6 +2017,22 @@ const ConfiguracoesPage: React.FC = () => {
                 <path d="M13 20V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v17"></path>
               </svg>
               <span className="text-sm whitespace-nowrap">Estoque</span>
+            </button>
+            <button
+              onClick={() => setActiveSection('pedidos')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+                activeSection === 'pedidos'
+                  ? 'bg-primary-500/10 text-primary-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                <path d="M9 12h6"></path>
+                <path d="M9 16h6"></path>
+              </svg>
+              <span className="text-sm whitespace-nowrap">Pedidos</span>
             </button>
             {/* Aba "Perfis" ocultada */}
             {/* Aba "Pagamentos" ocultada */}
