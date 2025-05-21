@@ -450,15 +450,15 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                 {selectedGrupo && <p className="text-sm mt-1">Ou selecione outro grupo</p>}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
                 {filteredProdutos.map(produto => (
                   <div
                     key={produto.id}
-                    onClick={() => handleProdutoClick(produto)}
+                    onClick={() => handleSelectProduto(produto)}
                     className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer flex flex-col h-full"
                   >
                     {/* Imagem do produto */}
-                    <div className="aspect-square bg-gray-900 relative">
+                    <div className="aspect-square bg-gray-900 relative h-24">
                       {getFotoPrincipal(produto) ? (
                         <img
                           src={getFotoPrincipal(produto)!.url}
@@ -467,13 +467,13 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <ImageIcon size={48} className="text-gray-700" />
+                          <ImageIcon size={24} className="text-gray-700" />
                         </div>
                       )}
 
                       {/* Badge de promoção */}
                       {produto.promocao && (
-                        <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
+                        <div className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold px-1 py-0.5 rounded">
                           {produto.tipo_desconto === 'percentual'
                             ? `-${produto.valor_desconto}%`
                             : formatarPreco(produto.valor_desconto || 0)}
@@ -482,10 +482,10 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                     </div>
 
                     {/* Informações do produto */}
-                    <div className="p-3 flex-1 flex flex-col">
-                      <h3 className="text-white font-medium line-clamp-2">{produto.nome}</h3>
+                    <div className="p-2 flex-1 flex flex-col">
+                      <h3 className="text-white text-sm font-medium line-clamp-1">{produto.nome}</h3>
                       <div className="flex justify-between items-center">
-                        <p className="text-gray-400 text-sm mt-1">{produto.codigo}</p>
+                        <p className="text-gray-400 text-xs">{produto.codigo}</p>
                         {produto.unidade_medida && (
                           <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
                             {produto.unidade_medida.sigla}
@@ -494,49 +494,39 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                       </div>
 
                       {/* Preço */}
-                      <div className="mt-2 mb-auto">
+                      <div className="mt-1">
                         {produto.promocao ? (
                           <div>
-                            <span className="text-gray-400 line-through text-sm">
+                            <span className="text-gray-400 line-through text-xs">
                               {formatarPreco(produto.preco)}
                             </span>
-                            <span className="text-primary-400 font-bold ml-2">
+                            <span className="text-primary-400 font-bold text-sm ml-1">
                               {formatarPreco(calcularPrecoFinal(produto))}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-primary-400 font-bold">
+                          <span className="text-primary-400 font-bold text-sm">
                             {formatarPreco(produto.preco)}
                           </span>
                         )}
                       </div>
 
-                      {/* Informações de estoque */}
+                      {/* Estoque simplificado */}
                       {produtosEstoque[produto.id] && (
-                        <div className="flex flex-wrap items-center gap-1 mt-2">
-                          <span className="px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded-full flex items-center gap-1">
-                            <Package size={12} />
-                            <span>{produtosEstoque[produto.id].total.toFixed(2)}</span>
-                          </span>
-                          {produtosEstoque[produto.id].naoFaturado > 0 && (
-                            <span className="px-2 py-0.5 text-xs font-medium bg-yellow-900/30 text-yellow-400 rounded-full flex items-center gap-1">
-                              <AlertCircle size={12} />
-                              <span>Pendente: {produtosEstoque[produto.id].naoFaturado.toFixed(2)}</span>
-                            </span>
-                          )}
+                        <div className="mt-1 text-xs text-gray-300">
+                          Estoque: {produtosEstoque[produto.id].total.toFixed(2)}
                         </div>
                       )}
 
-                      {/* Desconto por quantidade */}
-                      {produto.desconto_quantidade && produto.quantidade_minima && produto.valor_desconto_quantidade && (
-                        <div className="mt-2 text-xs text-green-400 bg-green-900/20 px-2 py-1 rounded flex items-center gap-1">
-                          <Percent size={12} />
-                          <span>
-                            {produto.quantidade_minima}+ unid:
-                            {produto.tipo_desconto_quantidade === 'percentual'
-                              ? ` -${produto.valor_desconto_quantidade}%`
-                              : ` -${formatarPreco(produto.valor_desconto_quantidade)}`}
-                          </span>
+                      {/* Desconto por quantidade simplificado */}
+                      {produto.desconto_quantidade && produto.quantidade_minima &&
+                       ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                        (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade)) && (
+                        <div className="mt-1 text-xs text-green-400">
+                          {produto.quantidade_minima}+ unid:
+                          {produto.tipo_desconto_quantidade === 'percentual'
+                            ? ` -${produto.percentual_desconto_quantidade}%`
+                            : ` -${formatarPreco(produto.valor_desconto_quantidade)}`}
                         </div>
                       )}
                     </div>

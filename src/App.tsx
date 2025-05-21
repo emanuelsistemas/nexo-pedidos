@@ -28,6 +28,9 @@ import UserClientesPage from './pages/user/UserClientesPage';
 import UserNovoClienteCompleto from './pages/user/UserNovoClienteCompleto';
 import UserPerfilPage from './pages/user/UserPerfilPage';
 
+// Páginas públicas
+import PedidoPublicoPage from './pages/public/PedidoPublicoPage';
+
 function App() {
   return (
     <>

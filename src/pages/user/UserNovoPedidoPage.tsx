@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import ClienteDropdown from '../../components/comum/ClienteDropdown';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
+import { verificarTipoControleEstoque, atualizarEstoquePorPedido } from '../../utils/estoqueUtils';
 
 interface Empresa {
   id: string;
@@ -18,6 +19,20 @@ interface Produto {
   preco: number;
   codigo: string;
   descricao?: string;
+  promocao?: boolean;
+  tipo_desconto?: string;
+  valor_desconto?: number;
+  desconto_quantidade?: boolean;
+  quantidade_minima?: number;
+  tipo_desconto_quantidade?: 'percentual' | 'valor';
+  valor_desconto_quantidade?: number;
+  percentual_desconto_quantidade?: number;
+  unidade_medida_id?: string;
+  unidade_medida?: {
+    id: string;
+    sigla: string;
+    nome: string;
+  };
 }
 
 interface DescontoPrazo {
@@ -259,7 +274,27 @@ const UserNovoPedidoPage: React.FC = () => {
       // Obter produtos da empresa
       const { data: produtosData } = await supabase
         .from('produtos')
-        .select('id, nome, preco, codigo, descricao')
+        .select(`
+          id,
+          nome,
+          preco,
+          codigo,
+          descricao,
+          promocao,
+          tipo_desconto,
+          valor_desconto,
+          desconto_quantidade,
+          quantidade_minima,
+          tipo_desconto_quantidade,
+          valor_desconto_quantidade,
+          percentual_desconto_quantidade,
+          unidade_medida_id,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome
+          )
+        `)
         .eq('empresa_id', empresaId)
         .eq('ativo', true)
         .eq('deletado', false)
@@ -305,7 +340,7 @@ const UserNovoPedidoPage: React.FC = () => {
       if (temDesconto) {
         if (tipoDesconto === 'quantidade') {
           const descontoInfo = produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual'
-            ? `${produtoSelecionadoObj.valor_desconto_quantidade}%`
+            ? `${produtoSelecionadoObj.percentual_desconto_quantidade}%`
             : formatarPreco(produtoSelecionadoObj.valor_desconto_quantidade || 0);
 
           showMessage('info', `Desconto por quantidade aplicado! (${descontoInfo}) - De ${formatarPreco(valorOriginal)} para ${formatarPreco(valorUnitario)} por unidade.`);
@@ -371,7 +406,7 @@ const UserNovoPedidoPage: React.FC = () => {
             if (temDesconto) {
               if (tipoDesconto === 'quantidade') {
                 const descontoInfo = item.produto.tipo_desconto_quantidade === 'percentual'
-                  ? `${item.produto.valor_desconto_quantidade}%`
+                  ? `${item.produto.percentual_desconto_quantidade}%`
                   : formatarPreco(item.produto.valor_desconto_quantidade || 0);
 
                 showMessage('info', `Desconto por quantidade aplicado! (${descontoInfo}) - De ${formatarPreco(valorOriginal)} para ${formatarPreco(valorUnitario)} por unidade.`);
@@ -507,14 +542,15 @@ const UserNovoPedidoPage: React.FC = () => {
     // Verificar se a quantidade atinge o mínimo para desconto por quantidade
     if (produto.desconto_quantidade &&
         produto.quantidade_minima &&
-        produto.valor_desconto_quantidade &&
+        ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+         (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade)) &&
         quantidade >= produto.quantidade_minima) {
 
       // Se já tem desconto de promoção, usar o menor valor entre os dois
       let valorComDescontoQuantidade = produto.preco;
 
       if (produto.tipo_desconto_quantidade === 'percentual') {
-        valorComDescontoQuantidade = produto.preco * (1 - produto.valor_desconto_quantidade / 100);
+        valorComDescontoQuantidade = produto.preco * (1 - produto.percentual_desconto_quantidade / 100);
       } else {
         valorComDescontoQuantidade = produto.preco - produto.valor_desconto_quantidade;
       }
@@ -710,8 +746,15 @@ const UserNovoPedidoPage: React.FC = () => {
       const estoqueDisponivel = saldoTotal - quantidadeNaoFaturada;
 
       if (estoqueDisponivel < quantidade) {
-        showMessage('error', `Estoque insuficiente. Disponível: ${estoqueDisponivel.toFixed(2)}`);
-        return false;
+        // Se a opção de bloqueio estiver ativada, impedir a operação
+        if (configData?.bloqueia_sem_estoque) {
+          showMessage('error', `Estoque insuficiente. Disponível: ${estoqueDisponivel.toFixed(2)}`);
+          return false;
+        } else {
+          // Se a opção de bloqueio estiver desativada, apenas mostrar um aviso
+          showMessage('warning', `Estoque insuficiente (${estoqueDisponivel.toFixed(2)}), mas a operação será permitida. O estoque ficará negativo.`);
+          return true;
+        }
       }
 
       return true;
@@ -1038,6 +1081,26 @@ const UserNovoPedidoPage: React.FC = () => {
 
         if (itensError) throw itensError;
 
+        // Verificar o tipo de controle de estoque configurado
+        const tipoControle = await verificarTipoControleEstoque(supabase, empresaSelecionada);
+
+        // Se o tipo de controle for por pedidos, atualizar o estoque agora
+        if (tipoControle === 'pedidos') {
+          const resultado = await atualizarEstoquePorPedido(
+            supabase,
+            pedido.id,
+            empresaSelecionada,
+            userData.user.id,
+            'saida',
+            'pedido'
+          );
+
+          if (!resultado.success) {
+            console.warn('Aviso ao atualizar estoque:', resultado.message);
+            showMessage('warning', resultado.message);
+          }
+        }
+
         showMessage('success', 'Pedido criado com sucesso!');
       }
 
@@ -1163,7 +1226,7 @@ const UserNovoPedidoPage: React.FC = () => {
                     <p className="text-xs text-green-400 mt-1">
                       Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades:
                       {produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual'
-                        ? ` ${produtoSelecionadoObj.valor_desconto_quantidade}%`
+                        ? ` ${produtoSelecionadoObj.percentual_desconto_quantidade}%`
                         : ` ${formatarPreco(produtoSelecionadoObj.valor_desconto_quantidade || 0)}`
                       }
                     </p>
@@ -1327,7 +1390,7 @@ const UserNovoPedidoPage: React.FC = () => {
                               <>
                                 Desconto por quantidade:
                                 {item.produto.tipo_desconto_quantidade === 'percentual'
-                                  ? ` ${item.produto.valor_desconto_quantidade}%`
+                                  ? ` ${item.produto.percentual_desconto_quantidade}%`
                                   : ` ${formatarPreco(item.produto.valor_desconto_quantidade || 0)}`
                                 }
                               </>

@@ -6,8 +6,16 @@ export interface Produto {
   codigo: string;
   grupo_id: string;
   promocao?: boolean;
+  tipo_desconto?: string;
+  valor_desconto?: number;
   ativo?: boolean;
   estoque_inicial?: number;
+  desconto_quantidade?: boolean;
+  quantidade_minima?: number;
+  tipo_desconto_quantidade?: 'percentual' | 'valor';
+  valor_desconto_quantidade?: number;
+  percentual_desconto_quantidade?: number;
+  unidade_medida_id?: string;
   created_at?: string;
   opcoes_adicionais?: OpcaoAdicional[];
 }

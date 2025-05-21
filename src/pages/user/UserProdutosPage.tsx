@@ -25,6 +25,7 @@ interface Produto {
   quantidade_minima?: number;
   tipo_desconto_quantidade?: 'percentual' | 'valor';
   valor_desconto_quantidade?: number;
+  percentual_desconto_quantidade?: number;
   unidade_medida?: {
     id: string;
     sigla: string;

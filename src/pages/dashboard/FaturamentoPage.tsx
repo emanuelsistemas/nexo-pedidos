@@ -4,6 +4,7 @@ import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, DollarSig
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+import { verificarTipoControleEstoque, atualizarEstoquePorPedido } from '../../utils/estoqueUtils';
 
 interface Pedido {
   id: string;
@@ -168,11 +169,20 @@ const FaturamentoPage: React.FC = () => {
     // Aplicar filtro de status
     if (statusFilter !== 'todos') {
       if (statusFilter === 'faturado') {
+        // Filtrar pedidos faturados (status entregue com data de faturamento)
         filtered = filtered.filter(pedido => pedido.status === 'entregue' && pedido.data_faturamento);
-      } else if (statusFilter === 'pendente_faturamento') {
-        filtered = filtered.filter(pedido => pedido.status === 'entregue' && !pedido.data_faturamento);
-      } else {
-        filtered = filtered.filter(pedido => pedido.status === statusFilter);
+      } else if (statusFilter === 'pendente') {
+        // Filtrar todos os pedidos pendentes (incluindo pendentes de faturamento)
+        filtered = filtered.filter(pedido =>
+          pedido.status === 'pendente' ||
+          pedido.status === 'confirmado' ||
+          pedido.status === 'em_preparo' ||
+          pedido.status === 'em_entrega' ||
+          (pedido.status === 'entregue' && !pedido.data_faturamento)
+        );
+      } else if (statusFilter === 'cancelado') {
+        // Filtrar pedidos cancelados
+        filtered = filtered.filter(pedido => pedido.status === 'cancelado');
       }
     }
 
@@ -297,6 +307,10 @@ const FaturamentoPage: React.FC = () => {
     setIsFaturando(true);
 
     try {
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
       const dataFaturamento = new Date().toISOString();
 
       const { error } = await supabase
@@ -308,6 +322,26 @@ const FaturamentoPage: React.FC = () => {
         .eq('id', pedidoSelecionado.id);
 
       if (error) throw error;
+
+      // Verificar o tipo de controle de estoque configurado
+      const tipoControle = await verificarTipoControleEstoque(supabase, pedidoSelecionado.empresa_id);
+
+      // Se o tipo de controle for por faturamento, atualizar o estoque agora
+      if (tipoControle === 'faturamento') {
+        const resultado = await atualizarEstoquePorPedido(
+          supabase,
+          pedidoSelecionado.id,
+          pedidoSelecionado.empresa_id,
+          userData.user.id,
+          'saida',
+          'faturamento'
+        );
+
+        if (!resultado.success) {
+          console.warn('Aviso ao atualizar estoque:', resultado.message);
+          toast.warning(resultado.message);
+        }
+      }
 
       toast.success('Pedido faturado com sucesso!');
       setShowModal(false);
@@ -379,15 +413,10 @@ const FaturamentoPage: React.FC = () => {
                       onChange={(e) => setStatusFilter(e.target.value)}
                       className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                     >
-                      <option value="todos">Todos</option>
-                      <option value="pendente">Pendente</option>
-                      <option value="confirmado">Confirmado</option>
-                      <option value="em_preparo">Em Preparo</option>
-                      <option value="em_entrega">Em Entrega</option>
-                      <option value="entregue">Entregue</option>
-                      <option value="pendente_faturamento">Pendente Faturamento</option>
+                      <option value="todos">Todas</option>
                       <option value="faturado">Faturado</option>
-                      <option value="cancelado">Cancelado</option>
+                      <option value="pendente">Pendentes</option>
+                      <option value="cancelado">Cancelados</option>
                     </select>
                   </div>
 

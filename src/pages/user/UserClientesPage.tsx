@@ -10,6 +10,12 @@ interface Cliente {
   telefone: string;
   email?: string;
   endereco?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
+  cep?: string;
   empresa_id: string;
   empresa_nome?: string;
   created_at: string;
@@ -392,10 +398,15 @@ const UserClientesPage: React.FC = () => {
                     </div>
                   )}
 
-                  {cliente.endereco && (
+                  {(cliente.endereco || cliente.bairro || cliente.cidade) && (
                     <div className="flex items-center gap-1 text-gray-400 text-sm mt-1">
                       <MapPin size={14} />
-                      <span>{cliente.endereco}</span>
+                      <span>
+                        {cliente.endereco && `${cliente.endereco}${cliente.numero ? `, ${cliente.numero}` : ''}`}
+                        {cliente.bairro && (cliente.endereco ? `, ${cliente.bairro}` : cliente.bairro)}
+                        {cliente.cidade && (cliente.endereco || cliente.bairro ? `, ${cliente.cidade}` : cliente.cidade)}
+                        {cliente.estado && `/${cliente.estado}`}
+                      </span>
                     </div>
                   )}
 

@@ -14,8 +14,9 @@ import {
   Filter,
   User,
   RefreshCw,
+  CheckCircle,
 } from 'lucide-react';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, ChartData } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
@@ -39,6 +40,7 @@ interface DashboardData {
   faturamentoHoje: number;
   clientesUnicos: number;
   entregasRealizadas: number;
+  valorFaturado: number;
   ticketMedio: number;
   crescimento: number;
 }
@@ -58,6 +60,7 @@ interface Usuario {
 
 const DashboardPage: React.FC = () => {
   const chartRef = useRef<ChartJS | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<DashboardData>({
     totalPedidos: 0,
     pedidosHoje: 0,
@@ -65,6 +68,7 @@ const DashboardPage: React.FC = () => {
     faturamentoHoje: 0,
     clientesUnicos: 0,
     entregasRealizadas: 0,
+    valorFaturado: 0,
     ticketMedio: 0,
     crescimento: 0,
   });
@@ -82,7 +86,7 @@ const DashboardPage: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  const [chartData, setChartData] = useState({
+  const [chartData, setChartData] = useState<ChartData<'line'>>({
     labels: [],
     datasets: [],
   });
@@ -111,6 +115,13 @@ const DashboardPage: React.FC = () => {
   useEffect(() => {
     loadDashboardData();
   }, [usuarioSelecionado]);
+
+  // Ajustar o gráfico quando os dados mudarem
+  useEffect(() => {
+    if (chartRef.current) {
+      chartRef.current.update();
+    }
+  }, [chartData]);
 
   // Verificar se o usuário é admin
   const checkUserType = async () => {
@@ -346,7 +357,9 @@ const DashboardPage: React.FC = () => {
       hoje.setHours(0, 0, 0, 0);
 
       const pedidosHoje = pedidos.filter(p => new Date(p.created_at) >= hoje);
-      const entregasRealizadas = pedidos.filter(p => p.status === 'entregue').length;
+      const pedidosFaturados = pedidos.filter(p => p.status === 'entregue');
+      const entregasRealizadas = pedidosFaturados.length;
+      const valorFaturado = pedidosFaturados.reduce((acc, p) => acc + p.valor_total, 0);
       const clientesUnicos = new Set(pedidos.map(p => p.cliente_telefone)).size;
       const faturamentoTotal = pedidos.reduce((acc, p) => acc + p.valor_total, 0);
       const faturamentoHoje = pedidosHoje.reduce((acc, p) => acc + p.valor_total, 0);
@@ -370,6 +383,7 @@ const DashboardPage: React.FC = () => {
         faturamentoHoje,
         clientesUnicos,
         entregasRealizadas,
+        valorFaturado,
         ticketMedio,
         crescimento,
       });
@@ -391,10 +405,14 @@ const DashboardPage: React.FC = () => {
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
 
-        return pedidos.filter(p => {
+        // Calcular o valor total dos pedidos para este dia
+        const valorDia = pedidos.filter(p => {
           const orderDate = new Date(p.created_at);
           return orderDate >= startOfDay && orderDate <= endOfDay;
         }).reduce((acc, p) => acc + p.valor_total, 0);
+
+        // Retornar o valor arredondado para 2 casas decimais para evitar problemas de precisão
+        return Math.round(valorDia * 100) / 100;
       });
 
       setChartData({
@@ -426,6 +444,7 @@ const DashboardPage: React.FC = () => {
 
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: {
         display: false,
@@ -433,6 +452,13 @@ const DashboardPage: React.FC = () => {
       title: {
         display: false,
       },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            return formatCurrency(context.parsed.y);
+          }
+        }
+      }
     },
     scales: {
       y: {
@@ -443,6 +469,13 @@ const DashboardPage: React.FC = () => {
         ticks: {
           color: '#9CA3AF',
           callback: (value: number) => formatCurrency(value),
+          maxTicksLimit: 5, // Limitar o número de ticks no eixo Y
+        },
+        // Definir limites automáticos para evitar valores extremos
+        adapters: {
+          date: {
+            locale: 'pt-BR',
+          },
         },
       },
       x: {
@@ -476,20 +509,20 @@ const DashboardPage: React.FC = () => {
       borderColor: 'border-green-500/20',
     },
     {
+      title: 'Faturados',
+      value: formatCurrency(data.valorFaturado),
+      icon: CheckCircle,
+      color: 'bg-orange-500/10',
+      iconColor: 'text-orange-500',
+      borderColor: 'border-orange-500/20',
+    },
+    {
       title: 'Ticket Médio',
       value: formatCurrency(data.ticketMedio),
       icon: ShoppingBag,
       color: 'bg-purple-500/10',
       iconColor: 'text-purple-500',
       borderColor: 'border-purple-500/20',
-    },
-    {
-      title: 'Entregas Realizadas',
-      value: data.entregasRealizadas,
-      icon: Truck,
-      color: 'bg-orange-500/10',
-      iconColor: 'text-orange-500',
-      borderColor: 'border-orange-500/20',
     },
     {
       title: 'Total de Pedidos',
@@ -652,7 +685,7 @@ const DashboardPage: React.FC = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="bg-background-card rounded-lg border border-gray-800 p-6"
+        className="bg-background-card rounded-lg border border-gray-800 p-6 overflow-hidden"
       >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-medium text-white">Faturamento dos Últimos 7 Dias</h2>
@@ -667,7 +700,7 @@ const DashboardPage: React.FC = () => {
             </div>
           )}
         </div>
-        <div className="h-[300px]">
+        <div ref={chartContainerRef} className="h-[250px] w-full relative">
           <Line
             options={chartOptions}
             data={chartData}

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search, Calendar, Edit, CheckCircle } from 'lucide-react';
+import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search, Calendar, Edit, CheckCircle, XCircle, Copy, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
+import { verificarTipoControleEstoque, atualizarEstoquePorPedido } from '../../utils/estoqueUtils';
 
 interface Produto {
   id: string;
@@ -12,6 +13,20 @@ interface Produto {
   preco: number;
   codigo: string;
   descricao?: string;
+  promocao?: boolean;
+  tipo_desconto?: string;
+  valor_desconto?: number;
+  desconto_quantidade?: boolean;
+  quantidade_minima?: number;
+  tipo_desconto_quantidade?: 'percentual' | 'valor';
+  valor_desconto_quantidade?: number;
+  percentual_desconto_quantidade?: number;
+  unidade_medida_id?: string;
+  unidade_medida?: {
+    id: string;
+    sigla: string;
+    nome: string;
+  };
 }
 
 interface ItemPedido {
@@ -77,6 +92,7 @@ const EditarPedidoPage: React.FC = () => {
   const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('pendente');
   const [dataFaturamento, setDataFaturamento] = useState<string | null>(null);
+  const [copiedFields, setCopiedFields] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     if (id) {
@@ -155,14 +171,35 @@ const EditarPedidoPage: React.FC = () => {
       setFormaPagamentoSelecionada(pedidoData.forma_pagamento_id || null);
 
       // Formatar itens do pedido
-      const itens = pedidoData.itens.map((item: any) => ({
-        id: item.id,
-        produto: item.produto,
-        quantidade: item.quantidade,
-        observacao: item.observacao || '',
-        valorUnitario: item.valor_unitario,
-        valorTotal: item.valor_total
-      }));
+      const itens = pedidoData.itens.map((item: any) => {
+        // Verificar se o item tem desconto
+        const valorOriginal = item.produto.preco;
+        const temDesconto = item.valor_unitario < valorOriginal;
+
+        // Determinar o tipo de desconto
+        let tipoDesconto = '';
+        if (temDesconto) {
+          if (item.produto.desconto_quantidade &&
+              item.produto.quantidade_minima &&
+              item.quantidade >= item.produto.quantidade_minima) {
+            tipoDesconto = 'quantidade';
+          } else if (item.produto.promocao) {
+            tipoDesconto = 'promocao';
+          }
+        }
+
+        return {
+          id: item.id,
+          produto: item.produto,
+          quantidade: item.quantidade,
+          observacao: item.observacao || '',
+          valorUnitario: item.valor_unitario,
+          valorTotal: item.valor_total,
+          valorOriginal: temDesconto ? valorOriginal : undefined,
+          temDesconto,
+          tipoDesconto
+        };
+      });
 
       setItensPedido(itens);
 
@@ -188,10 +225,29 @@ const EditarPedidoPage: React.FC = () => {
 
   const loadProdutos = async (empresaId: string) => {
     try {
-      // Obter produtos da empresa
+      // Obter produtos da empresa com todos os campos necessários
       const { data: produtosData } = await supabase
         .from('produtos')
-        .select('id, nome, preco, codigo, descricao')
+        .select(`
+          id,
+          nome,
+          preco,
+          codigo,
+          descricao,
+          promocao,
+          tipo_desconto,
+          valor_desconto,
+          desconto_quantidade,
+          quantidade_minima,
+          tipo_desconto_quantidade,
+          valor_desconto_quantidade,
+          unidade_medida_id,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome
+          )
+        `)
         .eq('empresa_id', empresaId)
         .eq('ativo', true)
         .eq('deletado', false)
@@ -387,8 +443,15 @@ const EditarPedidoPage: React.FC = () => {
       const estoqueDisponivel = saldoTotal - quantidadeNaoFaturada;
 
       if (estoqueDisponivel < quantidade) {
-        toast.error(`Estoque insuficiente. Disponível: ${estoqueDisponivel.toFixed(2)}`);
-        return false;
+        // Se a opção de bloqueio estiver ativada, impedir a operação
+        if (configData?.bloqueia_sem_estoque) {
+          toast.error(`Estoque insuficiente. Disponível: ${estoqueDisponivel.toFixed(2)}`);
+          return false;
+        } else {
+          // Se a opção de bloqueio estiver desativada, apenas mostrar um aviso
+          toast.warning(`Estoque insuficiente (${estoqueDisponivel.toFixed(2)}), mas a operação será permitida. O estoque ficará negativo.`);
+          return true;
+        }
       }
 
       return true;
@@ -484,6 +547,13 @@ const EditarPedidoPage: React.FC = () => {
     setItensPedido(itensPedido.filter(item => item.id !== id));
   };
 
+  const formatarPreco = (valor: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(valor);
+  };
+
   const handleUpdateQuantidade = async (id: string, novaQuantidade: number) => {
     if (novaQuantidade <= 0) return;
 
@@ -561,6 +631,7 @@ const EditarPedidoPage: React.FC = () => {
           valor_desconto: valorDesconto,
           valor_acrescimo: valorAcrescimo,
           valor_total: valorTotal,
+          status: status, // Manter o status atual
           desconto_prazo_id: descontoPrazoSelecionado,
           desconto_valor_id: descontoValorSelecionado,
           forma_pagamento_id: formaPagamentoSelecionada
@@ -617,15 +688,15 @@ const EditarPedidoPage: React.FC = () => {
       const subtotal = itensPedido.reduce((acc, item) => acc + item.valorTotal, 0);
       const dataFaturamento = new Date().toISOString();
 
-      // Atualizar o pedido (apenas adicionando a data de faturamento, mantendo o status atual)
+      // Atualizar o pedido para status 'entregue' e adicionar data de faturamento
       const { error: pedidoError } = await supabase
         .from('pedidos')
         .update({
-          // Mantemos apenas o cliente_id, não mais os campos cliente_nome e cliente_telefone
           valor_subtotal: subtotal,
           valor_desconto: valorDesconto,
           valor_acrescimo: valorAcrescimo,
           valor_total: valorTotal,
+          status: 'entregue',
           data_faturamento: dataFaturamento,
           desconto_prazo_id: descontoPrazoSelecionado,
           desconto_valor_id: descontoValorSelecionado,
@@ -660,7 +731,31 @@ const EditarPedidoPage: React.FC = () => {
 
       if (itensError) throw itensError;
 
-      toast.success('Pedido atualizado e faturado com sucesso!');
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      // Verificar o tipo de controle de estoque configurado
+      const tipoControle = await verificarTipoControleEstoque(supabase, empresaId);
+
+      // Se o tipo de controle for por faturamento, atualizar o estoque agora
+      if (tipoControle === 'faturamento') {
+        const resultado = await atualizarEstoquePorPedido(
+          supabase,
+          id,
+          empresaId,
+          userData.user.id,
+          'saida',
+          'faturamento'
+        );
+
+        if (!resultado.success) {
+          console.warn('Aviso ao atualizar estoque:', resultado.message);
+          toast.warning(resultado.message);
+        }
+      }
+
+      toast.success('Pedido faturado com sucesso!');
       navigate('/dashboard/faturamento');
     } catch (error: any) {
       console.error('Erro ao faturar pedido:', error);
@@ -670,11 +765,59 @@ const EditarPedidoPage: React.FC = () => {
     }
   };
 
-  const formatarPreco = (valor: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(valor);
+  const handleCancelarPedido = async () => {
+    if (!confirm('Tem certeza que deseja cancelar este pedido?')) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      // Atualizar o status do pedido para 'cancelado'
+      const { error } = await supabase
+        .from('pedidos')
+        .update({
+          status: 'cancelado',
+          data_faturamento: null // Remover data de faturamento se existir
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success('Pedido cancelado com sucesso!');
+      navigate('/dashboard/faturamento');
+    } catch (error: any) {
+      console.error('Erro ao cancelar pedido:', error);
+      toast.error('Erro ao cancelar pedido: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
+
+  const handleCopyToClipboard = (text: string, fieldId: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      // Marcar o campo como copiado
+      setCopiedFields(prev => ({...prev, [fieldId]: true}));
+
+      // Após 2 segundos, remover a marca de copiado
+      setTimeout(() => {
+        setCopiedFields(prev => ({...prev, [fieldId]: false}));
+      }, 2000);
+
+      toast.success('Texto copiado!', {
+        position: "top-center",
+        autoClose: 1500,
+        hideProgressBar: true,
+        closeOnClick: true,
+        pauseOnHover: false,
+        draggable: true,
+      });
+    }).catch(err => {
+      console.error('Erro ao copiar texto: ', err);
+      toast.error('Erro ao copiar texto');
+    });
   };
 
   const formatarTelefone = (telefone: string, tipo?: string) => {
@@ -751,16 +894,26 @@ const EditarPedidoPage: React.FC = () => {
               </>
             )}
           </button>
-          {status === 'entregue' && !dataFaturamento && (
-            <button
-              onClick={handleFaturarPedido}
-              disabled={isSaving}
-              className="px-4 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              <DollarSign size={18} />
-              <span>Faturar Pedido</span>
-            </button>
-          )}
+
+          {/* Botão de Faturar */}
+          <button
+            onClick={handleFaturarPedido}
+            disabled={isSaving}
+            className="px-4 py-2 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            <DollarSign size={18} />
+            <span>Faturar</span>
+          </button>
+
+          {/* Botão de Cancelar */}
+          <button
+            onClick={handleCancelarPedido}
+            disabled={isSaving}
+            className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            <XCircle size={18} />
+            <span>Cancelar</span>
+          </button>
         </div>
       </div>
 
@@ -778,13 +931,31 @@ const EditarPedidoPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2">
                     <div>
                       <p className="text-gray-400 text-sm">Nome</p>
-                      <p className="text-white">{clienteData.nome}</p>
+                      <div className="flex items-center">
+                        <p className="text-white">{clienteData.nome}</p>
+                        <button
+                          onClick={() => handleCopyToClipboard(clienteData.nome, 'nome')}
+                          className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                          title="Copiar nome"
+                        >
+                          {copiedFields['nome'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                        </button>
+                      </div>
                     </div>
 
                     {clienteData.email && (
                       <div>
                         <p className="text-gray-400 text-sm">Email</p>
-                        <p className="text-white">{clienteData.email}</p>
+                        <div className="flex items-center">
+                          <p className="text-white">{clienteData.email}</p>
+                          <button
+                            onClick={() => handleCopyToClipboard(clienteData.email, 'email')}
+                            className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                            title="Copiar email"
+                          >
+                            {copiedFields['email'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -793,25 +964,57 @@ const EditarPedidoPage: React.FC = () => {
                         <p className="text-gray-400 text-sm">
                           {clienteData.tipo_documento === 'CNPJ' ? 'CNPJ' : 'CPF'}
                         </p>
-                        <p className="text-white">
-                          {clienteData.tipo_documento === 'CNPJ'
-                            ? clienteData.documento.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
-                            : clienteData.documento.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')}
-                        </p>
+                        <div className="flex items-center">
+                          <p className="text-white">
+                            {clienteData.tipo_documento === 'CNPJ'
+                              ? clienteData.documento.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+                              : clienteData.documento.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4')}
+                          </p>
+                          <button
+                            onClick={() => handleCopyToClipboard(
+                              clienteData.tipo_documento === 'CNPJ'
+                                ? clienteData.documento.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+                                : clienteData.documento.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4'),
+                              'documento'
+                            )}
+                            className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                            title="Copiar documento"
+                          >
+                            {copiedFields['documento'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                          </button>
+                        </div>
                       </div>
                     )}
 
                     {clienteData.tipo_documento === 'CNPJ' && clienteData.razao_social && (
                       <div>
                         <p className="text-gray-400 text-sm">Razão Social</p>
-                        <p className="text-white">{clienteData.razao_social}</p>
+                        <div className="flex items-center">
+                          <p className="text-white">{clienteData.razao_social}</p>
+                          <button
+                            onClick={() => handleCopyToClipboard(clienteData.razao_social, 'razao_social')}
+                            className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                            title="Copiar razão social"
+                          >
+                            {copiedFields['razao_social'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                          </button>
+                        </div>
                       </div>
                     )}
 
                     {clienteData.nome_fantasia && (
                       <div>
                         <p className="text-gray-400 text-sm">Nome Fantasia</p>
-                        <p className="text-white">{clienteData.nome_fantasia}</p>
+                        <div className="flex items-center">
+                          <p className="text-white">{clienteData.nome_fantasia}</p>
+                          <button
+                            onClick={() => handleCopyToClipboard(clienteData.nome_fantasia, 'nome_fantasia')}
+                            className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                            title="Copiar nome fantasia"
+                          >
+                            {copiedFields['nome_fantasia'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -832,11 +1035,27 @@ const EditarPedidoPage: React.FC = () => {
                               {telefone.whatsapp ? ' - WhatsApp' : ''})
                             </span>
                           </p>
+                          <button
+                            onClick={() => handleCopyToClipboard(telefone.numero, `telefone_${index}`)}
+                            className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                            title="Copiar telefone"
+                          >
+                            {copiedFields[`telefone_${index}`] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                          </button>
                         </div>
                       ))}
                     </div>
                   ) : clienteData.telefone ? (
-                    <p className="text-white">{formatarTelefone(clienteData.telefone)}</p>
+                    <div className="flex items-center">
+                      <p className="text-white">{formatarTelefone(clienteData.telefone)}</p>
+                      <button
+                        onClick={() => handleCopyToClipboard(clienteData.telefone, 'telefone')}
+                        className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                        title="Copiar telefone"
+                      >
+                        {copiedFields['telefone'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                      </button>
+                    </div>
                   ) : (
                     <p className="text-gray-400">Nenhum telefone cadastrado</p>
                   )}
@@ -847,20 +1066,56 @@ const EditarPedidoPage: React.FC = () => {
                   <h3 className="text-white font-medium mb-2">Endereço</h3>
                   {clienteData.endereco ? (
                     <div>
-                      <p className="text-white">
-                        {clienteData.endereco}
-                        {clienteData.numero ? `, ${clienteData.numero}` : ''}
-                        {clienteData.complemento ? `, ${clienteData.complemento}` : ''}
-                      </p>
-                      <p className="text-gray-400 text-sm">
-                        {clienteData.bairro ? `${clienteData.bairro} - ` : ''}
-                        {clienteData.cidade || ''}
-                        {clienteData.estado ? `/${clienteData.estado}` : ''}
-                      </p>
-                      {clienteData.cep && (
-                        <p className="text-gray-400 text-sm">
-                          CEP: {clienteData.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2')}
+                      <div className="flex items-center">
+                        <p className="text-white">
+                          {clienteData.endereco}
+                          {clienteData.numero ? `, ${clienteData.numero}` : ''}
+                          {clienteData.complemento ? `, ${clienteData.complemento}` : ''}
                         </p>
+                        <button
+                          onClick={() => handleCopyToClipboard(
+                            `${clienteData.endereco}${clienteData.numero ? `, ${clienteData.numero}` : ''}${clienteData.complemento ? `, ${clienteData.complemento}` : ''}`,
+                            'endereco_completo'
+                          )}
+                          className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                          title="Copiar endereço"
+                        >
+                          {copiedFields['endereco_completo'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                      <div className="flex items-center">
+                        <p className="text-gray-400 text-sm">
+                          {clienteData.bairro ? `${clienteData.bairro} - ` : ''}
+                          {clienteData.cidade || ''}
+                          {clienteData.estado ? `/${clienteData.estado}` : ''}
+                        </p>
+                        <button
+                          onClick={() => handleCopyToClipboard(
+                            `${clienteData.bairro ? `${clienteData.bairro} - ` : ''}${clienteData.cidade || ''}${clienteData.estado ? `/${clienteData.estado}` : ''}`,
+                            'bairro_cidade'
+                          )}
+                          className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                          title="Copiar bairro/cidade"
+                        >
+                          {copiedFields['bairro_cidade'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                        </button>
+                      </div>
+                      {clienteData.cep && (
+                        <div className="flex items-center">
+                          <p className="text-gray-400 text-sm">
+                            CEP: {clienteData.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2')}
+                          </p>
+                          <button
+                            onClick={() => handleCopyToClipboard(
+                              clienteData.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2'),
+                              'cep'
+                            )}
+                            className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                            title="Copiar CEP"
+                          >
+                            {copiedFields['cep'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                          </button>
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -916,10 +1171,26 @@ const EditarPedidoPage: React.FC = () => {
                             <p className="text-sm">
                               <span className="text-gray-400 line-through">{formatarPreco(item.valorOriginal)}</span>
                               <span className="text-primary-400 ml-2">{formatarPreco(item.valorUnitario)}</span>
+                              <span className="text-gray-400"> x {item.quantidade} = {formatarPreco(item.valorTotal)}</span>
+                            </p>
+                            <p className="text-xs text-green-400">
+                              {item.tipoDesconto === 'quantidade' ? (
+                                <>
+                                  Desconto por quantidade:
+                                  {item.produto.tipo_desconto_quantidade === 'percentual'
+                                    ? ` ${item.produto.percentual_desconto_quantidade}%`
+                                    : ` ${formatarPreco(item.produto.valor_desconto_quantidade || 0)}`
+                                  }
+                                </>
+                              ) : (
+                                'Produto em promoção'
+                              )}
                             </p>
                           </div>
                         ) : (
-                          <p className="text-sm text-primary-400">{formatarPreco(item.valorUnitario)}</p>
+                          <p className="text-sm text-primary-400">
+                            {formatarPreco(item.valorUnitario)} x {item.quantidade} = {formatarPreco(item.valorTotal)}
+                          </p>
                         )}
                         {item.observacao && (
                           <p className="text-xs text-gray-400 mt-1">Obs: {item.observacao}</p>
@@ -988,6 +1259,20 @@ const EditarPedidoPage: React.FC = () => {
                       onChange={(e) => setQuantidade(parseInt(e.target.value) || 1)}
                       className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                     />
+                    {produtoSelecionadoObj && produtoSelecionadoObj.desconto_quantidade && produtoSelecionadoObj.quantidade_minima && (
+                      <div className="mt-1 text-xs text-green-400">
+                        {produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual' ? (
+                          <span>Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades: {produtoSelecionadoObj.percentual_desconto_quantidade}%</span>
+                        ) : (
+                          <span>Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades: {formatarPreco(produtoSelecionadoObj.valor_desconto_quantidade || 0)}</span>
+                        )}
+                      </div>
+                    )}
+                    {produtoSelecionadoObj && produtoSelecionadoObj.quantidade_minima && quantidade < produtoSelecionadoObj.quantidade_minima && (
+                      <div className="mt-1 text-xs text-gray-400">
+                        Min. {produtoSelecionadoObj.quantidade_minima} para desconto
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">

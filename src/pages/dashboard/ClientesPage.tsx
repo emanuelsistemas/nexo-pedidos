@@ -21,6 +21,12 @@ interface Cliente {
   telefones?: Telefone[];
   email?: string;
   endereco?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
+  cep?: string;
   empresa_id: string;
   empresa_nome?: string;
   created_at: string;
@@ -756,40 +762,22 @@ const ClientesPage: React.FC = () => {
   };
 
   const handleEdit = async (cliente: Cliente) => {
-    // Extrair informações de endereço do campo endereco, se existir
-    let cep = '';
-    let endereco = '';
-    let numero = '';
-    let complemento = '';
-    let bairro = '';
-    let cidade = '';
-    let estado = '';
+    // Usar diretamente os campos individuais de endereço
+    console.log('Editando cliente:', cliente);
 
-    // Se houver endereço, tentar extrair as informações
-    if (cliente.endereco) {
-      // Tentar extrair as informações do endereço completo
-      // Assumindo que o endereço está no formato: "Rua X, 123, Complemento, Bairro, Cidade/UF, CEP"
-      const enderecoCompleto = cliente.endereco.split(',');
-
-      if (enderecoCompleto.length >= 1) endereco = enderecoCompleto[0]?.trim() || '';
-      if (enderecoCompleto.length >= 2) numero = enderecoCompleto[1]?.trim() || '';
-      if (enderecoCompleto.length >= 3) complemento = enderecoCompleto[2]?.trim() || '';
-      if (enderecoCompleto.length >= 4) bairro = enderecoCompleto[3]?.trim() || '';
-
-      if (enderecoCompleto.length >= 5) {
-        const cidadeUf = enderecoCompleto[4]?.trim().split('/');
-        cidade = cidadeUf[0]?.trim() || '';
-        estado = cidadeUf[1]?.trim() || '';
-      }
-
-      if (enderecoCompleto.length >= 6) {
-        cep = enderecoCompleto[5]?.trim() || '';
-        // Formatar CEP se for um número
-        if (/^\d+$/.test(cep)) {
-          cep = formatarCep(cep);
-        }
-      }
+    // Formatar CEP se existir
+    let cep = cliente.cep || '';
+    if (cep && /^\d+$/.test(cep)) {
+      cep = formatarCep(cep);
     }
+
+    // Usar os campos individuais diretamente
+    let endereco = cliente.endereco || '';
+    let numero = cliente.numero || '';
+    let complemento = cliente.complemento || '';
+    let bairro = cliente.bairro || '';
+    let cidade = cliente.cidade || '';
+    let estado = cliente.estado || '';
 
     // Determinar o tipo de documento com base no formato
     let tipoDocumento = 'CNPJ';
@@ -1210,10 +1198,15 @@ const ClientesPage: React.FC = () => {
                   </div>
                 )}
 
-                {cliente.endereco && (
+                {(cliente.endereco || cliente.bairro || cliente.cidade) && (
                   <div className="flex items-center gap-1 text-gray-400 text-sm mt-2">
                     <MapPin size={14} />
-                    <span className="truncate">{cliente.endereco}</span>
+                    <span className="truncate">
+                      {cliente.endereco && `${cliente.endereco}${cliente.numero ? `, ${cliente.numero}` : ''}`}
+                      {cliente.bairro && (cliente.endereco ? `, ${cliente.bairro}` : cliente.bairro)}
+                      {cliente.cidade && (cliente.endereco || cliente.bairro ? `, ${cliente.cidade}` : cliente.cidade)}
+                      {cliente.estado && `/${cliente.estado}`}
+                    </span>
                   </div>
                 )}
 

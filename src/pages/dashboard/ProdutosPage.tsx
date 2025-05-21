@@ -755,7 +755,8 @@ const ProdutosPage: React.FC = () => {
       desconto_quantidade: false,
       quantidade_minima: 5,
       tipo_desconto_quantidade: 'percentual',
-      valor_desconto_quantidade: 10,
+      percentual_desconto_quantidade: 10,
+      valor_desconto_quantidade: 0,
       estoque_inicial: 0,
     });
 
@@ -910,7 +911,8 @@ const ProdutosPage: React.FC = () => {
       desconto_quantidade: produto.desconto_quantidade || false,
       quantidade_minima: produto.quantidade_minima || 5,
       tipo_desconto_quantidade: produto.tipo_desconto_quantidade || 'percentual',
-      valor_desconto_quantidade: produto.valor_desconto_quantidade || 10,
+      percentual_desconto_quantidade: produto.percentual_desconto_quantidade || 10,
+      valor_desconto_quantidade: produto.valor_desconto_quantidade || 0,
       estoque_inicial: produto.estoque_inicial || 0,
     };
 
@@ -932,12 +934,10 @@ const ProdutosPage: React.FC = () => {
     }
 
     // Definir o desconto por quantidade formatado
-    if (produto.valor_desconto_quantidade !== undefined) {
-      if (produto.tipo_desconto_quantidade === 'percentual') {
-        setDescontoQuantidadeFormatado(produto.valor_desconto_quantidade.toString());
-      } else {
-        setDescontoQuantidadeFormatado(formatarPreco(produto.valor_desconto_quantidade));
-      }
+    if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade !== undefined) {
+      setDescontoQuantidadeFormatado(produto.percentual_desconto_quantidade.toString());
+    } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade !== undefined) {
+      setDescontoQuantidadeFormatado(formatarPreco(produto.valor_desconto_quantidade));
     }
 
     // Abrir o sidebar imediatamente
@@ -1483,7 +1483,10 @@ const ProdutosPage: React.FC = () => {
 
     // Validar se o produto com desconto por quantidade tem um valor de desconto maior que zero
     if (novoProduto.desconto_quantidade) {
-      if (!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0) {
+      if ((novoProduto.tipo_desconto_quantidade === 'percentual' &&
+          (!novoProduto.percentual_desconto_quantidade || novoProduto.percentual_desconto_quantidade <= 0)) ||
+          (novoProduto.tipo_desconto_quantidade === 'valor' &&
+          (!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0))) {
         showMessage('error', 'Para produtos com desconto por quantidade, é necessário informar um valor de desconto maior que zero');
         return;
       }
@@ -1538,7 +1541,8 @@ const ProdutosPage: React.FC = () => {
             desconto_quantidade: novoProduto.desconto_quantidade,
             quantidade_minima: novoProduto.desconto_quantidade ? novoProduto.quantidade_minima : null,
             tipo_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.tipo_desconto_quantidade : null,
-            valor_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.valor_desconto_quantidade : null,
+            valor_desconto_quantidade: novoProduto.desconto_quantidade && novoProduto.tipo_desconto_quantidade === 'valor' ? novoProduto.valor_desconto_quantidade : null,
+            percentual_desconto_quantidade: novoProduto.desconto_quantidade && novoProduto.tipo_desconto_quantidade === 'percentual' ? novoProduto.percentual_desconto_quantidade : null,
             empresa_id: usuarioData.empresa_id
           })
           .eq('id', editingProduto.id)
@@ -1561,7 +1565,8 @@ const ProdutosPage: React.FC = () => {
           // Garantir que os campos de desconto por quantidade sejam null quando não habilitados
           quantidade_minima: novoProduto.desconto_quantidade ? novoProduto.quantidade_minima : null,
           tipo_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.tipo_desconto_quantidade : null,
-          valor_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.valor_desconto_quantidade : null,
+          valor_desconto_quantidade: novoProduto.desconto_quantidade && novoProduto.tipo_desconto_quantidade === 'valor' ? novoProduto.valor_desconto_quantidade : null,
+          percentual_desconto_quantidade: novoProduto.desconto_quantidade && novoProduto.tipo_desconto_quantidade === 'percentual' ? novoProduto.percentual_desconto_quantidade : null,
           // Garantir que os campos de promoção sejam null quando não habilitados
           tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
           valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
@@ -2350,7 +2355,7 @@ const ProdutosPage: React.FC = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.3 }}
-              className={`fixed right-0 top-0 h-screen w-full ${activeTab === 'estoque' ? 'max-w-[50vw]' : 'max-w-md'} bg-background-card border-l border-gray-800 z-50 overflow-y-auto`}
+              className={`fixed right-0 top-0 h-screen w-full ${activeTab === 'estoque' ? 'max-w-[30vw]' : 'max-w-md'} bg-background-card border-l border-gray-800 z-50 overflow-y-auto`}
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
@@ -2851,7 +2856,8 @@ const ProdutosPage: React.FC = () => {
                                     desconto_quantidade: isChecked,
                                     quantidade_minima: 5,
                                     tipo_desconto_quantidade: 'percentual',
-                                    valor_desconto_quantidade: 10
+                                    percentual_desconto_quantidade: 10,
+                                    valor_desconto_quantidade: 0
                                   });
                                   setDescontoQuantidadeFormatado('10');
                                 } else {
@@ -2921,18 +2927,18 @@ const ProdutosPage: React.FC = () => {
                                       checked={novoProduto.tipo_desconto_quantidade === 'percentual'}
                                       onChange={() => {
                                         // Se não tinha tipo de desconto definido, inicializa com 10%
-                                        const novoValorDesconto = !novoProduto.tipo_desconto_quantidade || novoProduto.tipo_desconto_quantidade !== 'percentual'
+                                        const novoPercentualDesconto = !novoProduto.tipo_desconto_quantidade || novoProduto.tipo_desconto_quantidade !== 'percentual'
                                           ? 10
-                                          : novoProduto.valor_desconto_quantidade;
+                                          : novoProduto.percentual_desconto_quantidade;
 
                                         setNovoProduto({
                                           ...novoProduto,
                                           tipo_desconto_quantidade: 'percentual',
-                                          valor_desconto_quantidade: novoValorDesconto || 10
+                                          percentual_desconto_quantidade: novoPercentualDesconto || 10
                                         });
 
                                         // Atualizar o formato do desconto quando mudar o tipo
-                                        setDescontoQuantidadeFormatado((novoValorDesconto || 10).toString());
+                                        setDescontoQuantidadeFormatado((novoPercentualDesconto || 10).toString());
                                       }}
                                       className="mr-2 rounded-full border-gray-700 text-primary-500 focus:ring-primary-500/20"
                                       required
@@ -2960,7 +2966,8 @@ const ProdutosPage: React.FC = () => {
                                         setNovoProduto({
                                           ...novoProduto,
                                           tipo_desconto_quantidade: 'valor',
-                                          valor_desconto_quantidade: novoValorDesconto || (novoProduto.preco * 0.1)
+                                          valor_desconto_quantidade: novoValorDesconto || (novoProduto.preco * 0.1),
+                                          percentual_desconto_quantidade: 0
                                         });
 
                                         // Atualizar o formato do desconto quando mudar o tipo
@@ -2993,7 +3000,11 @@ const ProdutosPage: React.FC = () => {
                                       setDescontoQuantidadeFormatado(e.target.value);
                                       // Atualiza o valor numérico no estado do produto
                                       const valorNumerico = desformatarPreco(e.target.value);
-                                      setNovoProduto({ ...novoProduto, valor_desconto_quantidade: valorNumerico });
+                                      if (novoProduto.tipo_desconto_quantidade === 'percentual') {
+                                        setNovoProduto({ ...novoProduto, percentual_desconto_quantidade: valorNumerico });
+                                      } else {
+                                        setNovoProduto({ ...novoProduto, valor_desconto_quantidade: valorNumerico });
+                                      }
                                     }}
                                     onFocus={() => {
                                       // Ao receber o foco, limpa o campo para facilitar a digitação
@@ -3011,7 +3022,10 @@ const ProdutosPage: React.FC = () => {
                                       }
                                     }}
                                     className={`w-full bg-gray-800/50 border ${
-                                      !novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0
+                                      (novoProduto.tipo_desconto_quantidade === 'percentual' &&
+                                       (!novoProduto.percentual_desconto_quantidade || novoProduto.percentual_desconto_quantidade <= 0)) ||
+                                      (novoProduto.tipo_desconto_quantidade === 'valor' &&
+                                       (!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0))
                                         ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
                                         : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
                                     } rounded-lg py-2 ${novoProduto.tipo_desconto_quantidade === 'valor' ? 'pl-8' : 'pl-3'} pr-3 text-white focus:outline-none focus:ring-1`}
@@ -3024,7 +3038,10 @@ const ProdutosPage: React.FC = () => {
                                     </span>
                                   )}
                                 </div>
-                                {(!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0) && (
+                                {((novoProduto.tipo_desconto_quantidade === 'percentual' &&
+                                   (!novoProduto.percentual_desconto_quantidade || novoProduto.percentual_desconto_quantidade <= 0)) ||
+                                  (novoProduto.tipo_desconto_quantidade === 'valor' &&
+                                   (!novoProduto.valor_desconto_quantidade || novoProduto.valor_desconto_quantidade <= 0))) && (
                                   <p className="text-red-500 text-xs mt-1">
                                     É necessário informar um valor de desconto maior que zero
                                   </p>
@@ -3377,12 +3394,12 @@ const ProdutosPage: React.FC = () => {
                                       <table className="w-full text-sm text-left text-gray-300">
                                         <thead className="text-xs uppercase bg-gray-900/50 text-gray-400 sticky top-0">
                                           <tr>
-                                            <th scope="col" className="px-4 py-3">Data/Hora</th>
-                                            <th scope="col" className="px-4 py-3">Tipo</th>
-                                            <th scope="col" className="px-4 py-3">Quantidade</th>
-                                            <th scope="col" className="px-4 py-3">Saldo</th>
-                                            <th scope="col" className="px-4 py-3">Usuário</th>
-                                            <th scope="col" className="px-4 py-3">Observação</th>
+                                            <th scope="col" className="px-4 py-3 w-[120px]">Data</th>
+                                            <th scope="col" className="px-4 py-3 w-[70px]">Tipo</th>
+                                            <th scope="col" className="px-4 py-3 w-[80px]">Qtde</th>
+                                            <th scope="col" className="px-4 py-3 w-[80px]">Saldo</th>
+                                            <th scope="col" className="px-4 py-3 w-[100px]">Usuário</th>
+                                            <th scope="col" className="px-4 py-3">Obs</th>
                                           </tr>
                                         </thead>
                                       </table>
@@ -3392,10 +3409,10 @@ const ProdutosPage: React.FC = () => {
                                         <tbody>
                                           {estoqueMovimentos.map((movimento) => (
                                             <tr key={movimento.id} className="border-b border-gray-800 hover:bg-gray-800/30">
-                                              <td className="px-4 py-3 w-[140px]">
+                                              <td className="px-4 py-3 w-[120px]">
                                                 {new Date(movimento.data_hora_movimento).toLocaleString('pt-BR')}
                                               </td>
-                                              <td className="px-4 py-3 w-[80px]">
+                                              <td className="px-4 py-3 w-[70px]">
                                                 <span className={`px-2 py-1 rounded-full text-xs ${
                                                   movimento.tipo_movimento === 'entrada'
                                                     ? 'bg-green-900/30 text-green-400'
@@ -3404,13 +3421,13 @@ const ProdutosPage: React.FC = () => {
                                                   {movimento.tipo_movimento === 'entrada' ? 'Entrada' : 'Saída'}
                                                 </span>
                                               </td>
-                                              <td className="px-4 py-3 w-[100px]">
+                                              <td className="px-4 py-3 w-[80px]">
                                                 {parseFloat(movimento.quantidade).toFixed(2)}
                                               </td>
-                                              <td className="px-4 py-3 font-medium w-[100px]">
+                                              <td className="px-4 py-3 font-medium w-[80px]">
                                                 {parseFloat(movimento.saldo).toFixed(2)}
                                               </td>
-                                              <td className="px-4 py-3 w-[120px]">
+                                              <td className="px-4 py-3 w-[100px]">
                                                 {movimento.usuario?.nome || 'Sistema'}
                                               </td>
                                               <td className="px-4 py-3">
