@@ -34,6 +34,19 @@ interface DescontoValor {
   tipo: 'desconto' | 'acrescimo';
 }
 
+interface FormaPagamento {
+  id: string;
+  nome: string;
+  tipo: string;
+}
+
+interface FormaPagamentoParcial {
+  id: string;
+  forma_pagamento_id: string;
+  forma_pagamento_nome: string;
+  valor: number;
+}
+
 interface ItemPedido {
   id: string;
   produto: Produto;
@@ -86,7 +99,12 @@ const UserNovoPedidoPage: React.FC = () => {
   const [valorAcrescimo, setValorAcrescimo] = useState(0);
   const [descontoPrazoObj, setDescontoPrazoObj] = useState<DescontoPrazo | null>(null);
   const [descontoValorObj, setDescontoValorObj] = useState<DescontoValor | null>(null);
-  const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
+  const [formasPagamento, setFormasPagamento] = useState<FormaPagamento[]>([]);
+  const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<string | null>(null);
+  const [formasPagamentoParciais, setFormasPagamentoParciais] = useState<FormaPagamentoParcial[]>([]);
+  const [novaFormaPagamentoId, setNovaFormaPagamentoId] = useState<string>('');
+  const [novaFormaPagamentoValor, setNovaFormaPagamentoValor] = useState<string>('');
+  const [tipoPagamento, setTipoPagamento] = useState<'unico' | 'parcial'>('unico');
 
   useEffect(() => {
     const init = async () => {
@@ -379,6 +397,62 @@ const UserNovoPedidoPage: React.FC = () => {
     }).format(valor);
   };
 
+  // Função para adicionar uma forma de pagamento parcial
+  const adicionarFormaPagamentoParcial = () => {
+    if (!novaFormaPagamentoId || !novaFormaPagamentoValor) {
+      showMessage('error', 'Selecione uma forma de pagamento e informe o valor');
+      return;
+    }
+
+    const valor = parseFloat(novaFormaPagamentoValor.replace(/[^\d,.-]/g, '').replace(',', '.'));
+
+    if (isNaN(valor) || valor <= 0) {
+      showMessage('error', 'Informe um valor válido');
+      return;
+    }
+
+    // Verificar se o valor total das formas de pagamento não excede o valor total do pedido
+    const valorTotalParciais = formasPagamentoParciais.reduce((acc, item) => acc + item.valor, 0) + valor;
+
+    if (valorTotalParciais > valorTotal) {
+      showMessage('error', `O valor total das formas de pagamento (${formatarPreco(valorTotalParciais)}) não pode exceder o valor total do pedido (${formatarPreco(valorTotal)})`);
+      return;
+    }
+
+    // Encontrar a forma de pagamento selecionada
+    const formaPagamento = formasPagamento.find(f => f.id === novaFormaPagamentoId);
+
+    if (!formaPagamento) {
+      showMessage('error', 'Forma de pagamento não encontrada');
+      return;
+    }
+
+    // Adicionar a forma de pagamento parcial
+    const novaFormaParcial: FormaPagamentoParcial = {
+      id: Date.now().toString(), // ID temporário
+      forma_pagamento_id: formaPagamento.id,
+      forma_pagamento_nome: formaPagamento.nome,
+      valor
+    };
+
+    setFormasPagamentoParciais([...formasPagamentoParciais, novaFormaParcial]);
+
+    // Limpar os campos
+    setNovaFormaPagamentoId('');
+    setNovaFormaPagamentoValor('');
+  };
+
+  // Função para remover uma forma de pagamento parcial
+  const removerFormaPagamentoParcial = (id: string) => {
+    setFormasPagamentoParciais(formasPagamentoParciais.filter(item => item.id !== id));
+  };
+
+  // Função para calcular o valor restante a ser pago
+  const calcularValorRestante = (): number => {
+    const valorTotalParciais = formasPagamentoParciais.reduce((acc, item) => acc + item.valor, 0);
+    return valorTotal - valorTotalParciais;
+  };
+
   // Função para calcular o preço unitário considerando promoção e desconto por quantidade
   const calcularPrecoUnitario = (produto: Produto, quantidade: number): { valorUnitario: number, temDesconto: boolean, valorOriginal: number, tipoDesconto: string } => {
     let valorUnitario = produto.preco;
@@ -447,13 +521,64 @@ const UserNovoPedidoPage: React.FC = () => {
     return cepLimpo.replace(/^(\d{5})(\d{3})$/, '$1-$2');
   };
 
+  // Função para formatar valor monetário no campo de entrada
+  const formatarValorMonetario = (valor: string): string => {
+    // Remove todos os caracteres não numéricos
+    let valorLimpo = valor.replace(/\D/g, '');
+
+    // Converte para número
+    const valorNumerico = parseInt(valorLimpo) / 100;
+
+    // Formata como moeda
+    return valorNumerico.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    });
+  };
+
+  // Função para lidar com a mudança no campo de valor
+  const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+
+    // Se o campo estiver vazio, não formatar
+    if (!valor) {
+      setNovaFormaPagamentoValor('');
+      return;
+    }
+
+    // Remove formatação atual
+    const valorLimpo = valor.replace(/\D/g, '');
+
+    // Se não houver números, limpa o campo
+    if (!valorLimpo) {
+      setNovaFormaPagamentoValor('');
+      return;
+    }
+
+    // Formata o valor
+    setNovaFormaPagamentoValor(formatarValorMonetario(valorLimpo));
+  };
+
   // Função para carregar as formas de pagamento disponíveis
   const loadFormasPagamentoGeral = async () => {
     try {
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
       const { data, error } = await supabase
-        .from('forma_pagamento_opcoes')
-        .select('*')
-        .eq('ativo', true)
+        .from('formas_pagamento_tipos')
+        .select('id, nome, tipo')
+        .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
 
       if (error) {
@@ -644,6 +769,17 @@ const UserNovoPedidoPage: React.FC = () => {
       setDescontoPrazoSelecionado(pedidoData.desconto_prazo_id || null);
       setDescontoValorSelecionado(pedidoData.desconto_valor_id || null);
 
+      // Verificar se o pedido tem formas de pagamento parciais
+      if (pedidoData.formas_pagamento && Array.isArray(pedidoData.formas_pagamento) && pedidoData.formas_pagamento.length > 0) {
+        // Carregar formas de pagamento parciais
+        setFormasPagamentoParciais(pedidoData.formas_pagamento);
+        setTipoPagamento('parcial');
+      } else if (pedidoData.forma_pagamento_id) {
+        // Carregar forma de pagamento única
+        setFormaPagamentoSelecionada(pedidoData.forma_pagamento_id);
+        setTipoPagamento('unico');
+      }
+
       // Formatar itens do pedido
       console.log('Itens do pedido:', pedidoData.itens);
       if (pedidoData.itens && pedidoData.itens.length > 0) {
@@ -742,6 +878,28 @@ const UserNovoPedidoPage: React.FC = () => {
       return;
     }
 
+    // Verificar se há forma de pagamento selecionada
+    if (tipoPagamento === 'unico' && !formaPagamentoSelecionada) {
+      showMessage('error', 'Selecione uma forma de pagamento');
+      return;
+    }
+
+    // Verificar se as formas de pagamento parciais cobrem o valor total
+    if (tipoPagamento === 'parcial') {
+      if (formasPagamentoParciais.length === 0) {
+        showMessage('error', 'Adicione pelo menos uma forma de pagamento');
+        return;
+      }
+
+      const valorTotalParciais = formasPagamentoParciais.reduce((acc, item) => acc + item.valor, 0);
+      const valorRestante = valorTotal - valorTotalParciais;
+
+      if (valorRestante > 0.01) { // Tolerância de 1 centavo para evitar problemas de arredondamento
+        showMessage('error', `Ainda falta ${formatarPreco(valorRestante)} para completar o valor total do pedido`);
+        return;
+      }
+    }
+
     try {
       setIsSaving(true);
 
@@ -764,6 +922,8 @@ const UserNovoPedidoPage: React.FC = () => {
             valor_total: valorTotal,
             desconto_prazo_id: descontoPrazoSelecionado,
             desconto_valor_id: descontoValorSelecionado,
+            forma_pagamento_id: tipoPagamento === 'unico' ? formaPagamentoSelecionada : null,
+            formas_pagamento: tipoPagamento === 'parcial' ? formasPagamentoParciais : null,
             status: 'pendente' // Voltar para pendente quando editado
           })
           .eq('id', id);
@@ -815,7 +975,9 @@ const UserNovoPedidoPage: React.FC = () => {
             status: 'pendente',
             numero: numeroPedido,
             desconto_prazo_id: descontoPrazoSelecionado,
-            desconto_valor_id: descontoValorSelecionado
+            desconto_valor_id: descontoValorSelecionado,
+            forma_pagamento_id: tipoPagamento === 'unico' ? formaPagamentoSelecionada : null,
+            formas_pagamento: tipoPagamento === 'parcial' ? formasPagamentoParciais : null
           })
           .select()
           .single();
@@ -1341,6 +1503,120 @@ const UserNovoPedidoPage: React.FC = () => {
                     {descontosPrazo.length === 0 && descontosValor.length === 0 && (
                       <p className="text-gray-400 text-sm">Nenhuma condição de pagamento disponível para este cliente</p>
                     )}
+
+                    {/* Formas de Pagamento */}
+                    <div className="mt-4">
+                      <h4 className="text-sm text-gray-400 mb-2">Forma de Pagamento</h4>
+
+                      {/* Opções de tipo de pagamento */}
+                      <div className="flex gap-4 mb-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="tipoPagamento"
+                            checked={tipoPagamento === 'unico'}
+                            onChange={() => setTipoPagamento('unico')}
+                            className="w-4 h-4 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
+                          />
+                          <span className="text-white">À Vista (uma forma)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="tipoPagamento"
+                            checked={tipoPagamento === 'parcial'}
+                            onChange={() => setTipoPagamento('parcial')}
+                            className="w-4 h-4 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
+                          />
+                          <span className="text-white">Diversos (múltiplas formas)</span>
+                        </label>
+                      </div>
+
+                      {/* Pagamento único */}
+                      {tipoPagamento === 'unico' && (
+                        <select
+                          value={formaPagamentoSelecionada || ''}
+                          onChange={(e) => setFormaPagamentoSelecionada(e.target.value || null)}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        >
+                          <option value="">Selecione uma forma de pagamento</option>
+                          {formasPagamento.map(forma => (
+                            <option key={forma.id} value={forma.id}>{forma.nome}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* Pagamento parcial */}
+                      {tipoPagamento === 'parcial' && (
+                        <div className="space-y-3">
+                          {/* Lista de formas de pagamento adicionadas */}
+                          {formasPagamentoParciais.length > 0 && (
+                            <div className="space-y-2 mb-3">
+                              {formasPagamentoParciais.map((forma) => (
+                                <div key={forma.id} className="flex justify-between items-center bg-gray-800/50 border border-gray-700 rounded-lg p-2">
+                                  <div className="flex items-center gap-2">
+                                    <DollarSign size={16} className="text-primary-400" />
+                                    <span className="text-white">{forma.forma_pagamento_nome}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-primary-400">{formatarPreco(forma.valor)}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removerFormaPagamentoParcial(forma.id)}
+                                      className="p-1 text-red-400 hover:text-red-300"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+
+                              {/* Valor restante */}
+                              <div className="flex justify-between items-center p-2">
+                                <span className="text-gray-400">Valor restante:</span>
+                                <span className={calcularValorRestante() > 0 ? "text-red-400" : "text-green-400"}>
+                                  {formatarPreco(calcularValorRestante())}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Adicionar nova forma de pagamento */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="col-span-1">
+                              <select
+                                value={novaFormaPagamentoId}
+                                onChange={(e) => setNovaFormaPagamentoId(e.target.value)}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              >
+                                <option value="">Selecione</option>
+                                {formasPagamento.map(forma => (
+                                  <option key={forma.id} value={forma.id}>{forma.nome}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-span-1">
+                              <input
+                                type="text"
+                                value={novaFormaPagamentoValor}
+                                onChange={handleValorChange}
+                                placeholder="Valor"
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              />
+                            </div>
+                            <div className="col-span-1">
+                              <button
+                                type="button"
+                                onClick={adicionarFormaPagamentoParcial}
+                                className="w-full bg-primary-500 hover:bg-primary-600 text-white py-2 px-3 rounded-lg transition-colors"
+                              >
+                                Adicionar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
