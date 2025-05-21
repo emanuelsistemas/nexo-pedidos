@@ -207,17 +207,31 @@ const EditarPedidoPage: React.FC = () => {
 
   const loadFormasPagamento = async (empresaId: string) => {
     try {
-      const { data: formasPagamentoData } = await supabase
-        .from('formas_pagamento_tipos')
-        .select('id, nome, tipo')
-        .eq('empresa_id', empresaId)
+      console.log('Iniciando carregamento de formas de pagamento...');
+
+      // Consultar a tabela forma_pagamento_opcoes diretamente
+      const { data: formasPagamentoData, error } = await supabase
+        .from('forma_pagamento_opcoes')
+        .select('id, nome, tipo, max_parcelas')
+        .eq('ativo', true)
         .order('nome');
 
-      if (formasPagamentoData) {
+      if (error) {
+        console.error('Erro ao carregar formas de pagamento:', error);
+        toast.error('Erro ao carregar formas de pagamento');
+        return;
+      }
+
+      if (formasPagamentoData && formasPagamentoData.length > 0) {
+        console.log('Formas de pagamento carregadas com sucesso:', formasPagamentoData);
         setFormasPagamento(formasPagamentoData);
+      } else {
+        console.warn('Nenhuma forma de pagamento encontrada');
+        toast.warning('Nenhuma forma de pagamento encontrada');
       }
     } catch (error) {
       console.error('Erro ao carregar formas de pagamento:', error);
+      toast.error('Erro ao carregar formas de pagamento');
     }
   };
 

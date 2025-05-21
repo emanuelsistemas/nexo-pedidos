@@ -38,6 +38,7 @@ interface FormaPagamento {
   id: string;
   nome: string;
   tipo: string;
+  max_parcelas?: number;
 }
 
 interface FormaPagamentoParcial {
@@ -45,6 +46,7 @@ interface FormaPagamentoParcial {
   forma_pagamento_id: string;
   forma_pagamento_nome: string;
   valor: number;
+  parcelas?: number; // Número de parcelas para cartão de crédito
 }
 
 interface ItemPedido {
@@ -104,6 +106,8 @@ const UserNovoPedidoPage: React.FC = () => {
   const [formasPagamentoParciais, setFormasPagamentoParciais] = useState<FormaPagamentoParcial[]>([]);
   const [novaFormaPagamentoId, setNovaFormaPagamentoId] = useState<string>('');
   const [novaFormaPagamentoValor, setNovaFormaPagamentoValor] = useState<string>('');
+  const [novaFormaPagamentoParcelas, setNovaFormaPagamentoParcelas] = useState<number>(1);
+  const [formaPagamentoSelecionadaObj, setFormaPagamentoSelecionadaObj] = useState<FormaPagamento | null>(null);
   const [tipoPagamento, setTipoPagamento] = useState<'unico' | 'parcial'>('unico');
 
   useEffect(() => {
@@ -166,6 +170,32 @@ const UserNovoPedidoPage: React.FC = () => {
       setDescontoValorObj(null);
     }
   }, [descontoValorSelecionado, descontosValor]);
+
+  // Efeito para atualizar o objeto de forma de pagamento quando a seleção mudar (para pagamento parcial)
+  useEffect(() => {
+    if (novaFormaPagamentoId) {
+      const formaPagamento = formasPagamento.find(f => f.id === novaFormaPagamentoId) || null;
+      setFormaPagamentoSelecionadaObj(formaPagamento);
+
+      // Resetar parcelas para 1 quando mudar a forma de pagamento
+      setNovaFormaPagamentoParcelas(1);
+    } else {
+      setFormaPagamentoSelecionadaObj(null);
+    }
+  }, [novaFormaPagamentoId, formasPagamento]);
+
+  // Efeito para atualizar o objeto de forma de pagamento quando a seleção mudar (para pagamento único)
+  useEffect(() => {
+    if (formaPagamentoSelecionada) {
+      const formaPagamento = formasPagamento.find(f => f.id === formaPagamentoSelecionada) || null;
+      // Não usamos setFormaPagamentoSelecionadaObj aqui para não interferir com o pagamento parcial
+
+      // Se for cartão de crédito, definir parcelas como 1 por padrão
+      if (formaPagamento?.tipo === 'cartao_credito') {
+        setNovaFormaPagamentoParcelas(1);
+      }
+    }
+  }, [formaPagamentoSelecionada, formasPagamento]);
 
   // Efeito para calcular os valores de desconto e acréscimo
   useEffect(() => {
@@ -432,7 +462,9 @@ const UserNovoPedidoPage: React.FC = () => {
       id: Date.now().toString(), // ID temporário
       forma_pagamento_id: formaPagamento.id,
       forma_pagamento_nome: formaPagamento.nome,
-      valor
+      valor,
+      // Incluir parcelas apenas se for cartão de crédito
+      ...(formaPagamento.tipo === 'cartao_credito' ? { parcelas: novaFormaPagamentoParcelas } : {})
     };
 
     setFormasPagamentoParciais([...formasPagamentoParciais, novaFormaParcial]);
@@ -440,6 +472,7 @@ const UserNovoPedidoPage: React.FC = () => {
     // Limpar os campos
     setNovaFormaPagamentoId('');
     setNovaFormaPagamentoValor('');
+    setNovaFormaPagamentoParcelas(1);
   };
 
   // Função para remover uma forma de pagamento parcial
@@ -562,36 +595,31 @@ const UserNovoPedidoPage: React.FC = () => {
   // Função para carregar as formas de pagamento disponíveis
   const loadFormasPagamentoGeral = async () => {
     try {
-      // Obter o usuário atual
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      console.log('Iniciando carregamento de formas de pagamento...');
 
-      // Obter empresa do usuário
-      const { data: usuarioData } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('id', userData.user.id)
-        .single();
-
-      if (!usuarioData?.empresa_id) return;
-
+      // Consultar a tabela forma_pagamento_opcoes diretamente
       const { data, error } = await supabase
-        .from('formas_pagamento_tipos')
-        .select('id, nome, tipo')
-        .eq('empresa_id', usuarioData.empresa_id)
+        .from('forma_pagamento_opcoes')
+        .select('id, nome, tipo, max_parcelas')
+        .eq('ativo', true)
         .order('nome');
 
       if (error) {
         console.error('Erro ao carregar formas de pagamento:', error);
+        showMessage('error', 'Erro ao carregar formas de pagamento');
         return;
       }
 
-      if (data) {
-        console.log('Formas de pagamento carregadas:', data);
+      if (data && data.length > 0) {
+        console.log('Formas de pagamento carregadas com sucesso:', data);
         setFormasPagamento(data);
+      } else {
+        console.warn('Nenhuma forma de pagamento encontrada');
+        showMessage('warning', 'Nenhuma forma de pagamento encontrada');
       }
     } catch (error) {
       console.error('Erro ao carregar formas de pagamento:', error);
+      showMessage('error', 'Erro ao carregar formas de pagamento');
     }
   };
 
@@ -924,6 +952,11 @@ const UserNovoPedidoPage: React.FC = () => {
             desconto_valor_id: descontoValorSelecionado,
             forma_pagamento_id: tipoPagamento === 'unico' ? formaPagamentoSelecionada : null,
             formas_pagamento: tipoPagamento === 'parcial' ? formasPagamentoParciais : null,
+            parcelas: (tipoPagamento === 'unico' &&
+                      formaPagamentoSelecionada &&
+                      formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.tipo === 'cartao_credito')
+                      ? novaFormaPagamentoParcelas
+                      : null,
             status: 'pendente' // Voltar para pendente quando editado
           })
           .eq('id', id);
@@ -977,7 +1010,12 @@ const UserNovoPedidoPage: React.FC = () => {
             desconto_prazo_id: descontoPrazoSelecionado,
             desconto_valor_id: descontoValorSelecionado,
             forma_pagamento_id: tipoPagamento === 'unico' ? formaPagamentoSelecionada : null,
-            formas_pagamento: tipoPagamento === 'parcial' ? formasPagamentoParciais : null
+            formas_pagamento: tipoPagamento === 'parcial' ? formasPagamentoParciais : null,
+            parcelas: (tipoPagamento === 'unico' &&
+                      formaPagamentoSelecionada &&
+                      formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.tipo === 'cartao_credito')
+                      ? novaFormaPagamentoParcelas
+                      : null
           })
           .select()
           .single();
@@ -1534,16 +1572,39 @@ const UserNovoPedidoPage: React.FC = () => {
 
                       {/* Pagamento único */}
                       {tipoPagamento === 'unico' && (
-                        <select
-                          value={formaPagamentoSelecionada || ''}
-                          onChange={(e) => setFormaPagamentoSelecionada(e.target.value || null)}
-                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        >
-                          <option value="">Selecione uma forma de pagamento</option>
-                          {formasPagamento.map(forma => (
-                            <option key={forma.id} value={forma.id}>{forma.nome}</option>
-                          ))}
-                        </select>
+                        <div className="space-y-3">
+                          <select
+                            value={formaPagamentoSelecionada || ''}
+                            onChange={(e) => setFormaPagamentoSelecionada(e.target.value || null)}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          >
+                            <option value="">Selecione uma forma de pagamento</option>
+                            {formasPagamento.map(forma => (
+                              <option key={forma.id} value={forma.id}>{forma.nome}</option>
+                            ))}
+                          </select>
+
+                          {/* Campo de parcelas para cartão de crédito na opção À Vista */}
+                          {formaPagamentoSelecionada && formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.tipo === 'cartao_credito' && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Número de Parcelas
+                              </label>
+                              <select
+                                value={novaFormaPagamentoParcelas}
+                                onChange={(e) => setNovaFormaPagamentoParcelas(Number(e.target.value))}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              >
+                                {Array.from(
+                                  { length: formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.max_parcelas || 12 },
+                                  (_, i) => i + 1
+                                ).map(parcela => (
+                                  <option key={parcela} value={parcela}>{parcela}x</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
                       )}
 
                       {/* Pagamento parcial */}
@@ -1556,7 +1617,12 @@ const UserNovoPedidoPage: React.FC = () => {
                                 <div key={forma.id} className="flex justify-between items-center bg-gray-800/50 border border-gray-700 rounded-lg p-2">
                                   <div className="flex items-center gap-2">
                                     <DollarSign size={16} className="text-primary-400" />
-                                    <span className="text-white">{forma.forma_pagamento_nome}</span>
+                                    <span className="text-white">
+                                      {forma.forma_pagamento_nome}
+                                      {forma.parcelas && forma.parcelas > 1 && (
+                                        <span className="text-primary-400 ml-2">({forma.parcelas}x)</span>
+                                      )}
+                                    </span>
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-primary-400">{formatarPreco(forma.valor)}</span>
@@ -1582,7 +1648,7 @@ const UserNovoPedidoPage: React.FC = () => {
                           )}
 
                           {/* Adicionar nova forma de pagamento */}
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className={`grid ${formaPagamentoSelecionadaObj?.tipo === 'cartao_credito' ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}>
                             <div className="col-span-1">
                               <select
                                 value={novaFormaPagamentoId}
@@ -1604,6 +1670,20 @@ const UserNovoPedidoPage: React.FC = () => {
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               />
                             </div>
+                            {/* Campo de parcelas para cartão de crédito */}
+                            {formaPagamentoSelecionadaObj?.tipo === 'cartao_credito' && (
+                              <div className="col-span-1">
+                                <select
+                                  value={novaFormaPagamentoParcelas}
+                                  onChange={(e) => setNovaFormaPagamentoParcelas(Number(e.target.value))}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                >
+                                  {Array.from({ length: formaPagamentoSelecionadaObj.max_parcelas || 12 }, (_, i) => i + 1).map(parcela => (
+                                    <option key={parcela} value={parcela}>{parcela}x</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
                             <div className="col-span-1">
                               <button
                                 type="button"
