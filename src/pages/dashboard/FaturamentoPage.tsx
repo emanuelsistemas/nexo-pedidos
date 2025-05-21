@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, DollarSign, User, Building, FileText } from 'lucide-react';
+import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, DollarSign, User, Building, FileText, Edit } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 interface Pedido {
   id: string;
   numero: string;
-  cliente_nome: string;
+  cliente_id: string;
   valor_total: number;
   status: string;
   created_at: string;
@@ -16,6 +17,10 @@ interface Pedido {
   empresa_id: string;
   empresa_nome?: string;
   data_faturamento?: string;
+  cliente?: {
+    nome: string;
+    telefone: string;
+  };
 }
 
 interface Usuario {
@@ -29,6 +34,7 @@ interface Empresa {
 }
 
 const FaturamentoPage: React.FC = () => {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [filteredPedidos, setFilteredPedidos] = useState<Pedido[]>([]);
@@ -94,7 +100,8 @@ const FaturamentoPage: React.FC = () => {
         .from('pedidos')
         .select(`
           *,
-          empresa:empresas(nome)
+          empresa:empresas(nome),
+          cliente:clientes(nome, telefone)
         `)
         .order('created_at', { ascending: false });
 
@@ -152,7 +159,7 @@ const FaturamentoPage: React.FC = () => {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(
         pedido =>
-          pedido.cliente_nome?.toLowerCase().includes(searchLower) ||
+          pedido.cliente?.nome?.toLowerCase().includes(searchLower) ||
           pedido.numero?.toLowerCase().includes(searchLower) ||
           pedido.usuario_nome?.toLowerCase().includes(searchLower)
       );
@@ -260,6 +267,30 @@ const FaturamentoPage: React.FC = () => {
     setShowModal(true);
   };
 
+  const handleEditar = async (pedido: Pedido) => {
+    try {
+      // Atualizar o status do pedido para 'pendente' para permitir edição
+      const { error } = await supabase
+        .from('pedidos')
+        .update({
+          status: 'pendente',
+          data_faturamento: null // Remover data de faturamento se existir
+        })
+        .eq('id', pedido.id);
+
+      if (error) throw error;
+
+      // Mostrar mensagem de sucesso
+      toast.success('Pedido reaberto para edição com sucesso!');
+
+      // Redirecionar diretamente para a página de edição
+      navigate(`/dashboard/editar-pedido/${pedido.id}`);
+    } catch (error: any) {
+      console.error('Erro ao reabrir pedido para edição:', error);
+      toast.error(`Erro ao reabrir pedido: ${error.message}`);
+    }
+  };
+
   const handleConfirmarFaturamento = async () => {
     if (!pedidoSelecionado) return;
 
@@ -288,6 +319,8 @@ const FaturamentoPage: React.FC = () => {
       setIsFaturando(false);
     }
   };
+
+
 
   const calcularTotalFiltrado = () => {
     return filteredPedidos.reduce((total, pedido) => total + pedido.valor_total, 0);
@@ -490,7 +523,7 @@ const FaturamentoPage: React.FC = () => {
 
                   <div className="flex items-center gap-1 text-gray-400 text-sm">
                     <User size={14} />
-                    <span>Cliente: {pedido.cliente_nome}</span>
+                    <span>Cliente: {pedido.cliente?.nome || 'Cliente'}</span>
                   </div>
 
                   {pedido.usuario_nome && (
@@ -527,15 +560,27 @@ const FaturamentoPage: React.FC = () => {
                     {formatCurrency(pedido.valor_total)}
                   </p>
 
-                  {pedido.status === 'entregue' && !pedido.data_faturamento && (
+                  <div className="flex gap-2 mt-2">
+                    {/* Botão de Editar - disponível para todos os pedidos */}
                     <button
-                      onClick={() => handleFaturar(pedido)}
-                      className="mt-2 px-3 py-1.5 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-1.5"
+                      onClick={() => handleEditar(pedido)}
+                      className="px-3 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center gap-1.5"
                     >
-                      <DollarSign size={16} />
-                      <span>Faturar</span>
+                      <Edit size={16} />
+                      <span>Editar</span>
                     </button>
-                  )}
+
+                    {/* Botão de Faturar - apenas para pedidos entregues não faturados */}
+                    {pedido.status === 'entregue' && !pedido.data_faturamento && (
+                      <button
+                        onClick={() => handleFaturar(pedido)}
+                        className="px-3 py-1.5 rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-1.5"
+                      >
+                        <DollarSign size={16} />
+                        <span>Faturar</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -578,7 +623,7 @@ const FaturamentoPage: React.FC = () => {
                 </p>
                 <div className="bg-gray-800/50 p-3 rounded-lg">
                   <p className="text-white"><strong>Pedido:</strong> #{pedidoSelecionado.numero}</p>
-                  <p className="text-white"><strong>Cliente:</strong> {pedidoSelecionado.cliente_nome}</p>
+                  <p className="text-white"><strong>Cliente:</strong> {pedidoSelecionado.cliente?.nome || 'Cliente'}</p>
                   <p className="text-white"><strong>Valor:</strong> {formatCurrency(pedidoSelecionado.valor_total)}</p>
                 </div>
               </div>

@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { Search, Filter, Calendar, Clock, CheckCircle, AlertCircle, X, Edit } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 interface Pedido {
   id: string;
   numero: string;
-  cliente_nome: string;
-  cliente_telefone: string;
+  cliente_id: string;
   valor_total: number;
   status: string;
   created_at: string;
   empresa_nome?: string;
+  cliente?: {
+    nome: string;
+    telefone: string;
+  };
 }
 
 const UserPedidosPage: React.FC = () => {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [filteredPedidos, setFilteredPedidos] = useState<Pedido[]>([]);
@@ -93,7 +98,8 @@ const UserPedidosPage: React.FC = () => {
         .from('pedidos')
         .select(`
           *,
-          empresa:empresas(nome)
+          empresa:empresas(nome),
+          cliente:clientes(nome, telefone)
         `)
         .eq('usuario_id', userData.user.id)
         .order('created_at', { ascending: false });
@@ -131,7 +137,7 @@ const UserPedidosPage: React.FC = () => {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(
         pedido =>
-          pedido.cliente_nome?.toLowerCase().includes(searchLower) ||
+          pedido.cliente?.nome?.toLowerCase().includes(searchLower) ||
           pedido.numero?.toLowerCase().includes(searchLower)
       );
     }
@@ -209,6 +215,11 @@ const UserPedidosPage: React.FC = () => {
       case 'cancelado': return 'Cancelado';
       default: return 'Desconhecido';
     }
+  };
+
+  const handleEditarPedido = (pedidoId: string) => {
+    // Navegar para a página de edição de pedido
+    navigate(`/user/pedidos/editar/${pedidoId}`);
   };
 
   // Animação de carregamento de cards
@@ -386,7 +397,7 @@ const UserPedidosPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-gray-400 text-sm">
-                    {pedido.cliente_nome || 'Cliente'}
+                    {pedido.cliente?.nome || 'Cliente'}
                   </p>
                   {pedido.empresa_nome && (
                     <p className="text-gray-500 text-xs mt-1">
@@ -405,6 +416,17 @@ const UserPedidosPage: React.FC = () => {
                     <span>{formatTime(pedido.created_at)}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Botão de edição */}
+              <div className="mt-3 pt-3 border-t border-gray-800 flex justify-end">
+                <button
+                  onClick={() => handleEditarPedido(pedido.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                >
+                  <Edit size={14} />
+                  <span className="text-sm">Editar</span>
+                </button>
               </div>
             </motion.div>
           ))}

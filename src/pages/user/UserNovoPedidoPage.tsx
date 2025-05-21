@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
@@ -48,7 +48,9 @@ interface ItemPedido {
 
 const UserNovoPedidoPage: React.FC = () => {
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(false);
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
+  const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -56,6 +58,7 @@ const UserNovoPedidoPage: React.FC = () => {
   const [clienteId, setClienteId] = useState('');
   const [clienteNome, setClienteNome] = useState('');
   const [clienteTelefone, setClienteTelefone] = useState('');
+  const [pedido, setPedido] = useState<any>(null);
   const [clienteData, setClienteData] = useState<{
     documento?: string;
     tipo_documento?: string;
@@ -83,10 +86,29 @@ const UserNovoPedidoPage: React.FC = () => {
   const [valorAcrescimo, setValorAcrescimo] = useState(0);
   const [descontoPrazoObj, setDescontoPrazoObj] = useState<DescontoPrazo | null>(null);
   const [descontoValorObj, setDescontoValorObj] = useState<DescontoValor | null>(null);
+  const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
 
   useEffect(() => {
-    loadEmpresas();
+    const init = async () => {
+      await loadEmpresas();
+      await loadFormasPagamentoGeral();
+    };
+
+    init();
   }, []);
+
+  // Efeito separado para carregar o pedido quando empresaSelecionada estiver disponível
+  useEffect(() => {
+    const carregarPedido = async () => {
+      // Se estiver no modo de edição e tiver empresa selecionada
+      if (isEditMode && id && empresaSelecionada) {
+        console.log('Carregando pedido:', id, 'Empresa:', empresaSelecionada);
+        await loadPedido(id);
+      }
+    };
+
+    carregarPedido();
+  }, [isEditMode, id, empresaSelecionada]);
 
   useEffect(() => {
     // Quando as empresas são carregadas, seleciona automaticamente a primeira
@@ -425,6 +447,29 @@ const UserNovoPedidoPage: React.FC = () => {
     return cepLimpo.replace(/^(\d{5})(\d{3})$/, '$1-$2');
   };
 
+  // Função para carregar as formas de pagamento disponíveis
+  const loadFormasPagamentoGeral = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('forma_pagamento_opcoes')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
+
+      if (error) {
+        console.error('Erro ao carregar formas de pagamento:', error);
+        return;
+      }
+
+      if (data) {
+        console.log('Formas de pagamento carregadas:', data);
+        setFormasPagamento(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar formas de pagamento:', error);
+    }
+  };
+
   // Função para verificar se há estoque suficiente para um produto
   const verificarEstoqueSuficiente = async (produtoId: string, quantidade: number, quantidadeAtual: number = 0): Promise<boolean> => {
     try {
@@ -530,8 +575,113 @@ const UserNovoPedidoPage: React.FC = () => {
   };
 
   // Função para carregar os descontos disponíveis para o cliente
+  // Função para carregar os dados do pedido quando estamos no modo de edição
+  const loadPedido = async (pedidoId: string) => {
+    try {
+      setIsLoading(true);
+
+      // Carregar dados do pedido
+      const { data: pedidoData, error: pedidoError } = await supabase
+        .from('pedidos')
+        .select(`
+          *,
+          itens:pedidos_itens(
+            *,
+            produto:produtos(*)
+          )
+        `)
+        .eq('id', pedidoId)
+        .single();
+
+      if (pedidoError) {
+        console.error('Erro ao carregar pedido:', pedidoError);
+        showMessage('error', 'Erro ao carregar pedido');
+        navigate('/user/pedidos');
+        return;
+      }
+
+      if (!pedidoData) {
+        showMessage('error', 'Pedido não encontrado');
+        navigate('/user/pedidos');
+        return;
+      }
+
+      console.log('Pedido carregado:', pedidoData);
+
+      // Atualizar o estado com os dados do pedido
+      setPedido(pedidoData);
+      setEmpresaSelecionada(pedidoData.empresa_id);
+
+      // Se tiver cliente_id, carregar dados do cliente
+      if (pedidoData.cliente_id) {
+        setClienteId(pedidoData.cliente_id);
+
+        // Carregar dados do cliente
+        const { data: clienteData, error: clienteError } = await supabase
+          .from('clientes')
+          .select('*')
+          .eq('id', pedidoData.cliente_id)
+          .single();
+
+        if (!clienteError && clienteData) {
+          setClienteNome(clienteData.nome || '');
+          setClienteTelefone(clienteData.telefone ? formatarTelefone(clienteData.telefone) : '');
+          setClienteData({
+            documento: clienteData.documento,
+            tipo_documento: clienteData.tipo_documento,
+            endereco: clienteData.endereco,
+            numero: clienteData.numero,
+            bairro: clienteData.bairro,
+            cidade: clienteData.cidade,
+            estado: clienteData.estado,
+            cep: clienteData.cep,
+            complemento: clienteData.complemento
+          });
+        } else {
+          console.error('Erro ao carregar dados do cliente:', clienteError);
+        }
+      }
+      setDescontoPrazoSelecionado(pedidoData.desconto_prazo_id || null);
+      setDescontoValorSelecionado(pedidoData.desconto_valor_id || null);
+
+      // Formatar itens do pedido
+      console.log('Itens do pedido:', pedidoData.itens);
+      if (pedidoData.itens && pedidoData.itens.length > 0) {
+        const itens = pedidoData.itens.map((item: any) => ({
+          id: item.id,
+          produto: item.produto,
+          quantidade: item.quantidade,
+          observacao: item.observacao || '',
+          valorUnitario: item.valor_unitario,
+          valorTotal: item.valor_total,
+          valorOriginal: item.produto.preco,
+          temDesconto: item.valor_unitario < item.produto.preco,
+          tipoDesconto: ''
+        }));
+
+        setItensPedido(itens);
+      }
+
+      // Carregar produtos da empresa
+      await loadProdutos(pedidoData.empresa_id);
+
+      // Se tiver cliente_id, carregar descontos
+      if (pedidoData.cliente_id) {
+        await loadFormasPagamento(pedidoData.cliente_id, pedidoData.empresa_id);
+      }
+
+    } catch (error) {
+      console.error('Erro ao carregar pedido:', error);
+      showMessage('error', 'Erro ao carregar pedido');
+      navigate('/user/pedidos');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const loadFormasPagamento = async (clienteId: string, empresaId: string) => {
     try {
+      console.log('Carregando formas de pagamento para cliente:', clienteId, 'empresa:', empresaId);
       setIsLoading(true);
 
       // Carregar descontos por prazo
@@ -599,57 +749,102 @@ const UserNovoPedidoPage: React.FC = () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Usuário não autenticado');
 
-      // Gerar número do pedido (formato: ANO+MES+DIA+HORA+MINUTO+SEGUNDO)
-      const agora = new Date();
-      const numeroPedido = `${agora.getFullYear()}${(agora.getMonth() + 1).toString().padStart(2, '0')}${agora.getDate().toString().padStart(2, '0')}${agora.getHours().toString().padStart(2, '0')}${agora.getMinutes().toString().padStart(2, '0')}${agora.getSeconds().toString().padStart(2, '0')}`;
-
       // Calcular o subtotal (soma dos itens sem descontos/acréscimos)
       const subtotal = itensPedido.reduce((acc, item) => acc + item.valorTotal, 0);
 
-      // Criar pedido
-      const { data: pedido, error: pedidoError } = await supabase
-        .from('pedidos')
-        .insert({
-          empresa_id: empresaSelecionada,
-          usuario_id: userData.user.id,
-          cliente_id: clienteId || null, // Incluir ID do cliente se disponível
-          cliente_nome: clienteNome,
-          cliente_telefone: clienteTelefone.replace(/\D/g, ''),
-          valor_subtotal: subtotal,
-          valor_desconto: valorDesconto,
-          valor_acrescimo: valorAcrescimo,
-          valor_total: valorTotal,
-          status: 'pendente',
-          numero: numeroPedido,
-          desconto_prazo_id: descontoPrazoSelecionado,
-          desconto_valor_id: descontoValorSelecionado
-        })
-        .select()
-        .single();
+      if (isEditMode && id) {
+        // Modo de edição - atualizar pedido existente
+        const { error: pedidoError } = await supabase
+          .from('pedidos')
+          .update({
+            cliente_id: clienteId || null,
+            valor_subtotal: subtotal,
+            valor_desconto: valorDesconto,
+            valor_acrescimo: valorAcrescimo,
+            valor_total: valorTotal,
+            desconto_prazo_id: descontoPrazoSelecionado,
+            desconto_valor_id: descontoValorSelecionado,
+            status: 'pendente' // Voltar para pendente quando editado
+          })
+          .eq('id', id);
 
-      if (pedidoError) throw pedidoError;
+        if (pedidoError) throw pedidoError;
 
-      // Criar itens do pedido
-      const itensPedidoData = itensPedido.map(item => ({
-        pedido_id: pedido.id,
-        produto_id: item.produto.id,
-        quantidade: item.quantidade,
-        valor_unitario: item.valorUnitario,
-        valor_total: item.valorTotal,
-        observacao: item.observacao
-      }));
+        // Remover itens antigos
+        const { error: deleteError } = await supabase
+          .from('pedidos_itens')
+          .delete()
+          .eq('pedido_id', id);
 
-      const { error: itensError } = await supabase
-        .from('pedidos_itens')
-        .insert(itensPedidoData);
+        if (deleteError) throw deleteError;
 
-      if (itensError) throw itensError;
+        // Criar novos itens do pedido
+        const itensPedidoData = itensPedido.map(item => ({
+          pedido_id: id,
+          produto_id: item.produto.id,
+          quantidade: item.quantidade,
+          valor_unitario: item.valorUnitario,
+          valor_total: item.valorTotal,
+          observacao: item.observacao
+        }));
 
-      showMessage('success', 'Pedido criado com sucesso!');
+        const { error: itensError } = await supabase
+          .from('pedidos_itens')
+          .insert(itensPedidoData);
+
+        if (itensError) throw itensError;
+
+        showMessage('success', 'Pedido atualizado com sucesso!');
+      } else {
+        // Modo de criação - criar novo pedido
+        // Gerar número do pedido (formato: ANO+MES+DIA+HORA+MINUTO+SEGUNDO)
+        const agora = new Date();
+        const numeroPedido = `${agora.getFullYear()}${(agora.getMonth() + 1).toString().padStart(2, '0')}${agora.getDate().toString().padStart(2, '0')}${agora.getHours().toString().padStart(2, '0')}${agora.getMinutes().toString().padStart(2, '0')}${agora.getSeconds().toString().padStart(2, '0')}`;
+
+        // Criar pedido
+        const { data: pedido, error: pedidoError } = await supabase
+          .from('pedidos')
+          .insert({
+            empresa_id: empresaSelecionada,
+            usuario_id: userData.user.id,
+            cliente_id: clienteId || null, // Incluir ID do cliente se disponível
+            valor_subtotal: subtotal,
+            valor_desconto: valorDesconto,
+            valor_acrescimo: valorAcrescimo,
+            valor_total: valorTotal,
+            status: 'pendente',
+            numero: numeroPedido,
+            desconto_prazo_id: descontoPrazoSelecionado,
+            desconto_valor_id: descontoValorSelecionado
+          })
+          .select()
+          .single();
+
+        if (pedidoError) throw pedidoError;
+
+        // Criar itens do pedido
+        const itensPedidoData = itensPedido.map(item => ({
+          pedido_id: pedido.id,
+          produto_id: item.produto.id,
+          quantidade: item.quantidade,
+          valor_unitario: item.valorUnitario,
+          valor_total: item.valorTotal,
+          observacao: item.observacao
+        }));
+
+        const { error: itensError } = await supabase
+          .from('pedidos_itens')
+          .insert(itensPedidoData);
+
+        if (itensError) throw itensError;
+
+        showMessage('success', 'Pedido criado com sucesso!');
+      }
+
       navigate('/user/pedidos');
     } catch (error: any) {
-      console.error('Erro ao criar pedido:', error);
-      showMessage('error', 'Erro ao criar pedido: ' + error.message);
+      console.error(`Erro ao ${isEditMode ? 'atualizar' : 'criar'} pedido:`, error);
+      showMessage('error', `Erro ao ${isEditMode ? 'atualizar' : 'criar'} pedido: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -668,7 +863,7 @@ const UserNovoPedidoPage: React.FC = () => {
         >
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-xl font-semibold text-white">Novo Pedido</h1>
+        <h1 className="text-xl font-semibold text-white">{isEditMode ? 'Editar Pedido' : 'Novo Pedido'}</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -1167,7 +1362,7 @@ const UserNovoPedidoPage: React.FC = () => {
           ) : (
             <>
               <Save size={18} />
-              <span>Finalizar Pedido</span>
+              <span>{isEditMode ? 'Salvar Alterações' : 'Finalizar Pedido'}</span>
             </>
           )}
         </button>

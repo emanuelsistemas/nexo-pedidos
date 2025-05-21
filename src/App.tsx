@@ -12,6 +12,7 @@ import AdicionaisPage from './pages/dashboard/AdicionaisPage';
 import UnidadeMedidaPage from './pages/dashboard/UnidadeMedidaPage';
 import ClientesPage from './pages/dashboard/ClientesPage';
 import FaturamentoPage from './pages/dashboard/FaturamentoPage';
+import EditarPedidoPage from './pages/dashboard/EditarPedidoPage';
 import GestorPage from './pages/dashboard/GestorPage';
 import EntregadorPage from './pages/dashboard/EntregadorPage';
 import TaxaEntregaPage from './pages/dashboard/TaxaEntregaPage';
@@ -41,6 +42,7 @@ function App() {
           <Route path="unidade-medida" element={<UnidadeMedidaPage />} />
           <Route path="clientes" element={<ClientesPage />} />
           <Route path="faturamento" element={<FaturamentoPage />} />
+          <Route path="editar-pedido/:id" element={<EditarPedidoPage />} />
           <Route path="gestor" element={<GestorPage />} />
           <Route path="conexao" element={<ConexaoPage />} />
           <Route path="entregador" element={<EntregadorPage />} />
@@ -54,6 +56,7 @@ function App() {
           <Route path="dashboard" element={<UserDashboardPage />} />
           <Route path="pedidos" element={<UserPedidosPage />} />
           <Route path="pedidos/novo" element={<UserNovoPedidoPage />} />
+          <Route path="pedidos/editar/:id" element={<UserNovoPedidoPage />} />
           <Route path="produtos" element={<UserProdutosPage />} />
           <Route path="clientes" element={<UserClientesPage />} />
           <Route path="clientes/novo" element={<UserNovoClienteCompleto />} />
