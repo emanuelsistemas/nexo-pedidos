@@ -205,14 +205,23 @@ const ConfiguracoesPage: React.FC = () => {
             *,
             perfil:perfis_acesso(nome)
           `)
-          .eq('empresa_id', usuarioData.empresa_id);
+          .eq('empresa_id', usuarioData.empresa_id)
+          .order('nome'); // Ordenar por nome para melhor visualização
 
         // Filtrar apenas o próprio usuário se for do tipo 'user'
         if (usuarioData.tipo === 'user') {
           query = query.eq('id', usuarioData.id);
         }
 
-        const { data: usuariosData } = await query;
+        const { data: usuariosData, error: usuariosError } = await query;
+
+        if (usuariosError) {
+          console.error('Erro ao carregar usuários:', usuariosError);
+          showMessage('error', 'Erro ao carregar lista de usuários');
+          return;
+        }
+
+        console.log(`Carregados ${usuariosData?.length || 0} usuários. Usuário logado é ${usuarioData.tipo}`);
         setUsuarios(usuariosData || []);
       }
 
@@ -1056,10 +1065,24 @@ const ConfiguracoesPage: React.FC = () => {
           return;
         }
 
-        // 1. Criar o usuário na autenticação do Supabase
+        // IMPORTANTE: Quando criamos um novo usuário com supabase.auth.signUp(),
+        // o Supabase automaticamente tenta fazer login com esse novo usuário.
+        // Para evitar que o admin seja deslogado, salvamos a sessão atual e a restauramos após criar o novo usuário.
+
+        // 1. Salvar os dados do usuário atual antes de criar o novo usuário
+        const { data: currentSession } = await supabase.auth.getSession();
+
+        if (!currentSession?.session) {
+          throw new Error('Sessão atual não encontrada');
+        }
+
+        // 2. Criar o usuário na autenticação do Supabase
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: usuarioForm.email,
           password: usuarioForm.senha,
+          options: {
+            emailRedirectTo: window.location.origin
+          }
         });
 
         if (authError) {
@@ -1074,7 +1097,13 @@ const ConfiguracoesPage: React.FC = () => {
 
         if (!authData.user) throw new Error('Erro ao criar usuário');
 
-        // 2. Inserir o usuário na tabela usuarios com tipo 'user' e status ativo
+        // 3. Restaurar a sessão do usuário admin
+        await supabase.auth.setSession({
+          access_token: currentSession.session.access_token,
+          refresh_token: currentSession.session.refresh_token
+        });
+
+        // 4. Inserir o usuário na tabela usuarios com tipo 'user' e status ativo
         const { error: insertError } = await supabase
           .from('usuarios')
           .insert([{
@@ -1241,7 +1270,12 @@ const ConfiguracoesPage: React.FC = () => {
         return (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white">Usuários</h2>
+              <div>
+                <h2 className="text-xl font-semibold text-white">Usuários</h2>
+                {usuarioLogado?.tipo === 'admin' && (
+                  <p className="text-gray-400 text-sm mt-1">Listando todos os usuários da empresa</p>
+                )}
+              </div>
               {/* Mostrar o botão apenas se o usuário for admin */}
               {usuarioLogado?.tipo === 'admin' && (
                 <Button
@@ -1255,72 +1289,81 @@ const ConfiguracoesPage: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              {usuarios.map(usuario => (
-                <div
-                  key={usuario.id}
-                  className="bg-background-card p-4 rounded-lg border border-gray-800"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
+              {usuarios.length > 0 ? (
+                usuarios.map(usuario => (
+                  <div
+                    key={usuario.id}
+                    className="bg-background-card p-4 rounded-lg border border-gray-800"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-white font-medium">{usuario.nome}</h3>
+                          {usuario.tipo !== 'admin' && (
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                              usuario.status ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                            }`}>
+                              {usuario.status ? 'Ativo' : 'Bloqueado'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-400 text-sm">{usuario.email}</p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">
+                            {usuario.tipo === 'admin' ? 'Administrador' : 'Usuário'}
+                          </span>
+                          {usuario.perfil && (
+                            <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-500/10 text-primary-400">
+                              {usuario.perfil.nome}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-white font-medium">{usuario.nome}</h3>
-                        {usuario.tipo !== 'admin' && (
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                            usuario.status ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
-                          }`}>
-                            {usuario.status ? 'Ativo' : 'Bloqueado'}
-                          </span>
+                        {/* Botão de edição - visível para admin (todos os usuários) ou para o próprio usuário */}
+                        {(usuarioLogado?.tipo === 'admin' || usuarioLogado?.id === usuario.id) && (
+                          <button
+                            onClick={() => handleEditUsuario(usuario)}
+                            className="p-2 text-gray-400 hover:text-white transition-colors"
+                            title="Editar usuário"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
+
+                        {/* Botão de bloquear/desbloquear - visível apenas para admin e apenas para usuários não-admin */}
+                        {usuarioLogado?.tipo === 'admin' && usuario.tipo !== 'admin' && (
+                          <button
+                            onClick={() => handleToggleUserStatus(usuario.id, usuario.nome, usuario.status)}
+                            className={`p-2 ${usuario.status ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'} transition-colors`}
+                            title={usuario.status ? 'Bloquear usuário' : 'Desbloquear usuário'}
+                          >
+                            {usuario.status ? <Lock size={16} /> : <Unlock size={16} />}
+                          </button>
+                        )}
+
+                        {/* Botão de exclusão - visível apenas para admin */}
+                        {usuarioLogado?.tipo === 'admin' && (
+                          <button
+                            onClick={() => handleDelete(usuario.id, 'usuario', usuario.nome)}
+                            className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                            title="Excluir usuário"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm">{usuario.email}</p>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">
-                          {usuario.tipo === 'admin' ? 'Administrador' : 'Usuário'}
-                        </span>
-                        {usuario.perfil && (
-                          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-500/10 text-primary-400">
-                            {usuario.perfil.nome}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* Botão de edição - visível para admin (todos os usuários) ou para o próprio usuário */}
-                      {(usuarioLogado?.tipo === 'admin' || usuarioLogado?.id === usuario.id) && (
-                        <button
-                          onClick={() => handleEditUsuario(usuario)}
-                          className="p-2 text-gray-400 hover:text-white transition-colors"
-                          title="Editar usuário"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                      )}
-
-                      {/* Botão de bloquear/desbloquear - visível apenas para admin e apenas para usuários não-admin */}
-                      {usuarioLogado?.tipo === 'admin' && usuario.tipo !== 'admin' && (
-                        <button
-                          onClick={() => handleToggleUserStatus(usuario.id, usuario.nome, usuario.status)}
-                          className={`p-2 ${usuario.status ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'} transition-colors`}
-                          title={usuario.status ? 'Bloquear usuário' : 'Desbloquear usuário'}
-                        >
-                          {usuario.status ? <Lock size={16} /> : <Unlock size={16} />}
-                        </button>
-                      )}
-
-                      {/* Botão de exclusão - visível apenas para admin */}
-                      {usuarioLogado?.tipo === 'admin' && (
-                        <button
-                          onClick={() => handleDelete(usuario.id, 'usuario', usuario.nome)}
-                          className="p-2 text-red-400 hover:text-red-300 transition-colors"
-                          title="Excluir usuário"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
                     </div>
                   </div>
+                ))
+              ) : (
+                <div className="text-center py-8 bg-background-card rounded-lg border border-gray-800">
+                  <p className="text-gray-400">Nenhum usuário encontrado</p>
+                  {usuarioLogado?.tipo === 'admin' && (
+                    <p className="text-gray-500 text-sm mt-2">Clique em "Adicionar Usuário" para cadastrar um novo usuário</p>
+                  )}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         );

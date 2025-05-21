@@ -175,6 +175,14 @@ const ProdutosPage: React.FC = () => {
   // Estado para unidades de medida
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadeMedida[]>([]);
 
+  // Estado para controlar o formulário de unidade de medida
+  const [showUnidadeMedidaForm, setShowUnidadeMedidaForm] = useState(false);
+  const [novaUnidadeMedida, setNovaUnidadeMedida] = useState<{sigla: string, nome: string}>({
+    sigla: '',
+    nome: ''
+  });
+  const [isLoadingUnidadeMedida, setIsLoadingUnidadeMedida] = useState(false);
+
   // Estado para o valor formatado do desconto
   const [descontoFormatado, setDescontoFormatado] = useState('');
 
@@ -183,6 +191,12 @@ const ProdutosPage: React.FC = () => {
 
   // Estado para o valor formatado do desconto por quantidade
   const [descontoQuantidadeFormatado, setDescontoQuantidadeFormatado] = useState('');
+
+  // Estado para controlar quando o campo de estoque inicial está vazio
+  const [estoqueInputVazio, setEstoqueInputVazio] = useState(false);
+
+  // Estado para controlar quando o formulário foi resetado
+  const [formularioResetado, setFormularioResetado] = useState(false);
 
   // Estados para a aba de Estoque
   const [estoqueMovimentos, setEstoqueMovimentos] = useState<any[]>([]);
@@ -210,6 +224,15 @@ const ProdutosPage: React.FC = () => {
     loadProdutosEstoque();
   }, []);
 
+  // Efeito para monitorar quando o sidebar é fechado
+  useEffect(() => {
+    // Se o sidebar foi fechado e o formulário foi resetado
+    if (!showSidebar && formularioResetado) {
+      // Resetar a flag
+      setFormularioResetado(false);
+    }
+  }, [showSidebar, formularioResetado]);
+
   // Efeito para atualizar o valor final quando o preço, tipo de desconto ou valor do desconto mudar
   useEffect(() => {
     if (novoProduto.promocao && novoProduto.preco && novoProduto.tipo_desconto && novoProduto.valor_desconto !== undefined) {
@@ -223,6 +246,23 @@ const ProdutosPage: React.FC = () => {
       setValorFinalFormatado('');
     }
   }, [novoProduto.preco, novoProduto.promocao, novoProduto.tipo_desconto, novoProduto.valor_desconto]);
+
+  // Efeito para arredondar o estoque inicial quando a unidade de medida mudar
+  useEffect(() => {
+    if (novoProduto.estoque_inicial !== undefined && novoProduto.unidade_medida_id) {
+      // Verificar se a unidade de medida é KG
+      const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+      const isKG = unidadeSelecionada?.sigla === 'KG';
+
+      // Se não for KG e o valor for fracionado, arredondar para número inteiro
+      if (!isKG && novoProduto.estoque_inicial % 1 !== 0) {
+        setNovoProduto(prev => ({
+          ...prev,
+          estoque_inicial: Math.floor(prev.estoque_inicial || 0)
+        }));
+      }
+    }
+  }, [novoProduto.unidade_medida_id, unidadesMedida]);
 
   const loadUnidadesMedida = async () => {
     try {
@@ -248,6 +288,60 @@ const ProdutosPage: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao carregar unidades de medida:', error);
       showMessage('error', 'Erro ao carregar unidades de medida');
+    }
+  };
+
+  const handleSubmitUnidadeMedida = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!novaUnidadeMedida.sigla || !novaUnidadeMedida.nome) {
+      showMessage('error', 'Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    try {
+      setIsLoadingUnidadeMedida(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      const { data, error } = await supabase
+        .from('unidade_medida')
+        .insert({
+          sigla: novaUnidadeMedida.sigla,
+          nome: novaUnidadeMedida.nome,
+          empresa_id: usuarioData.empresa_id,
+        })
+        .select();
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        // Adicionar a nova unidade à lista
+        setUnidadesMedida([...unidadesMedida, data[0]]);
+
+        // Selecionar a nova unidade no formulário de produto
+        setNovoProduto({ ...novoProduto, unidade_medida_id: data[0].id });
+
+        // Limpar o formulário e fechar
+        setNovaUnidadeMedida({ sigla: '', nome: '' });
+        setShowUnidadeMedidaForm(false);
+
+        showMessage('success', 'Unidade de medida criada com sucesso');
+      }
+    } catch (error: any) {
+      console.error('Erro ao salvar unidade de medida:', error);
+      showMessage('error', 'Erro ao salvar unidade de medida');
+    } finally {
+      setIsLoadingUnidadeMedida(false);
     }
   };
 
@@ -585,6 +679,11 @@ const ProdutosPage: React.FC = () => {
     setEditingProduto(null);
     setSelectedOpcoes([]);
     const nextCode = await getNextAvailableCode();
+
+    // Verificar se há unidades de medida disponíveis
+    // Importante: Não definimos uma unidade padrão aqui para evitar o problema
+    const unidadeMedidaId = undefined;
+
     setNovoProduto({
       nome: '',
       preco: 0,
@@ -594,13 +693,14 @@ const ProdutosPage: React.FC = () => {
       tipo_desconto: 'percentual',
       valor_desconto: 0,
       ativo: true,
-      unidade_medida_id: unidadesMedida.length > 0 ? unidadesMedida[0].id : undefined,
+      unidade_medida_id: unidadeMedidaId,
       desconto_quantidade: false,
       quantidade_minima: 5,
       tipo_desconto_quantidade: 'percentual',
       valor_desconto_quantidade: 10,
       estoque_inicial: 0,
     });
+
     // Inicializa o preço formatado
     setPrecoFormatado(formatarPreco(0));
 
@@ -609,6 +709,13 @@ const ProdutosPage: React.FC = () => {
 
     // Inicializa o valor do desconto por quantidade formatado
     setDescontoQuantidadeFormatado('10');
+
+    // Inicializa o estado do campo de estoque inicial
+    setEstoqueInputVazio(false);
+
+    // Resetar a flag de formulário resetado
+    setFormularioResetado(false);
+
     setShowSidebar(true);
   };
 
@@ -1616,6 +1723,25 @@ const ProdutosPage: React.FC = () => {
     }));
   };
 
+  // Função para resetar o formulário de produto
+  const resetFormularioProduto = () => {
+    // Não definimos o estado novoProduto aqui para evitar problemas com a unidade de medida
+    // Isso será feito na função handleAddProduto quando o formulário for aberto novamente
+
+    // Resetar outros estados relacionados ao formulário
+    setPrecoFormatado(formatarPreco(0));
+    setDescontoFormatado('0');
+    setDescontoQuantidadeFormatado('10');
+    setEstoqueInputVazio(false);
+    setEditingProduto(null);
+    setSelectedOpcoes([]);
+    setActiveTab('dados');
+    setProdutoFotos([]);
+
+    // Definir uma flag para indicar que o formulário foi resetado
+    setFormularioResetado(true);
+  };
+
   const handleOpcaoChange = (opcaoId: string) => {
     setSelectedOpcoes(prev => {
       if (prev.includes(opcaoId)) {
@@ -2121,7 +2247,10 @@ const ProdutosPage: React.FC = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setShowSidebar(false)}
+              onClick={() => {
+                resetFormularioProduto();
+                setShowSidebar(false);
+              }}
             />
             <motion.div
               initial={{ x: '100%' }}
@@ -2141,7 +2270,10 @@ const ProdutosPage: React.FC = () => {
                     }
                   </h2>
                   <button
-                    onClick={() => setShowSidebar(false)}
+                    onClick={() => {
+                      resetFormularioProduto();
+                      setShowSidebar(false);
+                    }}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     <X size={24} />
@@ -2281,19 +2413,50 @@ const ProdutosPage: React.FC = () => {
                           <label className="block text-sm font-medium text-gray-400 mb-2">
                             Unidade de Medida <span className="text-red-500">*</span>
                           </label>
-                          <select
-                            value={novoProduto.unidade_medida_id || ''}
-                            onChange={(e) => setNovoProduto({ ...novoProduto, unidade_medida_id: e.target.value })}
-                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 dark-select"
-                            required
-                          >
-                            <option value="" disabled>Selecione uma unidade de medida</option>
-                            {unidadesMedida.map((unidade) => (
-                              <option key={unidade.id} value={unidade.id}>
-                                {unidade.sigla} - {unidade.nome}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <select
+                                value={novoProduto.unidade_medida_id || ''}
+                                onChange={(e) => {
+                                  const novaUnidadeId = e.target.value;
+                                  const novaUnidade = unidadesMedida.find(u => u.id === novaUnidadeId);
+                                  const isKG = novaUnidade?.sigla === 'KG';
+
+                                  // Se não for KG e o estoque inicial for fracionado, arredondar para inteiro
+                                  let novoEstoqueInicial = novoProduto.estoque_inicial || 0;
+                                  if (!isKG && novoEstoqueInicial % 1 !== 0) {
+                                    novoEstoqueInicial = Math.floor(novoEstoqueInicial);
+                                  }
+
+                                  setNovoProduto({
+                                    ...novoProduto,
+                                    unidade_medida_id: novaUnidadeId,
+                                    estoque_inicial: novoEstoqueInicial
+                                  });
+                                }}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 dark-select"
+                                required
+                              >
+                                <option value="" disabled>Selecione uma unidade de medida</option>
+                                {unidadesMedida.map((unidade) => (
+                                  <option key={unidade.id} value={unidade.id}>
+                                    {unidade.sigla} - {unidade.nome}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNovaUnidadeMedida({ sigla: '', nome: '' });
+                                setShowUnidadeMedidaForm(true);
+                              }}
+                              className="bg-primary-500 hover:bg-primary-600 text-white rounded-lg p-2 flex items-center justify-center transition-colors"
+                              title="Adicionar nova unidade de medida"
+                            >
+                              <Plus size={20} />
+                            </button>
+                          </div>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-2">
@@ -2311,6 +2474,10 @@ const ProdutosPage: React.FC = () => {
                                 // Atualiza o valor numérico no estado do produto
                                 const valorNumerico = desformatarPreco(e.target.value);
                                 setNovoProduto({ ...novoProduto, preco: valorNumerico });
+                              }}
+                              onFocus={() => {
+                                // Ao receber o foco, limpa o campo para facilitar a digitação
+                                setPrecoFormatado('');
                               }}
                               onBlur={() => {
                                 // Ao perder o foco, formata corretamente o valor
@@ -2342,17 +2509,57 @@ const ProdutosPage: React.FC = () => {
                               Estoque Inicial
                             </label>
                             <input
-                              type="number"
-                              value={novoProduto.estoque_inicial || 0}
+                              type="text" // Mudamos para text para permitir campo vazio
+                              value={novoProduto.estoque_inicial === 0 && estoqueInputVazio ? '' : novoProduto.estoque_inicial}
                               onChange={(e) => {
-                                const valor = parseFloat(e.target.value);
+                                // Se o campo estiver vazio
+                                if (e.target.value === '') {
+                                  setEstoqueInputVazio(true);
+                                  setNovoProduto({ ...novoProduto, estoque_inicial: 0 });
+                                  return;
+                                }
+
+                                setEstoqueInputVazio(false);
+
+                                // Remover caracteres não numéricos, exceto ponto e vírgula
+                                const valorLimpo = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+
+                                // Se não for um número válido, não atualiza
+                                if (isNaN(parseFloat(valorLimpo))) {
+                                  return;
+                                }
+
+                                let valor = parseFloat(valorLimpo);
+
+                                // Verificar se a unidade de medida é KG
+                                const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+                                const isKG = unidadeSelecionada?.sigla === 'KG';
+
+                                // Se não for KG, arredondar para número inteiro
+                                if (!isKG) {
+                                  valor = Math.floor(valor);
+                                }
+
                                 setNovoProduto({ ...novoProduto, estoque_inicial: valor >= 0 ? valor : 0 });
                               }}
-                              min="0"
-                              step="0.01"
+                              onBlur={() => {
+                                // Se o campo estiver vazio ao perder o foco, define como 0
+                                if (estoqueInputVazio) {
+                                  setEstoqueInputVazio(false);
+                                }
+                              }}
                               className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               placeholder="0"
                             />
+                            <p className="text-xs text-gray-500 mt-1">
+                              {(() => {
+                                // Verificar se a unidade de medida é KG
+                                const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+                                return unidadeSelecionada?.sigla === 'KG'
+                                  ? "Valores fracionados permitidos para KG (ex: 0,5)"
+                                  : "Apenas valores inteiros permitidos para esta unidade";
+                              })()}
+                            </p>
                           </div>
                         )}
 
@@ -2506,6 +2713,10 @@ const ProdutosPage: React.FC = () => {
                                     // Atualiza o valor numérico no estado do produto
                                     const valorNumerico = desformatarPreco(e.target.value);
                                     setNovoProduto({ ...novoProduto, valor_desconto: valorNumerico });
+                                  }}
+                                  onFocus={() => {
+                                    // Ao receber o foco, limpa o campo para facilitar a digitação
+                                    setDescontoFormatado('');
                                   }}
                                   onBlur={() => {
                                     // Ao perder o foco, formata corretamente o valor
@@ -2666,6 +2877,10 @@ const ProdutosPage: React.FC = () => {
                                     const valorNumerico = desformatarPreco(e.target.value);
                                     setNovoProduto({ ...novoProduto, valor_desconto_quantidade: valorNumerico });
                                   }}
+                                  onFocus={() => {
+                                    // Ao receber o foco, limpa o campo para facilitar a digitação
+                                    setDescontoQuantidadeFormatado('');
+                                  }}
                                   onBlur={() => {
                                     // Ao perder o foco, formata corretamente o valor
                                     const valorNumerico = desformatarPreco(descontoQuantidadeFormatado);
@@ -2707,7 +2922,10 @@ const ProdutosPage: React.FC = () => {
                             type="button"
                             variant="text"
                             className="flex-1"
-                            onClick={() => setShowSidebar(false)}
+                            onClick={() => {
+                              resetFormularioProduto();
+                              setShowSidebar(false);
+                            }}
                           >
                             Cancelar
                           </Button>
@@ -2854,7 +3072,10 @@ const ProdutosPage: React.FC = () => {
                                 type="button"
                                 variant="primary"
                                 className="flex-1"
-                                onClick={() => setShowSidebar(false)}
+                                onClick={() => {
+                                  resetFormularioProduto();
+                                  setShowSidebar(false);
+                                }}
                               >
                                 Concluir
                               </Button>
@@ -3105,7 +3326,10 @@ const ProdutosPage: React.FC = () => {
                                 type="button"
                                 variant="primary"
                                 className="flex-1"
-                                onClick={() => setShowSidebar(false)}
+                                onClick={() => {
+                                  resetFormularioProduto();
+                                  setShowSidebar(false);
+                                }}
                               >
                                 Concluir
                               </Button>
@@ -3143,6 +3367,84 @@ const ProdutosPage: React.FC = () => {
         onClose={() => setIsGaleriaOpen(false)}
         initialFotoIndex={currentFotoIndex}
       />
+
+      {/* Formulário de Unidade de Medida */}
+      <AnimatePresence>
+        {showUnidadeMedidaForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-end z-50"
+            onClick={() => setShowUnidadeMedidaForm(false)}
+          >
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="bg-background-dark h-full w-full max-w-md overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-white">Nova Unidade de Medida</h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowUnidadeMedidaForm(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmitUnidadeMedida}>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Sigla <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={novaUnidadeMedida.sigla}
+                        onChange={(e) => setNovaUnidadeMedida({ ...novaUnidadeMedida, sigla: e.target.value.toUpperCase() })}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        placeholder="Ex: KG, UN, CX"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Nome <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={novaUnidadeMedida.nome}
+                        onChange={(e) => setNovaUnidadeMedida({ ...novaUnidadeMedida, nome: e.target.value })}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        placeholder="Ex: Quilograma, Unidade, Caixa"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-8">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      fullWidth
+                      isLoading={isLoadingUnidadeMedida}
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
