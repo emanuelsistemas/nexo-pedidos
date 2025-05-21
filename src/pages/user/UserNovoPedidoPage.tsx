@@ -1410,7 +1410,7 @@ const UserNovoPedidoPage: React.FC = () => {
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center bg-gray-700 rounded-lg">
                         <button
                           type="button"
@@ -1431,9 +1431,10 @@ const UserNovoPedidoPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleRemoveItem(item.id)}
-                        className="p-1 text-red-400 hover:text-red-300"
+                        className="p-2 ml-6 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                        title="Remover item"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={18} />
                       </button>
                     </div>
                   </div>

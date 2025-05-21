@@ -240,7 +240,13 @@ const FaturamentoPage: React.FC = () => {
   };
 
   const getStatusColor = (status: string, dataFaturamento?: string) => {
-    if (status === 'entregue' && dataFaturamento) {
+    // Se tiver data de faturamento, sempre usar a cor de faturado
+    if (dataFaturamento) {
+      return 'bg-green-500/10 text-green-500';
+    }
+
+    // Se o status for 'faturado', usar a cor de faturado mesmo sem data
+    if (status === 'faturado') {
       return 'bg-green-500/10 text-green-500';
     }
 
@@ -256,7 +262,13 @@ const FaturamentoPage: React.FC = () => {
   };
 
   const getStatusText = (status: string, dataFaturamento?: string) => {
-    if (status === 'entregue' && dataFaturamento) {
+    // Se tiver data de faturamento, sempre mostrar como FATURADO
+    if (dataFaturamento) {
+      return 'FATURADO';
+    }
+
+    // Se o status for 'faturado', mostrar como FATURADO mesmo sem data
+    if (status === 'faturado') {
       return 'FATURADO';
     }
 
@@ -267,7 +279,7 @@ const FaturamentoPage: React.FC = () => {
       case 'em_entrega': return 'Em Entrega';
       case 'entregue': return 'Entregue';
       case 'cancelado': return 'Cancelado';
-      default: return 'Desconhecido';
+      default: return 'Pendente'; // Fallback para status desconhecido
     }
   };
 
@@ -279,25 +291,12 @@ const FaturamentoPage: React.FC = () => {
 
   const handleEditar = async (pedido: Pedido) => {
     try {
-      // Atualizar o status do pedido para 'pendente' para permitir edição
-      const { error } = await supabase
-        .from('pedidos')
-        .update({
-          status: 'pendente',
-          data_faturamento: null // Remover data de faturamento se existir
-        })
-        .eq('id', pedido.id);
-
-      if (error) throw error;
-
-      // Mostrar mensagem de sucesso
-      toast.success('Pedido reaberto para edição com sucesso!');
-
-      // Redirecionar diretamente para a página de edição
+      // Não vamos mais alterar o status do pedido automaticamente
+      // Apenas redirecionar para a página de edição
       navigate(`/dashboard/editar-pedido/${pedido.id}`);
     } catch (error: any) {
-      console.error('Erro ao reabrir pedido para edição:', error);
-      toast.error(`Erro ao reabrir pedido: ${error.message}`);
+      console.error('Erro ao abrir pedido para edição:', error);
+      toast.error(`Erro ao abrir pedido: ${error.message}`);
     }
   };
 

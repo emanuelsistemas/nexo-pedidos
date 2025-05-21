@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search, Calendar, Edit, CheckCircle, XCircle, Copy, Check, Share2, Link } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, User, Phone, Building, DollarSign, Save, Plus, Minus, Trash2, FileText, MapPin, Search, Calendar, Edit, CheckCircle, XCircle, Copy, Check, Share2, Link } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
@@ -93,6 +93,7 @@ const EditarPedidoPage: React.FC = () => {
   const [status, setStatus] = useState<string>('pendente');
   const [dataFaturamento, setDataFaturamento] = useState<string | null>(null);
   const [copiedFields, setCopiedFields] = useState<{[key: string]: boolean}>({});
+  const [showReverterModal, setShowReverterModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -794,11 +795,12 @@ const EditarPedidoPage: React.FC = () => {
     }
   };
 
-  const handleReverterParaPendente = async () => {
-    if (!confirm('Tem certeza que deseja reverter este pedido para pendente? Esta ação removerá o status de faturado.')) {
-      return;
-    }
+  const handleReverterParaPendente = () => {
+    // Abrir o modal de confirmação
+    setShowReverterModal(true);
+  };
 
+  const confirmarReverterParaPendente = async () => {
     try {
       setIsSaving(true);
 
@@ -816,6 +818,9 @@ const EditarPedidoPage: React.FC = () => {
       // Atualizar o estado local
       setStatus('pendente');
       setDataFaturamento(null);
+
+      // Fechar o modal
+      setShowReverterModal(false);
 
       toast.success('Pedido revertido para pendente com sucesso!');
     } catch (error: any) {
@@ -1317,7 +1322,7 @@ const EditarPedidoPage: React.FC = () => {
                           <p className="text-xs text-gray-400 mt-1">Obs: {item.observacao}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-between">
                         {dataFaturamento ? (
                           <span className="px-3 py-1 bg-gray-800 text-white">{item.quantidade}</span>
                         ) : (
@@ -1340,9 +1345,10 @@ const EditarPedidoPage: React.FC = () => {
                         {!dataFaturamento && (
                           <button
                             onClick={() => handleRemoveItem(item.id)}
-                            className="p-1 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                            className="p-2 ml-6 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                            title="Remover item"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={18} />
                           </button>
                         )}
                       </div>
@@ -1573,6 +1579,56 @@ const EditarPedidoPage: React.FC = () => {
           }}
           empresaId={empresaId}
         />
+      )}
+
+      {/* Modal de confirmação para reverter pedido faturado */}
+      {showReverterModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div
+            className="bg-background-card rounded-lg p-6 w-full max-w-md border border-gray-700 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center mb-4 text-yellow-500">
+              <AlertTriangle size={24} className="mr-2" />
+              <h2 className="text-xl font-semibold">Reverter para Pendente</h2>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-white mb-2">
+                Tem certeza que deseja reverter este pedido para pendente?
+              </p>
+              <p className="text-gray-400 text-sm">
+                Esta ação removerá o status de faturado e permitirá a edição do pedido.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowReverterModal(false)}
+                className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarReverterParaPendente}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <span>Processando...</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowLeft size={18} />
+                    <span>Confirmar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
