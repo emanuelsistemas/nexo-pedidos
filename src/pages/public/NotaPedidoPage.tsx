@@ -91,6 +91,7 @@ const NotaPedidoPage: React.FC = () => {
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento | null>(null);
   const [unidadesMedida, setUnidadesMedida] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>({});
 
   useEffect(() => {
     // Salvar os estilos originais
@@ -295,7 +296,16 @@ const NotaPedidoPage: React.FC = () => {
 
       } catch (error: any) {
         console.error('Erro ao carregar pedido:', error);
-        setError('Erro ao carregar pedido');
+        const errorInfo = {
+          message: error.message || 'Erro desconhecido',
+          stack: error.stack,
+          codigoPedido,
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString()
+        };
+        setDebugInfo(errorInfo);
+        setError(`Erro ao carregar pedido: ${error.message || 'Erro desconhecido'}`);
       } finally {
         setIsLoading(false);
       }
@@ -343,11 +353,19 @@ const NotaPedidoPage: React.FC = () => {
 
           {/* Mostrar detalhes do erro para depuração */}
           <div className="text-left text-xs text-gray-500 mt-4 p-4 bg-gray-100 rounded-md overflow-auto">
-            <p>Detalhes para depuração:</p>
+            <p className="font-bold mb-2">Detalhes para depuração:</p>
             <pre>Error: {error || 'Nenhum erro específico'}</pre>
             <pre>Pedido: {pedido ? 'Carregado' : 'Não carregado'}</pre>
             <pre>Empresa: {empresa ? 'Carregada' : 'Não carregada'}</pre>
             <pre>Código do Pedido: {codigoPedido}</pre>
+            <pre>URL: {window.location.href}</pre>
+            <pre>User Agent: {navigator.userAgent}</pre>
+            {debugInfo && Object.keys(debugInfo).length > 0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer font-bold">Debug Info Completo</summary>
+                <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
+              </details>
+            )}
           </div>
         </div>
       </div>
