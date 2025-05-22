@@ -136,6 +136,9 @@ const NotaPedidoPage: React.FC = () => {
     const loadPedido = async () => {
       try {
         setIsLoading(true);
+        setError(null);
+
+        console.log('Iniciando carregamento do pedido:', { codigoPedido, url: window.location.href });
 
         if (!codigoPedido) {
           setError('Código de pedido inválido');
@@ -148,8 +151,10 @@ const NotaPedidoPage: React.FC = () => {
         const cnpjRegex = /^(\d{14})(\d+)$/;
         const match = codigoPedido.match(cnpjRegex);
 
+        console.log('Validação do código:', { codigoPedido, match });
+
         if (!match) {
-          setError('Formato de código inválido');
+          setError(`Formato de código inválido. Código recebido: ${codigoPedido}`);
           return;
         }
 
