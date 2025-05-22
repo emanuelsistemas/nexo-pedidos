@@ -38,7 +38,7 @@ const UserNovoClienteCompleto: React.FC = () => {
   const [bairro, setBairro] = useState('');
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
-  const [error, setError] = useState('');
+
 
 
 
@@ -372,21 +372,20 @@ const UserNovoClienteCompleto: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
 
     // Validações
     if (!nome.trim()) {
-      setError('O nome do cliente é obrigatório');
+      showMessage('error', 'O nome do cliente é obrigatório');
       return;
     }
 
     if (telefones.length === 0) {
-      setError('Adicione pelo menos um telefone');
+      showMessage('error', 'Adicione pelo menos um telefone');
       return;
     }
 
     if (email && !validateEmail(email)) {
-      setError('O email informado é inválido');
+      showMessage('error', 'O email informado é inválido');
       return;
     }
 
@@ -447,7 +446,7 @@ const UserNovoClienteCompleto: React.FC = () => {
       navigate('/user/clientes');
     } catch (error: any) {
       console.error('Erro ao cadastrar cliente:', error);
-      setError(error.message || 'Erro ao cadastrar cliente');
+      showMessage('error', error.message || 'Erro ao cadastrar cliente');
     } finally {
       setIsSaving(false);
     }
@@ -466,12 +465,6 @@ const UserNovoClienteCompleto: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-3">
-            <AlertCircle size={18} className="text-red-500 mt-0.5" />
-            <p className="text-red-400 text-sm">{error}</p>
-          </div>
-        )}
 
         {/* Documento */}
         <div className="bg-background-card rounded-lg border border-gray-800 p-4 space-y-4">

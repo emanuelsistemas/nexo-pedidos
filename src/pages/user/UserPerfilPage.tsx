@@ -19,7 +19,7 @@ const UserPerfilPage: React.FC = () => {
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
-  const [error, setError] = useState('');
+
 
   useEffect(() => {
     loadUserData();
@@ -53,23 +53,22 @@ const UserPerfilPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
 
     // Validar campos
     if (!nome.trim()) {
-      setError('O nome é obrigatório');
+      showMessage('error', 'O nome é obrigatório');
       return;
     }
 
     // Validar senhas se fornecidas
     if (senha || confirmarSenha) {
       if (senha !== confirmarSenha) {
-        setError('As senhas não coincidem');
+        showMessage('error', 'As senhas não coincidem');
         return;
       }
 
       if (senha.length < 6) {
-        setError('A senha deve ter pelo menos 6 caracteres');
+        showMessage('error', 'A senha deve ter pelo menos 6 caracteres');
         return;
       }
     }
@@ -100,7 +99,7 @@ const UserPerfilPage: React.FC = () => {
 
       showMessage('success', 'Perfil atualizado com sucesso!');
     } catch (error: any) {
-      setError(error.message || 'Erro ao atualizar perfil');
+      showMessage('error', error.message || 'Erro ao atualizar perfil');
     } finally {
       setIsSaving(false);
     }
@@ -153,12 +152,6 @@ const UserPerfilPage: React.FC = () => {
           className="bg-background-card rounded-lg border border-gray-800 p-6"
         >
           <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-3">
-                <AlertCircle size={18} className="text-red-500 mt-0.5" />
-                <p className="text-red-400 text-sm">{error}</p>
-              </div>
-            )}
 
             <div className="space-y-4">
               {/* Nome */}

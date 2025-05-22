@@ -96,7 +96,7 @@ const tiposPagamento = [
 
 const ConfiguracoesPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'conta'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -173,6 +173,11 @@ const ConfiguracoesPage: React.FC = () => {
     cidade: '',
     estado: ''
   });
+
+  // Estados para deletar conta
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [devPassword, setDevPassword] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -486,6 +491,61 @@ const ConfiguracoesPage: React.FC = () => {
       showMessage('error', 'Erro ao atualizar dados: ' + error.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Função para deletar a empresa inteira
+  const handleDeleteAccount = async () => {
+    // Verificar senha de desenvolvedor
+    const correctPassword = import.meta.env.VITE_DEV_PASSWORD;
+    if (!correctPassword) {
+      showMessage('error', 'Senha de desenvolvedor não configurada');
+      return;
+    }
+
+    if (devPassword !== correctPassword) {
+      showMessage('error', 'Senha de desenvolvedor incorreta');
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      const empresaId = usuarioData.empresa_id;
+
+      // Executar o script de exclusão completa da empresa
+      const { error } = await supabase.rpc('deletar_empresa_completa', {
+        empresa_uuid: empresaId
+      });
+
+      if (error) {
+        console.error('Erro ao deletar empresa:', error);
+        throw new Error('Erro ao deletar empresa: ' + error.message);
+      }
+
+      showMessage('success', 'Empresa deletada com sucesso!');
+
+      // Fazer logout e redirecionar
+      await supabase.auth.signOut();
+      window.location.href = '/login';
+
+    } catch (error: any) {
+      console.error('Erro ao deletar empresa:', error);
+      showMessage('error', error.message || 'Erro ao deletar empresa');
+    } finally {
+      setIsDeletingAccount(false);
+      setShowDeleteAccountModal(false);
+      setDevPassword('');
     }
   };
 
@@ -2004,6 +2064,35 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'conta':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Gerenciar Conta</h2>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-2">Zona de Perigo</h3>
+                  <p className="text-gray-400 text-sm mb-4">
+                    Esta ação irá deletar permanentemente toda a empresa, incluindo todos os dados, usuários, pedidos, produtos e configurações. Esta ação não pode ser desfeita.
+                  </p>
+
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => setShowDeleteAccountModal(true)}
+                    className="!bg-red-500 hover:!bg-red-600 !border-red-500"
+                  >
+                    🗑️ Deletar Empresa Completa
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -2012,8 +2101,8 @@ const ConfiguracoesPage: React.FC = () => {
   return (
     <div className="w-full">
       <div className="overflow-x-auto">
-        <div className="bg-background-card rounded-lg border border-gray-800 p-2 mb-8 min-w-[1024px]">
-          <div className="flex items-center gap-2">
+        <div className="bg-background-card rounded-lg border border-gray-800 p-2 mb-8">
+          <div className="flex items-center gap-2 min-w-fit">
             <button
               onClick={() => setActiveSection('geral')}
               className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
@@ -2067,6 +2156,20 @@ const ConfiguracoesPage: React.FC = () => {
               </svg>
               <span className="text-sm whitespace-nowrap">Pedidos</span>
             </button>
+            <button
+              onClick={() => setActiveSection('conta')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+                activeSection === 'conta'
+                  ? 'bg-primary-500/10 text-primary-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <span className="text-sm whitespace-nowrap">Conta</span>
+            </button>
             {/* Aba "Perfis" ocultada */}
             {/* Aba "Pagamentos" ocultada */}
             {/* Aba "Status Loja" ocultada */}
@@ -2076,7 +2179,7 @@ const ConfiguracoesPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full">
         {renderContent()}
       </div>
 
@@ -2678,6 +2781,94 @@ const ConfiguracoesPage: React.FC = () => {
         title={deleteConfirmation.title}
         message={deleteConfirmation.message}
       />
+
+      {/* Modal de confirmação para deletar conta */}
+      <AnimatePresence>
+        {showDeleteAccountModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card p-6 rounded-lg shadow-xl max-w-md mx-4 w-full border border-red-500/20"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+                    <path d="M3 6h18"></path>
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                    <line x1="10" y1="11" x2="10" y2="17"></line>
+                    <line x1="14" y1="11" x2="14" y2="17"></line>
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">⚠️ DELETAR EMPRESA COMPLETA</h3>
+                <p className="text-gray-400 text-sm">
+                  Esta ação irá deletar <strong>PERMANENTEMENTE</strong> toda a empresa e todos os dados associados:
+                </p>
+                <ul className="text-left text-gray-400 text-sm mt-3 space-y-1">
+                  <li>• Todos os usuários e contas</li>
+                  <li>• Todos os pedidos e histórico</li>
+                  <li>• Todos os produtos e estoque</li>
+                  <li>• Todos os clientes</li>
+                  <li>• Todas as configurações</li>
+                </ul>
+                <p className="text-red-400 text-sm mt-3 font-medium">
+                  Esta ação NÃO PODE ser desfeita!
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Senha de Desenvolvedor
+                  </label>
+                  <input
+                    type="password"
+                    value={devPassword}
+                    onChange={(e) => setDevPassword(e.target.value)}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
+                    placeholder="Digite a senha de desenvolvedor"
+                    autoFocus
+                  />
+                  <p className="text-gray-500 text-xs mt-1">
+                    Esta senha é necessária para confirmar a exclusão da empresa.
+                  </p>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <Button
+                    type="button"
+                    variant="text"
+                    className="flex-1"
+                    onClick={() => {
+                      setShowDeleteAccountModal(false);
+                      setDevPassword('');
+                    }}
+                    disabled={isDeletingAccount}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="flex-1 !bg-red-500 hover:!bg-red-600 !border-red-500"
+                    onClick={handleDeleteAccount}
+                    disabled={isDeletingAccount || !devPassword.trim()}
+                  >
+                    {isDeletingAccount ? 'Deletando...' : 'DELETAR EMPRESA'}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
