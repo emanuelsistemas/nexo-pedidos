@@ -718,6 +718,16 @@ const UserProdutosPage: React.FC = () => {
     }
   };
 
+  // Função para formatar o estoque baseado na unidade de medida
+  const formatarEstoque = (valor: number, produto: Produto) => {
+    // Se for KG, mostrar 3 casas decimais, senão mostrar como número inteiro
+    if (produto.unidade_medida?.sigla === 'KG') {
+      return valor.toFixed(3);
+    } else {
+      return Math.floor(valor).toString();
+    }
+  };
+
   const filteredGrupos = searchTerm
     ? grupos.map(grupo => ({
         ...grupo,
@@ -984,11 +994,11 @@ const UserProdutosPage: React.FC = () => {
                         {produtosEstoque[produto.id] && (
                           <div className="flex flex-wrap items-center gap-1 mt-2">
                             <span className="px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded-full">
-                              Estoque: {produtosEstoque[produto.id].total.toFixed(2)}
+                              Estoque: {formatarEstoque(produtosEstoque[produto.id].total, produto)}
                             </span>
                             {produtosEstoque[produto.id].naoFaturado > 0 && (
                               <span className="px-2 py-0.5 text-xs font-medium bg-yellow-900/30 text-yellow-400 rounded-full">
-                                Não Faturado: {produtosEstoque[produto.id].naoFaturado.toFixed(2)}
+                                Não Faturado: {formatarEstoque(produtosEstoque[produto.id].naoFaturado, produto)}
                               </span>
                             )}
                           </div>

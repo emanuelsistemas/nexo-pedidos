@@ -1064,12 +1064,18 @@ const ProdutosPage: React.FC = () => {
       // Atualizar a lista de fotos
       setProdutoFotos(prev => [...prev, fotoData]);
 
-      // Se for a foto principal, atualizar também a lista de fotos principais
-      if (isPrincipal && editingProduto) {
+      // Se for a foto principal ou se é a primeira foto do produto, atualizar a lista de fotos principais
+      if ((isPrincipal || produtoFotos.length === 0) && editingProduto) {
         // Atualizar imediatamente a foto principal na lista
         setProdutosFotosPrincipais(prev => ({
           ...prev,
           [editingProduto.id]: fotoData
+        }));
+
+        // Atualizar também a contagem de fotos
+        setProdutosFotosCount(prev => ({
+          ...prev,
+          [editingProduto.id]: (prev[editingProduto.id] || 0) + 1
         }));
 
         // Forçar a atualização da lista de grupos para refletir a nova foto
@@ -1092,6 +1098,12 @@ const ProdutosPage: React.FC = () => {
           // Atualizar os grupos para forçar a renderização
           setGrupos([...gruposAtualizados]);
         }
+      } else if (editingProduto) {
+        // Se não for a foto principal, apenas atualizar a contagem
+        setProdutosFotosCount(prev => ({
+          ...prev,
+          [editingProduto.id]: (prev[editingProduto.id] || 0) + 1
+        }));
       }
 
       // Definir um sinalizador no localStorage para notificar a versão mobile
@@ -1151,12 +1163,10 @@ const ProdutosPage: React.FC = () => {
       // Atualiza a lista de fotos
       await loadProdutoFotos(editingProduto.id);
 
-      // Encontrar a foto que foi definida como principal
-      const novaPrincipal = produtoFotos.find(foto => foto.id === fotoId);
-      if (novaPrincipal) {
-        // Criar uma cópia da foto com principal = true
-        const fotoPrincipalAtualizada = { ...novaPrincipal, principal: true };
+      // Buscar a foto principal atualizada diretamente do banco
+      const fotoPrincipalAtualizada = await getProdutoFotoPrincipal(editingProduto.id);
 
+      if (fotoPrincipalAtualizada) {
         // Atualizar a foto principal na lista de fotos principais
         setProdutosFotosPrincipais(prev => ({
           ...prev,
@@ -1342,24 +1352,24 @@ const ProdutosPage: React.FC = () => {
         // Recarregar a lista de fotos
         await loadProdutoFotos(editingProduto.id);
 
+        // Atualizar a contagem de fotos
+        setProdutosFotosCount(prev => ({
+          ...prev,
+          [editingProduto.id]: Math.max(0, (prev[editingProduto.id] || 1) - 1)
+        }));
+
         // Verificar se a foto excluída era a principal
         if (eraPrincipal) {
-          // Se a foto excluída era a principal, verificar se há outras fotos
-          if (produtoFotos.length > 0) {
-            // Encontrar a primeira foto que não é a que foi excluída
-            const novaFotoPrincipal = produtoFotos.find(f => f.id !== deleteConfirmation.id);
-            if (novaFotoPrincipal) {
-              // Atualizar a foto principal na lista
-              setProdutosFotosPrincipais(prev => ({
-                ...prev,
-                [editingProduto.id]: novaFotoPrincipal
-              }));
+          // Recarregar as fotos após a exclusão para ter a lista atualizada
+          await loadProdutoFotos(editingProduto.id);
 
-              // Se necessário, definir esta foto como principal no banco de dados
-              if (!novaFotoPrincipal.principal) {
-                await handleSetFotoPrincipal(novaFotoPrincipal.id);
-              }
-            }
+          // Verificar se ainda há fotos após a exclusão
+          const fotosRestantes = produtoFotos.filter(f => f.id !== deleteConfirmation.id);
+
+          if (fotosRestantes.length > 0) {
+            // Se há fotos restantes, definir a primeira como principal
+            const novaFotoPrincipal = fotosRestantes[0];
+            await handleSetFotoPrincipal(novaFotoPrincipal.id);
           } else {
             // Se não houver mais fotos, remover a foto principal
             setProdutosFotosPrincipais(prev => ({
@@ -1570,8 +1580,9 @@ const ProdutosPage: React.FC = () => {
           // Garantir que os campos de promoção sejam null quando não habilitados
           tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
           valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
-          // Incluir o estoque inicial
+          // Incluir o estoque inicial e definir o estoque atual
           estoque_inicial: novoProduto.estoque_inicial || 0,
+          estoque_atual: novoProduto.estoque_inicial || 0,
         };
 
         const { data, error } = await supabase
@@ -1619,6 +1630,20 @@ const ProdutosPage: React.FC = () => {
       }
 
       await loadGrupos();
+
+      // Atualizar o estoque na grid imediatamente após criar o produto
+      await loadProdutosEstoque();
+
+      // Se for um novo produto com estoque inicial, atualizar o estado local imediatamente
+      if (!editingProduto && novoProduto.estoque_inicial && novoProduto.estoque_inicial > 0) {
+        setProdutosEstoque(prev => ({
+          ...prev,
+          [productId]: {
+            total: novoProduto.estoque_inicial,
+            naoFaturado: 0
+          }
+        }));
+      }
 
       // Definir um sinalizador no localStorage para notificar a versão mobile
       localStorage.setItem('produto_atualizado', JSON.stringify({
@@ -2050,6 +2075,19 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
+  // Função para formatar o estoque baseado na unidade de medida
+  const formatarEstoque = (valor: number, produto: Produto) => {
+    // Encontrar a unidade de medida do produto
+    const unidadeMedida = unidadesMedida.find(u => u.id === produto.unidade_medida_id);
+
+    // Se for KG, mostrar 3 casas decimais, senão mostrar como número inteiro
+    if (unidadeMedida?.sigla === 'KG') {
+      return valor.toFixed(3);
+    } else {
+      return Math.floor(valor).toString();
+    }
+  };
+
   const renderProduto = (grupo: Grupo, produto: Produto) => {
     const fotoPrincipal = produtosFotosPrincipais[produto.id];
     const unidadeMedida = unidadesMedida.find(u => u.id === produto.unidade_medida_id);
@@ -2180,12 +2218,12 @@ const ProdutosPage: React.FC = () => {
               {estoqueInfo && (
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
-                    Estoque: {estoqueInfo.total.toFixed(2)}
+                    Estoque: {formatarEstoque(estoqueInfo.total, produto)}
                   </span>
                   {/* Mostrar "Não Faturado" apenas quando o tipo de controle for por pedidos */}
                   {tipoControleEstoque === 'pedidos' && estoqueInfo.naoFaturado > 0 && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400">
-                      Não Faturado: {estoqueInfo.naoFaturado.toFixed(2)}
+                      Não Faturado: {formatarEstoque(estoqueInfo.naoFaturado, produto)}
                     </span>
                   )}
                 </div>
@@ -2355,7 +2393,7 @@ const ProdutosPage: React.FC = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.3 }}
-              className={`fixed right-0 top-0 h-screen w-full ${activeTab === 'estoque' ? 'max-w-[30vw]' : 'max-w-md'} bg-background-card border-l border-gray-800 z-50 overflow-y-auto`}
+              className="fixed right-0 top-0 h-screen w-full max-w-xl bg-background-card border-l border-gray-800 z-50 overflow-y-auto"
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
@@ -3227,7 +3265,7 @@ const ProdutosPage: React.FC = () => {
                                 <div className="flex flex-col md:flex-row md:items-center gap-3">
                                   {/* Exibição do estoque */}
                                   <div className="text-sm text-gray-400 bg-gray-900/50 border border-gray-800 rounded-lg p-2 px-3">
-                                    Estoque Atual: <span className="font-semibold text-white">{estoqueAtual.toFixed(2)}</span>
+                                    Estoque Atual: <span className="font-semibold text-white">{editingProduto ? formatarEstoque(estoqueAtual, editingProduto) : estoqueAtual.toFixed(2)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -3421,10 +3459,10 @@ const ProdutosPage: React.FC = () => {
                                                 </span>
                                               </td>
                                               <td className="px-4 py-3 w-[80px]">
-                                                {parseFloat(movimento.quantidade).toFixed(2)}
+                                                {editingProduto ? formatarEstoque(parseFloat(movimento.quantidade), editingProduto) : parseFloat(movimento.quantidade).toFixed(2)}
                                               </td>
                                               <td className="px-4 py-3 font-medium w-[80px]">
-                                                {parseFloat(movimento.saldo).toFixed(2)}
+                                                {editingProduto ? formatarEstoque(parseFloat(movimento.saldo), editingProduto) : parseFloat(movimento.saldo).toFixed(2)}
                                               </td>
                                               <td className="px-4 py-3 w-[100px]">
                                                 {movimento.usuario?.nome || 'Sistema'}

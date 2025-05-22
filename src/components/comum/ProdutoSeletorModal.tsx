@@ -308,6 +308,16 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
     }
   };
 
+  // Função para formatar o estoque baseado na unidade de medida
+  const formatarEstoque = (valor: number, produto: Produto) => {
+    // Se for KG, mostrar 3 casas decimais, senão mostrar como número inteiro
+    if (produto.unidade_medida?.sigla === 'KG') {
+      return valor.toFixed(3);
+    } else {
+      return Math.floor(valor).toString();
+    }
+  };
+
   const handleSelectProduto = (produto: Produto) => {
     // Selecionar o produto e fechar o modal sem acionar validações
     onSelect(produto);
@@ -514,7 +524,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                       {/* Estoque simplificado */}
                       {produtosEstoque[produto.id] && (
                         <div className="mt-1 text-xs text-gray-300">
-                          Estoque: {produtosEstoque[produto.id].total.toFixed(2)}
+                          Estoque: {formatarEstoque(produtosEstoque[produto.id].total, produto)}
                         </div>
                       )}
 
@@ -642,12 +652,12 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         <span className="px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded-full flex items-center gap-1">
                           <Package size={12} />
-                          <span>Estoque: {produtosEstoque[produtoEmVisualizacao.id].total.toFixed(2)}</span>
+                          <span>Estoque: {formatarEstoque(produtosEstoque[produtoEmVisualizacao.id].total, produtoEmVisualizacao)}</span>
                         </span>
                         {produtosEstoque[produtoEmVisualizacao.id].naoFaturado > 0 && (
                           <span className="px-2 py-0.5 text-xs font-medium bg-yellow-900/30 text-yellow-400 rounded-full flex items-center gap-1">
                             <AlertCircle size={12} />
-                            <span>Pendente: {produtosEstoque[produtoEmVisualizacao.id].naoFaturado.toFixed(2)}</span>
+                            <span>Pendente: {formatarEstoque(produtosEstoque[produtoEmVisualizacao.id].naoFaturado, produtoEmVisualizacao)}</span>
                           </span>
                         )}
                       </div>
