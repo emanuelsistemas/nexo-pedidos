@@ -43,7 +43,7 @@ interface ProdutoFoto {
 }
 
 const UserProdutosPage: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');

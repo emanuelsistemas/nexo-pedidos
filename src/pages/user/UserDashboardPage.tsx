@@ -21,7 +21,7 @@ interface Usuario {
 }
 
 const UserDashboardPage: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [data, setData] = useState<DashboardData>({
     pedidosHoje: 0,
     pedidosSemana: 0,

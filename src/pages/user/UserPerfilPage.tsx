@@ -11,7 +11,7 @@ interface UserData {
 }
 
 const UserPerfilPage: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [nome, setNome] = useState('');

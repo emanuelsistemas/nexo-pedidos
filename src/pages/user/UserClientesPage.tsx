@@ -23,14 +23,14 @@ interface Cliente {
 
 const UserClientesPage: React.FC = () => {
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [empresaFilter, setEmpresaFilter] = useState<string>('todas');
   const [empresas, setEmpresas] = useState<{id: string, nome: string}[]>([]);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(false);
 
   useEffect(() => {
     // Tentar carregar dados do localStorage primeiro
