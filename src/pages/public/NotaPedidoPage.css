@@ -1,14 +1,14 @@
 /* Estilos específicos para a página de nota de pedido */
-body {
+body.pedido-publico {
   background-color: white !important;
   color: #333 !important;
 }
 
-html {
+body.pedido-publico html {
   background-color: white !important;
 }
 
-#root {
+body.pedido-publico #root {
   background-color: white !important;
   color: #333 !important;
   min-height: 100vh;

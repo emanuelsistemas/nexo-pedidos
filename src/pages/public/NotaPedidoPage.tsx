@@ -5,10 +5,6 @@ import { formatarPreco, formatarDataHora, formatarTelefone, formatarDocumento } 
 import PageTitle from '../../components/comum/PageTitle';
 import './NotaPedidoPage.css';
 
-// Forçar o fundo branco
-document.body.style.backgroundColor = 'white';
-document.body.style.color = 'black';
-
 // Interfaces
 interface ItemPedido {
   id: string;
@@ -97,12 +93,20 @@ const NotaPedidoPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Forçar o fundo branco
+    // Salvar os estilos originais
+    const originalBodyBg = document.body.style.backgroundColor;
+    const originalBodyColor = document.body.style.color;
+    const originalDocumentBg = document.documentElement.style.backgroundColor;
+
+    const rootElement = document.getElementById('root');
+    const originalRootBg = rootElement?.style.backgroundColor || '';
+    const originalRootColor = rootElement?.style.color || '';
+
+    // Aplicar estilos para a página pública
     document.documentElement.style.backgroundColor = 'white';
     document.body.style.backgroundColor = 'white';
     document.body.style.color = '#333';
 
-    const rootElement = document.getElementById('root');
     if (rootElement) {
       rootElement.style.backgroundColor = 'white';
       rootElement.style.color = '#333';
@@ -111,9 +115,17 @@ const NotaPedidoPage: React.FC = () => {
     // Adicionar classe ao body para aplicar estilos específicos
     document.body.classList.add('pedido-publico');
 
-    // Remover a classe quando o componente for desmontado
+    // Restaurar os estilos originais quando o componente for desmontado
     return () => {
       document.body.classList.remove('pedido-publico');
+      document.documentElement.style.backgroundColor = originalDocumentBg;
+      document.body.style.backgroundColor = originalBodyBg;
+      document.body.style.color = originalBodyColor;
+
+      if (rootElement) {
+        rootElement.style.backgroundColor = originalRootBg;
+        rootElement.style.color = originalRootColor;
+      }
     };
   }, []);
 

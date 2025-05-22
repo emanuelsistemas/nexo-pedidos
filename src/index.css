@@ -148,11 +148,3 @@ select option {
   @apply bg-gray-800 text-white;
 }
 
-/* Estilos específicos para a página pública de pedido */
-body.pedido-publico {
-  @apply bg-white text-gray-900;
-}
-
-body.pedido-publico #root {
-  @apply bg-white;
-}

@@ -2,7 +2,6 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import './styles/pedido-publico.css';
 import EntrarPage from './pages/EntrarPage';
 import CadastrarPage from './pages/CadastrarPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
