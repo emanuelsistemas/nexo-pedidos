@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
@@ -105,6 +105,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [usuarioLogado, setUsuarioLogado] = useState<{id: string, tipo: string} | null>(null);
+  const [copiedFields, setCopiedFields] = useState<{[key: string]: boolean}>({});
   const [selectedTipo, setSelectedTipo] = useState('');
   const [storeStatus, setStoreStatus] = useState<{
     modo_operacao: 'manual' | 'automatico';
@@ -1341,6 +1342,23 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
+  const handleCopyToClipboard = (text: string, fieldId: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      // Marcar o campo como copiado
+      setCopiedFields(prev => ({...prev, [fieldId]: true}));
+
+      // Após 2 segundos, remover a marca de copiado
+      setTimeout(() => {
+        setCopiedFields(prev => ({...prev, [fieldId]: false}));
+      }, 2000);
+
+      showMessage('success', 'Texto copiado!');
+    }).catch(err => {
+      console.error('Erro ao copiar texto: ', err);
+      showMessage('error', 'Erro ao copiar texto');
+    });
+  };
+
   const renderContent = () => {
     switch (activeSection) {
       case 'pagamentos':
@@ -1745,6 +1763,21 @@ const ConfiguracoesPage: React.FC = () => {
                   <div>
                     <h3 className="text-lg font-medium text-white mb-4">Dados Gerais</h3>
                     <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                          ID da Empresa
+                        </label>
+                        <div className="flex items-center">
+                          <p className="text-white">{empresa.id}</p>
+                          <button
+                            onClick={() => handleCopyToClipboard(empresa.id, 'empresa_id')}
+                            className="ml-2 p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white"
+                            title="Copiar ID da empresa"
+                          >
+                            {copiedFields['empresa_id'] ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-400 mb-1">
                           Segmento

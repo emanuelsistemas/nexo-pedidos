@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
+import { supabase } from '../../lib/supabase';
 
 const menuItems = [
   { icon: Home, label: 'Dashboard', path: '/dashboard', tooltip: 'Dashboard' },

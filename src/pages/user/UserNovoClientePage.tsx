@@ -5,10 +5,7 @@ import { ArrowLeft, User, Phone, Mail, MapPin, Building, Save, AlertCircle, Sear
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
-interface Empresa {
-  id: string;
-  nome: string;
-}
+
 
 const UserNovoClientePage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +18,6 @@ const UserNovoClientePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [tipoDocumento, setTipoDocumento] = useState<'CNPJ' | 'CPF'>('CNPJ');
   const [documento, setDocumento] = useState('');
   const [razaoSocial, setRazaoSocial] = useState('');
@@ -41,32 +37,9 @@ const UserNovoClientePage: React.FC = () => {
   const [bairro, setBairro] = useState('');
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
-  const [empresaId, setEmpresaId] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadEmpresas();
-  }, []);
 
-  const loadEmpresas = async () => {
-    try {
-      setIsLoading(true);
-
-      // Obter empresas
-      const { data: empresasData } = await supabase
-        .from('empresas')
-        .select('id, nome')
-        .order('nome');
-
-      if (empresasData) {
-        setEmpresas(empresasData);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar empresas:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const formatarTelefone = (telefone: string, tipo?: 'Fixo' | 'Celular') => {
     if (!telefone) return '';
@@ -414,17 +387,21 @@ const UserNovoClientePage: React.FC = () => {
       return;
     }
 
-    if (!empresaId) {
-      setError('Selecione uma empresa');
-      return;
-    }
-
     try {
       setIsSaving(true);
 
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Usuário não autenticado');
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
       // Validar documento se preenchido
       if (documento) {
@@ -482,7 +459,7 @@ const UserNovoClientePage: React.FC = () => {
           cidade: cidade || null,
           estado: estado || null,
           cep: cep ? cep.replace(/\D/g, '') : null,
-          empresa_id: empresaId,
+          empresa_id: usuarioData.empresa_id,
           usuario_id: userData.user.id
         })
         .select()
@@ -878,28 +855,7 @@ const UserNovoClientePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Empresa */}
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Empresa <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Building size={18} className="text-gray-500" />
-              </div>
-              <select
-                value={empresaId}
-                onChange={(e) => setEmpresaId(e.target.value)}
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                required
-              >
-                <option value="">Selecione uma empresa</option>
-                {empresas.map(empresa => (
-                  <option key={empresa.id} value={empresa.id}>{empresa.nome}</option>
-                ))}
-              </select>
-            </div>
-          </div>
+
         </div>
 
         {/* Botão salvar */}

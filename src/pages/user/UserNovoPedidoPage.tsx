@@ -678,11 +678,25 @@ const UserNovoPedidoPage: React.FC = () => {
     try {
       console.log('Iniciando carregamento de formas de pagamento...');
 
-      // Consultar a tabela forma_pagamento_opcoes diretamente
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Consultar a tabela forma_pagamento_opcoes filtrada por empresa
       const { data, error } = await supabase
         .from('forma_pagamento_opcoes')
         .select('id, nome, tipo, max_parcelas')
         .eq('ativo', true)
+        .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
 
       if (error) {

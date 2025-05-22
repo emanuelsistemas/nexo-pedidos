@@ -97,18 +97,28 @@ const UserClientesPage: React.FC = () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
-      // Obter empresas
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Obter apenas a empresa do usuário
       const { data: empresasData } = await supabase
         .from('empresas')
         .select('id, nome')
-        .order('nome');
+        .eq('id', usuarioData.empresa_id)
+        .single();
 
       if (empresasData) {
-        setEmpresas(empresasData);
+        setEmpresas([empresasData]);
 
         // Salvar dados no localStorage
         try {
-          localStorage.setItem('empresas_cache', JSON.stringify(empresasData));
+          localStorage.setItem('empresas_cache', JSON.stringify([empresasData]));
         } catch (cacheError) {
           console.error('Erro ao salvar empresas no localStorage:', cacheError);
         }
@@ -150,23 +160,17 @@ const UserClientesPage: React.FC = () => {
       if (error) throw error;
 
       if (clientesData && clientesData.length > 0) {
-        // Buscar todas as empresas para associar aos clientes
-        const { data: empresasData } = await supabase
+        // Buscar apenas a empresa do usuário para associar aos clientes
+        const { data: empresaData } = await supabase
           .from('empresas')
-          .select('id, nome');
+          .select('id, nome')
+          .eq('id', usuarioData.empresa_id)
+          .single();
 
-        // Criar um mapa de empresas para facilitar a busca
-        const empresasMap = new Map();
-        if (empresasData) {
-          empresasData.forEach(empresa => {
-            empresasMap.set(empresa.id, empresa.nome);
-          });
-        }
-
-        // Formatar dados dos clientes com os nomes das empresas
+        // Formatar dados dos clientes com o nome da empresa
         const formattedClientes = clientesData.map(cliente => ({
           ...cliente,
-          empresa_nome: empresasMap.get(cliente.empresa_id) || 'Empresa não encontrada'
+          empresa_nome: empresaData?.nome || 'Empresa não encontrada'
         }));
 
         setClientes(formattedClientes);

@@ -29,10 +29,7 @@ interface Usuario {
   nome: string;
 }
 
-interface Empresa {
-  id: string;
-  nome: string;
-}
+
 
 const FaturamentoPage: React.FC = () => {
   const navigate = useNavigate();
@@ -45,9 +42,7 @@ const FaturamentoPage: React.FC = () => {
   const [dataInicioFilter, setDataInicioFilter] = useState<string>('');
   const [dataFimFilter, setDataFimFilter] = useState<string>('');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
-  const [empresaFilter, setEmpresaFilter] = useState<string>('todas');
   const [vendedores, setVendedores] = useState<Usuario[]>([]);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [pedidoSelecionado, setPedidoSelecionado] = useState<Pedido | null>(null);
   const [isFaturando, setIsFaturando] = useState(false);
@@ -56,19 +51,33 @@ const FaturamentoPage: React.FC = () => {
   useEffect(() => {
     loadPedidos();
     loadVendedores();
-    loadEmpresas();
   }, []);
 
   useEffect(() => {
     applyFilters();
-  }, [pedidos, searchTerm, statusFilter, dataInicioFilter, dataFimFilter, vendedorFilter, empresaFilter]);
+  }, [pedidos, searchTerm, statusFilter, dataInicioFilter, dataFimFilter, vendedorFilter]);
 
   const loadVendedores = async () => {
     try {
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Carregar apenas os vendedores da empresa do usuário
       const { data, error } = await supabase
         .from('usuarios')
         .select('id, nome')
         .eq('tipo', 'user')
+        .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
 
       if (error) throw error;
@@ -78,25 +87,26 @@ const FaturamentoPage: React.FC = () => {
     }
   };
 
-  const loadEmpresas = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('empresas')
-        .select('id, nome')
-        .order('nome');
 
-      if (error) throw error;
-      setEmpresas(data || []);
-    } catch (error) {
-      console.error('Erro ao carregar empresas:', error);
-    }
-  };
 
   const loadPedidos = async () => {
     try {
       setIsLoading(true);
 
-      // Primeiro, carregamos os pedidos
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Carregar apenas os pedidos da empresa do usuário
       const { data: pedidosData, error } = await supabase
         .from('pedidos')
         .select(`
@@ -104,6 +114,7 @@ const FaturamentoPage: React.FC = () => {
           empresa:empresas(nome),
           cliente:clientes(nome, telefone)
         `)
+        .eq('empresa_id', usuarioData.empresa_id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -205,10 +216,7 @@ const FaturamentoPage: React.FC = () => {
       filtered = filtered.filter(pedido => pedido.usuario_id === vendedorFilter);
     }
 
-    // Aplicar filtro de empresa
-    if (empresaFilter !== 'todas') {
-      filtered = filtered.filter(pedido => pedido.empresa_id === empresaFilter);
-    }
+
 
     setFilteredPedidos(filtered);
   };
@@ -510,22 +518,7 @@ const FaturamentoPage: React.FC = () => {
                     </select>
                   </div>
 
-                  {/* Filtro de Empresa */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Empresa
-                    </label>
-                    <select
-                      value={empresaFilter}
-                      onChange={(e) => setEmpresaFilter(e.target.value)}
-                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                    >
-                      <option value="todas">Todas</option>
-                      {empresas.map(empresa => (
-                        <option key={empresa.id} value={empresa.id}>{empresa.nome}</option>
-                      ))}
-                    </select>
-                  </div>
+
 
                   {/* Botões de Ação */}
                   <div className="flex items-end gap-2">
@@ -535,7 +528,6 @@ const FaturamentoPage: React.FC = () => {
                         setDataInicioFilter('');
                         setDataFimFilter('');
                         setVendedorFilter('todos');
-                        setEmpresaFilter('todas');
                       }}
                       className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition-colors"
                     >
@@ -609,12 +601,7 @@ const FaturamentoPage: React.FC = () => {
                     </div>
                   )}
 
-                  {pedido.empresa_nome && (
-                    <div className="flex items-center gap-1 text-gray-400 text-sm mt-1">
-                      <Building size={14} />
-                      <span>Empresa: {pedido.empresa_nome}</span>
-                    </div>
-                  )}
+
 
                   <div className="flex items-center gap-1 text-gray-500 text-xs mt-2">
                     <Calendar size={12} />

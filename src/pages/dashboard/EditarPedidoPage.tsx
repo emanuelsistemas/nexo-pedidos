@@ -266,11 +266,12 @@ const EditarPedidoPage: React.FC = () => {
     try {
       console.log('Iniciando carregamento de formas de pagamento...');
 
-      // Consultar a tabela forma_pagamento_opcoes diretamente
+      // Consultar a tabela forma_pagamento_opcoes filtrada por empresa
       const { data: formasPagamentoData, error } = await supabase
         .from('forma_pagamento_opcoes')
         .select('id, nome, tipo, max_parcelas')
         .eq('ativo', true)
+        .eq('empresa_id', empresaId)
         .order('nome');
 
       if (error) {
