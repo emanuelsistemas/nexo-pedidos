@@ -2966,8 +2966,7 @@ const ProdutosPage: React.FC = () => {
                                         setNovoProduto({
                                           ...novoProduto,
                                           tipo_desconto_quantidade: 'valor',
-                                          valor_desconto_quantidade: novoValorDesconto || (novoProduto.preco * 0.1),
-                                          percentual_desconto_quantidade: 0
+                                          valor_desconto_quantidade: novoValorDesconto || (novoProduto.preco * 0.1)
                                         });
 
                                         // Atualizar o formato do desconto quando mudar o tipo
