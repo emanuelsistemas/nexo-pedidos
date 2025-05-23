@@ -49,6 +49,9 @@ function App() {
           <Route path="produtos/adicionais" element={<AdicionaisPage />} />
           <Route path="unidade-medida" element={<UnidadeMedidaPage />} />
           <Route path="clientes" element={<ClientesPage />} />
+          <Route path="pedidos" element={<UserPedidosPage />} />
+          <Route path="pedidos/novo" element={<UserNovoPedidoPage />} />
+          <Route path="pedidos/editar/:id" element={<UserNovoPedidoPage />} />
           <Route path="faturamento" element={<FaturamentoPage />} />
           <Route path="editar-pedido/:id" element={<EditarPedidoPage />} />
           <Route path="gestor" element={<GestorPage />} />

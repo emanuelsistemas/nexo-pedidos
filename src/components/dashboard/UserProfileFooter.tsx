@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CircleUserRound, LogOut, Smartphone, Building } from 'lucide-react';
+import { CircleUserRound, LogOut, Building } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useSidebarStore } from '../../store/sidebarStore';
 
@@ -52,10 +52,7 @@ const UserProfileFooter: React.FC = () => {
     getUser();
   }, []);
 
-  // Função para redirecionar para a versão mobile como admin
-  const handleMobileMode = () => {
-    navigate('/user/dashboard');
-  };
+
 
   const handleLogout = async () => {
     try {
@@ -146,25 +143,7 @@ const UserProfileFooter: React.FC = () => {
           )}
         </div>
 
-        {/* Botão Modo Mobile - apenas para usuários admin */}
-        {isAdmin && (
-          <button
-            onClick={handleMobileMode}
-            className="w-full flex items-center px-4 py-2 my-1 mx-2 rounded-lg text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
-          >
-            <Smartphone size={20} />
-            {isExpanded && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.2 }}
-                className="ml-3 text-sm"
-              >
-                Modo Mobile
-              </motion.span>
-            )}
-          </button>
-        )}
+
 
         <button
           onClick={() => setShowConfirmation(true)}

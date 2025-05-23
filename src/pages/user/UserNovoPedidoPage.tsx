@@ -7,6 +7,7 @@ import { showMessage } from '../../utils/toast';
 import ClienteDropdown from '../../components/comum/ClienteDropdown';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 import { verificarTipoControleEstoque, atualizarEstoquePorPedido } from '../../utils/estoqueUtils';
+import { isDesktopScreen } from '../../config/responsive';
 
 interface Empresa {
   id: string;
@@ -673,30 +674,16 @@ const UserNovoPedidoPage: React.FC = () => {
     setNovaFormaPagamentoValor(formatarValorMonetario(valorLimpo));
   };
 
-  // Função para carregar as formas de pagamento disponíveis
+  // Função para carregar as formas de pagamento disponíveis (tabela global)
   const loadFormasPagamentoGeral = async () => {
     try {
       console.log('Iniciando carregamento de formas de pagamento...');
 
-      // Obter o usuário atual
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
-
-      // Obter a empresa do usuário
-      const { data: usuarioData } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('id', userData.user.id)
-        .single();
-
-      if (!usuarioData?.empresa_id) return;
-
-      // Consultar a tabela forma_pagamento_opcoes filtrada por empresa
+      // Consultar a tabela forma_pagamento_opcoes (tabela global, sem filtro de empresa)
       const { data, error } = await supabase
         .from('forma_pagamento_opcoes')
         .select('id, nome, tipo, max_parcelas')
         .eq('ativo', true)
-        .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
 
       if (error) {
@@ -1163,7 +1150,12 @@ const UserNovoPedidoPage: React.FC = () => {
         showMessage('success', 'Pedido criado com sucesso!');
       }
 
-      navigate('/user/pedidos');
+      // Navegar de volta usando a função responsiva
+      if (isWebVersion) {
+        navigate('/dashboard/pedidos');
+      } else {
+        navigate('/user/pedidos');
+      }
     } catch (error: any) {
       console.error(`Erro ao ${isEditMode ? 'atualizar' : 'criar'} pedido:`, error);
       showMessage('error', `Erro ao ${isEditMode ? 'atualizar' : 'criar'} pedido: ${error.message}`);
@@ -1172,14 +1164,25 @@ const UserNovoPedidoPage: React.FC = () => {
     }
   };
 
+  // Detectar se está na versão web e aplicar responsividade
+  const isWebVersion = window.location.pathname.startsWith('/dashboard');
+  const isDesktop = isDesktopScreen();
+  const shouldCenterContent = isWebVersion && isDesktop;
+
+  // Função para navegar de volta
+  const handleGoBack = () => {
+    if (isWebVersion) {
+      navigate('/dashboard/pedidos');
+    } else {
+      navigate('/user/pedidos');
+    }
+  };
+
   return (
-    <div className="space-y-6 pb-20">
+    <div className={`${shouldCenterContent ? 'max-w-4xl mx-auto' : ''} space-y-6 pb-20`}>
       <div className="flex items-center gap-2">
         <button
-          onClick={() => {
-            // Navegar sem validação
-            navigate('/user/pedidos');
-          }}
+          onClick={handleGoBack}
           className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors"
           type="button" // Importante: tipo button para não acionar o submit do formulário
         >

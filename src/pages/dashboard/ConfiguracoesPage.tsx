@@ -2136,9 +2136,8 @@ const ConfiguracoesPage: React.FC = () => {
 
   return (
     <div className="w-full">
-      <div className="overflow-x-auto">
-        <div className="bg-background-card rounded-lg border border-gray-800 p-2 mb-8">
-          <div className="flex items-center gap-2 min-w-fit">
+      <div className="bg-background-card rounded-lg border border-gray-800 p-2 mb-8">
+        <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setActiveSection('geral')}
               className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
@@ -2211,7 +2210,6 @@ const ConfiguracoesPage: React.FC = () => {
             {/* Aba "Status Loja" ocultada */}
             {/* Aba "Taxa Entrega" ocultada */}
             {/* Aba "Horários" ocultada */}
-          </div>
         </div>
       </div>
 

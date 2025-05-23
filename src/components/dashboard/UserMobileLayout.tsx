@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, ShoppingBag, User, LogOut, Plus, Users, Package, Monitor } from 'lucide-react';
+import { Home, ShoppingBag, User, LogOut, Plus, Users, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import LoadingScreen from './LoadingScreen';
 import Logo from '../comum/Logo';
+import { useResponsiveRedirect } from '../../hooks/useResponsiveRedirect';
 
 const UserMobileLayout: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [userName, setUserName] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
   const [empresaNomeFantasia, setEmpresaNomeFantasia] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Hook para redirecionamento responsivo automático
+  useResponsiveRedirect();
 
   useEffect(() => {
     // Carregar dados do usuário
@@ -25,15 +28,13 @@ const UserMobileLayout: React.FC = () => {
             .from('usuarios')
             .select(`
               nome,
-              empresa_id,
-              tipo_user_config:tipo_user_config_id(tipo)
+              empresa_id
             `)
             .eq('id', user.id)
             .single();
 
           if (userData) {
             setUserName(userData.nome);
-            setIsAdmin(userData.tipo_user_config?.tipo === 'admin');
 
             // Buscar o nome fantasia da empresa
             if (userData.empresa_id) {
@@ -63,10 +64,7 @@ const UserMobileLayout: React.FC = () => {
     getUser();
   }, []);
 
-  // Função para retornar à versão web (dashboard admin)
-  const handleWebMode = () => {
-    navigate('/dashboard');
-  };
+
 
   const handleLogout = async () => {
     try {
@@ -109,16 +107,7 @@ const UserMobileLayout: React.FC = () => {
             Olá, <span className="font-medium">{userName}</span>
           </div>
 
-          {/* Botão para retornar à versão web (apenas para admin) */}
-          {isAdmin && (
-            <button
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500/10 text-blue-400"
-              onClick={handleWebMode}
-              title="Voltar para versão web"
-            >
-              <Monitor size={16} />
-            </button>
-          )}
+
 
           <button
             className="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10 text-red-400"

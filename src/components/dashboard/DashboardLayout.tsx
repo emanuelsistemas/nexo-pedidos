@@ -4,10 +4,14 @@ import { motion } from 'framer-motion';
 import Sidebar from './Sidebar';
 import LoadingScreen from './LoadingScreen';
 import { useSidebarStore } from '../../store/sidebarStore';
+import { useResponsiveRedirect } from '../../hooks/useResponsiveRedirect';
 
 const DashboardLayout: React.FC = () => {
   const { isExpanded } = useSidebarStore();
   const [isLoading, setIsLoading] = useState(true);
+
+  // Hook para redirecionamento responsivo automático
+  useResponsiveRedirect();
 
   useEffect(() => {
     // Simulate loading time
