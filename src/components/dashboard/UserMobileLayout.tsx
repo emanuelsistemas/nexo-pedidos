@@ -23,13 +23,17 @@ const UserMobileLayout: React.FC = () => {
         if (user) {
           const { data: userData } = await supabase
             .from('usuarios')
-            .select('nome, tipo, empresa_id')
+            .select(`
+              nome,
+              empresa_id,
+              tipo_user_config:tipo_user_config_id(tipo)
+            `)
             .eq('id', user.id)
             .single();
 
           if (userData) {
             setUserName(userData.nome);
-            setIsAdmin(userData.tipo === 'admin');
+            setIsAdmin(userData.tipo_user_config?.tipo === 'admin');
 
             // Buscar o nome fantasia da empresa
             if (userData.empresa_id) {

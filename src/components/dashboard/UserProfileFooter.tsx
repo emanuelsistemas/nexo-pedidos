@@ -23,11 +23,14 @@ const UserProfileFooter: React.FC = () => {
           // Verificar se o usuário é admin e obter empresa_id
           const { data: userData } = await supabase
             .from('usuarios')
-            .select('tipo, empresa_id')
+            .select(`
+              empresa_id,
+              tipo_user_config:tipo_user_config_id(tipo)
+            `)
             .eq('id', user.id)
             .single();
 
-          setIsAdmin(userData?.tipo === 'admin');
+          setIsAdmin(userData?.tipo_user_config?.tipo === 'admin');
 
           // Buscar o nome fantasia da empresa
           if (userData?.empresa_id) {

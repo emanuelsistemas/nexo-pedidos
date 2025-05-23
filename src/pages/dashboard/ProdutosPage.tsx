@@ -826,26 +826,28 @@ const ProdutosPage: React.FC = () => {
       // Usar o estoque atual do banco de dados
       const estoqueAtualDB = parseFloat(produtoData.estoque_atual || '0');
 
-      // Calcular o saldo para cada movimento, começando do saldo atual
-      // e subtraindo cada movimento (já que estamos em ordem decrescente)
-      let saldoAtual = estoqueAtualDB;
-      const movimentosComSaldo = movimentosData.map((movimento: any, index: number) => {
-        // Para o primeiro item (mais recente), o saldo é o saldo atual
-        if (index > 0) {
-          // Para os demais itens, ajustamos o saldo removendo o efeito do movimento anterior
-          const movimentoAnterior = movimentosData[index - 1];
-          if (movimentoAnterior.tipo_movimento === 'entrada') {
-            saldoAtual -= parseFloat(movimentoAnterior.quantidade);
-          } else {
-            saldoAtual += parseFloat(movimentoAnterior.quantidade);
-          }
+      // Calcular o saldo histórico para cada movimento
+      // Primeiro, vamos calcular o saldo correto baseado na ordem cronológica
+      // Ordenar movimentos por data (mais antigo primeiro) para calcular saldo correto
+      const movimentosOrdenados = [...movimentosData].reverse();
+
+      let saldoAcumulado = 0;
+      const movimentosComSaldoCorreto = movimentosOrdenados.map((movimento: any) => {
+        // Aplicar o movimento ao saldo
+        if (movimento.tipo_movimento === 'entrada') {
+          saldoAcumulado += parseFloat(movimento.quantidade);
+        } else {
+          saldoAcumulado -= parseFloat(movimento.quantidade);
         }
 
         return {
           ...movimento,
-          saldo: saldoAtual
+          saldo: saldoAcumulado
         };
       });
+
+      // Reverter para ordem original (mais recente primeiro)
+      const movimentosComSaldo = movimentosComSaldoCorreto.reverse();
 
       // Calcular o estoque não faturado (pedidos pendentes)
       // Buscar pedidos pendentes que contêm este produto

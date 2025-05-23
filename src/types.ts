@@ -57,3 +57,23 @@ export interface TipoControleEstoqueConfig {
   bloqueia_sem_estoque?: boolean;
   created_at?: string;
 }
+
+export interface TipoUserConfig {
+  id: string;
+  tipo: 'admin' | 'user' | 'vendedor' | 'caixa' | 'socio';
+  descricao?: string;
+  ativo?: boolean;
+  created_at?: string;
+}
+
+export interface Usuario {
+  id: string;
+  nome: string;
+  email: string;
+  tipo: 'admin' | 'user';
+  empresa_id: string;
+  tipo_user_config_id?: string;
+  tipo_user_config?: TipoUserConfig;
+  ativo?: boolean;
+  created_at?: string;
+}

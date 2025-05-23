@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
 import { showMessage } from '../../utils/toast';
+import { TipoUserConfig } from '../../types';
 
 interface DeleteConfirmationProps {
   isOpen: boolean;
@@ -117,8 +118,12 @@ const ConfiguracoesPage: React.FC = () => {
     nome: '',
     email: '',
     senha: '',
-    confirmarSenha: ''
+    confirmarSenha: '',
+    tipo_user_config_id: ''
   });
+
+  // Estado para tipos de usuário
+  const [tiposUsuario, setTiposUsuario] = useState<TipoUserConfig[]>([]);
 
   // Estado para controlar a visibilidade da senha
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -191,7 +196,11 @@ const ConfiguracoesPage: React.FC = () => {
       // Obter dados do usuário logado, incluindo o tipo
       const { data: usuarioData } = await supabase
         .from('usuarios')
-        .select('id, empresa_id, tipo')
+        .select(`
+          id,
+          empresa_id,
+          tipo_user_config:tipo_user_config_id(tipo)
+        `)
         .eq('id', userData.user.id)
         .single();
 
@@ -200,23 +209,38 @@ const ConfiguracoesPage: React.FC = () => {
       // Armazenar o tipo do usuário logado
       setUsuarioLogado({
         id: usuarioData.id,
-        tipo: usuarioData.tipo || 'user' // Valor padrão 'user' caso não tenha tipo definido
+        tipo: usuarioData.tipo_user_config?.tipo || 'user' // Valor padrão 'user' caso não tenha tipo definido
       });
 
       if (activeSection === 'usuarios') {
+        // Carregar tipos de usuário
+        const { data: tiposData, error: tiposError } = await supabase
+          .from('tipo_user_config')
+          .select('*')
+          .eq('ativo', true)
+          .order('tipo');
+
+        if (tiposError) {
+          console.error('Erro ao carregar tipos de usuário:', tiposError);
+          showMessage('error', 'Erro ao carregar tipos de usuário');
+        } else {
+          setTiposUsuario(tiposData || []);
+        }
+
         // Se o usuário for do tipo 'user', mostrar apenas o próprio usuário
         // Se for 'admin', mostrar todos os usuários da empresa
         let query = supabase
           .from('usuarios')
           .select(`
             *,
-            perfil:perfis_acesso(nome)
+            perfil:perfis_acesso(nome),
+            tipo_user_config:tipo_user_config_id(id, tipo, descricao)
           `)
           .eq('empresa_id', usuarioData.empresa_id)
           .order('nome'); // Ordenar por nome para melhor visualização
 
         // Filtrar apenas o próprio usuário se for do tipo 'user'
-        if (usuarioData.tipo === 'user') {
+        if (usuarioData.tipo_user_config?.tipo === 'user') {
           query = query.eq('id', usuarioData.id);
         }
 
@@ -228,7 +252,7 @@ const ConfiguracoesPage: React.FC = () => {
           return;
         }
 
-        console.log(`Carregados ${usuariosData?.length || 0} usuários. Usuário logado é ${usuarioData.tipo}`);
+        console.log(`Carregados ${usuariosData?.length || 0} usuários. Usuário logado é ${usuarioData.tipo_user_config?.tipo}`);
         setUsuarios(usuariosData || []);
       }
 
@@ -537,7 +561,7 @@ const ConfiguracoesPage: React.FC = () => {
 
       // Fazer logout e redirecionar
       await supabase.auth.signOut();
-      window.location.href = '/login';
+      window.location.href = '/entrar';
 
     } catch (error: any) {
       console.error('Erro ao deletar empresa:', error);
@@ -698,7 +722,8 @@ const ConfiguracoesPage: React.FC = () => {
       nome: usuario.nome,
       email: usuario.email,
       senha: '', // Campos de senha vazios na edição
-      confirmarSenha: ''
+      confirmarSenha: '',
+      tipo_user_config_id: usuario.tipo_user_config_id || ''
     });
 
     // Ativar o modo de edição
@@ -1174,6 +1199,11 @@ const ConfiguracoesPage: React.FC = () => {
       return;
     }
 
+    if (!usuarioForm.tipo_user_config_id) {
+      showMessage('error', 'O tipo de usuário é obrigatório');
+      return;
+    }
+
     // Validar se as senhas coincidem (apenas se uma senha foi fornecida)
     if (usuarioForm.senha && usuarioForm.senha !== usuarioForm.confirmarSenha) {
       setFormErrors(prev => ({ ...prev, senha: 'As senhas não coincidem' }));
@@ -1212,10 +1242,13 @@ const ConfiguracoesPage: React.FC = () => {
 
       // Modo de edição
       if (isEditingUsuario) {
-        // 1. Atualizar o nome do usuário na tabela usuarios
+        // 1. Atualizar o nome e tipo do usuário na tabela usuarios
         const { error: updateError } = await supabase
           .from('usuarios')
-          .update({ nome: usuarioForm.nome })
+          .update({
+            nome: usuarioForm.nome,
+            tipo_user_config_id: usuarioForm.tipo_user_config_id
+          })
           .eq('id', usuarioForm.id);
 
         if (updateError) throw updateError;
@@ -1285,7 +1318,7 @@ const ConfiguracoesPage: React.FC = () => {
           refresh_token: currentSession.session.refresh_token
         });
 
-        // 4. Inserir o usuário na tabela usuarios com tipo 'user' e status ativo
+        // 4. Inserir o usuário na tabela usuarios com status ativo
         const { error: insertError } = await supabase
           .from('usuarios')
           .insert([{
@@ -1293,7 +1326,7 @@ const ConfiguracoesPage: React.FC = () => {
             nome: usuarioForm.nome,
             email: usuarioForm.email,
             empresa_id: usuarioData.empresa_id,
-            tipo: 'user',
+            tipo_user_config_id: usuarioForm.tipo_user_config_id,
             status: true // Definir o status como ativo por padrão
           }]);
 
@@ -1308,7 +1341,8 @@ const ConfiguracoesPage: React.FC = () => {
         nome: '',
         email: '',
         senha: '',
-        confirmarSenha: ''
+        confirmarSenha: '',
+        tipo_user_config_id: ''
       });
       setIsEditingUsuario(false);
 
@@ -1508,9 +1542,11 @@ const ConfiguracoesPage: React.FC = () => {
                         </div>
                         <p className="text-gray-400 text-sm">{usuario.email}</p>
                         <div className="flex flex-wrap gap-2 mt-2">
-                          <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-400">
-                            {usuario.tipo === 'admin' ? 'Administrador' : 'Usuário'}
-                          </span>
+                          {usuario.tipo_user_config && (
+                            <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
+                              {usuario.tipo_user_config.tipo.charAt(0).toUpperCase() + usuario.tipo_user_config.tipo.slice(1)}
+                            </span>
+                          )}
                           {usuario.perfil && (
                             <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-500/10 text-primary-400">
                               {usuario.perfil.nome}
@@ -1531,7 +1567,7 @@ const ConfiguracoesPage: React.FC = () => {
                         )}
 
                         {/* Botão de bloquear/desbloquear - visível apenas para admin e apenas para usuários não-admin */}
-                        {usuarioLogado?.tipo === 'admin' && usuario.tipo !== 'admin' && (
+                        {usuarioLogado?.tipo === 'admin' && usuario.tipo_user_config?.tipo !== 'admin' && (
                           <button
                             onClick={() => handleToggleUserStatus(usuario.id, usuario.nome, usuario.status)}
                             className={`p-2 ${usuario.status ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'} transition-colors`}
@@ -2301,6 +2337,20 @@ const ConfiguracoesPage: React.FC = () => {
                     </div>
 
                     <div>
+                      <SearchableSelect
+                        label="Tipo de Usuário"
+                        options={tiposUsuario.map(tipo => ({
+                          value: tipo.id,
+                          label: `${tipo.tipo.charAt(0).toUpperCase() + tipo.tipo.slice(1)} - ${tipo.descricao || ''}`
+                        }))}
+                        value={usuarioForm.tipo_user_config_id}
+                        onChange={(value) => setUsuarioForm(prev => ({ ...prev, tipo_user_config_id: value }))}
+                        placeholder="Selecione o tipo de usuário"
+                        required
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-sm font-medium text-gray-400 mb-2">
                         Email
                       </label>
@@ -2410,7 +2460,8 @@ const ConfiguracoesPage: React.FC = () => {
                             nome: '',
                             email: '',
                             senha: '',
-                            confirmarSenha: ''
+                            confirmarSenha: '',
+                            tipo_user_config_id: ''
                           });
                           setIsEditingUsuario(false); // Resetar o modo de edição
                         }}

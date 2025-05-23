@@ -131,12 +131,14 @@ const DashboardPage: React.FC = () => {
 
       const { data: usuarioData } = await supabase
         .from('usuarios')
-        .select('tipo')
+        .select(`
+          tipo_user_config:tipo_user_config_id(tipo)
+        `)
         .eq('id', userData.user.id)
         .single();
 
-      if (usuarioData) {
-        setIsAdmin(usuarioData.tipo === 'admin');
+      if (usuarioData?.tipo_user_config) {
+        setIsAdmin(usuarioData.tipo_user_config.tipo === 'admin');
       }
     } catch (error) {
       console.error('Erro ao verificar tipo de usuário:', error);
@@ -151,15 +153,23 @@ const DashboardPage: React.FC = () => {
 
       const { data: usuarioData } = await supabase
         .from('usuarios')
-        .select('empresa_id, tipo')
+        .select(`
+          empresa_id,
+          tipo_user_config:tipo_user_config_id(tipo)
+        `)
         .eq('id', userData.user.id)
         .single();
 
-      if (!usuarioData?.empresa_id || usuarioData.tipo !== 'admin') return;
+      if (!usuarioData?.empresa_id || usuarioData.tipo_user_config?.tipo !== 'admin') return;
 
       const { data: usuariosData } = await supabase
         .from('usuarios')
-        .select('id, nome, email, tipo')
+        .select(`
+          id,
+          nome,
+          email,
+          tipo_user_config:tipo_user_config_id(tipo)
+        `)
         .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
 
@@ -323,7 +333,10 @@ const DashboardPage: React.FC = () => {
 
       const { data: usuarioData } = await supabase
         .from('usuarios')
-        .select('empresa_id, tipo')
+        .select(`
+          empresa_id,
+          tipo_user_config:tipo_user_config_id(tipo)
+        `)
         .eq('id', userData.user.id)
         .single();
 
@@ -336,11 +349,11 @@ const DashboardPage: React.FC = () => {
         .eq('empresa_id', usuarioData.empresa_id);
 
       // Se um usuário específico estiver selecionado e o usuário atual for admin
-      if (usuarioSelecionado !== 'todos' && usuarioData.tipo === 'admin') {
+      if (usuarioSelecionado !== 'todos' && usuarioData.tipo_user_config?.tipo === 'admin') {
         query = query.eq('usuario_id', usuarioSelecionado);
       }
       // Se o usuário atual não for admin, mostrar apenas seus próprios pedidos
-      else if (usuarioData.tipo !== 'admin') {
+      else if (usuarioData.tipo_user_config?.tipo !== 'admin') {
         query = query.eq('usuario_id', userData.user.id);
       }
 

@@ -28,7 +28,10 @@ const FormEntrar: React.FC = () => {
       // Verificar o tipo e status do usuário
       const { data: userData } = await supabase
         .from('usuarios')
-        .select('tipo, status')
+        .select(`
+          status,
+          tipo_user_config:tipo_user_config_id(tipo)
+        `)
         .eq('id', (await supabase.auth.getUser()).data.user?.id)
         .single();
 

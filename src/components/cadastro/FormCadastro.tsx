@@ -67,7 +67,18 @@ const FormCadastro: React.FC = () => {
 
       if (empresaError) throw empresaError;
 
-      // 3. Create usuario record with admin type and active status
+      // 3. Get admin tipo_user_config_id
+      const { data: adminTipoData, error: adminTipoError } = await supabase
+        .from('tipo_user_config')
+        .select('id')
+        .eq('tipo', 'admin')
+        .single();
+
+      if (adminTipoError) {
+        console.error('Erro ao buscar tipo admin:', adminTipoError);
+      }
+
+      // 4. Create usuario record with admin type and active status
       const { error: usuarioError } = await supabase
         .from('usuarios')
         .insert([
@@ -76,14 +87,14 @@ const FormCadastro: React.FC = () => {
             nome,
             email,
             empresa_id: empresaData.id,
-            tipo: 'admin', // Define o usuário como administrador
+            tipo_user_config_id: adminTipoData?.id, // Associar ao tipo admin
             status: true, // Define o status como ativo por padrão
           },
         ]);
 
       if (usuarioError) throw usuarioError;
 
-      // 4. Create initial configurations
+      // 5. Create initial configurations
       const { error: configError } = await supabase
         .from('configuracoes')
         .insert([{
@@ -93,7 +104,7 @@ const FormCadastro: React.FC = () => {
 
       if (configError) throw configError;
 
-      // 5. Create initial store status
+      // 6. Create initial store status
       const { error: statusError } = await supabase
         .from('status_loja')
         .insert([{
@@ -105,7 +116,7 @@ const FormCadastro: React.FC = () => {
 
       if (statusError) throw statusError;
 
-      // 6. Create initial stock control configuration
+      // 7. Create initial stock control configuration
       try {
         const { error: estoqueConfigError } = await supabase
           .from('tipo_controle_estoque_config')
