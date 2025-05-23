@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import Input from '../comum/Input';
 import Button from '../comum/Button';
 import { supabase } from '../../lib/supabase';
+import { translateErrorMessage } from '../../utils/toast';
 
 const FormEntrar: React.FC = () => {
   const navigate = useNavigate();
@@ -50,7 +51,7 @@ const FormEntrar: React.FC = () => {
         navigate('/dashboard', { replace: true });
       }
     } catch (err: any) {
-      setError(err.message || 'Erro ao fazer login');
+      setError(translateErrorMessage(err));
     } finally {
       setIsLoading(false);
     }

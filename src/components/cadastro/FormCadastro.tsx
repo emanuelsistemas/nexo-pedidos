@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import Input from '../comum/Input';
 import Button from '../comum/Button';
 import { supabase } from '../../lib/supabase';
+import { translateErrorMessage } from '../../utils/toast';
 
 const FormCadastro: React.FC = () => {
   const navigate = useNavigate();
@@ -144,7 +145,7 @@ const FormCadastro: React.FC = () => {
       });
     } catch (err: any) {
       console.error('Erro no cadastro:', err);
-      setError(err.message || 'Erro ao criar conta. Por favor, tente novamente.');
+      setError(translateErrorMessage(err));
     } finally {
       setIsLoading(false);
     }

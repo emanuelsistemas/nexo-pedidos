@@ -4,7 +4,7 @@ import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, 
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
-import { showMessage } from '../../utils/toast';
+import { showMessage, translateErrorMessage } from '../../utils/toast';
 import { TipoUserConfig } from '../../types';
 
 interface DeleteConfirmationProps {
@@ -1349,7 +1349,7 @@ const ConfiguracoesPage: React.FC = () => {
       setShowSidebar(false);
       loadData();
     } catch (error: any) {
-      showMessage('error', `Erro ao ${isEditingUsuario ? 'atualizar' : 'adicionar'} usuário: ${error.message}`);
+      showMessage('error', `Erro ao ${isEditingUsuario ? 'atualizar' : 'adicionar'} usuário: ${translateErrorMessage(error)}`);
     } finally {
       setIsLoading(false);
     }
@@ -2138,7 +2138,7 @@ const ConfiguracoesPage: React.FC = () => {
     <div className="w-full">
       <div className="bg-background-card rounded-lg border border-gray-800 p-2 mb-8">
         <div className="flex items-center gap-2 flex-wrap">
-            <button
+          <button
               onClick={() => setActiveSection('geral')}
               className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
                 activeSection === 'geral'
