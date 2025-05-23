@@ -18,6 +18,7 @@ import GestorPage from './pages/dashboard/GestorPage';
 import EntregadorPage from './pages/dashboard/EntregadorPage';
 import TaxaEntregaPage from './pages/dashboard/TaxaEntregaPage';
 import ConfiguracoesPage from './pages/dashboard/ConfiguracoesPage';
+import PDVPage from './pages/dashboard/PDVPage';
 
 // Páginas de usuário mobile
 import UserMobileLayout from './components/dashboard/UserMobileLayout';
@@ -53,6 +54,7 @@ function App() {
           <Route path="pedidos/novo" element={<UserNovoPedidoPage />} />
           <Route path="pedidos/editar/:id" element={<UserNovoPedidoPage />} />
           <Route path="faturamento" element={<FaturamentoPage />} />
+          <Route path="pdv" element={<PDVPage />} />
           <Route path="editar-pedido/:id" element={<EditarPedidoPage />} />
           <Route path="gestor" element={<GestorPage />} />
           <Route path="conexao" element={<ConexaoPage />} />

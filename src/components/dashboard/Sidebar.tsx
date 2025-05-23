@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag } from 'lucide-react';
+import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
@@ -22,6 +22,7 @@ const menuItems = [
   { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
   { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },
   { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
+  { icon: ShoppingCart, label: 'PDV', path: '/dashboard/pdv', tooltip: 'Ponto de Venda' },
   // Item "Gestor" ocultado
   // { icon: MessageSquare, label: 'Gestor', path: '/dashboard/gestor', tooltip: 'Gestor de Pedidos' },
 
