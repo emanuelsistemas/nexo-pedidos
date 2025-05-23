@@ -778,6 +778,64 @@ const ProdutosPage: React.FC = () => {
     setShowSidebar(true);
   };
 
+  // Função para recalcular o estoque de um produto baseado no histórico de movimentações
+  const recalcularEstoqueProduto = async (produtoId: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar todas as movimentações do produto
+      const { data: movimentosData, error: movimentosError } = await supabase
+        .from('produto_estoque')
+        .select('tipo_movimento, quantidade')
+        .eq('produto_id', produtoId)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('data_hora_movimento', { ascending: true });
+
+      if (movimentosError) {
+        console.error('Erro ao buscar movimentações:', movimentosError);
+        return;
+      }
+
+      // Calcular o estoque correto baseado nas movimentações
+      let estoqueCorreto = 0;
+      if (movimentosData) {
+        movimentosData.forEach(movimento => {
+          if (movimento.tipo_movimento === 'entrada') {
+            estoqueCorreto += parseFloat(movimento.quantidade);
+          } else {
+            estoqueCorreto -= parseFloat(movimento.quantidade);
+          }
+        });
+      }
+
+      // Atualizar o estoque_atual na tabela produtos
+      const { error: updateError } = await supabase
+        .from('produtos')
+        .update({ estoque_atual: estoqueCorreto })
+        .eq('id', produtoId)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar estoque:', updateError);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Erro ao recalcular estoque:', error);
+      return false;
+    }
+  };
+
   // Função para carregar os movimentos de estoque de um produto
   const loadEstoqueMovimentos = async (produtoId: string) => {
     if (!produtoId) return;
@@ -1582,9 +1640,9 @@ const ProdutosPage: React.FC = () => {
           // Garantir que os campos de promoção sejam null quando não habilitados
           tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
           valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
-          // Incluir o estoque inicial e definir o estoque atual
+          // Incluir o estoque inicial e definir o estoque atual como 0 (será atualizado pela movimentação)
           estoque_inicial: novoProduto.estoque_inicial || 0,
-          estoque_atual: novoProduto.estoque_inicial || 0,
+          estoque_atual: 0,
         };
 
         const { data, error } = await supabase
@@ -1596,7 +1654,7 @@ const ProdutosPage: React.FC = () => {
         if (error) throw error;
         productId = data.id;
 
-        // Se tiver estoque inicial, criar um registro na tabela produto_estoque
+        // Se tiver estoque inicial, criar um registro na tabela produto_estoque e atualizar o estoque_atual
         if (novoProduto.estoque_inicial && novoProduto.estoque_inicial > 0) {
           const { error: estoqueError } = await supabase
             .from('produto_estoque')
@@ -1613,6 +1671,17 @@ const ProdutosPage: React.FC = () => {
           if (estoqueError) {
             console.error('Erro ao registrar estoque inicial:', estoqueError);
             // Não interrompe o fluxo, apenas loga o erro
+          } else {
+            // Atualizar o estoque_atual do produto com o estoque inicial
+            const { error: updateEstoqueError } = await supabase
+              .from('produtos')
+              .update({ estoque_atual: novoProduto.estoque_inicial })
+              .eq('id', productId)
+              .eq('empresa_id', usuarioData.empresa_id);
+
+            if (updateEstoqueError) {
+              console.error('Erro ao atualizar estoque atual:', updateEstoqueError);
+            }
           }
         }
       }
@@ -3416,7 +3485,29 @@ const ProdutosPage: React.FC = () => {
                               </div>
 
                               <div>
-                                <h4 className="text-white font-medium mb-4">Histórico de Movimentações</h4>
+                                <div className="flex items-center justify-between mb-4">
+                                  <h4 className="text-white font-medium">Histórico de Movimentações</h4>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                      if (editingProduto) {
+                                        const sucesso = await recalcularEstoqueProduto(editingProduto.id);
+                                        if (sucesso) {
+                                          showMessage('success', 'Estoque recalculado com sucesso!');
+                                          await loadEstoqueMovimentos(editingProduto.id);
+                                          await loadProdutosEstoque();
+                                        } else {
+                                          showMessage('error', 'Erro ao recalcular estoque');
+                                        }
+                                      }
+                                    }}
+                                    disabled={isLoadingEstoque}
+                                  >
+                                    Recalcular Estoque
+                                  </Button>
+                                </div>
 
                                 {isLoadingEstoque ? (
                                   <div className="text-center py-8">
