@@ -4,10 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Home, ShoppingBag, User, LogOut, Plus, Users, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import LoadingScreen from './LoadingScreen';
+import SessionCheck from '../comum/SessionCheck';
 import Logo from '../comum/Logo';
 import { useResponsiveRedirect } from '../../hooks/useResponsiveRedirect';
+import { useAuthSession } from '../../hooks/useAuthSession';
 
 const UserMobileLayout: React.FC = () => {
+  const { withSessionCheck } = useAuthSession();
   const [isLoading, setIsLoading] = useState(true);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [userName, setUserName] = useState('');
@@ -89,7 +92,8 @@ const UserMobileLayout: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background-dark flex flex-col">
+    <SessionCheck fallback={<LoadingScreen />}>
+      <div className="min-h-screen bg-background-dark flex flex-col">
       {/* Header com logo, nome fantasia, saudação e botões */}
       <header className="bg-background-card border-b border-gray-800 p-3 flex items-center justify-between">
         <div className="flex items-center gap-1 flex-shrink-0 max-w-[45%]">
@@ -207,7 +211,8 @@ const UserMobileLayout: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </SessionCheck>
   );
 };
 

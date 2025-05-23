@@ -4,6 +4,7 @@ import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown,
 import { supabase } from '../../lib/supabase';
 import { Grupo, Produto, OpcaoAdicional, ProdutoOpcao } from '../../types';
 import { showMessage } from '../../utils/toast';
+import { useAuthSession } from '../../hooks/useAuthSession';
 import Button from '../../components/comum/Button';
 import FotoGaleria from '../../components/comum/FotoGaleria';
 
@@ -113,6 +114,7 @@ interface ProdutoFoto {
 }
 
 const ProdutosPage: React.FC = () => {
+  const { withSessionCheck } = useAuthSession();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -569,7 +571,7 @@ const ProdutosPage: React.FC = () => {
   };
 
   const loadGrupos = async () => {
-    try {
+    await withSessionCheck(async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Usuário não autenticado');
 
@@ -635,9 +637,7 @@ const ProdutosPage: React.FC = () => {
       }));
 
       setGrupos(gruposWithProdutos);
-    } catch (error: any) {
-      showMessage('error', 'Erro ao carregar grupos: ' + error.message);
-    }
+    });
   };
 
   const getNextAvailableCode = async () => {

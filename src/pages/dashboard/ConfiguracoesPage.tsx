@@ -6,6 +6,7 @@ import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
 import { showMessage, translateErrorMessage } from '../../utils/toast';
 import { TipoUserConfig } from '../../types';
+import { useAuthSession } from '../../hooks/useAuthSession';
 
 interface DeleteConfirmationProps {
   isOpen: boolean;
@@ -96,6 +97,7 @@ const tiposPagamento = [
 ];
 
 const ConfiguracoesPage: React.FC = () => {
+  const { withSessionCheck } = useAuthSession();
   const [showSidebar, setShowSidebar] = useState(false);
   const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'conta'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
@@ -189,7 +191,7 @@ const ConfiguracoesPage: React.FC = () => {
   }, [activeSection]);
 
   const loadData = async () => {
-    try {
+    await withSessionCheck(async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
@@ -443,10 +445,7 @@ const ConfiguracoesPage: React.FC = () => {
           showMessage('error', 'Erro ao processar configuração de pedidos');
         }
       }
-    } catch (error: any) {
-      console.error('Error loading data:', error);
-      showMessage('error', 'Erro ao carregar dados');
-    }
+    });
   };
 
   const handleSubmitPagamento = async (e: React.FormEvent) => {
@@ -454,7 +453,7 @@ const ConfiguracoesPage: React.FC = () => {
     if (!selectedTipo) return;
 
     setIsLoading(true);
-    try {
+    await withSessionCheck(async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Usuário não autenticado');
 
@@ -479,11 +478,8 @@ const ConfiguracoesPage: React.FC = () => {
       setShowSidebar(false);
       loadData();
       showMessage('success', 'Forma de pagamento adicionada com sucesso!');
-    } catch (error: any) {
-      showMessage('error', 'Erro ao adicionar forma de pagamento: ' + error.message);
-    } finally {
-      setIsLoading(false);
-    }
+    });
+    setIsLoading(false);
   };
 
   const handleSubmitEmpresa = async (e: React.FormEvent) => {

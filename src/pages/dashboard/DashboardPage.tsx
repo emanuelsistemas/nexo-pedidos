@@ -20,6 +20,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement
 import { Line } from 'react-chartjs-2';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
+import { useAuthSession } from '../../hooks/useAuthSession';
 import Button from '../../components/comum/Button';
 
 ChartJS.register(
@@ -59,6 +60,7 @@ interface Usuario {
 }
 
 const DashboardPage: React.FC = () => {
+  const { withSessionCheck } = useAuthSession();
   const chartRef = useRef<ChartJS | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<DashboardData>({
@@ -326,7 +328,7 @@ const DashboardPage: React.FC = () => {
   };
 
   const loadDashboardData = async () => {
-    try {
+    await withSessionCheck(async () => {
       setIsLoading(true);
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
@@ -441,11 +443,8 @@ const DashboardPage: React.FC = () => {
           },
         ],
       });
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    });
+    setIsLoading(false);
   };
 
   const formatCurrency = (value: number) => {

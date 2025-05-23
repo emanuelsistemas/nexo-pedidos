@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Sidebar from './Sidebar';
 import LoadingScreen from './LoadingScreen';
+import SessionCheck from '../comum/SessionCheck';
 import { useSidebarStore } from '../../store/sidebarStore';
 import { useResponsiveRedirect } from '../../hooks/useResponsiveRedirect';
 
@@ -27,17 +28,19 @@ const DashboardLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background-dark">
-      <Sidebar />
-      <motion.main
-        initial={{ marginLeft: '72px' }}
-        animate={{ marginLeft: isExpanded ? '240px' : '72px' }}
-        transition={{ duration: 0.3, ease: 'easeInOut' }}
-        className="min-h-screen p-6"
-      >
-        <Outlet />
-      </motion.main>
-    </div>
+    <SessionCheck fallback={<LoadingScreen />}>
+      <div className="min-h-screen bg-background-dark">
+        <Sidebar />
+        <motion.main
+          initial={{ marginLeft: '72px' }}
+          animate={{ marginLeft: isExpanded ? '240px' : '72px' }}
+          transition={{ duration: 0.3, ease: 'easeInOut' }}
+          className="min-h-screen p-6"
+        >
+          <Outlet />
+        </motion.main>
+      </div>
+    </SessionCheck>
   );
 };
 
