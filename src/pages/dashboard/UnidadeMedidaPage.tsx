@@ -156,7 +156,7 @@ const UnidadeMedidaPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.sigla || !formData.nome) {
       showMessage('error', 'Preencha todos os campos obrigatórios');
       return;
@@ -186,12 +186,12 @@ const UnidadeMedidaPage: React.FC = () => {
 
         if (error) throw error;
 
-        setUnidades(unidades.map(u => 
-          u.id === editingUnidade.id 
-            ? { ...u, sigla: formData.sigla, nome: formData.nome } 
+        setUnidades(unidades.map(u =>
+          u.id === editingUnidade.id
+            ? { ...u, sigla: formData.sigla, nome: formData.nome }
             : u
         ));
-        
+
         showMessage('success', 'Unidade de medida atualizada com sucesso');
       } else {
         const { data, error } = await supabase
@@ -208,7 +208,7 @@ const UnidadeMedidaPage: React.FC = () => {
         if (data && data.length > 0) {
           setUnidades([...unidades, data[0]]);
         }
-        
+
         showMessage('success', 'Unidade de medida criada com sucesso');
       }
 
@@ -316,7 +316,7 @@ const UnidadeMedidaPage: React.FC = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ duration: 0.3, ease: 'easeInOut' }}
-              className="fixed right-0 top-0 h-full w-full max-w-md bg-background-card border-l border-gray-800 z-50 overflow-y-auto"
+              className="fixed right-0 top-0 h-full w-full max-w-md bg-background-card border-l border-gray-800 z-50 overflow-y-auto custom-scrollbar"
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">

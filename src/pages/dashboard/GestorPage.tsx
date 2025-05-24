@@ -99,7 +99,7 @@ const GestorPage: React.FC = () => {
     const handleResize = () => {
       setIsSmallScreen(window.innerWidth < 1280);
     };
-    
+
     handleResize();
     window.addEventListener('resize', handleResize);
 
@@ -325,7 +325,7 @@ const GestorPage: React.FC = () => {
         const statusPedidos = pedidos.filter(p => p.status === status);
 
         return (
-          <div 
+          <div
             key={status}
             className={`flex flex-col rounded-lg ${statusColors[status].bg}`}
           >
@@ -340,7 +340,7 @@ const GestorPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
               {statusPedidos.map(pedido => renderPedidoCard(pedido))}
             </div>
           </div>

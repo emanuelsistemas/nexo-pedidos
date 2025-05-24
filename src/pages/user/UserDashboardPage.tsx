@@ -490,7 +490,7 @@ const UserDashboardPage: React.FC = () => {
                 <p className="text-gray-400">Nenhum pedido encontrado</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
                 {data.ultimosPedidos.map((pedido, index) => (
                   <motion.div
                     key={pedido.id}

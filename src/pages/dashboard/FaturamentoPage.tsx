@@ -572,7 +572,7 @@ const FaturamentoPage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[calc(100vh-300px)] overflow-y-auto custom-scrollbar pr-2">
           {filteredPedidos.map((pedido) => (
             <motion.div
               key={pedido.id}

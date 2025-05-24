@@ -35,9 +35,11 @@ const DashboardLayout: React.FC = () => {
           initial={{ marginLeft: '72px' }}
           animate={{ marginLeft: isExpanded ? '240px' : '72px' }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
-          className="min-h-screen p-6"
+          className="min-h-screen h-screen overflow-y-auto custom-scrollbar"
         >
-          <Outlet />
+          <div className="p-6">
+            <Outlet />
+          </div>
         </motion.main>
       </div>
     </SessionCheck>

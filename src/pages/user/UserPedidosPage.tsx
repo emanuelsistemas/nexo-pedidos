@@ -525,7 +525,7 @@ const UserPedidosPage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 max-h-[calc(100vh-250px)] overflow-y-auto custom-scrollbar pr-2">
           {filteredPedidos.map((pedido, index) => (
             <motion.div
               key={pedido.id}

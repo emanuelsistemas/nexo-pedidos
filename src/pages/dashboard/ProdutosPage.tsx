@@ -130,6 +130,7 @@ const ProdutosPage: React.FC = () => {
     preco: 0,
     descricao: '',
     codigo: '',
+    codigo_barras: '',
     promocao: false,
     ativo: true,
     desconto_quantidade: false,
@@ -747,6 +748,7 @@ const ProdutosPage: React.FC = () => {
       preco: 0,
       descricao: '',
       codigo: nextCode,
+      codigo_barras: '',
       promocao: false,
       tipo_desconto: 'percentual',
       valor_desconto: 0,
@@ -963,6 +965,7 @@ const ProdutosPage: React.FC = () => {
       preco: produto.preco,
       descricao: produto.descricao,
       codigo: produto.codigo,
+      codigo_barras: produto.codigo_barras || '',
       promocao: produto.promocao || false,
       tipo_desconto: produto.tipo_desconto || 'percentual',
       valor_desconto: produto.valor_desconto || 0,
@@ -1580,16 +1583,60 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
-      // Verificar se o código já está sendo usado por outro produto não deletado
-      const { data: existingProducts } = await supabase
+      // Validações de duplicatas (apenas para produtos não deletados)
+      // Construir query base para verificar duplicatas
+      let query = supabase
         .from('produtos')
-        .select('id')
-        .eq('codigo', novoProduto.codigo)
-        .eq('deletado', false)
-        .eq('empresa_id', usuarioData.empresa_id);
+        .select('id, nome, codigo, codigo_barras')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false); // Apenas produtos não deletados
 
-      if (existingProducts && existingProducts.length > 0 && (!editingProduto || existingProducts[0].id !== editingProduto.id)) {
-        showMessage('error', 'Este código já está sendo utilizado por outro produto');
+      // Se estiver editando, excluir o produto atual da verificação
+      if (editingProduto) {
+        query = query.neq('id', editingProduto.id);
+      }
+
+      const { data: produtosExistentes, error: queryError } = await query;
+
+      if (queryError) throw queryError;
+
+      // Verificar duplicatas
+      const duplicatas = [];
+
+      // Verificar nome duplicado
+      const nomeDuplicado = produtosExistentes?.find(p =>
+        p.nome.toLowerCase().trim() === novoProduto.nome?.toLowerCase().trim()
+      );
+      if (nomeDuplicado) {
+        duplicatas.push('Nome do produto');
+      }
+
+      // Verificar código duplicado
+      const codigoDuplicado = produtosExistentes?.find(p =>
+        p.codigo === novoProduto.codigo
+      );
+      if (codigoDuplicado) {
+        duplicatas.push('Código do produto');
+      }
+
+      // Verificar código de barras duplicado (apenas se foi informado)
+      if (novoProduto.codigo_barras && novoProduto.codigo_barras.trim() !== '') {
+        const codigoBarrasDuplicado = produtosExistentes?.find(p =>
+          p.codigo_barras && p.codigo_barras === novoProduto.codigo_barras
+        );
+        if (codigoBarrasDuplicado) {
+          duplicatas.push('Código de barras');
+        }
+      }
+
+      // Se houver duplicatas, mostrar mensagem de erro
+      if (duplicatas.length > 0) {
+        const mensagem = duplicatas.length === 1
+          ? `${duplicatas[0]} já existe em outro produto. Por favor, corrija antes de continuar.`
+          : `Os seguintes campos já existem em outros produtos: ${duplicatas.join(', ')}. Por favor, corrija antes de continuar.`;
+
+        showMessage('error', mensagem);
+        setIsLoading(false);
         return;
       }
 
@@ -1603,6 +1650,7 @@ const ProdutosPage: React.FC = () => {
             preco: novoProduto.preco,
             descricao: novoProduto.descricao,
             codigo: novoProduto.codigo,
+            codigo_barras: novoProduto.codigo_barras,
             promocao: novoProduto.promocao,
             tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
             valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
@@ -1961,7 +2009,8 @@ const ProdutosPage: React.FC = () => {
     return grupo.produtos
       .filter(produto =>
         produto.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        produto.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+        produto.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase()))
       )
       .sort((a, b) => {
         const comparison = a.nome.localeCompare(b.nome);
@@ -2409,7 +2458,7 @@ const ProdutosPage: React.FC = () => {
                   <div className="flex-1 relative">
                     <input
                       type="text"
-                      placeholder="Buscar produtos por nome ou código..."
+                      placeholder="Buscar produtos por nome, código ou código de barras..."
                       value={productSearchTerms[grupo.id] || ''}
                       onChange={(e) => handleProductSearch(grupo.id, e.target.value)}
                       className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
@@ -2603,6 +2652,19 @@ const ProdutosPage: React.FC = () => {
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                             placeholder="Código do produto"
                             required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Código de Barras
+                          </label>
+                          <input
+                            type="text"
+                            value={novoProduto.codigo_barras || ''}
+                            onChange={(e) => setNovoProduto({ ...novoProduto, codigo_barras: e.target.value })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Código de barras do produto"
                           />
                         </div>
                         <div>
@@ -3520,7 +3582,7 @@ const ProdutosPage: React.FC = () => {
                                   </div>
                                 ) : (
                                   <div className="border border-gray-800 rounded-lg overflow-hidden">
-                                    <div className="overflow-x-auto">
+                                    <div className="overflow-x-auto custom-scrollbar">
                                       <table className="w-full text-sm text-left text-gray-300">
                                         <thead className="text-xs uppercase bg-gray-900/50 text-gray-400 sticky top-0">
                                           <tr>
@@ -3534,7 +3596,7 @@ const ProdutosPage: React.FC = () => {
                                         </thead>
                                       </table>
                                     </div>
-                                    <div className="overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-900">
+                                    <div className="overflow-y-auto max-h-[300px] custom-scrollbar">
                                       <table className="w-full text-sm text-left text-gray-300">
                                         <tbody>
                                           {estoqueMovimentos.map((movimento) => (
@@ -3643,7 +3705,7 @@ const ProdutosPage: React.FC = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="bg-background-dark h-full w-full max-w-md overflow-y-auto"
+              className="bg-background-dark h-full w-full max-w-md overflow-y-auto custom-scrollbar"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6">

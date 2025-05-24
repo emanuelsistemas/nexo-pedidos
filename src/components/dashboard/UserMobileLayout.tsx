@@ -124,7 +124,7 @@ const UserMobileLayout: React.FC = () => {
       </header>
 
       {/* Conteúdo principal */}
-      <main className="flex-1 p-4 pb-20 overflow-auto">
+      <main className="flex-1 p-4 pb-20 overflow-auto custom-scrollbar">
         <Outlet />
       </main>
 
@@ -156,7 +156,7 @@ const UserMobileLayout: React.FC = () => {
 
       {/* Footer com menu de navegação */}
       <footer className="fixed bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-10">
-        <div className="flex justify-around items-center h-16 overflow-x-auto hide-scrollbar">
+        <div className="flex justify-around items-center h-16 overflow-x-auto custom-scrollbar">
           {menuItems.map((item) => (
             <button
               key={item.path}

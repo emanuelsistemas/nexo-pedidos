@@ -28,6 +28,7 @@ interface Produto {
   nome: string;
   preco: number;
   codigo: string;
+  codigo_barras?: string;
   descricao?: string;
   promocao: boolean;
   tipo_desconto?: string;
@@ -60,6 +61,7 @@ interface Grupo {
 }
 
 interface ItemCarrinho {
+  id: string; // Identificador único para cada item
   produto: Produto;
   quantidade: number;
   subtotal: number;
@@ -91,14 +93,114 @@ const PDVPage: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [itemParaRemover, setItemParaRemover] = useState<string | null>(null);
   const [showLimparCarrinhoModal, setShowLimparCarrinhoModal] = useState(false);
+  const [currentDateTime, setCurrentDateTime] = useState(new Date());
   const [showGaleriaModal, setShowGaleriaModal] = useState(false);
   const [produtoSelecionadoGaleria, setProdutoSelecionadoGaleria] = useState<Produto | null>(null);
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [produtosEstoque, setProdutosEstoque] = useState<Record<string, EstoqueProduto>>({});
+  const [pdvConfig, setPdvConfig] = useState<any>(null);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Atualizar data e hora a cada segundo
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDateTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Estado para captura automática de código de barras
+  const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
+  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+
+  // Listener global para captura de código de barras
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Só funciona se a configuração estiver habilitada
+      if (!pdvConfig?.venda_codigo_barras) return;
+
+      // Ignorar se estiver digitando em um input, textarea ou elemento editável
+      const target = event.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.contentEditable === 'true' ||
+        target.closest('[contenteditable="true"]')
+      ) {
+        return;
+      }
+
+      // Só capturar números
+      if (!/^\d$/.test(event.key)) {
+        // Se pressionar Enter e tiver código no buffer, processar
+        if (event.key === 'Enter' && codigoBarrasBuffer.length > 0) {
+          processarCodigoBarras(codigoBarrasBuffer);
+          setCodigoBarrasBuffer('');
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            setTimeoutId(null);
+          }
+        }
+        return;
+      }
+
+      // Adicionar número ao buffer
+      const novoBuffer = codigoBarrasBuffer + event.key;
+      setCodigoBarrasBuffer(novoBuffer);
+
+      // Limpar timeout anterior
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      // Definir novo timeout para limpar o buffer após 2 segundos
+      const novoTimeoutId = setTimeout(() => {
+        setCodigoBarrasBuffer('');
+        setTimeoutId(null);
+      }, 2000);
+
+      setTimeoutId(novoTimeoutId);
+
+      // Prevenir comportamento padrão
+      event.preventDefault();
+    };
+
+    // Adicionar listener apenas se a configuração estiver habilitada
+    if (pdvConfig?.venda_codigo_barras) {
+      document.addEventListener('keydown', handleKeyPress);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [pdvConfig?.venda_codigo_barras, codigoBarrasBuffer, timeoutId]);
+
+  // Função para processar código de barras capturado
+  const processarCodigoBarras = (codigo: string) => {
+    // Buscar produto pelo código de barras
+    const produto = produtos.find(p => p.codigo_barras === codigo);
+
+    if (produto) {
+      adicionarAoCarrinho(produto);
+      toast.success(`${produto.nome} adicionado ao carrinho!`);
+    } else {
+      // Se não encontrou por código de barras, tentar por código normal
+      const produtoPorCodigo = produtos.find(p => p.codigo === codigo);
+      if (produtoPorCodigo) {
+        adicionarAoCarrinho(produtoPorCodigo);
+        toast.success(`${produtoPorCodigo.nome} adicionado ao carrinho!`);
+      } else {
+        toast.error(`Produto não encontrado para o código: ${codigo}`);
+      }
+    }
+  };
 
   const loadData = async () => {
     await withSessionCheck(async () => {
@@ -108,7 +210,8 @@ const PDVPage: React.FC = () => {
           loadProdutos(),
           loadGrupos(),
           loadClientes(),
-          loadEstoque()
+          loadEstoque(),
+          loadPdvConfig()
         ]);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -260,31 +363,121 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  const loadPdvConfig = async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+
+    const { data: usuarioData } = await supabase
+      .from('usuarios')
+      .select('empresa_id')
+      .eq('id', userData.user.id)
+      .single();
+
+    if (!usuarioData?.empresa_id) return;
+
+    const { data, error } = await supabase
+      .from('pdv_config')
+      .select('*')
+      .eq('empresa_id', usuarioData.empresa_id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Erro ao carregar configurações do PDV:', error);
+      return;
+    }
+
+    // Se não encontrou configuração, usar valores padrão
+    if (!data) {
+      setPdvConfig({
+        seleciona_clientes: false,
+        comandas: false,
+        mesas: false,
+        vendedor: false,
+        exibe_foto_item: false,
+        controla_caixa: false,
+        agrupa_itens: false,
+        delivery: false,
+        cardapio_digital: false,
+        delivery_chat_ia: false,
+        baixa_estoque_pdv: false,
+        venda_codigo_barras: false
+      });
+    } else {
+      setPdvConfig(data);
+    }
+  };
+
   const produtosFiltrados = produtos.filter(produto => {
-    const matchesSearch = produto.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         produto.codigo.toLowerCase().includes(searchTerm.toLowerCase());
+    // Extrair o termo de busca (removendo a quantidade se houver)
+    let termoBusca = searchTerm;
+    if (searchTerm.includes('*')) {
+      const partes = searchTerm.split('*');
+      if (partes.length >= 2) {
+        termoBusca = partes.slice(1).join('*').trim(); // Pega tudo após o primeiro *
+      }
+    }
+
+    const matchesSearch = produto.nome.toLowerCase().includes(termoBusca.toLowerCase()) ||
+                         produto.codigo.toLowerCase().includes(termoBusca.toLowerCase()) ||
+                         (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(termoBusca.toLowerCase()));
     const matchesGrupo = grupoSelecionado === 'todos' || produto.grupo_id === grupoSelecionado;
     return matchesSearch && matchesGrupo;
   });
 
-  const adicionarAoCarrinho = (produto: Produto) => {
-    setCarrinho(prev => {
-      const itemExistente = prev.find(item => item.produto.id === produto.id);
+  const adicionarAoCarrinho = (produto: Produto, quantidadePersonalizada?: number) => {
+    // Verificar se há quantidade especificada na busca (formato: quantidade*termo)
+    let quantidadeParaAdicionar = quantidadePersonalizada || 1;
 
-      if (itemExistente) {
-        return prev.map(item =>
-          item.produto.id === produto.id
-            ? { ...item, quantidade: item.quantidade + 1, subtotal: (item.quantidade + 1) * produto.preco }
-            : item
-        );
+    if (!quantidadePersonalizada && searchTerm.includes('*')) {
+      const [qtdStr] = searchTerm.split('*');
+      const qtdParsed = parseInt(qtdStr.trim());
+      if (!isNaN(qtdParsed) && qtdParsed > 0) {
+        quantidadeParaAdicionar = qtdParsed;
+        // Limpar o campo de busca após adicionar
+        setSearchTerm('');
+      }
+    }
+
+    setCarrinho(prev => {
+      // Verificar se deve agrupar itens baseado na configuração
+      const deveAgrupar = pdvConfig?.agrupa_itens === true;
+
+      if (deveAgrupar) {
+        // Comportamento original: agrupa itens idênticos
+        const itemExistente = prev.find(item => item.produto.id === produto.id);
+
+        if (itemExistente) {
+          return prev.map(item =>
+            item.produto.id === produto.id
+              ? {
+                  ...item,
+                  quantidade: item.quantidade + quantidadeParaAdicionar,
+                  subtotal: (item.quantidade + quantidadeParaAdicionar) * produto.preco
+                }
+              : item
+          );
+        } else {
+          return [...prev, {
+            id: `${produto.id}-${Date.now()}`, // ID único
+            produto,
+            quantidade: quantidadeParaAdicionar,
+            subtotal: produto.preco * quantidadeParaAdicionar
+          }];
+        }
       } else {
-        return [...prev, { produto, quantidade: 1, subtotal: produto.preco }];
+        // Comportamento novo: sempre adiciona como item separado
+        return [...prev, {
+          id: `${produto.id}-${Date.now()}-${Math.random()}`, // ID único
+          produto,
+          quantidade: quantidadeParaAdicionar,
+          subtotal: produto.preco * quantidadeParaAdicionar
+        }];
       }
     });
   };
 
-  const confirmarRemocao = (produtoId: string) => {
-    setItemParaRemover(produtoId);
+  const confirmarRemocao = (itemId: string) => {
+    setItemParaRemover(itemId);
     setShowConfirmModal(true);
   };
 
@@ -293,21 +486,29 @@ const PDVPage: React.FC = () => {
     setItemParaRemover(null);
   };
 
-  const removerDoCarrinho = (produtoId: string) => {
-    setCarrinho(prev => prev.filter(item => item.produto.id !== produtoId));
+  const removerDoCarrinho = (itemId: string) => {
+    // Encontrar o item antes de remover para mostrar no toast
+    const itemRemovido = carrinho.find(item => item.id === itemId);
+
+    setCarrinho(prev => prev.filter(item => item.id !== itemId));
     setShowConfirmModal(false);
     setItemParaRemover(null);
+
+    // Exibir toast de confirmação
+    if (itemRemovido) {
+      toast.success(`${itemRemovido.produto.nome} removido com sucesso!`);
+    }
   };
 
-  const alterarQuantidade = (produtoId: string, novaQuantidade: number) => {
+  const alterarQuantidade = (itemId: string, novaQuantidade: number) => {
     if (novaQuantidade <= 0) {
-      confirmarRemocao(produtoId);
+      confirmarRemocao(itemId);
       return;
     }
 
     setCarrinho(prev =>
       prev.map(item =>
-        item.produto.id === produtoId
+        item.id === itemId
           ? { ...item, quantidade: novaQuantidade, subtotal: novaQuantidade * item.produto.preco }
           : item
       )
@@ -320,6 +521,28 @@ const PDVPage: React.FC = () => {
 
   const formatCurrency = (value: number) => {
     return formatarPreco(value);
+  };
+
+  const formatCurrencyWithoutSymbol = (value: number) => {
+    return value.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const formatDateTime = (date: Date) => {
+    const diasSemana = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    const diaSemana = diasSemana[date.getDay()];
+
+    const dia = date.getDate().toString().padStart(2, '0');
+    const mes = (date.getMonth() + 1).toString().padStart(2, '0');
+    const ano = date.getFullYear().toString().slice(-2);
+
+    const horas = date.getHours().toString().padStart(2, '0');
+    const minutos = date.getMinutes().toString().padStart(2, '0');
+    const segundos = date.getSeconds().toString().padStart(2, '0');
+
+    return `${diaSemana}, ${dia}/${mes}/${ano} ${horas}:${minutos}:${segundos}`;
   };
 
   const formatarEstoque = (quantidade: number, produto: Produto) => {
@@ -388,9 +611,23 @@ const PDVPage: React.FC = () => {
   };
 
   const limparCarrinho = () => {
+    // Contar itens antes de limpar
+    const totalItens = carrinho.reduce((total, item) => total + item.quantidade, 0);
+    const totalProdutos = carrinho.length;
+    const primeiroProduto = carrinho[0]?.produto.nome; // Salvar antes de limpar
+
     setCarrinho([]);
     setClienteSelecionado(null);
     setShowLimparCarrinhoModal(false);
+
+    // Exibir toast de confirmação
+    if (totalProdutos > 0) {
+      if (totalProdutos === 1) {
+        toast.success(`${primeiroProduto} removido com sucesso!`);
+      } else {
+        toast.success(`${totalProdutos} produtos removidos com sucesso! (${totalItens} itens)`);
+      }
+    }
   };
 
   const finalizarVenda = () => {
@@ -399,6 +636,15 @@ const PDVPage: React.FC = () => {
       return;
     }
     setShowPagamentoModal(true);
+  };
+
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchTerm.trim()) {
+      // Se há produtos filtrados, adicionar o primeiro
+      if (produtosFiltrados.length > 0) {
+        adicionarAoCarrinho(produtosFiltrados[0]);
+      }
+    }
   };
 
   if (isLoading) {
@@ -412,9 +658,13 @@ const PDVPage: React.FC = () => {
   return (
     <div className="bg-background-dark overflow-hidden" style={{ margin: '-24px', height: 'calc(100vh + 48px)' }}>
       {/* Header */}
-      <div className="bg-background-card border-b border-gray-800 h-16 flex items-center justify-center px-4">
-        <div className="text-4xl font-bold text-primary-400">
-          {formatCurrency(calcularTotal())}
+      <div className="bg-background-card border-b border-gray-800 h-16 flex items-center justify-between px-4">
+        <div></div> {/* Espaço vazio à esquerda */}
+        <div className="text-5xl font-bold text-primary-400">
+          {formatCurrencyWithoutSymbol(calcularTotal())}
+        </div>
+        <div className="text-sm text-gray-400 font-mono">
+          {formatDateTime(currentDateTime)}
         </div>
       </div>
 
@@ -426,13 +676,41 @@ const PDVPage: React.FC = () => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="Buscar produto por nome ou código..."
+                placeholder="Buscar produto por nome, código ou código de barras... (Ex: 5*coca)"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={handleSearchKeyPress}
+                autoFocus
                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
               />
               <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+
+              {/* Indicador de quantidade */}
+              {searchTerm.includes('*') && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="bg-primary-500 text-white text-xs px-2 py-1 rounded-full">
+                    Qtd: {searchTerm.split('*')[0]}
+                  </div>
+                </div>
+              )}
+
+              {/* Indicador de código de barras buffer */}
+              {pdvConfig?.venda_codigo_barras && codigoBarrasBuffer && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                    Código: {codigoBarrasBuffer}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Indicador de captura automática ativa */}
+            {pdvConfig?.venda_codigo_barras && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-green-400">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                Captura automática de código de barras ativa - Digite números para adicionar produtos
+              </div>
+            )}
           </div>
 
           {/* Filtros por Categoria */}
@@ -467,7 +745,7 @@ const PDVPage: React.FC = () => {
           )}
 
           {/* Grid de Produtos */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
             {produtosFiltrados.length === 0 ? (
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-gray-500" />
@@ -521,13 +799,8 @@ const PDVPage: React.FC = () => {
                     <div className="p-3">
                       <h3 className="text-white text-sm font-medium line-clamp-2 mb-2">{produto.nome}</h3>
 
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="text-gray-400 text-xs">{produto.codigo}</p>
-                        {produto.unidade_medida && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
-                            {produto.unidade_medida.sigla}
-                          </span>
-                        )}
+                      <div className="mb-2">
+                        <p className="text-gray-400 text-xs">Código {produto.codigo}</p>
                       </div>
 
                       {/* Preço */}
@@ -537,14 +810,28 @@ const PDVPage: React.FC = () => {
                             <span className="text-gray-400 line-through text-xs block">
                               {formatCurrency(produto.preco)}
                             </span>
-                            <span className="text-primary-400 font-bold text-lg">
-                              {formatCurrency(calcularPrecoFinal(produto))}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-primary-400 font-bold text-lg">
+                                {formatCurrency(calcularPrecoFinal(produto))}
+                              </span>
+                              {produto.unidade_medida && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                                  {produto.unidade_medida.sigla}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         ) : (
-                          <span className="text-primary-400 font-bold text-lg">
-                            {formatCurrency(produto.preco)}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-primary-400 font-bold text-lg">
+                              {formatCurrency(produto.preco)}
+                            </span>
+                            {produto.unidade_medida && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                                {produto.unidade_medida.sigla}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
 
@@ -596,26 +883,28 @@ const PDVPage: React.FC = () => {
             )}
           </div>
 
-          {/* Cliente Selecionado */}
-          <div className="mb-4">
-            <button
-              onClick={() => setShowClienteModal(true)}
-              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-left hover:border-primary-500/50 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <User size={16} className="text-gray-400" />
-                <div>
-                  <div className="text-sm text-gray-400">Cliente</div>
-                  <div className="text-white">
-                    {clienteSelecionado ? clienteSelecionado.nome : 'Selecionar cliente'}
+          {/* Cliente Selecionado - Só aparece se a configuração estiver habilitada */}
+          {pdvConfig?.seleciona_clientes && (
+            <div className="mb-4">
+              <button
+                onClick={() => setShowClienteModal(true)}
+                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-left hover:border-primary-500/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <User size={16} className="text-gray-400" />
+                  <div>
+                    <div className="text-sm text-gray-400">Cliente</div>
+                    <div className="text-white">
+                      {clienteSelecionado ? clienteSelecionado.nome : 'Selecionar cliente'}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </button>
-          </div>
+              </button>
+            </div>
+          )}
 
           {/* Lista de Itens do Carrinho */}
-          <div className="flex-1 overflow-y-auto mb-4" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+          <div className="flex-1 overflow-y-auto custom-scrollbar mb-4" style={{ maxHeight: 'calc(100vh - 280px)' }}>
             {carrinho.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 <ShoppingCart size={48} className="mx-auto mb-2 opacity-50" />
@@ -626,49 +915,86 @@ const PDVPage: React.FC = () => {
               <div className="space-y-3">
                 {carrinho.map(item => (
                   <motion.div
-                    key={item.produto.id}
+                    key={item.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     className="bg-gray-800/50 rounded-lg p-3"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h4 className="text-white text-sm font-medium line-clamp-2">
-                          {item.produto.nome}
-                        </h4>
-                        <div className="text-primary-400 text-sm">
-                          {formatCurrency(item.produto.preco)}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => confirmarRemocao(item.produto.id)}
-                        className="text-red-400 hover:text-red-300 transition-colors ml-2"
+                    <div className="flex gap-3">
+                      {/* Foto do Produto */}
+                      <div
+                        className="w-16 h-16 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative"
+                        onClick={(e) => abrirGaleria(item.produto, e)}
                       >
-                        <X size={16} />
-                      </button>
-                    </div>
+                        {getFotoPrincipal(item.produto) ? (
+                          <img
+                            src={getFotoPrincipal(item.produto)!.url}
+                            alt={item.produto.nome}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package size={20} className="text-gray-700" />
+                          </div>
+                        )}
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => alterarQuantidade(item.produto.id, item.quantidade - 1)}
-                          className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="text-white font-medium w-8 text-center">
-                          {item.quantidade}
-                        </span>
-                        <button
-                          onClick={() => alterarQuantidade(item.produto.id, item.quantidade + 1)}
-                          className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
-                        >
-                          <Plus size={14} />
-                        </button>
+                        {/* Indicador de múltiplas fotos */}
+                        {item.produto.produto_fotos && item.produto.produto_fotos.length > 1 && (
+                          <div className="absolute bottom-1 right-1">
+                            <div className="bg-black/60 text-white text-xs px-1 py-0.5 rounded text-[10px]">
+                              {item.produto.produto_fotos.length}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-white font-bold">
-                        {formatCurrency(item.subtotal)}
+
+                      {/* Conteúdo do Item */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-white text-sm font-medium line-clamp-2">
+                              {item.produto.nome}
+                            </h4>
+                            <div className="text-primary-400 text-sm flex items-center gap-1">
+                              {formatCurrency(item.produto.preco)}
+                              {item.produto.unidade_medida && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
+                                  {item.produto.unidade_medida.sigla}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => confirmarRemocao(item.id)}
+                            className="text-red-400 hover:text-red-300 transition-colors ml-2 flex-shrink-0"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
+                              className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span className="text-white font-medium w-8 text-center">
+                              {item.quantidade}
+                            </span>
+                            <button
+                              onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
+                              className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                          <div className="text-white font-bold">
+                            {formatCurrency(item.subtotal)}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -730,7 +1056,7 @@ const PDVPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
                 <button
                   onClick={() => {
                     setClienteSelecionado(null);
@@ -798,7 +1124,7 @@ const PDVPage: React.FC = () => {
                       {formatCurrency(calcularTotal())}
                     </span>
                   </div>
-                  {clienteSelecionado && (
+                  {pdvConfig?.seleciona_clientes && clienteSelecionado && (
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Cliente:</span>
                       <span className="text-white">{clienteSelecionado.nome}</span>
@@ -881,7 +1207,7 @@ const PDVPage: React.FC = () => {
                   Tem certeza que deseja remover este item do carrinho?
                 </p>
                 {(() => {
-                  const item = carrinho.find(item => item.produto.id === itemParaRemover);
+                  const item = carrinho.find(item => item.id === itemParaRemover);
                   return item ? (
                     <div className="mt-3 p-3 bg-gray-800/50 rounded-lg">
                       <div className="text-white font-medium">{item.produto.nome}</div>
@@ -959,10 +1285,10 @@ const PDVPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                   <div className="text-sm text-gray-400 mb-2">Itens que serão removidos:</div>
                   {carrinho.map((item, index) => (
-                    <div key={item.produto.id} className="bg-gray-800/30 rounded-lg p-3">
+                    <div key={item.id} className="bg-gray-800/30 rounded-lg p-3">
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="text-white font-medium text-sm">{item.produto.nome}</div>

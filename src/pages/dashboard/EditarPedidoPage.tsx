@@ -1331,7 +1331,7 @@ const EditarPedidoPage: React.FC = () => {
                 <p className="text-gray-400">Nenhum item no pedido</p>
               </div>
             ) : (
-              <div className="space-y-3 mb-6">
+              <div className="space-y-3 mb-6 max-h-64 overflow-y-auto custom-scrollbar pr-2">
                 {itensPedido.map((item) => (
                   <div key={item.id} className="p-4 bg-gray-800/30 rounded-lg">
                     <div className="flex justify-between items-start">

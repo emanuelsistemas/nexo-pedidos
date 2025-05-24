@@ -805,7 +805,7 @@ const UserProdutosPage: React.FC = () => {
       {isLoading ? (
         <>
           {/* Skeleton para abas de grupos */}
-          <div className="flex overflow-x-auto pb-2 hide-scrollbar">
+          <div className="flex overflow-x-auto pb-2 custom-scrollbar">
             {Array(4).fill(0).map((_, index) => (
               <div key={index} className="h-8 w-24 bg-gray-700 rounded-full mr-2 flex-shrink-0 animate-pulse"></div>
             ))}
@@ -833,7 +833,7 @@ const UserProdutosPage: React.FC = () => {
           ) : (
             <>
               {/* Abas de filtros e grupos */}
-              <div className="flex overflow-x-auto pb-2 hide-scrollbar">
+              <div className="flex overflow-x-auto pb-2 custom-scrollbar">
                 {/* Filtro Todos */}
                 <button
                   className={`px-4 py-1 rounded-full mr-2 flex-shrink-0 transition-colors ${

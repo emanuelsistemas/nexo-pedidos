@@ -4,6 +4,7 @@ export interface Produto {
   preco: number;
   descricao?: string;
   codigo: string;
+  codigo_barras?: string;
   grupo_id: string;
   promocao?: boolean;
   tipo_desconto?: string;

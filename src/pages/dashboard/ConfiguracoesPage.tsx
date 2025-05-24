@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
@@ -99,7 +99,7 @@ const tiposPagamento = [
 const ConfiguracoesPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'conta'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'conta' | 'pdv'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -144,6 +144,22 @@ const ConfiguracoesPage: React.FC = () => {
   const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos'>('pedidos');
   const [bloqueiaSemEstoque, setBloqueiaSemEstoque] = useState<boolean>(false);
   const [agruparItens, setAgruparItens] = useState<boolean>(false);
+
+  // Estados para configurações do PDV
+  const [pdvConfig, setPdvConfig] = useState({
+    comandas: false,
+    mesas: false,
+    vendedor: false,
+    exibe_foto_item: false,
+    seleciona_clientes: false,
+    controla_caixa: false,
+    agrupa_itens: false,
+    delivery: false,
+    cardapio_digital: false,
+    delivery_chat_ia: false,
+    baixa_estoque_pdv: false,
+    venda_codigo_barras: false
+  });
   const [horarioForm, setHorarioForm] = useState({
     id: '',
     dia_semana: '0',
@@ -444,6 +460,10 @@ const ConfiguracoesPage: React.FC = () => {
           console.error('Erro ao processar configuração de pedidos:', error);
           showMessage('error', 'Erro ao processar configuração de pedidos');
         }
+      }
+
+      if (activeSection === 'pdv') {
+        carregarConfiguracoesPdv();
       }
     });
   };
@@ -1449,6 +1469,111 @@ const ConfiguracoesPage: React.FC = () => {
     });
   };
 
+  const carregarConfiguracoesPdv = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: config } = await supabase
+        .from('pdv_config')
+        .select('*')
+        .eq('empresa_id', user.user_metadata.empresa_id)
+        .single();
+
+      if (config) {
+        setPdvConfig({
+          comandas: config.comandas || false,
+          mesas: config.mesas || false,
+          vendedor: config.vendedor || false,
+          exibe_foto_item: config.exibe_foto_item || false,
+          seleciona_clientes: config.seleciona_clientes || false,
+          controla_caixa: config.controla_caixa || false,
+          agrupa_itens: config.agrupa_itens || false,
+          delivery: config.delivery || false,
+          cardapio_digital: config.cardapio_digital || false,
+          delivery_chat_ia: config.delivery_chat_ia || false,
+          baixa_estoque_pdv: config.baixa_estoque_pdv || false,
+          venda_codigo_barras: config.venda_codigo_barras || false
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações do PDV:', error);
+    }
+  };
+
+  const handlePdvConfigChange = async (field: string, value: boolean) => {
+    try {
+      // Atualizar o estado local primeiro
+      setPdvConfig(prev => ({ ...prev, [field]: value }));
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('pdv_config')
+        .select('id')
+        .eq('empresa_id', user.user_metadata.empresa_id)
+        .single();
+
+      const configData = {
+        empresa_id: user.user_metadata.empresa_id,
+        comandas: field === 'comandas' ? value : pdvConfig.comandas,
+        mesas: field === 'mesas' ? value : pdvConfig.mesas,
+        vendedor: field === 'vendedor' ? value : pdvConfig.vendedor,
+        exibe_foto_item: field === 'exibe_foto_item' ? value : pdvConfig.exibe_foto_item,
+        seleciona_clientes: field === 'seleciona_clientes' ? value : pdvConfig.seleciona_clientes,
+        controla_caixa: field === 'controla_caixa' ? value : pdvConfig.controla_caixa,
+        agrupa_itens: field === 'agrupa_itens' ? value : pdvConfig.agrupa_itens,
+        delivery: field === 'delivery' ? value : pdvConfig.delivery,
+        cardapio_digital: field === 'cardapio_digital' ? value : pdvConfig.cardapio_digital,
+        delivery_chat_ia: field === 'delivery_chat_ia' ? value : pdvConfig.delivery_chat_ia,
+        baixa_estoque_pdv: field === 'baixa_estoque_pdv' ? value : pdvConfig.baixa_estoque_pdv,
+        venda_codigo_barras: field === 'venda_codigo_barras' ? value : pdvConfig.venda_codigo_barras
+      };
+
+      if (existingConfig) {
+        const { error } = await supabase
+          .from('pdv_config')
+          .update(configData)
+          .eq('empresa_id', user.user_metadata.empresa_id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('pdv_config')
+          .insert([configData]);
+
+        if (error) throw error;
+      }
+
+      // Mostrar mensagem de sucesso
+      const fieldNames: { [key: string]: string } = {
+        comandas: 'Comandas',
+        mesas: 'Mesas',
+        vendedor: 'Vendedor',
+        exibe_foto_item: 'Exibe foto no item lançado',
+        seleciona_clientes: 'Seleciona clientes',
+        controla_caixa: 'Controla caixa',
+        agrupa_itens: 'Agrupa itens',
+        delivery: 'Delivery',
+        cardapio_digital: 'Cardápio digital',
+        delivery_chat_ia: 'Delivery como chat IA',
+        baixa_estoque_pdv: 'Baixa estoque na venda do PDV',
+        venda_codigo_barras: 'Venda de produtos por Código de barras'
+      };
+
+      const fieldName = fieldNames[field] || field;
+      const status = value ? 'habilitado' : 'desabilitado';
+      showMessage(`${fieldName} ${status} com sucesso!`, 'success');
+
+    } catch (error: any) {
+      // Reverter o estado local em caso de erro
+      setPdvConfig(prev => ({ ...prev, [field]: !value }));
+      showMessage('Erro ao salvar configuração: ' + error.message, 'error');
+    }
+  };
+
   const renderContent = () => {
     switch (activeSection) {
       case 'pagamentos':
@@ -2096,6 +2221,220 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'pdv':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Configurações do PDV</h2>
+                <p className="text-gray-400 mt-1">Configure as funcionalidades do Ponto de Venda</p>
+              </div>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <div className="space-y-6">
+                {/* Comandas e Mesas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.comandas}
+                      onChange={(e) => handlePdvConfigChange('comandas', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Comandas</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Permite controlar vendas por comandas numeradas para organização de pedidos.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.mesas}
+                      onChange={(e) => handlePdvConfigChange('mesas', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Mesas</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Habilita o controle de mesas para restaurantes e estabelecimentos com atendimento no local.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Outras configurações */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.vendedor}
+                      onChange={(e) => handlePdvConfigChange('vendedor', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Vendedor</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Permite associar vendedores às vendas para controle de comissões e relatórios.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.exibe_foto_item}
+                      onChange={(e) => handlePdvConfigChange('exibe_foto_item', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Exibe foto no item lançado</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Mostra a foto do produto no carrinho para facilitar a identificação visual.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.seleciona_clientes}
+                      onChange={(e) => handlePdvConfigChange('seleciona_clientes', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Seleciona clientes</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Permite vincular clientes às vendas para histórico e fidelização.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.controla_caixa}
+                      onChange={(e) => handlePdvConfigChange('controla_caixa', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Controla Caixa</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Habilita controle de abertura e fechamento de caixa com relatórios financeiros.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.agrupa_itens}
+                      onChange={(e) => handlePdvConfigChange('agrupa_itens', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Agrupa Itens</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Agrupa automaticamente itens idênticos no carrinho para melhor organização.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.delivery}
+                      onChange={(e) => handlePdvConfigChange('delivery', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Delivery</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Habilita funcionalidades de entrega com controle de endereços e taxas.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.cardapio_digital}
+                      onChange={(e) => handlePdvConfigChange('cardapio_digital', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Cardápio Digital</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Disponibiliza cardápio digital para clientes fazerem pedidos via QR Code.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.delivery_chat_ia}
+                      onChange={(e) => handlePdvConfigChange('delivery_chat_ia', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Delivery como chat IA</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Integra inteligência artificial para atendimento automatizado via chat.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.baixa_estoque_pdv}
+                      onChange={(e) => handlePdvConfigChange('baixa_estoque_pdv', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Baixa estoque na venda do PDV</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Automaticamente reduz o estoque dos produtos quando uma venda é finalizada no PDV.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.venda_codigo_barras}
+                      onChange={(e) => handlePdvConfigChange('venda_codigo_barras', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Venda de produtos por Código de barras</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Permite adicionar produtos ao carrinho digitando números mesmo sem focar no campo de busca.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       case 'conta':
         return (
           <div className="space-y-4">
@@ -2133,7 +2472,8 @@ const ConfiguracoesPage: React.FC = () => {
   return (
     <div className="w-full">
       <div className="bg-background-card rounded-lg border border-gray-800 p-2 mb-8">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="overflow-x-auto custom-scrollbar">
+          <div className="flex items-center gap-2 min-w-max">
           <button
               onClick={() => setActiveSection('geral')}
               className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
@@ -2188,6 +2528,17 @@ const ConfiguracoesPage: React.FC = () => {
               <span className="text-sm whitespace-nowrap">Pedidos</span>
             </button>
             <button
+              onClick={() => setActiveSection('pdv')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+                activeSection === 'pdv'
+                  ? 'bg-primary-500/10 text-primary-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <ShoppingCart size={18} />
+              <span className="text-sm whitespace-nowrap">PDV</span>
+            </button>
+            <button
               onClick={() => setActiveSection('conta')}
               className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
                 activeSection === 'conta'
@@ -2206,11 +2557,14 @@ const ConfiguracoesPage: React.FC = () => {
             {/* Aba "Status Loja" ocultada */}
             {/* Aba "Taxa Entrega" ocultada */}
             {/* Aba "Horários" ocultada */}
+          </div>
         </div>
       </div>
 
-      <div className="w-full">
-        {renderContent()}
+      <div className="w-full h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
+        <div className="pr-2">
+          {renderContent()}
+        </div>
       </div>
 
       <AnimatePresence>

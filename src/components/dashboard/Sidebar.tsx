@@ -177,7 +177,7 @@ const Sidebar: React.FC = () => {
           </button>
         </div>
 
-        <nav className="flex-1 py-4 px-2">
+        <nav className="flex-1 py-4 px-2 overflow-y-auto custom-scrollbar">
           {menuItems.map(renderMenuItem)}
         </nav>
       </div>

@@ -423,7 +423,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
 
           {/* Tags de grupos */}
           {grupos.length > 0 && (
-            <div className="p-4 border-b border-gray-800 overflow-x-auto">
+            <div className="p-4 border-b border-gray-800 overflow-x-auto custom-scrollbar">
               <div className="flex gap-2">
                 {grupos.map(grupo => (
                   <button
@@ -446,7 +446,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           )}
 
           {/* Lista de produtos */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin"></div>
