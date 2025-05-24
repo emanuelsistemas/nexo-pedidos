@@ -191,9 +191,11 @@ const ProdutosPage: React.FC = () => {
   const [expandedOpcoes, setExpandedOpcoes] = useState<Record<string, boolean>>({});
   const [availableOpcoes, setAvailableOpcoes] = useState<OpcaoAdicional[]>([]);
   const [selectedOpcoes, setSelectedOpcoes] = useState<string[]>([]);
+  const [opcoesAdicionaisHabilitado, setOpcoesAdicionaisHabilitado] = useState(false);
+  const [expandedOpcoesForm, setExpandedOpcoesForm] = useState<Record<string, boolean>>({});
 
   // Estados para as abas
-  const [activeTab, setActiveTab] = useState<'dados' | 'fotos' | 'estoque'>('dados');
+  const [activeTab, setActiveTab] = useState<'dados' | 'fotos' | 'estoque' | 'adicionais'>('dados');
   const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -261,6 +263,7 @@ const ProdutosPage: React.FC = () => {
     loadUnidadesMedida();
     loadTipoControleEstoque();
     loadProdutosEstoque();
+    loadOpcoesAdicionaisConfig();
   }, []);
 
   // useEffect separado para verificar produto para editar após grupos carregarem
@@ -422,6 +425,33 @@ const ProdutosPage: React.FC = () => {
     }
   }, [novoProduto.unidade_medida_id, unidadesMedida]);
 
+  const loadOpcoesAdicionaisConfig = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data: configData } = await supabase
+        .from('produtos_config')
+        .select('opcoes_adicionais')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (configData) {
+        setOpcoesAdicionaisHabilitado(configData.opcoes_adicionais || false);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configuração de opções adicionais:', error);
+    }
+  };
+
   const loadUnidadesMedida = async () => {
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -452,6 +482,23 @@ const ProdutosPage: React.FC = () => {
       // Em caso de erro, marcar como carregado para não ficar em loading infinito
       setLoadingStates(prev => ({ ...prev, unidades: false }));
     }
+  };
+
+  const handleOpcaoToggle = (opcaoId: string) => {
+    setSelectedOpcoes(prev => {
+      if (prev.includes(opcaoId)) {
+        return prev.filter(id => id !== opcaoId);
+      } else {
+        return [...prev, opcaoId];
+      }
+    });
+  };
+
+  const toggleOpcaoExpansion = (opcaoId: string) => {
+    setExpandedOpcoesForm(prev => ({
+      ...prev,
+      [opcaoId]: !prev[opcaoId]
+    }));
   };
 
   const handleSubmitUnidadeMedida = async (e: React.FormEvent) => {
@@ -2725,13 +2772,13 @@ const ProdutosPage: React.FC = () => {
                   <div className="p-4 border-b border-gray-800 flex items-center justify-between">
                     <h3 className="text-lg font-medium text-white">{grupo.nome}</h3>
                     <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="text"
+                      <button
                         onClick={() => handleAddProduto(grupo)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary-500/10 rounded-md text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 transition-colors"
                       >
-                        + Adicionar Produto
-                      </Button>
+                        <Plus size={14} />
+                        Adicionar Produto
+                      </button>
                       <button
                         className="p-1 text-gray-400 hover:text-white transition-colors"
                         onClick={() => handleEditGrupo(grupo)}
@@ -2918,9 +2965,21 @@ const ProdutosPage: React.FC = () => {
                       >
                         Estoque {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
                       </button>
+                      {opcoesAdicionaisHabilitado && (
+                        <button
+                          className={`px-4 py-2 font-medium text-sm ${
+                            activeTab === 'adicionais'
+                              ? 'text-primary-500 border-b-2 border-primary-500'
+                              : 'text-gray-400 hover:text-white'
+                          }`}
+                          onClick={() => setActiveTab('adicionais')}
+                        >
+                          Adicionais
+                        </button>
+                      )}
                     </div>
 
-                    {activeTab === 'dados' ? (
+                    {activeTab === 'dados' && (
                       <form onSubmit={handleSubmitProduto} className="space-y-6">
                         <div className="mb-4">
                           <div className="flex items-center">
@@ -3543,7 +3602,9 @@ const ProdutosPage: React.FC = () => {
 
 
                       </form>
-                    ) : activeTab === 'fotos' ? (
+                    )}
+
+                    {activeTab === 'fotos' && (
                       <div className="space-y-6">
                         {!editingProduto ? (
                           <div className="text-center py-8">
@@ -3675,7 +3736,9 @@ const ProdutosPage: React.FC = () => {
                           </div>
                         )}
                       </div>
-                    ) : (
+                    )}
+
+                    {activeTab === 'estoque' && (
                       <div className="space-y-6">
                         {!editingProduto ? (
                           <div className="text-center py-8">
@@ -4059,6 +4122,113 @@ const ProdutosPage: React.FC = () => {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {activeTab === 'adicionais' && (
+                      <div className="space-y-6">
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                          <h3 className="text-white font-medium mb-4">Opções Adicionais</h3>
+                          <p className="text-sm text-gray-400 mb-4">
+                            Selecione as opções adicionais que estarão disponíveis para este produto.
+                          </p>
+
+                          {availableOpcoes.length === 0 ? (
+                            <div className="text-center py-8">
+                              <div className="bg-gray-700/50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Plus size={24} className="text-gray-400" />
+                              </div>
+                              <p className="text-gray-400 mb-4">Nenhuma opção adicional cadastrada</p>
+                              <p className="text-sm text-gray-500">
+                                Cadastre opções adicionais primeiro para poder vinculá-las aos produtos.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {availableOpcoes.map((opcao) => (
+                                <div
+                                  key={opcao.id}
+                                  className="border border-gray-700 rounded-lg overflow-hidden"
+                                >
+                                  <div className="flex items-center justify-between p-3 bg-gray-800/30">
+                                    <div className="flex items-center gap-3">
+                                      <input
+                                        type="checkbox"
+                                        id={`opcao-${opcao.id}`}
+                                        checked={selectedOpcoes.includes(opcao.id)}
+                                        onChange={() => handleOpcaoToggle(opcao.id)}
+                                        className="w-4 h-4 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                                      />
+                                      <label
+                                        htmlFor={`opcao-${opcao.id}`}
+                                        className="text-white font-medium cursor-pointer"
+                                      >
+                                        {opcao.nome}
+                                      </label>
+                                      <span className="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded">
+                                        {opcao.itens?.length || 0} {(opcao.itens?.length || 0) === 1 ? 'item' : 'itens'}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleOpcaoExpansion(opcao.id)}
+                                      className="p-1 text-gray-400 hover:text-white transition-colors"
+                                    >
+                                      {expandedOpcoesForm[opcao.id] ? (
+                                        <ChevronUp size={16} />
+                                      ) : (
+                                        <ChevronDown size={16} />
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {expandedOpcoesForm[opcao.id] && opcao.itens && opcao.itens.length > 0 && (
+                                    <div className="p-3 bg-gray-900/30 border-t border-gray-700">
+                                      <h4 className="text-sm font-medium text-gray-300 mb-2">Itens disponíveis:</h4>
+                                      <div className="grid grid-cols-1 gap-2">
+                                        {opcao.itens.map((item) => (
+                                          <div
+                                            key={item.id}
+                                            className="flex items-center justify-between p-2 bg-gray-800/50 rounded"
+                                          >
+                                            <span className="text-sm text-white">{item.nome}</span>
+                                            <span className="text-sm text-primary-400">
+                                              {item.preco > 0 ? `+R$ ${item.preco.toFixed(2)}` : 'Grátis'}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex gap-4 pt-4">
+                          <Button
+                            type="button"
+                            variant="text"
+                            className="flex-1"
+                            onClick={() => setActiveTab('dados')}
+                          >
+                            Voltar
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="primary"
+                            className="flex-1"
+                            onClick={async () => {
+                              // Simular o evento de submit do formulário
+                              const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                              await handleSubmitProduto(fakeEvent);
+                            }}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? 'Salvando...' : 'Concluir'}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>

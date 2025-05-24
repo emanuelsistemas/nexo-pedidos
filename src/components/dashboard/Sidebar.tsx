@@ -47,6 +47,7 @@ const Sidebar: React.FC = () => {
     // Escutar evento customizado para atualização imediata
     const handleOpcoesAdicionaisChange = (event: CustomEvent) => {
       console.log('Evento opcoesAdicionaisChanged recebido:', event.detail);
+      console.log('Atualizando opcoesAdicionaisHabilitado para:', event.detail.opcoesAdicionais);
       setOpcoesAdicionaisHabilitado(event.detail.opcoesAdicionais);
     };
 
@@ -125,6 +126,11 @@ const Sidebar: React.FC = () => {
   };
 
   const menuItems = getMenuItems();
+
+  // Log para debug - mostrar quando o estado muda
+  useEffect(() => {
+    console.log('Estado opcoesAdicionaisHabilitado mudou para:', opcoesAdicionaisHabilitado);
+  }, [opcoesAdicionaisHabilitado]);
 
   const toggleSubmenu = (label: string) => {
     setExpandedSubmenu(expandedSubmenu === label ? null : label);

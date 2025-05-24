@@ -67,7 +67,9 @@ const AdicionaisPage: React.FC = () => {
   const [opcoes, setOpcoes] = useState<any[]>([]);
   const [editingOpcao, setEditingOpcao] = useState<any>(null);
   const [novaOpcao, setNovaOpcao] = useState({ nome: '', quantidade_minima: 0 });
+  const [quantidadeMinimaInput, setQuantidadeMinimaInput] = useState('');
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
+  const [precoFormatado, setPrecoFormatado] = useState('');
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -88,38 +90,157 @@ const AdicionaisPage: React.FC = () => {
     loadData();
   }, []);
 
+  // Função para formatar valor monetário
+  const formatarValorMonetario = (valor: string): string => {
+    // Remove todos os caracteres não numéricos
+    let valorLimpo = valor.replace(/\D/g, '');
+
+    // Se não houver valor, retorna vazio
+    if (!valorLimpo) return '';
+
+    // Converte para número (centavos)
+    const valorNumerico = parseInt(valorLimpo) / 100;
+
+    // Formata como moeda brasileira
+    return valorNumerico.toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    });
+  };
+
+  // Função para desformatar valor monetário
+  const desformatarValorMonetario = (valorFormatado: string): number => {
+    // Remove todos os caracteres não numéricos, exceto vírgula e ponto
+    const valorLimpo = valorFormatado.replace(/[^\d,\.]/g, '');
+
+    // Substitui vírgula por ponto para conversão correta
+    const valorComPonto = valorLimpo.replace(',', '.');
+
+    // Converte para número
+    const valorNumerico = parseFloat(valorComPonto);
+
+    // Retorna 0 se não for um número válido
+    return isNaN(valorNumerico) ? 0 : valorNumerico;
+  };
+
+  // Função para lidar com mudanças no campo de preço
+  const handlePrecoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+
+    // Se o campo estiver vazio, limpa tudo
+    if (!valor) {
+      setPrecoFormatado('');
+      setNovoItem({ ...novoItem, preco: '' });
+      return;
+    }
+
+    // Formata o valor
+    const valorFormatado = formatarValorMonetario(valor);
+    setPrecoFormatado(valorFormatado);
+
+    // Atualiza o valor numérico no estado
+    const valorNumerico = desformatarValorMonetario(valorFormatado);
+    setNovoItem({ ...novoItem, preco: valorNumerico.toString() });
+  };
+
+  // Função para lidar com mudanças no campo de quantidade mínima
+  const handleQuantidadeMinimaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+
+    // Atualiza o input visual
+    setQuantidadeMinimaInput(valor);
+
+    // Se o campo estiver vazio, define quantidade_minima como 0
+    if (valor === '') {
+      setNovaOpcao({ ...novaOpcao, quantidade_minima: 0 });
+      return;
+    }
+
+    // Converte para número, garantindo que seja um inteiro não negativo
+    const valorNumerico = parseInt(valor);
+    if (!isNaN(valorNumerico) && valorNumerico >= 0) {
+      setNovaOpcao({ ...novaOpcao, quantidade_minima: valorNumerico });
+    }
+  };
+
   const loadData = async () => {
     try {
+      setIsLoading(true);
+
       // Simular um delay mínimo para mostrar o skeleton
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error('Erro ao obter usuário:', userError);
+        showMessage('error', 'Erro de autenticação');
+        return;
+      }
 
-      const { data: usuarioData } = await supabase
+      if (!userData.user) {
+        console.error('Usuário não autenticado');
+        showMessage('error', 'Usuário não autenticado');
+        return;
+      }
+
+      console.log('Usuário logado:', userData.user.id);
+
+      const { data: usuarioData, error: usuarioError } = await supabase
         .from('usuarios')
         .select('empresa_id')
         .eq('id', userData.user.id)
         .single();
 
-      if (!usuarioData?.empresa_id) return;
+      if (usuarioError) {
+        console.error('Erro ao buscar dados do usuário:', usuarioError);
+        showMessage('error', 'Erro ao buscar dados do usuário');
+        return;
+      }
 
-      const { data: opcoesData } = await supabase
+      if (!usuarioData?.empresa_id) {
+        console.error('Empresa não encontrada para o usuário');
+        showMessage('error', 'Empresa não encontrada');
+        return;
+      }
+
+      console.log('Empresa ID:', usuarioData.empresa_id);
+
+      const { data: opcoesData, error: opcoesError } = await supabase
         .from('opcoes_adicionais')
         .select(`
           *,
-          itens:opcoes_adicionais_itens(deletado.eq.false)
+          itens:opcoes_adicionais_itens(*)
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false)
         .order('nome');
 
-      setOpcoes(opcoesData || []);
+      if (opcoesError) {
+        console.error('Erro ao carregar opções adicionais:', opcoesError);
+        showMessage('error', 'Erro ao carregar opções adicionais');
+        return;
+      }
+
+      console.log('Dados brutos das opções:', opcoesData);
+
+      // Filtrar itens não deletados no lado do cliente
+      const opcoesFiltered = opcoesData?.map(opcao => ({
+        ...opcao,
+        itens: opcao.itens?.filter((item: any) => !item.deletado) || []
+      })) || [];
+
+      console.log('Opções filtradas:', opcoesFiltered);
+      setOpcoes(opcoesFiltered);
+
+      if (opcoesFiltered.length === 0) {
+        console.log('Nenhuma opção adicional encontrada para esta empresa');
+      }
     } catch (error: any) {
       console.error('Error loading data:', error);
-      showMessage('error', 'Erro ao carregar dados');
+      showMessage('error', 'Erro ao carregar dados: ' + error.message);
     } finally {
       setIsDataReady(true);
+      setIsLoading(false);
     }
   };
 
@@ -165,6 +286,7 @@ const AdicionaisPage: React.FC = () => {
       }
 
       setNovaOpcao({ nome: '', quantidade_minima: 0 });
+      setQuantidadeMinimaInput('');
       setEditingOpcao(null);
       setShowSidebar(false);
       loadData();
@@ -210,6 +332,7 @@ const AdicionaisPage: React.FC = () => {
         if (error) throw error;
 
         setNovoItem({ nome: '', preco: '' });
+        setPrecoFormatado('');
         setEditingItem(null);
         setIsAddingItem(false);
         setEditingOpcao(null);
@@ -230,6 +353,7 @@ const AdicionaisPage: React.FC = () => {
         if (error) throw error;
 
         setNovoItem({ nome: '', preco: '' });
+        setPrecoFormatado('');
         setIsAddingItem(false);
         setEditingOpcao(null);
         setShowSidebar(false);
@@ -250,6 +374,9 @@ const AdicionaisPage: React.FC = () => {
       nome: item.nome,
       preco: item.preco.toString()
     });
+    // Formatar o preço para exibição
+    const precoFormatado = (item.preco * 100).toString().padStart(3, '0');
+    setPrecoFormatado(formatarValorMonetario(precoFormatado));
     setIsAddingItem(true);
     setShowSidebar(true);
   };
@@ -350,6 +477,7 @@ const AdicionaisPage: React.FC = () => {
           onClick={() => {
             setEditingOpcao(null);
             setNovaOpcao({ nome: '', quantidade_minima: 0 });
+            setQuantidadeMinimaInput('');
             setIsAddingItem(false);
             setShowSidebar(true);
           }}
@@ -381,7 +509,8 @@ const AdicionaisPage: React.FC = () => {
                     <button
                       onClick={() => {
                         setEditingOpcao(opcao);
-                        setNovoItem({ nome: '', preco: '0' });
+                        setNovoItem({ nome: '', preco: '' });
+                        setPrecoFormatado('');
                         setIsAddingItem(true);
                         setEditingItem(null);
                         setShowSidebar(true);
@@ -398,6 +527,7 @@ const AdicionaisPage: React.FC = () => {
                           nome: opcao.nome,
                           quantidade_minima: opcao.quantidade_minima || 0
                         });
+                        setQuantidadeMinimaInput(opcao.quantidade_minima > 0 ? opcao.quantidade_minima.toString() : '');
                         setIsAddingItem(false);
                         setShowSidebar(true);
                       }}
@@ -467,6 +597,7 @@ const AdicionaisPage: React.FC = () => {
                   onClick={() => {
                     setEditingOpcao(null);
                     setNovaOpcao({ nome: '', quantidade_minima: 0 });
+                    setQuantidadeMinimaInput('');
                     setIsAddingItem(false);
                     setShowSidebar(true);
                   }}
@@ -491,6 +622,8 @@ const AdicionaisPage: React.FC = () => {
                 setShowSidebar(false);
                 setIsAddingItem(false);
                 setEditingItem(null);
+                setPrecoFormatado('');
+                setQuantidadeMinimaInput('');
               }}
             />
             <motion.div
@@ -514,6 +647,8 @@ const AdicionaisPage: React.FC = () => {
                       setShowSidebar(false);
                       setIsAddingItem(false);
                       setEditingItem(null);
+                      setPrecoFormatado('');
+                      setQuantidadeMinimaInput('');
                     }}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
@@ -540,10 +675,9 @@ const AdicionaisPage: React.FC = () => {
                       </label>
                       <div className="flex items-center">
                         <input
-                          type="number"
-                          min="0"
-                          value={novaOpcao.quantidade_minima}
-                          onChange={(e) => setNovaOpcao({ ...novaOpcao, quantidade_minima: parseInt(e.target.value) || 0 })}
+                          type="text"
+                          value={quantidadeMinimaInput}
+                          onChange={handleQuantidadeMinimaChange}
                           className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                           placeholder="0"
                         />
@@ -562,6 +696,7 @@ const AdicionaisPage: React.FC = () => {
                           setShowSidebar(false);
                           setIsAddingItem(false);
                           setEditingItem(null);
+                          setQuantidadeMinimaInput('');
                         }}
                       >
                         Cancelar
@@ -598,13 +733,11 @@ const AdicionaisPage: React.FC = () => {
                         Preço
                       </label>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={novoItem.preco}
-                        onChange={(e) => setNovoItem({ ...novoItem, preco: e.target.value })}
+                        type="text"
+                        value={precoFormatado}
+                        onChange={handlePrecoChange}
                         className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="0.00"
+                        placeholder="R$ 0,00"
                       />
                     </div>
 
@@ -617,6 +750,7 @@ const AdicionaisPage: React.FC = () => {
                           setShowSidebar(false);
                           setIsAddingItem(false);
                           setEditingItem(null);
+                          setPrecoFormatado('');
                         }}
                       >
                         Cancelar

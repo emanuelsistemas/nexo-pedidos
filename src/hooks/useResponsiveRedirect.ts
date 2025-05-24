@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   isMobileScreen,
-  useResponsiveListener,
   webToMobileRoute,
   mobileToWebRoute
 } from '../config/responsive';
@@ -39,11 +38,20 @@ export const useResponsiveRedirect = () => {
       }
     };
 
-    // Configurar listener de redimensionamento
-    const cleanup = useResponsiveListener(handleResponsiveChange);
+    const handleResize = () => {
+      handleResponsiveChange(isMobileScreen());
+    };
+
+    // Adicionar listener
+    window.addEventListener('resize', handleResize);
+
+    // Verificar tamanho inicial
+    handleResize();
 
     // Cleanup quando o componente for desmontado
-    return cleanup;
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
   }, [navigate, location.pathname]);
 
   // Retornar estado atual da tela
@@ -60,11 +68,19 @@ export const useResponsiveDetection = () => {
   const [isMobile, setIsMobile] = useState(isMobileScreen());
 
   useEffect(() => {
-    const cleanup = useResponsiveListener((mobile) => {
-      setIsMobile(mobile);
-    });
+    const handleResize = () => {
+      setIsMobile(isMobileScreen());
+    };
 
-    return cleanup;
+    // Adicionar listener
+    window.addEventListener('resize', handleResize);
+
+    // Verificar tamanho inicial
+    handleResize();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   return {

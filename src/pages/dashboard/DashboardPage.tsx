@@ -610,14 +610,18 @@ const DashboardPage: React.FC = () => {
       onClick: handleEstoqueMinimoClick,
       customContent: (
         <div>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className={`text-xs mt-1 ${
+            produtosEstoqueMinimo === 0
+              ? 'text-gray-400'
+              : 'text-red-400 font-medium animate-pulse'
+          }`}>
             {produtosEstoqueMinimo === 0
               ? 'Todos os produtos estão OK'
-              : `${produtosEstoqueMinimo} ${produtosEstoqueMinimo === 1 ? 'produto atingiu' : 'produtos atingiram'} o estoque mínimo`
+              : `⚠️ ${produtosEstoqueMinimo} ${produtosEstoqueMinimo === 1 ? 'produto atingiu' : 'produtos atingiram'} o estoque mínimo`
             }
           </p>
           {produtosEstoqueMinimo > 0 && (
-            <p className="text-xs text-primary-400 mt-2 font-medium">
+            <p className="text-xs text-primary-400 mt-2 font-medium animate-pulse">
               Clique para ver detalhes →
             </p>
           )}
@@ -733,16 +737,44 @@ const DashboardPage: React.FC = () => {
           <motion.div
             key={card.title}
             initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className={`p-6 rounded-lg border ${card.borderColor} ${card.color} ${
+            animate={{
+              opacity: 1,
+              y: 0,
+              // Animação especial para o card de estoque mínimo quando há produtos
+              ...(card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0 && {
+                boxShadow: [
+                  "0 0 0 0 rgba(239, 68, 68, 0.7)",
+                  "0 0 0 10px rgba(239, 68, 68, 0)",
+                  "0 0 0 0 rgba(239, 68, 68, 0)"
+                ]
+              })
+            }}
+            transition={{
+              delay: index * 0.1,
+              ...(card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0 && {
+                boxShadow: {
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }
+              })
+            }}
+            className={`p-6 rounded-lg border ${
+              card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0
+                ? 'border-red-500/50 shadow-red-500/20'
+                : card.borderColor
+            } ${card.color} ${
               card.clickable ? 'cursor-pointer hover:bg-opacity-80 transition-all duration-200 hover:scale-105' : ''
             }`}
             onClick={card.onClick}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className={`p-2 rounded-lg ${card.color}`}>
-                <card.icon size={24} className={card.iconColor} />
+              <div className={`p-2 rounded-lg ${card.color} ${
+                card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0 ? 'animate-pulse' : ''
+              }`}>
+                <card.icon size={24} className={`${card.iconColor} ${
+                  card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0 ? 'animate-pulse' : ''
+                }`} />
               </div>
               {card.change !== undefined && (
                 <div className={`flex items-center gap-1 text-sm ${
@@ -759,7 +791,9 @@ const DashboardPage: React.FC = () => {
             </div>
             <h3 className="text-gray-400 text-sm mb-1">{card.title}</h3>
             {typeof card.value === 'string' || typeof card.value === 'number' ? (
-              <p className="text-2xl font-semibold text-white">{card.value}</p>
+              <p className={`text-2xl font-semibold text-white ${
+                card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0 ? 'animate-pulse' : ''
+              }`}>{card.value}</p>
             ) : (
               card.value
             )}
