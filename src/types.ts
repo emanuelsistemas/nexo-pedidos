@@ -62,6 +62,15 @@ export interface TipoControleEstoqueConfig {
   created_at?: string;
 }
 
+export interface TaxaEntregaConfig {
+  id: string;
+  empresa_id: string;
+  habilitado: boolean;
+  tipo: 'bairro' | 'distancia';
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface TipoUserConfig {
   id: string;
   tipo: 'admin' | 'user' | 'vendedor' | 'caixa' | 'socio';

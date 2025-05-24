@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart } from 'lucide-react';
+import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart, Truck } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
@@ -11,11 +11,13 @@ const Sidebar: React.FC = () => {
   const { isExpanded, toggle } = useSidebarStore();
   const [expandedSubmenu, setExpandedSubmenu] = useState<string | null>(null);
   const [opcoesAdicionaisHabilitado, setOpcoesAdicionaisHabilitado] = useState(false);
+  const [taxaEntregaHabilitada, setTaxaEntregaHabilitada] = useState(false);
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
   const location = useLocation();
 
-  // Carregar configuração de opções adicionais
+  // Carregar configuração de opções adicionais e taxa de entrega
   useEffect(() => {
-    const loadOpcoesAdicionaisConfig = async () => {
+    const loadConfiguracoes = async () => {
       try {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) return;
@@ -28,6 +30,10 @@ const Sidebar: React.FC = () => {
 
         if (!usuarioData?.empresa_id) return;
 
+        // Armazenar empresa_id para uso nos eventos
+        setEmpresaId(usuarioData.empresa_id);
+
+        // Carregar configuração de opções adicionais
         const { data: configData } = await supabase
           .from('produtos_config')
           .select('opcoes_adicionais')
@@ -37,24 +43,43 @@ const Sidebar: React.FC = () => {
         if (configData) {
           setOpcoesAdicionaisHabilitado(configData.opcoes_adicionais || false);
         }
+
+        // Carregar configuração de taxa de entrega
+        const { data: taxaEntregaConfigData } = await supabase
+          .from('taxa_entrega_config')
+          .select('habilitado')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        if (taxaEntregaConfigData) {
+          setTaxaEntregaHabilitada(taxaEntregaConfigData.habilitado || false);
+        }
       } catch (error) {
-        console.error('Erro ao carregar configuração de opções adicionais:', error);
+        console.error('Erro ao carregar configurações:', error);
       }
     };
 
-    loadOpcoesAdicionaisConfig();
+    loadConfiguracoes();
 
-    // Escutar evento customizado para atualização imediata
+    // Escutar evento customizado para atualização imediata de opções adicionais
     const handleOpcoesAdicionaisChange = (event: CustomEvent) => {
       console.log('Evento opcoesAdicionaisChanged recebido:', event.detail);
       console.log('Atualizando opcoesAdicionaisHabilitado para:', event.detail.opcoesAdicionais);
       setOpcoesAdicionaisHabilitado(event.detail.opcoesAdicionais);
     };
 
-    window.addEventListener('opcoesAdicionaisChanged', handleOpcoesAdicionaisChange as EventListener);
+    // Escutar evento customizado para atualização imediata de taxa de entrega (mesmo padrão das opções adicionais)
+    const handleTaxaEntregaChange = (event: CustomEvent) => {
+      console.log('🚀 Evento taxaEntregaChanged recebido:', event.detail);
+      console.log('🚀 Atualizando taxaEntregaHabilitada para:', event.detail.taxaEntregaHabilitada);
+      setTaxaEntregaHabilitada(event.detail.taxaEntregaHabilitada);
+    };
 
-    // Escutar mudanças na tabela produtos_config (backup)
-    const subscription = supabase
+    window.addEventListener('opcoesAdicionaisChanged', handleOpcoesAdicionaisChange as EventListener);
+    window.addEventListener('taxaEntregaChanged', handleTaxaEntregaChange as EventListener);
+
+    // Escutar mudanças nas tabelas (backup)
+    const produtosSubscription = supabase
       .channel('produtos_config_changes')
       .on('postgres_changes',
         {
@@ -64,14 +89,31 @@ const Sidebar: React.FC = () => {
         },
         () => {
           console.log('Mudança detectada na tabela produtos_config');
-          loadOpcoesAdicionaisConfig();
+          loadConfiguracoes();
+        }
+      )
+      .subscribe();
+
+    const taxaEntregaSubscription = supabase
+      .channel('taxa_entrega_config_changes')
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'taxa_entrega_config'
+        },
+        () => {
+          console.log('Mudança detectada na tabela taxa_entrega_config');
+          loadConfiguracoes();
         }
       )
       .subscribe();
 
     return () => {
       window.removeEventListener('opcoesAdicionaisChanged', handleOpcoesAdicionaisChange as EventListener);
-      subscription.unsubscribe();
+      window.removeEventListener('taxaEntregaChanged', handleTaxaEntregaChange as EventListener);
+      produtosSubscription.unsubscribe();
+      taxaEntregaSubscription.unsubscribe();
     };
   }, []);
 
@@ -92,7 +134,7 @@ const Sidebar: React.FC = () => {
       });
     }
 
-    return [
+    const menuItems = [
       { icon: Home, label: 'Dashboard', path: '/dashboard', tooltip: 'Dashboard' },
       {
         icon: Package2,
@@ -104,25 +146,27 @@ const Sidebar: React.FC = () => {
       { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },
       { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
       { icon: ShoppingCart, label: 'PDV', path: '/dashboard/pdv', tooltip: 'Ponto de Venda' },
-      // Item "Gestor" ocultado
-      // { icon: MessageSquare, label: 'Gestor', path: '/dashboard/gestor', tooltip: 'Gestor de Pedidos' },
-
-      // Item "Conexão" ocultado
-      // { icon: QrCode, label: 'Conexão', path: '/dashboard/conexao', tooltip: 'Conexão WhatsApp' },
-
-      // Item "Entregadores" ocultado
-      // {
-      //   icon: Bike,
-      //   label: 'Entregadores',
-      //   tooltip: 'Entregadores',
-      //   submenu: [
-      //     { icon: Bike, label: 'Motoboy', path: '/dashboard/entregador', tooltip: 'Motoboys' },
-      //     { icon: MapPin, label: 'Taxa de Entrega', path: '/dashboard/entregador/taxa', tooltip: 'Taxa de Entrega' }
-      //   ]
-      // },
-
-      { icon: Settings, label: 'Configurações', path: '/dashboard/configuracoes', tooltip: 'Configurações' },
     ];
+
+    // Adicionar "Taxa de Entrega" se estiver habilitado
+    if (taxaEntregaHabilitada) {
+      menuItems.push({
+        icon: Truck,
+        label: 'Taxa de Entrega',
+        path: '/dashboard/entregador/taxa',
+        tooltip: 'Taxa de Entrega'
+      });
+    }
+
+    // Adicionar configurações sempre por último
+    menuItems.push({
+      icon: Settings,
+      label: 'Configurações',
+      path: '/dashboard/configuracoes',
+      tooltip: 'Configurações'
+    });
+
+    return menuItems;
   };
 
   const menuItems = getMenuItems();
@@ -131,6 +175,10 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     console.log('Estado opcoesAdicionaisHabilitado mudou para:', opcoesAdicionaisHabilitado);
   }, [opcoesAdicionaisHabilitado]);
+
+  useEffect(() => {
+    console.log('Estado taxaEntregaHabilitada mudou para:', taxaEntregaHabilitada);
+  }, [taxaEntregaHabilitada]);
 
   const toggleSubmenu = (label: string) => {
     setExpandedSubmenu(expandedSubmenu === label ? null : label);

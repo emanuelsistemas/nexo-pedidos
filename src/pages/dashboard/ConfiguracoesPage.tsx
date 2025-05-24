@@ -1,12 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
 import { showMessage, translateErrorMessage } from '../../utils/toast';
 import { TipoUserConfig } from '../../types';
 import { useAuthSession } from '../../hooks/useAuthSession';
+
+// Componente de Skeleton Loading para Configurações
+const ConfigSkeletonLoader = () => (
+  <div className="space-y-6 animate-pulse">
+    {/* Header Skeleton */}
+    <div className="space-y-3">
+      <div className="h-8 bg-gray-700 rounded-lg w-1/3"></div>
+      <div className="h-4 bg-gray-700 rounded w-2/3"></div>
+    </div>
+
+    {/* Form Fields Skeleton */}
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <div className="h-4 bg-gray-700 rounded w-1/4"></div>
+        <div className="h-10 bg-gray-700 rounded-lg"></div>
+      </div>
+      <div className="space-y-2">
+        <div className="h-4 bg-gray-700 rounded w-1/4"></div>
+        <div className="h-10 bg-gray-700 rounded-lg"></div>
+      </div>
+      <div className="space-y-2">
+        <div className="h-4 bg-gray-700 rounded w-1/4"></div>
+        <div className="h-10 bg-gray-700 rounded-lg"></div>
+      </div>
+    </div>
+
+    {/* Cards Skeleton */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="h-32 bg-gray-700 rounded-lg"></div>
+      <div className="h-32 bg-gray-700 rounded-lg"></div>
+      <div className="h-32 bg-gray-700 rounded-lg"></div>
+      <div className="h-32 bg-gray-700 rounded-lg"></div>
+    </div>
+
+    {/* Button Skeleton */}
+    <div className="flex gap-3">
+      <div className="h-10 bg-gray-700 rounded-lg w-24"></div>
+      <div className="h-10 bg-gray-700 rounded-lg w-20"></div>
+    </div>
+  </div>
+);
 
 interface DeleteConfirmationProps {
   isOpen: boolean;
@@ -99,13 +140,15 @@ const tiposPagamento = [
 const ConfiguracoesPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv' | 'taxaentrega'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
   const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
+  const [sectionLoading, setSectionLoading] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [usuarioLogado, setUsuarioLogado] = useState<{id: string, tipo: string} | null>(null);
   const [copiedFields, setCopiedFields] = useState<{[key: string]: boolean}>({});
@@ -145,6 +188,8 @@ const ConfiguracoesPage: React.FC = () => {
   const [bloqueiaSemEstoque, setBloqueiaSemEstoque] = useState<boolean>(false);
   const [agruparItens, setAgruparItens] = useState<boolean>(false);
   const [opcoesAdicionais, setOpcoesAdicionais] = useState<boolean>(false);
+  const [taxaEntregaHabilitada, setTaxaEntregaHabilitada] = useState<boolean>(false);
+  const [tipoTaxaEntrega, setTipoTaxaEntrega] = useState<'bairro' | 'distancia'>('distancia');
 
   // Estados para configurações do PDV
   const [pdvConfig, setPdvConfig] = useState({
@@ -204,7 +249,17 @@ const ConfiguracoesPage: React.FC = () => {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   useEffect(() => {
-    loadData();
+    const loadDataWithLoading = async () => {
+      await loadData();
+      // Desativa o loading após carregar os dados
+      setSectionLoading(false);
+      // Marca que não é mais o primeiro carregamento
+      if (isFirstLoad) {
+        setIsFirstLoad(false);
+      }
+    };
+
+    loadDataWithLoading();
   }, [activeSection]);
 
   const loadData = async () => {
@@ -412,6 +467,55 @@ const ConfiguracoesPage: React.FC = () => {
         }
       }
 
+      if (activeSection === 'taxaentrega') {
+        try {
+          // Carregar configuração de taxa de entrega
+          const { data: taxaEntregaConfigData, error: taxaEntregaConfigError } = await supabase
+            .from('taxa_entrega_config')
+            .select('*')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .single();
+
+          if (taxaEntregaConfigError) {
+            // Se não encontrou configuração, criar uma nova com valores padrão
+            if (taxaEntregaConfigError.code === 'PGRST116') {
+              console.log('Configuração de taxa de entrega não encontrada, criando uma nova...');
+
+              const { error: insertError, data: insertData } = await supabase
+                .from('taxa_entrega_config')
+                .insert({
+                  empresa_id: usuarioData.empresa_id,
+                  habilitado: false,
+                  tipo: 'distancia'
+                })
+                .select();
+
+              console.log('Nova configuração de taxa de entrega criada:', insertData);
+
+              if (insertError) {
+                throw insertError;
+              }
+
+              // Definir valores padrão nos estados
+              setTaxaEntregaHabilitada(false);
+              setTipoTaxaEntrega('distancia');
+            } else {
+              // Se for outro erro, mostrar mensagem
+              console.error('Erro ao carregar configuração de taxa de entrega:', taxaEntregaConfigError);
+              showMessage('error', 'Erro ao carregar configuração de taxa de entrega');
+            }
+          } else if (taxaEntregaConfigData) {
+            // Se encontrou configuração, atualizar os estados
+            console.log('Configuração de taxa de entrega encontrada:', taxaEntregaConfigData);
+            setTaxaEntregaHabilitada(taxaEntregaConfigData.habilitado || false);
+            setTipoTaxaEntrega(taxaEntregaConfigData.tipo || 'distancia');
+          }
+        } catch (error) {
+          console.error('Erro ao processar configuração de taxa de entrega:', error);
+          showMessage('error', 'Erro ao processar configuração de taxa de entrega');
+        }
+      }
+
       if (activeSection === 'pedidos') {
         try {
           // Carregar configuração de pedidos
@@ -518,6 +622,21 @@ const ConfiguracoesPage: React.FC = () => {
         carregarConfiguracoesPdv();
       }
     });
+  };
+
+  // Função para trocar de seção com loading inteligente
+  const handleSectionChange = async (section: string) => {
+    // Se já está na mesma seção, não faz nada
+    if (activeSection === section) return;
+
+    // Ativa o loading apenas se não for o primeiro carregamento
+    if (!isFirstLoad) {
+      setSectionLoading(true);
+    }
+
+    setActiveSection(section as any);
+
+    // O loading será desativado automaticamente pelo useEffect quando loadData terminar
   };
 
   const handleSubmitPagamento = async (e: React.FormEvent) => {
@@ -1614,6 +1733,70 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
+  const handleSalvarTaxaEntrega = async () => {
+    try {
+      setIsLoading(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Primeiro, verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('taxa_entrega_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (existingConfig) {
+        // Se existe, atualizar
+        const { error } = await supabase
+          .from('taxa_entrega_config')
+          .update({
+            habilitado: taxaEntregaHabilitada,
+            tipo: tipoTaxaEntrega
+          })
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        // Se não existe, criar nova configuração
+        const { error } = await supabase
+          .from('taxa_entrega_config')
+          .insert({
+            empresa_id: usuarioData.empresa_id,
+            habilitado: taxaEntregaHabilitada,
+            tipo: tipoTaxaEntrega
+          });
+
+        if (error) throw error;
+      }
+
+      // Disparar evento customizado para notificar o Sidebar imediatamente (mesmo padrão das Opções Adicionais)
+      console.log('📡 Disparando evento taxaEntregaChanged com valor:', taxaEntregaHabilitada);
+      window.dispatchEvent(new CustomEvent('taxaEntregaChanged', {
+        detail: {
+          taxaEntregaHabilitada: taxaEntregaHabilitada,
+          tipo: tipoTaxaEntrega
+        }
+      }));
+
+      showMessage('success', 'Configuração de taxa de entrega salva com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar configuração de taxa de entrega:', error);
+      showMessage('error', 'Erro ao salvar configuração de taxa de entrega');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handlePdvConfigChange = async (field: string, value: boolean) => {
     try {
       // Atualizar o estado local primeiro
@@ -2601,6 +2784,91 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'taxaentrega':
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Configurações de Taxa de Entrega</h2>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <h3 className="text-lg font-medium text-white mb-4">Taxa de Entrega</h3>
+
+              <div className="p-4 bg-gray-800/50 rounded-lg mb-6">
+                <div className="flex items-center">
+                  <input
+                    id="habilitar_taxa_entrega"
+                    type="checkbox"
+                    checked={taxaEntregaHabilitada}
+                    onChange={(e) => setTaxaEntregaHabilitada(e.target.checked)}
+                    className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                  />
+                  <label htmlFor="habilitar_taxa_entrega" className="ml-3 cursor-pointer">
+                    <h4 className="text-white font-medium">Habilitar Taxa de Entrega</h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Quando ativado, permite configurar e cobrar taxas de entrega nos pedidos.
+                    </p>
+                  </label>
+                </div>
+              </div>
+
+
+
+              {taxaEntregaHabilitada && (
+                <div className="border-t border-gray-800 pt-6 mb-6">
+                  <h3 className="text-lg font-medium text-white mb-4">Tipo de Taxa</h3>
+
+                  <div className="space-y-4">
+                    <label className="flex items-center p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                      <input
+                        type="radio"
+                        name="tipo_taxa_entrega"
+                        checked={tipoTaxaEntrega === 'distancia'}
+                        onChange={() => setTipoTaxaEntrega('distancia')}
+                        className="mr-3"
+                      />
+                      <div>
+                        <h4 className="text-white font-medium">Por Distância (KM)</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          A taxa de entrega é calculada com base na distância em quilômetros do estabelecimento até o destino.
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                      <input
+                        type="radio"
+                        name="tipo_taxa_entrega"
+                        checked={tipoTaxaEntrega === 'bairro'}
+                        onChange={() => setTipoTaxaEntrega('bairro')}
+                        className="mr-3"
+                      />
+                      <div>
+                        <h4 className="text-white font-medium">Por Bairro</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          A taxa de entrega é calculada com base no bairro de destino do pedido.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={handleSalvarTaxaEntrega}
+                  disabled={isLoading}
+                  className="min-w-[120px]"
+                >
+                  {isLoading ? 'Salvando...' : 'Gravar'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+
       case 'conta':
         return (
           <div className="space-y-4">
@@ -2636,37 +2904,61 @@ const ConfiguracoesPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full">
-      <div className="bg-background-card rounded-lg border border-gray-800 p-2 mb-8">
-        <div className="overflow-x-auto custom-scrollbar">
-          <div className="flex items-center gap-2 min-w-max">
-          <button
-              onClick={() => setActiveSection('geral')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+    <div className="flex h-[calc(100vh-120px)] gap-6">
+      {/* Sidebar de Configurações */}
+      <div className="w-80 bg-background-card rounded-lg border border-gray-800 p-4">
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-white mb-2">Configurações</h2>
+          <p className="text-gray-400 text-sm">Gerencie as configurações do seu sistema</p>
+        </div>
+
+        <nav className="space-y-2">
+          {/* Seção Empresa */}
+          <div className="mb-4">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Empresa</h3>
+            <button
+              onClick={() => handleSectionChange('geral')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                 activeSection === 'geral'
-                  ? 'bg-primary-500/10 text-primary-400'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
               <Settings size={18} />
-              <span className="text-sm whitespace-nowrap">Dados da Empresa</span>
+              <span className="text-sm">Dados da Empresa</span>
             </button>
             <button
-              onClick={() => setActiveSection('usuarios')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
-                activeSection ===   'usuarios'
-                  ? 'bg-primary-500/10 text-primary-400'
+              onClick={() => handleSectionChange('usuarios')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                activeSection === 'usuarios'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
               <Users size={18} />
-              <span className="text-sm whitespace-nowrap">Usuários</span>
+              <span className="text-sm">Usuários</span>
             </button>
             <button
-              onClick={() => setActiveSection('estoque')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+              onClick={() => handleSectionChange('horarios')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                activeSection === 'horarios'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <Clock size={18} />
+              <span className="text-sm">Horário de Funcionamento</span>
+            </button>
+          </div>
+
+          {/* Seção Operações */}
+          <div className="mb-4">
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Operações</h3>
+            <button
+              onClick={() => handleSectionChange('estoque')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                 activeSection === 'estoque'
-                  ? 'bg-primary-500/10 text-primary-400'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
@@ -2675,53 +2967,69 @@ const ConfiguracoesPage: React.FC = () => {
                 <path d="M5 20V7a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v13"></path>
                 <path d="M13 20V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v17"></path>
               </svg>
-              <span className="text-sm whitespace-nowrap">Estoque</span>
+              <span className="text-sm">Estoque</span>
             </button>
             <button
-              onClick={() => setActiveSection('pedidos')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+              onClick={() => handleSectionChange('pedidos')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                 activeSection === 'pedidos'
-                  ? 'bg-primary-500/10 text-primary-400'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <path d="M16 4h2a2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
                 <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
                 <path d="M9 12h6"></path>
                 <path d="M9 16h6"></path>
               </svg>
-              <span className="text-sm whitespace-nowrap">Pedidos</span>
+              <span className="text-sm">Pedidos</span>
             </button>
             <button
-              onClick={() => setActiveSection('pdv')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+              onClick={() => handleSectionChange('pdv')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                 activeSection === 'pdv'
-                  ? 'bg-primary-500/10 text-primary-400'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
               <ShoppingCart size={18} />
-              <span className="text-sm whitespace-nowrap">PDV</span>
+              <span className="text-sm">PDV</span>
             </button>
             <button
-              onClick={() => setActiveSection('produtos')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+              onClick={() => handleSectionChange('produtos')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                 activeSection === 'produtos'
-                  ? 'bg-primary-500/10 text-primary-400'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
               </svg>
-              <span className="text-sm whitespace-nowrap">Produtos</span>
+              <span className="text-sm">Produtos</span>
             </button>
             <button
-              onClick={() => setActiveSection('conta')}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+              onClick={() => handleSectionChange('taxaentrega')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                activeSection === 'taxaentrega'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <Truck size={18} />
+              <span className="text-sm">Taxa de Entrega</span>
+            </button>
+          </div>
+
+          {/* Seção Sistema */}
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Sistema</h3>
+            <button
+              onClick={() => handleSectionChange('conta')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
                 activeSection === 'conta'
-                  ? 'bg-primary-500/10 text-primary-400'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
@@ -2729,20 +3037,18 @@ const ConfiguracoesPage: React.FC = () => {
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                 <circle cx="12" cy="7" r="4"></circle>
               </svg>
-              <span className="text-sm whitespace-nowrap">Conta</span>
+              <span className="text-sm">Conta</span>
             </button>
-            {/* Aba "Perfis" ocultada */}
-            {/* Aba "Pagamentos" ocultada */}
-            {/* Aba "Status Loja" ocultada */}
-            {/* Aba "Taxa Entrega" ocultada */}
-            {/* Aba "Horários" ocultada */}
           </div>
-        </div>
+        </nav>
       </div>
 
-      <div className="w-full h-[calc(100vh-200px)] overflow-y-auto custom-scrollbar">
-        <div className="pr-2">
-          {renderContent()}
+      {/* Área de Conteúdo */}
+      <div className="flex-1 bg-background-card rounded-lg border border-gray-800 overflow-hidden">
+        <div className="h-full overflow-y-auto custom-scrollbar">
+          <div className="p-6">
+            {sectionLoading ? <ConfigSkeletonLoader /> : renderContent()}
+          </div>
         </div>
       </div>
 

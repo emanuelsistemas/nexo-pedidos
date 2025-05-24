@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste do Sistema de Eventos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: white;
+        }
+        .container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .menu-item {
+            background-color: #333;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .menu-item.visible {
+            display: block;
+        }
+        .logs {
+            background-color: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste do Sistema de Eventos - Taxa de Entrega</h1>
+    
+    <div class="container">
+        <h2>📡 Emissor de Eventos (Configurações)</h2>
+        <button onclick="emitirEventoHabilitar()">✅ Habilitar Taxa de Entrega</button>
+        <button onclick="emitirEventoDesabilitar()">❌ Desabilitar Taxa de Entrega</button>
+        <button onclick="limparLogs()">🧹 Limpar Logs</button>
+    </div>
+
+    <div class="container">
+        <h2>📋 Menu Lateral (Simulado)</h2>
+        <div class="menu-item" id="dashboard">🏠 Dashboard</div>
+        <div class="menu-item" id="produtos">📦 Produtos</div>
+        <div class="menu-item" id="clientes">👥 Clientes</div>
+        <div class="menu-item" id="pedidos">🛒 Pedidos</div>
+        <div class="menu-item" id="faturamento">💰 Faturamento</div>
+        <div class="menu-item" id="pdv">🛍️ PDV</div>
+        <div class="menu-item" id="taxa-entrega">🚚 Taxa de Entrega</div>
+        <div class="menu-item" id="configuracoes">⚙️ Configurações</div>
+    </div>
+
+    <div class="container">
+        <h2>📝 Logs do Sistema</h2>
+        <div class="logs" id="logs"></div>
+    </div>
+
+    <script>
+        // Simular o EventBus
+        class EventBus {
+            constructor() {
+                this.events = new Map();
+            }
+
+            on(event, callback) {
+                if (!this.events.has(event)) {
+                    this.events.set(event, []);
+                }
+                this.events.get(event).push(callback);
+                
+                return () => this.off(event, callback);
+            }
+
+            off(event, callback) {
+                const callbacks = this.events.get(event);
+                if (callbacks) {
+                    const index = callbacks.indexOf(callback);
+                    if (index > -1) {
+                        callbacks.splice(index, 1);
+                    }
+                }
+            }
+
+            emit(event, data) {
+                const callbacks = this.events.get(event);
+                log(`🔥 EventBus.emit: Evento "${event}" - ${callbacks ? callbacks.length : 0} listeners registrados`);
+                
+                if (callbacks && callbacks.length > 0) {
+                    log(`🔥 EventBus.emit: Executando ${callbacks.length} callbacks para evento "${event}"`);
+                    callbacks.forEach((callback, index) => {
+                        try {
+                            log(`🔥 EventBus.emit: Executando callback ${index + 1}/${callbacks.length}`);
+                            callback(data);
+                            log(`✅ EventBus.emit: Callback ${index + 1} executado com sucesso`);
+                        } catch (error) {
+                            log(`❌ EventBus.emit: Erro ao executar callback ${index + 1} do evento ${event}: ${error}`);
+                        }
+                    });
+                } else {
+                    log(`⚠️ EventBus.emit: Nenhum listener registrado para o evento "${event}"`);
+                }
+            }
+        }
+
+        // Instância global
+        const eventBus = new EventBus();
+        const EVENTS = {
+            TAXA_ENTREGA_CONFIG_CHANGED: 'taxaEntregaConfigChanged'
+        };
+
+        // Simular empresa ID
+        const EMPRESA_ID = 'empresa-teste-123';
+
+        // Estado do menu
+        let taxaEntregaHabilitada = false;
+
+        // Função de log
+        function log(message) {
+            const logsDiv = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            logsDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Simular o listener do Sidebar
+        function handleTaxaEntregaConfigChange(data) {
+            log(`🚀 Evento taxaEntregaConfigChanged recebido no Sidebar: ${JSON.stringify(data)}`);
+            log(`🏢 Empresa atual: ${EMPRESA_ID}`);
+            log(`🏢 Empresa do evento: ${data.empresaId}`);
+            
+            if (data.empresaId === EMPRESA_ID) {
+                log(`✅ Empresa corresponde! Atualizando taxaEntregaHabilitada para: ${data.habilitado}`);
+                taxaEntregaHabilitada = data.habilitado;
+                atualizarMenu();
+            } else {
+                log(`❌ Empresa não corresponde. Ignorando evento.`);
+            }
+        }
+
+        // Função para atualizar o menu
+        function atualizarMenu() {
+            const menuItems = document.querySelectorAll('.menu-item');
+            menuItems.forEach(item => {
+                if (item.id === 'taxa-entrega') {
+                    if (taxaEntregaHabilitada) {
+                        item.classList.add('visible');
+                        log(`👁️ Menu: Item "Taxa de Entrega" MOSTRADO`);
+                    } else {
+                        item.classList.remove('visible');
+                        log(`🙈 Menu: Item "Taxa de Entrega" OCULTADO`);
+                    }
+                } else {
+                    item.classList.add('visible');
+                }
+            });
+        }
+
+        // Funções para emitir eventos
+        function emitirEventoHabilitar() {
+            const data = {
+                empresaId: EMPRESA_ID,
+                habilitado: true,
+                tipo: 'distancia'
+            };
+            
+            log(`📡 Emitindo evento taxaEntregaConfigChanged: ${JSON.stringify(data)}`);
+            eventBus.emit(EVENTS.TAXA_ENTREGA_CONFIG_CHANGED, data);
+        }
+
+        function emitirEventoDesabilitar() {
+            const data = {
+                empresaId: EMPRESA_ID,
+                habilitado: false,
+                tipo: 'distancia'
+            };
+            
+            log(`📡 Emitindo evento taxaEntregaConfigChanged: ${JSON.stringify(data)}`);
+            eventBus.emit(EVENTS.TAXA_ENTREGA_CONFIG_CHANGED, data);
+        }
+
+        function limparLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', function() {
+            log('🎧 Sidebar: Registrando listener para evento: ' + EVENTS.TAXA_ENTREGA_CONFIG_CHANGED);
+            eventBus.on(EVENTS.TAXA_ENTREGA_CONFIG_CHANGED, handleTaxaEntregaConfigChange);
+            log('🎧 Sidebar: Listener registrado com sucesso!');
+            
+            // Mostrar menu inicial
+            atualizarMenu();
+            log('🚀 Sistema de eventos inicializado!');
+        });
+    </script>
+</body>
+</html>
