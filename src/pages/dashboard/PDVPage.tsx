@@ -130,15 +130,129 @@ const PDVPage: React.FC = () => {
   const [valorDesconto, setValorDesconto] = useState('');
   const [novoValor, setNovoValor] = useState(0);
 
+  // Chave para localStorage específica do PDV
+  const PDV_STORAGE_KEY = 'nexo-pdv-state';
+
   // Estados para finalização de venda
   const [showFinalizacaoVenda, setShowFinalizacaoVenda] = useState(false);
   const [tipoPagamento, setTipoPagamento] = useState<'vista' | 'parcial'>('vista');
   const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
   const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<string | null>(null);
 
+  // Estados para pagamentos parciais
+  const [valorParcial, setValorParcial] = useState<string>('');
+  const [pagamentosParciais, setPagamentosParciais] = useState<Array<{
+    id: number;
+    forma: string;
+    valor: number;
+    tipo: 'eletronico' | 'dinheiro';
+  }>>([]);
+  const [trocoCalculado, setTrocoCalculado] = useState<number>(0);
+
+  // Estados para confirmações de remoção
+  const [showConfirmRemoveAll, setShowConfirmRemoveAll] = useState(false);
+  const [showConfirmRemoveItem, setShowConfirmRemoveItem] = useState(false);
+  const [itemToRemove, setItemToRemove] = useState<number | null>(null);
+
+  // Funções para localStorage
+  const savePDVState = () => {
+    try {
+      const pdvState = {
+        carrinho,
+        clienteSelecionado,
+        showFinalizacaoVenda,
+        tipoPagamento,
+        formaPagamentoSelecionada,
+        valorParcial,
+        pagamentosParciais,
+        trocoCalculado,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(PDV_STORAGE_KEY, JSON.stringify(pdvState));
+    } catch (error) {
+      console.error('Erro ao salvar estado do PDV:', error);
+    }
+  };
+
+  const loadPDVState = () => {
+    try {
+      const savedState = localStorage.getItem(PDV_STORAGE_KEY);
+      if (savedState) {
+        const pdvState = JSON.parse(savedState);
+
+        // Verifica se o estado não é muito antigo (24 horas)
+        const isStateValid = pdvState.timestamp && (Date.now() - pdvState.timestamp) < 24 * 60 * 60 * 1000;
+
+        if (isStateValid) {
+          // Restaura todos os estados
+          if (pdvState.carrinho) setCarrinho(pdvState.carrinho);
+          if (pdvState.clienteSelecionado) setClienteSelecionado(pdvState.clienteSelecionado);
+          if (pdvState.showFinalizacaoVenda !== undefined) setShowFinalizacaoVenda(pdvState.showFinalizacaoVenda);
+          if (pdvState.tipoPagamento) setTipoPagamento(pdvState.tipoPagamento);
+          if (pdvState.formaPagamentoSelecionada) setFormaPagamentoSelecionada(pdvState.formaPagamentoSelecionada);
+          if (pdvState.valorParcial) setValorParcial(pdvState.valorParcial);
+          if (pdvState.pagamentosParciais) setPagamentosParciais(pdvState.pagamentosParciais);
+          if (pdvState.trocoCalculado) setTrocoCalculado(pdvState.trocoCalculado);
+
+          console.log('Estado do PDV restaurado com sucesso');
+
+          // Notifica o usuário que o estado foi restaurado
+          setTimeout(() => {
+            toast.info('Estado do PDV restaurado automaticamente');
+          }, 1000);
+        } else {
+          // Remove estado antigo
+          clearPDVState();
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar estado do PDV:', error);
+      clearPDVState();
+    }
+  };
+
+  const clearPDVState = () => {
+    try {
+      localStorage.removeItem(PDV_STORAGE_KEY);
+    } catch (error) {
+      console.error('Erro ao limpar estado do PDV:', error);
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadPDVState(); // Carrega o estado salvo do PDV
+
+    // Adiciona listener para salvar antes de fechar a página
+    const handleBeforeUnload = () => {
+      savePDVState();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
+
+  // Salva automaticamente sempre que algum estado importante mudar
+  useEffect(() => {
+    // Só salva se já carregou os dados iniciais (evita salvar estado vazio no primeiro render)
+    if (produtos.length > 0) {
+      savePDVState();
+    }
+  }, [
+    carrinho,
+    clienteSelecionado,
+    showFinalizacaoVenda,
+    tipoPagamento,
+    formaPagamentoSelecionada,
+    valorParcial,
+    pagamentosParciais,
+    trocoCalculado,
+    produtos.length // Garante que só salva depois de carregar os produtos
+  ]);
 
   // Calcular novo valor em tempo real no modal de desconto
   useEffect(() => {
@@ -865,6 +979,105 @@ const PDVPage: React.FC = () => {
     setShowFinalizacaoVenda(true);
   };
 
+  // Funções para pagamentos parciais
+  const formatCurrencyInput = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '');
+
+    // Converte para centavos
+    const amount = parseFloat(numbers) / 100;
+
+    // Formata como moeda brasileira
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(amount);
+  };
+
+  const parseCurrencyToNumber = (value: string): number => {
+    return parseFloat(value.replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+  };
+
+  const calcularTotalPago = (): number => {
+    return pagamentosParciais.reduce((total, pagamento) => total + pagamento.valor, 0);
+  };
+
+  const calcularRestante = (): number => {
+    const restante = calcularTotal() - calcularTotalPago();
+    // Se há troco (restante negativo), considera como 0 (venda quitada)
+    return restante < 0 ? 0 : restante;
+  };
+
+  const adicionarPagamentoParcial = (formaId: string, formaNome: string, tipo: 'eletronico' | 'dinheiro') => {
+    let valor = parseCurrencyToNumber(valorParcial);
+    const totalVenda = calcularTotal();
+    const totalPago = calcularTotalPago();
+    const restanteReal = totalVenda - totalPago; // Valor real sem limitação
+
+    // Se não há valor digitado, usa o valor restante automaticamente
+    if (valor <= 0) {
+      valor = restanteReal > 0 ? restanteReal : 0;
+      if (valor > 0) {
+        toast.info(`Valor automático: ${formatCurrency(valor)}`);
+      }
+    }
+
+    if (valor <= 0) {
+      toast.error('Não há valor restante para pagamento');
+      return;
+    }
+
+    // Validação para formas eletrônicas
+    if (tipo === 'eletronico' && valor > restanteReal) {
+      toast.error('O valor parcial não pode ultrapassar o valor restante para formas eletrônicas');
+      return;
+    }
+
+    // Para dinheiro, pode ultrapassar (gera troco)
+    if (tipo === 'dinheiro' && valor > restanteReal) {
+      const troco = valor - restanteReal;
+      setTrocoCalculado(troco);
+      toast.success(`Troco: ${formatCurrency(troco)}`);
+    } else {
+      setTrocoCalculado(0);
+    }
+
+    const novoPagamento = {
+      id: Date.now(),
+      forma: formaNome,
+      valor: valor,
+      tipo: tipo
+    };
+
+    setPagamentosParciais(prev => [...prev, novoPagamento]);
+    setValorParcial('');
+  };
+
+  const confirmarRemocaoItem = (id: number) => {
+    setItemToRemove(id);
+    setShowConfirmRemoveItem(true);
+  };
+
+  const removerPagamentoParcial = (id: number) => {
+    setPagamentosParciais(prev => prev.filter(p => p.id !== id));
+    setTrocoCalculado(0);
+    setShowConfirmRemoveItem(false);
+    setItemToRemove(null);
+    toast.success('Pagamento removido');
+  };
+
+  const confirmarLimparTodos = () => {
+    setShowConfirmRemoveAll(true);
+  };
+
+  const limparPagamentosParciais = () => {
+    setPagamentosParciais([]);
+    setTrocoCalculado(0);
+    setValorParcial('');
+    setShowConfirmRemoveAll(false);
+    toast.success('Todos os pagamentos removidos');
+  };
+
   const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchTerm.trim()) {
       // Se há produtos filtrados, adicionar o primeiro
@@ -1226,9 +1439,15 @@ const PDVPage: React.FC = () => {
               </h3>
               {carrinho.length > 0 && (
                 <button
-                  onClick={confirmarLimparCarrinho}
+                  onClick={() => {
+                    setCarrinho([]);
+                    setClienteSelecionado(null);
+                    limparPagamentosParciais();
+                    clearPDVState();
+                    toast.success('PDV limpo com sucesso!');
+                  }}
                   className="text-red-400 hover:text-red-300 transition-colors"
-                  title="Limpar carrinho"
+                  title="Limpar PDV completo"
                 >
                   <Trash2 size={18} />
                 </button>
@@ -1487,7 +1706,10 @@ const PDVPage: React.FC = () => {
                 </label>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setTipoPagamento('vista')}
+                    onClick={() => {
+                      setTipoPagamento('vista');
+                      limparPagamentosParciais();
+                    }}
                     className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
                       tipoPagamento === 'vista'
                         ? 'bg-primary-500 border-primary-500 text-white'
@@ -1497,7 +1719,10 @@ const PDVPage: React.FC = () => {
                     À Vista
                   </button>
                   <button
-                    onClick={() => setTipoPagamento('parcial')}
+                    onClick={() => {
+                      setTipoPagamento('parcial');
+                      setFormaPagamentoSelecionada(null);
+                    }}
                     className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
                       tipoPagamento === 'parcial'
                         ? 'bg-primary-500 border-primary-500 text-white'
@@ -1512,43 +1737,182 @@ const PDVPage: React.FC = () => {
               {/* Formas de Pagamento */}
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Forma de Pagamento
+                  {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {formasPagamento.map((forma) => (
-                    <button
-                      key={forma.id}
-                      onClick={() => setFormaPagamentoSelecionada(forma.id)}
-                      className={`p-3 rounded-lg border transition-colors text-sm ${
-                        formaPagamentoSelecionada === forma.id
-                          ? 'bg-primary-500 border-primary-500 text-white'
-                          : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600'
-                      }`}
-                    >
-                      {forma.nome}
-                    </button>
-                  ))}
-                </div>
+
+                {tipoPagamento === 'vista' ? (
+                  // Pagamento à vista - interface original
+                  <div className="grid grid-cols-2 gap-2">
+                    {formasPagamento.map((forma) => (
+                      <button
+                        key={forma.id}
+                        onClick={() => setFormaPagamentoSelecionada(forma.id)}
+                        className={`p-3 rounded-lg border transition-colors text-sm ${
+                          formaPagamentoSelecionada === forma.id
+                            ? 'bg-primary-500 border-primary-500 text-white'
+                            : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600'
+                        }`}
+                      >
+                        {forma.nome}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  // Pagamentos parciais - nova interface
+                  <div className="space-y-4">
+                    {/* Campo de valor */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Valor do Pagamento
+                      </label>
+                      <input
+                        type="text"
+                        value={valorParcial}
+                        onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
+                        placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotal() - calcularTotalPago() > 0 ? calcularTotal() - calcularTotalPago() : 0)})`}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                      />
+                      <div className="text-xs text-gray-500 mt-1">
+                        💡 Deixe vazio para usar o valor restante automaticamente
+                      </div>
+                    </div>
+
+                    {/* Botões das formas de pagamento */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {formasPagamento.map((forma) => (
+                        <button
+                          key={forma.id}
+                          onClick={() => adicionarPagamentoParcial(
+                            forma.id,
+                            forma.nome,
+                            forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
+                          )}
+                          className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-700/50 transition-colors text-sm"
+                        >
+                          {forma.nome}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Lista de pagamentos adicionados */}
+                    {pagamentosParciais.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-400">Pagamentos Adicionados:</span>
+                          <button
+                            onClick={confirmarLimparTodos}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Limpar Todos
+                          </button>
+                        </div>
+
+                        {pagamentosParciais.map((pagamento) => (
+                          <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
+                            <div>
+                              <span className="text-white text-sm">{pagamento.forma}</span>
+                              <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
+                            </div>
+                            <button
+                              onClick={() => confirmarRemocaoItem(pagamento.id)}
+                              className="text-red-400 hover:text-red-300"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+
+                        {/* Resumo dos valores */}
+                        <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Total da Venda:</span>
+                            <span className="text-white">{formatCurrency(calcularTotal())}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Total Pago:</span>
+                            <span className="text-green-400">{formatCurrency(calcularTotalPago())}</span>
+                          </div>
+                          <div className="flex justify-between text-sm font-bold">
+                            <span className="text-gray-400">Restante:</span>
+                            <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                              {formatCurrency(calcularRestante())}
+                            </span>
+                          </div>
+                          {trocoCalculado > 0 && (
+                            <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
+                              <span className="text-gray-400 text-base">Troco:</span>
+                              <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Botões de Ação */}
               <div className="flex gap-3 mt-4">
                 <button
-                  onClick={() => setShowFinalizacaoVenda(false)}
+                  onClick={() => {
+                    setShowFinalizacaoVenda(false);
+                    limparPagamentosParciais();
+                  }}
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => {
-                    toast.success('Venda finalizada com sucesso!');
-                    setCarrinho([]);
-                    setClienteSelecionado(null);
-                    setShowFinalizacaoVenda(false);
+                    // Validação para pagamento à vista
+                    if (tipoPagamento === 'vista') {
+                      if (!formaPagamentoSelecionada) {
+                        toast.error('Selecione uma forma de pagamento');
+                        return;
+                      }
+                      toast.success('Venda finalizada com sucesso!');
+                      setCarrinho([]);
+                      setClienteSelecionado(null);
+                      setShowFinalizacaoVenda(false);
+                      limparPagamentosParciais();
+                      clearPDVState(); // Limpa o localStorage após finalizar a venda
+                    } else {
+                      // Validação para pagamentos parciais
+                      if (pagamentosParciais.length === 0) {
+                        toast.error('Adicione pelo menos uma forma de pagamento');
+                        return;
+                      }
+
+                      const restante = calcularRestante();
+                      if (restante > 0) {
+                        toast.error(`Ainda falta pagar ${formatCurrency(restante)}`);
+                        return;
+                      }
+
+                      let mensagem = 'Venda finalizada com sucesso!';
+                      if (trocoCalculado > 0) {
+                        mensagem += ` Troco: ${formatCurrency(trocoCalculado)}`;
+                      }
+
+                      toast.success(mensagem);
+                      setCarrinho([]);
+                      setClienteSelecionado(null);
+                      setShowFinalizacaoVenda(false);
+                      limparPagamentosParciais();
+                      clearPDVState(); // Limpa o localStorage após finalizar a venda
+                    }
                   }}
-                  className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-3 px-4 rounded-lg transition-colors"
+                  disabled={tipoPagamento === 'parcial' && calcularRestante() > 0}
+                  className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
+                    tipoPagamento === 'parcial' && calcularRestante() > 0
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-primary-500 hover:bg-primary-600 text-white'
+                  }`}
                 >
-                  Confirmar
+                  {tipoPagamento === 'parcial' && calcularRestante() > 0
+                    ? `Falta ${formatCurrency(calcularRestante())}`
+                    : 'Confirmar'
+                  }
                 </button>
               </div>
             </motion.div>
@@ -2357,6 +2721,105 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* Modal de Confirmação - Remover Item */}
+      <AnimatePresence>
+        {showConfirmRemoveItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <X size={20} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Remover Pagamento</h3>
+                  <p className="text-gray-400 text-sm">Esta ação não pode ser desfeita</p>
+                </div>
+              </div>
+
+              <p className="text-gray-300 mb-6">
+                Tem certeza que deseja remover este pagamento?
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowConfirmRemoveItem(false);
+                    setItemToRemove(null);
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => itemToRemove && removerPagamentoParcial(itemToRemove)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Remover
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação - Remover Todos */}
+      <AnimatePresence>
+        {showConfirmRemoveAll && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <Trash2 size={20} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Limpar Todos os Pagamentos</h3>
+                  <p className="text-gray-400 text-sm">Esta ação não pode ser desfeita</p>
+                </div>
+              </div>
+
+              <p className="text-gray-300 mb-6">
+                Tem certeza que deseja remover todos os pagamentos adicionados?
+                Você perderá {pagamentosParciais.length} pagamento(s) no valor total de {formatCurrency(calcularTotalPago())}.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmRemoveAll(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={limparPagamentosParciais}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Limpar Todos
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
