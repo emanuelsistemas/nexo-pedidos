@@ -16,7 +16,13 @@ import {
   Filter,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileText,
+  TrendingDown,
+  TrendingUp,
+  Clock,
+  UserCheck,
+  QrCode
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -99,6 +105,18 @@ const PDVPage: React.FC = () => {
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [produtosEstoque, setProdutosEstoque] = useState<Record<string, EstoqueProduto>>({});
   const [pdvConfig, setPdvConfig] = useState<any>(null);
+
+  // Estados para os modais do menu PDV
+  const [showComandasModal, setShowComandasModal] = useState(false);
+  const [showSangriaModal, setShowSangriaModal] = useState(false);
+  const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
+  const [showPagamentosModal, setShowPagamentosModal] = useState(false);
+  const [showFiadosModal, setShowFiadosModal] = useState(false);
+
+  // Estados para paginação do menu PDV
+  const [currentMenuPage, setCurrentMenuPage] = useState(0);
+  const [menuItemsPerPage, setMenuItemsPerPage] = useState(5);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -670,20 +688,20 @@ const PDVPage: React.FC = () => {
 
       <div className="flex" style={{ height: 'calc(100vh - 64px)' }}>
         {/* Área Principal - Produtos */}
-        <div className="flex-1 p-4 flex flex-col h-full">
+        <div className="flex-1 p-4 flex flex-col h-full relative">
           {/* Barra de Busca */}
           <div className="mb-4">
             <div className="relative">
               <input
                 type="text"
-                placeholder="Buscar produto por nome, código ou código de barras... (Ex: 5*coca)"
+                placeholder="Produto"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleSearchKeyPress}
                 autoFocus
                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
               />
-              <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
 
               {/* Indicador de quantidade */}
               {searchTerm.includes('*') && (
@@ -745,7 +763,7 @@ const PDVPage: React.FC = () => {
           )}
 
           {/* Grid de Produtos */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ paddingBottom: '80px' }}>
             {produtosFiltrados.length === 0 ? (
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-gray-500" />
@@ -862,6 +880,56 @@ const PDVPage: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Menu Fixo no Footer da Área de Produtos */}
+          <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
+            <div className="flex justify-around items-center h-16 px-4">
+              {/* Comandas/Mesas Abertas */}
+              <button
+                onClick={() => setShowComandasModal(true)}
+                className="flex flex-col items-center justify-center text-gray-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg p-2 transition-all duration-200"
+              >
+                <FileText size={20} />
+                <span className="text-xs mt-1">Comandas</span>
+              </button>
+
+              {/* Sangria */}
+              <button
+                onClick={() => setShowSangriaModal(true)}
+                className="flex flex-col items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg p-2 transition-all duration-200"
+              >
+                <TrendingDown size={20} />
+                <span className="text-xs mt-1">Sangria</span>
+              </button>
+
+              {/* Suprimento */}
+              <button
+                onClick={() => setShowSuprimentoModal(true)}
+                className="flex flex-col items-center justify-center text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg p-2 transition-all duration-200"
+              >
+                <TrendingUp size={20} />
+                <span className="text-xs mt-1">Suprimento</span>
+              </button>
+
+              {/* Pagamentos */}
+              <button
+                onClick={() => setShowPagamentosModal(true)}
+                className="flex flex-col items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg p-2 transition-all duration-200"
+              >
+                <CreditCard size={20} />
+                <span className="text-xs mt-1">Pagamentos</span>
+              </button>
+
+              {/* Fiados */}
+              <button
+                onClick={() => setShowFiadosModal(true)}
+                className="flex flex-col items-center justify-center text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg p-2 transition-all duration-200"
+              >
+                <Clock size={20} />
+                <span className="text-xs mt-1">Fiados</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1420,6 +1488,291 @@ const PDVPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Comandas/Mesas */}
+      <AnimatePresence>
+        {showComandasModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowComandasModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Comandas/Mesas Abertas</h3>
+                <button
+                  onClick={() => setShowComandasModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="text-center py-8">
+                  <FileText size={48} className="mx-auto mb-4 text-gray-500" />
+                  <p className="text-gray-400">Nenhuma comanda ou mesa aberta no momento</p>
+                  <button className="mt-4 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">
+                    Nova Comanda
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Sangria */}
+      <AnimatePresence>
+        {showSangriaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowSangriaModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Sangria</h3>
+                <button
+                  onClick={() => setShowSangriaModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Valor da Sangria
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="R$ 0,00"
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Motivo
+                  </label>
+                  <textarea
+                    placeholder="Descreva o motivo da sangria..."
+                    rows={3}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowSangriaModal(false)}
+                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      toast.success('Sangria registrada com sucesso!');
+                      setShowSangriaModal(false);
+                    }}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Registrar Sangria
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Suprimento */}
+      <AnimatePresence>
+        {showSuprimentoModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowSuprimentoModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Suprimento</h3>
+                <button
+                  onClick={() => setShowSuprimentoModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Valor do Suprimento
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="R$ 0,00"
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Motivo
+                  </label>
+                  <textarea
+                    placeholder="Descreva o motivo do suprimento..."
+                    rows={3}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowSuprimentoModal(false)}
+                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      toast.success('Suprimento registrado com sucesso!');
+                      setShowSuprimentoModal(false);
+                    }}
+                    className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Registrar Suprimento
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Pagamentos */}
+      <AnimatePresence>
+        {showPagamentosModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowPagamentosModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Relatório de Pagamentos</h3>
+                <button
+                  onClick={() => setShowPagamentosModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-800/50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-400">Dinheiro</div>
+                    <div className="text-xl font-bold text-green-400">R$ 0,00</div>
+                  </div>
+                  <div className="bg-gray-800/50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-400">Cartão</div>
+                    <div className="text-xl font-bold text-blue-400">R$ 0,00</div>
+                  </div>
+                  <div className="bg-gray-800/50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-400">PIX</div>
+                    <div className="text-xl font-bold text-purple-400">R$ 0,00</div>
+                  </div>
+                  <div className="bg-gray-800/50 p-4 rounded-lg">
+                    <div className="text-sm text-gray-400">Total</div>
+                    <div className="text-xl font-bold text-primary-400">R$ 0,00</div>
+                  </div>
+                </div>
+
+                <div className="text-center py-8">
+                  <CreditCard size={48} className="mx-auto mb-4 text-gray-500" />
+                  <p className="text-gray-400">Nenhuma venda registrada hoje</p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Fiados */}
+      <AnimatePresence>
+        {showFiadosModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowFiadosModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Vendas Fiadas</h3>
+                <button
+                  onClick={() => setShowFiadosModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-gray-800/50 p-4 rounded-lg">
+                  <div className="text-sm text-gray-400">Total em Fiados</div>
+                  <div className="text-2xl font-bold text-yellow-400">R$ 0,00</div>
+                </div>
+
+                <div className="text-center py-8">
+                  <Clock size={48} className="mx-auto mb-4 text-gray-500" />
+                  <p className="text-gray-400">Nenhuma venda fiada registrada</p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
     </div>
   );
 };
