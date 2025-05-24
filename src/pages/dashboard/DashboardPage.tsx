@@ -15,6 +15,7 @@ import {
   User,
   RefreshCw,
   CheckCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, ChartData } from 'chart.js';
 import { Line } from 'react-chartjs-2';
@@ -22,6 +23,7 @@ import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import Button from '../../components/comum/Button';
+import { useNavigate } from 'react-router-dom';
 
 ChartJS.register(
   CategoryScale,
@@ -61,6 +63,7 @@ interface Usuario {
 
 const DashboardPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
+  const navigate = useNavigate();
   const chartRef = useRef<ChartJS | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<DashboardData>({
@@ -87,6 +90,7 @@ const DashboardPage: React.FC = () => {
   const [usuarioSelecionado, setUsuarioSelecionado] = useState<string>('todos');
   const [showFilters, setShowFilters] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [produtosEstoqueMinimo, setProdutosEstoqueMinimo] = useState<number>(0);
 
   const [chartData, setChartData] = useState<ChartData<'line'>>({
     labels: [],
@@ -99,6 +103,7 @@ const DashboardPage: React.FC = () => {
     checkStoreStatus();
     checkUserType();
     loadUsuarios();
+    loadProdutosEstoqueMinimo();
 
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -180,6 +185,42 @@ const DashboardPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
+    }
+  };
+
+  // Carregar produtos com estoque mínimo
+  const loadProdutosEstoqueMinimo = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar produtos com estoque mínimo ativo e que atingiram o estoque mínimo
+      const { data: produtos } = await supabase
+        .from('produtos')
+        .select('id, nome, estoque_atual, estoque_minimo')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('estoque_minimo_ativo', true)
+        .eq('deletado', false)
+        .gt('estoque_minimo', 0);
+
+      if (produtos) {
+        // Filtrar produtos que atingiram o estoque mínimo
+        const produtosAbaixoMinimo = produtos.filter(produto =>
+          produto.estoque_atual <= produto.estoque_minimo
+        );
+
+        setProdutosEstoqueMinimo(produtosAbaixoMinimo.length);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar produtos com estoque mínimo:', error);
     }
   };
 
@@ -454,6 +495,12 @@ const DashboardPage: React.FC = () => {
     }).format(value);
   };
 
+  const handleEstoqueMinimoClick = () => {
+    if (produtosEstoqueMinimo > 0) {
+      navigate('/dashboard/estoque-minimo');
+    }
+  };
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -551,6 +598,31 @@ const DashboardPage: React.FC = () => {
       color: 'bg-yellow-500/10',
       iconColor: 'text-yellow-500',
       borderColor: 'border-yellow-500/20',
+    },
+    {
+      title: 'Estoque Mínimo',
+      value: produtosEstoqueMinimo,
+      icon: AlertTriangle,
+      color: produtosEstoqueMinimo > 0 ? 'bg-red-500/10' : 'bg-gray-500/10',
+      iconColor: produtosEstoqueMinimo > 0 ? 'text-red-500' : 'text-gray-500',
+      borderColor: produtosEstoqueMinimo > 0 ? 'border-red-500/20' : 'border-gray-500/20',
+      clickable: produtosEstoqueMinimo > 0,
+      onClick: handleEstoqueMinimoClick,
+      customContent: (
+        <div>
+          <p className="text-xs text-gray-400 mt-1">
+            {produtosEstoqueMinimo === 0
+              ? 'Todos os produtos estão OK'
+              : `${produtosEstoqueMinimo} ${produtosEstoqueMinimo === 1 ? 'produto atingiu' : 'produtos atingiram'} o estoque mínimo`
+            }
+          </p>
+          {produtosEstoqueMinimo > 0 && (
+            <p className="text-xs text-primary-400 mt-2 font-medium">
+              Clique para ver detalhes →
+            </p>
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -663,7 +735,10 @@ const DashboardPage: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className={`p-6 rounded-lg border ${card.borderColor} ${card.color}`}
+            className={`p-6 rounded-lg border ${card.borderColor} ${card.color} ${
+              card.clickable ? 'cursor-pointer hover:bg-opacity-80 transition-all duration-200 hover:scale-105' : ''
+            }`}
+            onClick={card.onClick}
           >
             <div className="flex items-center justify-between mb-4">
               <div className={`p-2 rounded-lg ${card.color}`}>

@@ -138,6 +138,8 @@ const ProdutosPage: React.FC = () => {
     tipo_desconto_quantidade: 'percentual',
     valor_desconto_quantidade: 0,
     estoque_inicial: 0,
+    estoque_minimo: 0,
+    estoque_minimo_ativo: false,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -201,6 +203,9 @@ const ProdutosPage: React.FC = () => {
   // Estado para controlar quando o campo de quantidade mínima está vazio
   const [quantidadeMinimaVazia, setQuantidadeMinimaVazia] = useState(false);
 
+  // Estado para controlar quando o campo de estoque mínimo está vazio
+  const [estoqueMinimoVazio, setEstoqueMinimoVazio] = useState(false);
+
   // Estado para controlar quando o formulário foi resetado
   const [formularioResetado, setFormularioResetado] = useState(false);
 
@@ -232,6 +237,94 @@ const ProdutosPage: React.FC = () => {
     loadTipoControleEstoque();
     loadProdutosEstoque();
   }, []);
+
+  // useEffect separado para verificar produto para editar após grupos carregarem
+  useEffect(() => {
+    if (grupos.length > 0) {
+      console.log('Grupos carregados, verificando produto para editar...');
+      checkProdutoParaEditar();
+    }
+  }, [grupos]);
+
+  const checkProdutoParaEditar = () => {
+    console.log('=== VERIFICANDO PRODUTO PARA EDITAR ===');
+    const produtoParaEditar = localStorage.getItem('produto_para_editar');
+    console.log('Dados do localStorage:', produtoParaEditar);
+
+    if (produtoParaEditar) {
+      try {
+        const { produto_id, grupo_id, timestamp, origem, aba_inicial } = JSON.parse(produtoParaEditar);
+        console.log('Dados parseados:', { produto_id, grupo_id, timestamp, origem, aba_inicial });
+
+        // Verificar se o timestamp não é muito antigo (5 minutos)
+        const agora = new Date().getTime();
+        const tempoLimite = 5 * 60 * 1000; // 5 minutos
+
+        console.log('Verificação de tempo:', { agora, timestamp, diferenca: agora - timestamp, limite: tempoLimite });
+
+        if (agora - timestamp < tempoLimite) {
+          console.log('Timestamp válido, abrindo produto imediatamente...');
+          console.log('Origem:', origem, 'Aba inicial:', aba_inicial);
+          // Como os grupos já estão carregados, abrir imediatamente
+          abrirProdutoParaEdicao(produto_id, grupo_id, aba_inicial);
+        } else {
+          console.log('Timestamp expirado, não abrindo produto');
+        }
+
+        // Limpar o localStorage
+        localStorage.removeItem('produto_para_editar');
+        console.log('localStorage limpo');
+      } catch (error) {
+        console.error('Erro ao processar produto para editar:', error);
+        localStorage.removeItem('produto_para_editar');
+      }
+    } else {
+      console.log('Nenhum produto para editar encontrado no localStorage');
+    }
+  };
+
+  const abrirProdutoParaEdicao = (produtoId: string, grupoId: string, abaInicial?: string) => {
+    console.log('=== ABRINDO PRODUTO PARA EDIÇÃO ===');
+    console.log('Produto ID:', produtoId);
+    console.log('Grupo ID:', grupoId);
+    console.log('Aba inicial:', abaInicial);
+    console.log('Grupos disponíveis:', grupos.length);
+    console.log('Grupos:', grupos.map(g => ({ id: g.id, nome: g.nome, produtos: g.produtos.length })));
+
+    // Encontrar o grupo
+    const grupo = grupos.find(g => g.id === grupoId);
+    if (!grupo) {
+      console.error('Grupo não encontrado:', grupoId);
+      console.error('Grupos disponíveis:', grupos.map(g => g.id));
+      return;
+    }
+
+    console.log('Grupo encontrado:', grupo.nome);
+    console.log('Produtos no grupo:', grupo.produtos.map(p => ({ id: p.id, nome: p.nome })));
+
+    // Encontrar o produto
+    const produto = grupo.produtos.find(p => p.id === produtoId);
+    if (!produto) {
+      console.error('Produto não encontrado:', produtoId);
+      console.error('Produtos disponíveis no grupo:', grupo.produtos.map(p => p.id));
+      return;
+    }
+
+    // Abrir o produto para edição
+    console.log('Produto encontrado:', produto.nome);
+    console.log('Chamando handleEditProduto...');
+    handleEditProduto(grupo, produto);
+    console.log('handleEditProduto executado');
+
+    // Se foi especificada uma aba inicial, definir após um pequeno delay
+    if (abaInicial) {
+      console.log('Definindo aba inicial para:', abaInicial);
+      setTimeout(() => {
+        setActiveTab(abaInicial);
+        console.log('Aba alterada para:', abaInicial);
+      }, 100);
+    }
+  };
 
   // Efeito para monitorar quando o sidebar é fechado
   useEffect(() => {
@@ -282,6 +375,23 @@ const ProdutosPage: React.FC = () => {
         setNovoProduto(prev => ({
           ...prev,
           estoque_inicial: Math.floor(prev.estoque_inicial || 0)
+        }));
+      }
+    }
+  }, [novoProduto.unidade_medida_id, unidadesMedida]);
+
+  // Efeito para arredondar o estoque mínimo quando a unidade de medida mudar
+  useEffect(() => {
+    if (novoProduto.estoque_minimo !== undefined && novoProduto.unidade_medida_id) {
+      // Verificar se a unidade de medida é KG
+      const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+      const isKG = unidadeSelecionada?.sigla === 'KG';
+
+      // Se não for KG e o valor for fracionado, arredondar para número inteiro
+      if (!isKG && novoProduto.estoque_minimo % 1 !== 0) {
+        setNovoProduto(prev => ({
+          ...prev,
+          estoque_minimo: Math.floor(prev.estoque_minimo || 0)
         }));
       }
     }
@@ -760,6 +870,8 @@ const ProdutosPage: React.FC = () => {
       percentual_desconto_quantidade: 10,
       valor_desconto_quantidade: 0,
       estoque_inicial: 0,
+      estoque_minimo: 0,
+      estoque_minimo_ativo: false,
     });
 
     // Inicializa o preço formatado
@@ -977,6 +1089,8 @@ const ProdutosPage: React.FC = () => {
       percentual_desconto_quantidade: produto.percentual_desconto_quantidade || 10,
       valor_desconto_quantidade: produto.valor_desconto_quantidade || 0,
       estoque_inicial: produto.estoque_inicial || 0,
+      estoque_minimo: produto.estoque_minimo || 0,
+      estoque_minimo_ativo: produto.estoque_minimo_ativo || false,
     };
 
     console.log('Definindo novoProduto com:', produtoState);
@@ -1541,7 +1655,14 @@ const ProdutosPage: React.FC = () => {
 
   const handleSubmitProduto = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    console.log('=== INÍCIO DO SUBMIT ===');
+    console.log('editingProduto:', editingProduto);
+    console.log('novoProduto completo:', novoProduto);
+    console.log('selectedGrupo:', selectedGrupo);
+
     if (!selectedGrupo || !novoProduto.nome || !novoProduto.preco || !novoProduto.codigo || !novoProduto.unidade_medida_id) {
+      console.log('ERRO: Campos obrigatórios não preenchidos');
       showMessage('error', 'Preencha todos os campos obrigatórios');
       return;
     }
@@ -1569,6 +1690,21 @@ const ProdutosPage: React.FC = () => {
         return;
       }
     }
+
+    // Validar se o produto com estoque mínimo ativo tem um valor válido
+    if (novoProduto.estoque_minimo_ativo) {
+      if (!novoProduto.estoque_minimo || novoProduto.estoque_minimo <= 0) {
+        showMessage('error', 'Para produtos com controle de estoque mínimo ativo, é necessário informar uma quantidade mínima maior que zero');
+        return;
+      }
+    }
+
+    // Debug: Log dos valores do estoque mínimo
+    console.log('Valores do estoque mínimo antes de salvar:', {
+      estoque_minimo_ativo: novoProduto.estoque_minimo_ativo,
+      estoque_minimo: novoProduto.estoque_minimo,
+      estoqueMinimoVazio: estoqueMinimoVazio
+    });
 
     setIsLoading(true);
     try {
@@ -1643,30 +1779,41 @@ const ProdutosPage: React.FC = () => {
       let productId: string;
 
       if (editingProduto) {
+        console.log('=== EDITANDO PRODUTO ===');
+        console.log('ID do produto:', editingProduto.id);
+
+        const updateData = {
+          nome: novoProduto.nome,
+          preco: novoProduto.preco,
+          descricao: novoProduto.descricao,
+          codigo: novoProduto.codigo,
+          codigo_barras: novoProduto.codigo_barras,
+          promocao: novoProduto.promocao,
+          tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
+          valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
+          ativo: novoProduto.ativo,
+          unidade_medida_id: novoProduto.unidade_medida_id,
+          desconto_quantidade: novoProduto.desconto_quantidade,
+          quantidade_minima: novoProduto.desconto_quantidade ? novoProduto.quantidade_minima : null,
+          tipo_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.tipo_desconto_quantidade : null,
+          valor_desconto_quantidade: novoProduto.desconto_quantidade && novoProduto.tipo_desconto_quantidade === 'valor' ? novoProduto.valor_desconto_quantidade : null,
+          percentual_desconto_quantidade: novoProduto.desconto_quantidade && novoProduto.tipo_desconto_quantidade === 'percentual' ? novoProduto.percentual_desconto_quantidade : null,
+          // Incluir os campos de estoque mínimo
+          estoque_minimo: novoProduto.estoque_minimo_ativo ? (novoProduto.estoque_minimo || 0) : 0,
+          estoque_minimo_ativo: novoProduto.estoque_minimo_ativo || false,
+          empresa_id: usuarioData.empresa_id
+        };
+
+        console.log('Dados para UPDATE:', updateData);
+
         const { data, error } = await supabase
           .from('produtos')
-          .update({
-            nome: novoProduto.nome,
-            preco: novoProduto.preco,
-            descricao: novoProduto.descricao,
-            codigo: novoProduto.codigo,
-            codigo_barras: novoProduto.codigo_barras,
-            promocao: novoProduto.promocao,
-            tipo_desconto: novoProduto.promocao ? novoProduto.tipo_desconto : null,
-            valor_desconto: novoProduto.promocao ? novoProduto.valor_desconto : null,
-            ativo: novoProduto.ativo,
-            unidade_medida_id: novoProduto.unidade_medida_id,
-            desconto_quantidade: novoProduto.desconto_quantidade,
-            quantidade_minima: novoProduto.desconto_quantidade ? novoProduto.quantidade_minima : null,
-            tipo_desconto_quantidade: novoProduto.desconto_quantidade ? novoProduto.tipo_desconto_quantidade : null,
-            valor_desconto_quantidade: novoProduto.desconto_quantidade && novoProduto.tipo_desconto_quantidade === 'valor' ? novoProduto.valor_desconto_quantidade : null,
-            percentual_desconto_quantidade: novoProduto.desconto_quantidade && novoProduto.tipo_desconto_quantidade === 'percentual' ? novoProduto.percentual_desconto_quantidade : null,
-            empresa_id: usuarioData.empresa_id
-          })
+          .update(updateData)
           .eq('id', editingProduto.id)
           .select()
           .single();
 
+        console.log('Resultado do UPDATE:', { data, error });
         if (error) throw error;
         productId = data.id;
 
@@ -1691,6 +1838,9 @@ const ProdutosPage: React.FC = () => {
           // Incluir o estoque inicial e definir o estoque atual como 0 (será atualizado pela movimentação)
           estoque_inicial: novoProduto.estoque_inicial || 0,
           estoque_atual: 0,
+          // Incluir os campos de estoque mínimo
+          estoque_minimo: novoProduto.estoque_minimo_ativo ? (novoProduto.estoque_minimo || 0) : 0,
+          estoque_minimo_ativo: novoProduto.estoque_minimo_ativo || false,
         };
 
         const { data, error } = await supabase
@@ -1799,8 +1949,13 @@ const ProdutosPage: React.FC = () => {
         setActiveTab('fotos');
       }
     } catch (error: any) {
+      console.error('=== ERRO NO SUBMIT ===');
+      console.error('Erro completo:', error);
+      console.error('Mensagem do erro:', error.message);
+      console.error('Stack trace:', error.stack);
       showMessage('error', `Erro ao ${editingProduto ? 'atualizar' : 'criar'} produto: ` + error.message);
     } finally {
+      console.log('=== FINALIZANDO SUBMIT ===');
       setIsLoading(false);
     }
   };
@@ -1974,6 +2129,7 @@ const ProdutosPage: React.FC = () => {
     setDescontoQuantidadeFormatado('10');
     setEstoqueInputVazio(false);
     setQuantidadeMinimaVazia(false);
+    setEstoqueMinimoVazio(false);
     setEditingProduto(null);
     setSelectedOpcoes([]);
     setActiveTab('dados');
@@ -3366,12 +3522,14 @@ const ProdutosPage: React.FC = () => {
                                 type="button"
                                 variant="primary"
                                 className="flex-1"
-                                onClick={() => {
-                                  resetFormularioProduto();
-                                  setShowSidebar(false);
+                                onClick={async () => {
+                                  // Simular o evento de submit do formulário
+                                  const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                                  await handleSubmitProduto(fakeEvent);
                                 }}
+                                disabled={isLoading}
                               >
-                                Concluir
+                                {isLoading ? 'Salvando...' : 'Concluir'}
                               </Button>
                             </div>
                           </>
@@ -3400,6 +3558,107 @@ const ProdutosPage: React.FC = () => {
                                   <div className="text-sm text-gray-400 bg-gray-900/50 border border-gray-800 rounded-lg p-2 px-3">
                                     Estoque Atual: <span className="font-semibold text-white">{editingProduto ? formatarEstoque(estoqueAtual, editingProduto) : estoqueAtual.toFixed(2)}</span>
                                   </div>
+                                </div>
+                              </div>
+
+                              {/* Configuração de Estoque Mínimo */}
+                              <div className="mb-6 bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+                                <h4 className="text-white font-medium mb-4">Configuração de Estoque Mínimo</h4>
+
+                                <div className="space-y-4">
+                                  {/* Checkbox para ativar estoque mínimo */}
+                                  <div className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      id="estoque_minimo_ativo"
+                                      checked={novoProduto.estoque_minimo_ativo}
+                                      onChange={(e) => setNovoProduto({ ...novoProduto, estoque_minimo_ativo: e.target.checked })}
+                                      className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                    />
+                                    <label htmlFor="estoque_minimo_ativo" className="text-sm font-medium text-white cursor-pointer">
+                                      Ativar controle de estoque mínimo
+                                    </label>
+                                  </div>
+
+                                  {/* Campo de estoque mínimo - só aparece quando ativado */}
+                                  {novoProduto.estoque_minimo_ativo && (
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                                        Quantidade Mínima
+                                      </label>
+                                      {(() => {
+                                        // Verificar se a unidade de medida é KG
+                                        const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+                                        const isKG = unidadeSelecionada?.sigla === 'KG';
+                                        const placeholder = isKG ? "0,000" : "0";
+
+                                        return (
+                                          <input
+                                            type="text"
+                                            value={novoProduto.estoque_minimo === 0 && estoqueMinimoVazio ? '' : novoProduto.estoque_minimo}
+                                            onChange={(e) => {
+                                              // Se o campo estiver vazio
+                                              if (e.target.value === '') {
+                                                setEstoqueMinimoVazio(true);
+                                                setNovoProduto({ ...novoProduto, estoque_minimo: 0 });
+                                                return;
+                                              }
+
+                                              setEstoqueMinimoVazio(false);
+
+                                              // Remover caracteres não numéricos, exceto ponto e vírgula
+                                              const valorLimpo = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+
+                                              // Se não for um número válido, não atualiza
+                                              if (isNaN(parseFloat(valorLimpo))) {
+                                                return;
+                                              }
+
+                                              const valor = parseFloat(valorLimpo);
+
+                                              // Se não for KG e o valor for fracionado, arredondar para inteiro
+                                              const valorFinal = !isKG && valor % 1 !== 0 ? Math.floor(valor) : valor;
+
+                                              setNovoProduto({
+                                                ...novoProduto,
+                                                estoque_minimo: valorFinal >= 0 ? valorFinal : 0
+                                              });
+                                            }}
+                                            onFocus={() => {
+                                              // Ao receber o foco, limpar o campo se for 0
+                                              if (novoProduto.estoque_minimo === 0) {
+                                                setEstoqueMinimoVazio(true);
+                                              }
+                                            }}
+                                            onBlur={() => {
+                                              // Se o campo estiver vazio ao perder o foco, define como 0
+                                              if (estoqueMinimoVazio) {
+                                                setEstoqueMinimoVazio(false);
+                                              } else {
+                                                // Se tiver valor, formata para casas decimais adequadas
+                                                const casasDecimais = isKG ? 3 : 0;
+                                                setNovoProduto({
+                                                  ...novoProduto,
+                                                  estoque_minimo: parseFloat(novoProduto.estoque_minimo.toFixed(casasDecimais))
+                                                });
+                                              }
+                                            }}
+                                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                            placeholder={placeholder}
+                                          />
+                                        );
+                                      })()}
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {(() => {
+                                          // Verificar se a unidade de medida é KG
+                                          const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+                                          return unidadeSelecionada?.sigla === 'KG'
+                                            ? "Valores fracionados permitidos para KG (ex: 0,5)"
+                                            : "Apenas valores inteiros permitidos para esta unidade";
+                                        })()}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -3648,12 +3907,14 @@ const ProdutosPage: React.FC = () => {
                                 type="button"
                                 variant="primary"
                                 className="flex-1"
-                                onClick={() => {
-                                  resetFormularioProduto();
-                                  setShowSidebar(false);
+                                onClick={async () => {
+                                  // Simular o evento de submit do formulário
+                                  const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                                  await handleSubmitProduto(fakeEvent);
                                 }}
+                                disabled={isLoading}
                               >
-                                Concluir
+                                {isLoading ? 'Salvando...' : 'Concluir'}
                               </Button>
                             </div>
                           </>

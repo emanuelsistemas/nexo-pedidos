@@ -11,6 +11,9 @@ export interface Produto {
   valor_desconto?: number;
   ativo?: boolean;
   estoque_inicial?: number;
+  estoque_atual?: number;
+  estoque_minimo?: number;
+  estoque_minimo_ativo?: boolean;
   desconto_quantidade?: boolean;
   quantidade_minima?: number;
   tipo_desconto_quantidade?: 'percentual' | 'valor';
