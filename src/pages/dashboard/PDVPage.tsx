@@ -22,7 +22,8 @@ import {
   TrendingUp,
   Clock,
   UserCheck,
-  QrCode
+  QrCode,
+  Percent
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -71,6 +72,13 @@ interface ItemCarrinho {
   produto: Produto;
   quantidade: number;
   subtotal: number;
+  desconto?: {
+    tipo: 'percentual' | 'valor';
+    valor: number;
+    valorDesconto: number;
+    precoOriginal: number;
+    precoComDesconto: number;
+  };
 }
 
 interface Cliente {
@@ -113,14 +121,95 @@ const PDVPage: React.FC = () => {
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
 
-  // Estados para paginação do menu PDV
-  const [currentMenuPage, setCurrentMenuPage] = useState(0);
-  const [menuItemsPerPage, setMenuItemsPerPage] = useState(5);
-  const [containerWidth, setContainerWidth] = useState(0);
+  // Estados para os modais do menu PDV (paginação removida)
+
+  // Estados para modal de desconto
+  const [showDescontoModal, setShowDescontoModal] = useState(false);
+  const [itemParaDesconto, setItemParaDesconto] = useState<string | null>(null);
+  const [tipoDesconto, setTipoDesconto] = useState<'percentual' | 'valor'>('percentual');
+  const [valorDesconto, setValorDesconto] = useState('');
+  const [novoValor, setNovoValor] = useState(0);
+
+  // Estados para finalização de venda
+  const [showFinalizacaoVenda, setShowFinalizacaoVenda] = useState(false);
+  const [tipoPagamento, setTipoPagamento] = useState<'vista' | 'parcial'>('vista');
+  const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
+  const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Calcular novo valor em tempo real no modal de desconto
+  useEffect(() => {
+    if (itemParaDesconto && valorDesconto) {
+      const item = carrinho.find(i => i.id === itemParaDesconto);
+      if (item) {
+        const valor = parseFloat(valorDesconto.replace(',', '.'));
+        if (!isNaN(valor) && valor >= 0) {
+          const novoPreco = calcularNovoValor(item, tipoDesconto, valor);
+          setNovoValor(novoPreco);
+        }
+      }
+    } else {
+      setNovoValor(0);
+    }
+  }, [itemParaDesconto, valorDesconto, tipoDesconto, carrinho]);
+
+
+
+  // Definir itens do menu PDV
+  const menuPDVItems = [
+    {
+      id: 'comandas',
+      icon: FileText,
+      label: 'Comandas',
+      color: 'primary',
+      onClick: () => setShowComandasModal(true)
+    },
+    {
+      id: 'sangria',
+      icon: TrendingDown,
+      label: 'Sangria',
+      color: 'red',
+      onClick: () => setShowSangriaModal(true)
+    },
+    {
+      id: 'suprimento',
+      icon: TrendingUp,
+      label: 'Suprimento',
+      color: 'green',
+      onClick: () => setShowSuprimentoModal(true)
+    },
+    {
+      id: 'pagamentos',
+      icon: CreditCard,
+      label: 'Pagamentos',
+      color: 'blue',
+      onClick: () => setShowPagamentosModal(true)
+    },
+    {
+      id: 'fiados',
+      icon: Clock,
+      label: 'Fiados',
+      color: 'yellow',
+      onClick: () => setShowFiadosModal(true)
+    }
+  ];
+
+
+
+  // Função para obter classes de cor
+  const getColorClasses = (color: string) => {
+    const colorMap = {
+      primary: 'hover:text-primary-400 hover:bg-primary-500/10',
+      red: 'hover:text-red-400 hover:bg-red-500/10',
+      green: 'hover:text-green-400 hover:bg-green-500/10',
+      blue: 'hover:text-blue-400 hover:bg-blue-500/10',
+      yellow: 'hover:text-yellow-400 hover:bg-yellow-500/10'
+    };
+    return colorMap[color as keyof typeof colorMap] || colorMap.primary;
+  };
 
   // Atualizar data e hora a cada segundo
   useEffect(() => {
@@ -229,7 +318,8 @@ const PDVPage: React.FC = () => {
           loadGrupos(),
           loadClientes(),
           loadEstoque(),
-          loadPdvConfig()
+          loadPdvConfig(),
+          loadFormasPagamento()
         ]);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -425,6 +515,26 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  const loadFormasPagamento = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('formas_pag_pdv')
+        .select('*')
+        .eq('ativo', true)
+        .order('ordem');
+
+      if (error) throw error;
+      setFormasPagamento(data || []);
+
+      // Selecionar a primeira forma de pagamento como padrão
+      if (data && data.length > 0) {
+        setFormaPagamentoSelecionada(data[0].id);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar formas de pagamento:', error);
+    }
+  };
+
   const produtosFiltrados = produtos.filter(produto => {
     // Extrair o termo de busca (removendo a quantidade se houver)
     let termoBusca = searchTerm;
@@ -456,6 +566,9 @@ const PDVPage: React.FC = () => {
       }
     }
 
+    // Calcular o preço final considerando promoções
+    const precoFinal = calcularPrecoFinal(produto);
+
     setCarrinho(prev => {
       // Verificar se deve agrupar itens baseado na configuração
       const deveAgrupar = pdvConfig?.agrupa_itens === true;
@@ -470,7 +583,7 @@ const PDVPage: React.FC = () => {
               ? {
                   ...item,
                   quantidade: item.quantidade + quantidadeParaAdicionar,
-                  subtotal: (item.quantidade + quantidadeParaAdicionar) * produto.preco
+                  subtotal: (item.quantidade + quantidadeParaAdicionar) * precoFinal
                 }
               : item
           );
@@ -479,7 +592,7 @@ const PDVPage: React.FC = () => {
             id: `${produto.id}-${Date.now()}`, // ID único
             produto,
             quantidade: quantidadeParaAdicionar,
-            subtotal: produto.preco * quantidadeParaAdicionar
+            subtotal: precoFinal * quantidadeParaAdicionar
           }];
         }
       } else {
@@ -488,7 +601,7 @@ const PDVPage: React.FC = () => {
           id: `${produto.id}-${Date.now()}-${Math.random()}`, // ID único
           produto,
           quantidade: quantidadeParaAdicionar,
-          subtotal: produto.preco * quantidadeParaAdicionar
+          subtotal: precoFinal * quantidadeParaAdicionar
         }];
       }
     });
@@ -525,12 +638,108 @@ const PDVPage: React.FC = () => {
     }
 
     setCarrinho(prev =>
-      prev.map(item =>
-        item.id === itemId
-          ? { ...item, quantidade: novaQuantidade, subtotal: novaQuantidade * item.produto.preco }
-          : item
-      )
+      prev.map(item => {
+        if (item.id === itemId) {
+          // Usar o preço com desconto aplicado pelo usuário, ou o preço final do produto (considerando promoções)
+          const precoUnitario = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
+          return {
+            ...item,
+            quantidade: novaQuantidade,
+            subtotal: novaQuantidade * precoUnitario
+          };
+        }
+        return item;
+      })
     );
+  };
+
+  // Funções para gerenciar desconto
+  const abrirModalDesconto = (itemId: string) => {
+    setItemParaDesconto(itemId);
+    setTipoDesconto('percentual');
+    setValorDesconto('');
+    setNovoValor(0);
+    setShowDescontoModal(true);
+  };
+
+  const calcularNovoValor = (item: ItemCarrinho, tipo: 'percentual' | 'valor', valor: number) => {
+    // Usar o preço final do produto (considerando promoções) como base para o desconto
+    const precoBase = calcularPrecoFinal(item.produto);
+
+    if (tipo === 'percentual') {
+      const desconto = (precoBase * valor) / 100;
+      return Math.max(0, precoBase - desconto);
+    } else {
+      return Math.max(0, precoBase - valor);
+    }
+  };
+
+  const aplicarDesconto = () => {
+    if (!itemParaDesconto || !valorDesconto) return;
+
+    const valor = parseFloat(valorDesconto.replace(',', '.'));
+    if (isNaN(valor) || valor < 0) {
+      toast.error('Valor de desconto inválido');
+      return;
+    }
+
+    setCarrinho(prev =>
+      prev.map(item => {
+        if (item.id === itemParaDesconto) {
+          // Usar o preço final do produto (considerando promoções) como base
+          const precoBase = calcularPrecoFinal(item.produto);
+          const precoComDesconto = calcularNovoValor(item, tipoDesconto, valor);
+
+          if (tipoDesconto === 'percentual' && valor > 100) {
+            toast.error('Desconto não pode ser maior que 100%');
+            return item;
+          }
+
+          if (tipoDesconto === 'valor' && valor > precoBase) {
+            toast.error('Desconto não pode ser maior que o preço do produto');
+            return item;
+          }
+
+          const valorDesconto = precoBase - precoComDesconto;
+
+          return {
+            ...item,
+            desconto: {
+              tipo: tipoDesconto,
+              valor,
+              valorDesconto,
+              precoOriginal: precoBase, // Usar o preço final como "original" para o desconto
+              precoComDesconto
+            },
+            subtotal: item.quantidade * precoComDesconto
+          };
+        }
+        return item;
+      })
+    );
+
+    setShowDescontoModal(false);
+    setItemParaDesconto(null);
+    setValorDesconto('');
+    toast.success('Desconto aplicado com sucesso!');
+  };
+
+  const removerDesconto = (itemId: string) => {
+    setCarrinho(prev =>
+      prev.map(item => {
+        if (item.id === itemId && item.desconto) {
+          // Voltar ao preço final do produto (considerando promoções)
+          const precoFinal = calcularPrecoFinal(item.produto);
+          return {
+            ...item,
+            desconto: undefined,
+            subtotal: item.quantidade * precoFinal
+          };
+        }
+        return item;
+      })
+    );
+    toast.success('Desconto removido com sucesso!');
   };
 
   const calcularTotal = () => {
@@ -653,7 +862,7 @@ const PDVPage: React.FC = () => {
       toast.warning('Adicione produtos ao carrinho antes de finalizar a venda');
       return;
     }
-    setShowPagamentoModal(true);
+    setShowFinalizacaoVenda(true);
   };
 
   const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -688,7 +897,8 @@ const PDVPage: React.FC = () => {
 
       <div className="flex" style={{ height: 'calc(100vh - 64px)' }}>
         {/* Área Principal - Produtos */}
-        <div className="flex-1 p-4 flex flex-col h-full relative">
+        {!showFinalizacaoVenda && (
+          <div className="flex-1 p-4 flex flex-col h-full relative">
           {/* Barra de Busca */}
           <div className="mb-4">
             <div className="relative">
@@ -763,7 +973,7 @@ const PDVPage: React.FC = () => {
           )}
 
           {/* Grid de Produtos */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ paddingBottom: '80px' }}>
+          <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ paddingBottom: '60px' }}>
             {produtosFiltrados.length === 0 ? (
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-gray-500" />
@@ -884,57 +1094,34 @@ const PDVPage: React.FC = () => {
 
           {/* Menu Fixo no Footer da Área de Produtos */}
           <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
-            <div className="flex justify-around items-center h-16 px-4">
-              {/* Comandas/Mesas Abertas */}
-              <button
-                onClick={() => setShowComandasModal(true)}
-                className="flex flex-col items-center justify-center text-gray-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg p-2 transition-all duration-200"
-              >
-                <FileText size={20} />
-                <span className="text-xs mt-1">Comandas</span>
-              </button>
-
-              {/* Sangria */}
-              <button
-                onClick={() => setShowSangriaModal(true)}
-                className="flex flex-col items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg p-2 transition-all duration-200"
-              >
-                <TrendingDown size={20} />
-                <span className="text-xs mt-1">Sangria</span>
-              </button>
-
-              {/* Suprimento */}
-              <button
-                onClick={() => setShowSuprimentoModal(true)}
-                className="flex flex-col items-center justify-center text-gray-400 hover:text-green-400 hover:bg-green-500/10 rounded-lg p-2 transition-all duration-200"
-              >
-                <TrendingUp size={20} />
-                <span className="text-xs mt-1">Suprimento</span>
-              </button>
-
-              {/* Pagamentos */}
-              <button
-                onClick={() => setShowPagamentosModal(true)}
-                className="flex flex-col items-center justify-center text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg p-2 transition-all duration-200"
-              >
-                <CreditCard size={20} />
-                <span className="text-xs mt-1">Pagamentos</span>
-              </button>
-
-              {/* Fiados */}
-              <button
-                onClick={() => setShowFiadosModal(true)}
-                className="flex flex-col items-center justify-center text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10 rounded-lg p-2 transition-all duration-200"
-              >
-                <Clock size={20} />
-                <span className="text-xs mt-1">Fiados</span>
-              </button>
+            <div className="h-14 px-4 py-2 overflow-hidden">
+              {/* Itens do Menu com Scroll Horizontal */}
+              <div className="flex items-center h-full overflow-x-auto overflow-y-hidden custom-scrollbar gap-2 justify-around min-w-0">
+                {menuPDVItems.map((item) => {
+                  const IconComponent = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={item.onClick}
+                      className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} rounded-lg p-1 transition-all duration-200 min-w-[70px] flex-shrink-0`}
+                    >
+                      <IconComponent size={18} />
+                      <span className="text-xs mt-0.5 whitespace-nowrap">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
+        )}
 
         {/* Carrinho de Compras */}
-        <div className="w-96 bg-background-card border-l border-gray-800 p-4 flex flex-col h-full">
+        <motion.div
+          className={`bg-background-card p-4 flex flex-col h-full transition-all duration-300 ${
+            showFinalizacaoVenda ? 'flex-1' : 'w-96 border-l border-gray-800'
+          }`}
+        >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-white flex items-center gap-2">
               <ShoppingCart size={20} />
@@ -1025,7 +1212,30 @@ const PDVPage: React.FC = () => {
                               {item.produto.nome}
                             </h4>
                             <div className="text-primary-400 text-sm flex items-center gap-1">
-                              {formatCurrency(item.produto.preco)}
+                              {item.desconto ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="line-through text-gray-500">
+                                    {formatCurrency(item.desconto.precoOriginal)}
+                                  </span>
+                                  <span className="text-green-400 font-medium">
+                                    {formatCurrency(item.desconto.precoComDesconto)}
+                                  </span>
+                                </div>
+                              ) : (
+                                // Mostrar preço com promoção se houver, senão preço normal
+                                item.produto.promocao && item.produto.valor_desconto ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="line-through text-gray-500">
+                                      {formatCurrency(item.produto.preco)}
+                                    </span>
+                                    <span className="text-green-400 font-medium">
+                                      {formatCurrency(calcularPrecoFinal(item.produto))}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  formatCurrency(item.produto.preco)
+                                )
+                              )}
                               {item.produto.unidade_medida && (
                                 <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
                                   {item.produto.unidade_medida.sigla}
@@ -1058,6 +1268,30 @@ const PDVPage: React.FC = () => {
                             >
                               <Plus size={14} />
                             </button>
+
+                            {/* Botão de Desconto */}
+                            <button
+                              onClick={() => abrirModalDesconto(item.id)}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                                item.desconto
+                                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                                  : 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                              }`}
+                              title={item.desconto ? 'Editar desconto' : 'Aplicar desconto'}
+                            >
+                              <Percent size={14} />
+                            </button>
+
+                            {/* Botão para remover desconto */}
+                            {item.desconto && (
+                              <button
+                                onClick={() => removerDesconto(item.id)}
+                                className="w-8 h-8 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                title="Remover desconto"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
                           </div>
                           <div className="text-white font-bold">
                             {formatCurrency(item.subtotal)}
@@ -1072,7 +1306,7 @@ const PDVPage: React.FC = () => {
           </div>
 
           {/* Resumo e Finalização */}
-          {carrinho.length > 0 && (
+          {carrinho.length > 0 && !showFinalizacaoVenda && (
             <div className="border-t border-gray-800 pt-4">
               <div className="space-y-2 mb-4">
                 <div className="flex justify-between text-gray-400">
@@ -1094,7 +1328,127 @@ const PDVPage: React.FC = () => {
               </button>
             </div>
           )}
-        </div>
+        </motion.div>
+
+        {/* Área de Finalização de Venda */}
+        <AnimatePresence>
+          {showFinalizacaoVenda && (
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="w-96 bg-background-card border-l border-gray-800 p-4 flex flex-col h-full"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <CreditCard size={20} />
+                  Finalizar Venda
+                </h3>
+                <button
+                  onClick={() => setShowFinalizacaoVenda(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Resumo da Venda */}
+              <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-gray-400">Total da Venda:</span>
+                  <span className="text-2xl font-bold text-primary-400">
+                    {formatCurrency(calcularTotal())}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-400">Itens:</span>
+                  <span className="text-white">
+                    {carrinho.reduce((total, item) => total + item.quantidade, 0)}
+                  </span>
+                </div>
+                {pdvConfig?.seleciona_clientes && clienteSelecionado && (
+                  <div className="flex justify-between items-center text-sm mt-1">
+                    <span className="text-gray-400">Cliente:</span>
+                    <span className="text-white">{clienteSelecionado.nome}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tipo de Pagamento */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Tipo de Pagamento
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setTipoPagamento('vista')}
+                    className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                      tipoPagamento === 'vista'
+                        ? 'bg-primary-500 border-primary-500 text-white'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                    }`}
+                  >
+                    À Vista
+                  </button>
+                  <button
+                    onClick={() => setTipoPagamento('parcial')}
+                    className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                      tipoPagamento === 'parcial'
+                        ? 'bg-primary-500 border-primary-500 text-white'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                    }`}
+                  >
+                    Parciais
+                  </button>
+                </div>
+              </div>
+
+              {/* Formas de Pagamento */}
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Forma de Pagamento
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {formasPagamento.map((forma) => (
+                    <button
+                      key={forma.id}
+                      onClick={() => setFormaPagamentoSelecionada(forma.id)}
+                      className={`p-3 rounded-lg border transition-colors text-sm ${
+                        formaPagamentoSelecionada === forma.id
+                          ? 'bg-primary-500 border-primary-500 text-white'
+                          : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600'
+                      }`}
+                    >
+                      {forma.nome}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => setShowFinalizacaoVenda(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    toast.success('Venda finalizada com sucesso!');
+                    setCarrinho([]);
+                    setClienteSelecionado(null);
+                    setShowFinalizacaoVenda(false);
+                  }}
+                  className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-3 px-4 rounded-lg transition-colors"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Modal de Seleção de Cliente */}
@@ -1772,6 +2126,132 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* Modal de Desconto */}
+      <AnimatePresence>
+        {showDescontoModal && itemParaDesconto && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowDescontoModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {(() => {
+                const item = carrinho.find(i => i.id === itemParaDesconto);
+                if (!item) return null;
+
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-white">Aplicar Desconto</h3>
+                      <button
+                        onClick={() => setShowDescontoModal(false)}
+                        className="text-gray-400 hover:text-white transition-colors"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <div className="mb-4 p-3 bg-gray-800/50 rounded-lg">
+                      <div className="text-white font-medium">{item.produto.nome}</div>
+                      <div className="text-sm text-gray-400">
+                        Preço atual: {formatCurrency(calcularPrecoFinal(item.produto))}
+                        {item.produto.promocao && item.produto.valor_desconto && (
+                          <div className="text-xs text-green-400 mt-1">
+                            (Preço original: {formatCurrency(item.produto.preco)} - Em promoção)
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Tipo de Desconto */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                          Tipo de Desconto
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setTipoDesconto('percentual')}
+                            className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                              tipoDesconto === 'percentual'
+                                ? 'bg-primary-500 border-primary-500 text-white'
+                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                            }`}
+                          >
+                            Percentual (%)
+                          </button>
+                          <button
+                            onClick={() => setTipoDesconto('valor')}
+                            className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                              tipoDesconto === 'valor'
+                                ? 'bg-primary-500 border-primary-500 text-white'
+                                : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
+                            }`}
+                          >
+                            Valor (R$)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Valor do Desconto */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                          {tipoDesconto === 'percentual' ? 'Percentual de Desconto' : 'Valor do Desconto'}
+                        </label>
+                        <input
+                          type="text"
+                          value={valorDesconto}
+                          onChange={(e) => setValorDesconto(e.target.value)}
+                          placeholder={tipoDesconto === 'percentual' ? 'Ex: 10' : 'Ex: 5,00'}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        />
+                      </div>
+
+                      {/* Novo Valor */}
+                      {valorDesconto && (
+                        <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                          <div className="text-sm text-gray-400 mb-1">Novo preço:</div>
+                          <div className="text-lg font-bold text-green-400">
+                            {formatCurrency(novoValor)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Desconto: {formatCurrency(calcularPrecoFinal(item.produto) - novoValor)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Botões */}
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setShowDescontoModal(false)}
+                          className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={aplicarDesconto}
+                          disabled={!valorDesconto}
+                          className="flex-1 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg transition-colors"
+                        >
+                          Aplicar Desconto
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
