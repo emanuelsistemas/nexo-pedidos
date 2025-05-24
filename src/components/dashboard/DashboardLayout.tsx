@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Sidebar from './Sidebar';
 import LoadingScreen from './LoadingScreen';
@@ -10,9 +10,13 @@ import { useResponsiveRedirect } from '../../hooks/useResponsiveRedirect';
 const DashboardLayout: React.FC = () => {
   const { isExpanded } = useSidebarStore();
   const [isLoading, setIsLoading] = useState(true);
+  const location = useLocation();
 
   // Hook para redirecionamento responsivo automático
   useResponsiveRedirect();
+
+  // Verificar se estamos na página do PDV
+  const isPDVPage = location.pathname === '/dashboard/pdv';
 
   useEffect(() => {
     // Simulate loading time
@@ -37,7 +41,7 @@ const DashboardLayout: React.FC = () => {
           transition={{ duration: 0.3, ease: 'easeInOut' }}
           className="min-h-screen h-screen overflow-y-auto custom-scrollbar"
         >
-          <div className="p-6">
+          <div className={isPDVPage ? '' : 'p-6'}>
             <Outlet />
           </div>
         </motion.main>

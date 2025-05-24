@@ -154,6 +154,16 @@ const PDVPage: React.FC = () => {
   const [showConfirmRemoveItem, setShowConfirmRemoveItem] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<number | null>(null);
 
+  // Estados para tela de finalização final
+  const [showFinalizacaoFinal, setShowFinalizacaoFinal] = useState(false);
+  const [cpfCnpjNota, setCpfCnpjNota] = useState('');
+  const [clienteEncontrado, setClienteEncontrado] = useState<Cliente | null>(null);
+  const [tipoDocumento, setTipoDocumento] = useState<'cpf' | 'cnpj'>('cpf');
+  const [erroValidacao, setErroValidacao] = useState<string>('');
+
+  // Estado para confirmação de limpar carrinho
+  const [showConfirmLimparCarrinho, setShowConfirmLimparCarrinho] = useState(false);
+
   // Funções para localStorage
   const savePDVState = () => {
     try {
@@ -161,6 +171,7 @@ const PDVPage: React.FC = () => {
         carrinho,
         clienteSelecionado,
         showFinalizacaoVenda,
+        showFinalizacaoFinal,
         tipoPagamento,
         formaPagamentoSelecionada,
         valorParcial,
@@ -188,18 +199,23 @@ const PDVPage: React.FC = () => {
           if (pdvState.carrinho) setCarrinho(pdvState.carrinho);
           if (pdvState.clienteSelecionado) setClienteSelecionado(pdvState.clienteSelecionado);
           if (pdvState.showFinalizacaoVenda !== undefined) setShowFinalizacaoVenda(pdvState.showFinalizacaoVenda);
+          if (pdvState.showFinalizacaoFinal !== undefined) setShowFinalizacaoFinal(pdvState.showFinalizacaoFinal);
           if (pdvState.tipoPagamento) setTipoPagamento(pdvState.tipoPagamento);
           if (pdvState.formaPagamentoSelecionada) setFormaPagamentoSelecionada(pdvState.formaPagamentoSelecionada);
           if (pdvState.valorParcial) setValorParcial(pdvState.valorParcial);
-          if (pdvState.pagamentosParciais) setPagamentosParciais(pdvState.pagamentosParciais);
+
+          // Verificar se os pagamentos parciais têm o formato correto (com IDs)
+          if (pdvState.pagamentosParciais && Array.isArray(pdvState.pagamentosParciais)) {
+            // Filtrar apenas pagamentos que têm IDs válidos (não são strings simples como "Dinheiro")
+            const pagamentosValidos = pdvState.pagamentosParciais.filter((p: any) => {
+              return p.forma && typeof p.forma === 'string' && p.forma.length > 10; // IDs são longos
+            });
+            setPagamentosParciais(pagamentosValidos);
+          }
+
           if (pdvState.trocoCalculado) setTrocoCalculado(pdvState.trocoCalculado);
 
           console.log('Estado do PDV restaurado com sucesso');
-
-          // Notifica o usuário que o estado foi restaurado
-          setTimeout(() => {
-            toast.info('Estado do PDV restaurado automaticamente');
-          }, 1000);
         } else {
           // Remove estado antigo
           clearPDVState();
@@ -246,6 +262,7 @@ const PDVPage: React.FC = () => {
     carrinho,
     clienteSelecionado,
     showFinalizacaoVenda,
+    showFinalizacaoFinal,
     tipoPagamento,
     formaPagamentoSelecionada,
     valorParcial,
@@ -622,7 +639,8 @@ const PDVPage: React.FC = () => {
         cardapio_digital: false,
         delivery_chat_ia: false,
         baixa_estoque_pdv: false,
-        venda_codigo_barras: false
+        venda_codigo_barras: false,
+        forca_venda_fiscal_cartao: false
       });
     } else {
       setPdvConfig(data);
@@ -948,7 +966,7 @@ const PDVPage: React.FC = () => {
     if (carrinho.length === 0) {
       return;
     }
-    setShowLimparCarrinhoModal(true);
+    setShowConfirmLimparCarrinho(true);
   };
 
   const limparCarrinho = () => {
@@ -1042,14 +1060,32 @@ const PDVPage: React.FC = () => {
       setTrocoCalculado(0);
     }
 
-    const novoPagamento = {
-      id: Date.now(),
-      forma: formaNome,
-      valor: valor,
-      tipo: tipo
-    };
+    // Verificar se já existe um pagamento com a mesma forma
+    const pagamentoExistente = pagamentosParciais.find(p => p.forma === formaId);
 
-    setPagamentosParciais(prev => [...prev, novoPagamento]);
+    if (pagamentoExistente) {
+      // Agrupar: somar o valor ao pagamento existente
+      setPagamentosParciais(prev =>
+        prev.map(p =>
+          p.forma === formaId
+            ? { ...p, valor: p.valor + valor }
+            : p
+        )
+      );
+      toast.success(`${formaNome}: ${formatCurrency(valor)} adicionado (Total: ${formatCurrency(pagamentoExistente.valor + valor)})`);
+    } else {
+      // Criar novo pagamento
+      const novoPagamento = {
+        id: Date.now(),
+        forma: formaId,
+        valor: valor,
+        tipo: tipo
+      };
+
+      setPagamentosParciais(prev => [...prev, novoPagamento]);
+      toast.success(`${formaNome}: ${formatCurrency(valor)} adicionado`);
+    }
+
     setValorParcial('');
   };
 
@@ -1078,6 +1114,210 @@ const PDVPage: React.FC = () => {
     toast.success('Todos os pagamentos removidos');
   };
 
+  // Funções para CPF/CNPJ e Nota Fiscal Paulista
+  const formatCpf = (value: string) => {
+    const numbers = value.replace(/\D/g, '').slice(0, 11);
+    return numbers.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  };
+
+  const formatCnpj = (value: string) => {
+    const numbers = value.replace(/\D/g, '').slice(0, 14);
+    return numbers.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  };
+
+  const formatDocumento = (value: string) => {
+    if (tipoDocumento === 'cpf') {
+      return formatCpf(value);
+    } else {
+      return formatCnpj(value);
+    }
+  };
+
+  const validarCpf = (cpf: string): boolean => {
+    const numbers = cpf.replace(/\D/g, '');
+    if (numbers.length !== 11) return false;
+
+    // Verifica se todos os dígitos são iguais
+    if (/^(\d)\1{10}$/.test(numbers)) return false;
+
+    // Validação do primeiro dígito verificador
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      sum += parseInt(numbers[i]) * (10 - i);
+    }
+    let digit1 = 11 - (sum % 11);
+    if (digit1 >= 10) digit1 = 0;
+
+    // Validação do segundo dígito verificador
+    sum = 0;
+    for (let i = 0; i < 10; i++) {
+      sum += parseInt(numbers[i]) * (11 - i);
+    }
+    let digit2 = 11 - (sum % 11);
+    if (digit2 >= 10) digit2 = 0;
+
+    return parseInt(numbers[9]) === digit1 && parseInt(numbers[10]) === digit2;
+  };
+
+  const validarCnpj = (cnpj: string): boolean => {
+    const numbers = cnpj.replace(/\D/g, '');
+    if (numbers.length !== 14) return false;
+
+    // Verifica se todos os dígitos são iguais
+    if (/^(\d)\1{13}$/.test(numbers)) return false;
+
+    // Validação do primeiro dígito verificador
+    const weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(numbers[i]) * weights1[i];
+    }
+    let digit1 = sum % 11;
+    digit1 = digit1 < 2 ? 0 : 11 - digit1;
+
+    // Validação do segundo dígito verificador
+    const weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    sum = 0;
+    for (let i = 0; i < 13; i++) {
+      sum += parseInt(numbers[i]) * weights2[i];
+    }
+    let digit2 = sum % 11;
+    digit2 = digit2 < 2 ? 0 : 11 - digit2;
+
+    return parseInt(numbers[12]) === digit1 && parseInt(numbers[13]) === digit2;
+  };
+
+  const buscarClientePorDocumento = async (documento: string) => {
+    const numbers = documento.replace(/\D/g, '');
+    if (numbers.length < 11) return;
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('id, nome, telefone')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .or(`cpf.eq.${numbers},cnpj.eq.${numbers}`)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao buscar cliente:', error);
+        return;
+      }
+
+      if (data) {
+        setClienteEncontrado(data);
+      } else {
+        setClienteEncontrado(null);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar cliente:', error);
+    }
+  };
+
+  const handleCpfCnpjChange = (value: string) => {
+    const formatted = formatDocumento(value);
+    setCpfCnpjNota(formatted);
+
+    const numbers = value.replace(/\D/g, '');
+    const expectedLength = tipoDocumento === 'cpf' ? 11 : 14;
+
+    if (numbers.length === expectedLength) {
+      const isValid = tipoDocumento === 'cpf' ? validarCpf(formatted) : validarCnpj(formatted);
+      if (isValid) {
+        buscarClientePorDocumento(formatted);
+      } else {
+        setClienteEncontrado(null);
+      }
+    } else {
+      setClienteEncontrado(null);
+    }
+  };
+
+  const handleTipoDocumentoChange = (tipo: 'cpf' | 'cnpj') => {
+    setTipoDocumento(tipo);
+    setCpfCnpjNota('');
+    setClienteEncontrado(null);
+    setErroValidacao('');
+  };
+
+  const validarDocumentoOnBlur = () => {
+    if (!cpfCnpjNota.trim()) {
+      setErroValidacao('');
+      return;
+    }
+
+    const numbers = cpfCnpjNota.replace(/\D/g, '');
+    const expectedLength = tipoDocumento === 'cpf' ? 11 : 14;
+
+    if (numbers.length !== expectedLength) {
+      setErroValidacao(`${tipoDocumento.toUpperCase()} deve ter ${expectedLength} dígitos`);
+      return;
+    }
+
+    const isValid = tipoDocumento === 'cpf' ? validarCpf(cpfCnpjNota) : validarCnpj(cpfCnpjNota);
+
+    if (!isValid) {
+      setErroValidacao(`${tipoDocumento.toUpperCase()} inválido`);
+    } else {
+      setErroValidacao('');
+    }
+  };
+
+  // Função para verificar se há pagamento com cartão
+  const temPagamentoCartao = () => {
+    if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
+      const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+      return forma && (forma.nome === 'Crédito' || forma.nome === 'Débito');
+    }
+
+    if (tipoPagamento === 'parcial') {
+      return pagamentosParciais.some(p => {
+        const forma = formasPagamento.find(f => f.id === p.forma);
+        return forma && (forma.nome === 'Crédito' || forma.nome === 'Débito');
+      });
+    }
+
+    return false;
+  };
+
+  // Função para verificar se deve ocultar botões de finalização simples
+  const deveOcultarFinalizacaoSimples = () => {
+    return pdvConfig?.forca_venda_fiscal_cartao && temPagamentoCartao();
+  };
+
+  const finalizarVendaCompleta = () => {
+    // Limpar todos os estados
+    setCarrinho([]);
+    setClienteSelecionado(null);
+    setShowFinalizacaoVenda(false);
+    setShowFinalizacaoFinal(false);
+    limparPagamentosParciais();
+    setCpfCnpjNota('');
+    setClienteEncontrado(null);
+    setTipoDocumento('cpf');
+    clearPDVState();
+  };
+
+  const limparCarrinhoCompleto = () => {
+    setCarrinho([]);
+    setClienteSelecionado(null);
+    limparPagamentosParciais();
+    clearPDVState();
+    setShowConfirmLimparCarrinho(false);
+    toast.success('PDV limpo com sucesso!');
+  };
+
   const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchTerm.trim()) {
       // Se há produtos filtrados, adicionar o primeiro
@@ -1098,7 +1338,7 @@ const PDVPage: React.FC = () => {
   return (
     <div
       className={`${showFinalizacaoVenda ? 'bg-background-card' : 'bg-background-dark'} overflow-hidden`}
-      style={{ margin: '-24px', height: 'calc(100vh + 48px)' }}
+      style={{ height: '100vh' }}
     >
       {/* Header */}
       <div className="bg-background-card border-b border-gray-800 h-16 flex items-center justify-between px-4">
@@ -1116,57 +1356,9 @@ const PDVPage: React.FC = () => {
         style={{ height: 'calc(100vh - 64px)' }}
       >
         {/* Área Principal - Produtos */}
-        <motion.div
-          initial={false}
-          animate={{
-            width: showFinalizacaoVenda ? 0 : 'auto',
-            opacity: showFinalizacaoVenda ? 0 : 1,
-            x: showFinalizacaoVenda ? -100 : 0
-          }}
-          transition={{
-            duration: showFinalizacaoVenda ? 0.6 : 0.4,
-            ease: [0.25, 0.46, 0.45, 0.94],
-            width: {
-              duration: showFinalizacaoVenda ? 0.6 : 0.4,
-              ease: [0.25, 0.46, 0.45, 0.94]
-            },
-            opacity: {
-              duration: showFinalizacaoVenda ? 0.4 : 0.3,
-              delay: showFinalizacaoVenda ? 0 : 0.1,
-              ease: [0.25, 0.46, 0.45, 0.94]
-            },
-            x: {
-              duration: showFinalizacaoVenda ? 0.6 : 0.4,
-              ease: [0.25, 0.46, 0.45, 0.94]
-            }
-          }}
-          className={`p-4 flex flex-col h-full relative overflow-hidden ${
-            showFinalizacaoVenda ? 'pointer-events-none' : 'flex-1'
-          }`}
-          style={{
-            minWidth: showFinalizacaoVenda ? 0 : 'auto'
-          }}
-        >
-          <motion.div
-            initial={false}
-            animate={{
-              opacity: showFinalizacaoVenda ? 0 : 1,
-              scale: showFinalizacaoVenda ? 0.95 : 1
-            }}
-            transition={{
-              duration: 0.5,
-              ease: [0.25, 0.46, 0.45, 0.94],
-              opacity: {
-                duration: 0.5,
-                ease: [0.25, 0.46, 0.45, 0.94]
-              },
-              scale: {
-                duration: 0.5,
-                ease: [0.25, 0.46, 0.45, 0.94]
-              }
-            }}
-            className="h-full flex flex-col"
-          >
+        {!showFinalizacaoVenda && !showFinalizacaoFinal && (
+          <div className="flex-1 p-4 flex flex-col h-full relative overflow-hidden">
+            <div className="h-full flex flex-col">
             {/* Barra de Busca */}
             <div className="mb-4">
               <div className="relative">
@@ -1243,7 +1435,7 @@ const PDVPage: React.FC = () => {
             {/* Grid de Produtos */}
             <div
               className="flex-1 overflow-y-auto custom-scrollbar"
-              style={{ paddingBottom: showFinalizacaoVenda ? '0px' : '60px' }}
+              style={{ paddingBottom: (showFinalizacaoVenda || showFinalizacaoFinal) ? '0px' : '60px' }}
             >
               {produtosFiltrados.length === 0 ? (
                 <div className="text-center py-8">
@@ -1364,7 +1556,7 @@ const PDVPage: React.FC = () => {
             </div>
 
             {/* Menu Fixo no Footer da Área de Produtos - Só aparece quando NÃO está na finalização */}
-            {!showFinalizacaoVenda && (
+            {!showFinalizacaoVenda && !showFinalizacaoFinal && (
               <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
                 <div className="h-14 px-4 py-2 overflow-hidden">
                   {/* Itens do Menu com Scroll Horizontal */}
@@ -1386,52 +1578,21 @@ const PDVPage: React.FC = () => {
                 </div>
               </div>
             )}
-          </motion.div>
-        </motion.div>
+            </div>
+          </div>
+        )}
 
         {/* Carrinho de Compras */}
-        <motion.div
-          initial={false}
-          animate={{
-            width: showFinalizacaoVenda ? 'auto' : 384,
-            flex: showFinalizacaoVenda ? 1 : 'none'
-          }}
-          transition={{
-            duration: showFinalizacaoVenda ? 0.6 : 0.4,
-            ease: [0.25, 0.46, 0.45, 0.94],
-            width: {
-              duration: showFinalizacaoVenda ? 0.6 : 0.4,
-              ease: [0.25, 0.46, 0.45, 0.94]
-            },
-            flex: {
-              duration: showFinalizacaoVenda ? 0.6 : 0.4,
-              ease: [0.25, 0.46, 0.45, 0.94]
-            }
-          }}
-          className={`bg-background-card p-4 flex flex-col h-full ${
+        <div
+          className={`${showFinalizacaoVenda ? 'flex-1' : 'w-96'} bg-background-card p-4 flex flex-col h-full relative ${
             showFinalizacaoVenda ? 'border-0' : 'border-l border-gray-800'
           }`}
         >
-          <motion.div
-            initial={false}
-            animate={{
-              x: showFinalizacaoVenda ? -20 : 0,
-              scale: showFinalizacaoVenda ? 1.02 : 1
-            }}
-            transition={{
-              duration: 0.6,
-              ease: [0.25, 0.46, 0.45, 0.94],
-              x: {
-                duration: 0.6,
-                ease: [0.25, 0.46, 0.45, 0.94]
-              },
-              scale: {
-                duration: 0.6,
-                ease: [0.25, 0.46, 0.45, 0.94]
-              }
-            }}
-            className="h-full flex flex-col"
-          >
+          {/* Overlay de bloqueio quando na finalização final */}
+          {showFinalizacaoFinal && (
+            <div className="absolute inset-0 bg-black/50 z-50"></div>
+          )}
+          <div className="h-full flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                 <ShoppingCart size={20} />
@@ -1439,13 +1600,7 @@ const PDVPage: React.FC = () => {
               </h3>
               {carrinho.length > 0 && (
                 <button
-                  onClick={() => {
-                    setCarrinho([]);
-                    setClienteSelecionado(null);
-                    limparPagamentosParciais();
-                    clearPDVState();
-                    toast.success('PDV limpo com sucesso!');
-                  }}
+                  onClick={confirmarLimparCarrinho}
                   className="text-red-400 hover:text-red-300 transition-colors"
                   title="Limpar PDV completo"
                 >
@@ -1649,11 +1804,11 @@ const PDVPage: React.FC = () => {
                 </button>
               </div>
             )}
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
         {/* Área de Finalização de Venda */}
-        {showFinalizacaoVenda && (
+        {showFinalizacaoVenda && !showFinalizacaoFinal && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
@@ -1662,20 +1817,26 @@ const PDVPage: React.FC = () => {
               duration: 0.5,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="w-96 bg-background-card border-l border-gray-800 p-4 flex flex-col h-full"
+            className="w-96 bg-background-card border-l border-gray-800 flex flex-col h-full"
           >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <CreditCard size={20} />
-                  Finalizar Venda
-                </h3>
-                <button
-                  onClick={() => setShowFinalizacaoVenda(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+            {/* Header fixo */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <CreditCard size={20} />
+                Finalizar Venda
+              </h3>
+              <button
+                onClick={() => setShowFinalizacaoVenda(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Conteúdo scrollável */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4"
+              style={{ maxHeight: 'calc(100vh - 160px)' }}
+            >
 
               {/* Resumo da Venda */}
               <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
@@ -1735,7 +1896,7 @@ const PDVPage: React.FC = () => {
               </div>
 
               {/* Formas de Pagamento */}
-              <div className="flex-1">
+              <div className="pb-4">
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
                 </label>
@@ -1784,7 +1945,7 @@ const PDVPage: React.FC = () => {
                           key={forma.id}
                           onClick={() => adicionarPagamentoParcial(
                             forma.id,
-                            forma.nome,
+                            forma.nome, // Usar o nome da forma para exibição
                             forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
                           )}
                           className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-700/50 transition-colors text-sm"
@@ -1807,20 +1968,23 @@ const PDVPage: React.FC = () => {
                           </button>
                         </div>
 
-                        {pagamentosParciais.map((pagamento) => (
-                          <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
-                            <div>
-                              <span className="text-white text-sm">{pagamento.forma}</span>
-                              <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
+                        {pagamentosParciais.map((pagamento) => {
+                          const forma = formasPagamento.find(f => f.id === pagamento.forma);
+                          return (
+                            <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
+                              <div>
+                                <span className="text-white text-sm">{forma?.nome || pagamento.forma}</span>
+                                <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
+                              </div>
+                              <button
+                                onClick={() => confirmarRemocaoItem(pagamento.id)}
+                                className="text-red-400 hover:text-red-300"
+                              >
+                                <X size={16} />
+                              </button>
                             </div>
-                            <button
-                              onClick={() => confirmarRemocaoItem(pagamento.id)}
-                              className="text-red-400 hover:text-red-300"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                         {/* Resumo dos valores */}
                         <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
@@ -1850,9 +2014,11 @@ const PDVPage: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Botões de Ação */}
-              <div className="flex gap-3 mt-4">
+            {/* Footer fixo com botões de ação */}
+            <div className="border-t border-gray-800 p-4 flex-shrink-0">
+              <div className="flex gap-3">
                 <button
                   onClick={() => {
                     setShowFinalizacaoVenda(false);
@@ -1870,12 +2036,8 @@ const PDVPage: React.FC = () => {
                         toast.error('Selecione uma forma de pagamento');
                         return;
                       }
-                      toast.success('Venda finalizada com sucesso!');
-                      setCarrinho([]);
-                      setClienteSelecionado(null);
-                      setShowFinalizacaoVenda(false);
-                      limparPagamentosParciais();
-                      clearPDVState(); // Limpa o localStorage após finalizar a venda
+                      // Avança para a tela de finalização final
+                      setShowFinalizacaoFinal(true);
                     } else {
                       // Validação para pagamentos parciais
                       if (pagamentosParciais.length === 0) {
@@ -1889,17 +2051,8 @@ const PDVPage: React.FC = () => {
                         return;
                       }
 
-                      let mensagem = 'Venda finalizada com sucesso!';
-                      if (trocoCalculado > 0) {
-                        mensagem += ` Troco: ${formatCurrency(trocoCalculado)}`;
-                      }
-
-                      toast.success(mensagem);
-                      setCarrinho([]);
-                      setClienteSelecionado(null);
-                      setShowFinalizacaoVenda(false);
-                      limparPagamentosParciais();
-                      clearPDVState(); // Limpa o localStorage após finalizar a venda
+                      // Avança para a tela de finalização final
+                      setShowFinalizacaoFinal(true);
                     }
                   }}
                   disabled={tipoPagamento === 'parcial' && calcularRestante() > 0}
@@ -1915,8 +2068,299 @@ const PDVPage: React.FC = () => {
                   }
                 </button>
               </div>
-            </motion.div>
-          )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Área de Finalização Final */}
+        {showFinalizacaoFinal && (
+          <motion.div
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{
+              type: "tween",
+              duration: 0.5,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }}
+            className="w-96 bg-background-card border-l border-gray-800 flex flex-col h-full"
+          >
+            {/* Header fixo */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
+              <h3 className="text-lg font-semibold text-white">
+                Finalizar Venda
+              </h3>
+              <button
+                onClick={() => setShowFinalizacaoFinal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Conteúdo scrollável */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4"
+              style={{ maxHeight: 'calc(100vh - 80px)' }}
+            >
+
+            {/* Formas de Pagamento Utilizadas */}
+            {(tipoPagamento === 'vista' && formaPagamentoSelecionada) || (tipoPagamento === 'parcial' && pagamentosParciais.length > 0) ? (
+              <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-white font-medium">Pagamentos Adicionados:</h4>
+                </div>
+
+                <div className="space-y-2">
+                  {tipoPagamento === 'vista' && formaPagamentoSelecionada ? (
+                    (() => {
+                      const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+
+                      if (!forma) return null;
+
+                      return (
+                        <div className="flex items-center justify-between py-2 px-3 bg-gray-700/30 rounded-lg">
+                          <span className="font-medium text-white">
+                            {forma.nome}
+                          </span>
+                          <span className="text-white font-medium">
+                            {formatCurrency(calcularTotal())}
+                          </span>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    pagamentosParciais.map((pagamento, index) => {
+                      const forma = formasPagamento.find(f => f.id === pagamento.forma);
+
+                      if (!forma) return null;
+
+                      return (
+                        <div key={index} className="flex items-center justify-between py-2 px-3 bg-gray-700/30 rounded-lg">
+                          <span className="font-medium text-white">
+                            {forma.nome}
+                          </span>
+                          <span className="text-white font-medium">
+                            {formatCurrency(pagamento.valor)}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Resumo da Venda */}
+            <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Total da Venda:</span>
+                  <span className="text-white">{formatCurrency(calcularTotal())}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Total Pago:</span>
+                  <span className="text-green-400">{formatCurrency(calcularTotalPago())}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Restante:</span>
+                  <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                    {formatCurrency(calcularRestante())}
+                  </span>
+                </div>
+                {trocoCalculado > 0 && (
+                  <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
+                    <span className="text-gray-400 text-base">Troco:</span>
+                    <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Campo CPF/CNPJ */}
+            <div className="mb-4">
+              <div className="space-y-3">
+                {/* Botões CPF/CNPJ */}
+                <div>
+                  <label className="block text-lg font-bold text-white mb-3">
+                    Nota Fiscal Paulista
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleTipoDocumentoChange('cpf')}
+                      className={`flex-1 py-3 px-4 rounded-lg border transition-colors font-medium ${
+                        tipoDocumento === 'cpf'
+                          ? 'bg-primary-500 border-primary-500 text-white shadow-lg'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-700'
+                      }`}
+                    >
+                      CPF
+                    </button>
+                    <button
+                      onClick={() => handleTipoDocumentoChange('cnpj')}
+                      className={`flex-1 py-3 px-4 rounded-lg border transition-colors font-medium ${
+                        tipoDocumento === 'cnpj'
+                          ? 'bg-primary-500 border-primary-500 text-white shadow-lg'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-700'
+                      }`}
+                    >
+                      CNPJ
+                    </button>
+                  </div>
+                </div>
+
+                {/* Campo de entrada */}
+                <div>
+                  <input
+                    type="text"
+                    value={cpfCnpjNota}
+                    onChange={(e) => {
+                      handleCpfCnpjChange(e.target.value);
+                      // Limpa erro ao digitar
+                      if (erroValidacao) {
+                        setErroValidacao('');
+                      }
+                    }}
+                    onBlur={validarDocumentoOnBlur}
+                    placeholder={tipoDocumento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
+                    className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 transition-colors ${
+                      erroValidacao
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                        : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                    }`}
+                  />
+
+                  {/* Mensagem de erro */}
+                  {erroValidacao && (
+                    <div className="mt-1 text-sm text-red-400 flex items-center gap-1">
+                      <span>⚠️</span>
+                      <span>{erroValidacao}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cliente encontrado */}
+                {clienteEncontrado ? (
+                  <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <UserCheck size={16} className="text-green-400" />
+                      <span className="text-green-400 text-sm font-medium">Cliente Encontrado</span>
+                    </div>
+                    <div className="text-white text-sm">{clienteEncontrado.nome}</div>
+                    {clienteEncontrado.telefone && (
+                      <div className="text-gray-300 text-xs">{clienteEncontrado.telefone}</div>
+                    )}
+                  </div>
+                ) : cpfCnpjNota && (
+                  <div className="bg-gray-600/20 border border-gray-600/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <User size={16} className="text-gray-400" />
+                      <span className="text-gray-400 text-sm">Consumidor Final</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+              {/* Botões de Finalização */}
+              <div className="space-y-3 pb-4">
+                {/* Grupo: Finalização Simples - Oculto quando CPF/CNPJ preenchido OU quando força venda fiscal com cartão */}
+                {!cpfCnpjNota && !deveOcultarFinalizacaoSimples() && (
+                  <>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => {
+                          toast.success('Venda finalizada com impressão!');
+                          finalizarVendaCompleta();
+                        }}
+                        className="w-full bg-green-900/20 hover:bg-green-800/30 text-green-300 py-3 px-4 rounded-lg transition-colors border border-green-800/30"
+                      >
+                        Finalizar com Impressão
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          toast.success('Venda finalizada sem impressão!');
+                          finalizarVendaCompleta();
+                        }}
+                        className="w-full bg-green-800/20 hover:bg-green-700/30 text-green-400 py-3 px-4 rounded-lg transition-colors border border-green-700/30"
+                      >
+                        Finalizar sem Impressão
+                      </button>
+                    </div>
+
+                    {/* Linha separadora */}
+                    <div className="border-t border-gray-700/30 my-2"></div>
+                  </>
+                )}
+
+                {/* Grupo: NFC-e */}
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      toast.success('NFC-e gerada com impressão!');
+                      finalizarVendaCompleta();
+                    }}
+                    className="w-full bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 py-3 px-4 rounded-lg transition-colors border border-blue-800/30"
+                  >
+                    NFC-e com Impressão
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      toast.success('NFC-e gerada sem impressão!');
+                      finalizarVendaCompleta();
+                    }}
+                    className="w-full bg-blue-800/20 hover:bg-blue-700/30 text-blue-400 py-3 px-4 rounded-lg transition-colors border border-blue-700/30"
+                  >
+                    NFC-e sem Impressão
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      toast.success('NFC-e + Produção finalizada!');
+                      finalizarVendaCompleta();
+                    }}
+                    className="w-full bg-blue-700/20 hover:bg-blue-600/30 text-blue-500 py-3 px-4 rounded-lg transition-colors border border-blue-600/30"
+                  >
+                    NFC-e + Produção
+                  </button>
+                </div>
+
+                {/* Linha separadora */}
+                <div className="border-t border-gray-700/30 my-2"></div>
+
+                {/* Grupo: Produção - Oculto quando CPF/CNPJ preenchido OU quando força venda fiscal com cartão */}
+                {!cpfCnpjNota && !deveOcultarFinalizacaoSimples() && (
+                  <>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => {
+                          toast.success('Enviado para produção!');
+                          finalizarVendaCompleta();
+                        }}
+                        className="w-full bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 py-3 px-4 rounded-lg transition-colors border border-orange-800/30"
+                      >
+                        Produção
+                      </button>
+                    </div>
+
+                    {/* Linha separadora */}
+                    <div className="border-t border-gray-700/30 my-2"></div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Footer fixo com botão Voltar */}
+            <div className="border-t border-gray-800 p-4 flex-shrink-0">
+              <button
+                onClick={() => setShowFinalizacaoFinal(false)}
+                className="w-full bg-gray-800/30 hover:bg-gray-700/50 text-gray-300 py-3 px-4 rounded-lg transition-colors border border-gray-700/50"
+              >
+                ← Voltar para Pagamento
+              </button>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Modal de Seleção de Cliente */}
@@ -2814,6 +3258,55 @@ const PDVPage: React.FC = () => {
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Limpar Todos
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação - Limpar Carrinho */}
+      <AnimatePresence>
+        {showConfirmLimparCarrinho && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <Trash2 size={20} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Limpar PDV Completo</h3>
+                  <p className="text-gray-400 text-sm">Esta ação não pode ser desfeita</p>
+                </div>
+              </div>
+
+              <p className="text-gray-300 mb-6">
+                Tem certeza que deseja limpar todo o PDV?
+                Você perderá {carrinho.length} produto(s) no carrinho, cliente selecionado e pagamentos em andamento.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmLimparCarrinho(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={limparCarrinhoCompleto}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Limpar PDV
                 </button>
               </div>
             </motion.div>

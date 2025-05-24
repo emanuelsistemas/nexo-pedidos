@@ -76,6 +76,7 @@ function App() {
           <Route path="clientes" element={<UserClientesPage />} />
           <Route path="clientes/novo" element={<UserNovoClienteCompleto />} />
           <Route path="perfil" element={<UserPerfilPage />} />
+          <Route path="pdv" element={<PDVPage />} />
         </Route>
       </Routes>
 

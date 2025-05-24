@@ -204,7 +204,8 @@ const ConfiguracoesPage: React.FC = () => {
     cardapio_digital: false,
     delivery_chat_ia: false,
     baixa_estoque_pdv: false,
-    venda_codigo_barras: false
+    venda_codigo_barras: false,
+    forca_venda_fiscal_cartao: false
   });
   const [horarioForm, setHorarioForm] = useState({
     id: '',
@@ -1664,7 +1665,8 @@ const ConfiguracoesPage: React.FC = () => {
           cardapio_digital: config.cardapio_digital || false,
           delivery_chat_ia: config.delivery_chat_ia || false,
           baixa_estoque_pdv: config.baixa_estoque_pdv || false,
-          venda_codigo_barras: config.venda_codigo_barras || false
+          venda_codigo_barras: config.venda_codigo_barras || false,
+          forca_venda_fiscal_cartao: config.forca_venda_fiscal_cartao || false
         });
       }
     } catch (error) {
@@ -1805,15 +1807,26 @@ const ConfiguracoesPage: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada');
+      }
+
       // Verificar se já existe uma configuração
       const { data: existingConfig } = await supabase
         .from('pdv_config')
         .select('id')
-        .eq('empresa_id', user.user_metadata.empresa_id)
+        .eq('empresa_id', usuarioData.empresa_id)
         .single();
 
       const configData = {
-        empresa_id: user.user_metadata.empresa_id,
+        empresa_id: usuarioData.empresa_id,
         comandas: field === 'comandas' ? value : pdvConfig.comandas,
         mesas: field === 'mesas' ? value : pdvConfig.mesas,
         vendedor: field === 'vendedor' ? value : pdvConfig.vendedor,
@@ -1825,14 +1838,15 @@ const ConfiguracoesPage: React.FC = () => {
         cardapio_digital: field === 'cardapio_digital' ? value : pdvConfig.cardapio_digital,
         delivery_chat_ia: field === 'delivery_chat_ia' ? value : pdvConfig.delivery_chat_ia,
         baixa_estoque_pdv: field === 'baixa_estoque_pdv' ? value : pdvConfig.baixa_estoque_pdv,
-        venda_codigo_barras: field === 'venda_codigo_barras' ? value : pdvConfig.venda_codigo_barras
+        venda_codigo_barras: field === 'venda_codigo_barras' ? value : pdvConfig.venda_codigo_barras,
+        forca_venda_fiscal_cartao: field === 'forca_venda_fiscal_cartao' ? value : pdvConfig.forca_venda_fiscal_cartao
       };
 
       if (existingConfig) {
         const { error } = await supabase
           .from('pdv_config')
           .update(configData)
-          .eq('empresa_id', user.user_metadata.empresa_id);
+          .eq('empresa_id', usuarioData.empresa_id);
 
         if (error) throw error;
       } else {
@@ -1856,12 +1870,13 @@ const ConfiguracoesPage: React.FC = () => {
         cardapio_digital: 'Cardápio digital',
         delivery_chat_ia: 'Delivery como chat IA',
         baixa_estoque_pdv: 'Baixa estoque na venda do PDV',
-        venda_codigo_barras: 'Venda de produtos por Código de barras'
+        venda_codigo_barras: 'Venda de produtos por Código de barras',
+        forca_venda_fiscal_cartao: 'Força venda fiscal nos cartões'
       };
 
       const fieldName = fieldNames[field] || field;
-      const status = value ? 'habilitado' : 'desabilitado';
-      showMessage(`${fieldName} ${status} com sucesso!`, 'success');
+      const status = value ? 'habilitada' : 'desabilitada';
+      showMessage('success', `${fieldName} ${status} com sucesso!`);
 
     } catch (error: any) {
       // Reverter o estado local em caso de erro
@@ -2775,6 +2790,22 @@ const ConfiguracoesPage: React.FC = () => {
                       <h4 className="text-white font-medium">Venda de produtos por Código de barras</h4>
                       <p className="text-sm text-gray-400 mt-1">
                         Permite adicionar produtos ao carrinho digitando números mesmo sem focar no campo de busca.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.forca_venda_fiscal_cartao}
+                      onChange={(e) => handlePdvConfigChange('forca_venda_fiscal_cartao', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Força venda fiscal nos cartões</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Quando habilitado, vendas com cartão só podem ser finalizadas com NFC-e, desabilitando as opções de finalização simples e produção.
                       </p>
                     </div>
                   </label>

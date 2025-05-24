@@ -1,6 +1,6 @@
 /**
  * Configurações globais de responsividade
- * 
+ *
  * Para alterar o breakpoint mobile, modifique apenas o valor MOBILE_BREAKPOINT
  * e todo o sistema será atualizado automaticamente.
  */
@@ -35,7 +35,7 @@ export const useResponsiveListener = (callback: (isMobile: boolean) => void) => 
 
   // Adicionar listener
   window.addEventListener('resize', handleResize);
-  
+
   // Verificar tamanho inicial
   handleResize();
 
@@ -64,8 +64,9 @@ export const REDIRECT_CONFIG = {
     '/dashboard/produtos': '/user/produtos',
     '/dashboard/clientes': '/user/clientes',
     '/dashboard/configuracoes': '/user/configuracoes',
+    '/dashboard/pdv': '/user/pdv',
   },
-  
+
   // Rotas da versão mobile que devem ser redirecionadas para web
   MOBILE_TO_WEB_ROUTES: {
     '/user/dashboard': '/dashboard',
@@ -75,6 +76,7 @@ export const REDIRECT_CONFIG = {
     '/user/produtos': '/dashboard/produtos',
     '/user/clientes': '/dashboard/clientes',
     '/user/configuracoes': '/dashboard/configuracoes',
+    '/user/pdv': '/dashboard/pdv',
   }
 };
 
@@ -88,7 +90,7 @@ export const webToMobileRoute = (webRoute: string): string => {
   if (REDIRECT_CONFIG.WEB_TO_MOBILE_ROUTES[webRoute]) {
     return REDIRECT_CONFIG.WEB_TO_MOBILE_ROUTES[webRoute];
   }
-  
+
   // Verificar rotas com parâmetros (ex: /dashboard/pedidos/editar/123)
   for (const [webPattern, mobileRoute] of Object.entries(REDIRECT_CONFIG.WEB_TO_MOBILE_ROUTES)) {
     if (webRoute.startsWith(webPattern)) {
@@ -97,7 +99,7 @@ export const webToMobileRoute = (webRoute: string): string => {
       return mobileRoute + params;
     }
   }
-  
+
   // Se não encontrar correspondência, redirecionar para dashboard mobile
   return '/user/dashboard';
 };
@@ -112,7 +114,7 @@ export const mobileToWebRoute = (mobileRoute: string): string => {
   if (REDIRECT_CONFIG.MOBILE_TO_WEB_ROUTES[mobileRoute]) {
     return REDIRECT_CONFIG.MOBILE_TO_WEB_ROUTES[mobileRoute];
   }
-  
+
   // Verificar rotas com parâmetros (ex: /user/pedidos/editar/123)
   for (const [mobilePattern, webRoute] of Object.entries(REDIRECT_CONFIG.MOBILE_TO_WEB_ROUTES)) {
     if (mobileRoute.startsWith(mobilePattern)) {
@@ -121,7 +123,7 @@ export const mobileToWebRoute = (mobileRoute: string): string => {
       return webRoute + params;
     }
   }
-  
+
   // Se não encontrar correspondência, redirecionar para dashboard web
   return '/dashboard';
 };

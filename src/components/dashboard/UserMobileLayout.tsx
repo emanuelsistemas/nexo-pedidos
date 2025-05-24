@@ -124,7 +124,9 @@ const UserMobileLayout: React.FC = () => {
       </header>
 
       {/* Conteúdo principal */}
-      <main className="flex-1 p-4 pb-20 overflow-auto custom-scrollbar">
+      <main className={`flex-1 p-4 overflow-auto custom-scrollbar ${
+        location.pathname === '/user/pdv' ? 'pb-4' : 'pb-20'
+      }`}>
         <Outlet />
       </main>
 
@@ -154,25 +156,27 @@ const UserMobileLayout: React.FC = () => {
         </motion.button>
       )}
 
-      {/* Footer com menu de navegação */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-10">
-        <div className="flex justify-around items-center h-16 overflow-x-auto custom-scrollbar">
-          {menuItems.map((item) => (
-            <button
-              key={item.path}
-              className={`flex flex-col items-center justify-center w-1/5 h-full ${
-                location.pathname.startsWith(item.path)
-                  ? 'text-primary-400'
-                  : 'text-gray-400'
-              }`}
-              onClick={() => navigate(item.path)}
-            >
-              <item.icon size={18} />
-              <span className="text-xs mt-1">{item.label}</span>
-            </button>
-          ))}
-        </div>
-      </footer>
+      {/* Footer com menu de navegação - Oculto no PDV */}
+      {location.pathname !== '/user/pdv' && (
+        <footer className="fixed bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-10">
+          <div className="flex justify-around items-center h-16 overflow-x-auto custom-scrollbar">
+            {menuItems.map((item) => (
+              <button
+                key={item.path}
+                className={`flex flex-col items-center justify-center w-1/5 h-full ${
+                  location.pathname.startsWith(item.path)
+                    ? 'text-primary-400'
+                    : 'text-gray-400'
+                }`}
+                onClick={() => navigate(item.path)}
+              >
+                <item.icon size={18} />
+                <span className="text-xs mt-1">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </footer>
+      )}
 
       {/* Modal de confirmação de logout */}
       <AnimatePresence>
