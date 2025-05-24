@@ -1274,6 +1274,21 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Função para verificar se o documento é inválido (para bloquear botões NFC-e)
+  const isDocumentoInvalido = (): boolean => {
+    if (!cpfCnpjNota.trim()) return false; // Se vazio, não é inválido (pode ser consumidor final)
+
+    const numbers = cpfCnpjNota.replace(/\D/g, '');
+    const expectedLength = tipoDocumento === 'cpf' ? 11 : 14;
+
+    // Se não tem o tamanho correto, é inválido
+    if (numbers.length !== expectedLength) return true;
+
+    // Se tem o tamanho correto, valida o documento
+    const isValid = tipoDocumento === 'cpf' ? validarCpf(cpfCnpjNota) : validarCnpj(cpfCnpjNota);
+    return !isValid;
+  };
+
   // Função para verificar se há pagamento com cartão
   const temPagamentoCartao = () => {
     if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
@@ -2296,32 +2311,74 @@ const PDVPage: React.FC = () => {
                 <div className="space-y-2">
                   <button
                     onClick={() => {
+                      if (isDocumentoInvalido()) {
+                        toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
+                        return;
+                      }
                       toast.success('NFC-e gerada com impressão!');
                       finalizarVendaCompleta();
                     }}
-                    className="w-full bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 py-3 px-4 rounded-lg transition-colors border border-blue-800/30"
+                    disabled={isDocumentoInvalido()}
+                    className={`w-full py-3 px-4 rounded-lg transition-colors border ${
+                      isDocumentoInvalido()
+                        ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 border-blue-800/30'
+                    }`}
                   >
                     NFC-e com Impressão
+                    {isDocumentoInvalido() && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        CPF/CNPJ inválido
+                      </div>
+                    )}
                   </button>
 
                   <button
                     onClick={() => {
+                      if (isDocumentoInvalido()) {
+                        toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
+                        return;
+                      }
                       toast.success('NFC-e gerada sem impressão!');
                       finalizarVendaCompleta();
                     }}
-                    className="w-full bg-blue-800/20 hover:bg-blue-700/30 text-blue-400 py-3 px-4 rounded-lg transition-colors border border-blue-700/30"
+                    disabled={isDocumentoInvalido()}
+                    className={`w-full py-3 px-4 rounded-lg transition-colors border ${
+                      isDocumentoInvalido()
+                        ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-800/20 hover:bg-blue-700/30 text-blue-400 border-blue-700/30'
+                    }`}
                   >
                     NFC-e sem Impressão
+                    {isDocumentoInvalido() && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        CPF/CNPJ inválido
+                      </div>
+                    )}
                   </button>
 
                   <button
                     onClick={() => {
+                      if (isDocumentoInvalido()) {
+                        toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
+                        return;
+                      }
                       toast.success('NFC-e + Produção finalizada!');
                       finalizarVendaCompleta();
                     }}
-                    className="w-full bg-blue-700/20 hover:bg-blue-600/30 text-blue-500 py-3 px-4 rounded-lg transition-colors border border-blue-600/30"
+                    disabled={isDocumentoInvalido()}
+                    className={`w-full py-3 px-4 rounded-lg transition-colors border ${
+                      isDocumentoInvalido()
+                        ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-700/20 hover:bg-blue-600/30 text-blue-500 border-blue-600/30'
+                    }`}
                   >
                     NFC-e + Produção
+                    {isDocumentoInvalido() && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        CPF/CNPJ inválido
+                      </div>
+                    )}
                   </button>
                 </div>
 
