@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
@@ -140,7 +140,7 @@ const tiposPagamento = [
 const ConfiguracoesPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv' | 'taxaentrega'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv' | 'taxaentrega' | 'conexao'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -190,6 +190,11 @@ const ConfiguracoesPage: React.FC = () => {
   const [opcoesAdicionais, setOpcoesAdicionais] = useState<boolean>(false);
   const [taxaEntregaHabilitada, setTaxaEntregaHabilitada] = useState<boolean>(false);
   const [tipoTaxaEntrega, setTipoTaxaEntrega] = useState<'bairro' | 'distancia'>('distancia');
+
+  // Estados para Conexão
+  const [conexaoConfig, setConexaoConfig] = useState({
+    habilita_conexao_whatsapp: false
+  });
 
   // Estados para configurações do PDV
   const [pdvConfig, setPdvConfig] = useState({
@@ -616,6 +621,56 @@ const ConfiguracoesPage: React.FC = () => {
         } catch (error) {
           console.error('Erro ao processar configuração de produtos:', error);
           showMessage('error', 'Erro ao processar configuração de produtos');
+        }
+      }
+
+      if (activeSection === 'conexao') {
+        try {
+          // Carregar configuração de conexão
+          const { data: conexaoConfigData, error: conexaoConfigError } = await supabase
+            .from('conexao_config')
+            .select('*')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .single();
+
+          if (conexaoConfigError) {
+            // Se não encontrou configuração, criar uma nova com valores padrão
+            if (conexaoConfigError.code === 'PGRST116') {
+              console.log('Configuração de conexão não encontrada, criando uma nova...');
+
+              const { error: insertError, data: insertData } = await supabase
+                .from('conexao_config')
+                .insert({
+                  empresa_id: usuarioData.empresa_id,
+                  habilita_conexao_whatsapp: false
+                })
+                .select();
+
+              console.log('Nova configuração de conexão criada:', insertData);
+
+              if (insertError) {
+                throw insertError;
+              }
+
+              // Definir valores padrão nos estados
+              setConexaoConfig({
+                habilita_conexao_whatsapp: false
+              });
+            } else {
+              // Se for outro erro, mostrar mensagem
+              console.error('Erro ao carregar configuração de conexão:', conexaoConfigError);
+              showMessage('error', 'Erro ao carregar configuração de conexão');
+            }
+          } else if (conexaoConfigData) {
+            // Se encontrou configuração, atualizar os estados
+            console.log('Configuração de conexão encontrada:', conexaoConfigData);
+            setConexaoConfig({
+              habilita_conexao_whatsapp: conexaoConfigData.habilita_conexao_whatsapp || false
+            });
+          }
+        } catch (error) {
+          console.error('Erro ao processar configuração de conexão:', error);
+          showMessage('error', 'Erro ao processar configuração de conexão');
         }
       }
 
@@ -1799,6 +1854,68 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
+  // Função para salvar configurações de conexão
+  const handleConexaoConfigChange = async (field: string, value: boolean) => {
+    try {
+      // Atualizar o estado local primeiro
+      setConexaoConfig(prev => ({ ...prev, [field]: value }));
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('conexao_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      const configData = {
+        empresa_id: usuarioData.empresa_id,
+        habilita_conexao_whatsapp: field === 'habilita_conexao_whatsapp' ? value : conexaoConfig.habilita_conexao_whatsapp
+      };
+
+      if (existingConfig) {
+        const { error } = await supabase
+          .from('conexao_config')
+          .update(configData)
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('conexao_config')
+          .insert([configData]);
+
+        if (error) throw error;
+      }
+
+      // Disparar evento customizado para notificar o Sidebar imediatamente
+      console.log('🔗 Disparando evento conexaoChanged com valor:', value);
+      window.dispatchEvent(new CustomEvent('conexaoChanged', {
+        detail: { conexaoHabilitada: value }
+      }));
+
+      // Mostrar mensagem de sucesso
+      const status = value ? 'habilitada' : 'desabilitada';
+      showMessage('success', `Conexão com WhatsApp ${status} com sucesso!`);
+
+    } catch (error: any) {
+      // Reverter o estado local em caso de erro
+      setConexaoConfig(prev => ({ ...prev, [field]: !value }));
+      console.error('Erro ao salvar configuração de conexão:', error);
+      showMessage('error', 'Erro ao salvar configuração: ' + error.message);
+    }
+  };
+
   const handlePdvConfigChange = async (field: string, value: boolean) => {
     try {
       // Atualizar o estado local primeiro
@@ -2900,6 +3017,42 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'conexao':
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Conexão</h2>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <h3 className="text-lg font-medium text-white mb-4">Configurações de Conexão</h3>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <MessageSquare className="text-green-400" size={20} />
+                    <div>
+                      <h4 className="text-white font-medium">Habilita Conexão com WhatsApp</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Permite integração com WhatsApp para comunicação com clientes.
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={conexaoConfig.habilita_conexao_whatsapp}
+                      onChange={(e) => handleConexaoConfigChange('habilita_conexao_whatsapp', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       case 'conta':
         return (
           <div className="space-y-4">
@@ -2979,6 +3132,17 @@ const ConfiguracoesPage: React.FC = () => {
             >
               <Clock size={18} />
               <span className="text-sm">Horário de Funcionamento</span>
+            </button>
+            <button
+              onClick={() => handleSectionChange('conexao')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                activeSection === 'conexao'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <MessageSquare size={18} />
+              <span className="text-sm">Conexão</span>
             </button>
           </div>
 

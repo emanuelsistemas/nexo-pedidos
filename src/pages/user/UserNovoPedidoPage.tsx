@@ -1752,7 +1752,7 @@ const UserNovoPedidoPage: React.FC = () => {
                             <div className="space-y-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
                               <h4 className="text-sm font-medium text-gray-300 mb-2">Formas de pagamento adicionadas</h4>
 
-                              <div className="space-y-3">
+                              <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
                                 {formasPagamentoParciais.map((forma) => (
                                   <div key={forma.id} className="flex justify-between items-center bg-gray-800 border border-gray-700 rounded-lg p-3">
                                     <div className="flex items-center gap-2">

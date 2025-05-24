@@ -39,7 +39,7 @@ const DashboardLayout: React.FC = () => {
           initial={{ marginLeft: '72px' }}
           animate={{ marginLeft: isExpanded ? '240px' : '72px' }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
-          className="min-h-screen h-screen overflow-y-auto custom-scrollbar"
+          className="min-h-screen overflow-y-auto custom-scrollbar"
         >
           <div className={isPDVPage ? '' : 'p-6'}>
             <Outlet />

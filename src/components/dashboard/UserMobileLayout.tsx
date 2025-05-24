@@ -93,7 +93,7 @@ const UserMobileLayout: React.FC = () => {
 
   return (
     <SessionCheck fallback={<LoadingScreen />}>
-      <div className="min-h-screen bg-background-dark flex flex-col">
+      <div className="min-h-screen bg-background-dark flex flex-col overflow-hidden">
       {/* Header com logo, nome fantasia, saudação e botões */}
       <header className="bg-background-card border-b border-gray-800 p-3 flex items-center justify-between">
         <div className="flex items-center gap-1 flex-shrink-0 max-w-[45%]">
@@ -124,7 +124,7 @@ const UserMobileLayout: React.FC = () => {
       </header>
 
       {/* Conteúdo principal */}
-      <main className={`flex-1 p-4 overflow-auto custom-scrollbar ${
+      <main className={`flex-1 p-4 overflow-y-auto custom-scrollbar ${
         location.pathname === '/user/pdv' ? 'pb-4' : 'pb-20'
       }`}>
         <Outlet />

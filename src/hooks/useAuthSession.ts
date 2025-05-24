@@ -15,7 +15,7 @@ export const useAuthSession = () => {
   const checkSession = useCallback(async (): Promise<boolean> => {
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
-      
+
       if (error) {
         console.error('Erro ao verificar sessão:', error);
         return false;
@@ -54,7 +54,7 @@ export const useAuthSession = () => {
   const refreshSession = useCallback(async (): Promise<boolean> => {
     try {
       const { data, error } = await supabase.auth.refreshSession();
-      
+
       if (error) {
         console.error('Erro ao renovar sessão:', error);
         return false;
@@ -94,7 +94,7 @@ export const useAuthSession = () => {
     fn: () => Promise<T>
   ): Promise<T | null> => {
     const isSessionValid = await checkSession();
-    
+
     if (!isSessionValid) {
       await handleSessionExpired();
       return null;
@@ -112,13 +112,13 @@ export const useAuthSession = () => {
       ) {
         console.log('Erro de autenticação detectado, verificando sessão...');
         const isStillValid = await checkSession();
-        
+
         if (!isStillValid) {
           await handleSessionExpired();
           return null;
         }
       }
-      
+
       throw error;
     }
   }, [checkSession, handleSessionExpired]);
@@ -129,15 +129,8 @@ export const useAuthSession = () => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
-        
         if (event === 'SIGNED_OUT') {
-          console.log('Usuário deslogado');
           navigate('/entrar', { replace: true });
-        } else if (event === 'TOKEN_REFRESHED') {
-          console.log('Token renovado automaticamente');
-        } else if (event === 'SIGNED_IN') {
-          console.log('Usuário logado');
         }
       }
     );

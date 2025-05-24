@@ -23,12 +23,14 @@ import {
   Clock,
   UserCheck,
   QrCode,
-  Percent
+  Percent,
+  ShoppingBag
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import { formatarPreco } from '../../utils/formatters';
+import { EVENT_TYPES, contarPedidosPendentes, PedidoEventData, RecarregarEventData } from '../../utils/eventSystem';
 
 interface Produto {
   id: string;
@@ -115,11 +117,19 @@ const PDVPage: React.FC = () => {
   const [pdvConfig, setPdvConfig] = useState<any>(null);
 
   // Estados para os modais do menu PDV
+  const [showPedidosModal, setShowPedidosModal] = useState(false);
   const [showComandasModal, setShowComandasModal] = useState(false);
   const [showSangriaModal, setShowSangriaModal] = useState(false);
   const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
+
+  // Estados para o modal de Pedidos
+  const [pedidos, setPedidos] = useState<any[]>([]);
+  const [loadingPedidos, setLoadingPedidos] = useState(false);
+  const [searchPedidos, setSearchPedidos] = useState('');
+  const [pedidosFiltrados, setPedidosFiltrados] = useState<any[]>([]);
+  const [contadorPedidosPendentes, setContadorPedidosPendentes] = useState<number>(0);
 
   // Estados para os modais do menu PDV (paginação removida)
 
@@ -215,7 +225,7 @@ const PDVPage: React.FC = () => {
 
           if (pdvState.trocoCalculado) setTrocoCalculado(pdvState.trocoCalculado);
 
-          console.log('Estado do PDV restaurado com sucesso');
+
         } else {
           // Remove estado antigo
           clearPDVState();
@@ -238,6 +248,7 @@ const PDVPage: React.FC = () => {
   useEffect(() => {
     loadData();
     loadPDVState(); // Carrega o estado salvo do PDV
+    loadContadorPedidos(); // Carrega contador inicial
 
     // Adiciona listener para salvar antes de fechar a página
     const handleBeforeUnload = () => {
@@ -246,11 +257,66 @@ const PDVPage: React.FC = () => {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    // Event listeners para sistema de eventos em tempo real
+    const handlePedidoCriado = (event: CustomEvent<PedidoEventData>) => {
+      const { empresaId } = event.detail;
+      // Verificar se é da mesma empresa
+      checkEmpresaAndUpdateCounter(empresaId);
+      // Recarregar lista de pedidos se o modal estiver aberto
+      if (showPedidosModal) {
+        loadPedidos();
+      }
+    };
+
+    const handlePedidoAtualizado = (event: CustomEvent<PedidoEventData>) => {
+      const { empresaId } = event.detail;
+      checkEmpresaAndUpdateCounter(empresaId);
+      if (showPedidosModal) {
+        loadPedidos();
+      }
+    };
+
+    const handlePedidoCancelado = (event: CustomEvent<PedidoEventData>) => {
+      const { empresaId } = event.detail;
+      checkEmpresaAndUpdateCounter(empresaId);
+      if (showPedidosModal) {
+        loadPedidos();
+      }
+    };
+
+    const handlePedidoFaturado = (event: CustomEvent<PedidoEventData>) => {
+      const { empresaId } = event.detail;
+      checkEmpresaAndUpdateCounter(empresaId);
+      if (showPedidosModal) {
+        loadPedidos();
+      }
+    };
+
+    const handlePedidosRecarregar = (event: CustomEvent<RecarregarEventData>) => {
+      const { empresaId } = event.detail;
+      checkEmpresaAndUpdateCounter(empresaId);
+      if (showPedidosModal) {
+        loadPedidos();
+      }
+    };
+
+    // Adicionar event listeners
+    window.addEventListener(EVENT_TYPES.PEDIDO_CRIADO, handlePedidoCriado as EventListener);
+    window.addEventListener(EVENT_TYPES.PEDIDO_ATUALIZADO, handlePedidoAtualizado as EventListener);
+    window.addEventListener(EVENT_TYPES.PEDIDO_CANCELADO, handlePedidoCancelado as EventListener);
+    window.addEventListener(EVENT_TYPES.PEDIDO_FATURADO, handlePedidoFaturado as EventListener);
+    window.addEventListener(EVENT_TYPES.PEDIDOS_RECARREGAR, handlePedidosRecarregar as EventListener);
+
     // Cleanup
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener(EVENT_TYPES.PEDIDO_CRIADO, handlePedidoCriado as EventListener);
+      window.removeEventListener(EVENT_TYPES.PEDIDO_ATUALIZADO, handlePedidoAtualizado as EventListener);
+      window.removeEventListener(EVENT_TYPES.PEDIDO_CANCELADO, handlePedidoCancelado as EventListener);
+      window.removeEventListener(EVENT_TYPES.PEDIDO_FATURADO, handlePedidoFaturado as EventListener);
+      window.removeEventListener(EVENT_TYPES.PEDIDOS_RECARREGAR, handlePedidosRecarregar as EventListener);
     };
-  }, []);
+  }, [showPedidosModal]);
 
   // Salva automaticamente sempre que algum estado importante mudar
   useEffect(() => {
@@ -291,6 +357,17 @@ const PDVPage: React.FC = () => {
 
   // Definir itens do menu PDV
   const menuPDVItems = [
+    {
+      id: 'pedidos',
+      icon: ShoppingBag,
+      label: 'Pedidos',
+      color: 'primary',
+      onClick: () => {
+        setShowPedidosModal(true);
+        setSearchPedidos('');
+        loadPedidos();
+      }
+    },
     {
       id: 'comandas',
       icon: FileText,
@@ -440,6 +517,53 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Função para carregar contador de pedidos pendentes
+  const loadContadorPedidos = async () => {
+    await withSessionCheck(async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        const contador = await contarPedidosPendentes(usuarioData.empresa_id);
+        setContadorPedidosPendentes(contador);
+      } catch (error) {
+        console.error('Erro ao carregar contador de pedidos:', error);
+      }
+    });
+  };
+
+  // Função para verificar empresa e atualizar contador
+  const checkEmpresaAndUpdateCounter = async (empresaId: string) => {
+    await withSessionCheck(async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        // Só atualiza se for da mesma empresa
+        if (usuarioData?.empresa_id === empresaId) {
+          const contador = await contarPedidosPendentes(empresaId);
+          setContadorPedidosPendentes(contador);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar empresa e atualizar contador:', error);
+      }
+    });
+  };
+
   const loadData = async () => {
     await withSessionCheck(async () => {
       try {
@@ -570,7 +694,7 @@ const PDVPage: React.FC = () => {
       // Buscar estoque dos produtos
       const { data: estoqueData, error } = await supabase
         .from('produto_estoque')
-        .select('produto_id, quantidade, tipo')
+        .select('produto_id, quantidade, tipo_movimento')
         .eq('empresa_id', usuarioData.empresa_id);
 
       if (error) {
@@ -587,15 +711,14 @@ const PDVPage: React.FC = () => {
             estoqueProcessado[item.produto_id] = { total: 0, naoFaturado: 0 };
           }
 
-          if (item.tipo === 'entrada') {
+          if (item.tipo_movimento === 'entrada') {
             estoqueProcessado[item.produto_id].total += item.quantidade;
-          } else if (item.tipo === 'saida') {
+          } else if (item.tipo_movimento === 'saida') {
             estoqueProcessado[item.produto_id].total -= item.quantidade;
           }
         });
       }
 
-      console.log('Estoque carregado:', estoqueProcessado);
       setProdutosEstoque(estoqueProcessado);
     } catch (error) {
       console.error('Erro ao processar estoque:', error);
@@ -665,6 +788,140 @@ const PDVPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao carregar formas de pagamento:', error);
     }
+  };
+
+  const loadPedidos = async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+
+    const { data: usuarioData } = await supabase
+      .from('usuarios')
+      .select('empresa_id')
+      .eq('id', userData.user.id)
+      .single();
+
+    if (!usuarioData?.empresa_id) return;
+
+    setLoadingPedidos(true);
+    try {
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select(`
+          id,
+          numero,
+          created_at,
+          status,
+          valor_total,
+          cliente:clientes(id, nome, telefone),
+          pedidos_itens(
+            id,
+            quantidade,
+            valor_unitario,
+            valor_total,
+            produto:produtos(
+              id,
+              nome,
+              preco,
+              codigo,
+              codigo_barras,
+              descricao,
+              promocao,
+              tipo_desconto,
+              valor_desconto,
+              unidade_medida_id,
+              grupo_id,
+              produto_fotos(url, principal)
+            )
+          )
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('status', 'pendente')
+        .eq('deletado', false)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      const pedidosData = data || [];
+      setPedidos(pedidosData);
+      setPedidosFiltrados(pedidosData);
+      // Atualizar contador com base nos dados carregados
+      setContadorPedidosPendentes(pedidosData.length);
+    } catch (error) {
+      console.error('Erro ao carregar pedidos:', error);
+      toast.error('Erro ao carregar pedidos');
+    } finally {
+      setLoadingPedidos(false);
+    }
+  };
+
+  // Função para filtrar pedidos
+  const filtrarPedidos = (termo: string) => {
+    setSearchPedidos(termo);
+    if (!termo.trim()) {
+      setPedidosFiltrados(pedidos);
+      return;
+    }
+
+    const termoLower = termo.toLowerCase();
+    const pedidosFiltrados = pedidos.filter(pedido =>
+      pedido.numero.toString().includes(termoLower) ||
+      pedido.cliente?.nome?.toLowerCase().includes(termoLower) ||
+      pedido.cliente?.telefone?.includes(termo)
+    );
+    setPedidosFiltrados(pedidosFiltrados);
+  };
+
+  // Função para importar pedido para o carrinho
+  const importarPedidoParaCarrinho = (pedido: any) => {
+    if (!pedido.pedidos_itens || pedido.pedidos_itens.length === 0) {
+      toast.error('Este pedido não possui itens');
+      return;
+    }
+
+    // Limpar carrinho atual se houver itens
+    if (carrinho.length > 0) {
+      const confirmar = window.confirm(
+        'Há itens no carrinho. Deseja limpar o carrinho atual e importar este pedido?'
+      );
+      if (!confirmar) return;
+    }
+
+    // Limpar carrinho e cliente atual
+    setCarrinho([]);
+    setClienteSelecionado(null);
+
+    // Importar cliente do pedido se existir
+    if (pedido.cliente) {
+      setClienteSelecionado({
+        id: pedido.cliente.id,
+        nome: pedido.cliente.nome,
+        telefone: pedido.cliente.telefone
+      });
+    }
+
+    // Importar itens do pedido
+    const novosItens: ItemCarrinho[] = [];
+    let itensImportados = 0;
+
+    pedido.pedidos_itens.forEach((item: any) => {
+      if (item.produto) {
+        const novoItem: ItemCarrinho = {
+          id: `${item.produto.id}-${Date.now()}-${Math.random()}`,
+          produto: item.produto,
+          quantidade: item.quantidade,
+          subtotal: item.quantidade * item.valor_unitario
+        };
+        novosItens.push(novoItem);
+        itensImportados++;
+      }
+    });
+
+    setCarrinho(novosItens);
+    setShowPedidosModal(false);
+
+    toast.success(
+      `Pedido #${pedido.numero} importado com sucesso! ${itensImportados} item(s) adicionado(s) ao carrinho.`
+    );
   };
 
   const produtosFiltrados = produtos.filter(produto => {
@@ -1582,10 +1839,17 @@ const PDVPage: React.FC = () => {
                         <button
                           key={item.id}
                           onClick={item.onClick}
-                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} rounded-lg p-1 transition-all duration-200 min-w-[70px] flex-shrink-0`}
+                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} rounded-lg p-1 transition-all duration-200 min-w-[70px] flex-shrink-0 relative`}
                         >
                           <IconComponent size={18} />
                           <span className="text-xs mt-0.5 whitespace-nowrap">{item.label}</span>
+
+                          {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
+                          {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
+                            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold border border-background-card">
+                              {contadorPedidosPendentes > 99 ? '99+' : contadorPedidosPendentes}
+                            </div>
+                          )}
                         </button>
                       );
                     })}
@@ -2807,6 +3071,167 @@ const PDVPage: React.FC = () => {
                   </div>
                 </div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Pedidos */}
+      <AnimatePresence>
+        {showPedidosModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => {
+              setShowPedidosModal(false);
+              setSearchPedidos('');
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-4xl mx-4 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Pedidos Pendentes</h3>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      loadPedidos();
+                      toast.success('Pedidos atualizados!');
+                    }}
+                    className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors text-sm"
+                  >
+                    Atualizar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowPedidosModal(false);
+                      setSearchPedidos('');
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Campo de Pesquisa */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Pesquisar por número do pedido, cliente ou telefone..."
+                    value={searchPedidos}
+                    onChange={(e) => filtrarPedidos(e.target.value)}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {loadingPedidos ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p className="text-gray-400">Carregando pedidos...</p>
+                  </div>
+                ) : pedidosFiltrados.length === 0 ? (
+                  <div className="text-center py-8">
+                    <ShoppingBag size={48} className="mx-auto mb-4 text-gray-500" />
+                    <p className="text-gray-400">
+                      {searchPedidos ? 'Nenhum pedido encontrado para esta pesquisa' : 'Nenhum pedido pendente encontrado'}
+                    </p>
+                    {searchPedidos && (
+                      <button
+                        onClick={() => {
+                          setSearchPedidos('');
+                          setPedidosFiltrados(pedidos);
+                        }}
+                        className="mt-2 text-primary-400 hover:text-primary-300 text-sm"
+                      >
+                        Limpar pesquisa
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {pedidosFiltrados.map((pedido) => (
+                      <div
+                        key={pedido.id}
+                        className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="text-white font-medium">
+                              Pedido #{pedido.numero}
+                            </div>
+                            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              pedido.status === 'pendente' ? 'bg-yellow-500/20 text-yellow-400' :
+                              pedido.status === 'preparando' ? 'bg-blue-500/20 text-blue-400' :
+                              pedido.status === 'pronto' ? 'bg-green-500/20 text-green-400' :
+                              pedido.status === 'entregue' ? 'bg-gray-500/20 text-gray-400' :
+                              'bg-red-500/20 text-red-400'
+                            }`}>
+                              {pedido.status.charAt(0).toUpperCase() + pedido.status.slice(1)}
+                            </div>
+                          </div>
+                          <div className="text-primary-400 font-bold">
+                            {formatCurrency(pedido.valor_total)}
+                          </div>
+                        </div>
+
+                        <div className="text-sm text-gray-400 mb-2">
+                          Cliente: {pedido.cliente?.nome || 'Consumidor Final'}
+                        </div>
+
+                        <div className="text-xs text-gray-500 mb-3">
+                          {new Date(pedido.created_at).toLocaleString('pt-BR')}
+                        </div>
+
+                        {pedido.pedidos_itens && pedido.pedidos_itens.length > 0 && (
+                          <div className="space-y-1 mb-3">
+                            <div className="text-xs text-gray-400 font-medium">Itens:</div>
+                            {pedido.pedidos_itens.slice(0, 3).map((item: any, index: number) => (
+                              <div key={index} className="text-xs text-gray-500 flex justify-between">
+                                <span>{item.quantidade}x {item.produto?.nome}</span>
+                                <span>{formatCurrency(item.valor_unitario * item.quantidade)}</span>
+                              </div>
+                            ))}
+                            {pedido.pedidos_itens.length > 3 && (
+                              <div className="text-xs text-gray-500">
+                                +{pedido.pedidos_itens.length - 3} item(s) a mais...
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 flex-wrap">
+                          <button
+                            onClick={() => importarPedidoParaCarrinho(pedido)}
+                            className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded text-xs transition-colors font-medium"
+                          >
+                            Importar para Carrinho
+                          </button>
+                          <button
+                            onClick={() => {
+                              // Aqui você pode implementar a visualização detalhada
+                              toast.info('Funcionalidade de visualização em desenvolvimento');
+                            }}
+                            className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs transition-colors"
+                          >
+                            Ver Detalhes
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}

@@ -12,6 +12,7 @@ const Sidebar: React.FC = () => {
   const [expandedSubmenu, setExpandedSubmenu] = useState<string | null>(null);
   const [opcoesAdicionaisHabilitado, setOpcoesAdicionaisHabilitado] = useState(false);
   const [taxaEntregaHabilitada, setTaxaEntregaHabilitada] = useState(false);
+  const [conexaoHabilitada, setConexaoHabilitada] = useState(false);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
   const location = useLocation();
 
@@ -54,6 +55,17 @@ const Sidebar: React.FC = () => {
         if (taxaEntregaConfigData) {
           setTaxaEntregaHabilitada(taxaEntregaConfigData.habilitado || false);
         }
+
+        // Carregar configuração de conexão
+        const { data: conexaoConfigData } = await supabase
+          .from('conexao_config')
+          .select('habilita_conexao_whatsapp')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        if (conexaoConfigData) {
+          setConexaoHabilitada(conexaoConfigData.habilita_conexao_whatsapp || false);
+        }
       } catch (error) {
         console.error('Erro ao carregar configurações:', error);
       }
@@ -75,8 +87,16 @@ const Sidebar: React.FC = () => {
       setTaxaEntregaHabilitada(event.detail.taxaEntregaHabilitada);
     };
 
+    // Escutar evento customizado para atualização imediata de conexão
+    const handleConexaoChange = (event: CustomEvent) => {
+      console.log('🔗 Evento conexaoChanged recebido:', event.detail);
+      console.log('🔗 Atualizando conexaoHabilitada para:', event.detail.conexaoHabilitada);
+      setConexaoHabilitada(event.detail.conexaoHabilitada);
+    };
+
     window.addEventListener('opcoesAdicionaisChanged', handleOpcoesAdicionaisChange as EventListener);
     window.addEventListener('taxaEntregaChanged', handleTaxaEntregaChange as EventListener);
+    window.addEventListener('conexaoChanged', handleConexaoChange as EventListener);
 
     // Escutar mudanças nas tabelas (backup)
     const produtosSubscription = supabase
@@ -109,11 +129,28 @@ const Sidebar: React.FC = () => {
       )
       .subscribe();
 
+    const conexaoSubscription = supabase
+      .channel('conexao_config_changes')
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'conexao_config'
+        },
+        () => {
+          console.log('Mudança detectada na tabela conexao_config');
+          loadConfiguracoes();
+        }
+      )
+      .subscribe();
+
     return () => {
       window.removeEventListener('opcoesAdicionaisChanged', handleOpcoesAdicionaisChange as EventListener);
       window.removeEventListener('taxaEntregaChanged', handleTaxaEntregaChange as EventListener);
+      window.removeEventListener('conexaoChanged', handleConexaoChange as EventListener);
       produtosSubscription.unsubscribe();
       taxaEntregaSubscription.unsubscribe();
+      conexaoSubscription.unsubscribe();
     };
   }, []);
 
@@ -158,6 +195,16 @@ const Sidebar: React.FC = () => {
       });
     }
 
+    // Adicionar "Conexão" se estiver habilitado
+    if (conexaoHabilitada) {
+      menuItems.push({
+        icon: MessageSquare,
+        label: 'Conexão',
+        path: '/dashboard/conexao',
+        tooltip: 'Conexão com WhatsApp'
+      });
+    }
+
     // Adicionar configurações sempre por último
     menuItems.push({
       icon: Settings,
@@ -171,14 +218,7 @@ const Sidebar: React.FC = () => {
 
   const menuItems = getMenuItems();
 
-  // Log para debug - mostrar quando o estado muda
-  useEffect(() => {
-    console.log('Estado opcoesAdicionaisHabilitado mudou para:', opcoesAdicionaisHabilitado);
-  }, [opcoesAdicionaisHabilitado]);
 
-  useEffect(() => {
-    console.log('Estado taxaEntregaHabilitada mudou para:', taxaEntregaHabilitada);
-  }, [taxaEntregaHabilitada]);
 
   const toggleSubmenu = (label: string) => {
     setExpandedSubmenu(expandedSubmenu === label ? null : label);
@@ -285,7 +325,7 @@ const Sidebar: React.FC = () => {
       initial={{ width: '72px' }}
       animate={{ width: isExpanded ? '240px' : '72px' }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="h-screen bg-background-card fixed left-0 top-0 z-50 border-r border-gray-800 flex flex-col"
+      className="min-h-screen bg-background-card fixed left-0 top-0 z-50 border-r border-gray-800 flex flex-col"
     >
       <div className="flex-1">
         <div className="h-16 flex items-center px-4 border-b border-gray-800 relative">
