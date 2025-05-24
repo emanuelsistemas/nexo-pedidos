@@ -66,6 +66,7 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
 const UnidadeMedidaPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataReady, setIsDataReady] = useState(false);
   const [unidades, setUnidades] = useState<UnidadeMedida[]>([]);
   const [editingUnidade, setEditingUnidade] = useState<UnidadeMedida | null>(null);
   const [formData, setFormData] = useState({
@@ -90,6 +91,9 @@ const UnidadeMedidaPage: React.FC = () => {
 
   const loadUnidades = async () => {
     try {
+      // Simular um delay mínimo para mostrar o skeleton
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
@@ -112,6 +116,8 @@ const UnidadeMedidaPage: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao carregar unidades de medida:', error);
       showMessage('error', 'Erro ao carregar unidades de medida');
+    } finally {
+      setIsDataReady(true);
     }
   };
 
@@ -223,6 +229,36 @@ const UnidadeMedidaPage: React.FC = () => {
     }
   };
 
+  // Renderizar skeleton loader para as unidades de medida
+  const renderSkeletonCards = () => {
+    return Array(4).fill(0).map((_, index) => (
+      <div
+        key={index}
+        className="bg-background-card p-4 rounded-lg border border-gray-800"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gray-700 animate-pulse">
+              <div className="w-5 h-5 bg-gray-600 rounded"></div>
+            </div>
+            <div>
+              <div className={`h-5 bg-gray-700 rounded animate-pulse mb-1 ${
+                index % 3 === 0 ? 'w-12' : index % 3 === 1 ? 'w-16' : 'w-10'
+              }`}></div>
+              <div className={`h-4 bg-gray-600 rounded animate-pulse ${
+                index % 3 === 0 ? 'w-24' : index % 3 === 1 ? 'w-32' : 'w-20'
+              }`}></div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-9 h-9 bg-gray-700 rounded-lg animate-pulse"></div>
+            <div className="w-9 h-9 bg-gray-700 rounded-lg animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -244,63 +280,69 @@ const UnidadeMedidaPage: React.FC = () => {
       </div>
 
       <div className="grid gap-6">
-        {unidades.map(unidade => (
-          <div
-            key={unidade.id}
-            className="bg-background-card p-4 rounded-lg border border-gray-800"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary-500/10">
-                  <Ruler size={20} className="text-primary-400" />
-                </div>
-                <div>
-                  <h3 className="text-white font-medium">{unidade.sigla}</h3>
-                  <p className="text-sm text-gray-400">{unidade.nome}</p>
+        {!isDataReady ? (
+          renderSkeletonCards()
+        ) : (
+          <>
+            {unidades.map(unidade => (
+              <div
+                key={unidade.id}
+                className="bg-background-card p-4 rounded-lg border border-gray-800"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary-500/10">
+                      <Ruler size={20} className="text-primary-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-white font-medium">{unidade.sigla}</h3>
+                      <p className="text-sm text-gray-400">{unidade.nome}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEditUnidade(unidade)}
+                      className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <Pencil size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(unidade)}
+                      className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleEditUnidade(unidade)}
-                  className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
-                >
-                  <Pencil size={18} />
-                </button>
-                <button
-                  onClick={() => handleDeleteClick(unidade)}
-                  className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+            ))}
 
-        {unidades.length === 0 && (
-          <div className="bg-background-card rounded-lg p-8 text-center">
-            <div className="bg-primary-500/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Ruler size={24} className="text-primary-400" />
-            </div>
-            <h3 className="text-lg font-medium text-white mb-2">
-              Nenhuma unidade de medida cadastrada
-            </h3>
-            <p className="text-gray-400 mb-6">
-              Cadastre sua primeira unidade de medida para começar.
-            </p>
-            <Button
-              type="button"
-              variant="primary"
-              className="mx-auto"
-              onClick={() => {
-                setEditingUnidade(null);
-                setFormData({ sigla: '', nome: '' });
-                setShowSidebar(true);
-              }}
-            >
-              + Adicionar Unidade
-            </Button>
-          </div>
+            {unidades.length === 0 && (
+              <div className="bg-background-card rounded-lg p-8 text-center">
+                <div className="bg-primary-500/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Ruler size={24} className="text-primary-400" />
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">
+                  Nenhuma unidade de medida cadastrada
+                </h3>
+                <p className="text-gray-400 mb-6">
+                  Cadastre sua primeira unidade de medida para começar.
+                </p>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="mx-auto"
+                  onClick={() => {
+                    setEditingUnidade(null);
+                    setFormData({ sigla: '', nome: '' });
+                    setShowSidebar(true);
+                  }}
+                >
+                  + Adicionar Unidade
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
 

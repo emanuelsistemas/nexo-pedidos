@@ -99,7 +99,7 @@ const tiposPagamento = [
 const ConfiguracoesPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'conta' | 'pdv'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -144,6 +144,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos'>('pedidos');
   const [bloqueiaSemEstoque, setBloqueiaSemEstoque] = useState<boolean>(false);
   const [agruparItens, setAgruparItens] = useState<boolean>(false);
+  const [opcoesAdicionais, setOpcoesAdicionais] = useState<boolean>(false);
 
   // Estados para configurações do PDV
   const [pdvConfig, setPdvConfig] = useState({
@@ -459,6 +460,57 @@ const ConfiguracoesPage: React.FC = () => {
         } catch (error) {
           console.error('Erro ao processar configuração de pedidos:', error);
           showMessage('error', 'Erro ao processar configuração de pedidos');
+        }
+      }
+
+      if (activeSection === 'produtos') {
+        try {
+          // Carregar configuração de produtos
+          const { data: produtosConfigData, error: produtosConfigError } = await supabase
+            .from('produtos_config')
+            .select('*')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .single();
+
+          if (produtosConfigError) {
+            // Se não encontrou configuração, criar uma nova com valores padrão
+            if (produtosConfigError.code === 'PGRST116') {
+              console.log('Configuração de produtos não encontrada, criando uma nova...');
+
+              const { error: insertError, data: insertData } = await supabase
+                .from('produtos_config')
+                .insert({
+                  empresa_id: usuarioData.empresa_id,
+                  opcoes_adicionais: false
+                })
+                .select();
+
+              console.log('Nova configuração de produtos criada:', insertData);
+
+              if (insertError) {
+                throw insertError;
+              }
+
+              // Definir valores padrão nos estados
+              setOpcoesAdicionais(false);
+            } else {
+              // Se for outro erro, mostrar mensagem
+              console.error('Erro ao carregar configuração de produtos:', produtosConfigError);
+              showMessage('error', 'Erro ao carregar configuração de produtos');
+            }
+          } else if (produtosConfigData) {
+            // Se encontrou configuração, atualizar os estados
+            console.log('Configuração de produtos encontrada:', produtosConfigData);
+
+            // Garantir que opcoes_adicionais seja um booleano
+            // Se o campo não existir ou for null, definir como false
+            const opcoesAdicionaisValue = produtosConfigData.opcoes_adicionais === true;
+            console.log('Valor de opcoes_adicionais:', opcoesAdicionaisValue);
+            setOpcoesAdicionais(opcoesAdicionaisValue);
+          }
+        } catch (error) {
+          console.error('Erro ao processar configuração de produtos:', error);
+          showMessage('error', 'Erro ao processar configuração de produtos');
         }
       }
 
@@ -1501,6 +1553,66 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
+  const handleOpcoesAdicionaisChange = async (value: boolean) => {
+    try {
+      // Atualizar o estado local primeiro
+      setOpcoesAdicionais(value);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('produtos_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      const configData = {
+        empresa_id: usuarioData.empresa_id,
+        opcoes_adicionais: value
+      };
+
+      if (existingConfig) {
+        const { error } = await supabase
+          .from('produtos_config')
+          .update(configData)
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('produtos_config')
+          .insert([configData]);
+
+        if (error) throw error;
+      }
+
+      // Disparar evento customizado para notificar o Sidebar imediatamente
+      window.dispatchEvent(new CustomEvent('opcoesAdicionaisChanged', {
+        detail: { opcoesAdicionais: value }
+      }));
+
+      // Mostrar mensagem de sucesso
+      const status = value ? 'habilitadas' : 'desabilitadas';
+      showMessage('success', `Opções Adicionais ${status} com sucesso!`);
+
+    } catch (error: any) {
+      // Reverter o estado local em caso de erro
+      setOpcoesAdicionais(!value);
+      console.error('Erro ao salvar configuração de produtos:', error);
+      showMessage('error', 'Erro ao salvar configuração: ' + error.message);
+    }
+  };
+
   const handlePdvConfigChange = async (field: string, value: boolean) => {
     try {
       // Atualizar o estado local primeiro
@@ -2221,6 +2333,59 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'produtos':
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Configurações de Produtos</h2>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <h3 className="text-lg font-medium text-white mb-4">Opções de Produtos</h3>
+
+              <div className="p-4 bg-gray-800/50 rounded-lg">
+                <div className="flex items-center">
+                  <input
+                    id="opcoes_adicionais"
+                    type="checkbox"
+                    checked={opcoesAdicionais}
+                    onChange={(e) => handleOpcoesAdicionaisChange(e.target.checked)}
+                    className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                  />
+                  <label htmlFor="opcoes_adicionais" className="ml-3 cursor-pointer">
+                    <h4 className="text-white font-medium">Opções Adicionais</h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Quando ativado, permite adicionar opções adicionais aos produtos durante a criação de pedidos, como ingredientes extras, tamanhos, sabores, etc.
+                    </p>
+                  </label>
+                </div>
+                <div className="mt-3 text-xs text-gray-400 flex items-center">
+                  <span className="inline-block w-3 h-3 rounded-full bg-gray-600 mr-2"></span>
+                  <span>Status atual: {opcoesAdicionais ? 'Ativado' : 'Desativado'}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 bg-blue-900/20 border border-blue-800/30 rounded-lg">
+                <div className="flex items-start">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400 mr-3 mt-0.5">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 16v-4"></path>
+                    <path d="M12 8h.01"></path>
+                  </svg>
+                  <div>
+                    <h4 className="text-blue-300 font-medium">Informação</h4>
+                    <p className="text-sm text-blue-200/70 mt-1">
+                      Esta configuração permite que os produtos tenham opções adicionais configuráveis. Quando ativada, durante a criação de pedidos,
+                      será possível selecionar opções extras para cada produto, como ingredientes adicionais, tamanhos diferentes, sabores, etc.
+                      As opções adicionais devem ser configuradas na página "Adicionais" do menu principal.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       case 'pdv':
         return (
           <div className="space-y-4">
@@ -2537,6 +2702,19 @@ const ConfiguracoesPage: React.FC = () => {
             >
               <ShoppingCart size={18} />
               <span className="text-sm whitespace-nowrap">PDV</span>
+            </button>
+            <button
+              onClick={() => setActiveSection('produtos')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors min-w-[140px] ${
+                activeSection === 'produtos'
+                  ? 'bg-primary-500/10 text-primary-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+              </svg>
+              <span className="text-sm whitespace-nowrap">Produtos</span>
             </button>
             <button
               onClick={() => setActiveSection('conta')}

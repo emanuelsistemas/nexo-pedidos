@@ -7,46 +7,124 @@ import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
 import { supabase } from '../../lib/supabase';
 
-const menuItems = [
-  { icon: Home, label: 'Dashboard', path: '/dashboard', tooltip: 'Dashboard' },
-  {
-    icon: Package2,
-    label: 'Produtos',
-    tooltip: 'Produtos',
-    submenu: [
-      { icon: ListOrdered, label: 'Itens', path: '/dashboard/produtos', tooltip: 'Lista de Produtos' },
-      { icon: Ruler, label: 'Unidade', path: '/dashboard/unidade-medida', tooltip: 'Unidades de Medida' }
-      // Submenu "Adicionais" ocultado
-    ]
-  },
-  { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
-  { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },
-  { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
-  { icon: ShoppingCart, label: 'PDV', path: '/dashboard/pdv', tooltip: 'Ponto de Venda' },
-  // Item "Gestor" ocultado
-  // { icon: MessageSquare, label: 'Gestor', path: '/dashboard/gestor', tooltip: 'Gestor de Pedidos' },
-
-  // Item "Conexão" ocultado
-  // { icon: QrCode, label: 'Conexão', path: '/dashboard/conexao', tooltip: 'Conexão WhatsApp' },
-
-  // Item "Entregadores" ocultado
-  // {
-  //   icon: Bike,
-  //   label: 'Entregadores',
-  //   tooltip: 'Entregadores',
-  //   submenu: [
-  //     { icon: Bike, label: 'Motoboy', path: '/dashboard/entregador', tooltip: 'Motoboys' },
-  //     { icon: MapPin, label: 'Taxa de Entrega', path: '/dashboard/entregador/taxa', tooltip: 'Taxa de Entrega' }
-  //   ]
-  // },
-
-  { icon: Settings, label: 'Configurações', path: '/dashboard/configuracoes', tooltip: 'Configurações' },
-];
-
 const Sidebar: React.FC = () => {
   const { isExpanded, toggle } = useSidebarStore();
   const [expandedSubmenu, setExpandedSubmenu] = useState<string | null>(null);
+  const [opcoesAdicionaisHabilitado, setOpcoesAdicionaisHabilitado] = useState(false);
   const location = useLocation();
+
+  // Carregar configuração de opções adicionais
+  useEffect(() => {
+    const loadOpcoesAdicionaisConfig = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        const { data: configData } = await supabase
+          .from('produtos_config')
+          .select('opcoes_adicionais')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        if (configData) {
+          setOpcoesAdicionaisHabilitado(configData.opcoes_adicionais || false);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar configuração de opções adicionais:', error);
+      }
+    };
+
+    loadOpcoesAdicionaisConfig();
+
+    // Escutar evento customizado para atualização imediata
+    const handleOpcoesAdicionaisChange = (event: CustomEvent) => {
+      console.log('Evento opcoesAdicionaisChanged recebido:', event.detail);
+      setOpcoesAdicionaisHabilitado(event.detail.opcoesAdicionais);
+    };
+
+    window.addEventListener('opcoesAdicionaisChanged', handleOpcoesAdicionaisChange as EventListener);
+
+    // Escutar mudanças na tabela produtos_config (backup)
+    const subscription = supabase
+      .channel('produtos_config_changes')
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'produtos_config'
+        },
+        () => {
+          console.log('Mudança detectada na tabela produtos_config');
+          loadOpcoesAdicionaisConfig();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('opcoesAdicionaisChanged', handleOpcoesAdicionaisChange as EventListener);
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Função para gerar os itens do menu dinamicamente
+  const getMenuItems = () => {
+    const produtosSubmenu = [
+      { icon: ListOrdered, label: 'Itens', path: '/dashboard/produtos', tooltip: 'Lista de Produtos' },
+      { icon: Ruler, label: 'Unidade', path: '/dashboard/unidade-medida', tooltip: 'Unidades de Medida' }
+    ];
+
+    // Adicionar submenu "Adicionais" se estiver habilitado
+    if (opcoesAdicionaisHabilitado) {
+      produtosSubmenu.push({
+        icon: PlusCircle,
+        label: 'Adicionais',
+        path: '/dashboard/produtos/adicionais',
+        tooltip: 'Opções Adicionais'
+      });
+    }
+
+    return [
+      { icon: Home, label: 'Dashboard', path: '/dashboard', tooltip: 'Dashboard' },
+      {
+        icon: Package2,
+        label: 'Produtos',
+        tooltip: 'Produtos',
+        submenu: produtosSubmenu
+      },
+      { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
+      { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },
+      { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
+      { icon: ShoppingCart, label: 'PDV', path: '/dashboard/pdv', tooltip: 'Ponto de Venda' },
+      // Item "Gestor" ocultado
+      // { icon: MessageSquare, label: 'Gestor', path: '/dashboard/gestor', tooltip: 'Gestor de Pedidos' },
+
+      // Item "Conexão" ocultado
+      // { icon: QrCode, label: 'Conexão', path: '/dashboard/conexao', tooltip: 'Conexão WhatsApp' },
+
+      // Item "Entregadores" ocultado
+      // {
+      //   icon: Bike,
+      //   label: 'Entregadores',
+      //   tooltip: 'Entregadores',
+      //   submenu: [
+      //     { icon: Bike, label: 'Motoboy', path: '/dashboard/entregador', tooltip: 'Motoboys' },
+      //     { icon: MapPin, label: 'Taxa de Entrega', path: '/dashboard/entregador/taxa', tooltip: 'Taxa de Entrega' }
+      //   ]
+      // },
+
+      { icon: Settings, label: 'Configurações', path: '/dashboard/configuracoes', tooltip: 'Configurações' },
+    ];
+  };
+
+  const menuItems = getMenuItems();
 
   const toggleSubmenu = (label: string) => {
     setExpandedSubmenu(expandedSubmenu === label ? null : label);

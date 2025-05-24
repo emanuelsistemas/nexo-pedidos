@@ -63,6 +63,7 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
 const AdicionaisPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataReady, setIsDataReady] = useState(false);
   const [opcoes, setOpcoes] = useState<any[]>([]);
   const [editingOpcao, setEditingOpcao] = useState<any>(null);
   const [novaOpcao, setNovaOpcao] = useState({ nome: '', quantidade_minima: 0 });
@@ -89,6 +90,9 @@ const AdicionaisPage: React.FC = () => {
 
   const loadData = async () => {
     try {
+      // Simular um delay mínimo para mostrar o skeleton
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
@@ -114,6 +118,8 @@ const AdicionaisPage: React.FC = () => {
     } catch (error: any) {
       console.error('Error loading data:', error);
       showMessage('error', 'Erro ao carregar dados');
+    } finally {
+      setIsDataReady(true);
     }
   };
 
@@ -288,6 +294,49 @@ const AdicionaisPage: React.FC = () => {
     }
   };
 
+  // Renderizar skeleton loader para as opções adicionais
+  const renderSkeletonCards = () => {
+    return Array(3).fill(0).map((_, index) => (
+      <div
+        key={index}
+        className="bg-background-card rounded-lg border border-gray-800"
+      >
+        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+          <div>
+            <div className={`h-6 bg-gray-700 rounded animate-pulse mb-2 ${
+              index % 3 === 0 ? 'w-32' : index % 3 === 1 ? 'w-40' : 'w-28'
+            }`}></div>
+            <div className="h-4 w-20 bg-gray-600 rounded animate-pulse"></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-24 bg-gray-700 rounded animate-pulse"></div>
+            <div className="w-8 h-8 bg-gray-700 rounded animate-pulse"></div>
+            <div className="w-8 h-8 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+        </div>
+        <div className="p-4">
+          <div className="space-y-3">
+            {Array(2).fill(0).map((_, itemIndex) => (
+              <div
+                key={itemIndex}
+                className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
+              >
+                <div className={`h-4 bg-gray-700 rounded animate-pulse ${
+                  itemIndex % 2 === 0 ? 'w-24' : 'w-32'
+                }`}></div>
+                <div className="flex items-center gap-4">
+                  <div className="h-4 w-16 bg-gray-700 rounded animate-pulse"></div>
+                  <div className="w-8 h-8 bg-gray-700 rounded animate-pulse"></div>
+                  <div className="w-8 h-8 bg-gray-700 rounded animate-pulse"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -310,117 +359,123 @@ const AdicionaisPage: React.FC = () => {
       </div>
 
       <div className="space-y-6">
-        {opcoes.map(opcao => (
-          <div
-            key={opcao.id}
-            className="bg-background-card rounded-lg border border-gray-800"
-          >
-            <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-medium text-white">{opcao.nome}</h3>
-                {opcao.quantidade_minima > 0 && (
-                  <p className="text-xs text-primary-400 mt-1">
-                    Mínimo: {opcao.quantidade_minima} {opcao.quantidade_minima === 1 ? 'item' : 'itens'}
-                  </p>
-                )}
+        {!isDataReady ? (
+          renderSkeletonCards()
+        ) : (
+          <>
+            {opcoes.map(opcao => (
+              <div
+                key={opcao.id}
+                className="bg-background-card rounded-lg border border-gray-800"
+              >
+                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium text-white">{opcao.nome}</h3>
+                    {opcao.quantidade_minima > 0 && (
+                      <p className="text-xs text-primary-400 mt-1">
+                        Mínimo: {opcao.quantidade_minima} {opcao.quantidade_minima === 1 ? 'item' : 'itens'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingOpcao(opcao);
+                        setNovoItem({ nome: '', preco: '0' });
+                        setIsAddingItem(true);
+                        setEditingItem(null);
+                        setShowSidebar(true);
+                      }}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary-500/10 rounded-md text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 transition-colors"
+                    >
+                      <Plus size={14} />
+                      Adicionar Item
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingOpcao(opcao);
+                        setNovaOpcao({
+                          nome: opcao.nome,
+                          quantidade_minima: opcao.quantidade_minima || 0
+                        });
+                        setIsAddingItem(false);
+                        setShowSidebar(true);
+                      }}
+                      className="p-1 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(opcao.id, 'opcao', opcao.nome)}
+                      className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4">
+                  {opcao.itens?.length > 0 ? (
+                    <div className="space-y-3">
+                      {opcao.itens.map((item: any) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
+                        >
+                          <span className="text-white">{item.nome}</span>
+                          <div className="flex items-center gap-4">
+                            <span className="text-primary-400">
+                              R$ {item.preco.toFixed(2)}
+                            </span>
+                            <button
+                              onClick={() => handleEditItem(item, opcao)}
+                              className="p-1 text-gray-400 hover:text-white transition-colors"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id, 'item', item.nome)}
+                              className="text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
+                      <p className="text-gray-400">Nenhum item cadastrado</p>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
+            ))}
+
+            {opcoes.length === 0 && (
+              <div className="bg-background-card rounded-lg p-8 text-center">
+                <h3 className="text-lg font-medium text-white mb-2">
+                  Nenhuma opção cadastrada
+                </h3>
+                <p className="text-gray-400 mb-6">
+                  Crie sua primeira opção adicional para começar.
+                </p>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="mx-auto"
                   onClick={() => {
-                    setEditingOpcao(opcao);
-                    setNovoItem({ nome: '', preco: '0' });
-                    setIsAddingItem(true);
-                    setEditingItem(null);
-                    setShowSidebar(true);
-                  }}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary-500/10 rounded-md text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 transition-colors"
-                >
-                  <Plus size={14} />
-                  Adicionar Item
-                </button>
-                <button
-                  onClick={() => {
-                    setEditingOpcao(opcao);
-                    setNovaOpcao({
-                      nome: opcao.nome,
-                      quantidade_minima: opcao.quantidade_minima || 0
-                    });
+                    setEditingOpcao(null);
+                    setNovaOpcao({ nome: '', quantidade_minima: 0 });
                     setIsAddingItem(false);
                     setShowSidebar(true);
                   }}
-                  className="p-1 text-gray-400 hover:text-white transition-colors"
                 >
-                  <Pencil size={16} />
-                </button>
-                <button
-                  onClick={() => handleDelete(opcao.id, 'opcao', opcao.nome)}
-                  className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
+                  + Adicionar Opção
+                </Button>
               </div>
-            </div>
-
-            <div className="p-4">
-              {opcao.itens?.length > 0 ? (
-                <div className="space-y-3">
-                  {opcao.itens.map((item: any) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
-                    >
-                      <span className="text-white">{item.nome}</span>
-                      <div className="flex items-center gap-4">
-                        <span className="text-primary-400">
-                          R$ {item.preco.toFixed(2)}
-                        </span>
-                        <button
-                          onClick={() => handleEditItem(item, opcao)}
-                          className="p-1 text-gray-400 hover:text-white transition-colors"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id, 'item', item.nome)}
-                          className="text-red-400 hover:text-red-300 transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <p className="text-gray-400">Nenhum item cadastrado</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {opcoes.length === 0 && (
-          <div className="bg-background-card rounded-lg p-8 text-center">
-            <h3 className="text-lg font-medium text-white mb-2">
-              Nenhuma opção cadastrada
-            </h3>
-            <p className="text-gray-400 mb-6">
-              Crie sua primeira opção adicional para começar.
-            </p>
-            <Button
-              type="button"
-              variant="primary"
-              className="mx-auto"
-              onClick={() => {
-                setEditingOpcao(null);
-                setNovaOpcao({ nome: '', quantidade_minima: 0 });
-                setIsAddingItem(false);
-                setShowSidebar(true);
-              }}
-            >
-              + Adicionar Opção
-            </Button>
-          </div>
+            )}
+          </>
         )}
       </div>
 

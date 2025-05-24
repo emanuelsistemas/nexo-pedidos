@@ -63,6 +63,7 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
 const TaxaEntregaPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataReady, setIsDataReady] = useState(false);
   const [taxas, setTaxas] = useState<any[]>([]);
   const [editingTaxa, setEditingTaxa] = useState<any>(null);
   const [taxaMode, setTaxaMode] = useState<'bairro' | 'distancia'>('bairro');
@@ -123,6 +124,9 @@ const TaxaEntregaPage: React.FC = () => {
 
   const loadTaxas = async () => {
     try {
+      // Simular um delay mínimo para mostrar o skeleton
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
 
@@ -144,6 +148,8 @@ const TaxaEntregaPage: React.FC = () => {
     } catch (error: any) {
       console.error('Error loading taxas:', error);
       showMessage('error', 'Erro ao carregar taxas');
+    } finally {
+      setIsDataReady(true);
     }
   };
 
@@ -261,6 +267,38 @@ const TaxaEntregaPage: React.FC = () => {
     }
   };
 
+  // Renderizar skeleton loader para as taxas de entrega
+  const renderSkeletonCards = () => {
+    return Array(3).fill(0).map((_, index) => (
+      <div
+        key={index}
+        className="bg-background-card p-4 rounded-lg border border-gray-800"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gray-700 animate-pulse">
+              <div className="w-5 h-5 bg-gray-600 rounded"></div>
+            </div>
+            <div>
+              <div className={`h-5 bg-gray-700 rounded animate-pulse mb-1 ${
+                index % 3 === 0 ? 'w-24' : index % 3 === 1 ? 'w-32' : 'w-20'
+              }`}></div>
+              <div className={`h-4 bg-gray-600 rounded animate-pulse mb-2 ${
+                index % 3 === 0 ? 'w-20' : index % 3 === 1 ? 'w-28' : 'w-16'
+              }`}></div>
+              <div className="h-4 w-16 bg-gray-600 rounded animate-pulse mb-1"></div>
+              <div className="h-3 w-20 bg-gray-600 rounded animate-pulse"></div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="w-9 h-9 bg-gray-700 rounded-lg animate-pulse"></div>
+            <div className="w-9 h-9 bg-gray-700 rounded-lg animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -282,87 +320,93 @@ const TaxaEntregaPage: React.FC = () => {
       </div>
 
       <div className="grid gap-6">
-        {taxas.map(taxa => (
-          <div
-            key={taxa.id}
-            className="bg-background-card p-4 rounded-lg border border-gray-800"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary-500/10">
-                  <MapPin size={20} className="text-primary-400" />
-                </div>
-                <div>
-                  {taxaMode === 'bairro' ? (
-                    <>
-                      <h3 className="text-white font-medium">{taxa.bairro}</h3>
-                      <p className="text-sm text-gray-400">CEP: {taxa.cep}</p>
-                    </>
-                  ) : (
-                    <h3 className="text-white font-medium">Até {taxa.km}km</h3>
-                  )}
-                  <div>
-                    <p className="text-sm text-primary-400">
-                      R$ {taxa.valor.toFixed(2)}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Tempo: {taxa.tempo_entrega} min
-                    </p>
+        {!isDataReady ? (
+          renderSkeletonCards()
+        ) : (
+          <>
+            {taxas.map(taxa => (
+              <div
+                key={taxa.id}
+                className="bg-background-card p-4 rounded-lg border border-gray-800"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary-500/10">
+                      <MapPin size={20} className="text-primary-400" />
+                    </div>
+                    <div>
+                      {taxaMode === 'bairro' ? (
+                        <>
+                          <h3 className="text-white font-medium">{taxa.bairro}</h3>
+                          <p className="text-sm text-gray-400">CEP: {taxa.cep}</p>
+                        </>
+                      ) : (
+                        <h3 className="text-white font-medium">Até {taxa.km}km</h3>
+                      )}
+                      <div>
+                        <p className="text-sm text-primary-400">
+                          R$ {taxa.valor.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Tempo: {taxa.tempo_entrega} min
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingTaxa(taxa);
+                        setFormData({
+                          cep: taxa.cep || '',
+                          bairro: taxa.bairro || '',
+                          valor: taxa.valor.toString(),
+                          km: taxa.km?.toString() || '',
+                          tempo_entrega: taxa.tempo_entrega?.toString() || '',
+                        });
+                        setShowSidebar(true);
+                      }}
+                      className="p-2 text-gray-400 hover:text-white transition-colors"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(taxa.id, taxaMode === 'bairro' ? taxa.bairro : `${taxa.km}km`)}
+                      className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
+            ))}
+
+            {taxas.length === 0 && (
+              <div className="bg-background-card rounded-lg p-8 text-center">
+                <div className="bg-primary-500/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <MapPin size={24} className="text-primary-400" />
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">
+                  Nenhuma taxa cadastrada
+                </h3>
+                <p className="text-gray-400 mb-6">
+                  Cadastre sua primeira taxa de entrega para começar.
+                </p>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="mx-auto"
                   onClick={() => {
-                    setEditingTaxa(taxa);
-                    setFormData({
-                      cep: taxa.cep || '',
-                      bairro: taxa.bairro || '',
-                      valor: taxa.valor.toString(),
-                      km: taxa.km?.toString() || '',
-                      tempo_entrega: taxa.tempo_entrega?.toString() || '',
-                    });
+                    setEditingTaxa(null);
+                    setFormData({ cep: '', bairro: '', valor: '', km: '', tempo_entrega: '' });
                     setShowSidebar(true);
                   }}
-                  className="p-2 text-gray-400 hover:text-white transition-colors"
                 >
-                  <Pencil size={16} />
-                </button>
-                <button
-                  onClick={() => handleDelete(taxa.id, taxaMode === 'bairro' ? taxa.bairro : `${taxa.km}km`)}
-                  className="p-2 text-red-400 hover:text-red-300 transition-colors"
-                >
-                  <Trash2 size={16} />
-                </button>
+                  + Adicionar Taxa
+                </Button>
               </div>
-            </div>
-          </div>
-        ))}
-
-        {taxas.length === 0 && (
-          <div className="bg-background-card rounded-lg p-8 text-center">
-            <div className="bg-primary-500/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MapPin size={24} className="text-primary-400" />
-            </div>
-            <h3 className="text-lg font-medium text-white mb-2">
-              Nenhuma taxa cadastrada
-            </h3>
-            <p className="text-gray-400 mb-6">
-              Cadastre sua primeira taxa de entrega para começar.
-            </p>
-            <Button
-              type="button"
-              variant="primary"
-              className="mx-auto"
-              onClick={() => {
-                setEditingTaxa(null);
-                setFormData({ cep: '', bairro: '', valor: '', km: '', tempo_entrega: '' });
-                setShowSidebar(true);
-              }}
-            >
-              + Adicionar Taxa
-            </Button>
-          </div>
+            )}
+          </>
         )}
       </div>
 

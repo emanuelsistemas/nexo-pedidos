@@ -43,8 +43,9 @@ interface ProdutoFoto {
 }
 
 const UserProdutosPage: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Iniciar como true
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDataReady, setIsDataReady] = useState(false); // Novo estado para controlar quando os dados estão prontos
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeGrupo, setActiveGrupo] = useState<string | null>(null);
@@ -61,6 +62,29 @@ const UserProdutosPage: React.FC = () => {
   // Estado para armazenar a contagem de fotos por produto
   const [produtosFotosCount, setProdutosFotosCount] = useState<Record<string, number>>({});
 
+  // Estados para controlar o carregamento de cada parte dos dados
+  const [loadingStates, setLoadingStates] = useState({
+    grupos: true,
+    fotos: true,
+    estoque: true,
+    fotosCount: true
+  });
+
+  // Função para verificar se todos os dados estão carregados
+  const checkIfDataReady = () => {
+    const allLoaded = !loadingStates.grupos && !loadingStates.fotos && !loadingStates.estoque && !loadingStates.fotosCount;
+    if (allLoaded && !isDataReady) {
+      console.log('Todos os dados foram carregados, exibindo interface');
+      setIsDataReady(true);
+      setIsLoading(false);
+    }
+  };
+
+  // Monitorar mudanças nos estados de loading
+  useEffect(() => {
+    checkIfDataReady();
+  }, [loadingStates, isDataReady]);
+
   // Verificar se há atualizações no localStorage
   const checkLocalStorageUpdates = () => {
     const produtoAtualizado = localStorage.getItem('produto_atualizado');
@@ -73,6 +97,16 @@ const UserProdutosPage: React.FC = () => {
         const now = new Date().getTime();
         if (now - data.timestamp < 5000) {
           console.log('Atualização recente, recarregando dados...');
+
+          // Resetar estados de loading
+          setIsDataReady(false);
+          setIsLoading(true);
+          setLoadingStates({
+            grupos: true,
+            fotos: true,
+            estoque: true,
+            fotosCount: true
+          });
 
           // Limpar os estados para forçar um recarregamento completo
           setGrupos([]);
@@ -116,9 +150,18 @@ const UserProdutosPage: React.FC = () => {
               setProdutosEstoque(JSON.parse(cachedEstoque));
             }
 
-            // Ainda carregamos os dados do servidor, mas não mostramos o loading
+            // Marcar grupos e estoque como carregados do cache
+            setLoadingStates(prev => ({
+              ...prev,
+              grupos: false,
+              estoque: cachedEstoque ? false : true
+            }));
+
+            // Ainda carregamos os dados do servidor, mas não mostramos o loading principal
             loadGrupos(false);
-            loadProdutosEstoque();
+            if (!cachedEstoque) {
+              loadProdutosEstoque();
+            }
             return true;
           } else {
             console.log('Cache de produtos expirado, carregando do servidor');
@@ -318,6 +361,9 @@ const UserProdutosPage: React.FC = () => {
       // Atualizar o estado com os novos dados
       setGrupos(gruposComProdutos);
 
+      // Marcar grupos como carregados
+      setLoadingStates(prev => ({ ...prev, grupos: false }));
+
       // Se for o carregamento inicial, definir o filtro e o grupo ativo
       if (isInitialLoad) {
         // Definir o filtro inicial como "todos"
@@ -351,8 +397,9 @@ const UserProdutosPage: React.FC = () => {
 
     } catch (error) {
       console.error('Erro ao carregar grupos e produtos:', error);
+      // Em caso de erro, marcar como carregado para não ficar em loading infinito
+      setLoadingStates(prev => ({ ...prev, grupos: false }));
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
     }
   };
@@ -465,6 +512,9 @@ const UserProdutosPage: React.FC = () => {
       // Atualizar o estado com as informações de estoque de todos os produtos
       setProdutosEstoque(estoqueInfo);
 
+      // Marcar estoque como carregado
+      setLoadingStates(prev => ({ ...prev, estoque: false }));
+
       // Salvar dados de estoque no localStorage
       try {
         localStorage.setItem('produtos_estoque_cache', JSON.stringify(estoqueInfo));
@@ -474,6 +524,8 @@ const UserProdutosPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Erro ao carregar estoque dos produtos:', error);
+      // Em caso de erro, marcar como carregado para não ficar em loading infinito
+      setLoadingStates(prev => ({ ...prev, estoque: false }));
     }
   };
 
@@ -508,8 +560,13 @@ const UserProdutosPage: React.FC = () => {
       });
 
       setProdutosFotosCount(fotosCount);
+
+      // Marcar contagem de fotos como carregada
+      setLoadingStates(prev => ({ ...prev, fotosCount: false }));
     } catch (error) {
       console.error('Erro ao carregar contagem de fotos dos produtos:', error);
+      // Em caso de erro, marcar como carregado para não ficar em loading infinito
+      setLoadingStates(prev => ({ ...prev, fotosCount: false }));
     }
   };
 
@@ -545,8 +602,13 @@ const UserProdutosPage: React.FC = () => {
       });
 
       setProdutosFotos(fotosMap);
+
+      // Marcar fotos como carregadas
+      setLoadingStates(prev => ({ ...prev, fotos: false }));
     } catch (error) {
       console.error('Erro ao carregar fotos dos produtos:', error);
+      // Em caso de erro, marcar como carregado para não ficar em loading infinito
+      setLoadingStates(prev => ({ ...prev, fotos: false }));
     }
   };
 
@@ -660,8 +722,20 @@ const UserProdutosPage: React.FC = () => {
           // Usamos setTimeout com um atraso maior para garantir que a atualização ocorra após o evento ser processado
           setTimeout(() => {
             console.log('Recarregando dados após alteração em produtos...');
+
+            // Resetar estados de loading
+            setIsDataReady(false);
+            setLoadingStates({
+              grupos: true,
+              fotos: true,
+              estoque: true,
+              fotosCount: true
+            });
+
             // Limpar o cache de grupos para forçar um recarregamento completo
             setGrupos([]);
+            setProdutosFotos({});
+            setProdutosFotosCount({});
             setProdutosEstoque({});
             loadGrupos();
             loadProdutosEstoque();
@@ -688,6 +762,16 @@ const UserProdutosPage: React.FC = () => {
           // Usamos setTimeout com um atraso maior para garantir que a atualização ocorra após o evento ser processado
           setTimeout(() => {
             console.log('Recarregando dados após alteração em fotos de produtos...');
+
+            // Resetar estados de loading
+            setIsDataReady(false);
+            setLoadingStates({
+              grupos: true,
+              fotos: true,
+              estoque: true,
+              fotosCount: true
+            });
+
             // Limpar o cache de grupos para forçar um recarregamento completo
             setGrupos([]);
             // Limpar o cache de fotos para forçar um recarregamento completo
@@ -741,13 +825,65 @@ const UserProdutosPage: React.FC = () => {
 
   // Renderizar skeleton loader para os cards de produtos
   const renderSkeletonCards = () => {
-    return Array(4).fill(0).map((_, index) => (
+    // Configurações fixas para cada card para evitar re-renders inconsistentes
+    const cardConfigs = [
+      { nameWidth: 'w-3/4', hasBadge: true, hasStock: true, hasDescription: true, hasExtraStock: false },
+      { nameWidth: 'w-5/6', hasBadge: false, hasStock: false, hasDescription: true, hasExtraStock: false },
+      { nameWidth: 'w-2/3', hasBadge: true, hasStock: true, hasDescription: false, hasExtraStock: true },
+      { nameWidth: 'w-4/5', hasBadge: false, hasStock: true, hasDescription: true, hasExtraStock: false },
+      { nameWidth: 'w-3/4', hasBadge: true, hasStock: false, hasDescription: false, hasExtraStock: false },
+      { nameWidth: 'w-5/6', hasBadge: false, hasStock: true, hasDescription: true, hasExtraStock: true },
+      { nameWidth: 'w-2/3', hasBadge: true, hasStock: true, hasDescription: false, hasExtraStock: false },
+      { nameWidth: 'w-4/5', hasBadge: false, hasStock: false, hasDescription: true, hasExtraStock: false },
+    ];
+
+    return cardConfigs.map((config, index) => (
       <div key={index} className="bg-background-card rounded-lg overflow-hidden border border-gray-800">
-        <div className="h-32 bg-gray-800 animate-pulse"></div>
+        {/* Skeleton da imagem */}
+        <div className="h-32 bg-gray-800 relative">
+          <div className="w-full h-full bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 animate-pulse"></div>
+
+          {/* Skeleton dos badges */}
+          <div className="absolute top-2 left-2 flex flex-col gap-1">
+            {config.hasBadge && (
+              <div className="h-5 w-16 bg-gray-600 rounded-full animate-pulse"></div>
+            )}
+          </div>
+
+          {/* Skeleton do preço */}
+          <div className="absolute bottom-0 right-0 bg-background-dark px-2 py-1">
+            <div className="h-4 w-12 bg-gray-600 rounded animate-pulse"></div>
+          </div>
+        </div>
+
+        {/* Skeleton das informações */}
         <div className="p-3 space-y-2">
-          <div className="h-5 w-3/4 bg-gray-700 rounded animate-pulse"></div>
-          <div className="h-4 w-1/3 bg-gray-700 rounded animate-pulse"></div>
-          <div className="h-3 w-2/3 bg-gray-700 rounded animate-pulse"></div>
+          {/* Nome do produto */}
+          <div className={`h-5 bg-gray-700 rounded animate-pulse ${config.nameWidth}`}></div>
+
+          {/* Tags e código */}
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-8 bg-gray-700 rounded animate-pulse"></div>
+            <div className="h-5 w-16 bg-gray-600 rounded-full animate-pulse"></div>
+          </div>
+
+          {/* Informações de estoque */}
+          {config.hasStock && (
+            <div className="flex gap-1 mt-2">
+              <div className="h-4 w-20 bg-gray-600 rounded-full animate-pulse"></div>
+              {config.hasExtraStock && (
+                <div className="h-4 w-24 bg-gray-600 rounded-full animate-pulse"></div>
+              )}
+            </div>
+          )}
+
+          {/* Descrição */}
+          {config.hasDescription && (
+            <div className="space-y-1 mt-2">
+              <div className="h-3 w-full bg-gray-700 rounded animate-pulse"></div>
+              <div className="h-3 w-4/5 bg-gray-700 rounded animate-pulse"></div>
+            </div>
+          )}
         </div>
       </div>
     ));
@@ -763,6 +899,17 @@ const UserProdutosPage: React.FC = () => {
             onClick={() => {
               if (!isRefreshing) {
                 console.log('Atualizando manualmente...');
+
+                // Resetar estados de loading
+                setIsDataReady(false);
+                setIsLoading(true);
+                setLoadingStates({
+                  grupos: true,
+                  fotos: true,
+                  estoque: true,
+                  fotosCount: true
+                });
+
                 // Limpar todos os estados para forçar um recarregamento completo
                 setGrupos([]);
                 setProdutosFotos({});
@@ -802,12 +949,14 @@ const UserProdutosPage: React.FC = () => {
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
       </div>
 
-      {isLoading ? (
+      {!isDataReady ? (
         <>
           {/* Skeleton para abas de grupos */}
           <div className="flex overflow-x-auto pb-2 custom-scrollbar">
-            {Array(4).fill(0).map((_, index) => (
-              <div key={index} className="h-8 w-24 bg-gray-700 rounded-full mr-2 flex-shrink-0 animate-pulse"></div>
+            {Array(6).fill(0).map((_, index) => (
+              <div key={index} className={`h-8 bg-gray-700 rounded-full mr-2 flex-shrink-0 animate-pulse ${
+                index === 0 ? 'w-16' : index === 1 ? 'w-20' : index % 2 === 0 ? 'w-24' : 'w-28'
+              }`}></div>
             ))}
           </div>
 

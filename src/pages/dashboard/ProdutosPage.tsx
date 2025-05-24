@@ -117,8 +117,33 @@ const ProdutosPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Iniciar como true
+  const [isDataReady, setIsDataReady] = useState(false); // Novo estado para controlar quando os dados estão prontos
   const [isGrupoForm, setIsGrupoForm] = useState(true);
+
+  // Estados para controlar o carregamento de cada parte dos dados
+  const [loadingStates, setLoadingStates] = useState({
+    grupos: true,
+    opcoes: true,
+    unidades: true,
+    estoque: true
+  });
+
+  // Função para verificar se todos os dados estão carregados
+  const checkIfDataReady = () => {
+    const allLoaded = !loadingStates.grupos && !loadingStates.opcoes && !loadingStates.unidades && !loadingStates.estoque;
+    if (allLoaded && !isDataReady) {
+      console.log('Todos os dados foram carregados, exibindo interface');
+      setIsDataReady(true);
+      setIsLoading(false);
+    }
+  };
+
+  // Monitorar mudanças nos estados de loading
+  useEffect(() => {
+    checkIfDataReady();
+  }, [loadingStates, isDataReady]);
+
   const [novoGrupoNome, setNovoGrupoNome] = useState('');
   const [selectedGrupo, setSelectedGrupo] = useState<Grupo | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -418,9 +443,14 @@ const ProdutosPage: React.FC = () => {
 
       if (error) throw error;
       setUnidadesMedida(data || []);
+
+      // Marcar unidades como carregadas
+      setLoadingStates(prev => ({ ...prev, unidades: false }));
     } catch (error: any) {
       console.error('Erro ao carregar unidades de medida:', error);
       showMessage('error', 'Erro ao carregar unidades de medida');
+      // Em caso de erro, marcar como carregado para não ficar em loading infinito
+      setLoadingStates(prev => ({ ...prev, unidades: false }));
     }
   };
 
@@ -643,8 +673,13 @@ const ProdutosPage: React.FC = () => {
 
       // Atualizar o estado com as informações de estoque de todos os produtos
       setProdutosEstoque(estoqueInfo);
+
+      // Marcar estoque como carregado
+      setLoadingStates(prev => ({ ...prev, estoque: false }));
     } catch (error: any) {
       console.error('Erro ao carregar estoque dos produtos:', error);
+      // Em caso de erro, marcar como carregado para não ficar em loading infinito
+      setLoadingStates(prev => ({ ...prev, estoque: false }));
     }
   };
 
@@ -676,8 +711,13 @@ const ProdutosPage: React.FC = () => {
       );
 
       setAvailableOpcoes(opcoesComItens);
+
+      // Marcar opções como carregadas
+      setLoadingStates(prev => ({ ...prev, opcoes: false }));
     } catch (error: any) {
       console.error('Error loading available options:', error);
+      // Em caso de erro, marcar como carregado para não ficar em loading infinito
+      setLoadingStates(prev => ({ ...prev, opcoes: false }));
     }
   };
 
@@ -748,6 +788,9 @@ const ProdutosPage: React.FC = () => {
       }));
 
       setGrupos(gruposWithProdutos);
+
+      // Marcar grupos como carregados
+      setLoadingStates(prev => ({ ...prev, grupos: false }));
     });
   };
 
@@ -2464,14 +2507,14 @@ const ProdutosPage: React.FC = () => {
             <div className="flex flex-col mb-1">
               <div className="flex items-center gap-2">
                 {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined ? (
-                  <>
+                  <div>
                     <p className="text-sm text-gray-400 line-through">
                       {produto.preco.toFixed(2)}
                     </p>
                     <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
                       {descontoExibicao}
                     </span>
-                  </>
+                  </div>
                 ) : (
                   <p className="text-sm text-primary-400">
                     {produto.preco.toFixed(2)}
@@ -2517,6 +2560,83 @@ const ProdutosPage: React.FC = () => {
     );
   };
 
+  // Renderizar skeleton loader para grupos e produtos
+  const renderSkeletonGroups = () => {
+    return Array(3).fill(0).map((_, groupIndex) => (
+      <div key={groupIndex} className="bg-background-card rounded-lg border border-gray-800">
+        {/* Skeleton do cabeçalho do grupo */}
+        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+          <div className="h-6 w-32 bg-gray-700 rounded animate-pulse"></div>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-28 bg-gray-700 rounded animate-pulse"></div>
+            <div className="h-8 w-8 bg-gray-700 rounded animate-pulse"></div>
+            <div className="h-8 w-8 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+        </div>
+
+        <div className="p-4">
+          {/* Skeleton da barra de busca */}
+          <div className="mb-4 flex gap-4">
+            <div className="flex-1 relative">
+              <div className="h-10 w-full bg-gray-700 rounded-lg animate-pulse"></div>
+            </div>
+            <div className="h-10 w-16 bg-gray-700 rounded animate-pulse"></div>
+          </div>
+
+          {/* Skeleton dos produtos */}
+          <div className="space-y-3">
+            {Array(groupIndex === 0 ? 3 : groupIndex === 1 ? 2 : 1).fill(0).map((_, productIndex) => (
+              <div key={productIndex} className="p-3 bg-gray-800/50 rounded-lg">
+                <div className="flex items-start gap-4">
+                  {/* Skeleton da foto */}
+                  <div className="w-24 h-24 bg-gray-700 rounded-lg animate-pulse flex-shrink-0"></div>
+
+                  {/* Skeleton das informações */}
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <div className={`h-5 bg-gray-700 rounded animate-pulse ${
+                          productIndex % 3 === 0 ? 'w-32' : productIndex % 3 === 1 ? 'w-40' : 'w-28'
+                        }`}></div>
+                        <div className="h-4 w-12 bg-gray-600 rounded animate-pulse"></div>
+                        {productIndex % 2 === 0 && (
+                          <div className="h-5 w-16 bg-gray-600 rounded-full animate-pulse"></div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 bg-gray-700 rounded animate-pulse"></div>
+                        <div className="h-8 w-8 bg-gray-700 rounded animate-pulse"></div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="h-6 w-20 bg-gray-600 rounded animate-pulse"></div>
+                      <div className="h-4 w-16 bg-gray-600 rounded animate-pulse"></div>
+                    </div>
+
+                    <div className="flex gap-2 mb-2">
+                      <div className="h-4 w-24 bg-gray-600 rounded-full animate-pulse"></div>
+                      {productIndex % 3 === 0 && (
+                        <div className="h-4 w-20 bg-gray-600 rounded-full animate-pulse"></div>
+                      )}
+                    </div>
+
+                    {productIndex % 2 === 0 && (
+                      <div className="space-y-1">
+                        <div className="h-3 w-full bg-gray-700 rounded animate-pulse"></div>
+                        <div className="h-3 w-3/4 bg-gray-700 rounded animate-pulse"></div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
@@ -2528,132 +2648,152 @@ const ProdutosPage: React.FC = () => {
           type="button"
           variant="primary"
           onClick={handleAddGrupo}
+          disabled={!isDataReady}
         >
           + Adicionar Grupo
         </Button>
       </div>
 
-      <div className="mb-6 flex gap-4">
-        <div className="flex-1 relative">
-          <input
-            type="text"
-            placeholder="Buscar grupos..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-          />
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        </div>
-        <Button
-          type="button"
-          variant="text"
-          className="flex items-center gap-2"
-          onClick={toggleSortOrder}
-        >
-          <ArrowUpDown size={18} />
-          {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
-        </Button>
-      </div>
+      {!isDataReady ? (
+        <div>
+          {/* Skeleton da barra de busca */}
+          <div className="mb-6 flex gap-4">
+            <div className="flex-1 relative">
+              <div className="h-10 w-full bg-gray-700 rounded-lg animate-pulse"></div>
+            </div>
+            <div className="h-10 w-16 bg-gray-700 rounded animate-pulse"></div>
+          </div>
 
-      {filteredAndSortedGrupos.length === 0 ? (
-        <div className="bg-background-card rounded-lg p-8 text-center">
-          <h3 className="text-lg font-medium text-white mb-2">
-            {searchTerm ? 'Nenhum grupo encontrado' : 'Nenhum grupo cadastrado'}
-          </h3>
-          <p className="text-gray-400 mb-6">
-            {searchTerm
-              ? 'Tente buscar com outros termos'
-              : 'Crie seu primeiro grupo de produtos para começar.'
-            }
-          </p>
-          {!searchTerm && (
-            <Button
-              type="button"
-              variant="primary"
-              className="mx-auto"
-              onClick={handleAddGrupo}
-            >
-              + Adicionar Grupo
-            </Button>
-          )}
+          {/* Skeleton dos grupos */}
+          <div className="space-y-6">
+            {renderSkeletonGroups()}
+          </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          {filteredAndSortedGrupos.map((grupo) => (
-            <div
-              key={grupo.id}
-              className="bg-background-card rounded-lg border border-gray-800"
-            >
-              <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-                <h3 className="text-lg font-medium text-white">{grupo.nome}</h3>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="text"
-                    onClick={() => handleAddProduto(grupo)}
-                  >
-                    + Adicionar Produto
-                  </Button>
-                  <button
-                    className="p-1 text-gray-400 hover:text-white transition-colors"
-                    onClick={() => handleEditGrupo(grupo)}
-                  >
-                    <Pencil size={16} />
-                  </button>
-                  <button
-                    className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                    onClick={() => handleDeleteGrupo(grupo.id)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4">
-                <div className="mb-4 flex gap-4">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      placeholder="Buscar produtos por nome, código ou código de barras..."
-                      value={productSearchTerms[grupo.id] || ''}
-                      onChange={(e) => handleProductSearch(grupo.id, e.target.value)}
-                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                    />
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="text"
-                    className="flex items-center gap-2"
-                    onClick={() => toggleProductSortOrder(grupo.id)}
-                  >
-                    <ArrowUpDown size={18} />
-                    {(productSortOrders[grupo.id] || 'asc') === 'asc' ? 'A-Z' : 'Z-A'}
-                  </Button>
-                </div>
-
-                {getFilteredAndSortedProducts(grupo).length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-400">
-                      {productSearchTerms[grupo.id]
-                        ? 'Nenhum produto encontrado'
-                        : 'Nenhum produto neste grupo'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {getFilteredAndSortedProducts(grupo).map((produto) => renderProduto(grupo, produto))}
-                  </div>
-                )}
-              </div>
+        <div>
+          <div className="mb-6 flex gap-4">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="Buscar grupos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+              />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
-          ))}
+            <Button
+              type="button"
+              variant="text"
+              className="flex items-center gap-2"
+              onClick={toggleSortOrder}
+            >
+              <ArrowUpDown size={18} />
+              {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
+            </Button>
+          </div>
+
+          {filteredAndSortedGrupos.length === 0 ? (
+            <div className="bg-background-card rounded-lg p-8 text-center">
+              <h3 className="text-lg font-medium text-white mb-2">
+                {searchTerm ? 'Nenhum grupo encontrado' : 'Nenhum grupo cadastrado'}
+              </h3>
+              <p className="text-gray-400 mb-6">
+                {searchTerm
+                  ? 'Tente buscar com outros termos'
+                  : 'Crie seu primeiro grupo de produtos para começar.'
+                }
+              </p>
+              {!searchTerm && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="mx-auto"
+                  onClick={handleAddGrupo}
+                >
+                  + Adicionar Grupo
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {filteredAndSortedGrupos.map((grupo) => (
+                <div
+                  key={grupo.id}
+                  className="bg-background-card rounded-lg border border-gray-800"
+                >
+                  <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                    <h3 className="text-lg font-medium text-white">{grupo.nome}</h3>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="text"
+                        onClick={() => handleAddProduto(grupo)}
+                      >
+                        + Adicionar Produto
+                      </Button>
+                      <button
+                        className="p-1 text-gray-400 hover:text-white transition-colors"
+                        onClick={() => handleEditGrupo(grupo)}
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                        onClick={() => handleDeleteGrupo(grupo.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-4">
+                    <div className="mb-4 flex gap-4">
+                      <div className="flex-1 relative">
+                        <input
+                          type="text"
+                          placeholder="Buscar produtos por nome, código ou código de barras..."
+                          value={productSearchTerms[grupo.id] || ''}
+                          onChange={(e) => handleProductSearch(grupo.id, e.target.value)}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        />
+                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="text"
+                        className="flex items-center gap-2"
+                        onClick={() => toggleProductSortOrder(grupo.id)}
+                      >
+                        <ArrowUpDown size={18} />
+                        {(productSortOrders[grupo.id] || 'asc') === 'asc' ? 'A-Z' : 'Z-A'}
+                      </Button>
+                    </div>
+
+                    {getFilteredAndSortedProducts(grupo).length === 0 ? (
+                      <div className="text-center py-8">
+                        <p className="text-gray-400">
+                          {productSearchTerms[grupo.id]
+                            ? 'Nenhum produto encontrado'
+                            : 'Nenhum produto neste grupo'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {getFilteredAndSortedProducts(grupo).map((produto) => renderProduto(grupo, produto))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       <AnimatePresence>
         {showSidebar && (
-          <>
+          <div>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -3418,7 +3558,7 @@ const ProdutosPage: React.FC = () => {
                             </button>
                           </div>
                         ) : (
-                          <>
+                          <div>
                             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
                               <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-white font-medium">Fotos do Produto</h3>
@@ -3494,15 +3634,15 @@ const ProdutosPage: React.FC = () => {
                                     className="w-full py-2 px-4 border border-dashed border-gray-600 rounded-lg flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:border-gray-500 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                                   >
                                     {isUploadingFoto ? (
-                                      <>
+                                      <div>
                                         <div className="w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin"></div>
                                         <span>Enviando...</span>
-                                      </>
+                                      </div>
                                     ) : (
-                                      <>
+                                      <div>
                                         <Upload size={18} />
                                         <span>Adicionar Foto</span>
-                                      </>
+                                      </div>
                                     )}
                                   </button>
                                 </div>
@@ -3532,7 +3672,7 @@ const ProdutosPage: React.FC = () => {
                                 {isLoading ? 'Salvando...' : 'Concluir'}
                               </Button>
                             </div>
-                          </>
+                          </div>
                         )}
                       </div>
                     ) : (
@@ -3550,7 +3690,7 @@ const ProdutosPage: React.FC = () => {
                             </button>
                           </div>
                         ) : (
-                          <>
+                          <div>
                             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
                               <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-3">
                                 <div className="flex flex-col md:flex-row md:items-center gap-3">
@@ -3917,7 +4057,7 @@ const ProdutosPage: React.FC = () => {
                                 {isLoading ? 'Salvando...' : 'Concluir'}
                               </Button>
                             </div>
-                          </>
+                          </div>
                         )}
                       </div>
                     )}
@@ -3925,7 +4065,7 @@ const ProdutosPage: React.FC = () => {
                 )}
               </div>
             </motion.div>
-          </>
+          </div>
         )}
       </AnimatePresence>
 
