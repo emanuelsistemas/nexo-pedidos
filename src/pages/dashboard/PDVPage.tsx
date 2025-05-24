@@ -883,7 +883,10 @@ const PDVPage: React.FC = () => {
   }
 
   return (
-    <div className="bg-background-dark overflow-hidden" style={{ margin: '-24px', height: 'calc(100vh + 48px)' }}>
+    <div
+      className={`${showFinalizacaoVenda ? 'bg-background-card' : 'bg-background-dark'} overflow-hidden`}
+      style={{ margin: '-24px', height: 'calc(100vh + 48px)' }}
+    >
       {/* Header */}
       <div className="bg-background-card border-b border-gray-800 h-16 flex items-center justify-between px-4">
         <div></div> {/* Espaço vazio à esquerda */}
@@ -895,7 +898,10 @@ const PDVPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex overflow-hidden" style={{ height: 'calc(100vh - 64px)' }}>
+      <div
+        className={`flex overflow-hidden ${showFinalizacaoVenda ? 'bg-background-card' : ''}`}
+        style={{ height: 'calc(100vh - 64px)' }}
+      >
         {/* Área Principal - Produtos */}
         <motion.div
           initial={false}
@@ -905,11 +911,21 @@ const PDVPage: React.FC = () => {
             x: showFinalizacaoVenda ? -100 : 0
           }}
           transition={{
-            duration: 0.5,
+            duration: showFinalizacaoVenda ? 0.6 : 0.4,
             ease: [0.25, 0.46, 0.45, 0.94],
-            width: { duration: 0.5 },
-            opacity: { duration: 0.3, delay: showFinalizacaoVenda ? 0 : 0.2 },
-            x: { duration: 0.5 }
+            width: {
+              duration: showFinalizacaoVenda ? 0.6 : 0.4,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            },
+            opacity: {
+              duration: showFinalizacaoVenda ? 0.4 : 0.3,
+              delay: showFinalizacaoVenda ? 0 : 0.1,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            },
+            x: {
+              duration: showFinalizacaoVenda ? 0.6 : 0.4,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }
           }}
           className={`p-4 flex flex-col h-full relative overflow-hidden ${
             showFinalizacaoVenda ? 'pointer-events-none' : 'flex-1'
@@ -925,10 +941,16 @@ const PDVPage: React.FC = () => {
               scale: showFinalizacaoVenda ? 0.95 : 1
             }}
             transition={{
-              duration: 0.3,
+              duration: 0.5,
               ease: [0.25, 0.46, 0.45, 0.94],
-              opacity: { duration: 0.3 },
-              scale: { duration: 0.3 }
+              opacity: {
+                duration: 0.5,
+                ease: [0.25, 0.46, 0.45, 0.94]
+              },
+              scale: {
+                duration: 0.5,
+                ease: [0.25, 0.46, 0.45, 0.94]
+              }
             }}
             className="h-full flex flex-col"
           >
@@ -1006,7 +1028,10 @@ const PDVPage: React.FC = () => {
             )}
 
             {/* Grid de Produtos */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ paddingBottom: '60px' }}>
+            <div
+              className="flex-1 overflow-y-auto custom-scrollbar"
+              style={{ paddingBottom: showFinalizacaoVenda ? '0px' : '60px' }}
+            >
               {produtosFiltrados.length === 0 ? (
                 <div className="text-center py-8">
                   <Package size={48} className="mx-auto mb-4 text-gray-500" />
@@ -1125,27 +1150,29 @@ const PDVPage: React.FC = () => {
               )}
             </div>
 
-            {/* Menu Fixo no Footer da Área de Produtos */}
-            <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
-              <div className="h-14 px-4 py-2 overflow-hidden">
-                {/* Itens do Menu com Scroll Horizontal */}
-                <div className="flex items-center h-full overflow-x-auto overflow-y-hidden custom-scrollbar gap-2 justify-around min-w-0">
-                  {menuPDVItems.map((item) => {
-                    const IconComponent = item.icon;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={item.onClick}
-                        className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} rounded-lg p-1 transition-all duration-200 min-w-[70px] flex-shrink-0`}
-                      >
-                        <IconComponent size={18} />
-                        <span className="text-xs mt-0.5 whitespace-nowrap">{item.label}</span>
-                      </button>
-                    );
-                  })}
+            {/* Menu Fixo no Footer da Área de Produtos - Só aparece quando NÃO está na finalização */}
+            {!showFinalizacaoVenda && (
+              <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
+                <div className="h-14 px-4 py-2 overflow-hidden">
+                  {/* Itens do Menu com Scroll Horizontal */}
+                  <div className="flex items-center h-full overflow-x-auto overflow-y-hidden custom-scrollbar gap-2 justify-around min-w-0">
+                    {menuPDVItems.map((item) => {
+                      const IconComponent = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={item.onClick}
+                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} rounded-lg p-1 transition-all duration-200 min-w-[70px] flex-shrink-0`}
+                        >
+                          <IconComponent size={18} />
+                          <span className="text-xs mt-0.5 whitespace-nowrap">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </motion.div>
         </motion.div>
 
@@ -1157,13 +1184,19 @@ const PDVPage: React.FC = () => {
             flex: showFinalizacaoVenda ? 1 : 'none'
           }}
           transition={{
-            duration: 0.5,
+            duration: showFinalizacaoVenda ? 0.6 : 0.4,
             ease: [0.25, 0.46, 0.45, 0.94],
-            width: { duration: 0.5 },
-            flex: { duration: 0.5 }
+            width: {
+              duration: showFinalizacaoVenda ? 0.6 : 0.4,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            },
+            flex: {
+              duration: showFinalizacaoVenda ? 0.6 : 0.4,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }
           }}
           className={`bg-background-card p-4 flex flex-col h-full ${
-            showFinalizacaoVenda ? '' : 'border-l border-gray-800'
+            showFinalizacaoVenda ? 'border-0' : 'border-l border-gray-800'
           }`}
         >
           <motion.div
@@ -1173,10 +1206,16 @@ const PDVPage: React.FC = () => {
               scale: showFinalizacaoVenda ? 1.02 : 1
             }}
             transition={{
-              duration: 0.5,
+              duration: 0.6,
               ease: [0.25, 0.46, 0.45, 0.94],
-              x: { duration: 0.5 },
-              scale: { duration: 0.5 }
+              x: {
+                duration: 0.6,
+                ease: [0.25, 0.46, 0.45, 0.94]
+              },
+              scale: {
+                duration: 0.6,
+                ease: [0.25, 0.46, 0.45, 0.94]
+              }
             }}
             className="h-full flex flex-col"
           >
@@ -1217,7 +1256,12 @@ const PDVPage: React.FC = () => {
             )}
 
             {/* Lista de Itens do Carrinho */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar mb-4" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+            <div
+              className="flex-1 overflow-y-auto custom-scrollbar mb-4"
+              style={{
+                maxHeight: showFinalizacaoVenda ? 'calc(100vh - 200px)' : 'calc(100vh - 280px)'
+              }}
+            >
               {carrinho.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
                   <ShoppingCart size={48} className="mx-auto mb-2 opacity-50" />
@@ -1363,7 +1407,7 @@ const PDVPage: React.FC = () => {
               )}
             </div>
 
-            {/* Resumo e Finalização */}
+            {/* Resumo e Finalização - Só aparece quando NÃO está na finalização */}
             {carrinho.length > 0 && !showFinalizacaoVenda && (
               <div className="border-t border-gray-800 pt-4">
                 <div className="space-y-2 mb-4">
@@ -1390,20 +1434,17 @@ const PDVPage: React.FC = () => {
         </motion.div>
 
         {/* Área de Finalização de Venda */}
-        <AnimatePresence mode="wait">
-          {showFinalizacaoVenda && (
-            <motion.div
-              initial={{ x: '100%', opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '100%', opacity: 0 }}
-              transition={{
-                duration: 0.5,
-                ease: [0.25, 0.46, 0.45, 0.94],
-                x: { duration: 0.5 },
-                opacity: { duration: 0.3, delay: 0.1 }
-              }}
-              className="w-96 bg-background-card border-l border-gray-800 p-4 flex flex-col h-full"
-            >
+        {showFinalizacaoVenda && (
+          <motion.div
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{
+              type: "tween",
+              duration: 0.5,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }}
+            className="w-96 bg-background-card border-l border-gray-800 p-4 flex flex-col h-full"
+          >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                   <CreditCard size={20} />
@@ -1512,7 +1553,6 @@ const PDVPage: React.FC = () => {
               </div>
             </motion.div>
           )}
-        </AnimatePresence>
       </div>
 
       {/* Modal de Seleção de Cliente */}
