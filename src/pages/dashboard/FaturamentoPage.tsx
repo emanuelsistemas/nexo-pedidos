@@ -72,11 +72,14 @@ const FaturamentoPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      // Carregar apenas os vendedores da empresa do usuário
+      // Carregar todos os usuários da empresa (não apenas vendedores)
       const { data, error } = await supabase
         .from('usuarios')
-        .select('id, nome')
-        .eq('tipo', 'user')
+        .select(`
+          id,
+          nome,
+          tipo_user_config:tipo_user_config_id(tipo)
+        `)
         .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
 

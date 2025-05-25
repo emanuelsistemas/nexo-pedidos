@@ -690,11 +690,8 @@ const UserProdutosPage: React.FC = () => {
         return;
       }
 
-      console.log(`Configurando escuta em tempo real para empresa_id: ${usuarioData.empresa_id}`);
-
       // Gerar um nome de canal único para evitar conflitos
       const channelName = `realtime-mobile-${Date.now()}`;
-      console.log(`Criando canal com nome: ${channelName}`);
 
       // Criar um único canal para todas as alterações
       const channel = supabase.channel(channelName, {
@@ -784,18 +781,8 @@ const UserProdutosPage: React.FC = () => {
         }
       );
 
-      // Inscrever-se no canal e verificar o status
-      const subscription = channel.subscribe(async (status) => {
-        console.log(`Status da inscrição: ${status}`);
-        if (status === 'SUBSCRIBED') {
-          console.log('Inscrição em tempo real configurada com sucesso');
-
-          // Teste para verificar se a inscrição está funcionando
-          console.log('Canais ativos:', await supabase.getChannels());
-        }
-      });
-
-      console.log('Canal de escuta em tempo real configurado');
+      // Inscrever-se no canal
+      const subscription = channel.subscribe();
 
     } catch (error) {
       console.error('Erro ao configurar escuta em tempo real:', error);

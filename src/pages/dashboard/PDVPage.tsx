@@ -187,9 +187,12 @@ const PDVPage: React.FC = () => {
 
   // Estados para descontos do cliente
   const [descontosCliente, setDescontosCliente] = useState<{
-    prazo: Array<{ prazo_dias: number; percentual: number; tipo: 'desconto' | 'acrescimo' }>;
+    prazo: Array<{ id: string; prazo_dias: number; percentual: number; tipo: 'desconto' | 'acrescimo' }>;
     valor: Array<{ valor_minimo: number; percentual: number; tipo: 'desconto' | 'acrescimo' }>;
   }>({ prazo: [], valor: [] });
+
+  // Estado para desconto por prazo selecionado (importado do pedido)
+  const [descontoPrazoSelecionado, setDescontoPrazoSelecionado] = useState<string | null>(null);
 
   // Funções para localStorage
   const savePDVState = () => {
@@ -205,6 +208,7 @@ const PDVPage: React.FC = () => {
         valorParcial,
         pagamentosParciais,
         trocoCalculado,
+        descontoPrazoSelecionado,
         timestamp: Date.now()
       };
       localStorage.setItem(PDV_STORAGE_KEY, JSON.stringify(pdvState));
@@ -247,7 +251,7 @@ const PDVPage: React.FC = () => {
           }
 
           if (pdvState.trocoCalculado) setTrocoCalculado(pdvState.trocoCalculado);
-
+          if (pdvState.descontoPrazoSelecionado) setDescontoPrazoSelecionado(pdvState.descontoPrazoSelecionado);
 
         } else {
           // Remove estado antigo
@@ -286,10 +290,11 @@ const PDVPage: React.FC = () => {
     // Remover pedido da lista de importados
     setPedidosImportados(prev => prev.filter(p => p.id !== pedidoParaRemover.id));
 
-    // Se não há mais pedidos importados e configuração desabilitada, remover cliente
+    // Se não há mais pedidos importados e configuração desabilitada, remover cliente e desconto
     const pedidosRestantes = pedidosImportados.filter(p => p.id !== pedidoParaRemover.id);
     if (pedidosRestantes.length === 0 && !pdvConfig?.seleciona_clientes) {
       setClienteSelecionado(null);
+      setDescontoPrazoSelecionado(null);
     }
 
     setShowConfirmRemovePedidoImportado(false);
@@ -306,11 +311,24 @@ const PDVPage: React.FC = () => {
   // Função para carregar descontos do cliente
   const carregarDescontosCliente = async (clienteId: string) => {
     try {
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
       // Carregar descontos por prazo
       const { data: descontosPrazo, error: errorPrazo } = await supabase
         .from('cliente_descontos_prazo')
-        .select('prazo_dias, percentual, tipo')
+        .select('id, prazo_dias, percentual, tipo')
         .eq('cliente_id', clienteId)
+        .eq('empresa_id', usuarioData.empresa_id)
         .order('prazo_dias');
 
       // Carregar descontos por valor
@@ -318,6 +336,7 @@ const PDVPage: React.FC = () => {
         .from('cliente_descontos_valor')
         .select('valor_minimo, percentual, tipo')
         .eq('cliente_id', clienteId)
+        .eq('empresa_id', usuarioData.empresa_id)
         .order('valor_minimo');
 
       if (errorPrazo) throw errorPrazo;
@@ -357,6 +376,7 @@ const PDVPage: React.FC = () => {
   // Função para obter descontos por prazo disponíveis
   const getDescontosPrazoDisponiveis = () => {
     return descontosCliente.prazo.map(d => ({
+      id: d.id,
       prazo_dias: d.prazo_dias,
       percentual: d.percentual,
       tipo: d.tipo,
@@ -374,6 +394,7 @@ const PDVPage: React.FC = () => {
       executarImportacaoPedido(pedidoParaImportar);
       setShowConfirmImportarPedido(false);
       setPedidoParaImportar(null);
+      setShowPedidosModal(false); // Fechar o modal de pedidos também
     }
   };
 
@@ -593,6 +614,7 @@ const PDVPage: React.FC = () => {
     valorParcial,
     pagamentosParciais,
     trocoCalculado,
+    descontoPrazoSelecionado,
     produtos.length // Garante que só salva depois de carregar os produtos
   ]);
 
@@ -860,8 +882,6 @@ const PDVPage: React.FC = () => {
 
         if (!usuarioData?.empresa_id) return;
 
-        console.log(`🔄 Configurando Realtime para empresa: ${usuarioData.empresa_id}`);
-
         // Subscription para mudanças na tabela pedidos
         subscription = supabase
           .channel(`pedidos-realtime-${usuarioData.empresa_id}`)
@@ -873,7 +893,6 @@ const PDVPage: React.FC = () => {
               filter: `empresa_id=eq.${usuarioData.empresa_id}`
             },
             (payload) => {
-              console.log('🆕 Novo pedido criado via Realtime:', payload.new);
               // Recalcula contador completo para garantir precisão
               loadContadorPedidos();
             }
@@ -886,7 +905,6 @@ const PDVPage: React.FC = () => {
               filter: `empresa_id=eq.${usuarioData.empresa_id}`
             },
             (payload) => {
-              console.log('📝 Pedido atualizado via Realtime:', payload.new);
               // Recalcula contador quando status muda
               loadContadorPedidos();
             }
@@ -899,30 +917,23 @@ const PDVPage: React.FC = () => {
               filter: `empresa_id=eq.${usuarioData.empresa_id}`
             },
             (payload) => {
-              console.log('🗑️ Pedido deletado via Realtime:', payload.old);
               // Recalcula contador quando pedido é deletado
               loadContadorPedidos();
             }
           )
           .subscribe((status) => {
-            console.log(`📡 Status da subscription Realtime: ${status}`);
-            if (status === 'SUBSCRIBED') {
-              console.log('✅ Realtime configurado com sucesso!');
-            } else if (status === 'CHANNEL_ERROR') {
-              console.log('❌ Erro no Realtime, usando polling como fallback');
+            if (status === 'CHANNEL_ERROR') {
               setupPolling();
             }
           });
 
       } catch (error) {
-        console.error('❌ Erro ao configurar subscription:', error);
         setupPolling();
       }
     };
 
     // Polling automático como backup (sempre ativo)
     const setupPolling = () => {
-      console.log('🔄 Configurando atualização automática...');
       pollingInterval = setInterval(() => {
         loadContadorPedidos();
       }, 8000); // A cada 8 segundos - totalmente automático
@@ -934,11 +945,9 @@ const PDVPage: React.FC = () => {
 
     return () => {
       if (subscription) {
-        console.log('🔌 Desconectando Realtime...');
         subscription.unsubscribe();
       }
       if (pollingInterval) {
-        console.log('⏹️ Parando atualização automática...');
         clearInterval(pollingInterval);
       }
     };
@@ -1216,6 +1225,9 @@ const PDVPage: React.FC = () => {
           created_at,
           status,
           valor_total,
+          desconto_prazo_id,
+          desconto_valor_id,
+          usuario_id,
           cliente:clientes(id, nome, telefone),
           pedidos_itens(
             id,
@@ -1278,6 +1290,7 @@ const PDVPage: React.FC = () => {
   const importarPedidoParaCarrinho = (pedido: any) => {
     if (!pedido.pedidos_itens || pedido.pedidos_itens.length === 0) {
       toast.error('Este pedido não possui itens');
+      setShowPedidosModal(false);
       return;
     }
 
@@ -1285,6 +1298,7 @@ const PDVPage: React.FC = () => {
     const jaImportado = pedidosImportados.some(p => p.id === pedido.id);
     if (jaImportado) {
       toast.warning(`Pedido #${pedido.numero} já foi importado!`);
+      setShowPedidosModal(false);
       return;
     }
 
@@ -1294,6 +1308,7 @@ const PDVPage: React.FC = () => {
 
     if (clienteAtual && clienteDoPedido && clienteAtual.id !== clienteDoPedido.id) {
       toast.error('Não é possível importar pedido de cliente diferente. Limpe o carrinho primeiro.');
+      setShowPedidosModal(false);
       return;
     }
 
@@ -1302,21 +1317,25 @@ const PDVPage: React.FC = () => {
     if (temItensDeOutrosPedidos) {
       setPedidoParaImportar(pedido);
       setShowConfirmImportarPedido(true);
+      // Não fechar o modal aqui pois vai abrir o modal de confirmação
     } else {
       // Se não há conflitos, importar diretamente
       executarImportacaoPedido(pedido);
+      // O modal será fechado dentro da função executarImportacaoPedido
     }
   };
 
   // Função que executa a importação do pedido
   const executarImportacaoPedido = (pedido: any) => {
-    // Adicionar pedido à lista de importados
+    // Adicionar pedido à lista de importados com informações de desconto
     const novoPedidoImportado = {
       numero: pedido.numero,
       id: pedido.id,
       cliente: pedido.cliente,
       created_at: pedido.created_at,
-      valor_total: pedido.valor_total
+      valor_total: pedido.valor_total,
+      desconto_prazo_id: pedido.desconto_prazo_id,
+      desconto_valor_id: pedido.desconto_valor_id
     };
 
     setPedidosImportados(prev => [...prev, novoPedidoImportado]);
@@ -1336,6 +1355,14 @@ const PDVPage: React.FC = () => {
       if (descontosCliente.prazo.length === 0 && descontosCliente.valor.length === 0) {
         carregarDescontosCliente(pedido.cliente.id);
       }
+    } else if (pedido.cliente) {
+      // Se há cliente no pedido mas é diferente do selecionado, carregar descontos
+      carregarDescontosCliente(pedido.cliente.id);
+    }
+
+    // Importar desconto por prazo se existir no pedido
+    if (pedido.desconto_prazo_id) {
+      setDescontoPrazoSelecionado(pedido.desconto_prazo_id);
     }
 
     // Converter itens do pedido para formato do carrinho
@@ -1601,9 +1628,23 @@ const PDVPage: React.FC = () => {
 
   // Função para calcular total com desconto aplicado (para uso em pagamentos)
   const calcularTotalComDesconto = () => {
-    const subtotal = calcularTotal();
-    const descontoValor = calcularDescontoPorValor(subtotal);
+    let subtotal = calcularTotal();
 
+    // Aplicar desconto por prazo se selecionado
+    if (descontoPrazoSelecionado) {
+      const descontoPrazo = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
+      if (descontoPrazo) {
+        const valorDescontoPrazo = (subtotal * descontoPrazo.percentual) / 100;
+        if (descontoPrazo.tipo === 'desconto') {
+          subtotal = subtotal - valorDescontoPrazo;
+        } else {
+          subtotal = subtotal + valorDescontoPrazo;
+        }
+      }
+    }
+
+    // Aplicar desconto por valor se aplicável
+    const descontoValor = calcularDescontoPorValor(subtotal);
     if (!descontoValor) return subtotal;
 
     return descontoValor.tipo === 'desconto'
@@ -1711,6 +1752,7 @@ const PDVPage: React.FC = () => {
     setCarrinho([]);
     setClienteSelecionado(null);
     setPedidosImportados([]);
+    setDescontoPrazoSelecionado(null);
     setShowLimparCarrinhoModal(false);
 
     // Exibir toast de confirmação
@@ -2095,8 +2137,6 @@ const PDVPage: React.FC = () => {
 
         if (!usuarioData?.empresa_id) return;
 
-        console.log('📋 Configurando Realtime para modal de pedidos...');
-
         modalSubscription = supabase
           .channel(`pedidos-modal-${Date.now()}`)
           .on('postgres_changes',
@@ -2107,7 +2147,6 @@ const PDVPage: React.FC = () => {
               filter: `empresa_id=eq.${usuarioData.empresa_id}`
             },
             (payload) => {
-              console.log('📋 Mudança detectada no modal de pedidos:', payload);
               // Recarregar pedidos automaticamente sem loading visível
               const loadPedidosSilencioso = async () => {
                 const { data: userData } = await supabase.auth.getUser();
@@ -2130,6 +2169,9 @@ const PDVPage: React.FC = () => {
                       created_at,
                       status,
                       valor_total,
+                      desconto_prazo_id,
+                      desconto_valor_id,
+                      usuario_id,
                       cliente:clientes(id, nome, telefone),
                       pedidos_itens(
                         id,
@@ -2159,7 +2201,37 @@ const PDVPage: React.FC = () => {
                     .limit(100);
 
                   if (error) throw error;
-                  const pedidosData = data || [];
+                  let pedidosData = data || [];
+
+                  // Buscar nomes dos usuários se houver pedidos com usuario_id
+                  if (pedidosData.length > 0) {
+                    const usuarioIds = [...new Set(pedidosData.filter(p => p.usuario_id).map(p => p.usuario_id))];
+
+                    if (usuarioIds.length > 0) {
+                      const { data: usuariosData } = await supabase
+                        .from('usuarios')
+                        .select('id, nome')
+                        .in('id', usuarioIds);
+
+                      if (usuariosData) {
+                        // Criar mapa de ID -> nome
+                        const usuariosMap = usuariosData.reduce((acc, user) => {
+                          acc[user.id] = user.nome;
+                          return acc;
+                        }, {} as Record<string, string>);
+
+                        // Adicionar nome do usuário aos pedidos
+                        pedidosData = pedidosData.map(pedido => ({
+                          ...pedido,
+                          usuario: pedido.usuario_id ? {
+                            id: pedido.usuario_id,
+                            nome: usuariosMap[pedido.usuario_id] || 'Usuário não encontrado'
+                          } : null
+                        }));
+                      }
+                    }
+                  }
+
                   setPedidos(pedidosData);
                   setPedidosFiltrados(pedidosData);
                   setContadorPedidosPendentes(pedidosData.length);
@@ -2193,7 +2265,6 @@ const PDVPage: React.FC = () => {
 
     return () => {
       if (modalSubscription) {
-        console.log('🔌 Desconectando Realtime do modal...');
         modalSubscription.unsubscribe();
       }
     };
@@ -2529,7 +2600,7 @@ const PDVPage: React.FC = () => {
                 {/* Informações dos Pedidos Importados */}
                 {pedidosImportados.map((pedido, index) => (
                   <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mb-3">
                       <ShoppingBag size={16} className="text-green-400" />
                       <div className="flex-1">
                         <div className="text-sm text-green-400">Pedido Importado</div>
@@ -2549,11 +2620,94 @@ const PDVPage: React.FC = () => {
                         <X size={14} />
                       </button>
                     </div>
+
+                    {/* Opções de Faturamento do Pedido Importado */}
+                    {(pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && (
+                      <div className="border-t border-green-500/20 pt-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-3 h-3 bg-green-500 rounded flex items-center justify-center">
+                            <span className="text-white text-xs font-bold">%</span>
+                          </div>
+                          <div className="text-xs text-green-400 font-medium">Opções de Faturamento</div>
+                        </div>
+
+                        {/* Descontos por Prazo */}
+                        {descontosCliente.prazo.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-xs text-gray-400 mb-1">Prazo de Faturamento</div>
+                            <div className="grid grid-cols-2 gap-1">
+                              {descontosCliente.prazo.map((desconto, idx) => {
+                                const isSelected = descontoPrazoSelecionado === desconto.id;
+                                const wasOriginallySelected = pedido.desconto_prazo_id === desconto.id;
+                                return (
+                                  <div
+                                    key={idx}
+                                    className={`p-1.5 rounded border text-center cursor-pointer transition-colors text-xs ${
+                                      isSelected
+                                        ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
+                                        : wasOriginallySelected
+                                          ? 'bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30'
+                                          : desconto.tipo === 'desconto'
+                                            ? 'bg-green-500/5 border-green-500/20 hover:bg-green-500/10'
+                                            : 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10'
+                                    }`}
+                                    onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
+                                  >
+                                    <div className="text-white font-medium">
+                                      {desconto.prazo_dias}d
+                                    </div>
+                                    <div className={`${
+                                      isSelected
+                                        ? 'text-blue-400'
+                                        : wasOriginallySelected
+                                          ? 'text-green-400'
+                                          : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                    }`}>
+                                      {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
+                                    </div>
+                                    {isSelected && (
+                                      <div className="text-xs text-blue-400">✓</div>
+                                    )}
+                                    {!isSelected && wasOriginallySelected && (
+                                      <div className="text-xs text-green-400">Original</div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Desconto por Valor (se aplicável) */}
+                        {(() => {
+                          const descontoValor = calcularDescontoPorValor(calcularTotal());
+                          return descontoValor && (
+                            <div className="mt-2 pt-2 border-t border-green-500/20">
+                              <div className="text-xs text-gray-400 mb-1">Desconto por Valor</div>
+                              <div className={`p-1.5 rounded border text-center text-xs ${
+                                descontoValor.tipo === 'desconto'
+                                  ? 'bg-green-500/10 border-green-500/30'
+                                  : 'bg-red-500/10 border-red-500/30'
+                              }`}>
+                                <div className="text-white font-medium">
+                                  A partir de {formatCurrency(descontoValor.valorMinimo)}
+                                </div>
+                                <div className={`${
+                                  descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 ))}
 
-                {/* Opções de Faturamento - Descontos do Cliente */}
-                {(descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
+                {/* Opções de Faturamento - Descontos do Cliente (apenas quando não há pedidos importados) */}
+                {pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
                   <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-4 h-4 bg-blue-500 rounded flex items-center justify-center">
@@ -2567,25 +2721,38 @@ const PDVPage: React.FC = () => {
                       <div className="space-y-2">
                         <div className="text-xs text-gray-400 mb-2">Prazo de Faturamento</div>
                         <div className="grid grid-cols-2 gap-2">
-                          {getDescontosPrazoDisponiveis().map((desconto, idx) => (
-                            <div
-                              key={idx}
-                              className={`p-2 rounded-lg border text-center cursor-pointer transition-colors ${
-                                desconto.tipo === 'desconto'
-                                  ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
-                                  : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
-                              }`}
-                            >
-                              <div className="text-xs text-white font-medium">
-                                {desconto.prazo_dias} dias
+                          {getDescontosPrazoDisponiveis().map((desconto, idx) => {
+                            const isSelected = descontoPrazoSelecionado === desconto.id;
+                            return (
+                              <div
+                                key={idx}
+                                className={`p-2 rounded-lg border text-center cursor-pointer transition-colors ${
+                                  isSelected
+                                    ? 'bg-blue-500/20 border-blue-500 ring-2 ring-blue-500/50'
+                                    : desconto.tipo === 'desconto'
+                                      ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
+                                      : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
+                                }`}
+                                onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
+                              >
+                                <div className="text-xs text-white font-medium">
+                                  {desconto.prazo_dias} dias
+                                </div>
+                                <div className={`text-xs ${
+                                  isSelected
+                                    ? 'text-blue-400'
+                                    : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
+                                </div>
+                                {isSelected && (
+                                  <div className="text-xs text-blue-400 mt-1">
+                                    ✓ Selecionado
+                                  </div>
+                                )}
                               </div>
-                              <div className={`text-xs ${
-                                desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                              }`}>
-                                {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -2775,12 +2942,28 @@ const PDVPage: React.FC = () => {
               <div className="border-t border-gray-800 pt-4">
                 {(() => {
                   const subtotal = calcularTotal();
-                  const descontoValor = calcularDescontoPorValor(subtotal);
-                  const totalFinal = descontoValor
-                    ? (descontoValor.tipo === 'desconto'
-                        ? subtotal - descontoValor.valor
-                        : subtotal + descontoValor.valor)
+                  const totalFinal = calcularTotalComDesconto();
+
+                  // Calcular desconto por prazo se selecionado
+                  let descontoPrazo = null;
+                  if (descontoPrazoSelecionado) {
+                    const desconto = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
+                    if (desconto) {
+                      const valorDesconto = (subtotal * desconto.percentual) / 100;
+                      descontoPrazo = {
+                        tipo: desconto.tipo,
+                        percentual: desconto.percentual,
+                        valor: valorDesconto,
+                        prazo_dias: desconto.prazo_dias
+                      };
+                    }
+                  }
+
+                  // Calcular desconto por valor (aplicado após desconto por prazo)
+                  const subtotalComDescontoPrazo = descontoPrazo
+                    ? (descontoPrazo.tipo === 'desconto' ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor)
                     : subtotal;
+                  const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
 
                   return (
                     <>
@@ -2789,6 +2972,22 @@ const PDVPage: React.FC = () => {
                           <span>Subtotal:</span>
                           <span>{formatCurrency(subtotal)}</span>
                         </div>
+
+                        {/* Desconto por Prazo (se aplicável) */}
+                        {descontoPrazo && (
+                          <div className="flex justify-between text-sm">
+                            <span className={`${
+                              descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
+                            }`}>
+                              {descontoPrazo.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} Prazo ({descontoPrazo.prazo_dias} dias):
+                            </span>
+                            <span className={`${
+                              descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
+                            }`}>
+                              {descontoPrazo.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoPrazo.valor)}
+                            </span>
+                          </div>
+                        )}
 
                         {/* Desconto por Valor (se aplicável) */}
                         {descontoValor && (

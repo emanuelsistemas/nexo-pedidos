@@ -1899,7 +1899,6 @@ const ConfiguracoesPage: React.FC = () => {
       }
 
       // Disparar evento customizado para notificar o Sidebar imediatamente
-      console.log('🔗 Disparando evento conexaoChanged com valor:', value);
       window.dispatchEvent(new CustomEvent('conexaoChanged', {
         detail: { conexaoHabilitada: value }
       }));
