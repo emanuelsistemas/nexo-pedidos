@@ -27,7 +27,9 @@ import {
   Percent,
   ShoppingBag,
   AlertTriangle,
-  Menu
+  Menu,
+  Table,
+  ArrowUpDown
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -134,11 +136,13 @@ const PDVPage: React.FC = () => {
 
   // Estados para os modais do menu PDV
   const [showPedidosModal, setShowPedidosModal] = useState(false);
+  const [showMesasModal, setShowMesasModal] = useState(false);
   const [showComandasModal, setShowComandasModal] = useState(false);
   const [showSangriaModal, setShowSangriaModal] = useState(false);
   const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
+  const [showMovimentosModal, setShowMovimentosModal] = useState(false);
 
   // Estado para controlar visibilidade da área de produtos
   const [showAreaProdutos, setShowAreaProdutos] = useState(false);
@@ -768,6 +772,19 @@ const PDVPage: React.FC = () => {
       }
     },
     {
+      id: 'mesas',
+      icon: Table,
+      label: 'Mesas',
+      color: 'primary',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowMesasModal(true);
+      }
+    },
+    {
       id: 'comandas',
       icon: FileText,
       label: 'Comandas',
@@ -831,6 +848,19 @@ const PDVPage: React.FC = () => {
         }
         setShowFiadosModal(true);
       }
+    },
+    {
+      id: 'movimentos',
+      icon: ArrowUpDown,
+      label: 'Movimentos',
+      color: 'purple',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowMovimentosModal(true);
+      }
     }
   ];
 
@@ -843,7 +873,8 @@ const PDVPage: React.FC = () => {
       red: 'hover:text-red-400 hover:bg-red-500/10',
       green: 'hover:text-green-400 hover:bg-green-500/10',
       blue: 'hover:text-blue-400 hover:bg-blue-500/10',
-      yellow: 'hover:text-yellow-400 hover:bg-yellow-500/10'
+      yellow: 'hover:text-yellow-400 hover:bg-yellow-500/10',
+      purple: 'hover:text-purple-400 hover:bg-purple-500/10'
     };
     return colorMap[color as keyof typeof colorMap] || colorMap.primary;
   };
@@ -861,14 +892,20 @@ const PDVPage: React.FC = () => {
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
-  // Listener global para captura de código de barras, F1 e ESC
+  // Listener global para captura de código de barras, F1-F9 e ESC
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      // Capturar F1 globalmente para abrir modal de produtos
-      if (event.key === 'F1') {
-        event.preventDefault();
-        setShowAreaProdutos(true);
-        return;
+      // Capturar teclas F1-F9 para atalhos do menu PDV
+      if (event.key.startsWith('F') && event.key.length <= 3) {
+        const fNumber = parseInt(event.key.substring(1));
+        if (fNumber >= 1 && fNumber <= 9) {
+          event.preventDefault();
+          const menuIndex = fNumber - 1;
+          if (menuPDVItems[menuIndex]) {
+            menuPDVItems[menuIndex].onClick();
+          }
+          return;
+        }
       }
 
       // Capturar ESC globalmente para fechar modal de produtos
@@ -927,7 +964,7 @@ const PDVPage: React.FC = () => {
       event.preventDefault();
     };
 
-    // Sempre adicionar listener para F1 e ESC, e condicionalmente para código de barras
+    // Sempre adicionar listener para F1-F9, ESC, e condicionalmente para código de barras
     document.addEventListener('keydown', handleKeyPress);
 
     return () => {
@@ -936,7 +973,7 @@ const PDVPage: React.FC = () => {
         clearTimeout(timeoutId);
       }
     };
-  }, [pdvConfig?.venda_codigo_barras, codigoBarrasBuffer, timeoutId, showAreaProdutos]);
+  }, [pdvConfig?.venda_codigo_barras, codigoBarrasBuffer, timeoutId, showAreaProdutos, menuPDVItems]);
 
   // Função para processar código de barras capturado
   const processarCodigoBarras = (codigo: string) => {
@@ -2846,17 +2883,24 @@ const PDVPage: React.FC = () => {
                 {/* Container sem padding para maximizar espaço */}
                 <div className="h-14">
                   {/* Itens do Menu com Scroll Horizontal */}
-                  <div className="flex items-center h-full overflow-x-auto overflow-y-visible custom-scrollbar justify-around min-w-0">
-                    {menuPDVItems.map((item) => {
+                  <div className="flex items-center h-full overflow-x-auto overflow-y-visible custom-scrollbar min-w-0">
+                    {menuPDVItems.map((item, index) => {
                       const IconComponent = item.icon;
+                      const teclaAtalho = `F${index + 1}`;
                       return (
                         <button
                           key={item.id}
                           onClick={(e) => item.onClick(e)}
-                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 flex-1 h-full relative`}
+                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative`}
+                          style={{ flex: '1 1 120px', minWidth: '120px' }}
                         >
                           <IconComponent size={20} />
-                          <span className="text-xs whitespace-nowrap mt-1">{item.label}</span>
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-xs whitespace-nowrap">{item.label}</span>
+                            <span className="text-xs bg-gray-700 px-1 py-0.5 rounded text-gray-300 font-mono">
+                              {teclaAtalho}
+                            </span>
+                          </div>
 
                           {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
                           {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
@@ -4851,6 +4895,71 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* Modal de Mesas */}
+      <AnimatePresence>
+        {showMesasModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowMesasModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-4xl mx-4 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Controle de Mesas</h3>
+                <button
+                  onClick={() => setShowMesasModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Grid de Mesas */}
+                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                  {Array.from({ length: 24 }, (_, i) => i + 1).map((numeroMesa) => (
+                    <div
+                      key={numeroMesa}
+                      className="aspect-square bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 hover:border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all group"
+                    >
+                      <Table size={24} className="text-gray-400 group-hover:text-white mb-1" />
+                      <span className="text-sm font-medium text-gray-300 group-hover:text-white">
+                        Mesa {numeroMesa}
+                      </span>
+                      <span className="text-xs text-green-400">Livre</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Legenda */}
+                <div className="flex items-center justify-center gap-6 pt-4 border-t border-gray-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-400 rounded-full"></div>
+                    <span className="text-sm text-gray-400">Livre</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                    <span className="text-sm text-gray-400">Ocupada</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-400 rounded-full"></div>
+                    <span className="text-sm text-gray-400">Reservada</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Modal de Comandas/Mesas */}
       <AnimatePresence>
         {showComandasModal && (
@@ -5127,6 +5236,87 @@ const PDVPage: React.FC = () => {
                 <div className="text-center py-8">
                   <Clock size={48} className="mx-auto mb-4 text-gray-500" />
                   <p className="text-gray-400">Nenhuma venda fiada registrada</p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Movimentos */}
+      <AnimatePresence>
+        {showMovimentosModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowMovimentosModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-4xl mx-4 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Movimentos do Caixa</h3>
+                <button
+                  onClick={() => setShowMovimentosModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Resumo do Dia */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp size={20} className="text-green-400" />
+                      <span className="text-sm text-gray-400">Entradas</span>
+                    </div>
+                    <div className="text-xl font-bold text-green-400">R$ 0,00</div>
+                  </div>
+
+                  <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingDown size={20} className="text-red-400" />
+                      <span className="text-sm text-gray-400">Saídas</span>
+                    </div>
+                    <div className="text-xl font-bold text-red-400">R$ 0,00</div>
+                  </div>
+
+                  <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign size={20} className="text-blue-400" />
+                      <span className="text-sm text-gray-400">Vendas</span>
+                    </div>
+                    <div className="text-xl font-bold text-blue-400">R$ 0,00</div>
+                  </div>
+
+                  <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calculator size={20} className="text-purple-400" />
+                      <span className="text-sm text-gray-400">Saldo</span>
+                    </div>
+                    <div className="text-xl font-bold text-purple-400">R$ 0,00</div>
+                  </div>
+                </div>
+
+                {/* Lista de Movimentos */}
+                <div className="bg-gray-800/30 rounded-lg p-4">
+                  <h4 className="text-white font-medium mb-3">Últimos Movimentos</h4>
+
+                  <div className="text-center py-8">
+                    <ArrowUpDown size={48} className="mx-auto mb-4 text-gray-500" />
+                    <p className="text-gray-400">Nenhum movimento registrado hoje</p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      Os movimentos de vendas, sangrias e suprimentos aparecerão aqui
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
