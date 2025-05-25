@@ -193,6 +193,10 @@ const PDVPage: React.FC = () => {
   // Estado para confirmação de limpeza geral do PDV
   const [showConfirmLimparTudoPDV, setShowConfirmLimparTudoPDV] = useState(false);
 
+  // Estado para modal de produto não encontrado
+  const [showProdutoNaoEncontrado, setShowProdutoNaoEncontrado] = useState(false);
+  const [produtoNaoEncontradoTermo, setProdutoNaoEncontradoTermo] = useState('');
+
   // Estado para dados do usuário
   const [userData, setUserData] = useState<{ nome: string } | null>(null);
 
@@ -848,9 +852,23 @@ const PDVPage: React.FC = () => {
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
-  // Listener global para captura de código de barras
+  // Listener global para captura de código de barras, F1 e ESC
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
+      // Capturar F1 globalmente para abrir modal de produtos
+      if (event.key === 'F1') {
+        event.preventDefault();
+        setShowAreaProdutos(true);
+        return;
+      }
+
+      // Capturar ESC globalmente para fechar modal de produtos
+      if (event.key === 'Escape' && showAreaProdutos) {
+        event.preventDefault();
+        setShowAreaProdutos(false);
+        return;
+      }
+
       // Só funciona se a configuração estiver habilitada
       if (!pdvConfig?.venda_codigo_barras) return;
 
@@ -900,10 +918,8 @@ const PDVPage: React.FC = () => {
       event.preventDefault();
     };
 
-    // Adicionar listener apenas se a configuração estiver habilitada
-    if (pdvConfig?.venda_codigo_barras) {
-      document.addEventListener('keydown', handleKeyPress);
-    }
+    // Sempre adicionar listener para F1 e ESC, e condicionalmente para código de barras
+    document.addEventListener('keydown', handleKeyPress);
 
     return () => {
       document.removeEventListener('keydown', handleKeyPress);
@@ -911,7 +927,7 @@ const PDVPage: React.FC = () => {
         clearTimeout(timeoutId);
       }
     };
-  }, [pdvConfig?.venda_codigo_barras, codigoBarrasBuffer, timeoutId]);
+  }, [pdvConfig?.venda_codigo_barras, codigoBarrasBuffer, timeoutId, showAreaProdutos]);
 
   // Função para processar código de barras capturado
   const processarCodigoBarras = (codigo: string) => {
@@ -2256,8 +2272,43 @@ const PDVPage: React.FC = () => {
       // Se há produtos filtrados, adicionar o primeiro
       if (produtosFiltrados.length > 0) {
         adicionarAoCarrinho(produtosFiltrados[0]);
+        // Limpar o campo de pesquisa após adicionar o produto
+        setSearchTerm('');
+        // Manter o foco no campo para próxima digitação
+        setTimeout(() => {
+          const input = e.target as HTMLInputElement;
+          input.focus();
+        }, 10);
+      } else {
+        // Produto não encontrado - extrair o termo de busca real
+        let termoBusca = searchTerm.trim();
+        if (searchTerm.includes('*')) {
+          const partes = searchTerm.split('*');
+          if (partes.length >= 2) {
+            termoBusca = partes.slice(1).join('*').trim(); // Pega tudo após o primeiro *
+          }
+        }
+
+        // Mostrar modal de produto não encontrado
+        mostrarProdutoNaoEncontrado(termoBusca);
+
+        // Limpar o campo e manter o foco
+        setSearchTerm('');
+        setTimeout(() => {
+          const input = e.target as HTMLInputElement;
+          input.focus();
+        }, 10);
       }
     }
+  };
+
+  const abrirModalProdutos = () => {
+    setShowAreaProdutos(true);
+  };
+
+  const mostrarProdutoNaoEncontrado = (termo: string) => {
+    setProdutoNaoEncontradoTermo(termo);
+    setShowProdutoNaoEncontrado(true);
   };
 
   // Realtime para o modal de pedidos - atualiza automaticamente quando modal está aberto
@@ -2462,15 +2513,19 @@ const PDVPage: React.FC = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                     onKeyDown={handleSearchKeyPress}
                     autoFocus
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-12 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-12 text-white placeholder-gray-300 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                   />
-                  <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
 
-                  {/* Ícone de busca com F1 */}
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                    <Search size={16} className="text-gray-400" />
-                    <span className="text-xs text-gray-500 bg-gray-700 px-1 py-0.5 rounded">F1</span>
-                  </div>
+                  {/* Ícone de busca com F1 - clicável */}
+                  <button
+                    onClick={abrirModalProdutos}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 hover:bg-gray-700/50 rounded px-1 py-1 transition-colors"
+                    title="Abrir lista de produtos (F1)"
+                  >
+                    <Search size={16} className="text-gray-300 hover:text-gray-200" />
+                    <span className="text-xs text-gray-300 bg-gray-700 px-1 py-0.5 rounded">F1</span>
+                  </button>
 
                   {/* Indicador de quantidade */}
                   {searchTerm.includes('*') && (
@@ -2624,7 +2679,7 @@ const PDVPage: React.FC = () => {
                                 </span>
                                 <button
                                   onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
-                                  className="w-8 h-8 bg-primary-500 hover:bg-primary-600 rounded-full flex items-center justify-center text-white transition-colors"
+                                  className="w-8 h-8 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors"
                                 >
                                   <Plus size={14} />
                                 </button>
@@ -2633,7 +2688,7 @@ const PDVPage: React.FC = () => {
                                 {!item.desconto && (
                                   <button
                                     onClick={() => abrirModalDesconto(item.id)}
-                                    className="w-8 h-8 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                    className="w-8 h-8 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors"
                                     title="Aplicar desconto"
                                   >
                                     <Percent size={14} />
@@ -2670,7 +2725,7 @@ const PDVPage: React.FC = () => {
                             </span>
                             <button
                               onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
-                              className="w-7 h-7 bg-primary-500 hover:bg-primary-600 rounded-full flex items-center justify-center text-white transition-colors"
+                              className="w-7 h-7 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors"
                             >
                               <Plus size={12} />
                             </button>
@@ -2679,7 +2734,7 @@ const PDVPage: React.FC = () => {
                             {!item.desconto && (
                               <button
                                 onClick={() => abrirModalDesconto(item.id)}
-                                className="w-7 h-7 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                className="w-7 h-7 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors"
                                 title="Aplicar desconto"
                               >
                                 <Percent size={12} />
@@ -5477,6 +5532,71 @@ const PDVPage: React.FC = () => {
 
               {/* Conteúdo */}
               <div className="flex-1 p-4 flex flex-col overflow-hidden">
+                {/* Barra de Busca */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Produto"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setShowAreaProdutos(false);
+                        } else if (e.key === 'Enter' && searchTerm.trim()) {
+                          // Se há produtos filtrados, adicionar o primeiro
+                          if (produtosFiltrados.length > 0) {
+                            adicionarAoCarrinho(produtosFiltrados[0]);
+                            // Limpar o campo de pesquisa após adicionar o produto
+                            setSearchTerm('');
+                            // Manter o foco no campo para próxima digitação
+                            setTimeout(() => {
+                              const input = e.target as HTMLInputElement;
+                              input.focus();
+                            }, 10);
+                          } else {
+                            // Produto não encontrado - extrair o termo de busca real
+                            let termoBusca = searchTerm.trim();
+                            if (searchTerm.includes('*')) {
+                              const partes = searchTerm.split('*');
+                              if (partes.length >= 2) {
+                                termoBusca = partes.slice(1).join('*').trim(); // Pega tudo após o primeiro *
+                              }
+                            }
+
+                            // Mostrar modal de produto não encontrado
+                            mostrarProdutoNaoEncontrado(termoBusca);
+
+                            // Limpar o campo e manter o foco
+                            setSearchTerm('');
+                            setTimeout(() => {
+                              const input = e.target as HTMLInputElement;
+                              input.focus();
+                            }, 10);
+                          }
+                        }
+                      }}
+                      autoFocus
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-12 text-white placeholder-gray-300 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    />
+                    <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+
+                    {/* Ícone ESC */}
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <span className="text-xs text-gray-300 bg-gray-700 px-1 py-0.5 rounded">ESC</span>
+                    </div>
+
+                    {/* Indicador de quantidade */}
+                    {searchTerm.includes('*') && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="bg-primary-500 text-white text-xs px-2 py-1 rounded-full">
+                          Qtd: {searchTerm.split('*')[0]}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Filtros por Categoria */}
                 {grupos.length > 0 && (
                   <div className="mb-4">
@@ -5742,6 +5862,50 @@ const PDVPage: React.FC = () => {
                 className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition-colors"
               >
                 Limpar Tudo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Produto Não Encontrado */}
+      {showProdutoNaoEncontrado && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background-card border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center">
+                <Package size={20} className="text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Produto Não Encontrado</h3>
+                <p className="text-sm text-gray-400">O item digitado não existe no sistema</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-300 mb-3">
+                O produto <span className="text-white font-medium bg-gray-800 px-2 py-1 rounded">"{produtoNaoEncontradoTermo}"</span> não foi encontrado.
+              </p>
+              <p className="text-gray-400 text-sm">
+                Verifique se o código ou nome está correto e tente novamente.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowProdutoNaoEncontrado(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={() => {
+                  setShowProdutoNaoEncontrado(false);
+                  setShowAreaProdutos(true);
+                }}
+                className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Ver Produtos
               </button>
             </div>
           </div>
