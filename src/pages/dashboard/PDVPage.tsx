@@ -74,12 +74,21 @@ interface ItemCarrinho {
   produto: Produto;
   quantidade: number;
   subtotal: number;
+  pedido_origem_id?: string; // ID do pedido de origem (se importado)
+  pedido_origem_numero?: string; // Número do pedido de origem (se importado)
+  pedidos_origem?: Array<{ // Para itens agrupados de múltiplos pedidos
+    id: string;
+    numero: string;
+    quantidade: number;
+  }>;
   desconto?: {
     tipo: 'percentual' | 'valor';
     valor: number;
     valorDesconto: number;
     precoOriginal: number;
     precoComDesconto: number;
+    percentualDesconto?: number;
+    origemPedido?: boolean; // Indica se o desconto veio de um pedido importado
   };
 }
 
@@ -1257,7 +1266,37 @@ const PDVPage: React.FC = () => {
         .limit(100);
 
       if (error) throw error;
-      const pedidosData = data || [];
+      let pedidosData = data || [];
+
+      // Buscar nomes dos usuários se houver pedidos com usuario_id
+      if (pedidosData.length > 0) {
+        const usuarioIds = [...new Set(pedidosData.filter(p => p.usuario_id).map(p => p.usuario_id))];
+
+        if (usuarioIds.length > 0) {
+          const { data: usuariosData } = await supabase
+            .from('usuarios')
+            .select('id, nome')
+            .in('id', usuarioIds);
+
+          if (usuariosData) {
+            // Criar mapa de ID -> nome
+            const usuariosMap = usuariosData.reduce((acc, user) => {
+              acc[user.id] = user.nome;
+              return acc;
+            }, {} as Record<string, string>);
+
+            // Adicionar nome do usuário aos pedidos
+            pedidosData = pedidosData.map(pedido => ({
+              ...pedido,
+              usuario: pedido.usuario_id ? {
+                id: pedido.usuario_id,
+                nome: usuariosMap[pedido.usuario_id] || 'Usuário não encontrado'
+              } : null
+            }));
+          }
+        }
+      }
+
       setPedidos(pedidosData);
       setPedidosFiltrados(pedidosData);
       // Atualizar contador com base nos dados carregados
@@ -1335,7 +1374,8 @@ const PDVPage: React.FC = () => {
       created_at: pedido.created_at,
       valor_total: pedido.valor_total,
       desconto_prazo_id: pedido.desconto_prazo_id,
-      desconto_valor_id: pedido.desconto_valor_id
+      desconto_valor_id: pedido.desconto_valor_id,
+      usuario: pedido.usuario // Incluir informações do vendedor
     };
 
     setPedidosImportados(prev => [...prev, novoPedidoImportado]);
@@ -1366,14 +1406,37 @@ const PDVPage: React.FC = () => {
     }
 
     // Converter itens do pedido para formato do carrinho
-    const novosItens: ItemCarrinho[] = pedido.pedidos_itens.map((item: any) => ({
-      id: `${item.produto.id}-${Date.now()}-${Math.random()}`,
-      produto: item.produto,
-      quantidade: item.quantidade,
-      subtotal: item.quantidade * item.valor_unitario,
-      pedido_origem_id: pedido.id, // Marcar de qual pedido veio
-      pedido_origem_numero: pedido.numero
-    }));
+    const novosItens: ItemCarrinho[] = pedido.pedidos_itens.map((item: any) => {
+      // Verificar se há desconto no item (valor unitário diferente do preço do produto)
+      const temDesconto = item.produto?.preco && item.valor_unitario < item.produto.preco;
+      const precoOriginal = item.produto?.preco || item.valor_unitario;
+
+      let descontoInfo = undefined;
+      if (temDesconto) {
+        const valorDesconto = precoOriginal - item.valor_unitario;
+        const percentualDesconto = ((valorDesconto / precoOriginal) * 100);
+
+        descontoInfo = {
+          tipo: 'valor' as const,
+          valor: valorDesconto,
+          valorDesconto: valorDesconto,
+          precoOriginal: precoOriginal,
+          precoComDesconto: item.valor_unitario,
+          percentualDesconto: percentualDesconto,
+          origemPedido: true // Marcar que veio de um pedido importado
+        };
+      }
+
+      return {
+        id: `${item.produto.id}-${Date.now()}-${Math.random()}`,
+        produto: item.produto,
+        quantidade: item.quantidade,
+        subtotal: item.quantidade * item.valor_unitario,
+        pedido_origem_id: pedido.id, // Marcar de qual pedido veio
+        pedido_origem_numero: pedido.numero,
+        desconto: descontoInfo // Preservar informações de desconto
+      };
+    });
 
     // Verificar configuração de agrupamento
     if (pdvConfig?.agrupa_itens) {
@@ -2608,6 +2671,12 @@ const PDVPage: React.FC = () => {
                         <div className="text-xs text-gray-400">
                           {new Date(pedido.created_at).toLocaleString('pt-BR')}
                         </div>
+                        {/* Informações do Vendedor */}
+                        {pedido.usuario && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            Vendedor: {pedido.usuario.nome}
+                          </div>
+                        )}
                       </div>
                       <button
                         onClick={() => {
@@ -2843,36 +2912,52 @@ const PDVPage: React.FC = () => {
                               <h4 className="text-white text-sm font-medium line-clamp-2">
                                 {item.produto.nome}
                               </h4>
-                              <div className="text-primary-400 text-sm flex items-center gap-1">
-                                {item.desconto ? (
-                                  <div className="flex items-center gap-2">
-                                    <span className="line-through text-gray-500">
-                                      {formatCurrency(item.desconto.precoOriginal)}
-                                    </span>
-                                    <span className="text-green-400 font-medium">
-                                      {formatCurrency(item.desconto.precoComDesconto)}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  // Mostrar preço com promoção se houver, senão preço normal
-                                  item.produto.promocao && item.produto.valor_desconto ? (
+                              <div className="text-primary-400 text-sm">
+                                <div className="flex items-center gap-1">
+                                  {item.desconto ? (
                                     <div className="flex items-center gap-2">
                                       <span className="line-through text-gray-500">
-                                        {formatCurrency(item.produto.preco)}
+                                        {formatCurrency(item.desconto.precoOriginal)}
                                       </span>
                                       <span className="text-green-400 font-medium">
-                                        {formatCurrency(calcularPrecoFinal(item.produto))}
+                                        {formatCurrency(item.desconto.precoComDesconto)}
                                       </span>
                                     </div>
                                   ) : (
-                                    formatCurrency(item.produto.preco)
-                                  )
-                                )}
-                                {item.produto.unidade_medida && (
-                                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
-                                    {item.produto.unidade_medida.sigla}
-                                  </span>
-                                )}
+                                    // Mostrar preço com promoção se houver, senão preço normal
+                                    item.produto.promocao && item.produto.valor_desconto ? (
+                                      <div className="flex items-center gap-2">
+                                        <span className="line-through text-gray-500">
+                                          {formatCurrency(item.produto.preco)}
+                                        </span>
+                                        <span className="text-green-400 font-medium">
+                                          {formatCurrency(calcularPrecoFinal(item.produto))}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      formatCurrency(item.produto.preco)
+                                    )
+                                  )}
+                                  {item.produto.unidade_medida && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
+                                      {item.produto.unidade_medida.sigla}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Indicadores de desconto/promoção */}
+                                <div className="flex items-center gap-1 mt-1">
+                                  {item.desconto?.origemPedido && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                      Desconto do pedido #{item.pedido_origem_numero}
+                                    </span>
+                                  )}
+                                  {item.produto.promocao && !item.desconto && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">
+                                      Produto em promoção
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <button
@@ -4173,19 +4258,49 @@ const PDVPage: React.FC = () => {
                           Cliente: {pedido.cliente?.nome || 'Consumidor Final'}
                         </div>
 
-                        <div className="text-xs text-gray-500 mb-3">
+                        <div className="text-xs text-gray-500 mb-2">
                           {new Date(pedido.created_at).toLocaleString('pt-BR')}
                         </div>
+
+                        {/* Informações do Vendedor */}
+                        {pedido.usuario && (
+                          <div className="text-xs text-gray-500 mb-3">
+                            Vendedor: {pedido.usuario.nome}
+                          </div>
+                        )}
 
                         {pedido.pedidos_itens && pedido.pedidos_itens.length > 0 && (
                           <div className="space-y-1 mb-3">
                             <div className="text-xs text-gray-400 font-medium">Itens:</div>
-                            {pedido.pedidos_itens.slice(0, 3).map((item: any, index: number) => (
-                              <div key={index} className="text-xs text-gray-500 flex justify-between">
-                                <span>{item.quantidade}x {item.produto?.nome}</span>
-                                <span>{formatCurrency(item.valor_unitario * item.quantidade)}</span>
-                              </div>
-                            ))}
+                            {pedido.pedidos_itens.slice(0, 3).map((item: any, index: number) => {
+                              // Verificar se há desconto no item (valor unitário diferente do preço do produto)
+                              const temDesconto = item.produto?.preco && item.valor_unitario < item.produto.preco;
+                              const temPromocao = item.produto?.promocao;
+
+                              return (
+                                <div key={index} className="text-xs">
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">{item.quantidade}x {item.produto?.nome}</span>
+                                    <span className="text-gray-500">{formatCurrency(item.valor_unitario * item.quantidade)}</span>
+                                  </div>
+                                  {(temDesconto || temPromocao) && (
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      {item.produto?.preco && (
+                                        <span className="text-gray-400 line-through text-xs">
+                                          {formatCurrency(item.produto.preco)} × {item.quantidade}
+                                        </span>
+                                      )}
+                                      {temPromocao && (
+                                        <span className="text-green-400 text-xs">Produto em promoção</span>
+                                      )}
+                                      {temDesconto && !temPromocao && (
+                                        <span className="text-blue-400 text-xs">Desconto aplicado</span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                             {pedido.pedidos_itens.length > 3 && (
                               <div className="text-xs text-gray-500">
                                 +{pedido.pedidos_itens.length - 3} item(s) a mais...
