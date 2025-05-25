@@ -1735,7 +1735,8 @@ const PDVPage: React.FC = () => {
               valor,
               valorDesconto,
               precoOriginal: precoBase, // Usar o preço final como "original" para o desconto
-              precoComDesconto
+              precoComDesconto,
+              percentualDesconto: tipoDesconto === 'percentual' ? valor : undefined
             },
             subtotal: item.quantidade * precoComDesconto
           };
@@ -2522,10 +2523,11 @@ const PDVPage: React.FC = () => {
                         exit={{ opacity: 0, y: -20 }}
                         className="bg-gray-800/50 rounded-lg p-3"
                       >
-                        <div className="flex gap-3">
+                        {/* Layout responsivo baseado na largura da tela */}
+                        <div className="flex gap-3 lg:grid lg:grid-cols-[auto_1fr_auto_auto] lg:items-center lg:gap-4">
                           {/* Foto do Produto */}
                           <div
-                            className="w-16 h-16 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative"
+                            className="w-16 h-16 lg:w-12 lg:h-12 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative"
                             onClick={(e) => abrirGaleria(item.produto, e)}
                           >
                             {getFotoPrincipal(item.produto) ? (
@@ -2536,7 +2538,7 @@ const PDVPage: React.FC = () => {
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
-                                <Package size={20} className="text-gray-700" />
+                                <Package size={16} className="text-gray-700" />
                               </div>
                             )}
 
@@ -2549,57 +2551,67 @@ const PDVPage: React.FC = () => {
                           </div>
 
                           {/* Informações do produto */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1 min-w-0 lg:min-w-0">
+                            <div className="flex justify-between items-start mb-2 lg:mb-0">
                               <div className="flex-1 min-w-0">
                                 <h4 className="text-white font-medium text-sm line-clamp-1">{item.produto.nome}</h4>
-                                <p className="text-gray-400 text-xs">Código {item.produto.codigo}</p>
+                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                  <span>Código {item.produto.codigo}</span>
+                                  {item.quantidade > 1 && (
+                                    <span className="bg-gray-700 px-1.5 py-0.5 rounded text-white font-medium">
+                                      {item.quantidade}
+                                    </span>
+                                  )}
+                                </div>
 
                                 {/* Informações de origem do pedido */}
                                 {item.pedido_origem_numero && (
-                                  <div className="text-xs text-green-400 mt-1">
+                                  <div className="text-xs text-green-400 mt-1 lg:mt-0">
                                     📦 Pedido #{item.pedido_origem_numero}
                                   </div>
                                 )}
 
                                 {/* Informações de desconto */}
                                 {item.desconto && (
-                                  <div className="text-xs text-blue-400 mt-1">
-                                    💰 {item.desconto.tipo === 'percentual' ? `${item.desconto.percentualDesconto}% OFF` : `${formatCurrency(item.desconto.valorDesconto)} OFF`}
+                                  <div className="text-xs text-blue-400 mt-1 lg:mt-0">
+                                    💰 {item.desconto.tipo === 'percentual' && item.desconto.percentualDesconto
+                                      ? `${Math.round(item.desconto.percentualDesconto)}% OFF`
+                                      : `${formatCurrency(item.desconto.valorDesconto)} OFF`}
                                     {item.desconto.origemPedido && ' (do pedido)'}
                                   </div>
                                 )}
                               </div>
 
+                              {/* Botão remover - mobile */}
                               <button
                                 onClick={() => confirmarRemocao(item.id)}
-                                className="text-red-400 hover:text-red-300 transition-colors ml-2"
+                                className="text-red-400 hover:text-red-300 transition-colors ml-2 lg:hidden"
                                 title="Remover item"
                               >
                                 <Trash2 size={14} />
                               </button>
                             </div>
 
-                            {/* Preço e controles */}
-                            <div className="flex justify-between items-center">
-                              <div className="text-sm">
-                                {item.desconto ? (
-                                  <div>
-                                    <span className="text-gray-400 line-through text-xs">
-                                      {formatCurrency(item.desconto.precoOriginal)}
-                                    </span>
-                                    <div className="text-primary-400 font-bold">
-                                      {formatCurrency(item.desconto.precoComDesconto)}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="text-primary-400 font-bold">
-                                    {formatCurrency(item.subtotal / item.quantidade)}
+                            {/* Preço - mobile */}
+                            <div className="text-sm lg:hidden">
+                              {item.desconto ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-gray-400 line-through text-xs">
+                                    {formatCurrency(item.desconto.precoOriginal)}
                                   </span>
-                                )}
-                              </div>
+                                  <span className="text-primary-400 font-bold">
+                                    {formatCurrency(item.desconto.precoComDesconto)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-primary-400 font-bold">
+                                  {formatCurrency(item.subtotal / item.quantidade)}
+                                </span>
+                              )}
+                            </div>
 
-                              {/* Controles de quantidade */}
+                            {/* Controles de quantidade - mobile */}
+                            <div className="flex justify-between items-center mt-2 lg:hidden">
                               <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
@@ -2643,6 +2655,78 @@ const PDVPage: React.FC = () => {
                                 {formatCurrency(item.subtotal)}
                               </div>
                             </div>
+                          </div>
+
+                          {/* Controles de quantidade - desktop */}
+                          <div className="hidden lg:flex items-center gap-2">
+                            <button
+                              onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
+                              className="w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <span className="text-white font-medium min-w-[1.5rem] text-center text-sm">
+                              {item.quantidade}
+                            </span>
+                            <button
+                              onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
+                              className="w-7 h-7 bg-primary-500 hover:bg-primary-600 rounded-full flex items-center justify-center text-white transition-colors"
+                            >
+                              <Plus size={12} />
+                            </button>
+
+                            {/* Botões de desconto - desktop */}
+                            {!item.desconto && (
+                              <button
+                                onClick={() => abrirModalDesconto(item.id)}
+                                className="w-7 h-7 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                title="Aplicar desconto"
+                              >
+                                <Percent size={12} />
+                              </button>
+                            )}
+
+                            {item.desconto && (
+                              <button
+                                onClick={() => removerDesconto(item.id)}
+                                className="w-7 h-7 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                title="Remover desconto"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Preço e botão remover - desktop */}
+                          <div className="hidden lg:flex items-center gap-3">
+                            <div className="text-right">
+                              {item.desconto ? (
+                                <>
+                                  <div className="flex items-center gap-2 justify-end mb-1">
+                                    <span className="text-gray-400 line-through text-xs">
+                                      {formatCurrency(item.desconto.precoOriginal)}
+                                    </span>
+                                    <span className="text-primary-400 font-bold text-sm">
+                                      {formatCurrency(item.desconto.precoComDesconto)}
+                                    </span>
+                                  </div>
+                                  <div className="text-white font-bold">
+                                    {formatCurrency(item.subtotal)}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-white font-bold">
+                                  {formatCurrency(item.subtotal)}
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => confirmarRemocao(item.id)}
+                              className="text-red-400 hover:text-red-300 transition-colors"
+                              title="Remover item"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         </div>
                       </motion.div>
@@ -2706,6 +2790,166 @@ const PDVPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4"
               style={{ maxHeight: 'calc(100vh - 320px)' }}
             >
+
+              {/* Seção de Pagamento quando NÃO há pedidos importados */}
+              {pedidosImportados.length === 0 && (
+                <div className="space-y-4">
+                  {/* Tipo de Pagamento */}
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-2">
+                      Tipo de Pagamento
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setTipoPagamento('vista');
+                          limparPagamentosParciais();
+                        }}
+                        className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                          tipoPagamento === 'vista'
+                            ? 'bg-gray-700 border-gray-600 text-white'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
+                        }`}
+                      >
+                        À Vista
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTipoPagamento('parcial');
+                          setFormaPagamentoSelecionada(null);
+                        }}
+                        className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                          tipoPagamento === 'parcial'
+                            ? 'bg-gray-700 border-gray-600 text-white'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
+                        }`}
+                      >
+                        Parciais
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Formas de Pagamento */}
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-2">
+                      {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
+                    </label>
+
+                    {tipoPagamento === 'vista' ? (
+                      // Pagamento à vista - interface original
+                      <div className="grid grid-cols-2 gap-2">
+                        {formasPagamento.map((forma) => (
+                          <button
+                            key={forma.id}
+                            onClick={() => setFormaPagamentoSelecionada(forma.id)}
+                            className={`p-3 rounded-lg border transition-colors text-sm ${
+                              formaPagamentoSelecionada === forma.id
+                                ? 'bg-gray-700 border-gray-600 text-white'
+                                : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
+                            }`}
+                          >
+                            {forma.nome}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      // Pagamentos parciais - nova interface
+                      <div className="space-y-4">
+                        {/* Campo de valor */}
+                        <div>
+                          <label className="block text-sm font-medium text-white mb-2">
+                            Valor do Pagamento
+                          </label>
+                          <input
+                            type="text"
+                            value={valorParcial}
+                            onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
+                            placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          />
+                          <div className="text-xs text-gray-500 mt-1">
+                            💡 Deixe vazio para usar o valor restante automaticamente
+                          </div>
+                        </div>
+
+                        {/* Botões das formas de pagamento */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {formasPagamento.map((forma) => (
+                            <button
+                              key={forma.id}
+                              onClick={() => adicionarPagamentoParcial(
+                                forma.id,
+                                forma.nome, // Usar o nome da forma para exibição
+                                forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
+                              )}
+                              className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
+                            >
+                              {forma.nome}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Lista de pagamentos adicionados */}
+                        {pagamentosParciais.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm font-medium text-gray-400">Pagamentos Adicionados:</span>
+                              <button
+                                onClick={confirmarLimparTodos}
+                                className="text-xs text-red-400 hover:text-red-300"
+                              >
+                                Limpar Todos
+                              </button>
+                            </div>
+
+                            {pagamentosParciais.map((pagamento) => {
+                              const forma = formasPagamento.find(f => f.id === pagamento.forma);
+                              return (
+                                <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
+                                  <div>
+                                    <span className="text-white text-sm">{forma?.nome || pagamento.forma}</span>
+                                    <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
+                                  </div>
+                                  <button
+                                    onClick={() => confirmarRemocaoItem(pagamento.id)}
+                                    className="text-red-400 hover:text-red-300"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {/* Resumo dos valores */}
+                            <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-400">Total da Venda:</span>
+                                <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-400">Total Pago:</span>
+                                <span className="text-green-400">{formatCurrency(calcularTotalPago())}</span>
+                              </div>
+                              <div className="flex justify-between text-sm font-bold">
+                                <span className="text-gray-400">Restante:</span>
+                                <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                                  {formatCurrency(calcularRestante())}
+                                </span>
+                              </div>
+                              {trocoCalculado > 0 && (
+                                <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
+                                  <span className="text-gray-400 text-base">Troco:</span>
+                                  <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados */}
               {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
@@ -2794,7 +3038,7 @@ const PDVPage: React.FC = () => {
                                   return (
                                     <div
                                       key={idx}
-                                      className={`p-1.5 rounded border text-center cursor-pointer transition-colors text-xs ${
+                                      className={`p-1.5 rounded border cursor-pointer transition-colors text-xs ${
                                         isSelected
                                           ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
                                           : wasOriginallySelected
@@ -2805,24 +3049,28 @@ const PDVPage: React.FC = () => {
                                       }`}
                                       onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
                                     >
-                                      <div className="text-white font-medium">
-                                        {desconto.prazo_dias}d
+                                      <div className="relative flex items-center justify-center">
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-white font-medium">
+                                            {desconto.prazo_dias}d
+                                          </span>
+                                          <span className={`${
+                                            isSelected
+                                              ? 'text-blue-400'
+                                              : wasOriginallySelected
+                                                ? 'text-green-400'
+                                                : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                          }`}>
+                                            {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
+                                          </span>
+                                        </div>
+                                        {isSelected && (
+                                          <span className="absolute right-0 text-xs text-blue-400">✓</span>
+                                        )}
+                                        {!isSelected && wasOriginallySelected && (
+                                          <span className="absolute right-0 text-xs text-green-400">Orig</span>
+                                        )}
                                       </div>
-                                      <div className={`${
-                                        isSelected
-                                          ? 'text-blue-400'
-                                          : wasOriginallySelected
-                                            ? 'text-green-400'
-                                            : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                      }`}>
-                                        {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                                      </div>
-                                      {isSelected && (
-                                        <div className="text-xs text-blue-400">✓</div>
-                                      )}
-                                      {!isSelected && wasOriginallySelected && (
-                                        <div className="text-xs text-green-400">Original</div>
-                                      )}
                                     </div>
                                   );
                                 })}
@@ -2878,7 +3126,7 @@ const PDVPage: React.FC = () => {
                               return (
                                 <div
                                   key={idx}
-                                  className={`p-2 rounded-lg border text-center cursor-pointer transition-colors ${
+                                  className={`p-2 rounded-lg border cursor-pointer transition-colors ${
                                     isSelected
                                       ? 'bg-blue-500/20 border-blue-500 ring-2 ring-blue-500/50'
                                       : desconto.tipo === 'desconto'
@@ -2887,21 +3135,23 @@ const PDVPage: React.FC = () => {
                                   }`}
                                   onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
                                 >
-                                  <div className="text-xs text-white font-medium">
-                                    {desconto.prazo_dias} dias
-                                  </div>
-                                  <div className={`text-xs ${
-                                    isSelected
-                                      ? 'text-blue-400'
-                                      : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                  }`}>
-                                    {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                                  </div>
-                                  {isSelected && (
-                                    <div className="text-xs text-blue-400 mt-1">
-                                      ✓ Selecionado
+                                  <div className="relative flex items-center justify-center">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs text-white font-medium">
+                                        {desconto.prazo_dias}d
+                                      </span>
+                                      <span className={`text-xs ${
+                                        isSelected
+                                          ? 'text-blue-400'
+                                          : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
+                                      </span>
                                     </div>
-                                  )}
+                                    {isSelected && (
+                                      <span className="absolute right-0 text-xs text-blue-400">✓</span>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -2946,162 +3196,167 @@ const PDVPage: React.FC = () => {
             {/* Área fixa de pagamento - sempre visível quando há itens */}
             {carrinho.length > 0 && (
               <div className="p-4 bg-background-card flex-shrink-0">
-                {/* Tipo de Pagamento */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Tipo de Pagamento
-                  </label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        setTipoPagamento('vista');
-                        limparPagamentosParciais();
-                      }}
-                      className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
-                        tipoPagamento === 'vista'
-                          ? 'bg-gray-700 border-gray-600 text-white'
-                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
-                      }`}
-                    >
-                      À Vista
-                    </button>
-                    <button
-                      onClick={() => {
-                        setTipoPagamento('parcial');
-                        setFormaPagamentoSelecionada(null);
-                      }}
-                      className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
-                        tipoPagamento === 'parcial'
-                          ? 'bg-gray-700 border-gray-600 text-white'
-                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
-                      }`}
-                    >
-                      Parciais
-                    </button>
-                  </div>
-                </div>
-
-                {/* Formas de Pagamento */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-white mb-2">
-                    {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
-                  </label>
-
-                  {tipoPagamento === 'vista' ? (
-                    // Pagamento à vista - interface original
-                    <div className="grid grid-cols-2 gap-2">
-                      {formasPagamento.map((forma) => (
+                {/* Seções de pagamento quando HÁ pedidos importados */}
+                {pedidosImportados.length > 0 && (
+                  <>
+                    {/* Tipo de Pagamento */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-white mb-2">
+                        Tipo de Pagamento
+                      </label>
+                      <div className="flex gap-2">
                         <button
-                          key={forma.id}
-                          onClick={() => setFormaPagamentoSelecionada(forma.id)}
-                          className={`p-3 rounded-lg border transition-colors text-sm ${
-                            formaPagamentoSelecionada === forma.id
+                          onClick={() => {
+                            setTipoPagamento('vista');
+                            limparPagamentosParciais();
+                          }}
+                          className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                            tipoPagamento === 'vista'
                               ? 'bg-gray-700 border-gray-600 text-white'
-                              : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
+                              : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
                           }`}
                         >
-                          {forma.nome}
+                          À Vista
                         </button>
-                      ))}
+                        <button
+                          onClick={() => {
+                            setTipoPagamento('parcial');
+                            setFormaPagamentoSelecionada(null);
+                          }}
+                          className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                            tipoPagamento === 'parcial'
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
+                          }`}
+                        >
+                          Parciais
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    // Pagamentos parciais - nova interface
-                    <div className="space-y-4">
-                      {/* Campo de valor */}
-                      <div>
-                        <label className="block text-sm font-medium text-white mb-2">
-                          Valor do Pagamento
-                        </label>
-                        <input
-                          type="text"
-                          value={valorParcial}
-                          onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
-                          placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
-                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        />
-                        <div className="text-xs text-gray-500 mt-1">
-                          💡 Deixe vazio para usar o valor restante automaticamente
-                        </div>
-                      </div>
 
-                      {/* Botões das formas de pagamento */}
-                      <div className="grid grid-cols-2 gap-2">
-                        {formasPagamento.map((forma) => (
-                          <button
-                            key={forma.id}
-                            onClick={() => adicionarPagamentoParcial(
-                              forma.id,
-                              forma.nome, // Usar o nome da forma para exibição
-                              forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
-                            )}
-                            className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
-                          >
-                            {forma.nome}
-                          </button>
-                        ))}
-                      </div>
+                    {/* Formas de Pagamento */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-white mb-2">
+                        {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
+                      </label>
 
-                      {/* Lista de pagamentos adicionados */}
-                      {pagamentosParciais.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium text-gray-400">Pagamentos Adicionados:</span>
+                      {tipoPagamento === 'vista' ? (
+                        // Pagamento à vista - interface original
+                        <div className="grid grid-cols-2 gap-2">
+                          {formasPagamento.map((forma) => (
                             <button
-                              onClick={confirmarLimparTodos}
-                              className="text-xs text-red-400 hover:text-red-300"
+                              key={forma.id}
+                              onClick={() => setFormaPagamentoSelecionada(forma.id)}
+                              className={`p-3 rounded-lg border transition-colors text-sm ${
+                                formaPagamentoSelecionada === forma.id
+                                  ? 'bg-gray-700 border-gray-600 text-white'
+                                  : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
+                              }`}
                             >
-                              Limpar Todos
+                              {forma.nome}
                             </button>
+                          ))}
+                        </div>
+                      ) : (
+                        // Pagamentos parciais - nova interface
+                        <div className="space-y-4">
+                          {/* Campo de valor */}
+                          <div>
+                            <label className="block text-sm font-medium text-white mb-2">
+                              Valor do Pagamento
+                            </label>
+                            <input
+                              type="text"
+                              value={valorParcial}
+                              onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
+                              placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            />
+                            <div className="text-xs text-gray-500 mt-1">
+                              💡 Deixe vazio para usar o valor restante automaticamente
+                            </div>
                           </div>
 
-                          {pagamentosParciais.map((pagamento) => {
-                            const forma = formasPagamento.find(f => f.id === pagamento.forma);
-                            return (
-                              <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
-                                <div>
-                                  <span className="text-white text-sm">{forma?.nome || pagamento.forma}</span>
-                                  <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
-                                </div>
+                          {/* Botões das formas de pagamento */}
+                          <div className="grid grid-cols-2 gap-2">
+                            {formasPagamento.map((forma) => (
+                              <button
+                                key={forma.id}
+                                onClick={() => adicionarPagamentoParcial(
+                                  forma.id,
+                                  forma.nome, // Usar o nome da forma para exibição
+                                  forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
+                                )}
+                                className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
+                              >
+                                {forma.nome}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Lista de pagamentos adicionados */}
+                          {pagamentosParciais.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-gray-400">Pagamentos Adicionados:</span>
                                 <button
-                                  onClick={() => confirmarRemocaoItem(pagamento.id)}
-                                  className="text-red-400 hover:text-red-300"
+                                  onClick={confirmarLimparTodos}
+                                  className="text-xs text-red-400 hover:text-red-300"
                                 >
-                                  <X size={16} />
+                                  Limpar Todos
                                 </button>
                               </div>
-                            );
-                          })}
 
-                          {/* Resumo dos valores */}
-                          <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Total da Venda:</span>
-                              <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Total Pago:</span>
-                              <span className="text-green-400">{formatCurrency(calcularTotalPago())}</span>
-                            </div>
-                            <div className="flex justify-between text-sm font-bold">
-                              <span className="text-gray-400">Restante:</span>
-                              <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
-                                {formatCurrency(calcularRestante())}
-                              </span>
-                            </div>
-                            {trocoCalculado > 0 && (
-                              <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
-                                <span className="text-gray-400 text-base">Troco:</span>
-                                <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                              {pagamentosParciais.map((pagamento) => {
+                                const forma = formasPagamento.find(f => f.id === pagamento.forma);
+                                return (
+                                  <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
+                                    <div>
+                                      <span className="text-white text-sm">{forma?.nome || pagamento.forma}</span>
+                                      <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
+                                    </div>
+                                    <button
+                                      onClick={() => confirmarRemocaoItem(pagamento.id)}
+                                      className="text-red-400 hover:text-red-300"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+
+                              {/* Resumo dos valores */}
+                              <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-400">Total da Venda:</span>
+                                  <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-400">Total Pago:</span>
+                                  <span className="text-green-400">{formatCurrency(calcularTotalPago())}</span>
+                                </div>
+                                <div className="flex justify-between text-sm font-bold">
+                                  <span className="text-gray-400">Restante:</span>
+                                  <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                                    {formatCurrency(calcularRestante())}
+                                  </span>
+                                </div>
+                                {trocoCalculado > 0 && (
+                                  <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
+                                    <span className="text-gray-400 text-base">Troco:</span>
+                                    <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
 
-                {/* Resumo da Venda */}
+                {/* Resumo da Venda - sempre presente */}
                 <div className="bg-gray-800/50 rounded-lg p-4 mb-2">
                   {(() => {
                     const subtotal = calcularTotal();
