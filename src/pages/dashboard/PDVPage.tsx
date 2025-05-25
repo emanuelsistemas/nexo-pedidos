@@ -936,8 +936,8 @@ const PDVPage: React.FC = () => {
     const larguraMinimaBotao = 120;
 
     // Ajustar largura disponível baseado se há itens no carrinho
-    // Se há itens no carrinho, a área principal ocupa 60% da tela (3/5)
-    const larguraAreaPrincipal = carrinho.length > 0 ? larguraTela * 0.6 : larguraTela;
+    // Se há itens no carrinho, a área principal ocupa 67% da tela (2/3)
+    const larguraAreaPrincipal = carrinho.length > 0 ? larguraTela * 0.67 : larguraTela;
 
     // Calcular quantos botões cabem (considerando espaço para botões de navegação se necessário)
     const larguraDisponivel = larguraAreaPrincipal - (menuStartIndex > 0 || menuStartIndex + visibleMenuItems < menuPDVItems.length ? larguraBotaoNavegacao * 2 : 0);
@@ -2681,7 +2681,7 @@ const PDVPage: React.FC = () => {
       >
         {/* Área dos Itens do Carrinho - ajusta largura baseado se há itens no carrinho */}
         {!showFinalizacaoFinal && (
-          <div className={`${carrinho.length > 0 ? 'w-3/5' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
+          <div className={`${carrinho.length > 0 ? 'w-2/3' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
             <div className="h-full flex flex-col">
 
 
@@ -3045,7 +3045,7 @@ const PDVPage: React.FC = () => {
               duration: 0.5,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="w-2/5 bg-background-card border-l border-gray-800 flex flex-col h-full"
+            className="w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full"
           >
 
 
@@ -3773,7 +3773,7 @@ const PDVPage: React.FC = () => {
               duration: 0.5,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="w-2/5 bg-background-card border-l border-gray-800 flex flex-col h-full"
+            className="w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full"
           >
             {/* Header fixo */}
             <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
