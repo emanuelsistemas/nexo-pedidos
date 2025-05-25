@@ -2430,8 +2430,14 @@ const PDVPage: React.FC = () => {
         <div className="text-5xl font-bold text-primary-400">
           {formatCurrencyWithoutSymbol(calcularTotal())}
         </div>
-        <div className="text-sm text-gray-400 font-mono">
-          {formatDateTime(currentDateTime)}
+        <div className="text-right">
+          <div className="text-sm text-gray-400 flex items-center justify-end gap-1 mb-1">
+            <User size={14} />
+            {userData?.nome || 'Usuário'}
+          </div>
+          <div className="text-sm text-gray-400 font-mono">
+            {formatDateTime(currentDateTime)}
+          </div>
         </div>
       </div>
 
@@ -2680,8 +2686,8 @@ const PDVPage: React.FC = () => {
           </div>
         )}
 
-        {/* Área de Finalização de Venda */}
-        {!showFinalizacaoFinal && (
+        {/* Área de Finalização de Venda - Só aparece quando há itens */}
+        {!showFinalizacaoFinal && carrinho.length > 0 && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
@@ -2694,17 +2700,11 @@ const PDVPage: React.FC = () => {
           >
 
 
-            {/* Título da área de finalização */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <User size={20} />
-                Caixa: {userData?.nome || 'Usuário'}
-              </h3>
-            </div>
+
 
             {/* Conteúdo scrollável */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4"
-              style={{ maxHeight: 'calc(100vh - 180px)' }}
+              style={{ maxHeight: 'calc(100vh - 320px)' }}
             >
 
               {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados */}
@@ -2939,297 +2939,307 @@ const PDVPage: React.FC = () => {
 
 
 
-              {/* Tipo de Pagamento */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  Tipo de Pagamento
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setTipoPagamento('vista');
-                      limparPagamentosParciais();
-                    }}
-                    className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
-                      tipoPagamento === 'vista'
-                        ? 'bg-primary-500 border-primary-500 text-white'
-                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
-                    }`}
-                  >
-                    À Vista
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTipoPagamento('parcial');
-                      setFormaPagamentoSelecionada(null);
-                    }}
-                    className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
-                      tipoPagamento === 'parcial'
-                        ? 'bg-primary-500 border-primary-500 text-white'
-                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'
-                    }`}
-                  >
-                    Parciais
-                  </button>
-                </div>
-              </div>
 
-              {/* Formas de Pagamento */}
-              <div className="pb-4">
-                <label className="block text-sm font-medium text-gray-400 mb-2">
-                  {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
-                </label>
 
-                {tipoPagamento === 'vista' ? (
-                  // Pagamento à vista - interface original
-                  <div className="grid grid-cols-2 gap-2">
-                    {formasPagamento.map((forma) => (
-                      <button
-                        key={forma.id}
-                        onClick={() => setFormaPagamentoSelecionada(forma.id)}
-                        className={`p-3 rounded-lg border transition-colors text-sm ${
-                          formaPagamentoSelecionada === forma.id
-                            ? 'bg-primary-500 border-primary-500 text-white'
-                            : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600'
-                        }`}
-                      >
-                        {forma.nome}
-                      </button>
-                    ))}
+            </div>
+
+            {/* Área fixa de pagamento - sempre visível quando há itens */}
+            {carrinho.length > 0 && (
+              <div className="p-4 bg-background-card flex-shrink-0">
+                {/* Tipo de Pagamento */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-white mb-2">
+                    Tipo de Pagamento
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setTipoPagamento('vista');
+                        limparPagamentosParciais();
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                        tipoPagamento === 'vista'
+                          ? 'bg-gray-700 border-gray-600 text-white'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
+                      }`}
+                    >
+                      À Vista
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTipoPagamento('parcial');
+                        setFormaPagamentoSelecionada(null);
+                      }}
+                      className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                        tipoPagamento === 'parcial'
+                          ? 'bg-gray-700 border-gray-600 text-white'
+                          : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
+                      }`}
+                    >
+                      Parciais
+                    </button>
                   </div>
-                ) : (
-                  // Pagamentos parciais - nova interface
-                  <div className="space-y-4">
-                    {/* Campo de valor */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Valor do Pagamento
-                      </label>
-                      <input
-                        type="text"
-                        value={valorParcial}
-                        onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
-                        placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                      />
-                      <div className="text-xs text-gray-500 mt-1">
-                        💡 Deixe vazio para usar o valor restante automaticamente
-                      </div>
-                    </div>
+                </div>
 
-                    {/* Botões das formas de pagamento */}
+                {/* Formas de Pagamento */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-white mb-2">
+                    {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
+                  </label>
+
+                  {tipoPagamento === 'vista' ? (
+                    // Pagamento à vista - interface original
                     <div className="grid grid-cols-2 gap-2">
                       {formasPagamento.map((forma) => (
                         <button
                           key={forma.id}
-                          onClick={() => adicionarPagamentoParcial(
-                            forma.id,
-                            forma.nome, // Usar o nome da forma para exibição
-                            forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
-                          )}
-                          className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-700/50 transition-colors text-sm"
+                          onClick={() => setFormaPagamentoSelecionada(forma.id)}
+                          className={`p-3 rounded-lg border transition-colors text-sm ${
+                            formaPagamentoSelecionada === forma.id
+                              ? 'bg-gray-700 border-gray-600 text-white'
+                              : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
+                          }`}
                         >
                           {forma.nome}
                         </button>
                       ))}
                     </div>
+                  ) : (
+                    // Pagamentos parciais - nova interface
+                    <div className="space-y-4">
+                      {/* Campo de valor */}
+                      <div>
+                        <label className="block text-sm font-medium text-white mb-2">
+                          Valor do Pagamento
+                        </label>
+                        <input
+                          type="text"
+                          value={valorParcial}
+                          onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
+                          placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        />
+                        <div className="text-xs text-gray-500 mt-1">
+                          💡 Deixe vazio para usar o valor restante automaticamente
+                        </div>
+                      </div>
 
-                    {/* Lista de pagamentos adicionados */}
-                    {pagamentosParciais.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium text-gray-400">Pagamentos Adicionados:</span>
+                      {/* Botões das formas de pagamento */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {formasPagamento.map((forma) => (
                           <button
-                            onClick={confirmarLimparTodos}
-                            className="text-xs text-red-400 hover:text-red-300"
+                            key={forma.id}
+                            onClick={() => adicionarPagamentoParcial(
+                              forma.id,
+                              forma.nome, // Usar o nome da forma para exibição
+                              forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
+                            )}
+                            className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
                           >
-                            Limpar Todos
+                            {forma.nome}
                           </button>
+                        ))}
+                      </div>
+
+                      {/* Lista de pagamentos adicionados */}
+                      {pagamentosParciais.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-gray-400">Pagamentos Adicionados:</span>
+                            <button
+                              onClick={confirmarLimparTodos}
+                              className="text-xs text-red-400 hover:text-red-300"
+                            >
+                              Limpar Todos
+                            </button>
+                          </div>
+
+                          {pagamentosParciais.map((pagamento) => {
+                            const forma = formasPagamento.find(f => f.id === pagamento.forma);
+                            return (
+                              <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
+                                <div>
+                                  <span className="text-white text-sm">{forma?.nome || pagamento.forma}</span>
+                                  <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
+                                </div>
+                                <button
+                                  onClick={() => confirmarRemocaoItem(pagamento.id)}
+                                  className="text-red-400 hover:text-red-300"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            );
+                          })}
+
+                          {/* Resumo dos valores */}
+                          <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-400">Total da Venda:</span>
+                              <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-400">Total Pago:</span>
+                              <span className="text-green-400">{formatCurrency(calcularTotalPago())}</span>
+                            </div>
+                            <div className="flex justify-between text-sm font-bold">
+                              <span className="text-gray-400">Restante:</span>
+                              <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                                {formatCurrency(calcularRestante())}
+                              </span>
+                            </div>
+                            {trocoCalculado > 0 && (
+                              <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
+                                <span className="text-gray-400 text-base">Troco:</span>
+                                <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Resumo da Venda */}
+                <div className="bg-gray-800/50 rounded-lg p-4 mb-2">
+                  {(() => {
+                    const subtotal = calcularTotal();
+                    const totalFinal = calcularTotalComDesconto();
+
+                    // Calcular desconto por prazo se selecionado
+                    let descontoPrazo = null;
+                    if (descontoPrazoSelecionado) {
+                      const desconto = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
+                      if (desconto) {
+                        const valorDesconto = (subtotal * desconto.percentual) / 100;
+                        descontoPrazo = {
+                          tipo: desconto.tipo,
+                          percentual: desconto.percentual,
+                          valor: valorDesconto,
+                          prazo_dias: desconto.prazo_dias
+                        };
+                      }
+                    }
+
+                    // Calcular desconto por valor (aplicado após desconto por prazo)
+                    const subtotalComDescontoPrazo = descontoPrazo
+                      ? (descontoPrazo.tipo === 'desconto' ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor)
+                      : subtotal;
+                    const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
+
+                    return (
+                      <>
+                        {/* Subtotal */}
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span className="text-white">Subtotal:</span>
+                          <span className="text-white">{formatCurrency(subtotal)}</span>
                         </div>
 
-                        {pagamentosParciais.map((pagamento) => {
-                          const forma = formasPagamento.find(f => f.id === pagamento.forma);
-                          return (
-                            <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
-                              <div>
-                                <span className="text-white text-sm">{forma?.nome || pagamento.forma}</span>
-                                <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
-                              </div>
-                              <button
-                                onClick={() => confirmarRemocaoItem(pagamento.id)}
-                                className="text-red-400 hover:text-red-300"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                          );
-                        })}
+                        {/* Itens */}
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span className="text-white">Itens:</span>
+                          <span className="text-white">{carrinho.reduce((total, item) => total + item.quantidade, 0)}</span>
+                        </div>
 
-                        {/* Resumo dos valores */}
-                        <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-400">Total da Venda:</span>
-                            <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-400">Total Pago:</span>
-                            <span className="text-green-400">{formatCurrency(calcularTotalPago())}</span>
-                          </div>
-                          <div className="flex justify-between text-sm font-bold">
-                            <span className="text-gray-400">Restante:</span>
-                            <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
-                              {formatCurrency(calcularRestante())}
+                        {/* Desconto por Prazo (se aplicável) */}
+                        {descontoPrazo && (
+                          <div className="flex justify-between items-center text-sm mb-2">
+                            <span className={`${
+                              descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
+                            }`}>
+                              {descontoPrazo.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} Prazo ({descontoPrazo.prazo_dias} dias):
+                            </span>
+                            <span className={`${
+                              descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
+                            }`}>
+                              {descontoPrazo.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoPrazo.valor)}
                             </span>
                           </div>
-                          {trocoCalculado > 0 && (
-                            <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
-                              <span className="text-gray-400 text-base">Troco:</span>
-                              <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
-                            </div>
-                          )}
+                        )}
+
+                        {/* Desconto por Valor (se aplicável) */}
+                        {descontoValor && (
+                          <div className="flex justify-between items-center text-sm mb-2">
+                            <span className={`${
+                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {descontoValor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} ({descontoValor.percentual}%):
+                            </span>
+                            <span className={`${
+                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {descontoValor.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoValor.valor)}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Total Final */}
+                        <div className="flex justify-between items-center mb-2 pt-2 border-t border-gray-700">
+                          <span className="text-white">Total da Venda:</span>
+                          <span className="text-2xl font-bold text-primary-400">
+                            {formatCurrency(totalFinal)}
+                          </span>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
+            )}
 
-              {/* Resumo da Venda */}
-              <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
-                {(() => {
-                  const subtotal = calcularTotal();
-                  const totalFinal = calcularTotalComDesconto();
+            {/* Footer fixo com botões de ação - Só aparece quando há itens */}
+            {carrinho.length > 0 && (
+              <div className="px-4 pt-4 pb-2 flex-shrink-0">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowConfirmLimparTudoPDV(true)}
+                    className="flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Validação para pagamento à vista
+                      if (tipoPagamento === 'vista') {
+                        if (!formaPagamentoSelecionada) {
+                          toast.error('Selecione uma forma de pagamento');
+                          return;
+                        }
+                        // Avança para a tela de finalização final
+                        setShowFinalizacaoFinal(true);
+                      } else {
+                        // Validação para pagamentos parciais
+                        if (pagamentosParciais.length === 0) {
+                          toast.error('Adicione pelo menos uma forma de pagamento');
+                          return;
+                        }
 
-                  // Calcular desconto por prazo se selecionado
-                  let descontoPrazo = null;
-                  if (descontoPrazoSelecionado) {
-                    const desconto = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
-                    if (desconto) {
-                      const valorDesconto = (subtotal * desconto.percentual) / 100;
-                      descontoPrazo = {
-                        tipo: desconto.tipo,
-                        percentual: desconto.percentual,
-                        valor: valorDesconto,
-                        prazo_dias: desconto.prazo_dias
-                      };
+                        const restante = calcularRestante();
+                        if (restante > 0) {
+                          toast.error(`Ainda falta pagar ${formatCurrency(restante)}`);
+                          return;
+                        }
+
+                        // Avança para a tela de finalização final
+                        setShowFinalizacaoFinal(true);
+                      }
+                    }}
+                    disabled={tipoPagamento === 'parcial' && calcularRestante() > 0}
+                    className={`flex-1 py-3 px-4 rounded-lg border transition-colors ${
+                      tipoPagamento === 'parcial' && calcularRestante() > 0
+                        ? 'bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-white'
+                    }`}
+                  >
+                    {tipoPagamento === 'parcial' && calcularRestante() > 0
+                      ? `Falta ${formatCurrency(calcularRestante())}`
+                      : 'Confirmar'
                     }
-                  }
-
-                  // Calcular desconto por valor (aplicado após desconto por prazo)
-                  const subtotalComDescontoPrazo = descontoPrazo
-                    ? (descontoPrazo.tipo === 'desconto' ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor)
-                    : subtotal;
-                  const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
-
-                  return (
-                    <>
-                      {/* Subtotal */}
-                      <div className="flex justify-between items-center text-sm mb-2">
-                        <span className="text-gray-400">Subtotal:</span>
-                        <span className="text-white">{formatCurrency(subtotal)}</span>
-                      </div>
-
-                      {/* Itens */}
-                      <div className="flex justify-between items-center text-sm mb-2">
-                        <span className="text-gray-400">Itens:</span>
-                        <span className="text-white">{carrinho.reduce((total, item) => total + item.quantidade, 0)}</span>
-                      </div>
-
-                      {/* Desconto por Prazo (se aplicável) */}
-                      {descontoPrazo && (
-                        <div className="flex justify-between items-center text-sm mb-2">
-                          <span className={`${
-                            descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
-                          }`}>
-                            {descontoPrazo.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} Prazo ({descontoPrazo.prazo_dias} dias):
-                          </span>
-                          <span className={`${
-                            descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
-                          }`}>
-                            {descontoPrazo.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoPrazo.valor)}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Desconto por Valor (se aplicável) */}
-                      {descontoValor && (
-                        <div className="flex justify-between items-center text-sm mb-2">
-                          <span className={`${
-                            descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                          }`}>
-                            {descontoValor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} ({descontoValor.percentual}%):
-                          </span>
-                          <span className={`${
-                            descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                          }`}>
-                            {descontoValor.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoValor.valor)}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Total Final */}
-                      <div className="flex justify-between items-center mb-2 pt-2 border-t border-gray-700">
-                        <span className="text-gray-400">Total da Venda:</span>
-                        <span className="text-2xl font-bold text-primary-400">
-                          {formatCurrency(totalFinal)}
-                        </span>
-                      </div>
-                    </>
-                  );
-                })()}
+                  </button>
+                </div>
               </div>
-            </div>
-
-            {/* Footer fixo com botões de ação */}
-            <div className="border-t border-gray-800 p-4 flex-shrink-0">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowConfirmLimparTudoPDV(true)}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => {
-                    // Validação para pagamento à vista
-                    if (tipoPagamento === 'vista') {
-                      if (!formaPagamentoSelecionada) {
-                        toast.error('Selecione uma forma de pagamento');
-                        return;
-                      }
-                      // Avança para a tela de finalização final
-                      setShowFinalizacaoFinal(true);
-                    } else {
-                      // Validação para pagamentos parciais
-                      if (pagamentosParciais.length === 0) {
-                        toast.error('Adicione pelo menos uma forma de pagamento');
-                        return;
-                      }
-
-                      const restante = calcularRestante();
-                      if (restante > 0) {
-                        toast.error(`Ainda falta pagar ${formatCurrency(restante)}`);
-                        return;
-                      }
-
-                      // Avança para a tela de finalização final
-                      setShowFinalizacaoFinal(true);
-                    }
-                  }}
-                  disabled={tipoPagamento === 'parcial' && calcularRestante() > 0}
-                  className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
-                    tipoPagamento === 'parcial' && calcularRestante() > 0
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : 'bg-primary-500 hover:bg-primary-600 text-white'
-                  }`}
-                >
-                  {tipoPagamento === 'parcial' && calcularRestante() > 0
-                    ? `Falta ${formatCurrency(calcularRestante())}`
-                    : 'Confirmar'
-                  }
-                </button>
-              </div>
-            </div>
+            )}
           </motion.div>
         )}
 
