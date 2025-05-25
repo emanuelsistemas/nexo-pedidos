@@ -133,6 +133,9 @@ const PDVPage: React.FC = () => {
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
 
+  // Estado para controlar visibilidade da área de produtos
+  const [showAreaProdutos, setShowAreaProdutos] = useState(false);
+
   // Estados para o modal de Pedidos
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [loadingPedidos, setLoadingPedidos] = useState(false);
@@ -647,6 +650,19 @@ const PDVPage: React.FC = () => {
 
   // Definir itens do menu PDV
   const menuPDVItems = [
+    {
+      id: 'produtos',
+      icon: Package,
+      label: 'Produtos',
+      color: 'primary',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowAreaProdutos(!showAreaProdutos);
+      }
+    },
     {
       id: 'pedidos',
       icon: ShoppingBag,
@@ -2361,205 +2377,224 @@ const PDVPage: React.FC = () => {
         className={`flex overflow-hidden ${showFinalizacaoVenda ? 'bg-background-card' : ''}`}
         style={{ height: 'calc(100vh - 64px)' }}
       >
-        {/* Área Principal - Produtos */}
+        {/* Área dos Itens do Carrinho (movida para a esquerda) */}
         {!showFinalizacaoVenda && !showFinalizacaoFinal && (
           <div className="flex-1 p-4 flex flex-col h-full relative overflow-hidden">
             <div className="h-full flex flex-col">
-            {/* Barra de Busca */}
-            <div className="mb-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Produto"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={handleSearchKeyPress}
-                  autoFocus
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                />
-                <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-
-                {/* Indicador de quantidade */}
-                {searchTerm.includes('*') && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="bg-primary-500 text-white text-xs px-2 py-1 rounded-full">
-                      Qtd: {searchTerm.split('*')[0]}
-                    </div>
-                  </div>
-                )}
-
-                {/* Indicador de código de barras buffer */}
-                {pdvConfig?.venda_codigo_barras && codigoBarrasBuffer && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
-                      Código: {codigoBarrasBuffer}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Indicador de captura automática ativa */}
-              {pdvConfig?.venda_codigo_barras && (
-                <div className="mt-2 flex items-center gap-2 text-xs text-green-400">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  Captura automática de código de barras ativa - Digite números para adicionar produtos
-                </div>
-              )}
-            </div>
-
-            {/* Filtros por Categoria */}
-            {grupos.length > 0 && (
-              <div className="mb-4">
-                <div className="flex flex-wrap gap-2">
+              {/* Título da área de itens */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <ShoppingCart size={20} />
+                  Itens do Carrinho ({carrinho.reduce((total, item) => total + item.quantidade, 0)})
+                </h3>
+                {carrinho.length > 0 && (
                   <button
-                    onClick={() => setGrupoSelecionado('todos')}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      grupoSelecionado === 'todos'
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
-                    }`}
+                    onClick={confirmarLimparCarrinho}
+                    className="text-red-400 hover:text-red-300 transition-colors"
+                    title="Limpar PDV completo"
                   >
-                    Todos
+                    <Trash2 size={18} />
                   </button>
-                  {grupos.map(grupo => (
-                    <button
-                      key={grupo.id}
-                      onClick={() => setGrupoSelecionado(grupo.id)}
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                        grupoSelecionado === grupo.id
-                          ? 'bg-primary-500 text-white'
-                          : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
-                      }`}
-                    >
-                      {grupo.nome}
-                    </button>
-                  ))}
-                </div>
+                )}
               </div>
-            )}
 
-            {/* Grid de Produtos */}
-            <div
-              className="flex-1 overflow-y-auto custom-scrollbar"
-              style={{ paddingBottom: (showFinalizacaoVenda || showFinalizacaoFinal) ? '0px' : '60px' }}
-            >
-              {produtosFiltrados.length === 0 ? (
-                <div className="text-center py-8">
-                  <Package size={48} className="mx-auto mb-4 text-gray-500" />
-                  <p className="text-gray-400">Nenhum produto encontrado</p>
-                </div>
-              ) : (
-                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
-                  {produtosFiltrados.map(produto => (
-                    <motion.div
-                      key={produto.id}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => adicionarAoCarrinho(produto)}
-                      className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer flex flex-col"
-                    >
-                      {/* Imagem do produto */}
-                      <div
-                        className="h-24 bg-gray-900 relative cursor-pointer"
-                        onClick={(e) => abrirGaleria(produto, e)}
-                      >
-                        {getFotoPrincipal(produto) ? (
-                          <img
-                            src={getFotoPrincipal(produto)!.url}
-                            alt={produto.nome}
-                            className="w-full h-full object-cover hover:opacity-90 transition-opacity"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Package size={24} className="text-gray-700" />
-                          </div>
-                        )}
+              {/* Barra de Busca */}
+              <div className="mb-4">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Produto"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={handleSearchKeyPress}
+                    autoFocus
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-12 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+                  <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
 
-                        {/* Indicador de múltiplas fotos */}
-                        {produto.produto_fotos && produto.produto_fotos.length > 1 && (
-                          <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
-                            {produto.produto_fotos.length} fotos
-                          </div>
-                        )}
+                  {/* Ícone de busca com F1 */}
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <Search size={16} className="text-gray-400" />
+                    <span className="text-xs text-gray-500 bg-gray-700 px-1 py-0.5 rounded">F1</span>
+                  </div>
 
-                        {/* Badge de promoção */}
-                        {produto.promocao && (
-                          <div className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold px-1 py-0.5 rounded">
-                            {produto.tipo_desconto === 'percentual'
-                              ? `-${produto.valor_desconto}%`
-                              : formatCurrency(produto.valor_desconto || 0)}
-                          </div>
-                        )}
+                  {/* Indicador de quantidade */}
+                  {searchTerm.includes('*') && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="bg-primary-500 text-white text-xs px-2 py-1 rounded-full">
+                        Qtd: {searchTerm.split('*')[0]}
                       </div>
+                    </div>
+                  )}
 
-                      {/* Informações do produto */}
-                      <div className="p-2.5">
-                        <h3 className="text-white text-xs font-medium line-clamp-2 mb-1.5">{produto.nome}</h3>
+                  {/* Indicador de código de barras buffer */}
+                  {pdvConfig?.venda_codigo_barras && codigoBarrasBuffer && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                        Código: {codigoBarrasBuffer}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-                        <div className="mb-1.5">
-                          <p className="text-gray-400 text-xs">Código {produto.codigo}</p>
-                        </div>
+                {/* Indicador de captura automática ativa */}
+                {pdvConfig?.venda_codigo_barras && (
+                  <div className="mt-2 flex items-center gap-2 text-xs text-green-400">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    Captura automática de código de barras ativa - Digite números para adicionar produtos
+                  </div>
+                )}
+              </div>
 
-                        {/* Preço */}
-                        <div className="mb-1.5">
-                          {produto.promocao ? (
-                            <div>
-                              <span className="text-gray-400 line-through text-xs block">
-                                {formatCurrency(produto.preco)}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-primary-400 font-bold text-sm">
-                                  {formatCurrency(calcularPrecoFinal(produto))}
-                                </span>
-                                {produto.unidade_medida && (
-                                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
-                                    {produto.unidade_medida.sigla}
+              {/* Lista de Itens do Carrinho */}
+              <div
+                className="flex-1 overflow-y-auto custom-scrollbar"
+                style={{ paddingBottom: '60px' }}
+              >
+                {carrinho.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    <ShoppingCart size={48} className="mx-auto mb-2 opacity-50" />
+                    <p>Carrinho vazio</p>
+                    <p className="text-sm">Use o botão "Produtos" para adicionar itens</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {carrinho.map(item => (
+                      <motion.div
+                        key={item.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="bg-gray-800/50 rounded-lg p-3"
+                      >
+                        <div className="flex gap-3">
+                          {/* Foto do Produto */}
+                          <div
+                            className="w-16 h-16 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative"
+                            onClick={(e) => abrirGaleria(item.produto, e)}
+                          >
+                            {getFotoPrincipal(item.produto) ? (
+                              <img
+                                src={getFotoPrincipal(item.produto)!.url}
+                                alt={item.produto.nome}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={20} className="text-gray-700" />
+                              </div>
+                            )}
+
+                            {/* Indicador de múltiplas fotos */}
+                            {item.produto.produto_fotos && item.produto.produto_fotos.length > 1 && (
+                              <div className="absolute top-0.5 left-0.5 bg-black/60 text-white text-xs px-1 py-0.5 rounded">
+                                {item.produto.produto_fotos.length}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Informações do produto */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-white font-medium text-sm line-clamp-1">{item.produto.nome}</h4>
+                                <p className="text-gray-400 text-xs">Código {item.produto.codigo}</p>
+
+                                {/* Informações de origem do pedido */}
+                                {item.pedido_origem_numero && (
+                                  <div className="text-xs text-green-400 mt-1">
+                                    📦 Pedido #{item.pedido_origem_numero}
+                                  </div>
+                                )}
+
+                                {/* Informações de desconto */}
+                                {item.desconto && (
+                                  <div className="text-xs text-blue-400 mt-1">
+                                    💰 {item.desconto.tipo === 'percentual' ? `${item.desconto.percentualDesconto}% OFF` : `${formatCurrency(item.desconto.valorDesconto)} OFF`}
+                                    {item.desconto.origemPedido && ' (do pedido)'}
+                                  </div>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={() => confirmarRemocao(item.id)}
+                                className="text-red-400 hover:text-red-300 transition-colors ml-2"
+                                title="Remover item"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+
+                            {/* Preço e controles */}
+                            <div className="flex justify-between items-center">
+                              <div className="text-sm">
+                                {item.desconto ? (
+                                  <div>
+                                    <span className="text-gray-400 line-through text-xs">
+                                      {formatCurrency(item.desconto.precoOriginal)}
+                                    </span>
+                                    <div className="text-primary-400 font-bold">
+                                      {formatCurrency(item.desconto.precoComDesconto)}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-primary-400 font-bold">
+                                    {formatCurrency(item.subtotal / item.quantidade)}
                                   </span>
                                 )}
                               </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-primary-400 font-bold text-sm">
-                                {formatCurrency(produto.preco)}
-                              </span>
-                              {produto.unidade_medida && (
-                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
-                                  {produto.unidade_medida.sigla}
+
+                              {/* Controles de quantidade */}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
+                                  className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
+                                >
+                                  <Minus size={14} />
+                                </button>
+                                <span className="text-white font-medium min-w-[2rem] text-center">
+                                  {item.quantidade}
                                 </span>
-                              )}
+                                <button
+                                  onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
+                                  className="w-8 h-8 bg-primary-500 hover:bg-primary-600 rounded-full flex items-center justify-center text-white transition-colors"
+                                >
+                                  <Plus size={14} />
+                                </button>
+
+                                {/* Botão para aplicar desconto */}
+                                {!item.desconto && (
+                                  <button
+                                    onClick={() => abrirModalDesconto(item.id)}
+                                    className="w-8 h-8 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                    title="Aplicar desconto"
+                                  >
+                                    <Percent size={14} />
+                                  </button>
+                                )}
+
+                                {/* Botão para remover desconto */}
+                                {item.desconto && (
+                                  <button
+                                    onClick={() => removerDesconto(item.id)}
+                                    className="w-8 h-8 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                    title="Remover desconto"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="text-white font-bold">
+                                {formatCurrency(item.subtotal)}
+                              </div>
                             </div>
-                          )}
-                        </div>
-
-                        {/* Estoque */}
-                        <div className="text-xs text-gray-300 mb-1">
-                          Estoque: {
-                            produtosEstoque[produto.id]
-                              ? formatarEstoque(produtosEstoque[produto.id].total, produto)
-                              : produto.estoque_inicial
-                                ? formatarEstoque(produto.estoque_inicial, produto)
-                                : '0'
-                          }
-                        </div>
-
-                        {/* Desconto por quantidade */}
-                        {produto.desconto_quantidade && produto.quantidade_minima &&
-                         ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
-                          (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade)) && (
-                          <div className="text-xs text-green-400">
-                            {produto.quantidade_minima}+ unid:
-                            {produto.tipo_desconto_quantidade === 'percentual'
-                              ? ` -${produto.percentual_desconto_quantidade}%`
-                              : ` -${formatCurrency(produto.valor_desconto_quantidade || 0)}`}
                           </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
             {/* Menu Fixo no Footer da Área de Produtos - Só aparece quando NÃO está na finalização */}
             {!showFinalizacaoVenda && !showFinalizacaoFinal && (
@@ -2596,7 +2631,7 @@ const PDVPage: React.FC = () => {
           </div>
         )}
 
-        {/* Carrinho de Compras */}
+        {/* Área de Informações e Totais */}
         <div
           className={`${showFinalizacaoVenda ? 'flex-1' : 'w-96'} bg-background-card p-4 flex flex-col h-full relative ${
             showFinalizacaoVenda ? 'border-0' : 'border-l border-gray-800'
@@ -2609,18 +2644,9 @@ const PDVPage: React.FC = () => {
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <ShoppingCart size={20} />
-                Carrinho ({carrinho.reduce((total, item) => total + item.quantidade, 0)})
+                <Calculator size={20} />
+                Resumo da Venda
               </h3>
-              {carrinho.length > 0 && (
-                <button
-                  onClick={confirmarLimparCarrinho}
-                  className="text-red-400 hover:text-red-300 transition-colors"
-                  title="Limpar PDV completo"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
             </div>
 
             {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados */}
@@ -2854,170 +2880,41 @@ const PDVPage: React.FC = () => {
               </div>
             )}
 
-            {/* Lista de Itens do Carrinho */}
-            <div
-              className="flex-1 overflow-y-auto custom-scrollbar mb-4"
-              style={{
-                maxHeight: showFinalizacaoVenda ? 'calc(100vh - 200px)' : 'calc(100vh - 280px)'
-              }}
-            >
+            {/* Área de informações resumidas */}
+            <div className="flex-1 flex flex-col justify-center">
               {carrinho.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">
-                  <ShoppingCart size={48} className="mx-auto mb-2 opacity-50" />
-                  <p>Carrinho vazio</p>
-                  <p className="text-sm">Clique nos produtos para adicionar</p>
+                  <Calculator size={48} className="mx-auto mb-2 opacity-50" />
+                  <p>Nenhum item no carrinho</p>
+                  <p className="text-sm">Use o botão "Produtos" para adicionar itens</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {carrinho.map(item => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className="bg-gray-800/50 rounded-lg p-3"
-                    >
-                      <div className="flex gap-3">
-                        {/* Foto do Produto */}
-                        <div
-                          className="w-16 h-16 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative"
-                          onClick={(e) => abrirGaleria(item.produto, e)}
-                        >
-                          {getFotoPrincipal(item.produto) ? (
-                            <img
-                              src={getFotoPrincipal(item.produto)!.url}
-                              alt={item.produto.nome}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Package size={20} className="text-gray-700" />
-                            </div>
-                          )}
+                <div className="bg-gray-800/30 rounded-lg p-4">
+                  <div className="text-center mb-4">
+                    <div className="text-3xl font-bold text-primary-400 mb-2">
+                      {carrinho.reduce((total, item) => total + item.quantidade, 0)}
+                    </div>
+                    <div className="text-gray-400 text-sm">
+                      {carrinho.length === 1 ? 'produto' : 'produtos'} no carrinho
+                    </div>
+                  </div>
 
-                          {/* Indicador de múltiplas fotos */}
-                          {item.produto.produto_fotos && item.produto.produto_fotos.length > 1 && (
-                            <div className="absolute bottom-1 right-1">
-                              <div className="bg-black/60 text-white text-xs px-1 py-0.5 rounded text-[10px]">
-                                {item.produto.produto_fotos.length}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Conteúdo do Item */}
+                  {/* Lista resumida dos produtos */}
+                  <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                    {carrinho.map(item => (
+                      <div key={item.id} className="flex justify-between items-center text-sm">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-white text-sm font-medium line-clamp-2">
-                                {item.produto.nome}
-                              </h4>
-                              <div className="text-primary-400 text-sm">
-                                <div className="flex items-center gap-1">
-                                  {item.desconto ? (
-                                    <div className="flex items-center gap-2">
-                                      <span className="line-through text-gray-500">
-                                        {formatCurrency(item.desconto.precoOriginal)}
-                                      </span>
-                                      <span className="text-green-400 font-medium">
-                                        {formatCurrency(item.desconto.precoComDesconto)}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    // Mostrar preço com promoção se houver, senão preço normal
-                                    item.produto.promocao && item.produto.valor_desconto ? (
-                                      <div className="flex items-center gap-2">
-                                        <span className="line-through text-gray-500">
-                                          {formatCurrency(item.produto.preco)}
-                                        </span>
-                                        <span className="text-green-400 font-medium">
-                                          {formatCurrency(calcularPrecoFinal(item.produto))}
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      formatCurrency(item.produto.preco)
-                                    )
-                                  )}
-                                  {item.produto.unidade_medida && (
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-300">
-                                      {item.produto.unidade_medida.sigla}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Indicadores de desconto/promoção */}
-                                <div className="flex items-center gap-1 mt-1">
-                                  {item.desconto?.origemPedido && (
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                                      Desconto do pedido #{item.pedido_origem_numero}
-                                    </span>
-                                  )}
-                                  {item.produto.promocao && !item.desconto && (
-                                    <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30">
-                                      Produto em promoção
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => confirmarRemocao(item.id)}
-                              className="text-red-400 hover:text-red-300 transition-colors ml-2 flex-shrink-0"
-                            >
-                              <X size={16} />
-                            </button>
+                          <div className="text-white truncate">{item.produto.nome}</div>
+                          <div className="text-gray-400 text-xs">
+                            {item.quantidade}x {formatCurrency(item.subtotal / item.quantidade)}
                           </div>
-
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
-                                className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
-                              >
-                                <Minus size={14} />
-                              </button>
-                              <span className="text-white font-medium w-8 text-center">
-                                {item.quantidade}
-                              </span>
-                              <button
-                                onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
-                                className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
-                              >
-                                <Plus size={14} />
-                              </button>
-
-                              {/* Botão de Desconto */}
-                              <button
-                                onClick={() => abrirModalDesconto(item.id)}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                                  item.desconto
-                                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                                    : 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                                }`}
-                                title={item.desconto ? 'Editar desconto' : 'Aplicar desconto'}
-                              >
-                                <Percent size={14} />
-                              </button>
-
-                              {/* Botão para remover desconto */}
-                              {item.desconto && (
-                                <button
-                                  onClick={() => removerDesconto(item.id)}
-                                  className="w-8 h-8 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
-                                  title="Remover desconto"
-                                >
-                                  <X size={14} />
-                                </button>
-                              )}
-                            </div>
-                            <div className="text-white font-bold">
-                              {formatCurrency(item.subtotal)}
-                            </div>
-                          </div>
+                        </div>
+                        <div className="text-primary-400 font-medium ml-2">
+                          {formatCurrency(item.subtotal)}
                         </div>
                       </div>
-                    </motion.div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -5358,6 +5255,201 @@ const PDVPage: React.FC = () => {
                 >
                   Remover
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Produtos */}
+      <AnimatePresence>
+        {showAreaProdutos && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowAreaProdutos(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg w-full max-w-6xl h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Package size={20} />
+                  Produtos
+                </h3>
+                <button
+                  onClick={() => setShowAreaProdutos(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="flex-1 p-4 flex flex-col overflow-hidden">
+                {/* Filtros por Categoria */}
+                {grupos.length > 0 && (
+                  <div className="mb-4">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setGrupoSelecionado('todos')}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                          grupoSelecionado === 'todos'
+                            ? 'bg-primary-500 text-white'
+                            : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
+                        }`}
+                      >
+                        Todos
+                      </button>
+                      {grupos.map(grupo => (
+                        <button
+                          key={grupo.id}
+                          onClick={() => setGrupoSelecionado(grupo.id)}
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                            grupoSelecionado === grupo.id
+                              ? 'bg-primary-500 text-white'
+                              : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'
+                          }`}
+                        >
+                          {grupo.nome}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Grid de Produtos */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  {produtosFiltrados.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Package size={48} className="mx-auto mb-4 text-gray-500" />
+                      <p className="text-gray-400">Nenhum produto encontrado</p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+                      {produtosFiltrados.map(produto => (
+                        <motion.div
+                          key={produto.id}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            adicionarAoCarrinho(produto);
+                            setShowAreaProdutos(false);
+                          }}
+                          className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer flex flex-col"
+                        >
+                          {/* Imagem do produto */}
+                          <div
+                            className="h-24 bg-gray-900 relative cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              abrirGaleria(produto, e);
+                            }}
+                          >
+                            {getFotoPrincipal(produto) ? (
+                              <img
+                                src={getFotoPrincipal(produto)!.url}
+                                alt={produto.nome}
+                                className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={24} className="text-gray-700" />
+                              </div>
+                            )}
+
+                            {/* Indicador de múltiplas fotos */}
+                            {produto.produto_fotos && produto.produto_fotos.length > 1 && (
+                              <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                                {produto.produto_fotos.length} fotos
+                              </div>
+                            )}
+
+                            {/* Badge de promoção */}
+                            {produto.promocao && (
+                              <div className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold px-1 py-0.5 rounded">
+                                {produto.tipo_desconto === 'percentual'
+                                  ? `-${produto.valor_desconto}%`
+                                  : formatCurrency(produto.valor_desconto || 0)}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Informações do produto */}
+                          <div className="p-2.5">
+                            <h3 className="text-white text-xs font-medium line-clamp-2 mb-1.5">{produto.nome}</h3>
+
+                            <div className="mb-1.5">
+                              <p className="text-gray-400 text-xs">Código {produto.codigo}</p>
+                            </div>
+
+                            {/* Preço */}
+                            <div className="mb-1.5">
+                              {produto.promocao ? (
+                                <div>
+                                  <span className="text-gray-400 line-through text-xs block">
+                                    {formatCurrency(produto.preco)}
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-primary-400 font-bold text-sm">
+                                      {formatCurrency(calcularPrecoFinal(produto))}
+                                    </span>
+                                    {produto.unidade_medida && (
+                                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                                        {produto.unidade_medida.sigla}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-primary-400 font-bold text-sm">
+                                    {formatCurrency(produto.preco)}
+                                  </span>
+                                  {produto.unidade_medida && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                                      {produto.unidade_medida.sigla}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Estoque */}
+                            <div className="text-xs text-gray-300 mb-1">
+                              Estoque: {
+                                produtosEstoque[produto.id]
+                                  ? formatarEstoque(produtosEstoque[produto.id].total, produto)
+                                  : produto.estoque_inicial
+                                    ? formatarEstoque(produto.estoque_inicial, produto)
+                                    : '0'
+                              }
+                            </div>
+
+                            {/* Desconto por quantidade */}
+                            {produto.desconto_quantidade && produto.quantidade_minima &&
+                             ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                              (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade)) && (
+                              <div className="text-xs text-green-400">
+                                {produto.quantidade_minima}+ unid:
+                                {produto.tipo_desconto_quantidade === 'percentual'
+                                  ? ` -${produto.percentual_desconto_quantidade}%`
+                                  : ` -${formatCurrency(produto.valor_desconto_quantidade || 0)}`}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
           </motion.div>
