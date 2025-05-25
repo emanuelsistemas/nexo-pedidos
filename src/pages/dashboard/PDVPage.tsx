@@ -935,8 +935,12 @@ const PDVPage: React.FC = () => {
     const larguraBotaoNavegacao = 40; // Largura dos botões < e >
     const larguraMinimaBotao = 120;
 
+    // Ajustar largura disponível baseado se há itens no carrinho
+    // Se há itens no carrinho, a área principal ocupa 60% da tela (3/5)
+    const larguraAreaPrincipal = carrinho.length > 0 ? larguraTela * 0.6 : larguraTela;
+
     // Calcular quantos botões cabem (considerando espaço para botões de navegação se necessário)
-    const larguraDisponivel = larguraTela - (menuStartIndex > 0 || menuStartIndex + visibleMenuItems < menuPDVItems.length ? larguraBotaoNavegacao * 2 : 0);
+    const larguraDisponivel = larguraAreaPrincipal - (menuStartIndex > 0 || menuStartIndex + visibleMenuItems < menuPDVItems.length ? larguraBotaoNavegacao * 2 : 0);
     const itensPossiveis = Math.floor(larguraDisponivel / larguraMinimaBotao);
 
     return Math.max(1, Math.min(itensPossiveis, menuPDVItems.length));
@@ -951,7 +955,7 @@ const PDVPage: React.FC = () => {
     setMenuStartIndex(Math.min(maxIndex, menuStartIndex + 1));
   };
 
-  // Calcular itens visíveis baseado no tamanho da tela
+  // Calcular itens visíveis baseado no tamanho da tela e estado do carrinho
   useEffect(() => {
     const handleResize = () => {
       const novosItensVisiveis = calcularItensVisiveis();
@@ -968,7 +972,7 @@ const PDVPage: React.FC = () => {
     window.addEventListener('resize', handleResize);
 
     return () => window.removeEventListener('resize', handleResize);
-  }, [menuStartIndex, menuPDVItems.length]);
+  }, [menuStartIndex, menuPDVItems.length, carrinho.length]); // Adicionar carrinho.length como dependência
 
   // Atualizar data e hora a cada segundo
   useEffect(() => {
@@ -2675,9 +2679,9 @@ const PDVPage: React.FC = () => {
         className="flex overflow-hidden"
         style={{ height: 'calc(100vh - 64px)' }}
       >
-        {/* Área dos Itens do Carrinho (ocupa toda a largura) */}
+        {/* Área dos Itens do Carrinho - ajusta largura baseado se há itens no carrinho */}
         {!showFinalizacaoFinal && (
-          <div className="w-full p-4 flex flex-col h-full relative overflow-hidden">
+          <div className={`${carrinho.length > 0 ? 'w-3/5' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
             <div className="h-full flex flex-col">
 
 
