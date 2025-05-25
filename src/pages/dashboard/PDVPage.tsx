@@ -31,7 +31,8 @@ import {
   Table,
   ArrowUpDown,
   BookOpen,
-  MessageCircle
+  MessageCircle,
+  Bike
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -829,6 +830,20 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
         setShowComandasModal(true);
+      }
+    },
+    {
+      id: 'delivery',
+      icon: Bike,
+      label: 'Delivery',
+      color: 'primary',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        // TODO: Implementar funcionalidade do Delivery
+        toast.info('Funcionalidade do Delivery em desenvolvimento');
       }
     },
     {
