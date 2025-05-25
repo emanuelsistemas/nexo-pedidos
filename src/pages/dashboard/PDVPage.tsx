@@ -29,7 +29,9 @@ import {
   AlertTriangle,
   Menu,
   Table,
-  ArrowUpDown
+  ArrowUpDown,
+  BookOpen,
+  MessageCircle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -212,6 +214,10 @@ const PDVPage: React.FC = () => {
 
   // Estado para controlar visibilidade do menu no PDV
   const [showMenuPDV, setShowMenuPDV] = useState(false);
+
+  // Estados para navegação do menu PDV
+  const [menuStartIndex, setMenuStartIndex] = useState(0);
+  const [visibleMenuItems, setVisibleMenuItems] = useState(9); // Quantos itens são visíveis
 
   // Estados para pedidos importados (múltiplos)
   const [pedidosImportados, setPedidosImportados] = useState<any[]>([]);
@@ -772,6 +778,34 @@ const PDVPage: React.FC = () => {
       }
     },
     {
+      id: 'cardapio-digital',
+      icon: BookOpen,
+      label: 'Cardápio Digital',
+      color: 'primary',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        // TODO: Implementar funcionalidade do cardápio digital
+        toast.info('Funcionalidade do Cardápio Digital em desenvolvimento');
+      }
+    },
+    {
+      id: 'whatsapp',
+      icon: MessageCircle,
+      label: 'WhatsApp',
+      color: 'primary',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        // TODO: Implementar funcionalidade do WhatsApp
+        toast.info('Funcionalidade do WhatsApp em desenvolvimento');
+      }
+    },
+    {
       id: 'mesas',
       icon: Table,
       label: 'Mesas',
@@ -878,6 +912,48 @@ const PDVPage: React.FC = () => {
     };
     return colorMap[color as keyof typeof colorMap] || colorMap.primary;
   };
+
+  // Funções para navegação do menu PDV
+  const calcularItensVisiveis = () => {
+    if (typeof window === 'undefined') return 9;
+    const larguraTela = window.innerWidth;
+    const larguraBotaoNavegacao = 40; // Largura dos botões < e >
+    const larguraMinimaBotao = 120;
+
+    // Calcular quantos botões cabem (considerando espaço para botões de navegação se necessário)
+    const larguraDisponivel = larguraTela - (menuStartIndex > 0 || menuStartIndex + visibleMenuItems < menuPDVItems.length ? larguraBotaoNavegacao * 2 : 0);
+    const itensPossiveis = Math.floor(larguraDisponivel / larguraMinimaBotao);
+
+    return Math.max(1, Math.min(itensPossiveis, menuPDVItems.length));
+  };
+
+  const navegarMenuAnterior = () => {
+    setMenuStartIndex(Math.max(0, menuStartIndex - 1));
+  };
+
+  const navegarMenuProximo = () => {
+    const maxIndex = Math.max(0, menuPDVItems.length - visibleMenuItems);
+    setMenuStartIndex(Math.min(maxIndex, menuStartIndex + 1));
+  };
+
+  // Calcular itens visíveis baseado no tamanho da tela
+  useEffect(() => {
+    const handleResize = () => {
+      const novosItensVisiveis = calcularItensVisiveis();
+      setVisibleMenuItems(novosItensVisiveis);
+
+      // Ajustar startIndex se necessário
+      const maxIndex = Math.max(0, menuPDVItems.length - novosItensVisiveis);
+      if (menuStartIndex > maxIndex) {
+        setMenuStartIndex(maxIndex);
+      }
+    };
+
+    handleResize(); // Calcular inicialmente
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, [menuStartIndex, menuPDVItems.length]);
 
   // Atualizar data e hora a cada segundo
   useEffect(() => {
@@ -2881,12 +2957,23 @@ const PDVPage: React.FC = () => {
             {!showFinalizacaoFinal && (
               <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
                 {/* Container sem padding para maximizar espaço */}
-                <div className="h-14">
-                  {/* Itens do Menu com Scroll Horizontal */}
-                  <div className="flex items-center h-full overflow-x-auto overflow-y-visible custom-scrollbar min-w-0">
-                    {menuPDVItems.map((item, index) => {
+                <div className="h-14 flex items-center">
+                  {/* Botão Anterior */}
+                  {menuStartIndex > 0 && (
+                    <button
+                      onClick={navegarMenuAnterior}
+                      className="w-10 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-r border-gray-800"
+                    >
+                      <ChevronLeft size={20} />
+                    </button>
+                  )}
+
+                  {/* Itens do Menu Visíveis */}
+                  <div className="flex items-center h-full flex-1">
+                    {menuPDVItems.slice(menuStartIndex, menuStartIndex + visibleMenuItems).map((item, index) => {
                       const IconComponent = item.icon;
-                      const teclaAtalho = `F${index + 1}`;
+                      const originalIndex = menuStartIndex + index;
+                      const teclaAtalho = `F${originalIndex + 1}`;
                       return (
                         <button
                           key={item.id}
@@ -2912,6 +2999,16 @@ const PDVPage: React.FC = () => {
                       );
                     })}
                   </div>
+
+                  {/* Botão Próximo */}
+                  {menuStartIndex + visibleMenuItems < menuPDVItems.length && (
+                    <button
+                      onClick={navegarMenuProximo}
+                      className="w-10 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-l border-gray-800"
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  )}
                 </div>
               </div>
             )}
