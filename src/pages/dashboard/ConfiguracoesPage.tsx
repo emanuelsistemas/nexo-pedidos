@@ -1701,10 +1701,19 @@ const ConfiguracoesPage: React.FC = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Obter empresa_id do usuário da tabela usuarios
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
       const { data: config } = await supabase
         .from('pdv_config')
         .select('*')
-        .eq('empresa_id', user.user_metadata.empresa_id)
+        .eq('empresa_id', usuarioData.empresa_id)
         .single();
 
       if (config) {
@@ -1723,9 +1732,42 @@ const ConfiguracoesPage: React.FC = () => {
           venda_codigo_barras: config.venda_codigo_barras || false,
           forca_venda_fiscal_cartao: config.forca_venda_fiscal_cartao || false
         });
+      } else {
+        // Se não encontrou configuração, definir valores padrão
+        setPdvConfig({
+          comandas: false,
+          mesas: false,
+          vendedor: false,
+          exibe_foto_item: false,
+          seleciona_clientes: false,
+          controla_caixa: false,
+          agrupa_itens: false,
+          delivery: false,
+          cardapio_digital: false,
+          delivery_chat_ia: false,
+          baixa_estoque_pdv: false,
+          venda_codigo_barras: false,
+          forca_venda_fiscal_cartao: false
+        });
       }
     } catch (error) {
       console.error('Erro ao carregar configurações do PDV:', error);
+      // Em caso de erro, definir valores padrão
+      setPdvConfig({
+        comandas: false,
+        mesas: false,
+        vendedor: false,
+        exibe_foto_item: false,
+        seleciona_clientes: false,
+        controla_caixa: false,
+        agrupa_itens: false,
+        delivery: false,
+        cardapio_digital: false,
+        delivery_chat_ia: false,
+        baixa_estoque_pdv: false,
+        venda_codigo_barras: false,
+        forca_venda_fiscal_cartao: false
+      });
     }
   };
 

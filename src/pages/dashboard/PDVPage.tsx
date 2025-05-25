@@ -921,6 +921,26 @@ const PDVPage: React.FC = () => {
       if (item.id === 'comandas') {
         return pdvConfig?.comandas === true;
       }
+      // Se for o item 'mesas', só mostrar se a configuração estiver habilitada
+      if (item.id === 'mesas') {
+        return pdvConfig?.mesas === true;
+      }
+      // Se for o item 'delivery', só mostrar se a configuração estiver habilitada
+      if (item.id === 'delivery') {
+        return pdvConfig?.delivery === true;
+      }
+      // Se for o item 'cardapio-digital', só mostrar se a configuração estiver habilitada
+      if (item.id === 'cardapio-digital') {
+        return pdvConfig?.cardapio_digital === true;
+      }
+      // Se for o item 'whatsapp', só mostrar se a configuração de delivery como chat IA estiver habilitada
+      if (item.id === 'whatsapp') {
+        return pdvConfig?.delivery_chat_ia === true;
+      }
+      // Se for um dos itens de controle de caixa, só mostrar se a configuração estiver habilitada
+      if (['sangria', 'suprimento', 'pagamentos'].includes(item.id)) {
+        return pdvConfig?.controla_caixa === true;
+      }
       // Para outros itens, sempre mostrar (pode adicionar outras condições aqui)
       return true;
     });
