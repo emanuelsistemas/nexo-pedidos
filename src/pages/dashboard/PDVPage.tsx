@@ -740,8 +740,8 @@ const PDVPage: React.FC = () => {
 
 
 
-  // Definir itens do menu PDV
-  const menuPDVItems = [
+  // Definir todos os itens do menu PDV
+  const allMenuPDVItems = [
     {
       id: 'produtos',
       icon: Package,
@@ -914,7 +914,20 @@ const PDVPage: React.FC = () => {
     }
   ];
 
+  // Função para filtrar itens do menu baseado nas configurações do PDV
+  const getFilteredMenuItems = () => {
+    return allMenuPDVItems.filter(item => {
+      // Se for o item 'comandas', só mostrar se a configuração estiver habilitada
+      if (item.id === 'comandas') {
+        return pdvConfig?.comandas === true;
+      }
+      // Para outros itens, sempre mostrar (pode adicionar outras condições aqui)
+      return true;
+    });
+  };
 
+  // Obter itens do menu filtrados
+  const menuPDVItems = getFilteredMenuItems();
 
   // Função para obter classes de cor
   const getColorClasses = (color: string) => {
@@ -974,6 +987,27 @@ const PDVPage: React.FC = () => {
 
     return () => window.removeEventListener('resize', handleResize);
   }, [menuStartIndex, menuPDVItems.length, carrinho.length]); // Adicionar carrinho.length como dependência
+
+  // Listener para eventos de mudança na configuração do PDV
+  useEffect(() => {
+    const handlePdvConfigChange = (event: CustomEvent) => {
+      const { field, value, config } = event.detail;
+
+      // Atualizar configuração local
+      setPdvConfig(config);
+
+      // Log para debug (pode remover em produção)
+      console.log(`Configuração PDV atualizada: ${field} = ${value}`);
+    };
+
+    // Adicionar listener para o evento customizado
+    window.addEventListener('pdvConfigChanged', handlePdvConfigChange as EventListener);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('pdvConfigChanged', handlePdvConfigChange as EventListener);
+    };
+  }, []);
 
   // Atualizar data e hora a cada segundo
   useEffect(() => {
@@ -2682,6 +2716,10 @@ const PDVPage: React.FC = () => {
       >
         {/* Área dos Itens do Carrinho - mantém largura fixa quando há itens */}
         <div className={`${carrinho.length > 0 ? 'w-2/3' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
+          {/* Overlay para desativar interação quando finalização está aberta */}
+          {showFinalizacaoFinal && (
+            <div className="absolute inset-0 bg-black/20 z-20 cursor-not-allowed" />
+          )}
             <div className="h-full flex flex-col">
 
 

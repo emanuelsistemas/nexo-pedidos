@@ -1973,6 +1973,16 @@ const ConfiguracoesPage: React.FC = () => {
         if (error) throw error;
       }
 
+      // Disparar evento customizado para notificar mudanças na configuração do PDV
+      const pdvConfigEvent = new CustomEvent('pdvConfigChanged', {
+        detail: {
+          field,
+          value,
+          config: configData
+        }
+      });
+      window.dispatchEvent(pdvConfigEvent);
+
       // Mostrar mensagem de sucesso
       const fieldNames: { [key: string]: string } = {
         comandas: 'Comandas',
