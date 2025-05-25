@@ -24,7 +24,8 @@ import {
   UserCheck,
   QrCode,
   Percent,
-  ShoppingBag
+  ShoppingBag,
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -189,6 +190,12 @@ const PDVPage: React.FC = () => {
   // Estado para confirmação de limpar carrinho
   const [showConfirmLimparCarrinho, setShowConfirmLimparCarrinho] = useState(false);
 
+  // Estado para confirmação de limpeza geral do PDV
+  const [showConfirmLimparTudoPDV, setShowConfirmLimparTudoPDV] = useState(false);
+
+  // Estado para dados do usuário
+  const [userData, setUserData] = useState<{ nome: string } | null>(null);
+
   // Estados para pedidos importados (múltiplos)
   const [pedidosImportados, setPedidosImportados] = useState<any[]>([]);
   const [showConfirmRemovePedidoImportado, setShowConfirmRemovePedidoImportado] = useState(false);
@@ -314,6 +321,69 @@ const PDVPage: React.FC = () => {
       toast.success(`Pedido #${pedidoParaRemover.numero} removido! ${totalProdutosRemovidos} produto(s) e ${totalItensRemovidos} item(s) foram removidos do carrinho.`);
     } else {
       toast.success(`Pedido #${pedidoParaRemover.numero} removido com sucesso!`);
+    }
+  };
+
+  // Função para limpar tudo do PDV (limpeza geral)
+  const limparTudoPDV = () => {
+    // Limpar carrinho
+    setCarrinho([]);
+
+    // Limpar cliente selecionado
+    setClienteSelecionado(null);
+
+    // Limpar pedidos importados
+    setPedidosImportados([]);
+
+    // Limpar descontos
+    setDescontosCliente({ prazo: [], valor: [] });
+    setDescontoPrazoSelecionado(null);
+
+    // Resetar tipo de pagamento
+    setTipoPagamento('vista');
+    setFormaPagamentoSelecionada(null);
+
+    // Limpar pagamentos parciais
+    setValorParcial('');
+    setPagamentosParciais([]);
+    setTrocoCalculado(0);
+
+    // Fechar telas de finalização
+    setShowFinalizacaoFinal(false);
+
+    // Limpar dados da nota fiscal
+    setCpfCnpjNota('');
+    setClienteEncontrado(null);
+    setTipoDocumento('cpf');
+    setErroValidacao('');
+
+    // Limpar localStorage
+    clearPDVState();
+
+    // Fechar modal de confirmação
+    setShowConfirmLimparTudoPDV(false);
+
+    // Toast de confirmação
+    toast.success('PDV limpo com sucesso! Todos os dados foram removidos.');
+  };
+
+  // Função para carregar dados do usuário
+  const loadUserData = async () => {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('nome')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (usuarioData) {
+        setUserData({ nome: usuarioData.nome });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados do usuário:', error);
     }
   };
 
@@ -524,6 +594,7 @@ const PDVPage: React.FC = () => {
     loadData();
     loadPDVState(); // Carrega o estado salvo do PDV
     loadContadorPedidos(); // Carrega contador inicial
+    loadUserData(); // Carrega dados do usuário
 
     // Adiciona listener para salvar antes de fechar a página
     const handleBeforeUnload = () => {
@@ -2171,6 +2242,8 @@ const PDVPage: React.FC = () => {
   const limparCarrinhoCompleto = () => {
     setCarrinho([]);
     setClienteSelecionado(null);
+    setPedidosImportados([]); // Limpar pedidos importados
+    setDescontoPrazoSelecionado(null); // Limpar desconto selecionado
     limparPagamentosParciais();
     clearPDVState();
     setShowConfirmLimparCarrinho(false);
@@ -2370,22 +2443,7 @@ const PDVPage: React.FC = () => {
         {!showFinalizacaoFinal && (
           <div className="w-full p-4 flex flex-col h-full relative overflow-hidden">
             <div className="h-full flex flex-col">
-              {/* Título da área de itens */}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <ShoppingCart size={20} />
-                  Itens do Carrinho ({carrinho.reduce((total, item) => total + item.quantidade, 0)})
-                </h3>
-                {carrinho.length > 0 && (
-                  <button
-                    onClick={confirmarLimparCarrinho}
-                    className="text-red-400 hover:text-red-300 transition-colors"
-                    title="Limpar PDV completo"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                )}
-              </div>
+
 
               {/* Barra de Busca */}
               <div className="mb-4">
@@ -2441,10 +2499,12 @@ const PDVPage: React.FC = () => {
                 style={{ paddingBottom: '60px' }}
               >
                 {carrinho.length === 0 ? (
-                  <div className="text-center text-gray-500 py-8">
-                    <ShoppingCart size={48} className="mx-auto mb-2 opacity-50" />
-                    <p>Carrinho vazio</p>
-                    <p className="text-sm">Use o botão "Produtos" para adicionar itens</p>
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center text-gray-500">
+                      <ShoppingCart size={64} className="mx-auto mb-4 opacity-50" />
+                      <p className="text-lg font-medium mb-2">Carrinho vazio</p>
+                      <p className="text-sm">Use o botão "Produtos" para adicionar itens</p>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -2634,9 +2694,17 @@ const PDVPage: React.FC = () => {
           >
 
 
+            {/* Título da área de finalização */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <User size={20} />
+                Caixa: {userData?.nome || 'Usuário'}
+              </h3>
+            </div>
+
             {/* Conteúdo scrollável */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4"
-              style={{ maxHeight: 'calc(100vh - 160px)' }}
+              style={{ maxHeight: 'calc(100vh - 180px)' }}
             >
 
               {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados */}
@@ -2675,8 +2743,20 @@ const PDVPage: React.FC = () => {
 
                   {/* Informações dos Pedidos Importados */}
                   {pedidosImportados.map((pedido, index) => (
-                    <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-3">
+                    <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 relative">
+                      {/* Botão X para remover pedido */}
+                      <button
+                        onClick={() => {
+                          setPedidoParaRemover(pedido);
+                          setShowConfirmRemovePedidoImportado(true);
+                        }}
+                        className="absolute top-2 right-2 text-red-400 hover:text-red-300 transition-colors"
+                        title="Remover pedido importado"
+                      >
+                        <X size={16} />
+                      </button>
+
+                      <div className="flex items-center gap-2 mb-3 pr-6">
                         <ShoppingBag size={16} className="text-green-400" />
                         <div className="flex-1">
                           <div className="text-sm text-green-400">Pedido Importado</div>
@@ -2857,91 +2937,7 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Resumo da Venda */}
-              <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
-                {(() => {
-                  const subtotal = calcularTotal();
-                  const totalFinal = calcularTotalComDesconto();
 
-                  // Calcular desconto por prazo se selecionado
-                  let descontoPrazo = null;
-                  if (descontoPrazoSelecionado) {
-                    const desconto = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
-                    if (desconto) {
-                      const valorDesconto = (subtotal * desconto.percentual) / 100;
-                      descontoPrazo = {
-                        tipo: desconto.tipo,
-                        percentual: desconto.percentual,
-                        valor: valorDesconto,
-                        prazo_dias: desconto.prazo_dias
-                      };
-                    }
-                  }
-
-                  // Calcular desconto por valor (aplicado após desconto por prazo)
-                  const subtotalComDescontoPrazo = descontoPrazo
-                    ? (descontoPrazo.tipo === 'desconto' ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor)
-                    : subtotal;
-                  const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
-
-                  return (
-                    <>
-                      {/* Subtotal */}
-                      <div className="flex justify-between items-center text-sm mb-2">
-                        <span className="text-gray-400">Subtotal:</span>
-                        <span className="text-white">{formatCurrency(subtotal)}</span>
-                      </div>
-
-                      {/* Desconto por Prazo (se aplicável) */}
-                      {descontoPrazo && (
-                        <div className="flex justify-between items-center text-sm mb-2">
-                          <span className={`${
-                            descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
-                          }`}>
-                            {descontoPrazo.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} Prazo ({descontoPrazo.prazo_dias} dias):
-                          </span>
-                          <span className={`${
-                            descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
-                          }`}>
-                            {descontoPrazo.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoPrazo.valor)}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Desconto por Valor (se aplicável) */}
-                      {descontoValor && (
-                        <div className="flex justify-between items-center text-sm mb-2">
-                          <span className={`${
-                            descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                          }`}>
-                            {descontoValor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} ({descontoValor.percentual}%):
-                          </span>
-                          <span className={`${
-                            descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                          }`}>
-                            {descontoValor.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoValor.valor)}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Total Final */}
-                      <div className="flex justify-between items-center mb-2 pt-2 border-t border-gray-700">
-                        <span className="text-gray-400">Total da Venda:</span>
-                        <span className="text-2xl font-bold text-primary-400">
-                          {formatCurrency(totalFinal)}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-400">Itens:</span>
-                        <span className="text-white">
-                          {carrinho.reduce((total, item) => total + item.quantidade, 0)}
-                        </span>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
 
               {/* Tipo de Pagamento */}
               <div className="mb-4">
@@ -3097,16 +3093,99 @@ const PDVPage: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Resumo da Venda */}
+              <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+                {(() => {
+                  const subtotal = calcularTotal();
+                  const totalFinal = calcularTotalComDesconto();
+
+                  // Calcular desconto por prazo se selecionado
+                  let descontoPrazo = null;
+                  if (descontoPrazoSelecionado) {
+                    const desconto = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
+                    if (desconto) {
+                      const valorDesconto = (subtotal * desconto.percentual) / 100;
+                      descontoPrazo = {
+                        tipo: desconto.tipo,
+                        percentual: desconto.percentual,
+                        valor: valorDesconto,
+                        prazo_dias: desconto.prazo_dias
+                      };
+                    }
+                  }
+
+                  // Calcular desconto por valor (aplicado após desconto por prazo)
+                  const subtotalComDescontoPrazo = descontoPrazo
+                    ? (descontoPrazo.tipo === 'desconto' ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor)
+                    : subtotal;
+                  const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
+
+                  return (
+                    <>
+                      {/* Subtotal */}
+                      <div className="flex justify-between items-center text-sm mb-2">
+                        <span className="text-gray-400">Subtotal:</span>
+                        <span className="text-white">{formatCurrency(subtotal)}</span>
+                      </div>
+
+                      {/* Itens */}
+                      <div className="flex justify-between items-center text-sm mb-2">
+                        <span className="text-gray-400">Itens:</span>
+                        <span className="text-white">{carrinho.reduce((total, item) => total + item.quantidade, 0)}</span>
+                      </div>
+
+                      {/* Desconto por Prazo (se aplicável) */}
+                      {descontoPrazo && (
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span className={`${
+                            descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
+                          }`}>
+                            {descontoPrazo.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} Prazo ({descontoPrazo.prazo_dias} dias):
+                          </span>
+                          <span className={`${
+                            descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
+                          }`}>
+                            {descontoPrazo.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoPrazo.valor)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Desconto por Valor (se aplicável) */}
+                      {descontoValor && (
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span className={`${
+                            descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {descontoValor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} ({descontoValor.percentual}%):
+                          </span>
+                          <span className={`${
+                            descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {descontoValor.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoValor.valor)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Total Final */}
+                      <div className="flex justify-between items-center mb-2 pt-2 border-t border-gray-700">
+                        <span className="text-gray-400">Total da Venda:</span>
+                        <span className="text-2xl font-bold text-primary-400">
+                          {formatCurrency(totalFinal)}
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
 
             {/* Footer fixo com botões de ação */}
             <div className="border-t border-gray-800 p-4 flex-shrink-0">
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    limparPagamentosParciais();
-                  }}
-                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                  onClick={() => setShowConfirmLimparTudoPDV(true)}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
@@ -4939,7 +5018,7 @@ const PDVPage: React.FC = () => {
 
               <p className="text-gray-300 mb-6">
                 Tem certeza que deseja limpar todo o PDV?
-                Você perderá {carrinho.length} produto(s) no carrinho, cliente selecionado e pagamentos em andamento.
+                Você perderá {carrinho.length} produto(s) no carrinho{pedidosImportados.length > 0 && `, ${pedidosImportados.length} pedido(s) importado(s)`}, cliente selecionado e pagamentos em andamento.
               </p>
 
               <div className="flex gap-3">
@@ -5294,6 +5373,115 @@ const PDVPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal de confirmação para remover pedido importado */}
+      {showConfirmRemovePedidoImportado && pedidoParaRemover && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background-card border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <AlertTriangle size={20} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Remover Pedido Importado</h3>
+                <p className="text-sm text-gray-400">Esta ação não pode ser desfeita</p>
+              </div>
+            </div>
+
+            <p className="text-gray-300 mb-6">
+              Tem certeza que deseja remover o pedido <span className="text-white font-medium">#{pedidoParaRemover.numero}</span>?
+              <br />
+              <br />
+              <span className="text-yellow-400">⚠️ Isso irá remover:</span>
+              <br />
+              • Todos os itens deste pedido do carrinho
+              <br />
+              • As informações do pedido importado
+              <br />
+              {pedidosImportados.length === 1 && !pdvConfig?.seleciona_clientes && (
+                <>
+                  • O cliente importado
+                  <br />
+                  • Os descontos de faturamento
+                  <br />
+                </>
+              )}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowConfirmRemovePedidoImportado(false);
+                  setPedidoParaRemover(null);
+                }}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={removerPedidoImportado}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação para limpeza geral do PDV */}
+      {showConfirmLimparTudoPDV && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background-card border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                <AlertTriangle size={20} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Cancelar Venda</h3>
+                <p className="text-sm text-gray-400">Esta ação irá limpar todos os dados</p>
+              </div>
+            </div>
+
+            <p className="text-gray-300 mb-6">
+              Tem certeza que deseja cancelar a venda e limpar todos os dados do PDV?
+              <br />
+              <br />
+              <span className="text-yellow-400">⚠️ Isso irá remover:</span>
+              <br />
+              • Todos os itens do carrinho
+              <br />
+              • Cliente selecionado
+              <br />
+              • Pedidos importados
+              <br />
+              • Formas de pagamento configuradas
+              <br />
+              • Dados da nota fiscal
+              <br />
+              • Todos os descontos aplicados
+              <br />
+              <br />
+              <span className="text-red-400 font-medium">Esta ação não pode ser desfeita!</span>
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmLimparTudoPDV(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Manter Dados
+              </button>
+              <button
+                onClick={limparTudoPDV}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Limpar Tudo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
