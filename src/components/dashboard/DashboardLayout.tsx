@@ -34,10 +34,13 @@ const DashboardLayout: React.FC = () => {
   return (
     <SessionCheck fallback={<LoadingScreen />}>
       <div className="min-h-screen bg-background-dark">
-        <Sidebar />
+        {/* Renderizar Sidebar apenas se não estiver na página do PDV */}
+        {!isPDVPage && <Sidebar />}
         <motion.main
-          initial={{ marginLeft: '72px' }}
-          animate={{ marginLeft: isExpanded ? '240px' : '72px' }}
+          initial={{ marginLeft: isPDVPage ? '0px' : '72px' }}
+          animate={{
+            marginLeft: isPDVPage ? '0px' : (isExpanded ? '240px' : '72px')
+          }}
           transition={{ duration: 0.3, ease: 'easeInOut' }}
           className="min-h-screen overflow-y-auto custom-scrollbar"
         >

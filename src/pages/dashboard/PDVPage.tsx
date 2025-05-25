@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   ShoppingCart,
@@ -25,13 +26,16 @@ import {
   QrCode,
   Percent,
   ShoppingBag,
-  AlertTriangle
+  AlertTriangle,
+  Menu
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import { formatarPreco } from '../../utils/formatters';
 import { EVENT_TYPES, contarPedidosPendentes, PedidoEventData, RecarregarEventData } from '../../utils/eventSystem';
+import Sidebar from '../../components/dashboard/Sidebar';
+import { useSidebarStore } from '../../store/sidebarStore';
 
 interface Produto {
   id: string;
@@ -106,6 +110,8 @@ interface EstoqueProduto {
 
 const PDVPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
+  const navigate = useNavigate();
+  const { isExpanded, toggle } = useSidebarStore();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
@@ -199,6 +205,9 @@ const PDVPage: React.FC = () => {
 
   // Estado para dados do usuário
   const [userData, setUserData] = useState<{ nome: string } | null>(null);
+
+  // Estado para controlar visibilidade do menu no PDV
+  const [showMenuPDV, setShowMenuPDV] = useState(false);
 
   // Estados para pedidos importados (múltiplos)
   const [pedidosImportados, setPedidosImportados] = useState<any[]>([]);
@@ -2472,13 +2481,54 @@ const PDVPage: React.FC = () => {
   }
 
   return (
-    <div
-      className="bg-background-dark overflow-hidden"
-      style={{ height: '100vh' }}
-    >
+    <div className="bg-background-dark overflow-hidden flex" style={{ height: '100vh' }}>
+      {/* Sidebar do menu - aparece quando showMenuPDV é true */}
+      <AnimatePresence>
+        {showMenuPDV && (
+          <motion.div
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: isExpanded ? '240px' : '72px', opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className="flex-shrink-0 overflow-hidden"
+          >
+            <div style={{ width: isExpanded ? '240px' : '72px' }}>
+              <Sidebar />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Conteúdo principal do PDV */}
+      <motion.div
+        initial={{ marginLeft: 0 }}
+        animate={{ marginLeft: 0 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        className="flex-1 bg-background-dark overflow-hidden"
+        style={{ height: '100vh' }}
+      >
       {/* Header */}
-      <div className="bg-background-card border-b border-gray-800 h-16 flex items-center justify-between px-4">
-        <div></div> {/* Espaço vazio à esquerda */}
+      <div className="bg-background-card border-b border-gray-800 h-16 flex items-center justify-between pl-2 pr-4">
+        {/* Botão para mostrar/ocultar menu */}
+        <div className="flex items-center">
+          <button
+            onClick={() => {
+              setShowMenuPDV(!showMenuPDV);
+              // Forçar o sidebar a ficar retraído quando abrir no PDV
+              if (!showMenuPDV && isExpanded) {
+                toggle();
+              }
+            }}
+            className="w-8 h-8 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
+            title={showMenuPDV ? "Ocultar menu" : "Mostrar menu"}
+          >
+            {showMenuPDV ? (
+              <ChevronLeft size={16} className="group-hover:scale-110 transition-transform" />
+            ) : (
+              <ChevronRight size={16} className="group-hover:scale-110 transition-transform" />
+            )}
+          </button>
+        </div>
         <div className="text-5xl font-bold text-primary-400">
           {formatCurrencyWithoutSymbol(calcularTotal())}
         </div>
@@ -5867,6 +5917,7 @@ const PDVPage: React.FC = () => {
           </div>
         </div>
       )}
+      </motion.div>
 
       {/* Modal de Produto Não Encontrado */}
       {showProdutoNaoEncontrado && (
