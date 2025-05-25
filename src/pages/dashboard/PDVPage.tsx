@@ -195,6 +195,7 @@ const PDVPage: React.FC = () => {
 
   // Estados para tela de finalização final
   const [showFinalizacaoFinal, setShowFinalizacaoFinal] = useState(false);
+  const [showFinalizacaoNaAreaPagamento, setShowFinalizacaoNaAreaPagamento] = useState(false);
   const [cpfCnpjNota, setCpfCnpjNota] = useState('');
   const [clienteEncontrado, setClienteEncontrado] = useState<Cliente | null>(null);
   const [tipoDocumento, setTipoDocumento] = useState<'cpf' | 'cnpj'>('cpf');
@@ -2676,12 +2677,11 @@ const PDVPage: React.FC = () => {
       </div>
 
       <div
-        className="flex overflow-hidden"
+        className="flex overflow-hidden relative"
         style={{ height: 'calc(100vh - 64px)' }}
       >
-        {/* Área dos Itens do Carrinho - ajusta largura baseado se há itens no carrinho */}
-        {!showFinalizacaoFinal && (
-          <div className={`${carrinho.length > 0 ? 'w-2/3' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
+        {/* Área dos Itens do Carrinho - mantém largura fixa quando há itens */}
+        <div className={`${carrinho.length > 0 ? 'w-2/3' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
             <div className="h-full flex flex-col">
 
 
@@ -3033,7 +3033,6 @@ const PDVPage: React.FC = () => {
             )}
             </div>
           </div>
-        )}
 
         {/* Área de Finalização de Venda - Só aparece quando há itens */}
         {!showFinalizacaoFinal && carrinho.length > 0 && (
@@ -3763,7 +3762,7 @@ const PDVPage: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Área de Finalização Final */}
+        {/* Área de Finalização Final - Sobrepõe a área de pagamento */}
         {showFinalizacaoFinal && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
@@ -3773,7 +3772,7 @@ const PDVPage: React.FC = () => {
               duration: 0.5,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full"
+            className="absolute top-0 right-0 w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full z-10"
           >
             {/* Header fixo */}
             <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
