@@ -8,6 +8,7 @@ import ClienteDropdown from '../../components/comum/ClienteDropdown';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 import { verificarTipoControleEstoque, atualizarEstoquePorPedido } from '../../utils/estoqueUtils';
 import { isDesktopScreen } from '../../config/responsive';
+import { dispatchPedidoCriado, dispatchPedidoAtualizado } from '../../utils/eventSystem';
 
 interface Empresa {
   id: string;
@@ -1077,6 +1078,16 @@ const UserNovoPedidoPage: React.FC = () => {
         if (itensError) throw itensError;
 
         showMessage('success', 'Pedido atualizado com sucesso!');
+
+        // Disparar evento para atualizar contador no PDV
+        dispatchPedidoAtualizado({
+          pedidoId: id,
+          numero: pedido?.numero || '',
+          status: 'pendente',
+          empresaId: empresaSelecionada,
+          valorTotal: valorTotal,
+          clienteNome: clienteNome
+        });
       } else {
         // Modo de criação - criar novo pedido
         // Gerar número do pedido (formato: ANO+MES+DIA+HORA+MINUTO+SEGUNDO)
@@ -1148,6 +1159,16 @@ const UserNovoPedidoPage: React.FC = () => {
         }
 
         showMessage('success', 'Pedido criado com sucesso!');
+
+        // Disparar evento para atualizar contador no PDV
+        dispatchPedidoCriado({
+          pedidoId: pedido.id,
+          numero: numeroPedido,
+          status: 'pendente',
+          empresaId: empresaSelecionada,
+          valorTotal: valorTotal,
+          clienteNome: clienteNome
+        });
       }
 
       // Navegar de volta usando a função responsiva
@@ -1502,9 +1523,14 @@ const UserNovoPedidoPage: React.FC = () => {
                   </div>
                 </motion.div>
               ))}
+            </div>
+          )}
+        </div>
 
-              {/* Área de subtotais */}
-              <div className="space-y-3 pt-4 border-t border-gray-700 mt-4">
+        {/* Resumo do Pedido */}
+        {itensPedido.length > 0 && (
+          <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+            <div className="space-y-3">
                 {/* Resumo do pedido */}
                 <div className="bg-gray-800/50 rounded-lg p-3">
                   <h3 className="text-white font-medium mb-2">Resumo do Pedido</h3>
@@ -1548,10 +1574,15 @@ const UserNovoPedidoPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+            </div>
+          </div>
+        )}
 
-                {/* Opções de descontos */}
-                {clienteId && clienteData && (
-                  <div className="bg-gray-800/50 rounded-lg p-3">
+        {/* Opções de Faturamento */}
+        {clienteId && clienteData && itensPedido.length > 0 && (
+          <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+            <div className="space-y-3">
+              <div className="bg-gray-800/50 rounded-lg p-3">
                     <h3 className="text-white font-medium mb-2">Opções de Faturamento</h3>
 
                     {/* Descontos por prazo */}
@@ -1667,9 +1698,16 @@ const UserNovoPedidoPage: React.FC = () => {
                     {descontosPrazo.length === 0 && descontosValor.length === 0 && (
                       <p className="text-gray-400 text-sm">Nenhuma condição de pagamento disponível para este cliente</p>
                     )}
+              </div>
+            </div>
+          </div>
+        )}
 
-                    {/* Formas de Pagamento - Seção Redesenhada */}
-                    <div className="mt-6 bg-gray-800/30 rounded-lg p-4 border border-gray-700">
+        {/* Forma de Pagamento */}
+        {clienteId && clienteData && itensPedido.length > 0 && (
+          <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+            <div className="space-y-3">
+              <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700">
                       <h3 className="text-white font-medium mb-4 text-base border-b border-gray-700 pb-2">Forma de Pagamento</h3>
 
                       {/* Opções de tipo de pagamento */}
@@ -1849,13 +1887,10 @@ const UserNovoPedidoPage: React.FC = () => {
                           </div>
                         </div>
                       )}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Botão salvar */}
         <button

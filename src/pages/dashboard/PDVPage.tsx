@@ -131,6 +131,10 @@ const PDVPage: React.FC = () => {
   const [pedidosFiltrados, setPedidosFiltrados] = useState<any[]>([]);
   const [contadorPedidosPendentes, setContadorPedidosPendentes] = useState<number>(0);
 
+  // Estados para visualização detalhada do pedido
+  const [pedidoDetalhado, setPedidoDetalhado] = useState<any>(null);
+  const [showDetalhePedido, setShowDetalhePedido] = useState(false);
+
   // Estados para os modais do menu PDV (paginação removida)
 
   // Estados para modal de desconto
@@ -174,12 +178,26 @@ const PDVPage: React.FC = () => {
   // Estado para confirmação de limpar carrinho
   const [showConfirmLimparCarrinho, setShowConfirmLimparCarrinho] = useState(false);
 
+  // Estados para pedidos importados (múltiplos)
+  const [pedidosImportados, setPedidosImportados] = useState<any[]>([]);
+  const [showConfirmRemovePedidoImportado, setShowConfirmRemovePedidoImportado] = useState(false);
+  const [pedidoParaRemover, setPedidoParaRemover] = useState<any>(null);
+  const [showConfirmImportarPedido, setShowConfirmImportarPedido] = useState(false);
+  const [pedidoParaImportar, setPedidoParaImportar] = useState<any>(null);
+
+  // Estados para descontos do cliente
+  const [descontosCliente, setDescontosCliente] = useState<{
+    prazo: Array<{ prazo_dias: number; percentual: number; tipo: 'desconto' | 'acrescimo' }>;
+    valor: Array<{ valor_minimo: number; percentual: number; tipo: 'desconto' | 'acrescimo' }>;
+  }>({ prazo: [], valor: [] });
+
   // Funções para localStorage
   const savePDVState = () => {
     try {
       const pdvState = {
         carrinho,
         clienteSelecionado,
+        pedidosImportados,
         showFinalizacaoVenda,
         showFinalizacaoFinal,
         tipoPagamento,
@@ -208,6 +226,11 @@ const PDVPage: React.FC = () => {
           // Restaura todos os estados
           if (pdvState.carrinho) setCarrinho(pdvState.carrinho);
           if (pdvState.clienteSelecionado) setClienteSelecionado(pdvState.clienteSelecionado);
+          if (pdvState.pedidosImportados) setPedidosImportados(pdvState.pedidosImportados);
+          // Compatibilidade com versão anterior (pedido único)
+          if (pdvState.pedidoImportado && !pdvState.pedidosImportados) {
+            setPedidosImportados([pdvState.pedidoImportado]);
+          }
           if (pdvState.showFinalizacaoVenda !== undefined) setShowFinalizacaoVenda(pdvState.showFinalizacaoVenda);
           if (pdvState.showFinalizacaoFinal !== undefined) setShowFinalizacaoFinal(pdvState.showFinalizacaoFinal);
           if (pdvState.tipoPagamento) setTipoPagamento(pdvState.tipoPagamento);
@@ -245,6 +268,228 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Função para remover pedido importado específico
+  const removerPedidoImportado = () => {
+    if (!pedidoParaRemover) return;
+
+    // Filtrar itens do carrinho que pertencem a este pedido
+    const itensDoCarrinho = carrinho.filter(item => item.pedido_origem_id === pedidoParaRemover.id);
+    const itensRestantes = carrinho.filter(item => item.pedido_origem_id !== pedidoParaRemover.id);
+
+    // Contar itens removidos
+    const totalItensRemovidos = itensDoCarrinho.reduce((total, item) => total + item.quantidade, 0);
+    const totalProdutosRemovidos = itensDoCarrinho.length;
+
+    // Atualizar carrinho removendo apenas itens deste pedido
+    setCarrinho(itensRestantes);
+
+    // Remover pedido da lista de importados
+    setPedidosImportados(prev => prev.filter(p => p.id !== pedidoParaRemover.id));
+
+    // Se não há mais pedidos importados e configuração desabilitada, remover cliente
+    const pedidosRestantes = pedidosImportados.filter(p => p.id !== pedidoParaRemover.id);
+    if (pedidosRestantes.length === 0 && !pdvConfig?.seleciona_clientes) {
+      setClienteSelecionado(null);
+    }
+
+    setShowConfirmRemovePedidoImportado(false);
+    setPedidoParaRemover(null);
+
+    // Toast informativo sobre o que foi removido
+    if (totalProdutosRemovidos > 0) {
+      toast.success(`Pedido #${pedidoParaRemover.numero} removido! ${totalProdutosRemovidos} produto(s) e ${totalItensRemovidos} item(s) foram removidos do carrinho.`);
+    } else {
+      toast.success(`Pedido #${pedidoParaRemover.numero} removido com sucesso!`);
+    }
+  };
+
+  // Função para carregar descontos do cliente
+  const carregarDescontosCliente = async (clienteId: string) => {
+    try {
+      // Carregar descontos por prazo
+      const { data: descontosPrazo, error: errorPrazo } = await supabase
+        .from('cliente_descontos_prazo')
+        .select('prazo_dias, percentual, tipo')
+        .eq('cliente_id', clienteId)
+        .order('prazo_dias');
+
+      // Carregar descontos por valor
+      const { data: descontosValor, error: errorValor } = await supabase
+        .from('cliente_descontos_valor')
+        .select('valor_minimo, percentual, tipo')
+        .eq('cliente_id', clienteId)
+        .order('valor_minimo');
+
+      if (errorPrazo) throw errorPrazo;
+      if (errorValor) throw errorValor;
+
+      setDescontosCliente({
+        prazo: descontosPrazo || [],
+        valor: descontosValor || []
+      });
+    } catch (error) {
+      console.error('Erro ao carregar descontos do cliente:', error);
+      setDescontosCliente({ prazo: [], valor: [] });
+    }
+  };
+
+  // Função para calcular desconto por valor do pedido
+  const calcularDescontoPorValor = (valorTotal: number) => {
+    if (!descontosCliente.valor.length) return null;
+
+    // Encontrar o maior desconto aplicável (valor mínimo menor ou igual ao total)
+    const descontoAplicavel = descontosCliente.valor
+      .filter(d => d.valor_minimo <= valorTotal)
+      .sort((a, b) => b.valor_minimo - a.valor_minimo)[0];
+
+    if (!descontoAplicavel) return null;
+
+    const valorDesconto = (valorTotal * descontoAplicavel.percentual) / 100;
+
+    return {
+      tipo: descontoAplicavel.tipo,
+      percentual: descontoAplicavel.percentual,
+      valor: valorDesconto,
+      valorMinimo: descontoAplicavel.valor_minimo
+    };
+  };
+
+  // Função para obter descontos por prazo disponíveis
+  const getDescontosPrazoDisponiveis = () => {
+    return descontosCliente.prazo.map(d => ({
+      prazo_dias: d.prazo_dias,
+      percentual: d.percentual,
+      tipo: d.tipo,
+      valor: (calcularTotal() * d.percentual) / 100
+    }));
+  };
+
+  // Função para confirmar importação de pedido
+  const confirmarImportarPedido = () => {
+    if (pedidoParaImportar) {
+      // Limpar apenas itens adicionados manualmente (sem pedido_origem_id)
+      const itensDeOutrosPedidos = carrinho.filter(item => item.pedido_origem_id);
+      setCarrinho(itensDeOutrosPedidos);
+
+      executarImportacaoPedido(pedidoParaImportar);
+      setShowConfirmImportarPedido(false);
+      setPedidoParaImportar(null);
+    }
+  };
+
+  // Funções auxiliares para detalhes do pedido
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pendente': return 'text-yellow-400';
+      case 'confirmado': return 'text-blue-400';
+      case 'preparando': return 'text-orange-400';
+      case 'pronto': return 'text-green-400';
+      case 'entregue': return 'text-green-500';
+      case 'cancelado': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pendente': return 'Pendente';
+      case 'confirmado': return 'Confirmado';
+      case 'preparando': return 'Em Preparação';
+      case 'pronto': return 'Pronto';
+      case 'entregue': return 'Entregue';
+      case 'cancelado': return 'Cancelado';
+      default: return status;
+    }
+  };
+
+  const formatarDataHora = (data: string) => {
+    return new Date(data).toLocaleString('pt-BR');
+  };
+
+  // Função para carregar detalhes completos do pedido
+  const carregarDetalhesPedido = async (pedidoId: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar pedido completo com todos os relacionamentos
+      const { data: pedidoCompleto, error } = await supabase
+        .from('pedidos')
+        .select(`
+          *,
+          cliente:clientes(
+            id,
+            nome,
+            telefone,
+            documento,
+            tipo_documento,
+            razao_social,
+            nome_fantasia,
+            cliente_enderecos(
+              cep,
+              rua,
+              numero,
+              complemento,
+              bairro,
+              cidade,
+              estado
+            ),
+            cliente_telefones(
+              numero,
+              tipo,
+              whatsapp
+            )
+          ),
+          usuario:usuarios(nome),
+          pedidos_itens(
+            id,
+            quantidade,
+            valor_unitario,
+            valor_total,
+            observacao,
+            produto:produtos(
+              id,
+              nome,
+              codigo,
+              codigo_barras,
+              descricao,
+              preco,
+              unidade_medida:unidade_medidas(sigla, nome),
+              grupo:grupos(nome),
+              produto_fotos(url, principal)
+            )
+          ),
+          forma_pagamento:forma_pagamento_opcoes(nome),
+          desconto_prazo:desconto_prazos(nome, percentual),
+          desconto_valor:desconto_valores(valor_minimo, percentual, tipo)
+        `)
+        .eq('id', pedidoId)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (error) {
+        console.error('Erro ao carregar detalhes do pedido:', error);
+        toast.error('Erro ao carregar detalhes do pedido');
+        return;
+      }
+
+      setPedidoDetalhado(pedidoCompleto);
+      setShowDetalhePedido(true);
+    } catch (error) {
+      console.error('Erro ao carregar detalhes do pedido:', error);
+      toast.error('Erro ao carregar detalhes do pedido');
+    }
+  };
+
+  // useEffect para carregamento inicial - SEM dependências para evitar recarregamentos
   useEffect(() => {
     loadData();
     loadPDVState(); // Carrega o estado salvo do PDV
@@ -257,13 +502,23 @@ const PDVPage: React.FC = () => {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    // Cleanup
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []); // Array vazio para executar apenas uma vez
+
+  // useEffect separado para event listeners - SEM dependências para evitar recarregamentos
+  useEffect(() => {
     // Event listeners para sistema de eventos em tempo real
     const handlePedidoCriado = (event: CustomEvent<PedidoEventData>) => {
       const { empresaId } = event.detail;
       // Verificar se é da mesma empresa
       checkEmpresaAndUpdateCounter(empresaId);
       // Recarregar lista de pedidos se o modal estiver aberto
-      if (showPedidosModal) {
+      // Usar uma verificação dinâmica do DOM ao invés de estado
+      const modalElement = document.querySelector('[data-modal="pedidos"]');
+      if (modalElement) {
         loadPedidos();
       }
     };
@@ -271,7 +526,8 @@ const PDVPage: React.FC = () => {
     const handlePedidoAtualizado = (event: CustomEvent<PedidoEventData>) => {
       const { empresaId } = event.detail;
       checkEmpresaAndUpdateCounter(empresaId);
-      if (showPedidosModal) {
+      const modalElement = document.querySelector('[data-modal="pedidos"]');
+      if (modalElement) {
         loadPedidos();
       }
     };
@@ -279,7 +535,8 @@ const PDVPage: React.FC = () => {
     const handlePedidoCancelado = (event: CustomEvent<PedidoEventData>) => {
       const { empresaId } = event.detail;
       checkEmpresaAndUpdateCounter(empresaId);
-      if (showPedidosModal) {
+      const modalElement = document.querySelector('[data-modal="pedidos"]');
+      if (modalElement) {
         loadPedidos();
       }
     };
@@ -287,7 +544,8 @@ const PDVPage: React.FC = () => {
     const handlePedidoFaturado = (event: CustomEvent<PedidoEventData>) => {
       const { empresaId } = event.detail;
       checkEmpresaAndUpdateCounter(empresaId);
-      if (showPedidosModal) {
+      const modalElement = document.querySelector('[data-modal="pedidos"]');
+      if (modalElement) {
         loadPedidos();
       }
     };
@@ -295,7 +553,8 @@ const PDVPage: React.FC = () => {
     const handlePedidosRecarregar = (event: CustomEvent<RecarregarEventData>) => {
       const { empresaId } = event.detail;
       checkEmpresaAndUpdateCounter(empresaId);
-      if (showPedidosModal) {
+      const modalElement = document.querySelector('[data-modal="pedidos"]');
+      if (modalElement) {
         loadPedidos();
       }
     };
@@ -309,14 +568,13 @@ const PDVPage: React.FC = () => {
 
     // Cleanup
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener(EVENT_TYPES.PEDIDO_CRIADO, handlePedidoCriado as EventListener);
       window.removeEventListener(EVENT_TYPES.PEDIDO_ATUALIZADO, handlePedidoAtualizado as EventListener);
       window.removeEventListener(EVENT_TYPES.PEDIDO_CANCELADO, handlePedidoCancelado as EventListener);
       window.removeEventListener(EVENT_TYPES.PEDIDO_FATURADO, handlePedidoFaturado as EventListener);
       window.removeEventListener(EVENT_TYPES.PEDIDOS_RECARREGAR, handlePedidosRecarregar as EventListener);
     };
-  }, [showPedidosModal]);
+  }, []); // Array vazio para executar apenas uma vez
 
   // Salva automaticamente sempre que algum estado importante mudar
   useEffect(() => {
@@ -327,6 +585,7 @@ const PDVPage: React.FC = () => {
   }, [
     carrinho,
     clienteSelecionado,
+    pedidosImportados,
     showFinalizacaoVenda,
     showFinalizacaoFinal,
     tipoPagamento,
@@ -362,10 +621,23 @@ const PDVPage: React.FC = () => {
       icon: ShoppingBag,
       label: 'Pedidos',
       color: 'primary',
-      onClick: () => {
+      onClick: (e?: React.MouseEvent) => {
+        // Prevenir qualquer comportamento padrão
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        // Abrir modal IMEDIATAMENTE sem loading
         setShowPedidosModal(true);
         setSearchPedidos('');
-        loadPedidos();
+
+        // Carregar pedidos em background apenas se necessário
+        if (pedidos.length === 0) {
+          setTimeout(() => {
+            loadPedidos();
+          }, 100);
+        }
       }
     },
     {
@@ -373,35 +645,65 @@ const PDVPage: React.FC = () => {
       icon: FileText,
       label: 'Comandas',
       color: 'primary',
-      onClick: () => setShowComandasModal(true)
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowComandasModal(true);
+      }
     },
     {
       id: 'sangria',
       icon: TrendingDown,
       label: 'Sangria',
       color: 'red',
-      onClick: () => setShowSangriaModal(true)
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowSangriaModal(true);
+      }
     },
     {
       id: 'suprimento',
       icon: TrendingUp,
       label: 'Suprimento',
       color: 'green',
-      onClick: () => setShowSuprimentoModal(true)
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowSuprimentoModal(true);
+      }
     },
     {
       id: 'pagamentos',
       icon: CreditCard,
       label: 'Pagamentos',
       color: 'blue',
-      onClick: () => setShowPagamentosModal(true)
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowPagamentosModal(true);
+      }
     },
     {
       id: 'fiados',
       icon: Clock,
       label: 'Fiados',
       color: 'yellow',
-      onClick: () => setShowFiadosModal(true)
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowFiadosModal(true);
+      }
     }
   ];
 
@@ -539,6 +841,108 @@ const PDVPage: React.FC = () => {
       }
     });
   };
+
+  // Subscription em tempo real para pedidos + Polling como fallback
+  useEffect(() => {
+    let subscription: any = null;
+    let pollingInterval: NodeJS.Timeout | null = null;
+
+    const setupRealtimeSubscription = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        console.log(`🔄 Configurando Realtime para empresa: ${usuarioData.empresa_id}`);
+
+        // Subscription para mudanças na tabela pedidos
+        subscription = supabase
+          .channel(`pedidos-realtime-${usuarioData.empresa_id}`)
+          .on('postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'pedidos',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              console.log('🆕 Novo pedido criado via Realtime:', payload.new);
+              // Recalcula contador completo para garantir precisão
+              loadContadorPedidos();
+            }
+          )
+          .on('postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'pedidos',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              console.log('📝 Pedido atualizado via Realtime:', payload.new);
+              // Recalcula contador quando status muda
+              loadContadorPedidos();
+            }
+          )
+          .on('postgres_changes',
+            {
+              event: 'DELETE',
+              schema: 'public',
+              table: 'pedidos',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              console.log('🗑️ Pedido deletado via Realtime:', payload.old);
+              // Recalcula contador quando pedido é deletado
+              loadContadorPedidos();
+            }
+          )
+          .subscribe((status) => {
+            console.log(`📡 Status da subscription Realtime: ${status}`);
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Realtime configurado com sucesso!');
+            } else if (status === 'CHANNEL_ERROR') {
+              console.log('❌ Erro no Realtime, usando polling como fallback');
+              setupPolling();
+            }
+          });
+
+      } catch (error) {
+        console.error('❌ Erro ao configurar subscription:', error);
+        setupPolling();
+      }
+    };
+
+    // Polling automático como backup (sempre ativo)
+    const setupPolling = () => {
+      console.log('🔄 Configurando atualização automática...');
+      pollingInterval = setInterval(() => {
+        loadContadorPedidos();
+      }, 8000); // A cada 8 segundos - totalmente automático
+    };
+
+    setupRealtimeSubscription();
+    // Sempre inicia o polling automático como backup
+    setupPolling();
+
+    return () => {
+      if (subscription) {
+        console.log('🔌 Desconectando Realtime...');
+        subscription.unsubscribe();
+      }
+      if (pollingInterval) {
+        console.log('⏹️ Parando atualização automática...');
+        clearInterval(pollingInterval);
+      }
+    };
+  }, []);
 
   // Função para verificar empresa e atualizar contador
   const checkEmpresaAndUpdateCounter = async (empresaId: string) => {
@@ -802,7 +1206,7 @@ const PDVPage: React.FC = () => {
 
     if (!usuarioData?.empresa_id) return;
 
-    setLoadingPedidos(true);
+    // Removido setLoadingPedidos(true) para evitar loading visual desnecessário
     try {
       const { data, error } = await supabase
         .from('pedidos')
@@ -849,9 +1253,8 @@ const PDVPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao carregar pedidos:', error);
       toast.error('Erro ao carregar pedidos');
-    } finally {
-      setLoadingPedidos(false);
     }
+    // Removido setLoadingPedidos(false) para manter consistência
   };
 
   // Função para filtrar pedidos
@@ -871,57 +1274,118 @@ const PDVPage: React.FC = () => {
     setPedidosFiltrados(pedidosFiltrados);
   };
 
-  // Função para importar pedido para o carrinho
+  // Função para importar pedido para o carrinho (com confirmação)
   const importarPedidoParaCarrinho = (pedido: any) => {
     if (!pedido.pedidos_itens || pedido.pedidos_itens.length === 0) {
       toast.error('Este pedido não possui itens');
       return;
     }
 
-    // Limpar carrinho atual se houver itens
-    if (carrinho.length > 0) {
-      const confirmar = window.confirm(
-        'Há itens no carrinho. Deseja limpar o carrinho atual e importar este pedido?'
-      );
-      if (!confirmar) return;
+    // Verificar se o pedido já foi importado
+    const jaImportado = pedidosImportados.some(p => p.id === pedido.id);
+    if (jaImportado) {
+      toast.warning(`Pedido #${pedido.numero} já foi importado!`);
+      return;
     }
 
-    // Limpar carrinho e cliente atual
-    setCarrinho([]);
-    setClienteSelecionado(null);
+    // Verificar se há cliente diferente no carrinho
+    const clienteAtual = clienteSelecionado;
+    const clienteDoPedido = pedido.cliente;
 
-    // Importar cliente do pedido se existir
-    if (pedido.cliente) {
+    if (clienteAtual && clienteDoPedido && clienteAtual.id !== clienteDoPedido.id) {
+      toast.error('Não é possível importar pedido de cliente diferente. Limpe o carrinho primeiro.');
+      return;
+    }
+
+    // Se há itens no carrinho de outros pedidos, mostrar modal de confirmação
+    const temItensDeOutrosPedidos = carrinho.some(item => !item.pedido_origem_id);
+    if (temItensDeOutrosPedidos) {
+      setPedidoParaImportar(pedido);
+      setShowConfirmImportarPedido(true);
+    } else {
+      // Se não há conflitos, importar diretamente
+      executarImportacaoPedido(pedido);
+    }
+  };
+
+  // Função que executa a importação do pedido
+  const executarImportacaoPedido = (pedido: any) => {
+    // Adicionar pedido à lista de importados
+    const novoPedidoImportado = {
+      numero: pedido.numero,
+      id: pedido.id,
+      cliente: pedido.cliente,
+      created_at: pedido.created_at,
+      valor_total: pedido.valor_total
+    };
+
+    setPedidosImportados(prev => [...prev, novoPedidoImportado]);
+
+    // Importar cliente do pedido se existir e não houver cliente selecionado
+    if (pedido.cliente && !clienteSelecionado) {
       setClienteSelecionado({
         id: pedido.cliente.id,
         nome: pedido.cliente.nome,
         telefone: pedido.cliente.telefone
       });
+
+      // Carregar descontos do cliente
+      carregarDescontosCliente(pedido.cliente.id);
+    } else if (pedido.cliente && clienteSelecionado && clienteSelecionado.id === pedido.cliente.id) {
+      // Se é o mesmo cliente, garantir que os descontos estejam carregados
+      if (descontosCliente.prazo.length === 0 && descontosCliente.valor.length === 0) {
+        carregarDescontosCliente(pedido.cliente.id);
+      }
     }
 
-    // Importar itens do pedido
-    const novosItens: ItemCarrinho[] = [];
-    let itensImportados = 0;
+    // Converter itens do pedido para formato do carrinho
+    const novosItens: ItemCarrinho[] = pedido.pedidos_itens.map((item: any) => ({
+      id: `${item.produto.id}-${Date.now()}-${Math.random()}`,
+      produto: item.produto,
+      quantidade: item.quantidade,
+      subtotal: item.quantidade * item.valor_unitario,
+      pedido_origem_id: pedido.id, // Marcar de qual pedido veio
+      pedido_origem_numero: pedido.numero
+    }));
 
-    pedido.pedidos_itens.forEach((item: any) => {
-      if (item.produto) {
-        const novoItem: ItemCarrinho = {
-          id: `${item.produto.id}-${Date.now()}-${Math.random()}`,
-          produto: item.produto,
-          quantidade: item.quantidade,
-          subtotal: item.quantidade * item.valor_unitario
-        };
-        novosItens.push(novoItem);
-        itensImportados++;
-      }
-    });
+    // Verificar configuração de agrupamento
+    if (pdvConfig?.agrupa_itens) {
+      // Agrupar itens iguais
+      const carrinhoAtualizado = [...carrinho];
 
-    setCarrinho(novosItens);
+      novosItens.forEach(novoItem => {
+        const itemExistente = carrinhoAtualizado.find(item =>
+          item.produto.id === novoItem.produto.id &&
+          item.subtotal / item.quantidade === novoItem.subtotal / novoItem.quantidade // Mesmo preço unitário
+        );
+
+        if (itemExistente) {
+          // Agrupar: somar quantidade e recalcular subtotal
+          itemExistente.quantidade += novoItem.quantidade;
+          itemExistente.subtotal = itemExistente.quantidade * (itemExistente.subtotal / (itemExistente.quantidade - novoItem.quantidade));
+          // Manter referência dos pedidos de origem
+          if (!itemExistente.pedidos_origem) {
+            itemExistente.pedidos_origem = [];
+          }
+          itemExistente.pedidos_origem.push({
+            id: pedido.id,
+            numero: pedido.numero,
+            quantidade: novoItem.quantidade
+          });
+        } else {
+          // Adicionar como novo item
+          carrinhoAtualizado.push(novoItem);
+        }
+      });
+
+      setCarrinho(carrinhoAtualizado);
+    } else {
+      // Não agrupar: adicionar todos os itens separadamente
+      setCarrinho(prev => [...prev, ...novosItens]);
+    }
+
     setShowPedidosModal(false);
-
-    toast.success(
-      `Pedido #${pedido.numero} importado com sucesso! ${itensImportados} item(s) adicionado(s) ao carrinho.`
-    );
+    toast.success(`Pedido #${pedido.numero} importado com sucesso! ${novosItens.length} produto(s) adicionado(s).`);
   };
 
   const produtosFiltrados = produtos.filter(produto => {
@@ -1135,6 +1599,18 @@ const PDVPage: React.FC = () => {
     return carrinho.reduce((total, item) => total + item.subtotal, 0);
   };
 
+  // Função para calcular total com desconto aplicado (para uso em pagamentos)
+  const calcularTotalComDesconto = () => {
+    const subtotal = calcularTotal();
+    const descontoValor = calcularDescontoPorValor(subtotal);
+
+    if (!descontoValor) return subtotal;
+
+    return descontoValor.tipo === 'desconto'
+      ? subtotal - descontoValor.valor
+      : subtotal + descontoValor.valor;
+  };
+
   const formatCurrency = (value: number) => {
     return formatarPreco(value);
   };
@@ -1234,6 +1710,7 @@ const PDVPage: React.FC = () => {
 
     setCarrinho([]);
     setClienteSelecionado(null);
+    setPedidosImportados([]);
     setShowLimparCarrinhoModal(false);
 
     // Exibir toast de confirmação
@@ -1278,14 +1755,14 @@ const PDVPage: React.FC = () => {
   };
 
   const calcularRestante = (): number => {
-    const restante = calcularTotal() - calcularTotalPago();
+    const restante = calcularTotalComDesconto() - calcularTotalPago();
     // Se há troco (restante negativo), considera como 0 (venda quitada)
     return restante < 0 ? 0 : restante;
   };
 
   const adicionarPagamentoParcial = (formaId: string, formaNome: string, tipo: 'eletronico' | 'dinheiro') => {
     let valor = parseCurrencyToNumber(valorParcial);
-    const totalVenda = calcularTotal();
+    const totalVenda = calcularTotalComDesconto(); // Usar total com desconto
     const totalPago = calcularTotalPago();
     const restanteReal = totalVenda - totalPago; // Valor real sem limitação
 
@@ -1599,6 +2076,129 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Realtime para o modal de pedidos - atualiza automaticamente quando modal está aberto
+  useEffect(() => {
+    if (!showPedidosModal) return;
+
+    let modalSubscription: any = null;
+
+    const setupModalRealtime = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        console.log('📋 Configurando Realtime para modal de pedidos...');
+
+        modalSubscription = supabase
+          .channel(`pedidos-modal-${Date.now()}`)
+          .on('postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'pedidos',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              console.log('📋 Mudança detectada no modal de pedidos:', payload);
+              // Recarregar pedidos automaticamente sem loading visível
+              const loadPedidosSilencioso = async () => {
+                const { data: userData } = await supabase.auth.getUser();
+                if (!userData.user) return;
+
+                const { data: usuarioData } = await supabase
+                  .from('usuarios')
+                  .select('empresa_id')
+                  .eq('id', userData.user.id)
+                  .single();
+
+                if (!usuarioData?.empresa_id) return;
+
+                try {
+                  const { data, error } = await supabase
+                    .from('pedidos')
+                    .select(`
+                      id,
+                      numero,
+                      created_at,
+                      status,
+                      valor_total,
+                      cliente:clientes(id, nome, telefone),
+                      pedidos_itens(
+                        id,
+                        quantidade,
+                        valor_unitario,
+                        valor_total,
+                        produto:produtos(
+                          id,
+                          nome,
+                          preco,
+                          codigo,
+                          codigo_barras,
+                          descricao,
+                          promocao,
+                          tipo_desconto,
+                          valor_desconto,
+                          unidade_medida_id,
+                          grupo_id,
+                          produto_fotos(url, principal)
+                        )
+                      )
+                    `)
+                    .eq('empresa_id', usuarioData.empresa_id)
+                    .eq('status', 'pendente')
+                    .eq('deletado', false)
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+
+                  if (error) throw error;
+                  const pedidosData = data || [];
+                  setPedidos(pedidosData);
+                  setPedidosFiltrados(pedidosData);
+                  setContadorPedidosPendentes(pedidosData.length);
+                } catch (error) {
+                  console.error('Erro ao carregar pedidos silencioso:', error);
+                }
+              };
+
+              setTimeout(() => loadPedidosSilencioso(), 500);
+            }
+          )
+          .subscribe((status) => {
+            console.log(`📋 Status Realtime modal: ${status}`);
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Realtime do modal ativo!');
+            }
+          });
+
+      } catch (error) {
+        console.error('Erro ao configurar Realtime do modal:', error);
+      }
+    };
+
+    // Não carregar pedidos automaticamente quando o modal abre
+    // O carregamento será feito apenas quando necessário pelo onClick do botão
+
+    // Configurar realtime com delay para evitar conflitos
+    setTimeout(() => {
+      setupModalRealtime();
+    }, 100);
+
+    return () => {
+      if (modalSubscription) {
+        console.log('🔌 Desconectando Realtime do modal...');
+        modalSubscription.unsubscribe();
+      }
+    };
+  }, [showPedidosModal]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1715,7 +2315,7 @@ const PDVPage: React.FC = () => {
                   <p className="text-gray-400">Nenhum produto encontrado</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
                   {produtosFiltrados.map(produto => (
                     <motion.div
                       key={produto.id}
@@ -1726,7 +2326,7 @@ const PDVPage: React.FC = () => {
                     >
                       {/* Imagem do produto */}
                       <div
-                        className="h-32 bg-gray-900 relative cursor-pointer"
+                        className="h-24 bg-gray-900 relative cursor-pointer"
                         onClick={(e) => abrirGaleria(produto, e)}
                       >
                         {getFotoPrincipal(produto) ? (
@@ -1759,38 +2359,38 @@ const PDVPage: React.FC = () => {
                       </div>
 
                       {/* Informações do produto */}
-                      <div className="p-3">
-                        <h3 className="text-white text-sm font-medium line-clamp-2 mb-2">{produto.nome}</h3>
+                      <div className="p-2.5">
+                        <h3 className="text-white text-xs font-medium line-clamp-2 mb-1.5">{produto.nome}</h3>
 
-                        <div className="mb-2">
+                        <div className="mb-1.5">
                           <p className="text-gray-400 text-xs">Código {produto.codigo}</p>
                         </div>
 
                         {/* Preço */}
-                        <div className="mb-2">
+                        <div className="mb-1.5">
                           {produto.promocao ? (
                             <div>
                               <span className="text-gray-400 line-through text-xs block">
                                 {formatCurrency(produto.preco)}
                               </span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-primary-400 font-bold text-lg">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-primary-400 font-bold text-sm">
                                   {formatCurrency(calcularPrecoFinal(produto))}
                                 </span>
                                 {produto.unidade_medida && (
-                                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
                                     {produto.unidade_medida.sigla}
                                   </span>
                                 )}
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="text-primary-400 font-bold text-lg">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-primary-400 font-bold text-sm">
                                 {formatCurrency(produto.preco)}
                               </span>
                               {produto.unidade_medida && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
                                   {produto.unidade_medida.sigla}
                                 </span>
                               )}
@@ -1830,23 +2430,24 @@ const PDVPage: React.FC = () => {
             {/* Menu Fixo no Footer da Área de Produtos - Só aparece quando NÃO está na finalização */}
             {!showFinalizacaoVenda && !showFinalizacaoFinal && (
               <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
-                <div className="h-14 px-4 py-2 overflow-hidden">
+                {/* Container sem padding para maximizar espaço */}
+                <div className="h-14">
                   {/* Itens do Menu com Scroll Horizontal */}
-                  <div className="flex items-center h-full overflow-x-auto overflow-y-hidden custom-scrollbar gap-2 justify-around min-w-0">
+                  <div className="flex items-center h-full overflow-x-auto overflow-y-visible custom-scrollbar justify-around min-w-0">
                     {menuPDVItems.map((item) => {
                       const IconComponent = item.icon;
                       return (
                         <button
                           key={item.id}
-                          onClick={item.onClick}
-                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} rounded-lg p-1 transition-all duration-200 min-w-[70px] flex-shrink-0 relative`}
+                          onClick={(e) => item.onClick(e)}
+                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 flex-1 h-full relative`}
                         >
-                          <IconComponent size={18} />
-                          <span className="text-xs mt-0.5 whitespace-nowrap">{item.label}</span>
+                          <IconComponent size={20} />
+                          <span className="text-xs whitespace-nowrap mt-1">{item.label}</span>
 
                           {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
                           {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
-                            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold border border-background-card">
+                            <div className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
                               {contadorPedidosPendentes > 99 ? '99+' : contadorPedidosPendentes}
                             </div>
                           )}
@@ -1888,23 +2489,132 @@ const PDVPage: React.FC = () => {
               )}
             </div>
 
-            {/* Cliente Selecionado - Só aparece se a configuração estiver habilitada */}
-            {pdvConfig?.seleciona_clientes && (
-              <div className="mb-4">
-                <button
-                  onClick={() => setShowClienteModal(true)}
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-left hover:border-primary-500/50 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <User size={16} className="text-gray-400" />
-                    <div>
-                      <div className="text-sm text-gray-400">Cliente</div>
-                      <div className="text-white">
-                        {clienteSelecionado ? clienteSelecionado.nome : 'Selecionar cliente'}
+            {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados */}
+            {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
+              <div className="mb-4 space-y-3">
+                {/* Informações do Cliente */}
+                {pdvConfig?.seleciona_clientes ? (
+                  <button
+                    onClick={() => setShowClienteModal(true)}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-left hover:border-primary-500/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <User size={16} className="text-gray-400" />
+                      <div>
+                        <div className="text-sm text-gray-400">Cliente</div>
+                        <div className="text-white">
+                          {clienteSelecionado ? clienteSelecionado.nome : 'Selecionar cliente'}
+                        </div>
+                        {clienteSelecionado?.telefone && (
+                          <div className="text-xs text-gray-500">{clienteSelecionado.telefone}</div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ) : pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <User size={16} className="text-blue-400" />
+                      <div>
+                        <div className="text-sm text-blue-400">Cliente dos Pedidos Importados</div>
+                        <div className="text-white font-medium">{pedidosImportados[0].cliente.nome}</div>
+                        {pedidosImportados[0].cliente.telefone && (
+                          <div className="text-xs text-gray-400">{pedidosImportados[0].cliente.telefone}</div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </button>
+                )}
+
+                {/* Informações dos Pedidos Importados */}
+                {pedidosImportados.map((pedido, index) => (
+                  <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag size={16} className="text-green-400" />
+                      <div className="flex-1">
+                        <div className="text-sm text-green-400">Pedido Importado</div>
+                        <div className="text-white font-medium">#{pedido.numero}</div>
+                        <div className="text-xs text-gray-400">
+                          {new Date(pedido.created_at).toLocaleString('pt-BR')}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setPedidoParaRemover(pedido);
+                          setShowConfirmRemovePedidoImportado(true);
+                        }}
+                        className="text-gray-400 hover:text-red-400 transition-colors"
+                        title="Remover informações do pedido importado"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Opções de Faturamento - Descontos do Cliente */}
+                {(descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-4 h-4 bg-blue-500 rounded flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">%</span>
+                      </div>
+                      <div className="text-sm text-blue-400 font-medium">Opções de Faturamento</div>
+                    </div>
+
+                    {/* Descontos por Prazo */}
+                    {descontosCliente.prazo.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-xs text-gray-400 mb-2">Prazo de Faturamento</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {getDescontosPrazoDisponiveis().map((desconto, idx) => (
+                            <div
+                              key={idx}
+                              className={`p-2 rounded-lg border text-center cursor-pointer transition-colors ${
+                                desconto.tipo === 'desconto'
+                                  ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
+                                  : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
+                              }`}
+                            >
+                              <div className="text-xs text-white font-medium">
+                                {desconto.prazo_dias} dias
+                              </div>
+                              <div className={`text-xs ${
+                                desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                              }`}>
+                                {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Desconto por Valor (se aplicável) */}
+                    {(() => {
+                      const descontoValor = calcularDescontoPorValor(calcularTotal());
+                      return descontoValor && (
+                        <div className="mt-3 pt-3 border-t border-gray-700">
+                          <div className="text-xs text-gray-400 mb-2">Desconto por Valor</div>
+                          <div className={`p-2 rounded-lg border text-center ${
+                            descontoValor.tipo === 'desconto'
+                              ? 'bg-green-500/10 border-green-500/30'
+                              : 'bg-red-500/10 border-red-500/30'
+                          }`}>
+                            <div className="text-xs text-white font-medium">
+                              A partir de {formatCurrency(descontoValor.valorMinimo)}
+                            </div>
+                            <div className={`text-xs ${
+                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 
@@ -2063,24 +2773,55 @@ const PDVPage: React.FC = () => {
             {/* Resumo e Finalização - Só aparece quando NÃO está na finalização */}
             {carrinho.length > 0 && !showFinalizacaoVenda && (
               <div className="border-t border-gray-800 pt-4">
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-gray-400">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(calcularTotal())}</span>
-                  </div>
-                  <div className="flex justify-between text-white font-bold text-lg">
-                    <span>Total:</span>
-                    <span>{formatCurrency(calcularTotal())}</span>
-                  </div>
-                </div>
+                {(() => {
+                  const subtotal = calcularTotal();
+                  const descontoValor = calcularDescontoPorValor(subtotal);
+                  const totalFinal = descontoValor
+                    ? (descontoValor.tipo === 'desconto'
+                        ? subtotal - descontoValor.valor
+                        : subtotal + descontoValor.valor)
+                    : subtotal;
 
-                <button
-                  onClick={finalizarVenda}
-                  className="w-full bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  <CreditCard size={20} />
-                  Finalizar Venda
-                </button>
+                  return (
+                    <>
+                      <div className="space-y-2 mb-4">
+                        <div className="flex justify-between text-gray-400">
+                          <span>Subtotal:</span>
+                          <span>{formatCurrency(subtotal)}</span>
+                        </div>
+
+                        {/* Desconto por Valor (se aplicável) */}
+                        {descontoValor && (
+                          <div className="flex justify-between text-sm">
+                            <span className={`${
+                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {descontoValor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} ({descontoValor.percentual}%):
+                            </span>
+                            <span className={`${
+                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {descontoValor.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoValor.valor)}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between text-white font-bold text-lg">
+                          <span>Total:</span>
+                          <span>{formatCurrency(totalFinal)}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={finalizarVenda}
+                        className="w-full bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        <CreditCard size={20} />
+                        Finalizar Venda
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -2119,24 +2860,66 @@ const PDVPage: React.FC = () => {
 
               {/* Resumo da Venda */}
               <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-400">Total da Venda:</span>
-                  <span className="text-2xl font-bold text-primary-400">
-                    {formatCurrency(calcularTotal())}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-400">Itens:</span>
-                  <span className="text-white">
-                    {carrinho.reduce((total, item) => total + item.quantidade, 0)}
-                  </span>
-                </div>
-                {pdvConfig?.seleciona_clientes && clienteSelecionado && (
-                  <div className="flex justify-between items-center text-sm mt-1">
-                    <span className="text-gray-400">Cliente:</span>
-                    <span className="text-white">{clienteSelecionado.nome}</span>
-                  </div>
-                )}
+                {(() => {
+                  const subtotal = calcularTotal();
+                  const descontoValor = calcularDescontoPorValor(subtotal);
+                  const totalFinal = calcularTotalComDesconto();
+
+                  return (
+                    <>
+                      {/* Subtotal */}
+                      <div className="flex justify-between items-center text-sm mb-2">
+                        <span className="text-gray-400">Subtotal:</span>
+                        <span className="text-white">{formatCurrency(subtotal)}</span>
+                      </div>
+
+                      {/* Desconto por Valor (se aplicável) */}
+                      {descontoValor && (
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span className={`${
+                            descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {descontoValor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} ({descontoValor.percentual}%):
+                          </span>
+                          <span className={`${
+                            descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {descontoValor.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoValor.valor)}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Total Final */}
+                      <div className="flex justify-between items-center mb-2 pt-2 border-t border-gray-700">
+                        <span className="text-gray-400">Total da Venda:</span>
+                        <span className="text-2xl font-bold text-primary-400">
+                          {formatCurrency(totalFinal)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-400">Itens:</span>
+                        <span className="text-white">
+                          {carrinho.reduce((total, item) => total + item.quantidade, 0)}
+                        </span>
+                      </div>
+                      {clienteSelecionado && (
+                        <div className="flex justify-between items-center text-sm mt-1">
+                          <span className="text-gray-400">Cliente:</span>
+                          <span className="text-white">{clienteSelecionado.nome}</span>
+                        </div>
+                      )}
+                      {pedidosImportados.length > 0 && (
+                        <div className="flex justify-between items-center text-sm mt-1">
+                          <span className="text-gray-400">Pedidos:</span>
+                          <span className="text-green-400">
+                            {pedidosImportados.map(p => `#${p.numero}`).join(', ')}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Tipo de Pagamento */}
@@ -2209,7 +2992,7 @@ const PDVPage: React.FC = () => {
                         type="text"
                         value={valorParcial}
                         onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
-                        placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotal() - calcularTotalPago() > 0 ? calcularTotal() - calcularTotalPago() : 0)})`}
+                        placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
                         className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                       />
                       <div className="text-xs text-gray-500 mt-1">
@@ -2269,7 +3052,7 @@ const PDVPage: React.FC = () => {
                         <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-400">Total da Venda:</span>
-                            <span className="text-white">{formatCurrency(calcularTotal())}</span>
+                            <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-400">Total Pago:</span>
@@ -2401,7 +3184,7 @@ const PDVPage: React.FC = () => {
                             {forma.nome}
                           </span>
                           <span className="text-white font-medium">
-                            {formatCurrency(calcularTotal())}
+                            {formatCurrency(calcularTotalComDesconto())}
                           </span>
                         </div>
                       );
@@ -2433,7 +3216,7 @@ const PDVPage: React.FC = () => {
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Total da Venda:</span>
-                  <span className="text-white">{formatCurrency(calcularTotal())}</span>
+                  <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Total Pago:</span>
@@ -2779,10 +3562,18 @@ const PDVPage: React.FC = () => {
                       {formatCurrency(calcularTotal())}
                     </span>
                   </div>
-                  {pdvConfig?.seleciona_clientes && clienteSelecionado && (
+                  {clienteSelecionado && (
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Cliente:</span>
                       <span className="text-white">{clienteSelecionado.nome}</span>
+                    </div>
+                  )}
+                  {pedidosImportados.length > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Pedidos:</span>
+                      <span className="text-green-400">
+                        {pedidosImportados.map(p => `#${p.numero}`).join(', ')}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -3093,21 +3884,20 @@ const PDVPage: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-4xl mx-4 max-h-[80vh] overflow-y-auto"
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl mx-4 max-h-[80vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
+              data-modal="pedidos"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Pedidos Pendentes</h3>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      loadPedidos();
-                      toast.success('Pedidos atualizados!');
-                    }}
-                    className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors text-sm"
-                  >
-                    Atualizar
-                  </button>
+              {/* Cabeçalho Fixo */}
+              <div className="flex-shrink-0 p-6 border-b border-gray-800">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-white">Pedidos Pendentes</h3>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                      <span className="text-xs text-green-400">Atualização automática</span>
+                    </div>
+                  </div>
                   <button
                     onClick={() => {
                       setShowPedidosModal(false);
@@ -3118,10 +3908,8 @@ const PDVPage: React.FC = () => {
                     <X size={20} />
                   </button>
                 </div>
-              </div>
 
-              {/* Campo de Pesquisa */}
-              <div className="mb-4">
+                {/* Campo de Pesquisa */}
                 <div className="relative">
                   <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -3134,13 +3922,10 @@ const PDVPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {loadingPedidos ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-                    <p className="text-gray-400">Carregando pedidos...</p>
-                  </div>
-                ) : pedidosFiltrados.length === 0 ? (
+              {/* Conteúdo Rolável */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                <div className="space-y-4">
+                {pedidosFiltrados.length === 0 ? (
                   <div className="text-center py-8">
                     <ShoppingBag size={48} className="mx-auto mb-4 text-gray-500" />
                     <p className="text-gray-400">
@@ -3218,10 +4003,7 @@ const PDVPage: React.FC = () => {
                             Importar para Carrinho
                           </button>
                           <button
-                            onClick={() => {
-                              // Aqui você pode implementar a visualização detalhada
-                              toast.info('Funcionalidade de visualização em desenvolvimento');
-                            }}
+                            onClick={() => carregarDetalhesPedido(pedido.id)}
                             className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs transition-colors"
                           >
                             Ver Detalhes
@@ -3231,6 +4013,339 @@ const PDVPage: React.FC = () => {
                     ))}
                   </div>
                 )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Detalhes do Pedido */}
+      <AnimatePresence>
+        {showDetalhePedido && pedidoDetalhado && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => {
+              setShowDetalhePedido(false);
+              setPedidoDetalhado(null);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Cabeçalho Fixo */}
+              <div className="flex-shrink-0 p-6 border-b border-gray-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <FileText size={24} className="text-primary-400" />
+                    <div>
+                      <h3 className="text-xl font-semibold text-white">Detalhes do Pedido</h3>
+                      <p className="text-sm text-gray-400">Visualização completa</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowDetalhePedido(false);
+                      setPedidoDetalhado(null);
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Conteúdo Rolável */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                <div className="space-y-6">
+                  {/* Informações Gerais do Pedido */}
+                  <div className="bg-gray-800/50 rounded-lg p-4">
+                    <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                      <Receipt size={18} className="text-primary-400" />
+                      Informações Gerais
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-sm text-gray-400">Número do Pedido</label>
+                        <p className="text-white font-medium">#{pedidoDetalhado.numero}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-400">Status</label>
+                        <p className={`font-medium ${getStatusColor(pedidoDetalhado.status)}`}>
+                          {getStatusText(pedidoDetalhado.status)}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-400">Data de Criação</label>
+                        <p className="text-white">{formatarDataHora(pedidoDetalhado.created_at)}</p>
+                      </div>
+                      {pedidoDetalhado.data_faturamento && (
+                        <div>
+                          <label className="text-sm text-gray-400">Data de Faturamento</label>
+                          <p className="text-white">{formatarDataHora(pedidoDetalhado.data_faturamento)}</p>
+                        </div>
+                      )}
+                      {pedidoDetalhado.usuario && (
+                        <div>
+                          <label className="text-sm text-gray-400">Criado por</label>
+                          <p className="text-white">{pedidoDetalhado.usuario.nome}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Informações do Cliente */}
+                  {pedidoDetalhado.cliente && (
+                    <div className="bg-gray-800/50 rounded-lg p-4">
+                      <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <User size={18} className="text-blue-400" />
+                        Informações do Cliente
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm text-gray-400">Nome</label>
+                          <p className="text-white font-medium">{pedidoDetalhado.cliente.nome}</p>
+                        </div>
+                        {pedidoDetalhado.cliente.telefone && (
+                          <div>
+                            <label className="text-sm text-gray-400">Telefone</label>
+                            <p className="text-white">{pedidoDetalhado.cliente.telefone}</p>
+                          </div>
+                        )}
+                        {pedidoDetalhado.cliente.documento && (
+                          <div>
+                            <label className="text-sm text-gray-400">
+                              {pedidoDetalhado.cliente.tipo_documento === 'CNPJ' ? 'CNPJ' : 'CPF'}
+                            </label>
+                            <p className="text-white">{pedidoDetalhado.cliente.documento}</p>
+                          </div>
+                        )}
+                        {pedidoDetalhado.cliente.razao_social && (
+                          <div>
+                            <label className="text-sm text-gray-400">Razão Social</label>
+                            <p className="text-white">{pedidoDetalhado.cliente.razao_social}</p>
+                          </div>
+                        )}
+                        {pedidoDetalhado.cliente.nome_fantasia && (
+                          <div>
+                            <label className="text-sm text-gray-400">Nome Fantasia</label>
+                            <p className="text-white">{pedidoDetalhado.cliente.nome_fantasia}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Endereços do Cliente */}
+                      {pedidoDetalhado.cliente.cliente_enderecos && pedidoDetalhado.cliente.cliente_enderecos.length > 0 && (
+                        <div className="mt-4">
+                          <label className="text-sm text-gray-400 mb-2 block">Endereços</label>
+                          {pedidoDetalhado.cliente.cliente_enderecos.map((endereco: any, index: number) => (
+                            <div key={index} className="bg-gray-700/50 rounded p-3 mb-2">
+                              <p className="text-white text-sm">
+                                {endereco.rua}, {endereco.numero}
+                                {endereco.complemento && ` - ${endereco.complemento}`}
+                              </p>
+                              <p className="text-gray-400 text-xs">
+                                {endereco.bairro}, {endereco.cidade} - {endereco.estado}
+                                {endereco.cep && ` - CEP: ${endereco.cep}`}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Telefones do Cliente */}
+                      {pedidoDetalhado.cliente.cliente_telefones && pedidoDetalhado.cliente.cliente_telefones.length > 0 && (
+                        <div className="mt-4">
+                          <label className="text-sm text-gray-400 mb-2 block">Telefones</label>
+                          <div className="flex flex-wrap gap-2">
+                            {pedidoDetalhado.cliente.cliente_telefones.map((telefone: any, index: number) => (
+                              <div key={index} className="bg-gray-700/50 rounded px-3 py-1">
+                                <span className="text-white text-sm">{telefone.numero}</span>
+                                <span className="text-gray-400 text-xs ml-2">
+                                  ({telefone.tipo}{telefone.whatsapp ? ' - WhatsApp' : ''})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Itens do Pedido */}
+                  <div className="bg-gray-800/50 rounded-lg p-4">
+                    <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                      <Package size={18} className="text-green-400" />
+                      Itens do Pedido ({pedidoDetalhado.pedidos_itens?.length || 0})
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="text-xs uppercase bg-gray-700/50 text-gray-400">
+                          <tr>
+                            <th className="px-4 py-3 text-left">Produto</th>
+                            <th className="px-4 py-3 text-center">Qtde</th>
+                            <th className="px-4 py-3 text-right">Valor Unit.</th>
+                            <th className="px-4 py-3 text-right">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pedidoDetalhado.pedidos_itens?.map((item: any) => (
+                            <tr key={item.id} className="border-b border-gray-700">
+                              <td className="px-4 py-3">
+                                <div>
+                                  <p className="font-medium text-white">{item.produto?.nome}</p>
+                                  <p className="text-xs text-gray-400">
+                                    Cód: {item.produto?.codigo}
+                                    {item.produto?.codigo_barras && ` | Barras: ${item.produto.codigo_barras}`}
+                                  </p>
+                                  {item.produto?.grupo && (
+                                    <p className="text-xs text-gray-500">Grupo: {item.produto.grupo.nome}</p>
+                                  )}
+                                  {item.observacao && (
+                                    <p className="text-xs text-yellow-400 mt-1">Obs: {item.observacao}</p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center text-white">
+                                {item.quantidade}
+                                {item.produto?.unidade_medida && (
+                                  <span className="text-gray-400 ml-1">{item.produto.unidade_medida.sigla}</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right text-white">
+                                {formatCurrency(item.valor_unitario)}
+                              </td>
+                              <td className="px-4 py-3 text-right text-white font-medium">
+                                {formatCurrency(item.valor_total)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Resumo Financeiro */}
+                  <div className="bg-gray-800/50 rounded-lg p-4">
+                    <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                      <DollarSign size={18} className="text-primary-400" />
+                      Resumo Financeiro
+                    </h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Subtotal:</span>
+                        <span className="text-white">{formatCurrency(pedidoDetalhado.valor_subtotal || 0)}</span>
+                      </div>
+                      {pedidoDetalhado.valor_desconto > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Desconto:</span>
+                          <span className="text-red-400">-{formatCurrency(pedidoDetalhado.valor_desconto)}</span>
+                        </div>
+                      )}
+                      {pedidoDetalhado.valor_acrescimo > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Acréscimo:</span>
+                          <span className="text-green-400">+{formatCurrency(pedidoDetalhado.valor_acrescimo)}</span>
+                        </div>
+                      )}
+                      <div className="border-t border-gray-700 pt-2">
+                        <div className="flex justify-between">
+                          <span className="text-white font-medium">Total:</span>
+                          <span className="text-primary-400 font-bold text-lg">
+                            {formatCurrency(pedidoDetalhado.valor_total)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Forma de Pagamento */}
+                  {(pedidoDetalhado.forma_pagamento || pedidoDetalhado.formas_pagamento) && (
+                    <div className="bg-gray-800/50 rounded-lg p-4">
+                      <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <CreditCard size={18} className="text-blue-400" />
+                        Forma de Pagamento
+                      </h4>
+                      {pedidoDetalhado.forma_pagamento ? (
+                        <div>
+                          <p className="text-white">{pedidoDetalhado.forma_pagamento.nome}</p>
+                          {pedidoDetalhado.parcelas && pedidoDetalhado.parcelas > 1 && (
+                            <p className="text-gray-400 text-sm">
+                              {pedidoDetalhado.parcelas}x de {formatCurrency(pedidoDetalhado.valor_total / pedidoDetalhado.parcelas)}
+                            </p>
+                          )}
+                        </div>
+                      ) : pedidoDetalhado.formas_pagamento && (
+                        <div className="space-y-2">
+                          {pedidoDetalhado.formas_pagamento.map((forma: any, index: number) => (
+                            <div key={index} className="flex justify-between">
+                              <span className="text-white">{forma.nome}</span>
+                              <span className="text-primary-400">{formatCurrency(forma.valor)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Descontos Aplicados */}
+                  {(pedidoDetalhado.desconto_prazo || pedidoDetalhado.desconto_valor) && (
+                    <div className="bg-gray-800/50 rounded-lg p-4">
+                      <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <Percent size={18} className="text-orange-400" />
+                        Descontos Aplicados
+                      </h4>
+                      {pedidoDetalhado.desconto_prazo && (
+                        <div className="mb-2">
+                          <p className="text-white">{pedidoDetalhado.desconto_prazo.nome}</p>
+                          <p className="text-gray-400 text-sm">{pedidoDetalhado.desconto_prazo.percentual}% de desconto</p>
+                        </div>
+                      )}
+                      {pedidoDetalhado.desconto_valor && (
+                        <div>
+                          <p className="text-white">
+                            {pedidoDetalhado.desconto_valor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} por valor
+                          </p>
+                          <p className="text-gray-400 text-sm">
+                            {pedidoDetalhado.desconto_valor.percentual}% para pedidos acima de {formatCurrency(pedidoDetalhado.desconto_valor.valor_minimo)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Rodapé com Ações */}
+              <div className="flex-shrink-0 p-6 border-t border-gray-800">
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => {
+                      setShowDetalhePedido(false);
+                      setPedidoDetalhado(null);
+                    }}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  >
+                    Fechar
+                  </button>
+                  <button
+                    onClick={() => {
+                      importarPedidoParaCarrinho(pedidoDetalhado);
+                      setShowDetalhePedido(false);
+                      setPedidoDetalhado(null);
+                    }}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                  >
+                    Importar para Carrinho
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
@@ -3789,6 +4904,145 @@ const PDVPage: React.FC = () => {
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Limpar PDV
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação - Importar Pedido */}
+      <AnimatePresence>
+        {showConfirmImportarPedido && pedidoParaImportar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                  <ShoppingCart size={20} className="text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Importar Pedido</h3>
+                  <p className="text-gray-400 text-sm">Há itens no carrinho atual</p>
+                </div>
+              </div>
+
+              <p className="text-gray-300 mb-4">
+                Há <span className="text-primary-400 font-medium">{carrinho.filter(item => !item.pedido_origem_id).length} produto(s)</span> adicionados manualmente no carrinho.
+              </p>
+
+              <p className="text-gray-300 mb-6">
+                Deseja limpar estes itens e importar o pedido?
+                <br />
+                <span className="text-green-400 font-medium">Pedido #{pedidoParaImportar.numero}</span>
+                {pedidoParaImportar.cliente && (
+                  <>
+                    <br />
+                    <span className="text-blue-400">Cliente: {pedidoParaImportar.cliente.nome}</span>
+                  </>
+                )}
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowConfirmImportarPedido(false);
+                    setPedidoParaImportar(null);
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarImportarPedido}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Importar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação - Remover Pedido Importado */}
+      <AnimatePresence>
+        {showConfirmRemovePedidoImportado && pedidoParaRemover && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center">
+                  <ShoppingBag size={20} className="text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Remover Pedido Importado</h3>
+                  <p className="text-gray-400 text-sm">Esta ação não pode ser desfeita</p>
+                </div>
+              </div>
+
+              <p className="text-gray-300 mb-4">
+                Tem certeza que deseja remover as informações do pedido importado?
+                <br />
+                <span className="text-green-400 font-medium">Pedido #{pedidoParaRemover.numero}</span>
+                {pedidoParaRemover.cliente && (
+                  <>
+                    <br />
+                    <span className="text-blue-400">Cliente: {pedidoParaRemover.cliente.nome}</span>
+                  </>
+                )}
+              </p>
+
+              {(() => {
+                const itensDoCarrinho = carrinho.filter(item => item.pedido_origem_id === pedidoParaRemover.id);
+                const totalItens = itensDoCarrinho.reduce((total, item) => total + item.quantidade, 0);
+
+                return itensDoCarrinho.length > 0 && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 mb-6">
+                    <p className="text-yellow-400 text-sm font-medium mb-1">⚠️ Atenção!</p>
+                    <p className="text-gray-300 text-sm">
+                      Os <span className="text-primary-400 font-medium">{itensDoCarrinho.length} produto(s)</span> deste pedido
+                      serão removidos do carrinho ({totalItens} item(s) no total).
+                    </p>
+                    {carrinho.length > itensDoCarrinho.length && (
+                      <p className="text-gray-400 text-xs mt-1">
+                        Os demais produtos no carrinho serão mantidos.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmRemovePedidoImportado(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={removerPedidoImportado}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Remover
                 </button>
               </div>
             </motion.div>
