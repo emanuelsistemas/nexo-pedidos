@@ -160,7 +160,6 @@ const PDVPage: React.FC = () => {
   const PDV_STORAGE_KEY = 'nexo-pdv-state';
 
   // Estados para finalização de venda
-  const [showFinalizacaoVenda, setShowFinalizacaoVenda] = useState(false);
   const [tipoPagamento, setTipoPagamento] = useState<'vista' | 'parcial'>('vista');
   const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
   const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<string | null>(null);
@@ -213,7 +212,6 @@ const PDVPage: React.FC = () => {
         carrinho,
         clienteSelecionado,
         pedidosImportados,
-        showFinalizacaoVenda,
         showFinalizacaoFinal,
         tipoPagamento,
         formaPagamentoSelecionada,
@@ -247,7 +245,6 @@ const PDVPage: React.FC = () => {
           if (pdvState.pedidoImportado && !pdvState.pedidosImportados) {
             setPedidosImportados([pdvState.pedidoImportado]);
           }
-          if (pdvState.showFinalizacaoVenda !== undefined) setShowFinalizacaoVenda(pdvState.showFinalizacaoVenda);
           if (pdvState.showFinalizacaoFinal !== undefined) setShowFinalizacaoFinal(pdvState.showFinalizacaoFinal);
           if (pdvState.tipoPagamento) setTipoPagamento(pdvState.tipoPagamento);
           if (pdvState.formaPagamentoSelecionada) setFormaPagamentoSelecionada(pdvState.formaPagamentoSelecionada);
@@ -619,7 +616,6 @@ const PDVPage: React.FC = () => {
     carrinho,
     clienteSelecionado,
     pedidosImportados,
-    showFinalizacaoVenda,
     showFinalizacaoFinal,
     tipoPagamento,
     formaPagamentoSelecionada,
@@ -1844,13 +1840,7 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  const finalizarVenda = () => {
-    if (carrinho.length === 0) {
-      toast.warning('Adicione produtos ao carrinho antes de finalizar a venda');
-      return;
-    }
-    setShowFinalizacaoVenda(true);
-  };
+
 
   // Funções para pagamentos parciais
   const formatCurrencyInput = (value: string) => {
@@ -2170,7 +2160,6 @@ const PDVPage: React.FC = () => {
     // Limpar todos os estados
     setCarrinho([]);
     setClienteSelecionado(null);
-    setShowFinalizacaoVenda(false);
     setShowFinalizacaoFinal(false);
     limparPagamentosParciais();
     setCpfCnpjNota('');
@@ -2359,7 +2348,7 @@ const PDVPage: React.FC = () => {
 
   return (
     <div
-      className={`${showFinalizacaoVenda ? 'bg-background-card' : 'bg-background-dark'} overflow-hidden`}
+      className="bg-background-dark overflow-hidden"
       style={{ height: '100vh' }}
     >
       {/* Header */}
@@ -2374,12 +2363,12 @@ const PDVPage: React.FC = () => {
       </div>
 
       <div
-        className={`flex overflow-hidden ${showFinalizacaoVenda ? 'bg-background-card' : ''}`}
+        className="flex overflow-hidden"
         style={{ height: 'calc(100vh - 64px)' }}
       >
-        {/* Área dos Itens do Carrinho (movida para a esquerda) */}
-        {!showFinalizacaoVenda && !showFinalizacaoFinal && (
-          <div className="flex-1 p-4 flex flex-col h-full relative overflow-hidden">
+        {/* Área dos Itens do Carrinho (ocupa toda a largura) */}
+        {!showFinalizacaoFinal && (
+          <div className="w-full p-4 flex flex-col h-full relative overflow-hidden">
             <div className="h-full flex flex-col">
               {/* Título da área de itens */}
               <div className="flex items-center justify-between mb-4">
@@ -2597,7 +2586,7 @@ const PDVPage: React.FC = () => {
               </div>
 
             {/* Menu Fixo no Footer da Área de Produtos - Só aparece quando NÃO está na finalização */}
-            {!showFinalizacaoVenda && !showFinalizacaoFinal && (
+            {!showFinalizacaoFinal && (
               <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
                 {/* Container sem padding para maximizar espaço */}
                 <div className="h-14">
@@ -2631,385 +2620,8 @@ const PDVPage: React.FC = () => {
           </div>
         )}
 
-        {/* Área de Informações e Totais */}
-        <div
-          className={`${showFinalizacaoVenda ? 'flex-1' : 'w-96'} bg-background-card p-4 flex flex-col h-full relative ${
-            showFinalizacaoVenda ? 'border-0' : 'border-l border-gray-800'
-          }`}
-        >
-          {/* Overlay de bloqueio quando na finalização final */}
-          {showFinalizacaoFinal && (
-            <div className="absolute inset-0 bg-black/50 z-50"></div>
-          )}
-          <div className="h-full flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Calculator size={20} />
-                Resumo da Venda
-              </h3>
-            </div>
-
-            {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados */}
-            {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
-              <div className="mb-4 space-y-3">
-                {/* Informações do Cliente */}
-                {pdvConfig?.seleciona_clientes ? (
-                  <button
-                    onClick={() => setShowClienteModal(true)}
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg p-3 text-left hover:border-primary-500/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <User size={16} className="text-gray-400" />
-                      <div>
-                        <div className="text-sm text-gray-400">Cliente</div>
-                        <div className="text-white">
-                          {clienteSelecionado ? clienteSelecionado.nome : 'Selecionar cliente'}
-                        </div>
-                        {clienteSelecionado?.telefone && (
-                          <div className="text-xs text-gray-500">{clienteSelecionado.telefone}</div>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ) : pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                    <div className="flex items-center gap-2">
-                      <User size={16} className="text-blue-400" />
-                      <div>
-                        <div className="text-sm text-blue-400">Cliente dos Pedidos Importados</div>
-                        <div className="text-white font-medium">{pedidosImportados[0].cliente.nome}</div>
-                        {pedidosImportados[0].cliente.telefone && (
-                          <div className="text-xs text-gray-400">{pedidosImportados[0].cliente.telefone}</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Informações dos Pedidos Importados */}
-                {pedidosImportados.map((pedido, index) => (
-                  <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-3">
-                      <ShoppingBag size={16} className="text-green-400" />
-                      <div className="flex-1">
-                        <div className="text-sm text-green-400">Pedido Importado</div>
-                        <div className="text-white font-medium">#{pedido.numero}</div>
-                        <div className="text-xs text-gray-400">
-                          {new Date(pedido.created_at).toLocaleString('pt-BR')}
-                        </div>
-                        {/* Informações do Vendedor */}
-                        {pedido.usuario && (
-                          <div className="text-xs text-gray-400 mt-1">
-                            Vendedor: {pedido.usuario.nome}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => {
-                          setPedidoParaRemover(pedido);
-                          setShowConfirmRemovePedidoImportado(true);
-                        }}
-                        className="text-gray-400 hover:text-red-400 transition-colors"
-                        title="Remover informações do pedido importado"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-
-                    {/* Opções de Faturamento do Pedido Importado */}
-                    {(pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && (
-                      <div className="border-t border-green-500/20 pt-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-3 h-3 bg-green-500 rounded flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">%</span>
-                          </div>
-                          <div className="text-xs text-green-400 font-medium">Opções de Faturamento</div>
-                        </div>
-
-                        {/* Descontos por Prazo */}
-                        {descontosCliente.prazo.length > 0 && (
-                          <div className="space-y-2">
-                            <div className="text-xs text-gray-400 mb-1">Prazo de Faturamento</div>
-                            <div className="grid grid-cols-2 gap-1">
-                              {descontosCliente.prazo.map((desconto, idx) => {
-                                const isSelected = descontoPrazoSelecionado === desconto.id;
-                                const wasOriginallySelected = pedido.desconto_prazo_id === desconto.id;
-                                return (
-                                  <div
-                                    key={idx}
-                                    className={`p-1.5 rounded border text-center cursor-pointer transition-colors text-xs ${
-                                      isSelected
-                                        ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
-                                        : wasOriginallySelected
-                                          ? 'bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30'
-                                          : desconto.tipo === 'desconto'
-                                            ? 'bg-green-500/5 border-green-500/20 hover:bg-green-500/10'
-                                            : 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10'
-                                    }`}
-                                    onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
-                                  >
-                                    <div className="text-white font-medium">
-                                      {desconto.prazo_dias}d
-                                    </div>
-                                    <div className={`${
-                                      isSelected
-                                        ? 'text-blue-400'
-                                        : wasOriginallySelected
-                                          ? 'text-green-400'
-                                          : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                    }`}>
-                                      {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                                    </div>
-                                    {isSelected && (
-                                      <div className="text-xs text-blue-400">✓</div>
-                                    )}
-                                    {!isSelected && wasOriginallySelected && (
-                                      <div className="text-xs text-green-400">Original</div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Desconto por Valor (se aplicável) */}
-                        {(() => {
-                          const descontoValor = calcularDescontoPorValor(calcularTotal());
-                          return descontoValor && (
-                            <div className="mt-2 pt-2 border-t border-green-500/20">
-                              <div className="text-xs text-gray-400 mb-1">Desconto por Valor</div>
-                              <div className={`p-1.5 rounded border text-center text-xs ${
-                                descontoValor.tipo === 'desconto'
-                                  ? 'bg-green-500/10 border-green-500/30'
-                                  : 'bg-red-500/10 border-red-500/30'
-                              }`}>
-                                <div className="text-white font-medium">
-                                  A partir de {formatCurrency(descontoValor.valorMinimo)}
-                                </div>
-                                <div className={`${
-                                  descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                }`}>
-                                  {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {/* Opções de Faturamento - Descontos do Cliente (apenas quando não há pedidos importados) */}
-                {pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-4 h-4 bg-blue-500 rounded flex items-center justify-center">
-                        <span className="text-white text-xs font-bold">%</span>
-                      </div>
-                      <div className="text-sm text-blue-400 font-medium">Opções de Faturamento</div>
-                    </div>
-
-                    {/* Descontos por Prazo */}
-                    {descontosCliente.prazo.length > 0 && (
-                      <div className="space-y-2">
-                        <div className="text-xs text-gray-400 mb-2">Prazo de Faturamento</div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {getDescontosPrazoDisponiveis().map((desconto, idx) => {
-                            const isSelected = descontoPrazoSelecionado === desconto.id;
-                            return (
-                              <div
-                                key={idx}
-                                className={`p-2 rounded-lg border text-center cursor-pointer transition-colors ${
-                                  isSelected
-                                    ? 'bg-blue-500/20 border-blue-500 ring-2 ring-blue-500/50'
-                                    : desconto.tipo === 'desconto'
-                                      ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
-                                      : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
-                                }`}
-                                onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
-                              >
-                                <div className="text-xs text-white font-medium">
-                                  {desconto.prazo_dias} dias
-                                </div>
-                                <div className={`text-xs ${
-                                  isSelected
-                                    ? 'text-blue-400'
-                                    : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                }`}>
-                                  {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                                </div>
-                                {isSelected && (
-                                  <div className="text-xs text-blue-400 mt-1">
-                                    ✓ Selecionado
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Desconto por Valor (se aplicável) */}
-                    {(() => {
-                      const descontoValor = calcularDescontoPorValor(calcularTotal());
-                      return descontoValor && (
-                        <div className="mt-3 pt-3 border-t border-gray-700">
-                          <div className="text-xs text-gray-400 mb-2">Desconto por Valor</div>
-                          <div className={`p-2 rounded-lg border text-center ${
-                            descontoValor.tipo === 'desconto'
-                              ? 'bg-green-500/10 border-green-500/30'
-                              : 'bg-red-500/10 border-red-500/30'
-                          }`}>
-                            <div className="text-xs text-white font-medium">
-                              A partir de {formatCurrency(descontoValor.valorMinimo)}
-                            </div>
-                            <div className={`text-xs ${
-                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                            }`}>
-                              {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Área de informações resumidas */}
-            <div className="flex-1 flex flex-col justify-center">
-              {carrinho.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">
-                  <Calculator size={48} className="mx-auto mb-2 opacity-50" />
-                  <p>Nenhum item no carrinho</p>
-                  <p className="text-sm">Use o botão "Produtos" para adicionar itens</p>
-                </div>
-              ) : (
-                <div className="bg-gray-800/30 rounded-lg p-4">
-                  <div className="text-center mb-4">
-                    <div className="text-3xl font-bold text-primary-400 mb-2">
-                      {carrinho.reduce((total, item) => total + item.quantidade, 0)}
-                    </div>
-                    <div className="text-gray-400 text-sm">
-                      {carrinho.length === 1 ? 'produto' : 'produtos'} no carrinho
-                    </div>
-                  </div>
-
-                  {/* Lista resumida dos produtos */}
-                  <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                    {carrinho.map(item => (
-                      <div key={item.id} className="flex justify-between items-center text-sm">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-white truncate">{item.produto.nome}</div>
-                          <div className="text-gray-400 text-xs">
-                            {item.quantidade}x {formatCurrency(item.subtotal / item.quantidade)}
-                          </div>
-                        </div>
-                        <div className="text-primary-400 font-medium ml-2">
-                          {formatCurrency(item.subtotal)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Resumo e Finalização - Só aparece quando NÃO está na finalização */}
-            {carrinho.length > 0 && !showFinalizacaoVenda && (
-              <div className="border-t border-gray-800 pt-4">
-                {(() => {
-                  const subtotal = calcularTotal();
-                  const totalFinal = calcularTotalComDesconto();
-
-                  // Calcular desconto por prazo se selecionado
-                  let descontoPrazo = null;
-                  if (descontoPrazoSelecionado) {
-                    const desconto = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
-                    if (desconto) {
-                      const valorDesconto = (subtotal * desconto.percentual) / 100;
-                      descontoPrazo = {
-                        tipo: desconto.tipo,
-                        percentual: desconto.percentual,
-                        valor: valorDesconto,
-                        prazo_dias: desconto.prazo_dias
-                      };
-                    }
-                  }
-
-                  // Calcular desconto por valor (aplicado após desconto por prazo)
-                  const subtotalComDescontoPrazo = descontoPrazo
-                    ? (descontoPrazo.tipo === 'desconto' ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor)
-                    : subtotal;
-                  const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
-
-                  return (
-                    <>
-                      <div className="space-y-2 mb-4">
-                        <div className="flex justify-between text-gray-400">
-                          <span>Subtotal:</span>
-                          <span>{formatCurrency(subtotal)}</span>
-                        </div>
-
-                        {/* Desconto por Prazo (se aplicável) */}
-                        {descontoPrazo && (
-                          <div className="flex justify-between text-sm">
-                            <span className={`${
-                              descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
-                            }`}>
-                              {descontoPrazo.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} Prazo ({descontoPrazo.prazo_dias} dias):
-                            </span>
-                            <span className={`${
-                              descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
-                            }`}>
-                              {descontoPrazo.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoPrazo.valor)}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Desconto por Valor (se aplicável) */}
-                        {descontoValor && (
-                          <div className="flex justify-between text-sm">
-                            <span className={`${
-                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                            }`}>
-                              {descontoValor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} ({descontoValor.percentual}%):
-                            </span>
-                            <span className={`${
-                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                            }`}>
-                              {descontoValor.tipo === 'desconto' ? '-' : '+'}{formatCurrency(descontoValor.valor)}
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="flex justify-between text-white font-bold text-lg">
-                          <span>Total:</span>
-                          <span>{formatCurrency(totalFinal)}</span>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={finalizarVenda}
-                        className="w-full bg-primary-500 hover:bg-primary-600 text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <CreditCard size={20} />
-                        Finalizar Venda
-                      </button>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Área de Finalização de Venda */}
-        {showFinalizacaoVenda && !showFinalizacaoFinal && (
+        {!showFinalizacaoFinal && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
@@ -3018,21 +2630,9 @@ const PDVPage: React.FC = () => {
               duration: 0.5,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="w-96 bg-background-card border-l border-gray-800 flex flex-col h-full"
+            className="w-2/5 bg-background-card border-l border-gray-800 flex flex-col h-full"
           >
-            {/* Header fixo */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <CreditCard size={20} />
-                Finalizar Venda
-              </h3>
-              <button
-                onClick={() => setShowFinalizacaoVenda(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
+
 
             {/* Conteúdo scrollável */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4"
@@ -3504,7 +3104,6 @@ const PDVPage: React.FC = () => {
               <div className="flex gap-3">
                 <button
                   onClick={() => {
-                    setShowFinalizacaoVenda(false);
                     limparPagamentosParciais();
                   }}
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
@@ -3565,7 +3164,7 @@ const PDVPage: React.FC = () => {
               duration: 0.5,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="w-96 bg-background-card border-l border-gray-800 flex flex-col h-full"
+            className="w-2/5 bg-background-card border-l border-gray-800 flex flex-col h-full"
           >
             {/* Header fixo */}
             <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
