@@ -3058,20 +3058,22 @@ const PDVPage: React.FC = () => {
                           className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative`}
                           style={{ flex: '1 1 120px', minWidth: '120px' }}
                         >
-                          <IconComponent size={20} />
+                          {/* Wrapper do ícone com contador */}
+                          <div className="relative">
+                            <IconComponent size={20} />
+                            {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
+                            {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
+                              <div className="absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
+                                {contadorPedidosPendentes > 99 ? '99+' : contadorPedidosPendentes}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex items-center gap-1 mt-1">
                             <span className="text-xs whitespace-nowrap">{item.label}</span>
                             <span className="text-xs bg-gray-700 px-1 py-0.5 rounded text-gray-300 font-mono">
                               {teclaAtalho}
                             </span>
                           </div>
-
-                          {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
-                          {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
-                            <div className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
-                              {contadorPedidosPendentes > 99 ? '99+' : contadorPedidosPendentes}
-                            </div>
-                          )}
                         </button>
                       );
                     })}
