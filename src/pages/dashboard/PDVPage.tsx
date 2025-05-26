@@ -3017,7 +3017,7 @@ const PDVPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {carrinho.map(item => (
+                    {carrinho.map((item, index) => (
                       <motion.div
                         key={item.id}
                         initial={{ opacity: 0, y: 20 }}
@@ -3027,6 +3027,13 @@ const PDVPage: React.FC = () => {
                       >
                         {/* Layout responsivo baseado na largura da tela */}
                         <div className="flex gap-3">
+                          {/* Número sequencial do item */}
+                          <div className="w-6 h-6 bg-background-card border border-gray-700 rounded-full flex items-center justify-center flex-shrink-0 self-center shadow-lg">
+                            <span className="text-xs font-medium text-gray-100">
+                              {index + 1}
+                            </span>
+                          </div>
+
                           {/* Foto do Produto - Alinhada apenas com dados principais */}
                           <div
                             className="w-16 h-16 lg:w-12 lg:h-12 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative self-start"
