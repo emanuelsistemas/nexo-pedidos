@@ -34,7 +34,8 @@ import {
   MessageCircle,
   Bike,
   Pencil,
-  Check
+  Check,
+  MessageSquare
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -110,6 +111,7 @@ interface ItemCarrinho {
     quantidade: number;
   }>;
   temOpcoesAdicionais?: boolean; // Indica se o produto tem opções adicionais disponíveis
+  observacao?: string; // Observação adicional do produto
 }
 
 interface Cliente {
@@ -256,6 +258,13 @@ const PDVPage: React.FC = () => {
   const [itemEditandoNome, setItemEditandoNome] = useState<string | null>(null);
   const [nomeEditando, setNomeEditando] = useState<string>('');
 
+  // Estados para observação adicional
+  const [showObservacaoModal, setShowObservacaoModal] = useState(false);
+  const [itemParaObservacao, setItemParaObservacao] = useState<string | null>(null);
+  const [observacaoTexto, setObservacaoTexto] = useState<string>('');
+  const [itemEditandoObservacao, setItemEditandoObservacao] = useState<string | null>(null);
+  const [observacaoEditando, setObservacaoEditando] = useState<string>('');
+
   // Funções para localStorage
   const savePDVState = () => {
     try {
@@ -272,6 +281,8 @@ const PDVPage: React.FC = () => {
         descontoPrazoSelecionado,
         itemEditandoNome,
         nomeEditando,
+        itemEditandoObservacao,
+        observacaoEditando,
         timestamp: Date.now()
       };
       localStorage.setItem(PDV_STORAGE_KEY, JSON.stringify(pdvState));
@@ -316,6 +327,8 @@ const PDVPage: React.FC = () => {
           if (pdvState.descontoPrazoSelecionado) setDescontoPrazoSelecionado(pdvState.descontoPrazoSelecionado);
           if (pdvState.itemEditandoNome) setItemEditandoNome(pdvState.itemEditandoNome);
           if (pdvState.nomeEditando) setNomeEditando(pdvState.nomeEditando);
+          if (pdvState.itemEditandoObservacao) setItemEditandoObservacao(pdvState.itemEditandoObservacao);
+          if (pdvState.observacaoEditando) setObservacaoEditando(pdvState.observacaoEditando);
 
         } else {
           // Remove estado antigo
@@ -408,6 +421,8 @@ const PDVPage: React.FC = () => {
     // Limpar estados de edição
     setItemEditandoNome(null);
     setNomeEditando('');
+    setItemEditandoObservacao(null);
+    setObservacaoEditando('');
 
     // Limpar localStorage
     clearPDVState();
@@ -748,6 +763,8 @@ const PDVPage: React.FC = () => {
     descontoPrazoSelecionado,
     itemEditandoNome,
     nomeEditando,
+    itemEditandoObservacao,
+    observacaoEditando,
     produtos.length // Garante que só salva depois de carregar os produtos
   ]);
 
@@ -2073,6 +2090,64 @@ const PDVPage: React.FC = () => {
     setNomeEditando('');
   };
 
+  // Funções para observação adicional
+  const abrirModalObservacao = (itemId: string) => {
+    const item = carrinho.find(i => i.id === itemId);
+    setItemParaObservacao(itemId);
+    setObservacaoTexto(item?.observacao || '');
+    setShowObservacaoModal(true);
+  };
+
+  const salvarObservacao = () => {
+    if (!itemParaObservacao) return;
+
+    // Atualizar o item no carrinho com a observação
+    setCarrinho(prev => prev.map(item =>
+      item.id === itemParaObservacao
+        ? { ...item, observacao: observacaoTexto.trim() || undefined }
+        : item
+    ));
+
+    // Fechar modal e limpar estados
+    setShowObservacaoModal(false);
+    setItemParaObservacao(null);
+    setObservacaoTexto('');
+
+    toast.success('Observação salva com sucesso!');
+  };
+
+  const iniciarEdicaoObservacao = (itemId: string, observacaoAtual: string) => {
+    setItemEditandoObservacao(itemId);
+    setObservacaoEditando(observacaoAtual);
+  };
+
+  const finalizarEdicaoObservacao = (itemId: string) => {
+    if (observacaoEditando.trim() === '') {
+      // Se a observação estiver vazia, remove ela
+      setCarrinho(prev => prev.map(item =>
+        item.id === itemId
+          ? { ...item, observacao: undefined }
+          : item
+      ));
+    } else {
+      // Atualizar a observação no carrinho
+      setCarrinho(prev => prev.map(item =>
+        item.id === itemId
+          ? { ...item, observacao: observacaoEditando.trim() }
+          : item
+      ));
+    }
+
+    // Limpar estados de edição
+    setItemEditandoObservacao(null);
+    setObservacaoEditando('');
+  };
+
+  const cancelarEdicaoObservacao = () => {
+    setItemEditandoObservacao(null);
+    setObservacaoEditando('');
+  };
+
   const confirmarOpcoesAdicionais = (itensSelecionados: Array<{
     item: { id: string; nome: string; preco: number; opcao_id: string };
     quantidade: number;
@@ -3207,6 +3282,15 @@ const PDVPage: React.FC = () => {
                                     <Plus size={12} />
                                   </button>
                                 )}
+
+                                {/* Botão para observação adicional - desktop */}
+                                <button
+                                  onClick={() => abrirModalObservacao(item.id)}
+                                  className="w-7 h-7 bg-blue-600/20 hover:bg-blue-600/40 rounded-full flex items-center justify-center text-blue-200 transition-colors"
+                                  title="Adicionar observação"
+                                >
+                                  <MessageSquare size={12} />
+                                </button>
                               </div>
 
                               {/* Preço e botão remover - desktop */}
@@ -3295,6 +3379,65 @@ const PDVPage: React.FC = () => {
                               </div>
                             )}
 
+                            {/* Seção de Observação - Aparece por último */}
+                            {item.observacao && (
+                              <div className={`${item.adicionais && item.adicionais.length > 0 ? 'mt-3' : 'mt-3 pt-3 border-t border-gray-700/50'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-sm text-blue-300 font-medium">
+                                    <span>Observação</span>
+                                  </div>
+                                </div>
+                                <div className="bg-gray-800/30 rounded-lg p-2">
+                                  {itemEditandoObservacao === item.id ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={observacaoEditando}
+                                        onChange={(e) => setObservacaoEditando(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            finalizarEdicaoObservacao(item.id);
+                                          } else if (e.key === 'Escape') {
+                                            cancelarEdicaoObservacao();
+                                          }
+                                        }}
+                                        onBlur={() => finalizarEdicaoObservacao(item.id)}
+                                        onFocus={(e) => {
+                                          const input = e.target as HTMLInputElement;
+                                          setTimeout(() => {
+                                            input.setSelectionRange(input.value.length, input.value.length);
+                                          }, 0);
+                                        }}
+                                        className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500"
+                                        autoFocus
+                                        placeholder="Digite a observação..."
+                                      />
+                                      <button
+                                        onClick={() => finalizarEdicaoObservacao(item.id)}
+                                        className="text-green-400 hover:text-green-300 transition-colors flex-shrink-0"
+                                        title="Confirmar edição"
+                                      >
+                                        <Check size={14} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-gray-300 text-sm italic flex-1">
+                                        {item.observacao}
+                                      </span>
+                                      <button
+                                        onClick={() => iniciarEdicaoObservacao(item.id, item.observacao!)}
+                                        className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0 ml-2"
+                                        title="Editar observação"
+                                      >
+                                        <Pencil size={12} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Preço - mobile */}
                             <div className="text-sm lg:hidden mt-2">
                               {item.desconto ? (
@@ -3364,6 +3507,15 @@ const PDVPage: React.FC = () => {
                                     <Plus size={14} />
                                   </button>
                                 )}
+
+                                {/* Botão para observação adicional */}
+                                <button
+                                  onClick={() => abrirModalObservacao(item.id)}
+                                  className="w-8 h-8 bg-blue-600/20 hover:bg-blue-600/40 rounded-full flex items-center justify-center text-blue-200 transition-colors"
+                                  title="Adicionar observação"
+                                >
+                                  <MessageSquare size={14} />
+                                </button>
                               </div>
                               <div className="text-white font-bold">
                                 {formatCurrency(item.subtotal)}
@@ -6644,6 +6796,59 @@ const PDVPage: React.FC = () => {
           produto={produtoParaAdicionais}
           onConfirm={confirmarOpcoesAdicionais}
         />
+      )}
+
+      {/* Modal de Observação Adicional */}
+      {showObservacaoModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background-card border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                <MessageSquare size={20} className="text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Observação Adicional</h3>
+                <p className="text-sm text-gray-400">Adicione uma observação para este produto</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-white mb-2">
+                Observação
+              </label>
+              <textarea
+                value={observacaoTexto}
+                onChange={(e) => setObservacaoTexto(e.target.value)}
+                placeholder="Digite uma observação para este produto..."
+                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 resize-none"
+                rows={3}
+                autoFocus
+              />
+              <p className="text-gray-400 text-xs mt-1">
+                Esta observação aparecerá junto com o produto no carrinho
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowObservacaoModal(false);
+                  setItemParaObservacao(null);
+                  setObservacaoTexto('');
+                }}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarObservacao}
+                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition-colors"
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de Produto Não Encontrado */}
