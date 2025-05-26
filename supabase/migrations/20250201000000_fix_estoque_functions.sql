@@ -1,8 +1,11 @@
 -- =====================================================
--- FUNÇÃO PARA ATUALIZAR ESTOQUE DE PRODUTOS
+-- CORREÇÃO DAS FUNÇÕES DE ESTOQUE
 -- =====================================================
+-- Data: 2025-02-01
+-- Descrição: Corrige as funções de estoque para trabalhar corretamente
+--            com a estrutura atual das tabelas produto_estoque e produtos
 
--- Função para atualizar estoque de produto
+-- Função para atualizar estoque de produto (CORRIGIDA)
 CREATE OR REPLACE FUNCTION atualizar_estoque_produto(
   p_produto_id UUID,
   p_quantidade NUMERIC(10,3),
@@ -18,6 +21,7 @@ DECLARE
   v_usuario_id UUID;
   v_estoque_atual NUMERIC(10,3) := 0;
   v_novo_estoque NUMERIC(10,3);
+  v_bloqueia_estoque BOOLEAN := false;
 BEGIN
   -- Buscar empresa_id do produto e estoque atual
   SELECT empresa_id, COALESCE(estoque_atual, 0) INTO v_empresa_id, v_estoque_atual
@@ -27,6 +31,11 @@ BEGIN
   IF v_empresa_id IS NULL THEN
     RAISE EXCEPTION 'Produto não encontrado';
   END IF;
+
+  -- Verificar configuração de bloqueio de estoque da empresa
+  SELECT COALESCE(bloqueia_sem_estoque, false) INTO v_bloqueia_estoque
+  FROM tipo_controle_estoque_config
+  WHERE empresa_id = v_empresa_id;
 
   -- Buscar usuário atual (se autenticado)
   SELECT auth.uid() INTO v_usuario_id;
@@ -39,8 +48,8 @@ BEGIN
   -- Calcular novo estoque
   v_novo_estoque := v_estoque_atual + p_quantidade;
 
-  -- Verificar se estoque não ficará negativo (apenas para saídas)
-  IF p_quantidade < 0 AND v_novo_estoque < 0 THEN
+  -- Verificar se estoque não ficará negativo (apenas se bloqueio estiver ativado e for saída)
+  IF v_bloqueia_estoque AND p_quantidade < 0 AND v_novo_estoque < 0 THEN
     RAISE EXCEPTION 'Estoque insuficiente. Estoque atual: %, Tentativa de baixa: %', v_estoque_atual, ABS(p_quantidade);
   END IF;
 
@@ -80,13 +89,7 @@ EXCEPTION
 END;
 $$;
 
--- Comentário na função
-COMMENT ON FUNCTION atualizar_estoque_produto IS 'Atualiza estoque de produto com validações e histórico';
-
--- =====================================================
--- FUNÇÃO PARA VERIFICAR ESTOQUE DISPONÍVEL
--- =====================================================
-
+-- Função para verificar estoque disponível (CORRIGIDA)
 CREATE OR REPLACE FUNCTION verificar_estoque_disponivel(
   p_produto_id UUID,
   p_quantidade_necessaria NUMERIC(10,3)
@@ -108,13 +111,7 @@ BEGIN
 END;
 $$;
 
--- Comentário na função
-COMMENT ON FUNCTION verificar_estoque_disponivel IS 'Verifica se há estoque suficiente para uma operação';
-
--- =====================================================
--- FUNÇÃO PARA OBTER ESTOQUE ATUAL
--- =====================================================
-
+-- Função para obter estoque atual (CORRIGIDA)
 CREATE OR REPLACE FUNCTION obter_estoque_atual(p_produto_id UUID)
 RETURNS NUMERIC(10,3)
 LANGUAGE plpgsql
@@ -132,12 +129,10 @@ BEGIN
 END;
 $$;
 
--- Comentário na função
-COMMENT ON FUNCTION obter_estoque_atual IS 'Retorna o estoque atual de um produto';
-
--- =====================================================
--- PERMISSÕES
--- =====================================================
+-- Comentários nas funções
+COMMENT ON FUNCTION atualizar_estoque_produto IS 'Atualiza estoque de produto com validações e histórico (CORRIGIDA)';
+COMMENT ON FUNCTION verificar_estoque_disponivel IS 'Verifica se há estoque suficiente para uma operação (CORRIGIDA)';
+COMMENT ON FUNCTION obter_estoque_atual IS 'Retorna o estoque atual de um produto (CORRIGIDA)';
 
 -- Dar permissões para usuários autenticados
 GRANT EXECUTE ON FUNCTION atualizar_estoque_produto TO authenticated;

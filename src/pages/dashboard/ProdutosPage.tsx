@@ -616,10 +616,10 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      // Buscar todos os produtos da empresa com seus valores de estoque atual
+      // Buscar todos os produtos da empresa
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
-        .select('id, estoque_atual')
+        .select('id')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false);
 
@@ -629,10 +629,32 @@ const ProdutosPage: React.FC = () => {
       // Criar um objeto para armazenar as informações de estoque de cada produto
       const estoqueInfo: Record<string, { total: number, naoFaturado: number }> = {};
 
-      // Para cada produto, buscar os pedidos pendentes para calcular o estoque não faturado
+      // Para cada produto, calcular o estoque baseado nas movimentações (igual ao histórico)
       for (const produto of produtosData) {
-        // Obter o estoque atual diretamente da tabela de produtos
-        const estoqueAtual = parseFloat(produto.estoque_atual || '0');
+        // Buscar todas as movimentações de estoque do produto
+        const { data: movimentosData, error: movimentosError } = await supabase
+          .from('produto_estoque')
+          .select('tipo_movimento, quantidade')
+          .eq('produto_id', produto.id)
+          .eq('empresa_id', usuarioData.empresa_id)
+          .order('data_hora_movimento', { ascending: true });
+
+        if (movimentosError) {
+          console.error(`Erro ao carregar movimentos do produto ${produto.id}:`, movimentosError);
+          continue;
+        }
+
+        // Calcular o estoque atual baseado nas movimentações (igual ao histórico)
+        let estoqueCalculado = 0;
+        if (movimentosData) {
+          movimentosData.forEach(movimento => {
+            if (movimento.tipo_movimento === 'entrada') {
+              estoqueCalculado += parseFloat(movimento.quantidade);
+            } else {
+              estoqueCalculado -= parseFloat(movimento.quantidade);
+            }
+          });
+        }
 
         // Buscar pedidos pendentes que contêm este produto
         const { data: pedidosData, error: pedidosError } = await supabase
@@ -662,9 +684,9 @@ const ProdutosPage: React.FC = () => {
           });
         }
 
-        // Armazenar as informações de estoque do produto
+        // Armazenar as informações de estoque do produto usando o valor calculado
         estoqueInfo[produto.id] = {
-          total: estoqueAtual,
+          total: estoqueCalculado, // Agora usa o valor calculado das movimentações
           naoFaturado: quantidadeNaoFaturada
         };
       }
@@ -926,64 +948,6 @@ const ProdutosPage: React.FC = () => {
     setFormularioResetado(false);
 
     setShowSidebar(true);
-  };
-
-  // Função para recalcular o estoque de um produto baseado no histórico de movimentações
-  const recalcularEstoqueProduto = async (produtoId: string) => {
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
-
-      const { data: usuarioData } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('id', userData.user.id)
-        .single();
-
-      if (!usuarioData?.empresa_id) return;
-
-      // Buscar todas as movimentações do produto
-      const { data: movimentosData, error: movimentosError } = await supabase
-        .from('produto_estoque')
-        .select('tipo_movimento, quantidade')
-        .eq('produto_id', produtoId)
-        .eq('empresa_id', usuarioData.empresa_id)
-        .order('data_hora_movimento', { ascending: true });
-
-      if (movimentosError) {
-        console.error('Erro ao buscar movimentações:', movimentosError);
-        return;
-      }
-
-      // Calcular o estoque correto baseado nas movimentações
-      let estoqueCorreto = 0;
-      if (movimentosData) {
-        movimentosData.forEach(movimento => {
-          if (movimento.tipo_movimento === 'entrada') {
-            estoqueCorreto += parseFloat(movimento.quantidade);
-          } else {
-            estoqueCorreto -= parseFloat(movimento.quantidade);
-          }
-        });
-      }
-
-      // Atualizar o estoque_atual na tabela produtos
-      const { error: updateError } = await supabase
-        .from('produtos')
-        .update({ estoque_atual: estoqueCorreto })
-        .eq('id', produtoId)
-        .eq('empresa_id', usuarioData.empresa_id);
-
-      if (updateError) {
-        console.error('Erro ao atualizar estoque:', updateError);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Erro ao recalcular estoque:', error);
-      return false;
-    }
   };
 
   // Função para carregar os movimentos de estoque de um produto
@@ -3934,28 +3898,8 @@ const ProdutosPage: React.FC = () => {
                               </div>
 
                               <div>
-                                <div className="flex items-center justify-between mb-4">
+                                <div className="mb-4">
                                   <h4 className="text-white font-medium">Histórico de Movimentações</h4>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={async () => {
-                                      if (editingProduto) {
-                                        const sucesso = await recalcularEstoqueProduto(editingProduto.id);
-                                        if (sucesso) {
-                                          showMessage('success', 'Estoque recalculado com sucesso!');
-                                          await loadEstoqueMovimentos(editingProduto.id);
-                                          await loadProdutosEstoque();
-                                        } else {
-                                          showMessage('error', 'Erro ao recalcular estoque');
-                                        }
-                                      }
-                                    }}
-                                    disabled={isLoadingEstoque}
-                                  >
-                                    Recalcular Estoque
-                                  </Button>
                                 </div>
 
                                 {isLoadingEstoque ? (
@@ -3969,30 +3913,29 @@ const ProdutosPage: React.FC = () => {
                                   </div>
                                 ) : (
                                   <div className="border border-gray-800 rounded-lg overflow-hidden">
-                                    <div className="overflow-x-auto custom-scrollbar">
+                                    <div className="overflow-y-auto max-h-[300px] custom-scrollbar">
                                       <table className="w-full text-sm text-left text-gray-300">
                                         <thead className="text-xs uppercase bg-gray-900/50 text-gray-400 sticky top-0">
                                           <tr>
-                                            <th scope="col" className="px-4 py-3 w-[120px]">Data</th>
-                                            <th scope="col" className="px-4 py-3 w-[70px]">Tipo</th>
-                                            <th scope="col" className="px-4 py-3 w-[80px]">Qtde</th>
-                                            <th scope="col" className="px-4 py-3 w-[80px]">Saldo</th>
-                                            <th scope="col" className="px-4 py-3 w-[100px]">Usuário</th>
-                                            <th scope="col" className="px-4 py-3">Obs</th>
+                                            <th scope="col" className="px-1 py-2 w-[110px]">Data</th>
+                                            <th scope="col" className="px-1 py-2 w-[70px]">Tipo</th>
+                                            <th scope="col" className="px-1 py-2 w-[50px] text-center">Qtde</th>
+                                            <th scope="col" className="px-1 py-2 w-[60px] text-center">Saldo</th>
+                                            <th scope="col" className="px-1 py-2 w-[80px]">Usuário</th>
+                                            <th scope="col" className="px-1 py-2">Obs</th>
                                           </tr>
                                         </thead>
-                                      </table>
-                                    </div>
-                                    <div className="overflow-y-auto max-h-[300px] custom-scrollbar">
-                                      <table className="w-full text-sm text-left text-gray-300">
                                         <tbody>
                                           {estoqueMovimentos.map((movimento) => (
                                             <tr key={movimento.id} className="border-b border-gray-800 hover:bg-gray-800/30">
-                                              <td className="px-4 py-3 w-[120px]">
-                                                {new Date(movimento.data_hora_movimento).toLocaleString('pt-BR')}
+                                              <td className="px-1 py-1.5 w-[110px] text-xs">
+                                                <div className="flex flex-col leading-none">
+                                                  <span className="text-gray-200 text-[11px]">{new Date(movimento.data_hora_movimento).toLocaleDateString('pt-BR')}</span>
+                                                  <span className="text-gray-500 text-[9px] mt-0.5">{new Date(movimento.data_hora_movimento).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
                                               </td>
-                                              <td className="px-4 py-3 w-[70px]">
-                                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                              <td className="px-1 py-1.5 w-[70px]">
+                                                <span className={`px-1 py-0.5 rounded text-[9px] font-medium ${
                                                   movimento.tipo_movimento === 'entrada'
                                                     ? 'bg-green-900/30 text-green-400'
                                                     : 'bg-red-900/30 text-red-400'
@@ -4000,16 +3943,16 @@ const ProdutosPage: React.FC = () => {
                                                   {movimento.tipo_movimento === 'entrada' ? 'Entrada' : 'Saída'}
                                                 </span>
                                               </td>
-                                              <td className="px-4 py-3 w-[80px]">
+                                              <td className="px-1 py-1.5 w-[50px] font-medium text-center text-xs">
                                                 {editingProduto ? formatarEstoque(parseFloat(movimento.quantidade), editingProduto) : parseFloat(movimento.quantidade).toFixed(2)}
                                               </td>
-                                              <td className="px-4 py-3 font-medium w-[80px]">
+                                              <td className="px-1 py-1.5 font-bold w-[60px] text-white text-center text-xs">
                                                 {editingProduto ? formatarEstoque(parseFloat(movimento.saldo), editingProduto) : parseFloat(movimento.saldo).toFixed(2)}
                                               </td>
-                                              <td className="px-4 py-3 w-[100px]">
+                                              <td className="px-1 py-1.5 w-[80px] text-gray-300 text-[10px] truncate" title={movimento.usuario?.nome || 'Sistema'}>
                                                 {movimento.usuario?.nome || 'Sistema'}
                                               </td>
-                                              <td className="px-4 py-3">
+                                              <td className="px-1 py-1.5 text-gray-300 text-[10px] break-words">
                                                 {movimento.observacao || '-'}
                                               </td>
                                             </tr>

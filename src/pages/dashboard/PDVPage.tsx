@@ -3059,6 +3059,47 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
+      // Verificar baixa de estoque se configurado
+      if (pdvConfig?.baixa_estoque_pdv) {
+        setEtapaProcessamento('Verificando baixa de estoque...');
+
+        for (const item of carrinho) {
+          // Verificar se existe movimentação de estoque para este produto desta venda
+          const { data: movimentacaoEstoque, error: estoqueError } = await supabase
+            .from('produto_estoque')
+            .select('id, tipo_movimento, quantidade, observacao, data_hora_movimento')
+            .eq('produto_id', item.produto.id)
+            .eq('tipo_movimento', 'saida')
+            .ilike('observacao', `%Venda PDV #${numeroVenda}%`)
+            .order('data_hora_movimento', { ascending: false });
+
+          if (estoqueError) {
+            console.error('Erro ao verificar movimentação de estoque:', estoqueError);
+            return false;
+          }
+
+          if (!movimentacaoEstoque || movimentacaoEstoque.length === 0) {
+            console.error(`❌ Movimentação de estoque não encontrada para produto ${item.produto.nome} (ID: ${item.produto.id})`);
+            console.error(`   Esperado: Saída de ${item.quantidade} unidades com observação "Venda PDV #${numeroVenda}"`);
+            return false;
+          }
+
+          // Somar todas as movimentações desta venda para este produto (caso haja múltiplas)
+          const quantidadeTotal = movimentacaoEstoque.reduce((total, mov) => total + parseFloat(mov.quantidade), 0);
+
+          if (quantidadeTotal !== item.quantidade) {
+            console.error(`❌ Quantidade incorreta na movimentação de estoque para produto ${item.produto.nome}`);
+            console.error(`   Esperado: ${item.quantidade}, Encontrado: ${quantidadeTotal}`);
+            console.error(`   Movimentações encontradas:`, movimentacaoEstoque);
+            return false;
+          }
+
+          console.log(`✅ Estoque verificado para ${item.produto.nome}: ${quantidadeTotal} unidades baixadas`);
+        }
+
+        console.log('✅ Baixa de estoque verificada com sucesso para todos os itens');
+      }
+
       setEtapaProcessamento('Verificando opções adicionais...');
 
       // Verificar opções adicionais se existirem
@@ -3575,9 +3616,17 @@ const PDVPage: React.FC = () => {
           });
 
           if (estoqueError) {
-            console.warn('Erro ao atualizar estoque:', estoqueError);
+            console.error('Erro ao atualizar estoque:', estoqueError);
+            setEtapaProcessamento('ERRO: Falha na baixa de estoque: ' + estoqueError.message);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            setShowProcessandoVenda(false);
+            toast.error('ERRO: Falha na baixa de estoque: ' + estoqueError.message);
+            return;
           }
         }
+
+        // Aguardar um pouco para garantir que todas as movimentações foram processadas
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       // VERIFICAÇÃO CRÍTICA: Confirmar se tudo foi salvo corretamente
