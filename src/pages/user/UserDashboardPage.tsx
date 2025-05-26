@@ -413,12 +413,12 @@ const UserDashboardPage: React.FC = () => {
       {isLoading ? (
         <>
           {/* Cards skeleton */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
             {[1, 2, 3, 4, 5, 6].map((item) => (
               <div key={item} className="p-4 rounded-lg border border-gray-800 bg-background-card">
-                <div className="h-6 w-6 bg-gray-700 rounded mb-2 animate-pulse"></div>
+                <div className="h-5 w-5 bg-gray-700 rounded mb-2 animate-pulse"></div>
                 <div className="h-3 w-16 bg-gray-700 rounded mb-2 animate-pulse"></div>
-                <div className="h-5 w-20 bg-gray-700 rounded animate-pulse"></div>
+                <div className="h-4 w-20 bg-gray-700 rounded animate-pulse"></div>
               </div>
             ))}
           </div>
@@ -447,7 +447,7 @@ const UserDashboardPage: React.FC = () => {
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
             {cards.map((card, index) => (
               <motion.div
                 key={card.title}
@@ -456,13 +456,13 @@ const UserDashboardPage: React.FC = () => {
                 transition={{ delay: index * 0.1 }}
                 className={`p-4 rounded-lg border ${card.borderColor} ${card.color}`}
               >
-                <div className="flex items-center mb-2">
-                  <div className={`p-2 rounded-lg ${card.color}`}>
-                    <card.icon size={16} className={card.iconColor} />
+                <div className="flex items-center mb-3">
+                  <div className={`p-1.5 rounded-lg ${card.color}`}>
+                    <card.icon size={20} className={card.iconColor} />
                   </div>
                 </div>
                 <h3 className="text-gray-400 text-xs mb-1">{card.title}</h3>
-                <p className="text-lg font-semibold text-white">{card.value}</p>
+                <p className="text-xl font-semibold text-white">{card.value}</p>
               </motion.div>
             ))}
           </div>

@@ -621,7 +621,7 @@ const DashboardPage: React.FC = () => {
             }
           </p>
           {produtosEstoqueMinimo > 0 && (
-            <p className="text-xs text-primary-400 mt-2 font-medium animate-pulse">
+            <p className="text-xs text-primary-400 mt-1 font-medium animate-pulse">
               Clique para ver detalhes →
             </p>
           )}
@@ -732,7 +732,7 @@ const DashboardPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
         {cards.map((card, index) => (
           <motion.div
             key={card.title}
@@ -759,7 +759,7 @@ const DashboardPage: React.FC = () => {
                 }
               })
             }}
-            className={`p-6 rounded-lg border ${
+            className={`p-4 rounded-lg border ${
               card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0
                 ? 'border-red-500/50 shadow-red-500/20'
                 : card.borderColor
@@ -768,30 +768,30 @@ const DashboardPage: React.FC = () => {
             }`}
             onClick={card.onClick}
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className={`p-2 rounded-lg ${card.color} ${
+            <div className="flex items-center justify-between mb-3">
+              <div className={`p-1.5 rounded-lg ${card.color} ${
                 card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0 ? 'animate-pulse' : ''
               }`}>
-                <card.icon size={24} className={`${card.iconColor} ${
+                <card.icon size={20} className={`${card.iconColor} ${
                   card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0 ? 'animate-pulse' : ''
                 }`} />
               </div>
               {card.change !== undefined && (
-                <div className={`flex items-center gap-1 text-sm ${
+                <div className={`flex items-center gap-1 text-xs ${
                   card.change >= 0 ? 'text-green-500' : 'text-red-500'
                 }`}>
                   {card.change >= 0 ? (
-                    <ArrowUpRight size={16} />
+                    <ArrowUpRight size={14} />
                   ) : (
-                    <ArrowDownRight size={16} />
+                    <ArrowDownRight size={14} />
                   )}
                   <span>{Math.abs(card.change).toFixed(1)}%</span>
                 </div>
               )}
             </div>
-            <h3 className="text-gray-400 text-sm mb-1">{card.title}</h3>
+            <h3 className="text-gray-400 text-xs mb-1">{card.title}</h3>
             {typeof card.value === 'string' || typeof card.value === 'number' ? (
-              <p className={`text-2xl font-semibold text-white ${
+              <p className={`text-xl font-semibold text-white ${
                 card.title === 'Estoque Mínimo' && produtosEstoqueMinimo > 0 ? 'animate-pulse' : ''
               }`}>{card.value}</p>
             ) : (
