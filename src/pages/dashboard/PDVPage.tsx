@@ -32,7 +32,9 @@ import {
   ArrowUpDown,
   BookOpen,
   MessageCircle,
-  Bike
+  Bike,
+  Pencil,
+  Check
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -250,6 +252,10 @@ const PDVPage: React.FC = () => {
   const [produtoParaAdicionais, setProdutoParaAdicionais] = useState<Produto | null>(null);
   const [itemCarrinhoParaAdicionais, setItemCarrinhoParaAdicionais] = useState<string | null>(null);
 
+  // Estados para edição de nome do produto
+  const [itemEditandoNome, setItemEditandoNome] = useState<string | null>(null);
+  const [nomeEditando, setNomeEditando] = useState<string>('');
+
   // Funções para localStorage
   const savePDVState = () => {
     try {
@@ -264,6 +270,8 @@ const PDVPage: React.FC = () => {
         pagamentosParciais,
         trocoCalculado,
         descontoPrazoSelecionado,
+        itemEditandoNome,
+        nomeEditando,
         timestamp: Date.now()
       };
       localStorage.setItem(PDV_STORAGE_KEY, JSON.stringify(pdvState));
@@ -306,6 +314,8 @@ const PDVPage: React.FC = () => {
 
           if (pdvState.trocoCalculado) setTrocoCalculado(pdvState.trocoCalculado);
           if (pdvState.descontoPrazoSelecionado) setDescontoPrazoSelecionado(pdvState.descontoPrazoSelecionado);
+          if (pdvState.itemEditandoNome) setItemEditandoNome(pdvState.itemEditandoNome);
+          if (pdvState.nomeEditando) setNomeEditando(pdvState.nomeEditando);
 
         } else {
           // Remove estado antigo
@@ -394,6 +404,10 @@ const PDVPage: React.FC = () => {
     setClienteEncontrado(null);
     setTipoDocumento('cpf');
     setErroValidacao('');
+
+    // Limpar estados de edição
+    setItemEditandoNome(null);
+    setNomeEditando('');
 
     // Limpar localStorage
     clearPDVState();
@@ -732,6 +746,8 @@ const PDVPage: React.FC = () => {
     pagamentosParciais,
     trocoCalculado,
     descontoPrazoSelecionado,
+    itemEditandoNome,
+    nomeEditando,
     produtos.length // Garante que só salva depois de carregar os produtos
   ]);
 
@@ -2027,6 +2043,36 @@ const PDVPage: React.FC = () => {
     setShowOpcoesAdicionaisModal(true);
   };
 
+  // Funções para edição de nome do produto
+  const iniciarEdicaoNome = (itemId: string, nomeAtual: string) => {
+    setItemEditandoNome(itemId);
+    setNomeEditando(nomeAtual);
+  };
+
+  const finalizarEdicaoNome = (itemId: string) => {
+    if (nomeEditando.trim() === '') {
+      // Se o nome estiver vazio, cancela a edição
+      cancelarEdicaoNome();
+      return;
+    }
+
+    // Atualizar o nome do produto no carrinho
+    setCarrinho(prev => prev.map(item =>
+      item.id === itemId
+        ? { ...item, produto: { ...item.produto, nome: nomeEditando.trim() } }
+        : item
+    ));
+
+    // Limpar estados de edição
+    setItemEditandoNome(null);
+    setNomeEditando('');
+  };
+
+  const cancelarEdicaoNome = () => {
+    setItemEditandoNome(null);
+    setNomeEditando('');
+  };
+
   const confirmarOpcoesAdicionais = (itensSelecionados: Array<{
     item: { id: string; nome: string; preco: number; opcao_id: string };
     quantidade: number;
@@ -3012,7 +3058,54 @@ const PDVPage: React.FC = () => {
                             <div className="lg:grid lg:grid-cols-[1fr_auto_auto] lg:items-center lg:gap-4">
                                 <div className="flex justify-between items-start mb-2 lg:mb-0">
                                   <div className="flex-1 min-w-0">
-                                    <h4 className="text-white font-medium text-sm line-clamp-1">{item.produto.nome}</h4>
+                                    {/* Nome do produto com edição inline */}
+                                    <div className="mb-1">
+                                      {itemEditandoNome === item.id ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="text"
+                                            value={nomeEditando}
+                                            onChange={(e) => setNomeEditando(e.target.value)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                finalizarEdicaoNome(item.id);
+                                              } else if (e.key === 'Escape') {
+                                                cancelarEdicaoNome();
+                                              }
+                                            }}
+                                            onBlur={() => finalizarEdicaoNome(item.id)}
+                                            onFocus={(e) => {
+                                              // Posicionar cursor no final do texto
+                                              const input = e.target as HTMLInputElement;
+                                              setTimeout(() => {
+                                                input.setSelectionRange(input.value.length, input.value.length);
+                                              }, 0);
+                                            }}
+                                            className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-primary-500"
+                                            autoFocus
+                                            style={{ minWidth: '0' }}
+                                          />
+                                          <button
+                                            onClick={() => finalizarEdicaoNome(item.id)}
+                                            className="text-green-400 hover:text-green-300 transition-colors flex-shrink-0"
+                                            title="Confirmar edição"
+                                          >
+                                            <Check size={14} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-1">
+                                          <h4 className="text-white font-medium text-sm line-clamp-1">{item.produto.nome}</h4>
+                                          <button
+                                            onClick={() => iniciarEdicaoNome(item.id, item.produto.nome)}
+                                            className="text-gray-500 hover:text-gray-300 transition-colors opacity-60 hover:opacity-100 flex-shrink-0"
+                                            title="Editar nome do produto"
+                                          >
+                                            <Pencil size={12} />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                     <div className="flex items-center gap-2 text-xs text-gray-400">
                                       <span>Código {item.produto.codigo}</span>
                                       {item.produto.codigo_barras && item.produto.codigo_barras.trim() !== '' && (
