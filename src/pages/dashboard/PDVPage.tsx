@@ -205,6 +205,12 @@ const PDVPage: React.FC = () => {
   const [showConfirmRemoveItem, setShowConfirmRemoveItem] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<number | null>(null);
 
+  // Estados para modal de processamento da venda
+  const [showProcessandoVenda, setShowProcessandoVenda] = useState(false);
+  const [etapaProcessamento, setEtapaProcessamento] = useState<string>('');
+  const [vendaProcessadaId, setVendaProcessadaId] = useState<string | null>(null);
+  const [numeroVendaProcessada, setNumeroVendaProcessada] = useState<string>('');
+
   // Estados para tela de finalização final
   const [showFinalizacaoFinal, setShowFinalizacaoFinal] = useState(false);
   const [showFinalizacaoNaAreaPagamento, setShowFinalizacaoNaAreaPagamento] = useState(false);
@@ -2534,6 +2540,90 @@ const PDVPage: React.FC = () => {
     toast.success('Todos os pagamentos removidos');
   };
 
+  // Versão silenciosa para usar na finalização da venda
+  const limparPagamentosParciaisSilencioso = () => {
+    setPagamentosParciais([]);
+    setTrocoCalculado(0);
+    setValorParcial('');
+    setShowConfirmRemoveAll(false);
+  };
+
+  // Função para verificar se a venda foi inserida corretamente no banco
+  const verificarVendaNoBanco = async (vendaId: string, numeroVenda: string, totalItensEsperados: number): Promise<boolean> => {
+    try {
+      setEtapaProcessamento('Verificando venda no banco de dados...');
+
+      // Aguardar um pouco para garantir que a inserção foi processada
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Verificar se a venda principal existe
+      const { data: vendaData, error: vendaError } = await supabase
+        .from('pdv')
+        .select('id, numero_venda, status_venda, valor_total')
+        .eq('id', vendaId)
+        .single();
+
+      if (vendaError || !vendaData) {
+        console.error('Venda não encontrada no banco:', vendaError);
+        return false;
+      }
+
+      setEtapaProcessamento('Verificando itens da venda...');
+
+      // Verificar se os itens foram inseridos
+      const { data: itensData, error: itensError } = await supabase
+        .from('pdv_itens')
+        .select('id, produto_id, quantidade')
+        .eq('pdv_id', vendaId);
+
+      if (itensError) {
+        console.error('Erro ao verificar itens:', itensError);
+        return false;
+      }
+
+      const totalItensInseridos = itensData?.length || 0;
+
+      if (totalItensInseridos !== totalItensEsperados) {
+        console.error(`Número de itens incorreto. Esperado: ${totalItensEsperados}, Inserido: ${totalItensInseridos}`);
+        return false;
+      }
+
+      setEtapaProcessamento('Verificando opções adicionais...');
+
+      // Verificar opções adicionais se existirem
+      const itensComAdicionais = carrinho.filter(item => item.adicionais && item.adicionais.length > 0);
+      if (itensComAdicionais.length > 0) {
+        const { data: adicionaisData, error: adicionaisError } = await supabase
+          .from('pdv_itens_adicionais')
+          .select('id')
+          .in('pdv_item_id', itensData.map(item => item.id));
+
+        if (adicionaisError) {
+          console.error('Erro ao verificar adicionais:', adicionaisError);
+          return false;
+        }
+
+        const totalAdicionaisEsperados = itensComAdicionais.reduce((total, item) =>
+          total + (item.adicionais?.length || 0), 0
+        );
+
+        const totalAdicionaisInseridos = adicionaisData?.length || 0;
+
+        if (totalAdicionaisInseridos !== totalAdicionaisEsperados) {
+          console.error(`Número de adicionais incorreto. Esperado: ${totalAdicionaisEsperados}, Inserido: ${totalAdicionaisInseridos}`);
+          return false;
+        }
+      }
+
+      setEtapaProcessamento('Venda verificada com sucesso!');
+      return true;
+
+    } catch (error) {
+      console.error('Erro na verificação da venda:', error);
+      return false;
+    }
+  };
+
   // Funções para CPF/CNPJ e Nota Fiscal Paulista
   const formatCpf = (value: string) => {
     const numbers = value.replace(/\D/g, '').slice(0, 11);
@@ -2738,16 +2828,326 @@ const PDVPage: React.FC = () => {
     return pdvConfig?.forca_venda_fiscal_cartao && temPagamentoCartao();
   };
 
-  const finalizarVendaCompleta = () => {
-    // Limpar todos os estados
-    setCarrinho([]);
-    setClienteSelecionado(null);
-    setShowFinalizacaoFinal(false);
-    limparPagamentosParciais();
-    setCpfCnpjNota('');
-    setClienteEncontrado(null);
-    setTipoDocumento('cpf');
-    clearPDVState();
+  // Função para gerar número sequencial da venda
+  const gerarNumeroVenda = async (empresaId: string): Promise<string> => {
+    try {
+      // Buscar o último número de venda da empresa
+      const { data, error } = await supabase
+        .from('pdv')
+        .select('numero_venda')
+        .eq('empresa_id', empresaId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao buscar último número de venda:', error);
+        // Em caso de erro, usar timestamp como fallback
+        return `PDV-${Date.now()}`;
+      }
+
+      let proximoNumero = 1;
+      if (data && data.length > 0 && data[0].numero_venda) {
+        // Extrair número da string (formato: PDV-000001)
+        const ultimoNumero = data[0].numero_venda.replace('PDV-', '');
+        proximoNumero = parseInt(ultimoNumero) + 1;
+      }
+
+      // Formatar com zeros à esquerda (6 dígitos)
+      return `PDV-${proximoNumero.toString().padStart(6, '0')}`;
+    } catch (error) {
+      console.error('Erro ao gerar número de venda:', error);
+      // Fallback para timestamp
+      return `PDV-${Date.now()}`;
+    }
+  };
+
+  // Função principal para finalizar e salvar a venda
+  const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_impressao') => {
+    if (carrinho.length === 0) {
+      toast.error('Carrinho vazio! Adicione itens antes de finalizar.');
+      return;
+    }
+
+    // Abrir modal de processamento
+    setShowProcessandoVenda(true);
+    setEtapaProcessamento('Iniciando processamento da venda...');
+    setVendaProcessadaId(null);
+    setNumeroVendaProcessada('');
+
+    try {
+      // Obter dados do usuário
+      setEtapaProcessamento('Validando usuário...');
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        setEtapaProcessamento('Erro: Usuário não autenticado');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        setShowProcessandoVenda(false);
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        setEtapaProcessamento('Erro: Empresa não encontrada');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        setShowProcessandoVenda(false);
+        toast.error('Empresa não encontrada');
+        return;
+      }
+
+      // Gerar número da venda
+      setEtapaProcessamento('Gerando número da venda...');
+      const numeroVenda = await gerarNumeroVenda(usuarioData.empresa_id);
+      setNumeroVendaProcessada(numeroVenda);
+
+      // Calcular valores
+      setEtapaProcessamento('Calculando valores da venda...');
+      const valorSubtotal = carrinho.reduce((acc, item) => acc + item.subtotal, 0);
+      const valorDesconto = descontoPrazoSelecionado ? calcularDescontoPrazo() : 0;
+      const valorTotal = valorSubtotal - valorDesconto;
+
+      // Preparar dados do cliente
+      setEtapaProcessamento('Preparando dados do cliente...');
+      let clienteData = null;
+      if (clienteSelecionado) {
+        clienteData = {
+          cliente_id: clienteSelecionado.id,
+          nome_cliente: clienteSelecionado.nome,
+          telefone_cliente: clienteSelecionado.telefone,
+          documento_cliente: clienteSelecionado.documento,
+          tipo_documento_cliente: clienteSelecionado.tipo_documento
+        };
+      } else if (pedidosImportados.length > 0 && pedidosImportados[0]?.cliente) {
+        const cliente = pedidosImportados[0].cliente;
+        clienteData = {
+          cliente_id: cliente.id,
+          nome_cliente: cliente.nome,
+          telefone_cliente: cliente.telefone,
+          documento_cliente: cliente.documento,
+          tipo_documento_cliente: cliente.tipo_documento
+        };
+      } else if (cpfCnpjNota && clienteEncontrado) {
+        clienteData = {
+          cliente_id: clienteEncontrado.id,
+          nome_cliente: clienteEncontrado.nome,
+          telefone_cliente: clienteEncontrado.telefone,
+          documento_cliente: clienteEncontrado.documento,
+          tipo_documento_cliente: clienteEncontrado.tipo_documento
+        };
+      }
+
+      // Preparar dados de pagamento
+      setEtapaProcessamento('Preparando dados de pagamento...');
+      let pagamentoData = {};
+      if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
+        pagamentoData = {
+          tipo_pagamento: 'vista',
+          forma_pagamento_id: formaPagamentoSelecionada,
+          valor_pago: valorTotal,
+          valor_troco: 0
+        };
+      } else if (tipoPagamento === 'parcial' && pagamentosParciais.length > 0) {
+        const totalPago = calcularTotalPago();
+        pagamentoData = {
+          tipo_pagamento: 'parcial',
+          formas_pagamento: pagamentosParciais,
+          valor_pago: totalPago,
+          valor_troco: trocoCalculado
+        };
+      }
+
+      // Preparar dados da venda principal
+      setEtapaProcessamento('Preparando dados da venda...');
+      const vendaData = {
+        empresa_id: usuarioData.empresa_id,
+        usuario_id: userData.user.id,
+        numero_venda: numeroVenda,
+        data_venda: new Date().toISOString(),
+        status_venda: 'finalizada',
+        valor_subtotal: valorSubtotal,
+        valor_desconto: valorDesconto,
+        valor_total: valorTotal,
+        desconto_prazo_id: descontoPrazoSelecionado,
+        pedidos_importados: pedidosImportados.length > 0 ? pedidosImportados.map(p => p.id) : null,
+        finalizada_em: new Date().toISOString(),
+        ...clienteData,
+        ...pagamentoData
+      };
+
+      // Inserir venda principal
+      setEtapaProcessamento('Salvando venda no banco de dados...');
+      const { data: vendaInserida, error: vendaError } = await supabase
+        .from('pdv')
+        .insert(vendaData)
+        .select('id')
+        .single();
+
+      if (vendaError) {
+        console.error('Erro ao inserir venda:', vendaError);
+        setEtapaProcessamento('Erro ao salvar venda: ' + vendaError.message);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        setShowProcessandoVenda(false);
+        toast.error('Erro ao salvar venda: ' + vendaError.message);
+        return;
+      }
+
+      const vendaId = vendaInserida.id;
+      setVendaProcessadaId(vendaId);
+
+      // Preparar itens para inserção
+      setEtapaProcessamento('Preparando itens da venda...');
+      const itensParaInserir = carrinho.map(item => {
+        const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
+
+        return {
+          empresa_id: usuarioData.empresa_id,
+          usuario_id: userData.user.id,
+          pdv_id: vendaId,
+          produto_id: item.produto.id,
+          codigo_produto: item.produto.codigo,
+          nome_produto: item.produto.nome,
+          descricao_produto: item.produto.descricao,
+          quantidade: item.quantidade,
+          valor_unitario: precoUnitario,
+          valor_subtotal: item.subtotal,
+          valor_total_item: item.subtotal,
+          tem_desconto: !!item.desconto,
+          tipo_desconto: item.desconto?.tipo || null,
+          percentual_desconto: item.desconto?.percentualDesconto || null,
+          valor_desconto_aplicado: item.desconto?.valorDesconto || 0,
+          origem_desconto: item.desconto ? 'manual' : null,
+          origem_item: item.pedido_origem_numero ? 'pedido_importado' : 'manual',
+          pedido_origem_id: item.pedido_origem_id || null,
+          pedido_origem_numero: item.pedido_origem_numero || null,
+          observacao_item: item.observacao || null
+        };
+      });
+
+      // Inserir itens
+      setEtapaProcessamento('Salvando itens da venda...');
+      const { error: itensError } = await supabase
+        .from('pdv_itens')
+        .insert(itensParaInserir);
+
+      if (itensError) {
+        console.error('Erro ao inserir itens:', itensError);
+        setEtapaProcessamento('Erro ao salvar itens: ' + itensError.message);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        setShowProcessandoVenda(false);
+        toast.error('Erro ao salvar itens: ' + itensError.message);
+        return;
+      }
+
+      // Inserir opções adicionais se existirem
+      const itensComAdicionais = carrinho.filter(item => item.adicionais && item.adicionais.length > 0);
+      if (itensComAdicionais.length > 0) {
+        setEtapaProcessamento('Salvando opções adicionais...');
+
+        for (const item of itensComAdicionais) {
+          // Buscar o ID do item inserido
+          const { data: itemInserido } = await supabase
+            .from('pdv_itens')
+            .select('id')
+            .eq('pdv_id', vendaId)
+            .eq('produto_id', item.produto.id)
+            .single();
+
+          if (itemInserido && item.adicionais) {
+            const adicionaisParaInserir = item.adicionais.map(adicional => ({
+              empresa_id: usuarioData.empresa_id,
+              usuario_id: userData.user.id,
+              pdv_item_id: itemInserido.id,
+              item_adicional_id: adicional.id,
+              nome_adicional: adicional.nome,
+              quantidade: adicional.quantidade,
+              valor_unitario: adicional.preco,
+              valor_total: adicional.preco * adicional.quantidade,
+              origem_adicional: 'manual'
+            }));
+
+            const { error: adicionaisError } = await supabase
+              .from('pdv_itens_adicionais')
+              .insert(adicionaisParaInserir);
+
+            if (adicionaisError) {
+              console.error('Erro ao inserir adicionais:', adicionaisError);
+              setEtapaProcessamento('Erro ao salvar adicionais: ' + adicionaisError.message);
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              setShowProcessandoVenda(false);
+              toast.error('Erro ao salvar adicionais: ' + adicionaisError.message);
+              return;
+            }
+          }
+        }
+      }
+
+      // Atualizar estoque se configurado
+      if (pdvConfig?.baixa_estoque_pdv) {
+        setEtapaProcessamento('Atualizando estoque...');
+        for (const item of carrinho) {
+          const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
+            p_produto_id: item.produto.id,
+            p_quantidade: -item.quantidade, // Quantidade negativa para baixa
+            p_tipo_operacao: 'venda_pdv',
+            p_observacao: `Venda PDV #${numeroVenda}`
+          });
+
+          if (estoqueError) {
+            console.warn('Erro ao atualizar estoque:', estoqueError);
+          }
+        }
+      }
+
+      // VERIFICAÇÃO CRÍTICA: Confirmar se tudo foi salvo corretamente
+      const vendaVerificada = await verificarVendaNoBanco(vendaId, numeroVenda, carrinho.length);
+
+      if (!vendaVerificada) {
+        setEtapaProcessamento('ERRO: Venda não foi salva corretamente!');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        setShowProcessandoVenda(false);
+        toast.error('ERRO: Venda não foi salva corretamente no banco de dados!');
+        return;
+      }
+
+      // SUCESSO CONFIRMADO!
+      setEtapaProcessamento('Venda finalizada com sucesso!');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Fechar modal de processamento
+      setShowProcessandoVenda(false);
+
+      // Mostrar sucesso
+      toast.success(`Venda #${numeroVenda} finalizada com sucesso!`);
+
+      // Limpar todos os estados
+      setCarrinho([]);
+      setClienteSelecionado(null);
+      setShowFinalizacaoFinal(false);
+      limparPagamentosParciaisSilencioso(); // Versão silenciosa para não mostrar toast duplicado
+      setCpfCnpjNota('');
+      setClienteEncontrado(null);
+      setTipoDocumento('cpf');
+      setPedidosImportados([]);
+      setDescontoPrazoSelecionado(null);
+      clearPDVState();
+
+      // Recarregar estoque se necessário
+      if (pdvConfig?.baixa_estoque_pdv) {
+        loadEstoque();
+      }
+
+    } catch (error) {
+      console.error('Erro ao finalizar venda:', error);
+      setEtapaProcessamento('ERRO INESPERADO: ' + (error as Error).message);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setShowProcessandoVenda(false);
+      toast.error('Erro inesperado ao finalizar venda');
+    }
   };
 
   const limparCarrinhoCompleto = () => {
@@ -2755,7 +3155,7 @@ const PDVPage: React.FC = () => {
     setClienteSelecionado(null);
     setPedidosImportados([]); // Limpar pedidos importados
     setDescontoPrazoSelecionado(null); // Limpar desconto selecionado
-    limparPagamentosParciais();
+    limparPagamentosParciaisSilencioso(); // Versão silenciosa
     clearPDVState();
     setShowConfirmLimparCarrinho(false);
     toast.success('PDV limpo com sucesso!');
@@ -4540,10 +4940,7 @@ const PDVPage: React.FC = () => {
                       {/* Finalizar com Impressão */}
                       {!pdvConfig?.ocultar_finalizar_com_impressao && (
                         <button
-                          onClick={() => {
-                            toast.success('Venda finalizada com impressão!');
-                            finalizarVendaCompleta();
-                          }}
+                          onClick={() => finalizarVendaCompleta('finalizar_com_impressao')}
                           className="w-full bg-green-900/20 hover:bg-green-800/30 text-green-300 py-3 px-4 rounded-lg transition-colors border border-green-800/30"
                         >
                           Finalizar com Impressão
@@ -4553,10 +4950,7 @@ const PDVPage: React.FC = () => {
                       {/* Finalizar sem Impressão */}
                       {!pdvConfig?.ocultar_finalizar_sem_impressao && (
                         <button
-                          onClick={() => {
-                            toast.success('Venda finalizada sem impressão!');
-                            finalizarVendaCompleta();
-                          }}
+                          onClick={() => finalizarVendaCompleta('finalizar_sem_impressao')}
                           className="w-full bg-green-800/20 hover:bg-green-700/30 text-green-400 py-3 px-4 rounded-lg transition-colors border border-green-700/30"
                         >
                           Finalizar sem Impressão
@@ -4576,8 +4970,7 @@ const PDVPage: React.FC = () => {
                           toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
                           return;
                         }
-                        toast.success('NFC-e gerada com impressão!');
-                        finalizarVendaCompleta();
+                        finalizarVendaCompleta('nfce_com_impressao');
                       }}
                       disabled={isDocumentoInvalido()}
                       className={`w-full py-3 px-4 rounded-lg transition-colors border ${
@@ -4603,8 +4996,7 @@ const PDVPage: React.FC = () => {
                           toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
                           return;
                         }
-                        toast.success('NFC-e gerada sem impressão!');
-                        finalizarVendaCompleta();
+                        finalizarVendaCompleta('nfce_sem_impressao');
                       }}
                       disabled={isDocumentoInvalido()}
                       className={`w-full py-3 px-4 rounded-lg transition-colors border ${
@@ -4630,8 +5022,7 @@ const PDVPage: React.FC = () => {
                           toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
                           return;
                         }
-                        toast.success('NFC-e + Produção finalizada!');
-                        finalizarVendaCompleta();
+                        finalizarVendaCompleta('nfce_producao');
                       }}
                       disabled={isDocumentoInvalido()}
                       className={`w-full py-3 px-4 rounded-lg transition-colors border ${
@@ -4657,10 +5048,7 @@ const PDVPage: React.FC = () => {
                       {/* Produção */}
                       {!pdvConfig?.ocultar_producao && (
                         <button
-                          onClick={() => {
-                            toast.success('Enviado para produção!');
-                            finalizarVendaCompleta();
-                          }}
+                          onClick={() => finalizarVendaCompleta('producao')}
                           className="w-full bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 py-3 px-4 rounded-lg transition-colors border border-orange-800/30"
                         >
                           Produção
@@ -4825,9 +5213,8 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    toast.success('Venda finalizada com sucesso!');
-                    limparCarrinho();
                     setShowPagamentoModal(false);
+                    finalizarVendaCompleta('finalizar_sem_impressao');
                   }}
                   className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-3 px-4 rounded-lg transition-colors"
                 >
@@ -6813,6 +7200,63 @@ const PDVPage: React.FC = () => {
         </div>
       )}
       </motion.div>
+
+      {/* Modal de Processamento da Venda */}
+      <AnimatePresence>
+        {showProcessandoVenda && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card border border-gray-800 rounded-lg p-8 max-w-md w-full mx-4"
+            >
+              <div className="text-center">
+                {/* Ícone de loading */}
+                <div className="w-16 h-16 bg-primary-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+
+                {/* Título */}
+                <h3 className="text-xl font-semibold text-white mb-2">
+                  Processando Venda
+                </h3>
+
+                {/* Número da venda se disponível */}
+                {numeroVendaProcessada && (
+                  <p className="text-primary-400 font-medium mb-4">
+                    #{numeroVendaProcessada}
+                  </p>
+                )}
+
+                {/* Etapa atual */}
+                <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+                  <p className="text-gray-300 text-sm leading-relaxed">
+                    {etapaProcessamento}
+                  </p>
+                </div>
+
+                {/* Barra de progresso animada */}
+                <div className="w-full bg-gray-700 rounded-full h-2 mb-4">
+                  <div className="bg-primary-500 h-2 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                </div>
+
+                {/* Aviso importante */}
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                  <p className="text-yellow-300 text-xs">
+                    ⚠️ Não feche esta janela durante o processamento
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modal de Opções Adicionais */}
       {produtoParaAdicionais && (
