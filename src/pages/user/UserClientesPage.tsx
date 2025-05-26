@@ -377,7 +377,7 @@ const UserClientesPage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-3 max-h-[calc(100vh-250px)] overflow-y-auto custom-scrollbar pr-2">
+        <div className="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto custom-scrollbar pr-2">
           {filteredClientes.map((cliente, index) => (
             <motion.div
               key={cliente.id}

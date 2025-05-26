@@ -224,6 +224,7 @@ const UserDashboardPage: React.FC = () => {
       case 'em_preparo': return 'text-orange-500';
       case 'em_entrega': return 'text-purple-500';
       case 'entregue': return 'text-green-500';
+      case 'faturado': return 'text-green-600';
       case 'cancelado': return 'text-red-500';
       default: return 'text-gray-500';
     }
@@ -236,6 +237,7 @@ const UserDashboardPage: React.FC = () => {
       case 'em_preparo': return 'Em Preparo';
       case 'em_entrega': return 'Em Entrega';
       case 'entregue': return 'Entregue';
+      case 'faturado': return 'Faturado';
       case 'cancelado': return 'Cancelado';
       default: return 'Desconhecido';
     }

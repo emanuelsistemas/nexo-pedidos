@@ -168,6 +168,8 @@ const PDVPage: React.FC = () => {
   const [searchPedidos, setSearchPedidos] = useState('');
   const [pedidosFiltrados, setPedidosFiltrados] = useState<any[]>([]);
   const [contadorPedidosPendentes, setContadorPedidosPendentes] = useState<number>(0);
+  const [statusFilterPedidos, setStatusFilterPedidos] = useState<string>('pendente');
+  const [showFiltersPedidos, setShowFiltersPedidos] = useState(false);
 
   // Estados para visualização detalhada do pedido
   const [pedidoDetalhado, setPedidoDetalhado] = useState<any>(null);
@@ -536,6 +538,21 @@ const PDVPage: React.FC = () => {
     }));
   };
 
+  // Função para calcular desconto por prazo selecionado
+  const calcularDescontoPrazo = () => {
+    if (!descontoPrazoSelecionado) return 0;
+
+    const desconto = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
+    if (!desconto) return 0;
+
+    const subtotal = carrinho.reduce((acc, item) => acc + item.subtotal, 0);
+    const valorDesconto = (subtotal * desconto.percentual) / 100;
+
+    // Se for desconto, retorna valor positivo para subtrair
+    // Se for acréscimo, retorna valor negativo para adicionar
+    return desconto.tipo === 'desconto' ? valorDesconto : -valorDesconto;
+  };
+
   // Função para confirmar importação de pedido
   const confirmarImportarPedido = () => {
     if (pedidoParaImportar) {
@@ -558,6 +575,7 @@ const PDVPage: React.FC = () => {
       case 'preparando': return 'text-orange-400';
       case 'pronto': return 'text-green-400';
       case 'entregue': return 'text-green-500';
+      case 'faturado': return 'text-green-600';
       case 'cancelado': return 'text-red-400';
       default: return 'text-gray-400';
     }
@@ -570,6 +588,7 @@ const PDVPage: React.FC = () => {
       case 'preparando': return 'Em Preparação';
       case 'pronto': return 'Pronto';
       case 'entregue': return 'Entregue';
+      case 'faturado': return 'Faturado';
       case 'cancelado': return 'Cancelado';
       default: return status;
     }
@@ -1060,6 +1079,11 @@ const PDVPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, [menuStartIndex, menuPDVItems.length, carrinho.length]); // Adicionar carrinho.length como dependência
 
+  // useEffect para aplicar filtros quando os estados mudarem
+  useEffect(() => {
+    aplicarFiltrosPedidos();
+  }, [pedidos, searchPedidos, statusFilterPedidos]);
+
   // Listener para eventos de mudança na configuração do PDV
   useEffect(() => {
     const handlePdvConfigChange = (event: CustomEvent) => {
@@ -1072,12 +1096,33 @@ const PDVPage: React.FC = () => {
       console.log(`Configuração PDV atualizada: ${field} = ${value}`);
     };
 
-    // Adicionar listener para o evento customizado
+    // Listener para mudança de status dos pedidos
+    const handlePedidoStatusChange = (event: CustomEvent) => {
+      const { pedidosIds, novoStatus, numeroVenda } = event.detail;
+
+      console.log(`Status dos pedidos ${pedidosIds.join(', ')} atualizado para: ${novoStatus} (Venda: ${numeroVenda})`);
+
+      // Aguardar um pouco para garantir que a atualização no banco foi processada
+      setTimeout(() => {
+        // Recarregar contador de pedidos pendentes
+        loadContadorPedidos();
+
+        // Se o modal de pedidos estiver aberto, recarregar a lista
+        const modalElement = document.querySelector('[data-modal="pedidos"]');
+        if (modalElement) {
+          loadPedidos();
+        }
+      }, 1000); // 1 segundo de delay
+    };
+
+    // Adicionar listeners para os eventos customizados
     window.addEventListener('pdvConfigChanged', handlePdvConfigChange as EventListener);
+    window.addEventListener('pedidoStatusChanged', handlePedidoStatusChange as EventListener);
 
     // Cleanup
     return () => {
       window.removeEventListener('pdvConfigChanged', handlePdvConfigChange as EventListener);
+      window.removeEventListener('pedidoStatusChanged', handlePedidoStatusChange as EventListener);
     };
   }, []);
 
@@ -1591,6 +1636,7 @@ const PDVPage: React.FC = () => {
           created_at,
           status,
           valor_total,
+          empresa_id,
           desconto_prazo_id,
           desconto_valor_id,
           usuario_id,
@@ -1617,7 +1663,6 @@ const PDVPage: React.FC = () => {
           )
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('status', 'pendente')
         .eq('deletado', false)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -1655,9 +1700,11 @@ const PDVPage: React.FC = () => {
       }
 
       setPedidos(pedidosData);
-      setPedidosFiltrados(pedidosData);
-      // Atualizar contador com base nos dados carregados
-      setContadorPedidosPendentes(pedidosData.length);
+      // Aplicar filtros após carregar
+      aplicarFiltrosPedidos(pedidosData);
+      // Atualizar contador apenas com pedidos pendentes
+      const pedidosPendentes = pedidosData.filter(p => p.status === 'pendente');
+      setContadorPedidosPendentes(pedidosPendentes.length);
     } catch (error) {
       console.error('Erro ao carregar pedidos:', error);
       toast.error('Erro ao carregar pedidos');
@@ -1665,21 +1712,38 @@ const PDVPage: React.FC = () => {
     // Removido setLoadingPedidos(false) para manter consistência
   };
 
-  // Função para filtrar pedidos
-  const filtrarPedidos = (termo: string) => {
-    setSearchPedidos(termo);
-    if (!termo.trim()) {
-      setPedidosFiltrados(pedidos);
-      return;
+  // Função para aplicar filtros nos pedidos
+  const aplicarFiltrosPedidos = (pedidosParaFiltrar = pedidos) => {
+    let filtered = [...pedidosParaFiltrar];
+
+    // Aplicar filtro de status
+    if (statusFilterPedidos !== 'todos') {
+      filtered = filtered.filter(pedido => pedido.status === statusFilterPedidos);
     }
 
-    const termoLower = termo.toLowerCase();
-    const pedidosFiltrados = pedidos.filter(pedido =>
-      pedido.numero.toString().includes(termoLower) ||
-      pedido.cliente?.nome?.toLowerCase().includes(termoLower) ||
-      pedido.cliente?.telefone?.includes(termo)
-    );
-    setPedidosFiltrados(pedidosFiltrados);
+    // Aplicar filtro de busca
+    if (searchPedidos.trim()) {
+      const termoLower = searchPedidos.toLowerCase();
+      filtered = filtered.filter(pedido =>
+        pedido.numero.toString().includes(termoLower) ||
+        pedido.cliente?.nome?.toLowerCase().includes(termoLower) ||
+        pedido.cliente?.telefone?.includes(searchPedidos)
+      );
+    }
+
+    setPedidosFiltrados(filtered);
+  };
+
+  // Função para filtrar pedidos por termo de busca
+  const filtrarPedidos = (termo: string) => {
+    setSearchPedidos(termo);
+    aplicarFiltrosPedidos();
+  };
+
+  // Função para filtrar pedidos por status
+  const filtrarPedidosPorStatus = (status: string) => {
+    setStatusFilterPedidos(status);
+    aplicarFiltrosPedidos();
   };
 
   // Função para importar pedido para o carrinho (com confirmação)
@@ -1718,6 +1782,57 @@ const PDVPage: React.FC = () => {
       // Se não há conflitos, importar diretamente
       executarImportacaoPedido(pedido);
       // O modal será fechado dentro da função executarImportacaoPedido
+    }
+  };
+
+  // Função para gerar o link público do pedido
+  const gerarLinkPedido = async (pedido: any) => {
+    try {
+      console.log('Pedido recebido:', pedido); // Debug
+      console.log('empresa_id:', pedido.empresa_id); // Debug
+
+      // Se não temos empresa_id no pedido, buscar do usuário atual
+      let empresaId = pedido.empresa_id;
+      if (!empresaId) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error('Usuário não autenticado');
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) throw new Error('Empresa do usuário não encontrada');
+        empresaId = usuarioData.empresa_id;
+      }
+
+      // Buscar o CNPJ da empresa
+      const { data: empresaData, error: empresaError } = await supabase
+        .from('empresas')
+        .select('documento')
+        .eq('id', empresaId)
+        .single();
+
+      if (empresaError || !empresaData || !empresaData.documento) {
+        throw new Error('Não foi possível obter o CNPJ da empresa');
+      }
+
+      // Remover caracteres não numéricos do CNPJ (pontos, traços, barras)
+      const cnpjLimpo = empresaData.documento.replace(/[^\d]/g, '');
+
+      // Gerar o código do pedido (CNPJ + número do pedido)
+      const codigoPedido = `${cnpjLimpo}${pedido.numero}`;
+
+      // Gerar a URL completa
+      const baseUrl = window.location.origin;
+      const url = `${baseUrl}/pedido/${codigoPedido}`;
+
+      return url;
+    } catch (error: any) {
+      console.error('Erro ao gerar link do pedido:', error);
+      toast.error(`Erro ao gerar link: ${error.message}`);
+      return null;
     }
   };
 
@@ -2908,8 +3023,14 @@ const PDVPage: React.FC = () => {
       // Calcular valores
       setEtapaProcessamento('Calculando valores da venda...');
       const valorSubtotal = carrinho.reduce((acc, item) => acc + item.subtotal, 0);
-      const valorDesconto = descontoPrazoSelecionado ? calcularDescontoPrazo() : 0;
-      const valorTotal = valorSubtotal - valorDesconto;
+      const valorDescontoPrazo = descontoPrazoSelecionado ? calcularDescontoPrazo() : 0;
+
+      // Calcular valor total considerando desconto por prazo
+      // Se valorDescontoPrazo for negativo, significa que é acréscimo
+      const valorTotal = valorSubtotal - valorDescontoPrazo;
+
+      // Para salvar no banco, o valor do desconto deve ser sempre positivo
+      const valorDesconto = Math.abs(valorDescontoPrazo);
 
       // Preparar dados do cliente
       setEtapaProcessamento('Preparando dados do cliente...');
@@ -3112,6 +3233,62 @@ const PDVPage: React.FC = () => {
         setShowProcessandoVenda(false);
         toast.error('ERRO: Venda não foi salva corretamente no banco de dados!');
         return;
+      }
+
+      // Atualizar status dos pedidos importados para "faturado"
+      if (pedidosImportados.length > 0) {
+        setEtapaProcessamento('Atualizando status dos pedidos...');
+
+        try {
+          const dataFaturamento = new Date().toISOString();
+
+          for (const pedido of pedidosImportados) {
+            const { error: pedidoError } = await supabase
+              .from('pedidos')
+              .update({
+                status: 'faturado',
+                data_faturamento: dataFaturamento,
+                observacao_faturamento: `Faturado via PDV - Venda #${numeroVenda}`
+              })
+              .eq('id', pedido.id);
+
+            if (pedidoError) {
+              console.error(`Erro ao atualizar pedido ${pedido.numero}:`, pedidoError);
+              // Não interrompe o processo, apenas loga o erro
+            } else {
+              console.log(`✅ Pedido ${pedido.numero} atualizado para 'faturado' com sucesso`);
+            }
+          }
+
+          // Disparar eventos do sistema para cada pedido faturado
+          for (const pedido of pedidosImportados) {
+            // Disparar evento padrão do sistema
+            window.dispatchEvent(new CustomEvent(EVENT_TYPES.PEDIDO_FATURADO, {
+              detail: {
+                pedidoId: pedido.id,
+                numero: pedido.numero,
+                status: 'faturado',
+                empresaId: usuarioData.empresa_id,
+                valorTotal: pedido.valor_total || 0,
+                clienteNome: pedido.cliente?.nome,
+                action: 'invoiced'
+              }
+            }));
+          }
+
+          // Disparar evento customizado adicional
+          window.dispatchEvent(new CustomEvent('pedidoStatusChanged', {
+            detail: {
+              pedidosIds: pedidosImportados.map(p => p.id),
+              novoStatus: 'faturado',
+              numeroVenda: numeroVenda
+            }
+          }));
+
+        } catch (error) {
+          console.error('Erro ao atualizar status dos pedidos:', error);
+          // Não interrompe o processo, pois a venda já foi salva com sucesso
+        }
       }
 
       // SUCESSO CONFIRMADO!
@@ -5497,25 +5674,42 @@ const PDVPage: React.FC = () => {
               <div className="flex-shrink-0 p-6 border-b border-gray-800">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-white">Pedidos Pendentes</h3>
+                    <h3 className="text-lg font-semibold text-white">
+                      {statusFilterPedidos === 'todos' ? 'Todos os Pedidos' :
+                       statusFilterPedidos === 'pendente' ? 'Pedidos Pendentes' :
+                       statusFilterPedidos === 'faturado' ? 'Pedidos Faturados' :
+                       statusFilterPedidos === 'cancelado' ? 'Pedidos Cancelados' :
+                       'Pedidos'}
+                    </h3>
                     <div className="flex items-center gap-1">
                       <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                       <span className="text-xs text-green-400">Atualização automática</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setShowPedidosModal(false);
-                      setSearchPedidos('');
-                    }}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowFiltersPedidos(!showFiltersPedidos)}
+                      className="text-gray-400 hover:text-white transition-colors p-1"
+                      title="Filtros"
+                    >
+                      <Filter size={18} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPedidosModal(false);
+                        setSearchPedidos('');
+                        setStatusFilterPedidos('pendente');
+                        setShowFiltersPedidos(false);
+                      }}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Campo de Pesquisa */}
-                <div className="relative">
+                <div className="relative mb-4">
                   <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
@@ -5525,6 +5719,53 @@ const PDVPage: React.FC = () => {
                     className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                   />
                 </div>
+
+                {/* Filtros */}
+                <AnimatePresence>
+                  {showFiltersPedidos && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden mb-4"
+                    >
+                      <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Status do Pedido
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              { value: 'pendente', label: 'Pendentes', count: contadorPedidosPendentes },
+                              { value: 'faturado', label: 'Faturados', count: pedidos.filter(p => p.status === 'faturado').length },
+                              { value: 'cancelado', label: 'Cancelados', count: pedidos.filter(p => p.status === 'cancelado').length },
+                              { value: 'todos', label: 'Todos', count: pedidos.length }
+                            ].map((status) => (
+                              <button
+                                key={status.value}
+                                onClick={() => filtrarPedidosPorStatus(status.value)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
+                                  statusFilterPedidos === status.value
+                                    ? 'bg-primary-500 text-white'
+                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                }`}
+                              >
+                                {status.label}
+                                <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                                  statusFilterPedidos === status.value
+                                    ? 'bg-white/20 text-white'
+                                    : 'bg-gray-600 text-gray-300'
+                                }`}>
+                                  {status.count}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Conteúdo Rolável */}
@@ -5534,17 +5775,22 @@ const PDVPage: React.FC = () => {
                   <div className="text-center py-8">
                     <ShoppingBag size={48} className="mx-auto mb-4 text-gray-500" />
                     <p className="text-gray-400">
-                      {searchPedidos ? 'Nenhum pedido encontrado para esta pesquisa' : 'Nenhum pedido pendente encontrado'}
+                      {searchPedidos ? 'Nenhum pedido encontrado para esta pesquisa' :
+                       statusFilterPedidos === 'pendente' ? 'Nenhum pedido pendente encontrado' :
+                       statusFilterPedidos === 'faturado' ? 'Nenhum pedido faturado encontrado' :
+                       statusFilterPedidos === 'cancelado' ? 'Nenhum pedido cancelado encontrado' :
+                       'Nenhum pedido encontrado'}
                     </p>
-                    {searchPedidos && (
+                    {(searchPedidos || statusFilterPedidos !== 'pendente') && (
                       <button
                         onClick={() => {
                           setSearchPedidos('');
-                          setPedidosFiltrados(pedidos);
+                          setStatusFilterPedidos('pendente');
+                          aplicarFiltrosPedidos();
                         }}
                         className="mt-2 text-primary-400 hover:text-primary-300 text-sm"
                       >
-                        Limpar pesquisa
+                        {searchPedidos ? 'Limpar pesquisa' : 'Ver pedidos pendentes'}
                       </button>
                     )}
                   </div>
@@ -5560,14 +5806,8 @@ const PDVPage: React.FC = () => {
                             <div className="text-white font-medium">
                               Pedido #{pedido.numero}
                             </div>
-                            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              pedido.status === 'pendente' ? 'bg-yellow-500/20 text-yellow-400' :
-                              pedido.status === 'preparando' ? 'bg-blue-500/20 text-blue-400' :
-                              pedido.status === 'pronto' ? 'bg-green-500/20 text-green-400' :
-                              pedido.status === 'entregue' ? 'bg-gray-500/20 text-gray-400' :
-                              'bg-red-500/20 text-red-400'
-                            }`}>
-                              {pedido.status.charAt(0).toUpperCase() + pedido.status.slice(1)}
+                            <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(pedido.status).replace('text-', 'bg-').replace('-400', '-500/20').replace('-500', '-500/20').replace('-600', '-600/20')} ${getStatusColor(pedido.status)}`}>
+                              {getStatusText(pedido.status)}
                             </div>
                           </div>
                           <div className="text-primary-400 font-bold">
@@ -5631,17 +5871,31 @@ const PDVPage: React.FC = () => {
                         )}
 
                         <div className="flex gap-2 flex-wrap">
-                          <button
-                            onClick={() => importarPedidoParaCarrinho(pedido)}
-                            className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded text-xs transition-colors font-medium"
-                          >
-                            Importar para Carrinho
-                          </button>
+                          {pedido.status === 'pendente' && (
+                            <button
+                              onClick={() => importarPedidoParaCarrinho(pedido)}
+                              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors font-medium"
+                            >
+                              Importar para Carrinho
+                            </button>
+                          )}
                           <button
                             onClick={() => carregarDetalhesPedido(pedido.id)}
                             className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs transition-colors"
                           >
                             Ver Detalhes
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const url = await gerarLinkPedido(pedido);
+                              if (url) {
+                                window.open(url, '_blank');
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-blue-500/80 hover:bg-blue-600/90 text-white rounded text-xs transition-colors"
+                            title="Abrir nota de pedido em nova página"
+                          >
+                            Abrir
                           </button>
                         </div>
                       </div>
@@ -5971,15 +6225,29 @@ const PDVPage: React.FC = () => {
                     Fechar
                   </button>
                   <button
-                    onClick={() => {
-                      importarPedidoParaCarrinho(pedidoDetalhado);
-                      setShowDetalhePedido(false);
-                      setPedidoDetalhado(null);
+                    onClick={async () => {
+                      const url = await gerarLinkPedido(pedidoDetalhado);
+                      if (url) {
+                        window.open(url, '_blank');
+                      }
                     }}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    className="px-4 py-2 bg-blue-500/80 hover:bg-blue-600/90 text-white rounded-lg transition-colors"
+                    title="Abrir nota de pedido em nova página"
                   >
-                    Importar para Carrinho
+                    Abrir
                   </button>
+                  {pedidoDetalhado?.status === 'pendente' && (
+                    <button
+                      onClick={() => {
+                        importarPedidoParaCarrinho(pedidoDetalhado);
+                        setShowDetalhePedido(false);
+                        setPedidoDetalhado(null);
+                      }}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      Importar para Carrinho
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>
