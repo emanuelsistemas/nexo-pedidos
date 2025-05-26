@@ -41,6 +41,7 @@ import { formatarPreco } from '../../utils/formatters';
 import { EVENT_TYPES, contarPedidosPendentes, PedidoEventData, RecarregarEventData } from '../../utils/eventSystem';
 import Sidebar from '../../components/dashboard/Sidebar';
 import { useSidebarStore } from '../../store/sidebarStore';
+import OpcoesAdicionaisModal from '../../components/pdv/OpcoesAdicionaisModal';
 
 interface Produto {
   id: string;
@@ -100,6 +101,13 @@ interface ItemCarrinho {
     percentualDesconto?: number;
     origemPedido?: boolean; // Indica se o desconto veio de um pedido importado
   };
+  adicionais?: Array<{
+    id: string;
+    nome: string;
+    preco: number;
+    quantidade: number;
+  }>;
+  temOpcoesAdicionais?: boolean; // Indica se o produto tem opções adicionais disponíveis
 }
 
 interface Cliente {
@@ -236,6 +244,11 @@ const PDVPage: React.FC = () => {
 
   // Estado para desconto por prazo selecionado (importado do pedido)
   const [descontoPrazoSelecionado, setDescontoPrazoSelecionado] = useState<string | null>(null);
+
+  // Estados para modal de opções adicionais
+  const [showOpcoesAdicionaisModal, setShowOpcoesAdicionaisModal] = useState(false);
+  const [produtoParaAdicionais, setProdutoParaAdicionais] = useState<Produto | null>(null);
+  const [itemCarrinhoParaAdicionais, setItemCarrinhoParaAdicionais] = useState<string | null>(null);
 
   // Funções para localStorage
   const savePDVState = () => {
@@ -1790,7 +1803,29 @@ const PDVPage: React.FC = () => {
     return matchesSearch && matchesGrupo;
   });
 
-  const adicionarAoCarrinho = (produto: Produto, quantidadePersonalizada?: number) => {
+  // Função para verificar se um produto tem opções adicionais
+  const verificarOpcoesAdicionais = async (produtoId: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('produtos_opcoes_adicionais')
+        .select('id')
+        .eq('produto_id', produtoId)
+        .eq('deletado', false)
+        .limit(1);
+
+      if (error) {
+        console.error('Erro ao verificar opções adicionais:', error);
+        return false;
+      }
+
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Erro ao verificar opções adicionais:', error);
+      return false;
+    }
+  };
+
+  const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
     // Verificar se há quantidade especificada na busca (formato: quantidade*termo)
     let quantidadeParaAdicionar = quantidadePersonalizada || 1;
 
@@ -1804,8 +1839,20 @@ const PDVPage: React.FC = () => {
       }
     }
 
+    // Verificar se o produto tem opções adicionais
+    const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
+
     // Calcular o preço final considerando promoções
     const precoFinal = calcularPrecoFinal(produto);
+
+    // Criar o item do carrinho
+    const novoItem: ItemCarrinho = {
+      id: `${produto.id}-${Date.now()}-${Math.random()}`, // ID único
+      produto,
+      quantidade: quantidadeParaAdicionar,
+      subtotal: precoFinal * quantidadeParaAdicionar,
+      temOpcoesAdicionais
+    };
 
     setCarrinho(prev => {
       // Verificar se deve agrupar itens baseado na configuração
@@ -1821,26 +1868,17 @@ const PDVPage: React.FC = () => {
               ? {
                   ...item,
                   quantidade: item.quantidade + quantidadeParaAdicionar,
-                  subtotal: (item.quantidade + quantidadeParaAdicionar) * precoFinal
+                  subtotal: (item.quantidade + quantidadeParaAdicionar) * precoFinal,
+                  temOpcoesAdicionais
                 }
               : item
           );
         } else {
-          return [...prev, {
-            id: `${produto.id}-${Date.now()}`, // ID único
-            produto,
-            quantidade: quantidadeParaAdicionar,
-            subtotal: precoFinal * quantidadeParaAdicionar
-          }];
+          return [...prev, novoItem];
         }
       } else {
         // Comportamento novo: sempre adiciona como item separado
-        return [...prev, {
-          id: `${produto.id}-${Date.now()}-${Math.random()}`, // ID único
-          produto,
-          quantidade: quantidadeParaAdicionar,
-          subtotal: precoFinal * quantidadeParaAdicionar
-        }];
+        return [...prev, novoItem];
       }
     });
   };
@@ -1979,6 +2017,128 @@ const PDVPage: React.FC = () => {
       })
     );
     toast.success('Desconto removido com sucesso!');
+  };
+
+  // Funções para gerenciar opções adicionais
+  const abrirOpcoesAdicionais = (item: ItemCarrinho) => {
+    setProdutoParaAdicionais(item.produto);
+    setItemCarrinhoParaAdicionais(item.id);
+    setShowOpcoesAdicionaisModal(true);
+  };
+
+  const confirmarOpcoesAdicionais = (itensSelecionados: Array<{
+    item: { id: string; nome: string; preco: number; opcao_id: string };
+    quantidade: number;
+  }>) => {
+    if (!itemCarrinhoParaAdicionais) return;
+
+    // Converter para o formato do carrinho
+    const adicionaisFormatados = itensSelecionados.map(itemSelecionado => ({
+      id: itemSelecionado.item.id,
+      nome: itemSelecionado.item.nome,
+      preco: itemSelecionado.item.preco,
+      quantidade: itemSelecionado.quantidade
+    }));
+
+    // Atualizar o item do carrinho com os adicionais
+    setCarrinho(prev =>
+      prev.map(item => {
+        if (item.id === itemCarrinhoParaAdicionais) {
+          // Adicionar aos adicionais existentes ao invés de substituir
+          const adicionaisExistentes = item.adicionais || [];
+          const todosAdicionais = [...adicionaisExistentes, ...adicionaisFormatados];
+
+          // Calcular valor total dos adicionais (existentes + novos)
+          const valorAdicionais = todosAdicionais.reduce((total, adicional) =>
+            total + (adicional.preco * adicional.quantidade), 0
+          );
+
+          // Calcular novo subtotal (produto + todos os adicionais) * quantidade
+          const precoUnitario = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
+          const novoSubtotal = (precoUnitario * item.quantidade) + valorAdicionais;
+
+          return {
+            ...item,
+            adicionais: todosAdicionais,
+            subtotal: novoSubtotal
+          };
+        }
+        return item;
+      })
+    );
+
+    // Mostrar toast de confirmação
+    const totalAdicionais = adicionaisFormatados.length;
+    if (totalAdicionais > 0) {
+      toast.success(`${totalAdicionais} ${totalAdicionais === 1 ? 'adicional selecionado' : 'adicionais selecionados'}!`);
+    }
+
+    setShowOpcoesAdicionaisModal(false);
+    setProdutoParaAdicionais(null);
+    setItemCarrinhoParaAdicionais(null);
+  };
+
+  const removerAdicional = (itemId: string, adicionalIndex: number) => {
+    setCarrinho(prev =>
+      prev.map(item => {
+        if (item.id === itemId) {
+          const novosAdicionais = item.adicionais?.filter((_, index) => index !== adicionalIndex) || [];
+
+          // Recalcular subtotal sem o adicional removido
+          const valorAdicionais = novosAdicionais.reduce((total, adicional) =>
+            total + (adicional.preco * adicional.quantidade), 0
+          );
+
+          // Usar o preço com desconto se houver, senão usar preço final do produto
+          const precoBase = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
+          const novoSubtotal = (precoBase * item.quantidade) + valorAdicionais;
+
+          return {
+            ...item,
+            adicionais: novosAdicionais,
+            subtotal: novoSubtotal
+          };
+        }
+        return item;
+      })
+    );
+
+    toast.success('Adicional removido com sucesso!');
+  };
+
+  const alterarQuantidadeAdicional = (itemId: string, adicionalIndex: number, novaQuantidade: number) => {
+    if (novaQuantidade <= 0) {
+      removerAdicional(itemId, adicionalIndex);
+      return;
+    }
+
+    setCarrinho(prev =>
+      prev.map(item => {
+        if (item.id === itemId) {
+          const novosAdicionais = item.adicionais?.map((adicional, index) =>
+            index === adicionalIndex
+              ? { ...adicional, quantidade: novaQuantidade }
+              : adicional
+          ) || [];
+
+          // Recalcular subtotal com nova quantidade
+          const valorAdicionais = novosAdicionais.reduce((total, adicional) =>
+            total + (adicional.preco * adicional.quantidade), 0
+          );
+
+          // Usar o preço com desconto se houver, senão usar preço final do produto
+          const precoBase = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
+          const novoSubtotal = (precoBase * item.quantidade) + valorAdicionais;
+
+          return {
+            ...item,
+            adicionais: novosAdicionais,
+            subtotal: novoSubtotal
+          };
+        }
+        return item;
+      })
+    );
   };
 
   const calcularTotal = () => {
@@ -2819,10 +2979,10 @@ const PDVPage: React.FC = () => {
                         className="bg-gray-800/50 rounded-lg p-3"
                       >
                         {/* Layout responsivo baseado na largura da tela */}
-                        <div className="flex gap-3 lg:grid lg:grid-cols-[auto_1fr_auto_auto] lg:items-center lg:gap-4">
-                          {/* Foto do Produto */}
+                        <div className="flex gap-3">
+                          {/* Foto do Produto - Alinhada apenas com dados principais */}
                           <div
-                            className="w-16 h-16 lg:w-12 lg:h-12 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative"
+                            className="w-16 h-16 lg:w-12 lg:h-12 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative self-start"
                             onClick={(e) => abrirGaleria(item.produto, e)}
                           >
                             {getFotoPrincipal(item.produto) ? (
@@ -2845,50 +3005,211 @@ const PDVPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Informações do produto */}
-                          <div className="flex-1 min-w-0 lg:min-w-0">
-                            <div className="flex justify-between items-start mb-2 lg:mb-0">
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-white font-medium text-sm line-clamp-1">{item.produto.nome}</h4>
-                                <div className="flex items-center gap-2 text-xs text-gray-400">
-                                  <span>Código {item.produto.codigo}</span>
-                                  {item.quantidade > 1 && (
-                                    <span className="bg-gray-700 px-1.5 py-0.5 rounded text-white font-medium">
-                                      {item.quantidade}
-                                    </span>
-                                  )}
+                          {/* Container principal do conteúdo */}
+                          <div className="flex-1 min-w-0">
+                            {/* Seção superior - Dados do produto com controles */}
+                            <div className="lg:grid lg:grid-cols-[1fr_auto_auto] lg:items-center lg:gap-4">
+                                <div className="flex justify-between items-start mb-2 lg:mb-0">
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="text-white font-medium text-sm line-clamp-1">{item.produto.nome}</h4>
+                                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                                      <span>Código {item.produto.codigo}</span>
+                                      {item.quantidade > 1 && (
+                                        <span className="bg-gray-700 px-1.5 py-0.5 rounded text-white font-medium">
+                                          {item.quantidade}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Informações de origem do pedido */}
+                                    {item.pedido_origem_numero && (
+                                      <div className="text-xs text-green-400 mt-1 lg:mt-0">
+                                        📦 Pedido #{item.pedido_origem_numero}
+                                      </div>
+                                    )}
+
+                                    {/* Informações de desconto */}
+                                    {item.desconto && (
+                                      <div className="text-xs text-blue-400 mt-1 lg:mt-0">
+                                        💰 {item.desconto.tipo === 'percentual' && item.desconto.percentualDesconto
+                                          ? `${Math.round(item.desconto.percentualDesconto)}% OFF`
+                                          : `${formatCurrency(item.desconto.valorDesconto)} OFF`}
+                                        {item.desconto.origemPedido && ' (do pedido)'}
+                                      </div>
+                                    )}
+
+                                    {/* Botão "Opção adicional" se produto tem opções mas nenhuma foi selecionada */}
+                                    {item.temOpcoesAdicionais && (!item.adicionais || item.adicionais.length === 0) && (
+                                      <button
+                                        onClick={() => abrirOpcoesAdicionais(item)}
+                                        className="inline-flex items-center gap-1 px-2 py-1 mt-1 lg:mt-0 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-full text-xs text-purple-300 hover:text-purple-200 transition-all duration-200 group"
+                                      >
+                                        <Plus size={10} className="group-hover:scale-110 transition-transform" />
+                                        <span className="font-medium">Opção adicional</span>
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {/* Botão remover - mobile */}
+                                  <button
+                                    onClick={() => confirmarRemocao(item.id)}
+                                    className="text-red-400 hover:text-red-300 transition-colors ml-2 lg:hidden"
+                                    title="Remover item"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
                                 </div>
 
-                                {/* Informações de origem do pedido */}
-                                {item.pedido_origem_numero && (
-                                  <div className="text-xs text-green-400 mt-1 lg:mt-0">
-                                    📦 Pedido #{item.pedido_origem_numero}
-                                  </div>
+                              {/* Controles de quantidade - desktop */}
+                              <div className="hidden lg:flex items-center gap-2">
+                                <button
+                                  onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
+                                  className="w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
+                                >
+                                  <Minus size={12} />
+                                </button>
+                                <span className="text-white font-medium min-w-[1.5rem] text-center text-sm">
+                                  {item.quantidade}
+                                </span>
+                                <button
+                                  onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
+                                  className="w-7 h-7 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors"
+                                >
+                                  <Plus size={12} />
+                                </button>
+
+                                {/* Botões de desconto - desktop */}
+                                {!item.desconto && (
+                                  <button
+                                    onClick={() => abrirModalDesconto(item.id)}
+                                    className="w-7 h-7 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors"
+                                    title="Aplicar desconto"
+                                  >
+                                    <Percent size={12} />
+                                  </button>
                                 )}
 
-                                {/* Informações de desconto */}
                                 {item.desconto && (
-                                  <div className="text-xs text-blue-400 mt-1 lg:mt-0">
-                                    💰 {item.desconto.tipo === 'percentual' && item.desconto.percentualDesconto
-                                      ? `${Math.round(item.desconto.percentualDesconto)}% OFF`
-                                      : `${formatCurrency(item.desconto.valorDesconto)} OFF`}
-                                    {item.desconto.origemPedido && ' (do pedido)'}
-                                  </div>
+                                  <button
+                                    onClick={() => removerDesconto(item.id)}
+                                    className="w-7 h-7 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                    title="Remover desconto"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                )}
+
+                                {/* Botão para opções adicionais - desktop */}
+                                {item.temOpcoesAdicionais && (
+                                  <button
+                                    onClick={() => abrirOpcoesAdicionais(item)}
+                                    className="w-7 h-7 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors"
+                                    title="Opções adicionais"
+                                  >
+                                    <Plus size={12} />
+                                  </button>
                                 )}
                               </div>
 
-                              {/* Botão remover - mobile */}
-                              <button
-                                onClick={() => confirmarRemocao(item.id)}
-                                className="text-red-400 hover:text-red-300 transition-colors ml-2 lg:hidden"
-                                title="Remover item"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
+                              {/* Preço e botão remover - desktop */}
+                              <div className="hidden lg:flex items-center gap-3">
+                                <div className="text-right">
+                                  {item.desconto ? (
+                                    <>
+                                      <div className="flex items-center gap-2 justify-end mb-1">
+                                        <span className="text-gray-400 line-through text-xs">
+                                          {formatCurrency(item.desconto.precoOriginal)}
+                                        </span>
+                                        <span className="text-primary-400 font-bold text-sm">
+                                          {formatCurrency(item.desconto.precoComDesconto)}
+                                        </span>
+                                      </div>
+                                      <div className="text-white font-bold">
+                                        {formatCurrency(item.subtotal)}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-white font-bold">
+                                      {formatCurrency(item.subtotal)}
+                                    </div>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => confirmarRemocao(item.id)}
+                                  className="text-red-400 hover:text-red-300 transition-colors"
+                                  title="Remover item"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+
+                            {/* Seção de Adicionais - Separada */}
+                            {item.adicionais && item.adicionais.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-gray-700/50">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded-full text-sm text-purple-300 font-medium">
+                                    <Plus size={12} />
+                                    <span>Adicionais</span>
+                                  </div>
+                                  {item.temOpcoesAdicionais && (
+                                    <button
+                                      onClick={() => abrirOpcoesAdicionais(item)}
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-full text-xs text-purple-300 hover:text-purple-200 transition-all duration-200 group"
+                                      title="Adicionar mais opções"
+                                    >
+                                      <Plus size={10} className="group-hover:scale-110 transition-transform" />
+                                      <span className="font-medium">Adicionar</span>
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="space-y-2">
+                                  {item.adicionais.map((adicional, index) => (
+                                    <div key={index} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-2">
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <span className="text-gray-300 text-sm font-medium">
+                                          {adicional.nome}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        {/* Controles de quantidade */}
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => alterarQuantidadeAdicional(item.id, index, adicional.quantidade - 1)}
+                                            className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
+                                          >
+                                            <Minus size={10} />
+                                          </button>
+                                          <span className="text-white font-medium min-w-[1.5rem] text-center text-sm">
+                                            {adicional.quantidade}
+                                          </span>
+                                          <button
+                                            onClick={() => alterarQuantidadeAdicional(item.id, index, adicional.quantidade + 1)}
+                                            className="w-6 h-6 bg-purple-500/30 hover:bg-purple-500/50 rounded-full flex items-center justify-center text-white transition-colors"
+                                          >
+                                            <Plus size={10} />
+                                          </button>
+                                        </div>
+                                        {/* Preço */}
+                                        <span className="text-purple-300 text-sm font-medium min-w-[4rem] text-right">
+                                          {adicional.preco > 0 ? `+${formatCurrency(adicional.preco * adicional.quantidade)}` : 'Grátis'}
+                                        </span>
+                                        {/* Botão remover */}
+                                        <button
+                                          onClick={() => removerAdicional(item.id, index)}
+                                          className="w-6 h-6 bg-red-600/20 hover:bg-red-600/40 rounded-full flex items-center justify-center text-red-400 hover:text-red-300 transition-colors"
+                                          title="Remover adicional"
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
 
                             {/* Preço - mobile */}
-                            <div className="text-sm lg:hidden">
+                            <div className="text-sm lg:hidden mt-2">
                               {item.desconto ? (
                                 <div className="flex items-center gap-2">
                                   <span className="text-gray-400 line-through text-xs">
@@ -2945,83 +3266,23 @@ const PDVPage: React.FC = () => {
                                     <X size={14} />
                                   </button>
                                 )}
+
+                                {/* Botão para opções adicionais */}
+                                {item.temOpcoesAdicionais && (
+                                  <button
+                                    onClick={() => abrirOpcoesAdicionais(item)}
+                                    className="w-8 h-8 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors"
+                                    title="Opções adicionais"
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                )}
                               </div>
                               <div className="text-white font-bold">
                                 {formatCurrency(item.subtotal)}
                               </div>
                             </div>
-                          </div>
-
-                          {/* Controles de quantidade - desktop */}
-                          <div className="hidden lg:flex items-center gap-2">
-                            <button
-                              onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
-                              className="w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
-                            >
-                              <Minus size={12} />
-                            </button>
-                            <span className="text-white font-medium min-w-[1.5rem] text-center text-sm">
-                              {item.quantidade}
-                            </span>
-                            <button
-                              onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
-                              className="w-7 h-7 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors"
-                            >
-                              <Plus size={12} />
-                            </button>
-
-                            {/* Botões de desconto - desktop */}
-                            {!item.desconto && (
-                              <button
-                                onClick={() => abrirModalDesconto(item.id)}
-                                className="w-7 h-7 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors"
-                                title="Aplicar desconto"
-                              >
-                                <Percent size={12} />
-                              </button>
-                            )}
-
-                            {item.desconto && (
-                              <button
-                                onClick={() => removerDesconto(item.id)}
-                                className="w-7 h-7 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
-                                title="Remover desconto"
-                              >
-                                <X size={12} />
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Preço e botão remover - desktop */}
-                          <div className="hidden lg:flex items-center gap-3">
-                            <div className="text-right">
-                              {item.desconto ? (
-                                <>
-                                  <div className="flex items-center gap-2 justify-end mb-1">
-                                    <span className="text-gray-400 line-through text-xs">
-                                      {formatCurrency(item.desconto.precoOriginal)}
-                                    </span>
-                                    <span className="text-primary-400 font-bold text-sm">
-                                      {formatCurrency(item.desconto.precoComDesconto)}
-                                    </span>
-                                  </div>
-                                  <div className="text-white font-bold">
-                                    {formatCurrency(item.subtotal)}
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="text-white font-bold">
-                                  {formatCurrency(item.subtotal)}
-                                </div>
-                              )}
                             </div>
-                            <button
-                              onClick={() => confirmarRemocao(item.id)}
-                              className="text-red-400 hover:text-red-300 transition-colors"
-                              title="Remover item"
-                            >
-                              <Trash2 size={14} />
-                            </button>
                           </div>
                         </div>
                       </motion.div>
@@ -6283,6 +6544,20 @@ const PDVPage: React.FC = () => {
         </div>
       )}
       </motion.div>
+
+      {/* Modal de Opções Adicionais */}
+      {produtoParaAdicionais && (
+        <OpcoesAdicionaisModal
+          isOpen={showOpcoesAdicionaisModal}
+          onClose={() => {
+            setShowOpcoesAdicionaisModal(false);
+            setProdutoParaAdicionais(null);
+            setItemCarrinhoParaAdicionais(null);
+          }}
+          produto={produtoParaAdicionais}
+          onConfirm={confirmarOpcoesAdicionais}
+        />
+      )}
 
       {/* Modal de Produto Não Encontrado */}
       {showProdutoNaoEncontrado && (
