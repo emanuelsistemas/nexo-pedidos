@@ -181,7 +181,7 @@ const Sidebar: React.FC = () => {
       },
       { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
       { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },
-      { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
+      // { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
       { icon: ShoppingCart, label: 'PDV', path: '/dashboard/pdv', tooltip: 'Ponto de Venda' },
     ];
 

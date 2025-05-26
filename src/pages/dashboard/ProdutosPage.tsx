@@ -248,7 +248,7 @@ const ProdutosPage: React.FC = () => {
   const [estoqueAtual, setEstoqueAtual] = useState<number>(0);
   const [estoqueNaoFaturado, setEstoqueNaoFaturado] = useState<number>(0);
   const [tipoVisualizacaoEstoque, setTipoVisualizacaoEstoque] = useState<'total' | 'nao-faturado'>('total');
-  const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos'>('pedidos');
+  const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos' | 'pdv'>('pedidos');
   const [produtosEstoque, setProdutosEstoque] = useState<Record<string, { total: number, naoFaturado: number }>>({});
   const [novoMovimento, setNovoMovimento] = useState<{
     tipo: 'entrada' | 'saida';
@@ -581,7 +581,7 @@ const ProdutosPage: React.FC = () => {
       }
 
       if (data) {
-        const novoTipoControle = data.tipo_controle as 'faturamento' | 'pedidos';
+        const novoTipoControle = data.tipo_controle as 'faturamento' | 'pedidos' | 'pdv';
 
         // Definir o tipo de controle correto
         setTipoControleEstoque(novoTipoControle);

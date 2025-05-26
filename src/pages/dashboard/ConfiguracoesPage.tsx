@@ -184,7 +184,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [isEditingUsuario, setIsEditingUsuario] = useState(false);
   const [taxaMode, setTaxaMode] = useState<'bairro' | 'distancia'>('bairro');
   const [horarios, setHorarios] = useState<any[]>([]);
-  const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos'>('pedidos');
+  const [tipoControleEstoque, setTipoControleEstoque] = useState<'faturamento' | 'pedidos' | 'pdv'>('pedidos');
   const [bloqueiaSemEstoque, setBloqueiaSemEstoque] = useState<boolean>(false);
   const [agruparItens, setAgruparItens] = useState<boolean>(false);
   const [opcoesAdicionais, setOpcoesAdicionais] = useState<boolean>(false);
@@ -457,9 +457,9 @@ const ConfiguracoesPage: React.FC = () => {
             // Se encontrou configuração, atualizar os estados
             console.log('Configuração de estoque encontrada:', estoqueConfigData);
 
-            // Definir tipo de controle (pedidos ou faturamento)
+            // Definir tipo de controle (pedidos, faturamento ou pdv)
             if (estoqueConfigData.tipo_controle) {
-              setTipoControleEstoque(estoqueConfigData.tipo_controle as 'faturamento' | 'pedidos');
+              setTipoControleEstoque(estoqueConfigData.tipo_controle as 'faturamento' | 'pedidos' | 'pdv');
             } else {
               console.log('tipo_controle não definido, usando padrão "pedidos"');
               setTipoControleEstoque('pedidos');
@@ -1187,7 +1187,7 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
-  const handleTipoControleEstoqueChange = async (tipo: 'faturamento' | 'pedidos') => {
+  const handleTipoControleEstoqueChange = async (tipo: 'faturamento' | 'pedidos' | 'pdv') => {
     console.log('Alterando tipo de controle de estoque para:', tipo);
     setIsLoading(true);
     try {
@@ -2647,6 +2647,22 @@ const ConfiguracoesPage: React.FC = () => {
                   <input
                     type="radio"
                     name="tipo_controle_estoque"
+                    checked={tipoControleEstoque === 'pdv'}
+                    onChange={() => handleTipoControleEstoqueChange('pdv')}
+                    className="mr-3"
+                  />
+                  <div>
+                    <h4 className="text-white font-medium">Controle de baixa por venda no PDV</h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      O estoque é atualizado automaticamente quando uma venda é finalizada no PDV, ideal para controle em tempo real.
+                    </p>
+                  </div>
+                </label>
+
+                {/* <label className="flex items-center p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                  <input
+                    type="radio"
+                    name="tipo_controle_estoque"
                     checked={tipoControleEstoque === 'faturamento'}
                     onChange={() => handleTipoControleEstoqueChange('faturamento')}
                     className="mr-3"
@@ -2657,7 +2673,7 @@ const ConfiguracoesPage: React.FC = () => {
                       O estoque é atualizado apenas quando um pedido é faturado, mantendo o estoque disponível até a confirmação final.
                     </p>
                   </div>
-                </label>
+                </label> */}
               </div>
 
               <div className="mt-6 border-t border-gray-800 pt-6">
@@ -2696,9 +2712,8 @@ const ConfiguracoesPage: React.FC = () => {
                   <div>
                     <h4 className="text-blue-300 font-medium">Informação</h4>
                     <p className="text-sm text-blue-200/70 mt-1">
-                      Esta configuração afeta como o estoque é gerenciado em todo o sistema. No modo "Controle por Pedidos",
-                      o estoque é reservado assim que um pedido é criado. No modo "Controle por Faturamento", o estoque só é
-                      deduzido quando o pedido é efetivamente faturado.
+                      Esta configuração afeta como o estoque é gerenciado em todo o sistema. "Controle por Pedidos" reserva estoque ao criar pedidos,
+                      "Controle de baixa por venda no PDV" atualiza estoque automaticamente nas vendas do PDV em tempo real.
                     </p>
                   </div>
                 </div>
@@ -2989,7 +3004,7 @@ const ConfiguracoesPage: React.FC = () => {
                     </div>
                   </label>
 
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                  {/* <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                     <input
                       type="checkbox"
                       checked={pdvConfig.baixa_estoque_pdv}
@@ -3003,7 +3018,7 @@ const ConfiguracoesPage: React.FC = () => {
                         Automaticamente reduz o estoque dos produtos quando uma venda é finalizada no PDV.
                       </p>
                     </div>
-                  </label>
+                  </label> */}
 
                   <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                     <input

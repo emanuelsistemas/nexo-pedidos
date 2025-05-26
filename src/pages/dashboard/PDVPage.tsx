@@ -3064,8 +3064,27 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      // Verificar baixa de estoque se configurado
-      if (pdvConfig?.baixa_estoque_pdv) {
+      // Verificar baixa de estoque se configurado para PDV
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return false;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return false;
+
+      const { data: estoqueConfig } = await supabase
+        .from('tipo_controle_estoque_config')
+        .select('tipo_controle')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      const tipoControle = estoqueConfig?.tipo_controle || 'pedidos';
+
+      if (tipoControle === 'pdv') {
         setEtapaProcessamento('Verificando baixa de estoque...');
 
         // Agrupar itens do carrinho por produto para calcular quantidade total esperada
@@ -3623,8 +3642,8 @@ const PDVPage: React.FC = () => {
         }
       }
 
-      // Atualizar estoque se configurado
-      if (pdvConfig?.baixa_estoque_pdv) {
+      // Atualizar estoque se configurado para PDV
+      if (tipoControle === 'pdv') {
         setEtapaProcessamento('Atualizando estoque...');
         for (const item of carrinho) {
           const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {

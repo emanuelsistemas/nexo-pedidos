@@ -95,12 +95,12 @@ export const atualizarEstoqueProduto = async (
  * Verifica o tipo de controle de estoque configurado para a empresa
  * @param supabase Cliente Supabase
  * @param empresaId ID da empresa
- * @returns Tipo de controle de estoque ('pedidos' ou 'faturamento')
+ * @returns Tipo de controle de estoque ('pedidos', 'faturamento' ou 'pdv')
  */
 export const verificarTipoControleEstoque = async (
   supabase: SupabaseClient,
   empresaId: string
-): Promise<'pedidos' | 'faturamento'> => {
+): Promise<'pedidos' | 'faturamento' | 'pdv'> => {
   try {
     const { data, error } = await supabase
       .from('tipo_controle_estoque_config')
@@ -113,7 +113,7 @@ export const verificarTipoControleEstoque = async (
       return 'pedidos'; // Valor padrão em caso de erro
     }
 
-    return data?.tipo_controle as 'pedidos' | 'faturamento' || 'pedidos';
+    return data?.tipo_controle as 'pedidos' | 'faturamento' | 'pdv' || 'pedidos';
   } catch (error) {
     console.error('Erro ao verificar tipo de controle de estoque:', error);
     return 'pedidos'; // Valor padrão em caso de erro
