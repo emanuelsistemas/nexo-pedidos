@@ -1016,6 +1016,10 @@ const PDVPage: React.FC = () => {
       if (item.id === 'whatsapp') {
         return pdvConfig?.delivery_chat_ia === true;
       }
+      // Se for o item 'fiados', só mostrar se a configuração estiver habilitada
+      if (item.id === 'fiados') {
+        return pdvConfig?.fiado === true;
+      }
       // Se for um dos itens de controle de caixa, só mostrar se a configuração estiver habilitada
       if (['sangria', 'suprimento', 'pagamentos'].includes(item.id)) {
         return pdvConfig?.controla_caixa === true;
@@ -1635,6 +1639,7 @@ const PDVPage: React.FC = () => {
         observacao_no_item: false,
         desconto_no_item: false,
         editar_nome_produto: false,
+        fiado: false,
         ocultar_finalizar_com_impressao: false,
         ocultar_finalizar_sem_impressao: false,
         ocultar_nfce_com_impressao: false,

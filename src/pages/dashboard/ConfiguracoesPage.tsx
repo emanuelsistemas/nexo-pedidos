@@ -214,6 +214,7 @@ const ConfiguracoesPage: React.FC = () => {
     observacao_no_item: false,
     desconto_no_item: false,
     editar_nome_produto: false,
+    fiado: false,
     ocultar_finalizar_com_impressao: false,
     ocultar_finalizar_sem_impressao: false,
     ocultar_nfce_com_impressao: false,
@@ -1743,6 +1744,7 @@ const ConfiguracoesPage: React.FC = () => {
           observacao_no_item: config.observacao_no_item || false,
           desconto_no_item: config.desconto_no_item || false,
           editar_nome_produto: config.editar_nome_produto || false,
+          fiado: config.fiado || false,
           ocultar_finalizar_com_impressao: config.ocultar_finalizar_com_impressao || false,
           ocultar_finalizar_sem_impressao: config.ocultar_finalizar_sem_impressao || false,
           ocultar_nfce_com_impressao: config.ocultar_nfce_com_impressao || false,
@@ -1769,6 +1771,7 @@ const ConfiguracoesPage: React.FC = () => {
           observacao_no_item: false,
           desconto_no_item: false,
           editar_nome_produto: false,
+          fiado: false,
           ocultar_finalizar_com_impressao: false,
           ocultar_finalizar_sem_impressao: false,
           ocultar_nfce_com_impressao: false,
@@ -1797,6 +1800,7 @@ const ConfiguracoesPage: React.FC = () => {
         observacao_no_item: false,
         desconto_no_item: false,
         editar_nome_produto: false,
+        fiado: false,
         ocultar_finalizar_com_impressao: false,
         ocultar_finalizar_sem_impressao: false,
         ocultar_nfce_com_impressao: false,
@@ -2088,6 +2092,7 @@ const ConfiguracoesPage: React.FC = () => {
         observacao_no_item: 'Observação no Item',
         desconto_no_item: 'Desconto no Item',
         editar_nome_produto: 'Editar nome do produto na venda',
+        fiado: 'Fiado',
         ocultar_finalizar_com_impressao: 'Ocultar "Finalizar com Impressão"',
         ocultar_finalizar_sem_impressao: 'Ocultar "Finalizar sem Impressão"',
         ocultar_nfce_com_impressao: 'Ocultar "NFC-e com Impressão"',
@@ -3060,6 +3065,22 @@ const ConfiguracoesPage: React.FC = () => {
                       <h4 className="text-white font-medium">Desconto no Item</h4>
                       <p className="text-sm text-gray-400 mt-1">
                         Permite aplicar desconto individual em cada item durante a venda no PDV.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.fiado}
+                      onChange={(e) => handlePdvConfigChange('fiado', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Fiado</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Habilita a opção de venda fiado no PDV.
                       </p>
                     </div>
                   </label>

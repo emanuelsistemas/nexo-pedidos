@@ -110,6 +110,7 @@ export interface PDVConfig {
   observacao_no_item?: boolean;
   desconto_no_item?: boolean;
   editar_nome_produto?: boolean;
+  fiado?: boolean;
   ocultar_finalizar_com_impressao?: boolean;
   ocultar_finalizar_sem_impressao?: boolean;
   ocultar_nfce_com_impressao?: boolean;

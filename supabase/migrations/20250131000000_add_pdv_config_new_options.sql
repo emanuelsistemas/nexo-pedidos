@@ -35,10 +35,14 @@ ADD COLUMN IF NOT EXISTS ocultar_nfce_producao BOOLEAN DEFAULT FALSE;
 ALTER TABLE pdv_config
 ADD COLUMN IF NOT EXISTS ocultar_producao BOOLEAN DEFAULT FALSE;
 
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS fiado BOOLEAN DEFAULT FALSE;
+
 -- Comentários para documentação
 COMMENT ON COLUMN pdv_config.observacao_no_item IS 'Permite adicionar observações personalizadas aos itens durante a venda no PDV';
 COMMENT ON COLUMN pdv_config.desconto_no_item IS 'Permite aplicar desconto individual em cada item durante a venda no PDV';
 COMMENT ON COLUMN pdv_config.editar_nome_produto IS 'Permite editar o nome do produto durante a venda no PDV para personalização';
+COMMENT ON COLUMN pdv_config.fiado IS 'Habilita a opção de venda fiado no PDV';
 COMMENT ON COLUMN pdv_config.ocultar_finalizar_com_impressao IS 'Se true, oculta o botão "Finalizar com Impressão" na finalização do PDV';
 COMMENT ON COLUMN pdv_config.ocultar_finalizar_sem_impressao IS 'Se true, oculta o botão "Finalizar sem Impressão" na finalização do PDV';
 COMMENT ON COLUMN pdv_config.ocultar_nfce_com_impressao IS 'Se true, oculta o botão "NFC-e com Impressão" na finalização do PDV';
