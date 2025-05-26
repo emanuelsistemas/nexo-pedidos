@@ -1334,6 +1334,7 @@ const PDVPage: React.FC = () => {
         nome,
         preco,
         codigo,
+        codigo_barras,
         descricao,
         promocao,
         tipo_desconto,
@@ -3014,6 +3015,12 @@ const PDVPage: React.FC = () => {
                                     <h4 className="text-white font-medium text-sm line-clamp-1">{item.produto.nome}</h4>
                                     <div className="flex items-center gap-2 text-xs text-gray-400">
                                       <span>Código {item.produto.codigo}</span>
+                                      {item.produto.codigo_barras && item.produto.codigo_barras.trim() !== '' && (
+                                        <div className="flex items-center gap-1">
+                                          <QrCode size={10} className="text-gray-500" />
+                                          <span>{item.produto.codigo_barras}</span>
+                                        </div>
+                                      )}
                                       {item.quantidade > 1 && (
                                         <span className="bg-gray-700 px-1.5 py-0.5 rounded text-white font-medium">
                                           {item.quantidade}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, AlertCircle, Image, Tag, Package, RefreshCw } from 'lucide-react';
+import { Search, AlertCircle, Image, Tag, Package, RefreshCw, QrCode } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FotoGaleria from '../../components/comum/FotoGaleria';
 
@@ -16,6 +16,7 @@ interface Produto {
   preco: number;
   descricao?: string;
   codigo: string;
+  codigo_barras?: string;
   ativo: boolean;
   grupo_id: string;
   promocao?: boolean;
@@ -1074,11 +1075,6 @@ const UserProdutosPage: React.FC = () => {
                               Promoção
                             </span>
                           )}
-                          {produto.desconto_quantidade && (
-                            <span className="px-2 py-0.5 text-xs font-medium bg-blue-600 text-white rounded-full">
-                              Desconto {produto.quantidade_minima}+ unid.
-                            </span>
-                          )}
                         </div>
 
                         {/* Preço */}
@@ -1107,14 +1103,28 @@ const UserProdutosPage: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-1 mt-1">
                           <div className="flex items-center gap-1 text-gray-400 text-xs">
                             <Tag size={12} />
-                            <span>#{produto.codigo}</span>
+                            <span>Código {produto.codigo}</span>
+                            {produto.codigo_barras && produto.codigo_barras.trim() !== '' && (
+                              <div className="flex items-center gap-1 ml-1">
+                                <QrCode size={10} className="text-gray-500" />
+                                <span>{produto.codigo_barras}</span>
+                              </div>
+                            )}
                           </div>
 
-                          {produto.unidade_medida && (
-                            <span className="px-2 py-0.5 text-xs font-medium bg-primary-700 text-white rounded-full">
-                              {produto.unidade_medida.sigla} - {produto.unidade_medida.nome}
-                            </span>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {produto.unidade_medida && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-primary-700 text-white rounded-full">
+                                {produto.unidade_medida.sigla} - {produto.unidade_medida.nome}
+                              </span>
+                            )}
+
+                            {produto.desconto_quantidade && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-blue-600 text-white rounded-full">
+                                Desconto {produto.quantidade_minima}+ unid.
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Informações de desconto */}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera } from 'lucide-react';
+import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Grupo, Produto, OpcaoAdicional, ProdutoOpcao } from '../../types';
 import { showMessage } from '../../utils/toast';
@@ -2516,15 +2516,18 @@ const ProdutosPage: React.FC = () => {
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <h4 className="text-white font-medium">{produto.nome}</h4>
-                <span className="text-sm text-gray-400">#{produto.codigo}</span>
+                <div className="flex items-center gap-1 text-sm text-gray-400">
+                  <span>Código {produto.codigo}</span>
+                  {produto.codigo_barras && produto.codigo_barras.trim() !== '' && (
+                    <div className="flex items-center gap-1 ml-1">
+                      <QrCode size={10} className="text-gray-500" />
+                      <span>{produto.codigo_barras}</span>
+                    </div>
+                  )}
+                </div>
                 {produto.promocao && (
                   <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
                     Promoção
-                  </span>
-                )}
-                {produto.desconto_quantidade && (
-                  <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded-full">
-                    Desconto {produto.quantidade_minima}+ unid.
                   </span>
                 )}
                 {produto.ativo === false && (
@@ -2567,11 +2570,18 @@ const ProdutosPage: React.FC = () => {
                     {produto.preco.toFixed(2)}
                   </p>
                 )}
-                {unidadeMedida && (
-                  <span className="px-2 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
-                    {unidadeMedida.sigla} - {unidadeMedida.nome}
-                  </span>
-                )}
+                <div className="flex flex-wrap items-center gap-1">
+                  {unidadeMedida && (
+                    <span className="px-2 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                      {unidadeMedida.sigla} - {unidadeMedida.nome}
+                    </span>
+                  )}
+                  {produto.desconto_quantidade && (
+                    <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded-full">
+                      Desconto {produto.quantidade_minima}+ unid.
+                    </span>
+                  )}
+                </div>
               </div>
 
               {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined && (
