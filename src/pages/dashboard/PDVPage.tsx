@@ -3068,12 +3068,26 @@ const PDVPage: React.FC = () => {
       if (pdvConfig?.baixa_estoque_pdv) {
         setEtapaProcessamento('Verificando baixa de estoque...');
 
-        for (const item of carrinho) {
+        // Agrupar itens do carrinho por produto para calcular quantidade total esperada
+        const produtosAgrupados = carrinho.reduce((acc, item) => {
+          const produtoId = item.produto.id;
+          if (!acc[produtoId]) {
+            acc[produtoId] = {
+              produto: item.produto,
+              quantidadeTotal: 0
+            };
+          }
+          acc[produtoId].quantidadeTotal += item.quantidade;
+          return acc;
+        }, {} as Record<string, { produto: any; quantidadeTotal: number }>);
+
+        // Verificar cada produto único
+        for (const [produtoId, dadosProduto] of Object.entries(produtosAgrupados)) {
           // Verificar se existe movimentação de estoque para este produto desta venda
           const { data: movimentacaoEstoque, error: estoqueError } = await supabase
             .from('produto_estoque')
             .select('id, tipo_movimento, quantidade, observacao, data_hora_movimento')
-            .eq('produto_id', item.produto.id)
+            .eq('produto_id', produtoId)
             .eq('tipo_movimento', 'saida')
             .ilike('observacao', `%Venda PDV #${numeroVenda}%`)
             .order('data_hora_movimento', { ascending: false });
@@ -3084,22 +3098,22 @@ const PDVPage: React.FC = () => {
           }
 
           if (!movimentacaoEstoque || movimentacaoEstoque.length === 0) {
-            console.error(`❌ Movimentação de estoque não encontrada para produto ${item.produto.nome} (ID: ${item.produto.id})`);
-            console.error(`   Esperado: Saída de ${item.quantidade} unidades com observação "Venda PDV #${numeroVenda}"`);
+            console.error(`❌ Movimentação de estoque não encontrada para produto ${dadosProduto.produto.nome} (ID: ${produtoId})`);
+            console.error(`   Esperado: Saída de ${dadosProduto.quantidadeTotal} unidades com observação "Venda PDV #${numeroVenda}"`);
             return false;
           }
 
           // Somar todas as movimentações desta venda para este produto (caso haja múltiplas)
-          const quantidadeTotal = movimentacaoEstoque.reduce((total, mov) => total + parseFloat(mov.quantidade), 0);
+          const quantidadeMovimentada = movimentacaoEstoque.reduce((total, mov) => total + parseFloat(mov.quantidade), 0);
 
-          if (quantidadeTotal !== item.quantidade) {
-            console.error(`❌ Quantidade incorreta na movimentação de estoque para produto ${item.produto.nome}`);
-            console.error(`   Esperado: ${item.quantidade}, Encontrado: ${quantidadeTotal}`);
+          if (quantidadeMovimentada !== dadosProduto.quantidadeTotal) {
+            console.error(`❌ Quantidade incorreta na movimentação de estoque para produto ${dadosProduto.produto.nome}`);
+            console.error(`   Esperado: ${dadosProduto.quantidadeTotal}, Encontrado: ${quantidadeMovimentada}`);
             console.error(`   Movimentações encontradas:`, movimentacaoEstoque);
             return false;
           }
 
-          console.log(`✅ Estoque verificado para ${item.produto.nome}: ${quantidadeTotal} unidades baixadas`);
+          console.log(`✅ Estoque verificado para ${dadosProduto.produto.nome}: ${quantidadeMovimentada} unidades baixadas`);
         }
 
         console.log('✅ Baixa de estoque verificada com sucesso para todos os itens');
@@ -7401,7 +7415,7 @@ const PDVPage: React.FC = () => {
                   }}
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
                 >
-                  Cancelar
+                  Sair
                 </button>
                 <button
                   onClick={cancelarVenda}
