@@ -3038,16 +3038,7 @@ const PDVPage: React.FC = () => {
                                       </div>
                                     )}
 
-                                    {/* Botão "Opção adicional" se produto tem opções mas nenhuma foi selecionada */}
-                                    {item.temOpcoesAdicionais && (!item.adicionais || item.adicionais.length === 0) && (
-                                      <button
-                                        onClick={() => abrirOpcoesAdicionais(item)}
-                                        className="inline-flex items-center gap-1 px-2 py-1 mt-1 lg:mt-0 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-full text-xs text-purple-300 hover:text-purple-200 transition-all duration-200 group"
-                                      >
-                                        <Plus size={10} className="group-hover:scale-110 transition-transform" />
-                                        <span className="font-medium">Opção adicional</span>
-                                      </button>
-                                    )}
+
                                   </div>
 
                                   {/* Botão remover - mobile */}
@@ -3148,19 +3139,8 @@ const PDVPage: React.FC = () => {
                               <div className="mt-3 pt-3 border-t border-gray-700/50">
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded-full text-sm text-purple-300 font-medium">
-                                    <Plus size={12} />
                                     <span>Adicionais</span>
                                   </div>
-                                  {item.temOpcoesAdicionais && (
-                                    <button
-                                      onClick={() => abrirOpcoesAdicionais(item)}
-                                      className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-full text-xs text-purple-300 hover:text-purple-200 transition-all duration-200 group"
-                                      title="Adicionar mais opções"
-                                    >
-                                      <Plus size={10} className="group-hover:scale-110 transition-transform" />
-                                      <span className="font-medium">Adicionar</span>
-                                    </button>
-                                  )}
                                 </div>
                                 <div className="space-y-2">
                                   {item.adicionais.map((adicional, index) => (
