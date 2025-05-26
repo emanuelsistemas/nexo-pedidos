@@ -8,6 +8,14 @@ import { useAuthSession } from '../../hooks/useAuthSession';
 import Button from '../../components/comum/Button';
 import FotoGaleria from '../../components/comum/FotoGaleria';
 
+interface UnidadeMedida {
+  id: string;
+  sigla: string;
+  nome: string;
+  empresa_id: string;
+  created_at?: string;
+}
+
 interface DeleteConfirmationProps {
   isOpen: boolean;
   onClose: () => void;
@@ -126,14 +134,13 @@ const ProdutosPage: React.FC = () => {
     grupos: true,
     opcoes: true,
     unidades: true,
-    estoque: true
+    estoqueConfig: true
   });
 
   // Função para verificar se todos os dados estão carregados
   const checkIfDataReady = () => {
-    const allLoaded = !loadingStates.grupos && !loadingStates.opcoes && !loadingStates.unidades && !loadingStates.estoque;
+    const allLoaded = !loadingStates.grupos && !loadingStates.opcoes && !loadingStates.unidades && !loadingStates.estoqueConfig;
     if (allLoaded && !isDataReady) {
-      console.log('Todos os dados foram carregados, exibindo interface');
       setIsDataReady(true);
       setIsLoading(false);
     }
@@ -269,87 +276,55 @@ const ProdutosPage: React.FC = () => {
   // useEffect separado para verificar produto para editar após grupos carregarem
   useEffect(() => {
     if (grupos.length > 0) {
-      console.log('Grupos carregados, verificando produto para editar...');
       checkProdutoParaEditar();
     }
   }, [grupos]);
 
   const checkProdutoParaEditar = () => {
-    console.log('=== VERIFICANDO PRODUTO PARA EDITAR ===');
     const produtoParaEditar = localStorage.getItem('produto_para_editar');
-    console.log('Dados do localStorage:', produtoParaEditar);
 
     if (produtoParaEditar) {
       try {
         const { produto_id, grupo_id, timestamp, origem, aba_inicial } = JSON.parse(produtoParaEditar);
-        console.log('Dados parseados:', { produto_id, grupo_id, timestamp, origem, aba_inicial });
 
         // Verificar se o timestamp não é muito antigo (5 minutos)
         const agora = new Date().getTime();
         const tempoLimite = 5 * 60 * 1000; // 5 minutos
 
-        console.log('Verificação de tempo:', { agora, timestamp, diferenca: agora - timestamp, limite: tempoLimite });
-
         if (agora - timestamp < tempoLimite) {
-          console.log('Timestamp válido, abrindo produto imediatamente...');
-          console.log('Origem:', origem, 'Aba inicial:', aba_inicial);
           // Como os grupos já estão carregados, abrir imediatamente
           abrirProdutoParaEdicao(produto_id, grupo_id, aba_inicial);
-        } else {
-          console.log('Timestamp expirado, não abrindo produto');
         }
 
         // Limpar o localStorage
         localStorage.removeItem('produto_para_editar');
-        console.log('localStorage limpo');
       } catch (error) {
         console.error('Erro ao processar produto para editar:', error);
         localStorage.removeItem('produto_para_editar');
       }
-    } else {
-      console.log('Nenhum produto para editar encontrado no localStorage');
     }
   };
 
   const abrirProdutoParaEdicao = (produtoId: string, grupoId: string, abaInicial?: string) => {
-    console.log('=== ABRINDO PRODUTO PARA EDIÇÃO ===');
-    console.log('Produto ID:', produtoId);
-    console.log('Grupo ID:', grupoId);
-    console.log('Aba inicial:', abaInicial);
-    console.log('Grupos disponíveis:', grupos.length);
-    console.log('Grupos:', grupos.map(g => ({ id: g.id, nome: g.nome, produtos: g.produtos.length })));
-
     // Encontrar o grupo
     const grupo = grupos.find(g => g.id === grupoId);
     if (!grupo) {
-      console.error('Grupo não encontrado:', grupoId);
-      console.error('Grupos disponíveis:', grupos.map(g => g.id));
       return;
     }
-
-    console.log('Grupo encontrado:', grupo.nome);
-    console.log('Produtos no grupo:', grupo.produtos.map(p => ({ id: p.id, nome: p.nome })));
 
     // Encontrar o produto
     const produto = grupo.produtos.find(p => p.id === produtoId);
     if (!produto) {
-      console.error('Produto não encontrado:', produtoId);
-      console.error('Produtos disponíveis no grupo:', grupo.produtos.map(p => p.id));
       return;
     }
 
     // Abrir o produto para edição
-    console.log('Produto encontrado:', produto.nome);
-    console.log('Chamando handleEditProduto...');
     handleEditProduto(grupo, produto);
-    console.log('handleEditProduto executado');
 
     // Se foi especificada uma aba inicial, definir após um pequeno delay
     if (abaInicial) {
-      console.log('Definindo aba inicial para:', abaInicial);
       setTimeout(() => {
         setActiveTab(abaInicial);
-        console.log('Aba alterada para:', abaInicial);
       }, 100);
     }
   };
@@ -365,14 +340,11 @@ const ProdutosPage: React.FC = () => {
 
   // Efeito para garantir que o tipo de visualização seja compatível com o tipo de controle
   useEffect(() => {
-    console.log('Tipo de controle de estoque alterado para:', tipoControleEstoque);
-
     // Forçar uma atualização da interface quando o tipo de controle mudar
     document.title = `Nexo - Produtos (${tipoControleEstoque})`;
 
     // Se o tipo de controle for 'faturamento', forçar a visualização para 'total'
     if (tipoControleEstoque === 'faturamento' && tipoVisualizacaoEstoque !== 'total') {
-      console.log('Forçando visualização para "total" devido ao tipo de controle "faturamento"');
       setTipoVisualizacaoEstoque('total');
     }
   }, [tipoControleEstoque, tipoVisualizacaoEstoque]);
@@ -568,16 +540,6 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      console.log('Carregando configuração de estoque para empresa:', usuarioData.empresa_id);
-
-      // Consulta direta para verificar o tipo de controle
-      const { data: rawData, error: rawError } = await supabase
-        .rpc('execute_sql', {
-          query_text: `SELECT tipo_controle FROM tipo_controle_estoque_config WHERE empresa_id = '${usuarioData.empresa_id}' LIMIT 1;`
-        });
-
-      console.log('Resultado da consulta direta:', rawData);
-
       const { data, error } = await supabase
         .from('tipo_controle_estoque_config')
         .select('*')
@@ -587,8 +549,6 @@ const ProdutosPage: React.FC = () => {
       if (error) {
         // Se o erro for "não encontrado", usamos o valor padrão 'pedidos'
         if (error.code === 'PGRST116') {
-          console.log('Configuração de estoque não encontrada, criando uma nova...');
-
           // Criar uma nova configuração com valor padrão
           const { data: insertData, error: insertError } = await supabase
             .from('tipo_controle_estoque_config')
@@ -601,53 +561,45 @@ const ProdutosPage: React.FC = () => {
             .single();
 
           if (insertError) {
-            console.error('Erro ao criar configuração de estoque:', insertError);
             setTipoControleEstoque('pedidos');
+            // Marcar estoque como carregado mesmo em caso de erro
+            setLoadingStates(prev => ({ ...prev, estoqueConfig: false }));
             return;
           }
 
-          console.log('Nova configuração criada:', insertData);
           setTipoControleEstoque('pedidos');
 
-          // Forçar atualização da interface
-          setTimeout(() => {
-            console.log('Forçando atualização da interface após criar configuração');
-            setTipoControleEstoque('pedidos');
-          }, 100);
-
+          // Marcar estoque como carregado
+          setLoadingStates(prev => ({ ...prev, estoqueConfig: false }));
           return;
         } else {
-          console.error('Erro ao carregar configuração de estoque:', error);
           setTipoControleEstoque('pedidos');
+          // Marcar estoque como carregado mesmo em caso de erro
+          setLoadingStates(prev => ({ ...prev, estoqueConfig: false }));
           return;
         }
       }
 
       if (data) {
-        console.log('Configuração de estoque carregada:', data);
         const novoTipoControle = data.tipo_controle as 'faturamento' | 'pedidos';
-        console.log('Tipo de controle de estoque:', novoTipoControle);
 
-        // Forçar atualização da interface
-        setTipoControleEstoque('faturamento');
+        // Definir o tipo de controle correto
+        setTipoControleEstoque(novoTipoControle);
 
-        // Pequeno atraso para garantir que a interface seja atualizada
-        setTimeout(() => {
-          console.log('Definindo tipo de controle para:', novoTipoControle);
-          setTipoControleEstoque(novoTipoControle);
-
-          // Se o tipo de controle for 'faturamento', forçar a visualização para 'total'
-          if (novoTipoControle === 'faturamento') {
-            setTipoVisualizacaoEstoque('total');
-          }
-        }, 100);
+        // Se o tipo de controle for 'faturamento', forçar a visualização para 'total'
+        if (novoTipoControle === 'faturamento') {
+          setTipoVisualizacaoEstoque('total');
+        }
       } else {
-        console.log('Configuração de estoque vazia, usando padrão "pedidos"');
         setTipoControleEstoque('pedidos');
       }
+
+      // Marcar estoque como carregado
+      setLoadingStates(prev => ({ ...prev, estoqueConfig: false }));
     } catch (error: any) {
-      console.error('Erro ao carregar configuração de estoque:', error);
       setTipoControleEstoque('pedidos');
+      // Em caso de erro, marcar como carregado para não ficar em loading infinito
+      setLoadingStates(prev => ({ ...prev, estoqueConfig: false }));
     }
   };
 
@@ -695,7 +647,6 @@ const ProdutosPage: React.FC = () => {
           .eq('empresa_id', usuarioData.empresa_id);
 
         if (pedidosError) {
-          console.error(`Erro ao carregar pedidos do produto ${produto.id}:`, pedidosError);
           continue;
         }
 
@@ -720,13 +671,8 @@ const ProdutosPage: React.FC = () => {
 
       // Atualizar o estado com as informações de estoque de todos os produtos
       setProdutosEstoque(estoqueInfo);
-
-      // Marcar estoque como carregado
-      setLoadingStates(prev => ({ ...prev, estoque: false }));
     } catch (error: any) {
       console.error('Erro ao carregar estoque dos produtos:', error);
-      // Em caso de erro, marcar como carregado para não ficar em loading infinito
-      setLoadingStates(prev => ({ ...prev, estoque: false }));
     }
   };
 
@@ -1142,7 +1088,6 @@ const ProdutosPage: React.FC = () => {
       setEstoqueAtual(estoqueAtualDB);
       setEstoqueNaoFaturado(quantidadeNaoFaturada);
     } catch (error: any) {
-      console.error('Erro ao carregar movimentos de estoque:', error);
       showMessage('error', 'Erro ao carregar movimentos de estoque: ' + error.message);
     } finally {
       setIsLoadingEstoque(false);
@@ -1150,8 +1095,6 @@ const ProdutosPage: React.FC = () => {
   };
 
   const handleEditProduto = async (grupo: Grupo, produto: Produto) => {
-    console.log('handleEditProduto chamado com:', { grupo, produto });
-
     // Primeiro, definir o estado para o formulário de produto (não de grupo)
     setIsGrupoForm(false);
 
@@ -1183,8 +1126,6 @@ const ProdutosPage: React.FC = () => {
       estoque_minimo_ativo: produto.estoque_minimo_ativo || false,
     };
 
-    console.log('Definindo novoProduto com:', produtoState);
-
     // Definir o estado do novo produto
     setNovoProduto(produtoState);
 
@@ -1208,7 +1149,6 @@ const ProdutosPage: React.FC = () => {
     }
 
     // Abrir o sidebar imediatamente
-    console.log('Abrindo sidebar imediatamente');
     setShowSidebar(true);
 
     try {
@@ -1227,9 +1167,6 @@ const ProdutosPage: React.FC = () => {
     } catch (error) {
       console.error('Error loading product options:', error);
     }
-
-    console.log('Abrindo sidebar para edição de produto');
-    setShowSidebar(true);
   };
 
   const loadProdutoFotos = async (produtoId: string) => {
@@ -1380,8 +1317,6 @@ const ProdutosPage: React.FC = () => {
         acao: 'foto_adicionada'
       }));
 
-      console.log(`Foto adicionada com sucesso! Sinalizador definido para versão mobile.`);
-
       showMessage('success', 'Foto adicionada com sucesso');
     } catch (error: any) {
       console.error('Erro ao fazer upload da foto:', error);
@@ -1468,8 +1403,6 @@ const ProdutosPage: React.FC = () => {
         produto_id: editingProduto.id,
         acao: 'foto_principal_alterada'
       }));
-
-      console.log(`Foto principal definida com sucesso! Sinalizador definido para versão mobile.`);
 
       showMessage('success', 'Foto principal definida com sucesso');
     } catch (error: any) {
@@ -1675,8 +1608,6 @@ const ProdutosPage: React.FC = () => {
         acao: 'foto_excluida'
       }));
 
-      console.log(`Foto excluída com sucesso! Sinalizador definido para versão mobile.`);
-
       showMessage('success', 'Foto excluída com sucesso');
     } catch (error: any) {
       console.error('Erro ao excluir foto:', error);
@@ -1746,13 +1677,7 @@ const ProdutosPage: React.FC = () => {
   const handleSubmitProduto = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    console.log('=== INÍCIO DO SUBMIT ===');
-    console.log('editingProduto:', editingProduto);
-    console.log('novoProduto completo:', novoProduto);
-    console.log('selectedGrupo:', selectedGrupo);
-
     if (!selectedGrupo || !novoProduto.nome || !novoProduto.preco || !novoProduto.codigo || !novoProduto.unidade_medida_id) {
-      console.log('ERRO: Campos obrigatórios não preenchidos');
       showMessage('error', 'Preencha todos os campos obrigatórios');
       return;
     }
@@ -1789,12 +1714,7 @@ const ProdutosPage: React.FC = () => {
       }
     }
 
-    // Debug: Log dos valores do estoque mínimo
-    console.log('Valores do estoque mínimo antes de salvar:', {
-      estoque_minimo_ativo: novoProduto.estoque_minimo_ativo,
-      estoque_minimo: novoProduto.estoque_minimo,
-      estoqueMinimoVazio: estoqueMinimoVazio
-    });
+
 
     setIsLoading(true);
     try {
@@ -1869,8 +1789,6 @@ const ProdutosPage: React.FC = () => {
       let productId: string;
 
       if (editingProduto) {
-        console.log('=== EDITANDO PRODUTO ===');
-        console.log('ID do produto:', editingProduto.id);
 
         const updateData = {
           nome: novoProduto.nome,
@@ -1894,8 +1812,6 @@ const ProdutosPage: React.FC = () => {
           empresa_id: usuarioData.empresa_id
         };
 
-        console.log('Dados para UPDATE:', updateData);
-
         const { data, error } = await supabase
           .from('produtos')
           .update(updateData)
@@ -1903,7 +1819,6 @@ const ProdutosPage: React.FC = () => {
           .select()
           .single();
 
-        console.log('Resultado do UPDATE:', { data, error });
         if (error) throw error;
         productId = data.id;
 

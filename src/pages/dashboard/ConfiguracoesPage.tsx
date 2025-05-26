@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
@@ -210,7 +210,16 @@ const ConfiguracoesPage: React.FC = () => {
     delivery_chat_ia: false,
     baixa_estoque_pdv: false,
     venda_codigo_barras: false,
-    forca_venda_fiscal_cartao: false
+    forca_venda_fiscal_cartao: false,
+    observacao_no_item: false,
+    desconto_no_item: false,
+    editar_nome_produto: false,
+    ocultar_finalizar_com_impressao: false,
+    ocultar_finalizar_sem_impressao: false,
+    ocultar_nfce_com_impressao: false,
+    ocultar_nfce_sem_impressao: false,
+    ocultar_nfce_producao: false,
+    ocultar_producao: false
   });
   const [horarioForm, setHorarioForm] = useState({
     id: '',
@@ -1730,7 +1739,16 @@ const ConfiguracoesPage: React.FC = () => {
           delivery_chat_ia: config.delivery_chat_ia || false,
           baixa_estoque_pdv: config.baixa_estoque_pdv || false,
           venda_codigo_barras: config.venda_codigo_barras || false,
-          forca_venda_fiscal_cartao: config.forca_venda_fiscal_cartao || false
+          forca_venda_fiscal_cartao: config.forca_venda_fiscal_cartao || false,
+          observacao_no_item: config.observacao_no_item || false,
+          desconto_no_item: config.desconto_no_item || false,
+          editar_nome_produto: config.editar_nome_produto || false,
+          ocultar_finalizar_com_impressao: config.ocultar_finalizar_com_impressao || false,
+          ocultar_finalizar_sem_impressao: config.ocultar_finalizar_sem_impressao || false,
+          ocultar_nfce_com_impressao: config.ocultar_nfce_com_impressao || false,
+          ocultar_nfce_sem_impressao: config.ocultar_nfce_sem_impressao || false,
+          ocultar_nfce_producao: config.ocultar_nfce_producao || false,
+          ocultar_producao: config.ocultar_producao || false
         });
       } else {
         // Se não encontrou configuração, definir valores padrão
@@ -1747,7 +1765,16 @@ const ConfiguracoesPage: React.FC = () => {
           delivery_chat_ia: false,
           baixa_estoque_pdv: false,
           venda_codigo_barras: false,
-          forca_venda_fiscal_cartao: false
+          forca_venda_fiscal_cartao: false,
+          observacao_no_item: false,
+          desconto_no_item: false,
+          editar_nome_produto: false,
+          ocultar_finalizar_com_impressao: false,
+          ocultar_finalizar_sem_impressao: false,
+          ocultar_nfce_com_impressao: false,
+          ocultar_nfce_sem_impressao: false,
+          ocultar_nfce_producao: false,
+          ocultar_producao: false
         });
       }
     } catch (error) {
@@ -1766,7 +1793,16 @@ const ConfiguracoesPage: React.FC = () => {
         delivery_chat_ia: false,
         baixa_estoque_pdv: false,
         venda_codigo_barras: false,
-        forca_venda_fiscal_cartao: false
+        forca_venda_fiscal_cartao: false,
+        observacao_no_item: false,
+        desconto_no_item: false,
+        editar_nome_produto: false,
+        ocultar_finalizar_com_impressao: false,
+        ocultar_finalizar_sem_impressao: false,
+        ocultar_nfce_com_impressao: false,
+        ocultar_nfce_sem_impressao: false,
+        ocultar_nfce_producao: false,
+        ocultar_producao: false
       });
     }
   };
@@ -1997,7 +2033,16 @@ const ConfiguracoesPage: React.FC = () => {
         delivery_chat_ia: field === 'delivery_chat_ia' ? value : pdvConfig.delivery_chat_ia,
         baixa_estoque_pdv: field === 'baixa_estoque_pdv' ? value : pdvConfig.baixa_estoque_pdv,
         venda_codigo_barras: field === 'venda_codigo_barras' ? value : pdvConfig.venda_codigo_barras,
-        forca_venda_fiscal_cartao: field === 'forca_venda_fiscal_cartao' ? value : pdvConfig.forca_venda_fiscal_cartao
+        forca_venda_fiscal_cartao: field === 'forca_venda_fiscal_cartao' ? value : pdvConfig.forca_venda_fiscal_cartao,
+        observacao_no_item: field === 'observacao_no_item' ? value : pdvConfig.observacao_no_item,
+        desconto_no_item: field === 'desconto_no_item' ? value : pdvConfig.desconto_no_item,
+        editar_nome_produto: field === 'editar_nome_produto' ? value : pdvConfig.editar_nome_produto,
+        ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
+        ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
+        ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : pdvConfig.ocultar_nfce_com_impressao,
+        ocultar_nfce_sem_impressao: field === 'ocultar_nfce_sem_impressao' ? value : pdvConfig.ocultar_nfce_sem_impressao,
+        ocultar_nfce_producao: field === 'ocultar_nfce_producao' ? value : pdvConfig.ocultar_nfce_producao,
+        ocultar_producao: field === 'ocultar_producao' ? value : pdvConfig.ocultar_producao
       };
 
       if (existingConfig) {
@@ -2039,7 +2084,16 @@ const ConfiguracoesPage: React.FC = () => {
         delivery_chat_ia: 'Delivery como chat IA',
         baixa_estoque_pdv: 'Baixa estoque na venda do PDV',
         venda_codigo_barras: 'Venda de produtos por Código de barras',
-        forca_venda_fiscal_cartao: 'Força venda fiscal nos cartões'
+        forca_venda_fiscal_cartao: 'Força venda fiscal nos cartões',
+        observacao_no_item: 'Observação no Item',
+        desconto_no_item: 'Desconto no Item',
+        editar_nome_produto: 'Editar nome do produto na venda',
+        ocultar_finalizar_com_impressao: 'Ocultar "Finalizar com Impressão"',
+        ocultar_finalizar_sem_impressao: 'Ocultar "Finalizar sem Impressão"',
+        ocultar_nfce_com_impressao: 'Ocultar "NFC-e com Impressão"',
+        ocultar_nfce_sem_impressao: 'Ocultar "NFC-e sem Impressão"',
+        ocultar_nfce_producao: 'Ocultar "NFC-e + Produção"',
+        ocultar_producao: 'Ocultar "Produção"'
       };
 
       const fieldName = fieldNames[field] || field;
@@ -2977,6 +3031,173 @@ const ConfiguracoesPage: React.FC = () => {
                       </p>
                     </div>
                   </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.observacao_no_item}
+                      onChange={(e) => handlePdvConfigChange('observacao_no_item', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Observação no Item</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Permite adicionar observações personalizadas aos itens durante a venda no PDV.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.desconto_no_item}
+                      onChange={(e) => handlePdvConfigChange('desconto_no_item', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Desconto no Item</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Permite aplicar desconto individual em cada item durante a venda no PDV.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={pdvConfig.editar_nome_produto}
+                      onChange={(e) => handlePdvConfigChange('editar_nome_produto', e.target.checked)}
+                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                      style={{ borderRadius: '50%' }}
+                    />
+                    <div>
+                      <h4 className="text-white font-medium">Editar nome do produto na venda</h4>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Permite editar o nome do produto durante a venda no PDV para personalização.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Seção: Botões de Finalização */}
+                <div className="space-y-4">
+                  <div className="border-t border-gray-700/50 pt-6">
+                    <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                      <Receipt size={18} className="text-blue-400" />
+                      Controle de Botões de Finalização
+                    </h3>
+                    <p className="text-sm text-gray-400 mb-6">
+                      Configure quais botões de finalização devem ser <strong>ocultados</strong> no PDV.
+                      Marque as opções que você <strong>NÃO</strong> quer exibir na tela de finalização.
+                    </p>
+                  </div>
+
+                  {/* Finalização Simples */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={pdvConfig.ocultar_finalizar_com_impressao}
+                        onChange={(e) => handlePdvConfigChange('ocultar_finalizar_com_impressao', e.target.checked)}
+                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                        style={{ borderRadius: '50%' }}
+                      />
+                      <div>
+                        <h4 className="text-white font-medium">Ocultar "Finalizar com Impressão"</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Remove o botão de finalização simples com impressão da tela de finalização.
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={pdvConfig.ocultar_finalizar_sem_impressao}
+                        onChange={(e) => handlePdvConfigChange('ocultar_finalizar_sem_impressao', e.target.checked)}
+                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                        style={{ borderRadius: '50%' }}
+                      />
+                      <div>
+                        <h4 className="text-white font-medium">Ocultar "Finalizar sem Impressão"</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Remove o botão de finalização simples sem impressão da tela de finalização.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* NFC-e */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={pdvConfig.ocultar_nfce_com_impressao}
+                        onChange={(e) => handlePdvConfigChange('ocultar_nfce_com_impressao', e.target.checked)}
+                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                        style={{ borderRadius: '50%' }}
+                      />
+                      <div>
+                        <h4 className="text-white font-medium">Ocultar "NFC-e com Impressão"</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Remove o botão de emissão de NFC-e com impressão da tela de finalização.
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={pdvConfig.ocultar_nfce_sem_impressao}
+                        onChange={(e) => handlePdvConfigChange('ocultar_nfce_sem_impressao', e.target.checked)}
+                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                        style={{ borderRadius: '50%' }}
+                      />
+                      <div>
+                        <h4 className="text-white font-medium">Ocultar "NFC-e sem Impressão"</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Remove o botão de emissão de NFC-e sem impressão da tela de finalização.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* NFC-e + Produção e Produção */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={pdvConfig.ocultar_nfce_producao}
+                        onChange={(e) => handlePdvConfigChange('ocultar_nfce_producao', e.target.checked)}
+                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                        style={{ borderRadius: '50%' }}
+                      />
+                      <div>
+                        <h4 className="text-white font-medium">Ocultar "NFC-e + Produção"</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Remove o botão de emissão de NFC-e com envio para produção da tela de finalização.
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={pdvConfig.ocultar_producao}
+                        onChange={(e) => handlePdvConfigChange('ocultar_producao', e.target.checked)}
+                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                        style={{ borderRadius: '50%' }}
+                      />
+                      <div>
+                        <h4 className="text-white font-medium">Ocultar "Produção"</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Remove o botão de envio direto para produção da tela de finalização.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>

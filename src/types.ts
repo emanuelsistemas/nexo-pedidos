@@ -90,3 +90,32 @@ export interface Usuario {
   ativo?: boolean;
   created_at?: string;
 }
+
+export interface PDVConfig {
+  id?: string;
+  empresa_id?: string;
+  comandas?: boolean;
+  mesas?: boolean;
+  vendedor?: boolean;
+  exibe_foto_item?: boolean;
+  seleciona_clientes?: boolean;
+  controla_caixa?: boolean;
+  agrupa_itens?: boolean;
+  delivery?: boolean;
+  cardapio_digital?: boolean;
+  delivery_chat_ia?: boolean;
+  baixa_estoque_pdv?: boolean;
+  venda_codigo_barras?: boolean;
+  forca_venda_fiscal_cartao?: boolean;
+  observacao_no_item?: boolean;
+  desconto_no_item?: boolean;
+  editar_nome_produto?: boolean;
+  ocultar_finalizar_com_impressao?: boolean;
+  ocultar_finalizar_sem_impressao?: boolean;
+  ocultar_nfce_com_impressao?: boolean;
+  ocultar_nfce_sem_impressao?: boolean;
+  ocultar_nfce_producao?: boolean;
+  ocultar_producao?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
