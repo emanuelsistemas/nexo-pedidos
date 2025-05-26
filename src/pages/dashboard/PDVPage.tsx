@@ -159,6 +159,29 @@ const PDVPage: React.FC = () => {
   const [showFiadosModal, setShowFiadosModal] = useState(false);
   const [showMovimentosModal, setShowMovimentosModal] = useState(false);
 
+  // Estados para o modal de movimentos
+  const [vendas, setVendas] = useState<any[]>([]);
+  const [loadingVendas, setLoadingVendas] = useState(false);
+
+  // Estados para filtros avançados
+  const [showFiltrosVendas, setShowFiltrosVendas] = useState(false);
+  const [filtroStatus, setFiltroStatus] = useState<'todas' | 'canceladas' | 'finalizadas' | 'pedidos'>('todas');
+  const [filtroDataInicio, setFiltroDataInicio] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+  const [filtroNumeroPedido, setFiltroNumeroPedido] = useState('');
+  const [filtroNumeroVenda, setFiltroNumeroVenda] = useState('');
+
+  // Estados para cancelamento de vendas
+  const [showCancelamentoModal, setShowCancelamentoModal] = useState(false);
+  const [vendaParaCancelar, setVendaParaCancelar] = useState<any>(null);
+  const [motivoCancelamento, setMotivoCancelamento] = useState('');
+
+  // Estados para exibir itens da venda
+  const [showItensVendaModal, setShowItensVendaModal] = useState(false);
+  const [vendaParaExibirItens, setVendaParaExibirItens] = useState<any>(null);
+  const [itensVenda, setItensVenda] = useState<any[]>([]);
+  const [loadingItensVenda, setLoadingItensVenda] = useState(false);
+
   // Estado para controlar visibilidade da área de produtos
   const [showAreaProdutos, setShowAreaProdutos] = useState(false);
 
@@ -612,7 +635,7 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      // Buscar pedido completo com todos os relacionamentos
+      // Buscar pedido completo com relacionamentos básicos
       const { data: pedidoCompleto, error } = await supabase
         .from('pedidos')
         .select(`
@@ -624,21 +647,7 @@ const PDVPage: React.FC = () => {
             documento,
             tipo_documento,
             razao_social,
-            nome_fantasia,
-            cliente_enderecos(
-              cep,
-              rua,
-              numero,
-              complemento,
-              bairro,
-              cidade,
-              estado
-            ),
-            cliente_telefones(
-              numero,
-              tipo,
-              whatsapp
-            )
+            nome_fantasia
           ),
           usuario:usuarios(nome),
           pedidos_itens(
@@ -654,14 +663,11 @@ const PDVPage: React.FC = () => {
               codigo_barras,
               descricao,
               preco,
-              unidade_medida:unidade_medidas(sigla, nome),
-              grupo:grupos(nome),
+              unidade_medida_id,
+              grupo_id,
               produto_fotos(url, principal)
             )
-          ),
-          forma_pagamento:forma_pagamento_opcoes(nome),
-          desconto_prazo:desconto_prazos(nome, percentual),
-          desconto_valor:desconto_valores(valor_minimo, percentual, tipo)
+          )
         `)
         .eq('id', pedidoId)
         .eq('empresa_id', usuarioData.empresa_id)
@@ -981,6 +987,8 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
         setShowMovimentosModal(true);
+        // Carregar vendas apenas uma vez quando abrir o modal
+        loadVendas();
       }
     }
   ];
@@ -1115,16 +1123,50 @@ const PDVPage: React.FC = () => {
       }, 1000); // 1 segundo de delay
     };
 
+
+
+    // Listener para venda cancelada
+    const handleVendaCancelada = (event: CustomEvent) => {
+      const {
+        vendaId,
+        numeroVenda,
+        motivoCancelamento,
+        canceladaEm,
+        canceladaPorUsuarioId,
+        nomeUsuarioCancelamento
+      } = event.detail;
+
+      // Atualizar a venda na lista local
+      setVendas(prevVendas =>
+        prevVendas.map(venda =>
+          venda.id === vendaId
+            ? {
+                ...venda,
+                status_venda: 'cancelada',
+                cancelada_em: canceladaEm,
+                motivo_cancelamento: motivoCancelamento,
+                cancelada_por_usuario_id: canceladaPorUsuarioId,
+                usuario_cancelamento: { nome: nomeUsuarioCancelamento }
+              }
+            : venda
+        )
+      );
+    };
+
     // Adicionar listeners para os eventos customizados
     window.addEventListener('pdvConfigChanged', handlePdvConfigChange as EventListener);
     window.addEventListener('pedidoStatusChanged', handlePedidoStatusChange as EventListener);
+    window.addEventListener('vendaCancelada', handleVendaCancelada as EventListener);
 
     // Cleanup
     return () => {
       window.removeEventListener('pdvConfigChanged', handlePdvConfigChange as EventListener);
       window.removeEventListener('pedidoStatusChanged', handlePedidoStatusChange as EventListener);
+      window.removeEventListener('vendaCancelada', handleVendaCancelada as EventListener);
     };
   }, []);
+
+
 
   // Atualizar data e hora a cada segundo
   useEffect(() => {
@@ -1134,6 +1176,17 @@ const PDVPage: React.FC = () => {
 
     return () => clearInterval(timer);
   }, []);
+
+  // useEffect para aplicar filtros automaticamente quando mudarem
+  useEffect(() => {
+    if (showMovimentosModal) {
+      const timeoutId = setTimeout(() => {
+        loadVendas();
+      }, 300); // Debounce de 300ms para evitar muitas chamadas
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [filtroStatus, filtroDataInicio, filtroDataFim, filtroNumeroVenda, filtroNumeroPedido, showMovimentosModal]);
 
   // Estado para captura automática de código de barras
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
@@ -1663,7 +1716,7 @@ const PDVPage: React.FC = () => {
           )
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('deletado', false)
+        .neq('status_venda', 'cancelada') // Excluir vendas canceladas
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -1782,6 +1835,309 @@ const PDVPage: React.FC = () => {
       // Se não há conflitos, importar diretamente
       executarImportacaoPedido(pedido);
       // O modal será fechado dentro da função executarImportacaoPedido
+    }
+  };
+
+  // Função para carregar vendas do PDV da empresa
+  const loadVendas = async () => {
+    try {
+      setLoadingVendas(true);
+
+      // Obter usuário autenticado
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Obter empresa do usuário
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError || !usuarioData) {
+        throw new Error('Dados do usuário não encontrados');
+      }
+
+      // Carregar vendas da tabela PDV da empresa
+      let query = supabase
+        .from('pdv')
+        .select(`
+          id,
+          numero_venda,
+          data_venda,
+          created_at,
+          status_venda,
+          valor_total,
+          valor_subtotal,
+          valor_desconto,
+          valor_acrescimo,
+          nome_cliente,
+          telefone_cliente,
+          pedidos_importados,
+          cancelada_em,
+          motivo_cancelamento,
+          cancelada_por_usuario_id,
+          empresa_id,
+          usuario_id
+        `)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      // Aplicar filtros
+      // Filtro por status
+      if (filtroStatus === 'canceladas') {
+        query = query.eq('status_venda', 'cancelada');
+      } else if (filtroStatus === 'finalizadas') {
+        query = query.eq('status_venda', 'finalizada');
+      } else if (filtroStatus === 'pedidos') {
+        query = query.not('pedidos_importados', 'is', null);
+      }
+      // 'todas' não aplica filtro de status
+
+      // Filtro por data e hora
+      if (filtroDataInicio) {
+        // Para datetime-local, usar diretamente o valor (já inclui hora)
+        const dataInicio = new Date(filtroDataInicio);
+        query = query.gte('created_at', dataInicio.toISOString());
+      }
+
+      if (filtroDataFim) {
+        // Para datetime-local, usar diretamente o valor (já inclui hora)
+        const dataFim = new Date(filtroDataFim);
+        query = query.lte('created_at', dataFim.toISOString());
+      }
+
+      // Filtro por número da venda
+      if (filtroNumeroVenda) {
+        query = query.ilike('numero_venda', `%${filtroNumeroVenda}%`);
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) {
+        throw error;
+      }
+
+      const vendasData = data || [];
+
+
+
+      // Buscar informações dos usuários (vendedores e quem cancelou)
+      const usuariosIds = [
+        ...new Set([
+          ...vendasData.map(v => v.usuario_id).filter(Boolean),
+          ...vendasData.map(v => v.cancelada_por_usuario_id).filter(Boolean)
+        ])
+      ];
+
+      let usuariosMap = new Map();
+      if (usuariosIds.length > 0) {
+        const { data: usuariosData } = await supabase
+          .from('usuarios')
+          .select('id, nome')
+          .in('id', usuariosIds);
+
+        if (usuariosData) {
+          usuariosData.forEach(usuario => {
+            usuariosMap.set(usuario.id, usuario);
+          });
+        }
+      }
+
+      // Processar dados das vendas do PDV
+      const vendasProcessadas = await Promise.all(vendasData.map(async (venda) => {
+        // Verificar se a venda tem pedidos importados
+        const temPedidosImportados = venda.pedidos_importados &&
+          Array.isArray(venda.pedidos_importados) &&
+          venda.pedidos_importados.length > 0;
+
+        // Calcular valor final (valor_total - desconto + acréscimo)
+        const valorTotal = Number(venda.valor_total) || 0;
+        const valorDesconto = Number(venda.valor_desconto) || 0;
+        const valorAcrescimo = Number(venda.valor_acrescimo) || 0;
+        const valorFinal = valorTotal - valorDesconto + valorAcrescimo;
+
+        // Se tem pedidos importados, buscar os números dos pedidos
+        let pedidosOrigem = null;
+        if (temPedidosImportados) {
+          try {
+            const { data: pedidosData, error: pedidosError } = await supabase
+              .from('pedidos')
+              .select('id, numero')
+              .in('id', venda.pedidos_importados);
+
+            if (!pedidosError && pedidosData) {
+              pedidosOrigem = pedidosData.map(p => p.numero);
+            }
+          } catch (error) {
+            console.error('Erro ao buscar números dos pedidos:', error);
+            // Em caso de erro, usar os IDs como fallback
+            pedidosOrigem = venda.pedidos_importados;
+          }
+        }
+
+        return {
+          ...venda,
+          numero_venda: venda.numero_venda || venda.id, // Usar numero_venda ou ID como fallback
+          created_at: new Date(venda.data_venda || venda.created_at).toLocaleString('pt-BR'),
+          data_venda_formatada: new Date(venda.data_venda || venda.created_at).toLocaleString('pt-BR'),
+          cancelada_em_formatada: venda.cancelada_em ? new Date(venda.cancelada_em).toLocaleString('pt-BR') : null,
+          valor_total: valorTotal,
+          valor_final: valorFinal,
+          desconto_total: valorDesconto,
+          acrescimo_total: valorAcrescimo,
+          // Se tem pedidos importados, mostrar números dos pedidos
+          pedidos_origem: pedidosOrigem,
+          vendas_pdv_itens: [], // Será carregado separadamente se necessário
+          vendas_pdv_pagamentos: [], // Será carregado separadamente se necessário
+          cliente: venda.nome_cliente ? {
+            nome: venda.nome_cliente,
+            telefone: venda.telefone_cliente
+          } : null,
+          // Dados do usuário que fez a venda
+          usuario_venda: venda.usuario_id ? usuariosMap.get(venda.usuario_id) : null,
+          // Dados do usuário que cancelou (se aplicável)
+          usuario_cancelamento: venda.cancelada_por_usuario_id ? usuariosMap.get(venda.cancelada_por_usuario_id) : null,
+          status: venda.status_venda || 'finalizada'
+        };
+      }));
+
+      // Filtro por número de pedido (aplicado após processamento)
+      let vendasFiltradas = vendasProcessadas;
+      if (filtroNumeroPedido) {
+        vendasFiltradas = vendasProcessadas.filter(venda => {
+          if (venda.pedidos_origem && Array.isArray(venda.pedidos_origem)) {
+            return venda.pedidos_origem.some((numeroPedido: string) =>
+              numeroPedido.toString().toLowerCase().includes(filtroNumeroPedido.toLowerCase())
+            );
+          }
+          return false;
+        });
+      }
+
+      setVendas(vendasFiltradas);
+
+    } catch (error: any) {
+      console.error('Erro ao carregar vendas:', error);
+      toast.error(`Erro ao carregar vendas: ${error.message}`);
+    } finally {
+      setLoadingVendas(false);
+    }
+  };
+
+  // Função para cancelar uma venda
+  const cancelarVenda = async () => {
+    if (!vendaParaCancelar || !motivoCancelamento.trim()) {
+      toast.error('Motivo do cancelamento é obrigatório');
+      return;
+    }
+
+    try {
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      // Atualizar a venda no banco de dados
+      const { error } = await supabase
+        .from('pdv')
+        .update({
+          status_venda: 'cancelada',
+          cancelada_em: new Date().toISOString(),
+          motivo_cancelamento: motivoCancelamento.trim(),
+          cancelada_por_usuario_id: userData.user.id
+        })
+        .eq('id', vendaParaCancelar.id);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success(`Venda #${vendaParaCancelar.numero_venda} cancelada com sucesso`);
+
+      // Buscar nome do usuário que cancelou
+      const { data: usuarioCancelamento } = await supabase
+        .from('usuarios')
+        .select('nome')
+        .eq('id', userData.user.id)
+        .single();
+
+      // Disparar evento customizado para atualizar a venda na lista
+      const vendaCanceladaEvent = new CustomEvent('vendaCancelada', {
+        detail: {
+          vendaId: vendaParaCancelar.id,
+          numeroVenda: vendaParaCancelar.numero_venda,
+          motivoCancelamento: motivoCancelamento.trim(),
+          canceladaEm: new Date().toISOString(),
+          canceladaPorUsuarioId: userData.user.id,
+          nomeUsuarioCancelamento: usuarioCancelamento?.nome || 'Usuário não identificado'
+        }
+      });
+      window.dispatchEvent(vendaCanceladaEvent);
+
+      // Fechar modal e limpar estados
+      setShowCancelamentoModal(false);
+      setVendaParaCancelar(null);
+      setMotivoCancelamento('');
+
+    } catch (error) {
+      console.error('Erro ao cancelar venda:', error);
+      toast.error('Erro ao cancelar venda');
+    }
+  };
+
+  // Função para carregar itens da venda
+  const carregarItensVenda = async (vendaId: string) => {
+    try {
+      setLoadingItensVenda(true);
+
+      // Carregar itens da venda com suas opções adicionais
+      const { data: itensData, error: itensError } = await supabase
+        .from('pdv_itens')
+        .select(`
+          id,
+          produto_id,
+          codigo_produto,
+          nome_produto,
+          descricao_produto,
+          quantidade,
+          valor_unitario,
+          valor_subtotal,
+          valor_total_item,
+          tem_desconto,
+          tipo_desconto,
+          percentual_desconto,
+          valor_desconto_aplicado,
+          origem_item,
+          pedido_origem_numero,
+          observacao_item,
+          pdv_itens_adicionais (
+            id,
+            nome_adicional,
+            quantidade,
+            valor_unitario,
+            valor_total
+          )
+        `)
+        .eq('pdv_id', vendaId)
+        .order('created_at', { ascending: true });
+
+      if (itensError) {
+        throw itensError;
+      }
+
+      setItensVenda(itensData || []);
+
+    } catch (error) {
+      console.error('Erro ao carregar itens da venda:', error);
+      toast.error('Erro ao carregar itens da venda');
+    } finally {
+      setLoadingItensVenda(false);
     }
   };
 
@@ -3300,6 +3656,16 @@ const PDVPage: React.FC = () => {
 
       // Mostrar sucesso
       toast.success(`Venda #${numeroVenda} finalizada com sucesso!`);
+
+      // Disparar evento customizado para atualizar modal de movimentos
+      window.dispatchEvent(new CustomEvent('vendaPdvFinalizada', {
+        detail: {
+          vendaId: vendaId,
+          numeroVenda: numeroVenda,
+          empresaId: usuarioData.empresa_id,
+          valorTotal: valorTotal
+        }
+      }));
 
       // Limpar todos os estados
       setCarrinho([]);
@@ -5879,12 +6245,15 @@ const PDVPage: React.FC = () => {
                               Importar para Carrinho
                             </button>
                           )}
-                          <button
-                            onClick={() => carregarDetalhesPedido(pedido.id)}
-                            className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs transition-colors"
-                          >
-                            Ver Detalhes
-                          </button>
+                          {/* Botão Ver Detalhes temporariamente oculto */}
+                          {false && (
+                            <button
+                              onClick={() => carregarDetalhesPedido(pedido.id)}
+                              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs transition-colors"
+                            >
+                              Ver Detalhes
+                            </button>
+                          )}
                           <button
                             onClick={async () => {
                               const url = await gerarLinkPedido(pedido);
@@ -6030,41 +6399,7 @@ const PDVPage: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Endereços do Cliente */}
-                      {pedidoDetalhado.cliente.cliente_enderecos && pedidoDetalhado.cliente.cliente_enderecos.length > 0 && (
-                        <div className="mt-4">
-                          <label className="text-sm text-gray-400 mb-2 block">Endereços</label>
-                          {pedidoDetalhado.cliente.cliente_enderecos.map((endereco: any, index: number) => (
-                            <div key={index} className="bg-gray-700/50 rounded p-3 mb-2">
-                              <p className="text-white text-sm">
-                                {endereco.rua}, {endereco.numero}
-                                {endereco.complemento && ` - ${endereco.complemento}`}
-                              </p>
-                              <p className="text-gray-400 text-xs">
-                                {endereco.bairro}, {endereco.cidade} - {endereco.estado}
-                                {endereco.cep && ` - CEP: ${endereco.cep}`}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
 
-                      {/* Telefones do Cliente */}
-                      {pedidoDetalhado.cliente.cliente_telefones && pedidoDetalhado.cliente.cliente_telefones.length > 0 && (
-                        <div className="mt-4">
-                          <label className="text-sm text-gray-400 mb-2 block">Telefones</label>
-                          <div className="flex flex-wrap gap-2">
-                            {pedidoDetalhado.cliente.cliente_telefones.map((telefone: any, index: number) => (
-                              <div key={index} className="bg-gray-700/50 rounded px-3 py-1">
-                                <span className="text-white text-sm">{telefone.numero}</span>
-                                <span className="text-gray-400 text-xs ml-2">
-                                  ({telefone.tipo}{telefone.whatsapp ? ' - WhatsApp' : ''})
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -6094,9 +6429,6 @@ const PDVPage: React.FC = () => {
                                     Cód: {item.produto?.codigo}
                                     {item.produto?.codigo_barras && ` | Barras: ${item.produto.codigo_barras}`}
                                   </p>
-                                  {item.produto?.grupo && (
-                                    <p className="text-xs text-gray-500">Grupo: {item.produto.grupo.nome}</p>
-                                  )}
                                   {item.observacao && (
                                     <p className="text-xs text-yellow-400 mt-1">Obs: {item.observacao}</p>
                                   )}
@@ -6104,9 +6436,6 @@ const PDVPage: React.FC = () => {
                               </td>
                               <td className="px-4 py-3 text-center text-white">
                                 {item.quantidade}
-                                {item.produto?.unidade_medida && (
-                                  <span className="text-gray-400 ml-1">{item.produto.unidade_medida.sigla}</span>
-                                )}
                               </td>
                               <td className="px-4 py-3 text-right text-white">
                                 {formatCurrency(item.valor_unitario)}
@@ -6155,60 +6484,7 @@ const PDVPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Forma de Pagamento */}
-                  {(pedidoDetalhado.forma_pagamento || pedidoDetalhado.formas_pagamento) && (
-                    <div className="bg-gray-800/50 rounded-lg p-4">
-                      <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                        <CreditCard size={18} className="text-blue-400" />
-                        Forma de Pagamento
-                      </h4>
-                      {pedidoDetalhado.forma_pagamento ? (
-                        <div>
-                          <p className="text-white">{pedidoDetalhado.forma_pagamento.nome}</p>
-                          {pedidoDetalhado.parcelas && pedidoDetalhado.parcelas > 1 && (
-                            <p className="text-gray-400 text-sm">
-                              {pedidoDetalhado.parcelas}x de {formatCurrency(pedidoDetalhado.valor_total / pedidoDetalhado.parcelas)}
-                            </p>
-                          )}
-                        </div>
-                      ) : pedidoDetalhado.formas_pagamento && (
-                        <div className="space-y-2">
-                          {pedidoDetalhado.formas_pagamento.map((forma: any, index: number) => (
-                            <div key={index} className="flex justify-between">
-                              <span className="text-white">{forma.nome}</span>
-                              <span className="text-primary-400">{formatCurrency(forma.valor)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
 
-                  {/* Descontos Aplicados */}
-                  {(pedidoDetalhado.desconto_prazo || pedidoDetalhado.desconto_valor) && (
-                    <div className="bg-gray-800/50 rounded-lg p-4">
-                      <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                        <Percent size={18} className="text-orange-400" />
-                        Descontos Aplicados
-                      </h4>
-                      {pedidoDetalhado.desconto_prazo && (
-                        <div className="mb-2">
-                          <p className="text-white">{pedidoDetalhado.desconto_prazo.nome}</p>
-                          <p className="text-gray-400 text-sm">{pedidoDetalhado.desconto_prazo.percentual}% de desconto</p>
-                        </div>
-                      )}
-                      {pedidoDetalhado.desconto_valor && (
-                        <div>
-                          <p className="text-white">
-                            {pedidoDetalhado.desconto_valor.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} por valor
-                          </p>
-                          <p className="text-gray-400 text-sm">
-                            {pedidoDetalhado.desconto_valor.percentual}% para pedidos acima de {formatCurrency(pedidoDetalhado.desconto_valor.valor_minimo)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -6610,74 +6886,627 @@ const PDVPage: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             onClick={() => setShowMovimentosModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-4xl mx-4 max-h-[80vh] overflow-y-auto"
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-6xl h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Movimentos do Caixa</h3>
-                <button
-                  onClick={() => setShowMovimentosModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X size={20} />
-                </button>
+              {/* Cabeçalho */}
+              <div className="flex-shrink-0 p-4 border-b border-gray-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-white">Vendas do PDV</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowFiltrosVendas(!showFiltrosVendas)}
+                      className={`px-3 py-1 rounded-lg text-xs transition-colors flex items-center gap-1 relative ${
+                        showFiltrosVendas
+                          ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      }`}
+                      title="Filtros"
+                    >
+                      <Filter size={14} />
+                      Filtros
+                      {/* Indicador de filtros ativos */}
+                      {(filtroStatus !== 'todas' || filtroDataInicio || filtroDataFim || filtroNumeroVenda || filtroNumeroPedido) && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </button>
+                    <button
+                      onClick={loadVendas}
+                      className="text-gray-400 hover:text-white transition-colors p-1"
+                      title="Atualizar"
+                    >
+                      <ArrowUpDown size={18} />
+                    </button>
+                    <button
+                      onClick={() => setShowMovimentosModal(false)}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-4">
-                {/* Resumo do Dia */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp size={20} className="text-green-400" />
-                      <span className="text-sm text-gray-400">Entradas</span>
+              {/* Painel de Filtros */}
+              <AnimatePresence>
+                {showFiltrosVendas && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-b border-gray-800 bg-gray-800/30 overflow-hidden"
+                  >
+                    <div className="p-3 space-y-3">
+                      {/* Filtros por Status */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">Status</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { value: 'todas', label: 'Todas', icon: '📋' },
+                            { value: 'finalizadas', label: 'Finalizadas', icon: '✅' },
+                            { value: 'canceladas', label: 'Canceladas', icon: '❌' },
+                            { value: 'pedidos', label: 'Pedidos', icon: '📦' }
+                          ].map((status) => (
+                            <button
+                              key={status.value}
+                              onClick={() => {
+                                setFiltroStatus(status.value as any);
+                                // Aplicar filtro imediatamente
+                                setTimeout(() => loadVendas(), 100);
+                              }}
+                              className={`px-3 py-1 rounded-lg text-xs transition-colors flex items-center gap-1 ${
+                                filtroStatus === status.value
+                                  ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                              }`}
+                            >
+                              <span>{status.icon}</span>
+                              {status.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Filtros por Data e Hora */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data e Hora Início</label>
+                          <input
+                            type="datetime-local"
+                            value={filtroDataInicio}
+                            onChange={(e) => {
+                              setFiltroDataInicio(e.target.value);
+                              // Aplicar filtro automaticamente após mudança
+                              setTimeout(() => loadVendas(), 500);
+                            }}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-primary-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data e Hora Fim</label>
+                          <input
+                            type="datetime-local"
+                            value={filtroDataFim}
+                            onChange={(e) => {
+                              setFiltroDataFim(e.target.value);
+                              // Aplicar filtro automaticamente após mudança
+                              setTimeout(() => loadVendas(), 500);
+                            }}
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-primary-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Filtros por Número */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Número da Venda</label>
+                          <input
+                            type="text"
+                            value={filtroNumeroVenda}
+                            onChange={(e) => {
+                              setFiltroNumeroVenda(e.target.value);
+                              // Aplicar filtro automaticamente após mudança (com debounce maior para texto)
+                              setTimeout(() => loadVendas(), 800);
+                            }}
+                            placeholder="Ex: PDV-000123"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-primary-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Número do Pedido</label>
+                          <input
+                            type="text"
+                            value={filtroNumeroPedido}
+                            onChange={(e) => {
+                              setFiltroNumeroPedido(e.target.value);
+                              // Aplicar filtro automaticamente após mudança (com debounce maior para texto)
+                              setTimeout(() => loadVendas(), 800);
+                            }}
+                            placeholder="Ex: 123"
+                            className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 px-3 text-white text-sm focus:outline-none focus:border-primary-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botões de Ação */}
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          onClick={loadVendas}
+                          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
+                        >
+                          Aplicar Filtros
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFiltroStatus('todas');
+                            setFiltroDataInicio('');
+                            setFiltroDataFim('');
+                            setFiltroNumeroPedido('');
+                            setFiltroNumeroVenda('');
+                            setTimeout(() => loadVendas(), 100);
+                          }}
+                          className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+                        >
+                          Limpar Filtros
+                        </button>
+                      </div>
                     </div>
-                    <div className="text-xl font-bold text-green-400">R$ 0,00</div>
-                  </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-                  <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingDown size={20} className="text-red-400" />
-                      <span className="text-sm text-gray-400">Saídas</span>
+              {/* Conteúdo */}
+              <div className="flex-1 overflow-y-auto p-4 min-h-0" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4B5563 #1F2937' }}>
+                {loadingVendas ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                      <p className="text-gray-400">Carregando vendas...</p>
                     </div>
-                    <div className="text-xl font-bold text-red-400">R$ 0,00</div>
                   </div>
-
-                  <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <DollarSign size={20} className="text-blue-400" />
-                      <span className="text-sm text-gray-400">Vendas</span>
-                    </div>
-                    <div className="text-xl font-bold text-blue-400">R$ 0,00</div>
-                  </div>
-
-                  <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Calculator size={20} className="text-purple-400" />
-                      <span className="text-sm text-gray-400">Saldo</span>
-                    </div>
-                    <div className="text-xl font-bold text-purple-400">R$ 0,00</div>
-                  </div>
-                </div>
-
-                {/* Lista de Movimentos */}
-                <div className="bg-gray-800/30 rounded-lg p-4">
-                  <h4 className="text-white font-medium mb-3">Últimos Movimentos</h4>
-
-                  <div className="text-center py-8">
+                ) : vendas.length === 0 ? (
+                  <div className="text-center py-12">
                     <ArrowUpDown size={48} className="mx-auto mb-4 text-gray-500" />
-                    <p className="text-gray-400">Nenhum movimento registrado hoje</p>
+                    <p className="text-gray-400 text-lg">Nenhuma venda registrada</p>
                     <p className="text-gray-500 text-sm mt-2">
-                      Os movimentos de vendas, sangrias e suprimentos aparecerão aqui
+                      As vendas realizadas no PDV aparecerão aqui
                     </p>
                   </div>
+                ) : (
+                  <div className="space-y-4 pb-4">
+                    {vendas.map((venda) => (
+                      <div
+                        key={venda.id}
+                        className="bg-gray-800/50 rounded-lg border border-gray-700 p-4 hover:border-gray-600 transition-colors"
+                      >
+                        {/* Cabeçalho do Card */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-white font-medium">Venda #{venda.numero_venda}</h4>
+                              {/* Tag de pedido APENAS se a venda foi originada de um pedido */}
+                              {venda.pedidos_origem && venda.pedidos_origem.length > 0 && (
+                                <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                                  {venda.pedidos_origem.length === 1
+                                    ? `Pedido #${venda.pedidos_origem[0]}`
+                                    : `${venda.pedidos_origem.length} Pedidos`
+                                  }
+                                </span>
+                              )}
+                              {/* Tag de venda direta se NÃO foi de pedido */}
+                              {(!venda.pedidos_origem || venda.pedidos_origem.length === 0) && (
+                                <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
+                                  Venda Direta
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400">{venda.created_at}</p>
+                          </div>
+                          <div className={`px-2 py-1 rounded-full text-xs ${
+                            venda.status_venda === 'finalizada'
+                              ? 'bg-green-500/20 text-green-400'
+                              : venda.status_venda === 'cancelada'
+                              ? 'bg-red-500/20 text-red-400'
+                              : 'bg-yellow-500/20 text-yellow-400'
+                          }`}>
+                            {venda.status_venda === 'finalizada' ? 'Finalizada' :
+                             venda.status_venda === 'cancelada' ? 'Cancelada' :
+                             venda.status_venda}
+                          </div>
+                        </div>
+
+                        {/* Informações do Cliente */}
+                        {venda.cliente && (
+                          <div className="mb-3 p-2 bg-gray-700/50 rounded">
+                            <div className="text-sm text-white">{venda.cliente.nome}</div>
+                            {venda.cliente.telefone && (
+                              <div className="text-xs text-gray-400">{venda.cliente.telefone}</div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Resumo dos Itens */}
+                        {venda.vendas_pdv_itens && venda.vendas_pdv_itens.length > 0 && (
+                          <div className="mb-3">
+                            <div className="text-xs text-gray-400 mb-1">
+                              {venda.vendas_pdv_itens.length} item(s):
+                            </div>
+                            <div className="space-y-1 max-h-20 overflow-y-auto custom-scrollbar">
+                              {venda.vendas_pdv_itens.slice(0, 3).map((item: any, index: number) => (
+                                <div key={index} className="text-xs text-gray-300 flex justify-between">
+                                  <span className="truncate">{item.produto?.nome || 'Produto'}</span>
+                                  <span>{item.quantidade}x</span>
+                                </div>
+                              ))}
+                              {venda.vendas_pdv_itens.length > 3 && (
+                                <div className="text-xs text-gray-500">
+                                  +{venda.vendas_pdv_itens.length - 3} item(s)
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Valores */}
+                        <div className="space-y-1 border-t border-gray-700 pt-3">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Subtotal:</span>
+                            <span className="text-white">{formatCurrency(venda.valor_total)}</span>
+                          </div>
+                          {venda.desconto_total > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-red-400">Desconto:</span>
+                              <span className="text-red-400">-{formatCurrency(venda.desconto_total)}</span>
+                            </div>
+                          )}
+                          {venda.acrescimo_total > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-yellow-400">Acréscimo:</span>
+                              <span className="text-yellow-400">+{formatCurrency(venda.acrescimo_total)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-lg font-bold border-t border-gray-700 pt-2">
+                            <span className="text-white">Total:</span>
+                            <span className="text-primary-400">{formatCurrency(venda.valor_final)}</span>
+                          </div>
+                        </div>
+
+                        {/* Formas de Pagamento */}
+                        {venda.vendas_pdv_pagamentos && venda.vendas_pdv_pagamentos.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-700">
+                            <div className="text-xs text-gray-400 mb-1">Pagamento:</div>
+                            <div className="space-y-1">
+                              {venda.vendas_pdv_pagamentos.map((pagamento: any, index: number) => (
+                                <div key={index} className="flex justify-between text-xs">
+                                  <span className="text-gray-300">
+                                    {pagamento.forma_pagamento}
+                                    {pagamento.parcelas > 1 && ` (${pagamento.parcelas}x)`}
+                                  </span>
+                                  <span className="text-white">{formatCurrency(pagamento.valor)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Informações de Data e Usuário */}
+                        <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+                          {/* Data e hora da venda */}
+                          <div className="text-xs text-gray-400">
+                            <span className="font-medium">Realizada em:</span>
+                            <span className="text-gray-300 ml-1">{venda.data_venda_formatada}</span>
+                          </div>
+
+                          {/* Usuário que fez a venda */}
+                          {venda.usuario_venda && (
+                            <div className="text-xs text-gray-400">
+                              <span className="font-medium">Vendedor:</span>
+                              <span className="text-gray-300 ml-1">{venda.usuario_venda.nome}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Informações de Cancelamento */}
+                        {venda.status_venda === 'cancelada' && (
+                          <div className="mt-3 pt-3 border-t border-red-700/50 bg-red-500/10 rounded-lg p-3 space-y-2">
+                            <div className="text-xs text-red-400 font-medium">🚫 Venda Cancelada</div>
+
+                            {/* Data e hora do cancelamento */}
+                            {venda.cancelada_em_formatada && (
+                              <div className="text-xs text-gray-400">
+                                <span className="font-medium">Cancelada em:</span>
+                                <span className="text-gray-300 ml-1">{venda.cancelada_em_formatada}</span>
+                              </div>
+                            )}
+
+                            {/* Usuário que cancelou */}
+                            {venda.usuario_cancelamento && (
+                              <div className="text-xs text-gray-400">
+                                <span className="font-medium">Cancelada por:</span>
+                                <span className="text-gray-300 ml-1">{venda.usuario_cancelamento.nome}</span>
+                              </div>
+                            )}
+
+                            {/* Motivo do cancelamento */}
+                            {venda.motivo_cancelamento && (
+                              <div className="text-xs text-gray-400">
+                                <span className="font-medium">Motivo:</span>
+                                <span className="text-gray-300 ml-1">{venda.motivo_cancelamento}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Botões de Ação */}
+                        <div className="mt-3 pt-3 border-t border-gray-700">
+                          <div className="flex gap-2">
+                            {/* Botão Exibir Itens */}
+                            <button
+                              onClick={() => {
+                                setVendaParaExibirItens(venda);
+                                setShowItensVendaModal(true);
+                                carregarItensVenda(venda.id);
+                              }}
+                              className="flex-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 py-2 px-3 rounded-lg transition-colors text-sm font-medium border border-blue-600/30 hover:border-blue-600/50"
+                            >
+                              Exibir Itens
+                            </button>
+
+                            {/* Botão Cancelar Venda */}
+                            {venda.status_venda === 'finalizada' && (
+                              <button
+                                onClick={() => {
+                                  setVendaParaCancelar(venda);
+                                  setShowCancelamentoModal(true);
+                                }}
+                                className="flex-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 py-2 px-3 rounded-lg transition-colors text-sm font-medium border border-red-600/30 hover:border-red-600/50"
+                              >
+                                Cancelar Venda
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Cancelamento de Venda */}
+      <AnimatePresence>
+        {showCancelamentoModal && vendaParaCancelar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowCancelamentoModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <X size={20} className="text-red-400" />
                 </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Cancelar Venda</h3>
+                  <p className="text-gray-400 text-sm">Esta ação não pode ser desfeita</p>
+                </div>
+              </div>
+
+              <div className="mb-4 p-3 bg-gray-800/50 rounded-lg">
+                <div className="text-white font-medium">Venda #{vendaParaCancelar.numero_venda}</div>
+                <div className="text-sm text-gray-400">
+                  Valor: {formatCurrency(vendaParaCancelar.valor_total)}
+                </div>
+                {vendaParaCancelar.nome_cliente && (
+                  <div className="text-sm text-gray-400">
+                    Cliente: {vendaParaCancelar.nome_cliente}
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Motivo do Cancelamento *
+                </label>
+                <textarea
+                  value={motivoCancelamento}
+                  onChange={(e) => setMotivoCancelamento(e.target.value)}
+                  placeholder="Informe o motivo do cancelamento..."
+                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20 resize-none"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCancelamentoModal(false);
+                    setVendaParaCancelar(null);
+                    setMotivoCancelamento('');
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={cancelarVenda}
+                  disabled={!motivoCancelamento.trim()}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg transition-colors"
+                >
+                  Confirmar Cancelamento
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Itens da Venda */}
+      <AnimatePresence>
+        {showItensVendaModal && vendaParaExibirItens && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowItensVendaModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl mx-4 max-h-[85vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Cabeçalho */}
+              <div className="flex-shrink-0 p-6 border-b border-gray-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">
+                      Itens da Venda #{vendaParaExibirItens.numero_venda}
+                    </h3>
+                    <p className="text-sm text-gray-400">
+                      {vendaParaExibirItens.created_at} • Total: {formatCurrency(vendaParaExibirItens.valor_final)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowItensVendaModal(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                {loadingItensVenda ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                      <p className="text-gray-400">Carregando itens...</p>
+                    </div>
+                  </div>
+                ) : itensVenda.length === 0 ? (
+                  <div className="text-center py-12">
+                    <ShoppingCart size={48} className="mx-auto mb-4 text-gray-500" />
+                    <p className="text-gray-400 text-lg">Nenhum item encontrado</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {itensVenda.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className="bg-gray-800/50 rounded-lg border border-gray-700 p-4"
+                      >
+                        {/* Cabeçalho do Item */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs bg-primary-500/20 text-primary-400 px-2 py-1 rounded-full font-medium">
+                                #{index + 1}
+                              </span>
+                              <h4 className="text-white font-medium">{item.nome_produto}</h4>
+                              {item.origem_item === 'pedido_importado' && (
+                                <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                                  Pedido #{item.pedido_origem_numero}
+                                </span>
+                              )}
+                            </div>
+                            {item.codigo_produto && (
+                              <p className="text-xs text-gray-400">Código: {item.codigo_produto}</p>
+                            )}
+                            {item.descricao_produto && (
+                              <p className="text-xs text-gray-500 mt-1">{item.descricao_produto}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Informações do Item */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                          <div>
+                            <span className="text-xs text-gray-400">Quantidade:</span>
+                            <p className="text-white font-medium">{item.quantidade}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-gray-400">Valor Unitário:</span>
+                            <p className="text-white font-medium">{formatCurrency(item.valor_unitario)}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-gray-400">Subtotal:</span>
+                            <p className="text-white font-medium">{formatCurrency(item.valor_subtotal)}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-gray-400">Total:</span>
+                            <p className="text-primary-400 font-bold">{formatCurrency(item.valor_total_item)}</p>
+                          </div>
+                        </div>
+
+                        {/* Desconto no Item */}
+                        {item.tem_desconto && (
+                          <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                            <div className="text-xs text-red-400 font-medium mb-1">Desconto Aplicado</div>
+                            <div className="text-xs text-gray-300">
+                              {item.tipo_desconto === 'percentual'
+                                ? `${item.percentual_desconto}% de desconto`
+                                : `Desconto de ${formatCurrency(item.valor_desconto_aplicado)}`
+                              }
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Observação do Item */}
+                        {item.observacao_item && (
+                          <div className="mb-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                            <div className="text-xs text-yellow-400 font-medium mb-1">Observação</div>
+                            <div className="text-xs text-gray-300 italic">{item.observacao_item}</div>
+                          </div>
+                        )}
+
+                        {/* Opções Adicionais */}
+                        {item.pdv_itens_adicionais && item.pdv_itens_adicionais.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-700">
+                            <div className="text-xs text-gray-400 font-medium mb-2">Opções Adicionais:</div>
+                            <div className="space-y-2">
+                              {item.pdv_itens_adicionais.map((adicional: any) => (
+                                <div key={adicional.id} className="flex justify-between items-center bg-gray-700/30 rounded-lg p-2">
+                                  <div>
+                                    <span className="text-sm text-white">{adicional.nome_adicional}</span>
+                                    <span className="text-xs text-gray-400 ml-2">({adicional.quantidade}x)</span>
+                                  </div>
+                                  <div className="text-sm text-primary-400 font-medium">
+                                    {formatCurrency(adicional.valor_total)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
