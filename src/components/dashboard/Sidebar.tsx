@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart, Truck } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
 import { supabase } from '../../lib/supabase';
+import { useFullscreen } from '../../hooks/useFullscreen';
 
 const Sidebar: React.FC = () => {
   const { isExpanded, toggle } = useSidebarStore();
+  const { enterFullscreen } = useFullscreen();
+  const navigate = useNavigate();
   const [expandedSubmenu, setExpandedSubmenu] = useState<string | null>(null);
   const [opcoesAdicionaisHabilitado, setOpcoesAdicionaisHabilitado] = useState(false);
   const [taxaEntregaHabilitada, setTaxaEntregaHabilitada] = useState(false);
@@ -182,7 +185,7 @@ const Sidebar: React.FC = () => {
       { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
       { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },
       // { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
-      { icon: ShoppingCart, label: 'PDV', path: '/dashboard/pdv', tooltip: 'Ponto de Venda' },
+      { icon: ShoppingCart, label: 'PDV', path: '/dashboard/pdv', tooltip: 'Ponto de Venda', isPDV: true },
     ];
 
     // Adicionar "Taxa de Entrega" se estiver habilitado
@@ -224,7 +227,53 @@ const Sidebar: React.FC = () => {
     setExpandedSubmenu(expandedSubmenu === label ? null : label);
   };
 
+  // Função para lidar com o clique no PDV
+  const handlePDVClick = async () => {
+    try {
+      // Ativar fullscreen primeiro
+      await enterFullscreen();
+      console.log('Fullscreen ativado, navegando para PDV...');
+
+      // Navegar para o PDV
+      navigate('/dashboard/pdv');
+    } catch (error) {
+      console.log('Erro ao ativar fullscreen, navegando mesmo assim:', error);
+      // Navegar mesmo se o fullscreen falhar
+      navigate('/dashboard/pdv');
+    }
+  };
+
   const renderMenuItem = (item: any) => {
+    // Tratar o item PDV de forma especial
+    if (item.isPDV) {
+      const isActive = location.pathname === item.path;
+
+      return (
+        <button
+          key={item.path}
+          onClick={handlePDVClick}
+          className={`w-full flex items-center px-3 py-2 my-1 rounded-lg transition-colors ${
+            isActive
+              ? 'bg-primary-500/10 text-primary-400'
+              : 'text-gray-400 hover:bg-gray-800/50 hover:text-white'
+          }`}
+          title={!isExpanded ? item.tooltip : undefined}
+        >
+          <item.icon size={20} />
+          {isExpanded && (
+            <motion.span
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+              className="ml-3"
+            >
+              {item.label}
+            </motion.span>
+          )}
+        </button>
+      );
+    }
+
     if (item.submenu) {
       const isSubmenuActive = item.submenu.some((subItem: any) => location.pathname === subItem.path);
 

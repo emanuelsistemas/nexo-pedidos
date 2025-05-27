@@ -35,7 +35,9 @@ import {
   Bike,
   Pencil,
   Check,
-  MessageSquare
+  MessageSquare,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -45,6 +47,7 @@ import { EVENT_TYPES, contarPedidosPendentes, PedidoEventData, RecarregarEventDa
 import Sidebar from '../../components/dashboard/Sidebar';
 import { useSidebarStore } from '../../store/sidebarStore';
 import OpcoesAdicionaisModal from '../../components/pdv/OpcoesAdicionaisModal';
+import { useFullscreen } from '../../hooks/useFullscreen';
 
 interface Produto {
   id: string;
@@ -129,6 +132,9 @@ const PDVPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const navigate = useNavigate();
   const { isExpanded, toggle } = useSidebarStore();
+
+  // Hook para fullscreen
+  const { enterFullscreen, exitFullscreen, isFullscreen } = useFullscreen();
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [grupos, setGrupos] = useState<Grupo[]>([]);
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
@@ -701,9 +707,16 @@ const PDVPage: React.FC = () => {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Cleanup
+    // Cleanup - sair do fullscreen quando sair da página
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+
+      // Sair do fullscreen ao desmontar o componente
+      if (isFullscreen) {
+        exitFullscreen().catch(error => {
+          console.log('PDV: Erro ao sair do fullscreen:', error);
+        });
+      }
     };
   }, []); // Array vazio para executar apenas uma vez
 
@@ -824,12 +837,19 @@ const PDVPage: React.FC = () => {
       icon: Package,
       label: 'Produtos',
       color: 'primary',
-      onClick: (e?: React.MouseEvent) => {
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
-        setShowAreaProdutos(!showAreaProdutos);
+
+        if (showAreaProdutos) {
+          // Se já está aberto, apenas fechar
+          setShowAreaProdutos(false);
+        } else {
+          // Se está fechado, ativar fullscreen e abrir
+          await abrirModalProdutos();
+        }
       }
     },
     {
@@ -837,11 +857,21 @@ const PDVPage: React.FC = () => {
       icon: ShoppingBag,
       label: 'Pedidos',
       color: 'primary',
-      onClick: (e?: React.MouseEvent) => {
+      onClick: async (e?: React.MouseEvent) => {
         // Prevenir qualquer comportamento padrão
         if (e) {
           e.preventDefault();
           e.stopPropagation();
+        }
+
+        try {
+          // Ativar fullscreen antes de abrir o modal
+          if (!isFullscreen) {
+            await enterFullscreen();
+            console.log('Fullscreen ativado para modal de pedidos');
+          }
+        } catch (error) {
+          console.log('Erro ao ativar fullscreen para modal de pedidos:', error);
         }
 
         // Abrir modal IMEDIATAMENTE sem loading
@@ -981,11 +1011,22 @@ const PDVPage: React.FC = () => {
       icon: ArrowUpDown,
       label: 'Movimentos',
       color: 'purple',
-      onClick: (e?: React.MouseEvent) => {
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
+
+        try {
+          // Ativar fullscreen antes de abrir o modal
+          if (!isFullscreen) {
+            await enterFullscreen();
+            console.log('Fullscreen ativado para modal de movimentos');
+          }
+        } catch (error) {
+          console.log('Erro ao ativar fullscreen para modal de movimentos:', error);
+        }
+
         setShowMovimentosModal(true);
         // Carregar vendas apenas uma vez quando abrir o modal
         loadVendas();
@@ -1721,7 +1762,7 @@ const PDVPage: React.FC = () => {
           )
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .neq('status_venda', 'cancelada') // Excluir vendas canceladas
+        .eq('deletado', false)
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -3826,8 +3867,21 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  const abrirModalProdutos = () => {
-    setShowAreaProdutos(true);
+  const abrirModalProdutos = async () => {
+    try {
+      // Ativar fullscreen antes de abrir o modal
+      if (!isFullscreen) {
+        await enterFullscreen();
+        console.log('Fullscreen ativado para modal de produtos');
+      }
+
+      // Abrir o modal de produtos
+      setShowAreaProdutos(true);
+    } catch (error) {
+      console.log('Erro ao ativar fullscreen para modal de produtos:', error);
+      // Abrir o modal mesmo se o fullscreen falhar
+      setShowAreaProdutos(true);
+    }
   };
 
   const mostrarProdutoNaoEncontrado = (termo: string) => {
@@ -4024,8 +4078,9 @@ const PDVPage: React.FC = () => {
       >
       {/* Header */}
       <div className="bg-background-card border-b border-gray-800 h-16 flex items-center justify-between pl-2 pr-4">
-        {/* Botão para mostrar/ocultar menu */}
-        <div className="flex items-center">
+        {/* Botões do lado esquerdo */}
+        <div className="flex items-center gap-2">
+          {/* Botão para mostrar/ocultar menu */}
           <button
             onClick={() => {
               setShowMenuPDV(!showMenuPDV);
@@ -4041,6 +4096,25 @@ const PDVPage: React.FC = () => {
               <ChevronLeft size={16} className="group-hover:scale-110 transition-transform" />
             ) : (
               <ChevronRight size={16} className="group-hover:scale-110 transition-transform" />
+            )}
+          </button>
+
+          {/* Botão para alternar fullscreen */}
+          <button
+            onClick={() => {
+              if (isFullscreen) {
+                exitFullscreen();
+              } else {
+                enterFullscreen();
+              }
+            }}
+            className="w-8 h-8 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
+            title={isFullscreen ? "Sair do modo tela cheia" : "Entrar em tela cheia"}
+          >
+            {isFullscreen ? (
+              <Minimize2 size={16} className="group-hover:scale-110 transition-transform" />
+            ) : (
+              <Maximize2 size={16} className="group-hover:scale-110 transition-transform" />
             )}
           </button>
         </div>
@@ -6109,7 +6183,11 @@ const PDVPage: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            className={`fixed inset-0 z-50 flex items-center justify-center ${
+              isFullscreen
+                ? 'bg-background-dark p-0'
+                : 'bg-black/50 p-4'
+            }`}
             onClick={() => {
               setShowPedidosModal(false);
               setSearchPedidos('');
@@ -6119,7 +6197,11 @@ const PDVPage: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl mx-4 max-h-[80vh] flex flex-col"
+              className={`bg-background-card border border-gray-800 flex flex-col ${
+                isFullscreen
+                  ? 'w-full h-full rounded-none'
+                  : 'rounded-lg w-full max-w-4xl mx-4 max-h-[80vh]'
+              }`}
               onClick={(e) => e.stopPropagation()}
               data-modal="pedidos"
             >
@@ -6147,6 +6229,26 @@ const PDVPage: React.FC = () => {
                     >
                       <Filter size={18} />
                     </button>
+
+                    {/* Botão para alternar fullscreen */}
+                    <button
+                      onClick={() => {
+                        if (isFullscreen) {
+                          exitFullscreen();
+                        } else {
+                          enterFullscreen();
+                        }
+                      }}
+                      className="w-8 h-8 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
+                      title={isFullscreen ? "Sair do modo tela cheia" : "Entrar em tela cheia"}
+                    >
+                      {isFullscreen ? (
+                        <Minimize2 size={16} className="group-hover:scale-110 transition-transform" />
+                      ) : (
+                        <Maximize2 size={16} className="group-hover:scale-110 transition-transform" />
+                      )}
+                    </button>
+
                     <button
                       onClick={() => {
                         setShowPedidosModal(false);
@@ -6248,111 +6350,130 @@ const PDVPage: React.FC = () => {
                     )}
                   </div>
                 ) : (
-                  <div className="grid gap-3">
+                  <div className={`grid gap-4 ${
+                    isFullscreen
+                      ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+                      : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                  }`}>
                     {pedidosFiltrados.map((pedido) => (
                       <div
                         key={pedido.id}
-                        className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+                        className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors flex flex-col h-full"
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-3">
-                            <div className="text-white font-medium">
+                        {/* Header do Card */}
+                        <div className="flex flex-col gap-2 mb-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-white font-medium text-sm">
                               Pedido #{pedido.numero}
                             </div>
                             <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(pedido.status).replace('text-', 'bg-').replace('-400', '-500/20').replace('-500', '-500/20').replace('-600', '-600/20')} ${getStatusColor(pedido.status)}`}>
                               {getStatusText(pedido.status)}
                             </div>
                           </div>
-                          <div className="text-primary-400 font-bold">
+                          <div className="text-primary-400 font-bold text-lg">
                             {formatCurrency(pedido.valor_total)}
                           </div>
                         </div>
 
-                        <div className="text-sm text-gray-400 mb-2">
-                          Cliente: {pedido.cliente?.nome || 'Consumidor Final'}
-                        </div>
-
-                        <div className="text-xs text-gray-500 mb-2">
-                          {new Date(pedido.created_at).toLocaleString('pt-BR')}
-                        </div>
-
-                        {/* Informações do Vendedor */}
-                        {pedido.usuario && (
-                          <div className="text-xs text-gray-500 mb-3">
-                            Vendedor: {pedido.usuario.nome}
+                        {/* Informações do Cliente e Data */}
+                        <div className="flex-1 space-y-2 mb-3">
+                          <div className="text-sm text-gray-400 truncate">
+                            Cliente: {pedido.cliente?.nome || 'Consumidor Final'}
                           </div>
-                        )}
-
-                        {pedido.pedidos_itens && pedido.pedidos_itens.length > 0 && (
-                          <div className="space-y-1 mb-3">
-                            <div className="text-xs text-gray-400 font-medium">Itens:</div>
-                            {pedido.pedidos_itens.slice(0, 3).map((item: any, index: number) => {
-                              // Verificar se há desconto no item (valor unitário diferente do preço do produto)
-                              const temDesconto = item.produto?.preco && item.valor_unitario < item.produto.preco;
-                              const temPromocao = item.produto?.promocao;
-
-                              return (
-                                <div key={index} className="text-xs">
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-500">{item.quantidade}x {item.produto?.nome}</span>
-                                    <span className="text-gray-500">{formatCurrency(item.valor_unitario * item.quantidade)}</span>
-                                  </div>
-                                  {(temDesconto || temPromocao) && (
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      {item.produto?.preco && (
-                                        <span className="text-gray-400 line-through text-xs">
-                                          {formatCurrency(item.produto.preco)} × {item.quantidade}
-                                        </span>
-                                      )}
-                                      {temPromocao && (
-                                        <span className="text-green-400 text-xs">Produto em promoção</span>
-                                      )}
-                                      {temDesconto && !temPromocao && (
-                                        <span className="text-blue-400 text-xs">Desconto aplicado</span>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
+                          <div className="text-xs text-gray-500">
+                            {new Date(pedido.created_at).toLocaleString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
                             })}
-                            {pedido.pedidos_itens.length > 3 && (
-                              <div className="text-xs text-gray-500">
-                                +{pedido.pedidos_itens.length - 3} item(s) a mais...
-                              </div>
-                            )}
+                          </div>
+                          {/* Informações do Vendedor */}
+                          {pedido.usuario && (
+                            <div className="text-xs text-gray-500 truncate">
+                              Vendedor: {pedido.usuario.nome}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Resumo de Itens */}
+                        {pedido.pedidos_itens && pedido.pedidos_itens.length > 0 && (
+                          <div className="flex-1 mb-3">
+                            <div className="text-xs text-gray-400 font-medium mb-1">
+                              Itens ({pedido.pedidos_itens.length}):
+                            </div>
+                            <div className="space-y-1 max-h-20 overflow-y-auto custom-scrollbar">
+                              {pedido.pedidos_itens.slice(0, 2).map((item: any, index: number) => {
+                                // Verificar se há desconto no item
+                                const temDesconto = item.produto?.preco && item.valor_unitario < item.produto.preco;
+                                const temPromocao = item.produto?.promocao;
+
+                                return (
+                                  <div key={index} className="text-xs">
+                                    <div className="flex justify-between items-start">
+                                      <span className="text-gray-500 truncate flex-1 mr-2">
+                                        {item.quantidade}x {item.produto?.nome}
+                                      </span>
+                                      <span className="text-gray-500 flex-shrink-0">
+                                        {formatCurrency(item.valor_unitario * item.quantidade)}
+                                      </span>
+                                    </div>
+                                    {(temDesconto || temPromocao) && (
+                                      <div className="text-xs mt-0.5">
+                                        {temPromocao && (
+                                          <span className="text-green-400">🏷️ Promoção</span>
+                                        )}
+                                        {temDesconto && !temPromocao && (
+                                          <span className="text-blue-400">💰 Desconto</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {pedido.pedidos_itens.length > 2 && (
+                                <div className="text-xs text-gray-500 italic">
+                                  +{pedido.pedidos_itens.length - 2} item(s) a mais...
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
 
-                        <div className="flex gap-2 flex-wrap">
+                        {/* Botões de Ação */}
+                        <div className="flex flex-col gap-2 mt-auto">
                           {pedido.status === 'pendente' && (
                             <button
                               onClick={() => importarPedidoParaCarrinho(pedido)}
-                              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors font-medium"
+                              className="w-full px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors font-medium"
                             >
                               Importar para Carrinho
                             </button>
                           )}
-                          {/* Botão Ver Detalhes temporariamente oculto */}
-                          {false && (
+                          <div className="flex gap-2">
                             <button
-                              onClick={() => carregarDetalhesPedido(pedido.id)}
-                              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs transition-colors"
+                              onClick={async () => {
+                                const url = await gerarLinkPedido(pedido);
+                                if (url) {
+                                  window.open(url, '_blank');
+                                }
+                              }}
+                              className="flex-1 px-3 py-1.5 bg-blue-500/80 hover:bg-blue-600/90 text-white rounded text-xs transition-colors"
+                              title="Abrir nota de pedido em nova página"
                             >
-                              Ver Detalhes
+                              Abrir
                             </button>
-                          )}
-                          <button
-                            onClick={async () => {
-                              const url = await gerarLinkPedido(pedido);
-                              if (url) {
-                                window.open(url, '_blank');
-                              }
-                            }}
-                            className="px-3 py-1.5 bg-blue-500/80 hover:bg-blue-600/90 text-white rounded text-xs transition-colors"
-                            title="Abrir nota de pedido em nova página"
-                          >
-                            Abrir
-                          </button>
+                            {/* Botão Ver Detalhes temporariamente oculto */}
+                            {false && (
+                              <button
+                                onClick={() => carregarDetalhesPedido(pedido.id)}
+                                className="flex-1 px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded text-xs transition-colors"
+                              >
+                                Detalhes
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -6973,14 +7094,22 @@ const PDVPage: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className={`fixed inset-0 z-50 flex items-center justify-center ${
+              isFullscreen
+                ? 'bg-background-dark p-0'
+                : 'bg-black/50 p-4'
+            }`}
             onClick={() => setShowMovimentosModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-6xl h-[90vh] flex flex-col"
+              className={`bg-background-card border border-gray-800 flex flex-col ${
+                isFullscreen
+                  ? 'w-full h-full rounded-none'
+                  : 'rounded-lg w-full max-w-6xl h-[90vh]'
+              }`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Cabeçalho */}
@@ -7013,6 +7142,26 @@ const PDVPage: React.FC = () => {
                     >
                       <ArrowUpDown size={18} />
                     </button>
+
+                    {/* Botão para alternar fullscreen */}
+                    <button
+                      onClick={() => {
+                        if (isFullscreen) {
+                          exitFullscreen();
+                        } else {
+                          enterFullscreen();
+                        }
+                      }}
+                      className="w-8 h-8 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
+                      title={isFullscreen ? "Sair do modo tela cheia" : "Entrar em tela cheia"}
+                    >
+                      {isFullscreen ? (
+                        <Minimize2 size={16} className="group-hover:scale-110 transition-transform" />
+                      ) : (
+                        <Maximize2 size={16} className="group-hover:scale-110 transition-transform" />
+                      )}
+                    </button>
+
                     <button
                       onClick={() => setShowMovimentosModal(false)}
                       className="text-gray-400 hover:text-white transition-colors"
@@ -7170,198 +7319,200 @@ const PDVPage: React.FC = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-4 pb-4">
+                  <div className={`grid gap-4 pb-4 ${
+                    isFullscreen
+                      ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+                      : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                  }`}>
                     {vendas.map((venda) => (
                       <div
                         key={venda.id}
-                        className="bg-gray-800/50 rounded-lg border border-gray-700 p-4 hover:border-gray-600 transition-colors"
+                        className="bg-gray-800/50 rounded-lg border border-gray-700 p-4 hover:border-gray-600 transition-colors flex flex-col h-full"
                       >
-                        {/* Cabeçalho do Card */}
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="text-white font-medium">Venda #{venda.numero_venda}</h4>
-                              {/* Tag de pedido APENAS se a venda foi originada de um pedido */}
-                              {venda.pedidos_origem && venda.pedidos_origem.length > 0 && (
-                                <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
-                                  {venda.pedidos_origem.length === 1
-                                    ? `Pedido #${venda.pedidos_origem[0]}`
-                                    : `${venda.pedidos_origem.length} Pedidos`
-                                  }
-                                </span>
-                              )}
-                              {/* Tag de venda direta se NÃO foi de pedido */}
-                              {(!venda.pedidos_origem || venda.pedidos_origem.length === 0) && (
-                                <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
-                                  Venda Direta
-                                </span>
-                              )}
+                        {/* Header do Card */}
+                        <div className="flex flex-col gap-2 mb-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-white font-medium text-sm">
+                              Venda #{venda.numero_venda}
                             </div>
-                            <p className="text-xs text-gray-400">{venda.created_at}</p>
+                            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              venda.status_venda === 'finalizada'
+                                ? 'bg-green-500/20 text-green-400'
+                                : venda.status_venda === 'cancelada'
+                                ? 'bg-red-500/20 text-red-400'
+                                : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {venda.status_venda === 'finalizada' ? 'Finalizada' :
+                               venda.status_venda === 'cancelada' ? 'Cancelada' :
+                               venda.status_venda}
+                            </div>
                           </div>
-                          <div className={`px-2 py-1 rounded-full text-xs ${
-                            venda.status_venda === 'finalizada'
-                              ? 'bg-green-500/20 text-green-400'
-                              : venda.status_venda === 'cancelada'
-                              ? 'bg-red-500/20 text-red-400'
-                              : 'bg-yellow-500/20 text-yellow-400'
-                          }`}>
-                            {venda.status_venda === 'finalizada' ? 'Finalizada' :
-                             venda.status_venda === 'cancelada' ? 'Cancelada' :
-                             venda.status_venda}
+
+                          {/* Tags de Origem */}
+                          <div className="flex flex-wrap gap-1">
+                            {venda.pedidos_origem && venda.pedidos_origem.length > 0 ? (
+                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                                {venda.pedidos_origem.length === 1
+                                  ? `Pedido #${venda.pedidos_origem[0]}`
+                                  : `${venda.pedidos_origem.length} Pedidos`
+                                }
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
+                                Venda Direta
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Valor Total */}
+                          <div className="text-primary-400 font-bold text-lg">
+                            {formatCurrency(venda.valor_final)}
                           </div>
                         </div>
 
-                        {/* Informações do Cliente */}
-                        {venda.cliente && (
-                          <div className="mb-3 p-2 bg-gray-700/50 rounded">
-                            <div className="text-sm text-white">{venda.cliente.nome}</div>
-                            {venda.cliente.telefone && (
-                              <div className="text-xs text-gray-400">{venda.cliente.telefone}</div>
-                            )}
+                        {/* Informações do Cliente e Data */}
+                        <div className="flex-1 space-y-2 mb-3">
+                          {venda.cliente ? (
+                            <div className="text-sm text-gray-400 truncate">
+                              Cliente: {venda.cliente.nome}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-gray-400">
+                              Cliente: Consumidor Final
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-500">
+                            {venda.data_venda_formatada ||
+                             (venda.created_at ? new Date(venda.created_at).toLocaleString('pt-BR', {
+                               day: '2-digit',
+                               month: '2-digit',
+                               year: '2-digit',
+                               hour: '2-digit',
+                               minute: '2-digit'
+                             }) : 'Data não disponível')}
                           </div>
-                        )}
+                          {/* Informações do Operador */}
+                          {venda.usuario_venda && (
+                            <div className="text-xs text-gray-500 truncate">
+                              Operador: {venda.usuario_venda.nome}
+                            </div>
+                          )}
+                        </div>
 
                         {/* Resumo dos Itens */}
                         {venda.vendas_pdv_itens && venda.vendas_pdv_itens.length > 0 && (
-                          <div className="mb-3">
-                            <div className="text-xs text-gray-400 mb-1">
-                              {venda.vendas_pdv_itens.length} item(s):
+                          <div className="flex-1 mb-3">
+                            <div className="text-xs text-gray-400 font-medium mb-1">
+                              Itens ({venda.vendas_pdv_itens.length}):
                             </div>
-                            <div className="space-y-1 max-h-20 overflow-y-auto custom-scrollbar">
-                              {venda.vendas_pdv_itens.slice(0, 3).map((item: any, index: number) => (
-                                <div key={index} className="text-xs text-gray-300 flex justify-between">
-                                  <span className="truncate">{item.produto?.nome || 'Produto'}</span>
-                                  <span>{item.quantidade}x</span>
+                            <div className="space-y-1 max-h-16 overflow-y-auto custom-scrollbar">
+                              {venda.vendas_pdv_itens.slice(0, 2).map((item: any, index: number) => (
+                                <div key={index} className="text-xs">
+                                  <div className="flex justify-between items-start">
+                                    <span className="text-gray-500 truncate flex-1 mr-2">
+                                      {item.quantidade}x {item.produto?.nome || 'Produto'}
+                                    </span>
+                                    <span className="text-gray-500 flex-shrink-0">
+                                      {formatCurrency(item.valor_total_item)}
+                                    </span>
+                                  </div>
                                 </div>
                               ))}
-                              {venda.vendas_pdv_itens.length > 3 && (
-                                <div className="text-xs text-gray-500">
-                                  +{venda.vendas_pdv_itens.length - 3} item(s)
+                              {venda.vendas_pdv_itens.length > 2 && (
+                                <div className="text-xs text-gray-500 italic">
+                                  +{venda.vendas_pdv_itens.length - 2} item(s) a mais...
                                 </div>
                               )}
                             </div>
                           </div>
                         )}
 
-                        {/* Valores */}
-                        <div className="space-y-1 border-t border-gray-700 pt-3">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-400">Subtotal:</span>
-                            <span className="text-white">{formatCurrency(venda.valor_total)}</span>
-                          </div>
-                          {venda.desconto_total > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-red-400">Desconto:</span>
-                              <span className="text-red-400">-{formatCurrency(venda.desconto_total)}</span>
+                        {/* Resumo de Valores Compacto */}
+                        <div className="mb-3">
+                          {(venda.desconto_total > 0 || venda.acrescimo_total > 0) && (
+                            <div className="space-y-1 text-xs">
+                              {venda.desconto_total > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-red-400">💰 Desconto:</span>
+                                  <span className="text-red-400">-{formatCurrency(venda.desconto_total)}</span>
+                                </div>
+                              )}
+                              {venda.acrescimo_total > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-yellow-400">📈 Acréscimo:</span>
+                                  <span className="text-yellow-400">+{formatCurrency(venda.acrescimo_total)}</span>
+                                </div>
+                              )}
                             </div>
                           )}
-                          {venda.acrescimo_total > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-yellow-400">Acréscimo:</span>
-                              <span className="text-yellow-400">+{formatCurrency(venda.acrescimo_total)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between text-lg font-bold border-t border-gray-700 pt-2">
-                            <span className="text-white">Total:</span>
-                            <span className="text-primary-400">{formatCurrency(venda.valor_final)}</span>
-                          </div>
                         </div>
 
-                        {/* Formas de Pagamento */}
+                        {/* Formas de Pagamento Compacto */}
                         {venda.vendas_pdv_pagamentos && venda.vendas_pdv_pagamentos.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-gray-700">
-                            <div className="text-xs text-gray-400 mb-1">Pagamento:</div>
-                            <div className="space-y-1">
-                              {venda.vendas_pdv_pagamentos.map((pagamento: any, index: number) => (
+                          <div className="mb-3">
+                            <div className="text-xs text-gray-400 font-medium mb-1">
+                              Pagamento ({venda.vendas_pdv_pagamentos.length}):
+                            </div>
+                            <div className="space-y-1 max-h-12 overflow-y-auto custom-scrollbar">
+                              {venda.vendas_pdv_pagamentos.slice(0, 2).map((pagamento: any, index: number) => (
                                 <div key={index} className="flex justify-between text-xs">
-                                  <span className="text-gray-300">
+                                  <span className="text-gray-300 truncate flex-1 mr-2">
                                     {pagamento.forma_pagamento}
                                     {pagamento.parcelas > 1 && ` (${pagamento.parcelas}x)`}
                                   </span>
-                                  <span className="text-white">{formatCurrency(pagamento.valor)}</span>
+                                  <span className="text-white flex-shrink-0">{formatCurrency(pagamento.valor)}</span>
                                 </div>
                               ))}
+                              {venda.vendas_pdv_pagamentos.length > 2 && (
+                                <div className="text-xs text-gray-500 italic">
+                                  +{venda.vendas_pdv_pagamentos.length - 2} forma(s) a mais...
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
 
-                        {/* Informações de Data e Usuário */}
-                        <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
-                          {/* Data e hora da venda */}
-                          <div className="text-xs text-gray-400">
-                            <span className="font-medium">Realizada em:</span>
-                            <span className="text-gray-300 ml-1">{venda.data_venda_formatada}</span>
-                          </div>
-
-                          {/* Usuário que fez a venda */}
-                          {venda.usuario_venda && (
-                            <div className="text-xs text-gray-400">
-                              <span className="font-medium">Vendedor:</span>
-                              <span className="text-gray-300 ml-1">{venda.usuario_venda.nome}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Informações de Cancelamento */}
+                        {/* Informações de Cancelamento Compacto */}
                         {venda.status_venda === 'cancelada' && (
-                          <div className="mt-3 pt-3 border-t border-red-700/50 bg-red-500/10 rounded-lg p-3 space-y-2">
-                            <div className="text-xs text-red-400 font-medium">🚫 Venda Cancelada</div>
-
-                            {/* Data e hora do cancelamento */}
-                            {venda.cancelada_em_formatada && (
-                              <div className="text-xs text-gray-400">
-                                <span className="font-medium">Cancelada em:</span>
-                                <span className="text-gray-300 ml-1">{venda.cancelada_em_formatada}</span>
-                              </div>
-                            )}
-
-                            {/* Usuário que cancelou */}
+                          <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                            <div className="text-xs text-red-400 font-medium mb-1">🚫 Cancelada</div>
                             {venda.usuario_cancelamento && (
-                              <div className="text-xs text-gray-400">
-                                <span className="font-medium">Cancelada por:</span>
-                                <span className="text-gray-300 ml-1">{venda.usuario_cancelamento.nome}</span>
+                              <div className="text-xs text-gray-400 truncate">
+                                Por: {venda.usuario_cancelamento.nome}
                               </div>
                             )}
-
-                            {/* Motivo do cancelamento */}
                             {venda.motivo_cancelamento && (
-                              <div className="text-xs text-gray-400">
-                                <span className="font-medium">Motivo:</span>
-                                <span className="text-gray-300 ml-1">{venda.motivo_cancelamento}</span>
+                              <div className="text-xs text-gray-400 truncate">
+                                Motivo: {venda.motivo_cancelamento}
                               </div>
                             )}
                           </div>
                         )}
 
                         {/* Botões de Ação */}
-                        <div className="mt-3 pt-3 border-t border-gray-700">
-                          <div className="flex gap-2">
-                            {/* Botão Exibir Itens */}
+                        <div className="flex flex-col gap-2 mt-auto">
+                          <button
+                            onClick={() => {
+                              setVendaParaExibirItens(venda);
+                              setShowItensVendaModal(true);
+                              carregarItensVenda(venda.id);
+                            }}
+                            className="w-full px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded text-xs transition-colors font-medium border border-blue-600/30 hover:border-blue-600/50"
+                          >
+                            Exibir Itens
+                          </button>
+
+                          {venda.status_venda === 'finalizada' && (
                             <button
                               onClick={() => {
-                                setVendaParaExibirItens(venda);
-                                setShowItensVendaModal(true);
-                                carregarItensVenda(venda.id);
+                                setVendaParaCancelar(venda);
+                                setShowCancelamentoModal(true);
                               }}
-                              className="flex-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 py-2 px-3 rounded-lg transition-colors text-sm font-medium border border-blue-600/30 hover:border-blue-600/50"
+                              className="w-full px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-xs transition-colors font-medium border border-red-600/30 hover:border-red-600/50"
                             >
-                              Exibir Itens
+                              Cancelar Venda
                             </button>
-
-                            {/* Botão Cancelar Venda */}
-                            {venda.status_venda === 'finalizada' && (
-                              <button
-                                onClick={() => {
-                                  setVendaParaCancelar(venda);
-                                  setShowCancelamentoModal(true);
-                                }}
-                                className="flex-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 py-2 px-3 rounded-lg transition-colors text-sm font-medium border border-red-600/30 hover:border-red-600/50"
-                              >
-                                Cancelar Venda
-                              </button>
-                            )}
-                          </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -8022,14 +8173,22 @@ const PDVPage: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            className={`fixed inset-0 z-50 flex items-center justify-center ${
+              isFullscreen
+                ? 'bg-background-dark p-0'
+                : 'bg-black/50 p-4'
+            }`}
             onClick={() => setShowAreaProdutos(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg w-full max-w-6xl h-[90vh] flex flex-col"
+              className={`bg-background-card flex flex-col ${
+                isFullscreen
+                  ? 'w-full h-full rounded-none'
+                  : 'rounded-lg w-full max-w-6xl h-[90vh]'
+              }`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -8038,12 +8197,35 @@ const PDVPage: React.FC = () => {
                   <Package size={20} />
                   Produtos
                 </h3>
-                <button
-                  onClick={() => setShowAreaProdutos(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X size={18} />
-                </button>
+
+                <div className="flex items-center gap-2">
+                  {/* Botão para alternar fullscreen */}
+                  <button
+                    onClick={() => {
+                      if (isFullscreen) {
+                        exitFullscreen();
+                      } else {
+                        enterFullscreen();
+                      }
+                    }}
+                    className="w-8 h-8 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
+                    title={isFullscreen ? "Sair do modo tela cheia" : "Entrar em tela cheia"}
+                  >
+                    {isFullscreen ? (
+                      <Minimize2 size={16} className="group-hover:scale-110 transition-transform" />
+                    ) : (
+                      <Maximize2 size={16} className="group-hover:scale-110 transition-transform" />
+                    )}
+                  </button>
+
+                  {/* Botão para fechar */}
+                  <button
+                    onClick={() => setShowAreaProdutos(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
 
               {/* Conteúdo */}
