@@ -4736,26 +4736,26 @@ const PDVPage: React.FC = () => {
 
 
 
-            {/* Conteúdo scrollável */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4"
-              style={{ maxHeight: 'calc(100vh - 320px)' }}
+            {/* Conteúdo scrollável - Altura otimizada */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3"
+              style={{ maxHeight: 'calc(100vh - 200px)' }}
             >
 
               {/* Seção de Pagamento quando NÃO há pedidos importados */}
               {pedidosImportados.length === 0 && (
-                <div className="space-y-4">
-                  {/* Tipo de Pagamento */}
+                <div className="space-y-3">
+                  {/* Tipo de Pagamento - Compacto */}
                   <div>
-                    <label className="block text-sm font-medium text-white mb-2">
+                    <label className="block text-sm font-medium text-white mb-1.5">
                       Tipo de Pagamento
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5">
                       <button
                         onClick={() => {
                           setTipoPagamento('vista');
                           limparPagamentosParciais();
                         }}
-                        className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                        className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
                           tipoPagamento === 'vista'
                             ? 'bg-gray-700 border-gray-600 text-white'
                             : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
@@ -4768,7 +4768,7 @@ const PDVPage: React.FC = () => {
                           setTipoPagamento('parcial');
                           setFormaPagamentoSelecionada(null);
                         }}
-                        className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                        className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
                           tipoPagamento === 'parcial'
                             ? 'bg-gray-700 border-gray-600 text-white'
                             : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
@@ -4779,20 +4779,20 @@ const PDVPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Formas de Pagamento */}
+                  {/* Formas de Pagamento - Compacto */}
                   <div>
-                    <label className="block text-sm font-medium text-white mb-2">
+                    <label className="block text-sm font-medium text-white mb-1.5">
                       {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
                     </label>
 
                     {tipoPagamento === 'vista' ? (
-                      // Pagamento à vista - interface original
-                      <div className="grid grid-cols-2 gap-2">
+                      // Pagamento à vista - interface compacta
+                      <div className="grid grid-cols-2 gap-1.5">
                         {formasPagamento.map((forma) => (
                           <button
                             key={forma.id}
                             onClick={() => setFormaPagamentoSelecionada(forma.id)}
-                            className={`p-3 rounded-lg border transition-colors text-sm ${
+                            className={`p-2 rounded border transition-colors text-sm ${
                               formaPagamentoSelecionada === forma.id
                                 ? 'bg-gray-700 border-gray-600 text-white'
                                 : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
@@ -4803,11 +4803,11 @@ const PDVPage: React.FC = () => {
                         ))}
                       </div>
                     ) : (
-                      // Pagamentos parciais - nova interface
-                      <div className="space-y-4">
-                        {/* Campo de valor */}
+                      // Pagamentos parciais - interface compacta
+                      <div className="space-y-3">
+                        {/* Campo de valor - Compacto */}
                         <div>
-                          <label className="block text-sm font-medium text-white mb-2">
+                          <label className="block text-sm font-medium text-white mb-1.5">
                             Valor do Pagamento
                           </label>
                           <input
@@ -4815,15 +4815,15 @@ const PDVPage: React.FC = () => {
                             value={valorParcial}
                             onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
                             placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
-                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                           />
                           <div className="text-xs text-gray-500 mt-1">
                             💡 Deixe vazio para usar o valor restante automaticamente
                           </div>
                         </div>
 
-                        {/* Botões das formas de pagamento */}
-                        <div className="grid grid-cols-2 gap-2">
+                        {/* Botões das formas de pagamento - Compacto */}
+                        <div className="grid grid-cols-2 gap-1.5">
                           {formasPagamento.map((forma) => (
                             <button
                               key={forma.id}
@@ -4832,7 +4832,7 @@ const PDVPage: React.FC = () => {
                                 forma.nome, // Usar o nome da forma para exibição
                                 forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
                               )}
-                              className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
+                              className="p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
                             >
                               {forma.nome}
                             </button>
