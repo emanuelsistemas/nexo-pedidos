@@ -5458,32 +5458,29 @@ const PDVPage: React.FC = () => {
             }}
             className="absolute top-0 right-0 w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full z-10"
           >
-            {/* Header fixo */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
-              <h3 className="text-lg font-semibold text-white">
+            {/* Header fixo compacto */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+              <h3 className="text-base font-semibold text-white">
                 Finalizar Venda
               </h3>
               <button
                 onClick={() => setShowFinalizacaoFinal(false)}
                 className="text-gray-400 hover:text-white transition-colors"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
 
-            {/* Conteúdo scrollável */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4"
-              style={{ maxHeight: 'calc(100vh - 80px)' }}
+            {/* Conteúdo scrollável compacto */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-3"
+              style={{ maxHeight: 'calc(100vh - 120px)' }}
             >
 
-            {/* Formas de Pagamento Utilizadas */}
+            {/* Formas de Pagamento Utilizadas - Compacto */}
             {(tipoPagamento === 'vista' && formaPagamentoSelecionada) || (tipoPagamento === 'parcial' && pagamentosParciais.length > 0) ? (
-              <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-white font-medium">Pagamentos Adicionados:</h4>
-                </div>
-
-                <div className="space-y-2">
+              <div className="bg-gray-800/50 rounded-lg p-3 mb-3">
+                <div className="text-sm font-medium text-white mb-2">Pagamentos:</div>
+                <div className="space-y-1">
                   {tipoPagamento === 'vista' && formaPagamentoSelecionada ? (
                     (() => {
                       const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
@@ -5491,7 +5488,7 @@ const PDVPage: React.FC = () => {
                       if (!forma) return null;
 
                       return (
-                        <div className="flex items-center justify-between py-2 px-3 bg-gray-700/30 rounded-lg">
+                        <div className="flex items-center justify-between py-1.5 px-2 bg-gray-700/30 rounded text-sm">
                           <span className="font-medium text-white">
                             {forma.nome}
                           </span>
@@ -5508,7 +5505,7 @@ const PDVPage: React.FC = () => {
                       if (!forma) return null;
 
                       return (
-                        <div key={index} className="flex items-center justify-between py-2 px-3 bg-gray-700/30 rounded-lg">
+                        <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-gray-700/30 rounded text-sm">
                           <span className="font-medium text-white">
                             {forma.nome}
                           </span>
@@ -5523,12 +5520,12 @@ const PDVPage: React.FC = () => {
               </div>
             ) : null}
 
-            {/* Resumo da Venda */}
-            <div className="bg-gray-800/50 rounded-lg p-4 mb-4">
+            {/* Resumo da Venda - Compacto */}
+            <div className="bg-gray-800/50 rounded-lg p-3 mb-3">
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Total da Venda:</span>
-                  <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
+                  <span className="text-gray-400">Total:</span>
+                  <span className="text-white font-medium">{formatCurrency(calcularTotalComDesconto())}</span>
                 </div>
                 {/* Restante só aparece para pagamentos parciais */}
                 {tipoPagamento === 'parcial' && (
@@ -5540,29 +5537,29 @@ const PDVPage: React.FC = () => {
                   </div>
                 )}
                 {trocoCalculado > 0 && (
-                  <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
-                    <span className="text-gray-400 text-base">Troco:</span>
-                    <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                  <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-1.5 mt-1.5">
+                    <span className="text-gray-400">Troco:</span>
+                    <span className="text-blue-400 text-lg font-bold">{formatCurrency(trocoCalculado)}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Campo CPF/CNPJ - Só aparece se pelo menos um botão de NFC-e estiver ativo */}
+            {/* Campo CPF/CNPJ - Compacto */}
             {temBotaoNfceAtivo() && (
-              <div className="mb-4">
-                <div className="space-y-3">
+              <div className="mb-3">
+                <div className="space-y-2">
                   {/* Botões CPF/CNPJ */}
                   <div>
-                    <label className="block text-lg font-bold text-white mb-3">
+                    <label className="block text-sm font-medium text-white mb-2">
                       Nota Fiscal Paulista
                     </label>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleTipoDocumentoChange('cpf')}
-                        className={`flex-1 py-3 px-4 rounded-lg border transition-colors font-medium ${
+                        className={`flex-1 py-2 px-3 rounded border transition-colors text-sm font-medium ${
                           tipoDocumento === 'cpf'
-                            ? 'bg-primary-500 border-primary-500 text-white shadow-lg'
+                            ? 'bg-primary-500 border-primary-500 text-white'
                             : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-700'
                         }`}
                       >
@@ -5570,9 +5567,9 @@ const PDVPage: React.FC = () => {
                       </button>
                       <button
                         onClick={() => handleTipoDocumentoChange('cnpj')}
-                        className={`flex-1 py-3 px-4 rounded-lg border transition-colors font-medium ${
+                        className={`flex-1 py-2 px-3 rounded border transition-colors text-sm font-medium ${
                           tipoDocumento === 'cnpj'
-                            ? 'bg-primary-500 border-primary-500 text-white shadow-lg'
+                            ? 'bg-primary-500 border-primary-500 text-white'
                             : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-700'
                         }`}
                       >
@@ -5595,7 +5592,7 @@ const PDVPage: React.FC = () => {
                       }}
                       onBlur={validarDocumentoOnBlur}
                       placeholder={tipoDocumento === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
-                      className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 transition-colors ${
+                      className={`w-full bg-gray-800/50 border rounded py-1.5 px-2 text-sm text-white focus:outline-none focus:ring-1 transition-colors ${
                         erroValidacao
                           ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
                           : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
@@ -5604,19 +5601,19 @@ const PDVPage: React.FC = () => {
 
                     {/* Mensagem de erro */}
                     {erroValidacao && (
-                      <div className="mt-1 text-sm text-red-400 flex items-center gap-1">
+                      <div className="mt-1 text-xs text-red-400 flex items-center gap-1">
                         <span>⚠️</span>
                         <span>{erroValidacao}</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Cliente encontrado */}
+                  {/* Cliente encontrado - Compacto */}
                   {clienteEncontrado ? (
-                    <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-1">
-                        <UserCheck size={16} className="text-green-400" />
-                        <span className="text-green-400 text-sm font-medium">Cliente Encontrado</span>
+                    <div className="bg-green-500/20 border border-green-500/30 rounded p-2">
+                      <div className="flex items-center gap-1 mb-1">
+                        <UserCheck size={14} className="text-green-400" />
+                        <span className="text-green-400 text-xs font-medium">Cliente Encontrado</span>
                       </div>
                       <div className="text-white text-sm">{clienteEncontrado.nome}</div>
                       {clienteEncontrado.telefone && (
@@ -5624,10 +5621,10 @@ const PDVPage: React.FC = () => {
                       )}
                     </div>
                   ) : cpfCnpjNota && (
-                    <div className="bg-gray-600/20 border border-gray-600/30 rounded-lg p-3">
-                      <div className="flex items-center gap-2">
-                        <User size={16} className="text-gray-400" />
-                        <span className="text-gray-400 text-sm">Consumidor Final</span>
+                    <div className="bg-gray-600/20 border border-gray-600/30 rounded p-2">
+                      <div className="flex items-center gap-1">
+                        <User size={14} className="text-gray-400" />
+                        <span className="text-gray-400 text-xs">Consumidor Final</span>
                       </div>
                     </div>
                   )}
@@ -5635,33 +5632,31 @@ const PDVPage: React.FC = () => {
               </div>
             )}
 
-              {/* Botões de Finalização */}
-              <div className="space-y-3 pb-4">
+              {/* Botões de Finalização - Compactos */}
+              <div className="space-y-2 pb-3">
                 {/* Grupo: Finalização Simples - Oculto quando CPF/CNPJ preenchido OU quando força venda fiscal com cartão */}
                 {!cpfCnpjNota && !deveOcultarFinalizacaoSimples() && (
-                  <>
-                    <div className="space-y-2">
-                      {/* Finalizar com Impressão */}
-                      {!pdvConfig?.ocultar_finalizar_com_impressao && (
-                        <button
-                          onClick={() => finalizarVendaCompleta('finalizar_com_impressao')}
-                          className="w-full bg-green-900/20 hover:bg-green-800/30 text-green-300 py-3 px-4 rounded-lg transition-colors border border-green-800/30"
-                        >
-                          Finalizar com Impressão
-                        </button>
-                      )}
+                  <div className="space-y-2">
+                    {/* Finalizar com Impressão */}
+                    {!pdvConfig?.ocultar_finalizar_com_impressao && (
+                      <button
+                        onClick={() => finalizarVendaCompleta('finalizar_com_impressao')}
+                        className="w-full bg-green-900/20 hover:bg-green-800/30 text-green-300 py-2.5 px-3 rounded transition-colors border border-green-800/30 text-sm font-medium"
+                      >
+                        Finalizar com Impressão
+                      </button>
+                    )}
 
-                      {/* Finalizar sem Impressão */}
-                      {!pdvConfig?.ocultar_finalizar_sem_impressao && (
-                        <button
-                          onClick={() => finalizarVendaCompleta('finalizar_sem_impressao')}
-                          className="w-full bg-green-800/20 hover:bg-green-700/30 text-green-400 py-3 px-4 rounded-lg transition-colors border border-green-700/30"
-                        >
-                          Finalizar sem Impressão
-                        </button>
-                      )}
-                    </div>
-                  </>
+                    {/* Finalizar sem Impressão */}
+                    {!pdvConfig?.ocultar_finalizar_sem_impressao && (
+                      <button
+                        onClick={() => finalizarVendaCompleta('finalizar_sem_impressao')}
+                        className="w-full bg-green-800/20 hover:bg-green-700/30 text-green-400 py-2.5 px-3 rounded transition-colors border border-green-700/30 text-sm font-medium"
+                      >
+                        Finalizar sem Impressão
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* Grupo: NFC-e */}
@@ -5677,15 +5672,15 @@ const PDVPage: React.FC = () => {
                         finalizarVendaCompleta('nfce_com_impressao');
                       }}
                       disabled={isDocumentoInvalido()}
-                      className={`w-full py-3 px-4 rounded-lg transition-colors border ${
+                      className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
                         isDocumentoInvalido()
                           ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
                           : 'bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 border-blue-800/30'
                       }`}
                     >
-                      NFC-e com Impressão
+                      <div>NFC-e com Impressão</div>
                       {isDocumentoInvalido() && (
-                        <div className="text-xs text-gray-400 mt-1">
+                        <div className="text-xs text-gray-400 mt-0.5">
                           CPF/CNPJ inválido
                         </div>
                       )}
@@ -5703,15 +5698,15 @@ const PDVPage: React.FC = () => {
                         finalizarVendaCompleta('nfce_sem_impressao');
                       }}
                       disabled={isDocumentoInvalido()}
-                      className={`w-full py-3 px-4 rounded-lg transition-colors border ${
+                      className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
                         isDocumentoInvalido()
                           ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
                           : 'bg-blue-800/20 hover:bg-blue-700/30 text-blue-400 border-blue-700/30'
                       }`}
                     >
-                      NFC-e sem Impressão
+                      <div>NFC-e sem Impressão</div>
                       {isDocumentoInvalido() && (
-                        <div className="text-xs text-gray-400 mt-1">
+                        <div className="text-xs text-gray-400 mt-0.5">
                           CPF/CNPJ inválido
                         </div>
                       )}
@@ -5729,15 +5724,15 @@ const PDVPage: React.FC = () => {
                         finalizarVendaCompleta('nfce_producao');
                       }}
                       disabled={isDocumentoInvalido()}
-                      className={`w-full py-3 px-4 rounded-lg transition-colors border ${
+                      className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
                         isDocumentoInvalido()
                           ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
                           : 'bg-blue-700/20 hover:bg-blue-600/30 text-blue-500 border-blue-600/30'
                       }`}
                     >
-                      NFC-e + Produção
+                      <div>NFC-e + Produção</div>
                       {isDocumentoInvalido() && (
-                        <div className="text-xs text-gray-400 mt-1">
+                        <div className="text-xs text-gray-400 mt-0.5">
                           CPF/CNPJ inválido
                         </div>
                       )}
@@ -5747,28 +5742,26 @@ const PDVPage: React.FC = () => {
 
                 {/* Grupo: Produção - Oculto quando CPF/CNPJ preenchido OU quando força venda fiscal com cartão */}
                 {!cpfCnpjNota && !deveOcultarFinalizacaoSimples() && (
-                  <>
-                    <div className="space-y-2">
-                      {/* Produção */}
-                      {!pdvConfig?.ocultar_producao && (
-                        <button
-                          onClick={() => finalizarVendaCompleta('producao')}
-                          className="w-full bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 py-3 px-4 rounded-lg transition-colors border border-orange-800/30"
-                        >
-                          Produção
-                        </button>
-                      )}
-                    </div>
-                  </>
+                  <div className="space-y-2">
+                    {/* Produção */}
+                    {!pdvConfig?.ocultar_producao && (
+                      <button
+                        onClick={() => finalizarVendaCompleta('producao')}
+                        className="w-full bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 py-2.5 px-3 rounded transition-colors border border-orange-800/30 text-sm font-medium"
+                      >
+                        Produção
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Footer fixo com botão Voltar */}
-            <div className="border-t border-gray-800 p-4 flex-shrink-0">
+            {/* Footer fixo com botão Voltar - Compacto */}
+            <div className="border-t border-gray-800 px-4 py-3 flex-shrink-0">
               <button
                 onClick={() => setShowFinalizacaoFinal(false)}
-                className="w-full bg-gray-800/30 hover:bg-gray-700/50 text-gray-300 py-3 px-4 rounded-lg transition-colors border border-gray-700/50"
+                className="w-full bg-gray-800/30 hover:bg-gray-700/50 text-gray-300 py-2.5 px-3 rounded transition-colors border border-gray-700/50 text-sm font-medium"
               >
                 ← Voltar para Pagamento
               </button>
