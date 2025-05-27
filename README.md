@@ -1,5 +1,7 @@
 # Nexo - Sistema de Gestão para Delivery
 
+![Versão](https://img.shields.io/badge/versão-1.0.0-blue.svg)
+
 O Nexo é um sistema completo para gestão de estabelecimentos de delivery, integrando WhatsApp, catálogo de produtos, gerenciamento de pedidos e atendimento automatizado com IA.
 
 ## Sobre o Projeto
