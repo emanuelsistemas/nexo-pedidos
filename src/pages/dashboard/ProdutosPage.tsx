@@ -2147,38 +2147,38 @@ const ProdutosPage: React.FC = () => {
     if (!produtoOpcoes[produto.id]?.length) return null;
 
     return (
-      <div className="mt-3 border-t border-gray-700 pt-3">
-        <p className="text-sm font-medium text-gray-400 mb-2">Adicionais:</p>
-        <div className="space-y-2">
+      <div className="mt-2 pt-2 border-t border-gray-700/50">
+        <p className="text-xs font-medium text-gray-400 mb-1.5">Adicionais:</p>
+        <div className="space-y-1.5">
           {produtoOpcoes[produto.id].map((opcao) => (
             <div
               key={opcao.id}
-              className="bg-gray-700/30 rounded-lg overflow-hidden"
+              className="bg-gray-700/30 rounded overflow-hidden"
             >
               <div
-                className="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-700/50 transition-colors"
+                className="flex items-center justify-between p-1.5 cursor-pointer hover:bg-gray-700/50 transition-colors"
                 onClick={() => toggleOpcao(produto.id, opcao.id)}
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-white">{opcao.nome}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-white font-medium">{opcao.nome}</span>
                   <span className="text-xs text-gray-400">
                     ({opcao.itens.length} {opcao.itens.length === 1 ? 'item' : 'itens'})
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleRemoveAdicional(produto.id, opcao.id);
                     }}
-                    className="text-red-400 hover:text-red-300 p-1"
+                    className="text-red-400 hover:text-red-300 p-0.5"
                   >
-                    <X size={14} />
+                    <X size={12} />
                   </button>
                   {expandedOpcoes[`${produto.id}-${opcao.id}`] ? (
-                    <ChevronUp size={16} className="text-gray-400" />
+                    <ChevronUp size={14} className="text-gray-400" />
                   ) : (
-                    <ChevronDown size={16} className="text-gray-400" />
+                    <ChevronDown size={14} className="text-gray-400" />
                   )}
                 </div>
               </div>
@@ -2192,14 +2192,14 @@ const ProdutosPage: React.FC = () => {
                     transition={{ duration: 0.2 }}
                     className="border-t border-gray-700"
                   >
-                    <div className="p-2 space-y-1">
+                    <div className="p-1.5 space-y-0.5">
                       {opcao.itens.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-center justify-between px-2 py-1 rounded bg-gray-700/30"
+                          className="flex items-center justify-between px-1.5 py-0.5 rounded bg-gray-700/30"
                         >
-                          <span className="text-sm text-gray-300">{item.nome}</span>
-                          <span className="text-sm text-primary-400">
+                          <span className="text-xs text-gray-300">{item.nome}</span>
+                          <span className="text-xs text-primary-400 font-medium">
                             {formatarPreco(item.preco)}
                           </span>
                         </div>
@@ -2362,136 +2362,168 @@ const ProdutosPage: React.FC = () => {
     return (
       <div
         key={produto.id}
-        className={`p-3 bg-gray-800/50 rounded-lg ${produto.ativo === false ? 'opacity-60' : ''}`}
+        className={`p-2.5 bg-gray-800/50 rounded ${produto.ativo === false ? 'opacity-60' : ''}`}
       >
-        <div className="flex items-start gap-4">
-          {/* Foto principal do produto */}
-          <div
-            className="w-24 h-24 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer relative"
-            onClick={() => handleOpenProdutoGaleria(produto)}
-          >
-            {fotoPrincipal ? (
-              <img
-                src={fotoPrincipal.url}
-                alt={produto.nome}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-500">
-                <Image size={24} />
-              </div>
-            )}
-
-            {/* Contador de fotos */}
-            {produtosFotosCount[produto.id] > 0 && (
-              <div className="absolute top-1 right-1 bg-background-dark px-1.5 py-0.5 rounded-full text-xs font-medium text-white">
-                {produtosFotosCount[produto.id]} {produtosFotosCount[produto.id] === 1 ? 'foto' : 'fotos'}
-              </div>
-            )}
-          </div>
-
-          {/* Informações do produto */}
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <h4 className="text-white font-medium">{produto.nome}</h4>
-                <div className="flex items-center gap-1 text-sm text-gray-400">
-                  <span>Código {produto.codigo}</span>
-                  {produto.codigo_barras && produto.codigo_barras.trim() !== '' && (
-                    <div className="flex items-center gap-1 ml-1">
-                      <QrCode size={10} className="text-gray-500" />
-                      <span>{produto.codigo_barras}</span>
-                    </div>
-                  )}
+        {/* Layout em três colunas - Compacto */}
+        <div className="flex items-start gap-3">
+          {/* Coluna Esquerda - Foto e Nome */}
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            {/* Foto principal do produto */}
+            <div
+              className="w-16 h-16 rounded overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer relative"
+              onClick={() => handleOpenProdutoGaleria(produto)}
+            >
+              {fotoPrincipal ? (
+                <img
+                  src={fotoPrincipal.url}
+                  alt={produto.nome}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-500">
+                  <Image size={16} />
                 </div>
+              )}
+
+              {/* Contador de fotos */}
+              {produtosFotosCount[produto.id] > 0 && (
+                <div className="absolute top-0.5 right-0.5 bg-background-dark px-1 py-0.5 rounded-full text-xs font-medium text-white">
+                  {produtosFotosCount[produto.id]}
+                </div>
+              )}
+            </div>
+
+            {/* Nome e códigos */}
+            <div className="flex-1 min-w-0">
+              <h4 className="text-white font-medium text-sm truncate">{produto.nome}</h4>
+              <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                <span>Código {produto.codigo}</span>
+                {produto.codigo_barras && produto.codigo_barras.trim() !== '' && (
+                  <div className="flex items-center gap-1">
+                    <QrCode size={10} className="text-gray-500" />
+                    <span>{produto.codigo_barras}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Badges */}
+              <div className="flex flex-wrap gap-1 mt-1">
                 {produto.promocao && (
-                  <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
+                  <span className="px-1.5 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
                     Promoção
                   </span>
                 )}
                 {produto.ativo === false && (
-                  <span className="px-2 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
+                  <span className="px-1.5 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
                     Inativo
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  className="p-1 text-gray-400 hover:text-white transition-colors"
-                  onClick={() => {
-                    console.log('Botão de edição clicado para produto:', produto);
-                    handleEditProduto(grupo, produto);
-                  }}
-                >
-                  <Pencil size={16} />
-                </button>
-                <button
-                  className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                  onClick={() => handleDeleteProduto(produto.id, grupo.id)}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
             </div>
-            <div className="flex flex-col mb-1">
-              <div className="flex items-center gap-2">
-                {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined ? (
-                  <div>
-                    <p className="text-sm text-gray-400 line-through">
-                      {produto.preco.toFixed(2)}
+          </div>
+
+          {/* Coluna Central - Preços e Informações */}
+          <div className="flex-1 min-w-0">
+            {/* Preços */}
+            <div className="flex items-center gap-2 mb-0.5">
+              {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <p className="text-xs text-gray-400 line-through">
+                      R$ {produto.preco.toFixed(2)}
                     </p>
-                    <span className="px-2 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
-                      {descontoExibicao}
-                    </span>
+                    {unidadeMedida && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                        {unidadeMedida.sigla}
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-sm text-primary-400">
-                    {produto.preco.toFixed(2)}
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center gap-1">
-                  {unidadeMedida && (
-                    <span className="px-2 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
-                      {unidadeMedida.sigla} - {unidadeMedida.nome}
-                    </span>
-                  )}
-                  {produto.desconto_quantidade && (
-                    <span className="px-2 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded-full">
-                      Desconto {produto.quantidade_minima}+ unid.
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined && (
-                <p className="text-sm text-green-400 font-medium mt-1">
-                  Valor final: {valorFinal.toFixed(2)}
-                </p>
-              )}
-
-              {/* Exibição do estoque */}
-              {estoqueInfo && (
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">
-                    Estoque: {formatarEstoque(estoqueInfo.total, produto)}
+                  <span className="px-1.5 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
+                    {descontoExibicao}
                   </span>
-                  {/* Mostrar "Não Faturado" apenas quando o tipo de controle for por pedidos */}
-                  {tipoControleEstoque === 'pedidos' && estoqueInfo.naoFaturado > 0 && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400">
-                      Não Faturado: {formatarEstoque(estoqueInfo.naoFaturado, produto)}
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <p className="text-sm text-primary-400 font-medium">
+                    R$ {produto.preco.toFixed(2)}
+                  </p>
+                  {unidadeMedida && (
+                    <span className="px-1.5 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                      {unidadeMedida.sigla}
                     </span>
                   )}
                 </div>
               )}
             </div>
+
+            {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined && (
+              <div className="flex items-center gap-1 mb-0.5">
+                <p className="text-sm text-green-400 font-medium">
+                  Valor final: R$ {valorFinal.toFixed(2)}
+                </p>
+                {unidadeMedida && (
+                  <span className="px-1.5 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                    {unidadeMedida.sigla}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Badges de desconto */}
+            <div className="flex flex-wrap items-center gap-1 mb-0.5">
+              {produto.desconto_quantidade && (
+                <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-500/20 text-blue-400 rounded-full">
+                  Desconto {produto.quantidade_minima}+
+                </span>
+              )}
+            </div>
+
+            {/* Estoque */}
+            {estoqueInfo && (
+              <div className="flex flex-wrap items-center gap-1 mb-0.5">
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
+                  Estoque: {formatarEstoque(estoqueInfo.total, produto)}
+                </span>
+                {tipoControleEstoque === 'pedidos' && estoqueInfo.naoFaturado > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400">
+                    Não Faturado: {formatarEstoque(estoqueInfo.naoFaturado, produto)}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Descrição */}
             {produto.descricao && (
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-xs text-gray-400 truncate">
                 {produto.descricao}
               </p>
             )}
-            {renderProdutoOpcoes(produto)}
+          </div>
+
+          {/* Coluna Direita - Ações */}
+          <div className="flex items-center gap-1">
+            <button
+              className="p-1.5 text-gray-400 hover:text-white transition-colors rounded"
+              onClick={() => {
+                console.log('Botão de edição clicado para produto:', produto);
+                handleEditProduto(grupo, produto);
+              }}
+              title="Editar produto"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              className="p-1.5 text-red-400 hover:text-red-300 transition-colors rounded"
+              onClick={() => handleDeleteProduto(produto.id, grupo.id)}
+              title="Excluir produto"
+            >
+              <Trash2 size={14} />
+            </button>
           </div>
         </div>
+
+        {/* Opções do produto - Largura completa */}
+        {renderProdutoOpcoes(produto)}
       </div>
     );
   };
@@ -2574,12 +2606,9 @@ const ProdutosPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Produtos</h1>
-          <p className="text-gray-400 mt-1">Gerencie seus grupos e produtos</p>
-        </div>
+    <div className="w-full px-4 py-1">
+      <div className="flex items-center justify-between mb-3">
+        <h1 className="text-xl font-semibold text-white">Produtos</h1>
         <Button
           type="button"
           variant="primary"
@@ -2593,7 +2622,7 @@ const ProdutosPage: React.FC = () => {
       {!isDataReady ? (
         <div>
           {/* Skeleton da barra de busca */}
-          <div className="mb-6 flex gap-4">
+          <div className="mb-3 flex gap-4">
             <div className="flex-1 relative">
               <div className="h-10 w-full bg-gray-700 rounded-lg animate-pulse"></div>
             </div>
@@ -2601,13 +2630,13 @@ const ProdutosPage: React.FC = () => {
           </div>
 
           {/* Skeleton dos grupos */}
-          <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {renderSkeletonGroups()}
           </div>
         </div>
       ) : (
         <div>
-          <div className="mb-6 flex gap-4">
+          <div className="mb-3 flex gap-4">
             <div className="flex-1 relative">
               <input
                 type="text"
@@ -2652,39 +2681,39 @@ const ProdutosPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredAndSortedGrupos.map((grupo) => (
                 <div
                   key={grupo.id}
-                  className="bg-background-card rounded-lg border border-gray-800"
+                  className="bg-background-card rounded border border-gray-800"
                 >
-                  <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-white">{grupo.nome}</h3>
+                  <div className="p-3 border-b border-gray-800 flex items-center justify-between">
+                    <h3 className="text-base font-medium text-white">{grupo.nome}</h3>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleAddProduto(grupo)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm bg-primary-500/10 rounded-md text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 text-sm bg-primary-500/10 rounded text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 transition-colors"
                       >
-                        <Plus size={14} />
+                        <Plus size={12} />
                         Adicionar Produto
                       </button>
                       <button
                         className="p-1 text-gray-400 hover:text-white transition-colors"
                         onClick={() => handleEditGrupo(grupo)}
                       >
-                        <Pencil size={16} />
+                        <Pencil size={14} />
                       </button>
                       <button
                         className="p-1 text-red-400 hover:text-red-300 transition-colors"
                         onClick={() => handleDeleteGrupo(grupo.id)}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
 
-                  <div className="p-4">
-                    <div className="mb-4 flex gap-4">
+                  <div className="p-3">
+                    <div className="mb-3 flex gap-4">
                       <div className="flex-1 relative">
                         <input
                           type="text"
@@ -2707,15 +2736,15 @@ const ProdutosPage: React.FC = () => {
                     </div>
 
                     {getFilteredAndSortedProducts(grupo).length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-gray-400">
+                      <div className="text-center py-4">
+                        <p className="text-gray-400 text-sm">
                           {productSearchTerms[grupo.id]
                             ? 'Nenhum produto encontrado'
                             : 'Nenhum produto neste grupo'}
                         </p>
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         {getFilteredAndSortedProducts(grupo).map((produto) => renderProduto(grupo, produto))}
                       </div>
                     )}

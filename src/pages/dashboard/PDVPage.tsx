@@ -4900,35 +4900,57 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados */}
+              {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados - Compacto */}
               {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
-                <div className="mb-4 space-y-3">
-                  {/* Informações do Cliente */}
+                <div className="mb-3 space-y-2">
+                  {/* Informações do Cliente - Compacto */}
                   {pdvConfig?.seleciona_clientes ? (
                     clienteSelecionado && (
-                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                        <div className="flex items-center gap-2">
-                          <User size={16} className="text-blue-400" />
-                          <div>
-                            <div className="text-sm text-blue-400">Cliente</div>
-                            <div className="text-white font-medium">{clienteSelecionado.nome}</div>
-                            {clienteSelecionado.telefone && (
-                              <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
-                            )}
+                      <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
+                        {/* Layout em duas colunas */}
+                        <div className="flex items-start gap-2">
+                          <User size={14} className="text-blue-400 mt-0.5" />
+                          <div className="flex-1 flex items-start justify-between gap-3">
+                            {/* Coluna Esquerda - Nome e Label */}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-blue-400 font-medium">Cliente</div>
+                              <div className="text-white font-medium text-sm truncate">{clienteSelecionado.nome}</div>
+                            </div>
+
+                            {/* Coluna Direita - Contato */}
+                            <div className="text-right flex-shrink-0">
+                              {clienteSelecionado.telefone && (
+                                <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
+                              )}
+                              {clienteSelecionado.email && (
+                                <div className="text-xs text-gray-500 truncate max-w-[120px]">{clienteSelecionado.email}</div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
                     )
                   ) : pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                      <div className="flex items-center gap-2">
-                        <User size={16} className="text-blue-400" />
-                        <div>
-                          <div className="text-sm text-blue-400">Cliente dos Pedidos Importados</div>
-                          <div className="text-white font-medium">{pedidosImportados[0].cliente.nome}</div>
-                          {pedidosImportados[0].cliente.telefone && (
-                            <div className="text-xs text-gray-400">{pedidosImportados[0].cliente.telefone}</div>
-                          )}
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
+                      {/* Layout em duas colunas */}
+                      <div className="flex items-start gap-2">
+                        <User size={14} className="text-blue-400 mt-0.5" />
+                        <div className="flex-1 flex items-start justify-between gap-3">
+                          {/* Coluna Esquerda - Nome e Label */}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-blue-400 font-medium">Cliente dos Pedidos</div>
+                            <div className="text-white font-medium text-sm truncate">{pedidosImportados[0].cliente.nome}</div>
+                          </div>
+
+                          {/* Coluna Direita - Contato */}
+                          <div className="text-right flex-shrink-0">
+                            {pedidosImportados[0].cliente.telefone && (
+                              <div className="text-xs text-gray-400">{pedidosImportados[0].cliente.telefone}</div>
+                            )}
+                            {pedidosImportados[0].cliente.email && (
+                              <div className="text-xs text-gray-500 truncate max-w-[120px]">{pedidosImportados[0].cliente.email}</div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -5811,16 +5833,16 @@ const PDVPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+              <div className="space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
                 <button
                   onClick={() => {
                     setClienteSelecionado(null);
                     setShowClienteModal(false);
                   }}
-                  className="w-full text-left p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+                  className="w-full text-left p-2.5 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
                 >
-                  <div className="text-white">Venda sem cliente</div>
-                  <div className="text-sm text-gray-400">Consumidor final</div>
+                  <div className="text-white text-sm">Venda sem cliente</div>
+                  <div className="text-xs text-gray-400">Consumidor final</div>
                 </button>
 
                 {clientes.map(cliente => (
@@ -5830,12 +5852,31 @@ const PDVPage: React.FC = () => {
                       setClienteSelecionado(cliente);
                       setShowClienteModal(false);
                     }}
-                    className="w-full text-left p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+                    className="w-full text-left p-2.5 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
                   >
-                    <div className="text-white">{cliente.nome}</div>
-                    {cliente.telefone && (
-                      <div className="text-sm text-gray-400">{cliente.telefone}</div>
-                    )}
+                    {/* Layout em duas colunas - Compacto */}
+                    <div className="flex items-start justify-between gap-3">
+                      {/* Coluna Esquerda - Nome */}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-sm font-medium truncate">{cliente.nome}</div>
+                        {cliente.email && (
+                          <div className="text-xs text-gray-400 truncate">{cliente.email}</div>
+                        )}
+                      </div>
+
+                      {/* Coluna Direita - Contato */}
+                      <div className="text-right flex-shrink-0">
+                        {cliente.telefone && (
+                          <div className="text-xs text-gray-400">{cliente.telefone}</div>
+                        )}
+                        {cliente.cpf && (
+                          <div className="text-xs text-gray-500">CPF: {cliente.cpf.slice(-4)}</div>
+                        )}
+                        {cliente.cnpj && (
+                          <div className="text-xs text-gray-500">CNPJ: {cliente.cnpj.slice(-4)}</div>
+                        )}
+                      </div>
+                    </div>
                   </button>
                 ))}
               </div>

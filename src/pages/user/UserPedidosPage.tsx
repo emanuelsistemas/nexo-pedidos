@@ -30,6 +30,17 @@ const UserPedidosPage: React.FC = () => {
   const [dataFilter, setDataFilter] = useState<string>('');
   const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [empresaWhatsapp, setEmpresaWhatsapp] = useState<string>('');
+  const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth > 600);
+
+  // Hook para detectar mudanças no tamanho da tela
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLargeScreen(window.innerWidth > 600);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     // Tentar carregar dados do localStorage primeiro
@@ -357,30 +368,37 @@ const UserPedidosPage: React.FC = () => {
   // Animação de carregamento de cards
   if (isInitialLoading) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="h-8 w-48 bg-gray-800 rounded-lg animate-pulse"></div>
-          <div className="h-10 w-10 bg-gray-800 rounded-lg animate-pulse"></div>
+      <div className="space-y-3 px-4 py-1">
+        <div className="flex items-center justify-between mb-2">
+          <div className="h-6 w-32 bg-gray-800 rounded animate-pulse"></div>
+          <div className="h-8 w-8 bg-gray-800 rounded animate-pulse"></div>
         </div>
 
         {/* Barra de busca skeleton */}
-        <div className="h-10 w-full bg-gray-800 rounded-lg animate-pulse"></div>
+        <div className="h-9 w-full bg-gray-800 rounded animate-pulse"></div>
 
         {/* Cards skeleton */}
         {[1, 2, 3].map((item) => (
           <div
             key={item}
-            className="p-4 bg-background-card rounded-lg border border-gray-800"
+            className="p-2.5 bg-background-card rounded border border-gray-800"
           >
-            <div className="flex justify-between items-start">
-              <div className="space-y-2 w-2/3">
-                <div className="h-5 w-32 bg-gray-700 rounded animate-pulse"></div>
-                <div className="h-4 w-40 bg-gray-700 rounded animate-pulse"></div>
+            <div className="flex items-start gap-3">
+              {/* Coluna esquerda skeleton */}
+              <div className="flex-1 space-y-1">
                 <div className="h-4 w-24 bg-gray-700 rounded animate-pulse"></div>
+                <div className="h-3 w-32 bg-gray-700 rounded animate-pulse"></div>
+                <div className="h-3 w-28 bg-gray-700 rounded animate-pulse"></div>
               </div>
-              <div className="space-y-2 w-1/3 flex flex-col items-end">
-                <div className="h-5 w-20 bg-gray-700 rounded animate-pulse"></div>
-                <div className="h-4 w-28 bg-gray-700 rounded animate-pulse"></div>
+              {/* Coluna central skeleton */}
+              <div className="flex-1 space-y-1 flex flex-col items-center">
+                <div className="h-4 w-16 bg-gray-700 rounded animate-pulse"></div>
+                <div className="h-3 w-20 bg-gray-700 rounded animate-pulse"></div>
+              </div>
+              {/* Coluna direita skeleton */}
+              <div className="flex gap-1">
+                <div className="h-6 w-12 bg-gray-700 rounded animate-pulse"></div>
+                <div className="h-6 w-12 bg-gray-700 rounded animate-pulse"></div>
               </div>
             </div>
           </div>
@@ -394,7 +412,7 @@ const UserPedidosPage: React.FC = () => {
   const showAddButton = isWebVersion && isDesktopScreen();
 
   return (
-    <div className="space-y-4">
+    <div className={`${isLargeScreen ? 'h-full flex flex-col space-y-4' : 'space-y-2'}`}>
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-white">Meus Pedidos</h1>
         <div className="flex items-center gap-2">
@@ -424,9 +442,9 @@ const UserPedidosPage: React.FC = () => {
           placeholder="Buscar pedidos por clientes ou numero..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+          className="w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-9 pr-3 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
         />
-        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
       </div>
 
       {/* Filtros */}
@@ -438,17 +456,17 @@ const UserPedidosPage: React.FC = () => {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 space-y-3">
+            <div className="bg-gray-800/50 border border-gray-700 rounded p-3 space-y-2">
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   Status do Pedido
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {['todos', 'pendente', 'faturado'].map((status) => (
                     <button
                       key={status}
                       onClick={() => setStatusFilter(status)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium ${
                         statusFilter === status
                           ? 'bg-primary-500 text-white'
                           : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -461,27 +479,27 @@ const UserPedidosPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">
+                <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   Data do Pedido
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Calendar size={18} className="text-gray-500" />
+                    <Calendar size={16} className="text-gray-500" />
                   </div>
                   <input
                     type="date"
                     value={dataFilter}
                     onChange={(e) => setDataFilter(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-9 pr-3 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                   />
                 </div>
                 {dataFilter && (
-                  <div className="flex items-center mt-2">
+                  <div className="flex items-center mt-1.5">
                     <button
                       onClick={() => setDataFilter('')}
                       className="text-xs text-gray-400 hover:text-white flex items-center gap-1"
                     >
-                      <X size={14} />
+                      <X size={12} />
                       <span>Limpar filtro de data</span>
                     </button>
                   </div>
@@ -494,21 +512,28 @@ const UserPedidosPage: React.FC = () => {
 
       {/* Lista de pedidos */}
       {isLoading ? (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {[1, 2, 3].map((item) => (
-            <div key={item} className="p-4 bg-background-card rounded-lg border border-gray-800">
-              <div className="flex justify-between items-start">
-                <div className="space-y-2 w-2/3">
+            <div key={item} className="p-2.5 bg-background-card rounded border border-gray-800">
+              <div className="flex items-start gap-3">
+                {/* Coluna esquerda skeleton */}
+                <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
-                    <div className="h-5 w-16 bg-gray-700 rounded animate-pulse"></div>
-                    <div className="h-5 w-20 bg-gray-700 rounded-full animate-pulse"></div>
+                    <div className="h-4 w-16 bg-gray-700 rounded animate-pulse"></div>
+                    <div className="h-4 w-16 bg-gray-700 rounded-full animate-pulse"></div>
                   </div>
-                  <div className="h-4 w-32 bg-gray-700 rounded animate-pulse"></div>
-                  <div className="h-3 w-40 bg-gray-700 rounded animate-pulse"></div>
+                  <div className="h-3 w-24 bg-gray-700 rounded animate-pulse"></div>
+                  <div className="h-3 w-20 bg-gray-700 rounded animate-pulse"></div>
                 </div>
-                <div className="space-y-2 w-1/3 flex flex-col items-end">
-                  <div className="h-5 w-20 bg-gray-700 rounded animate-pulse"></div>
-                  <div className="h-3 w-28 bg-gray-700 rounded animate-pulse"></div>
+                {/* Coluna central skeleton */}
+                <div className="flex-1 space-y-1 flex flex-col items-center">
+                  <div className="h-4 w-16 bg-gray-700 rounded animate-pulse"></div>
+                  <div className="h-3 w-20 bg-gray-700 rounded animate-pulse"></div>
+                </div>
+                {/* Coluna direita skeleton */}
+                <div className="flex gap-1">
+                  <div className="h-6 w-12 bg-gray-700 rounded animate-pulse"></div>
+                  <div className="h-6 w-12 bg-gray-700 rounded animate-pulse"></div>
                 </div>
               </div>
             </div>
@@ -527,62 +552,72 @@ const UserPedidosPage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto custom-scrollbar pr-2">
+        <div className={`space-y-2 ${
+          isLargeScreen
+            ? 'max-h-[calc(100vh-140px)] overflow-y-auto custom-scrollbar pr-2'
+            : 'max-h-[calc(100vh-320px)] overflow-y-auto custom-scrollbar pr-2'
+        }`}>
           {filteredPedidos.map((pedido, index) => (
             <motion.div
               key={pedido.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="p-4 bg-background-card rounded-lg border border-gray-800"
+              className="p-2.5 bg-background-card rounded border border-gray-800"
             >
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-white font-medium">#{pedido.numero || index + 1}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(pedido.status)} bg-opacity-20`}>
+              {/* Layout em três colunas - Compacto */}
+              <div className="flex items-start gap-3">
+                {/* Coluna Esquerda - Número e Cliente */}
+                <div className={`${isLargeScreen ? 'flex-[2]' : 'flex-1'} min-w-0`}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-white font-medium text-sm">#{pedido.numero || index + 1}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${getStatusColor(pedido.status)} bg-opacity-20`}>
                       {getStatusText(pedido.status)}
                     </span>
                   </div>
-                  <p className="text-gray-400 text-sm">
+                  <p className="text-gray-400 text-sm truncate">
                     {pedido.cliente?.nome || 'Cliente'}
                   </p>
                   {pedido.empresa_nome && (
-                    <p className="text-gray-500 text-xs mt-1">
+                    <p className="text-gray-500 text-xs mt-0.5 truncate">
                       Empresa: {pedido.empresa_nome}
                     </p>
                   )}
                 </div>
-                <div className="text-right">
-                  <p className="text-primary-400 font-medium">
+
+                {/* Coluna Central - Valor e Data */}
+                <div className={`${isLargeScreen ? 'flex-[1.5] flex flex-col items-center justify-center text-center' : 'flex-1 text-center'} min-w-0`}>
+                  <p className="text-primary-400 font-medium text-sm">
                     {formatCurrency(pedido.valor_total)}
                   </p>
-                  <div className="flex items-center gap-1 text-gray-500 text-xs mt-1">
-                    <Calendar size={12} />
+                  <div className="flex items-center justify-center gap-1 text-gray-500 text-xs mt-0.5">
+                    <Calendar size={10} />
                     <span>{formatDate(pedido.created_at)}</span>
-                    <Clock size={12} className="ml-1" />
+                    <Clock size={10} className="ml-0.5" />
                     <span>{formatTime(pedido.created_at)}</span>
                   </div>
                 </div>
-              </div>
 
-              {/* Botões de ação */}
-              <div className="mt-3 pt-3 border-t border-gray-800 flex justify-between">
-                <button
-                  onClick={() => handleEnviarWhatsApp(pedido)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
-                >
-                  <MessageCircle size={14} />
-                  <span className="text-sm">Enviar</span>
-                </button>
+                {/* Coluna Direita - Ações */}
+                <div className={`${isLargeScreen ? 'flex-[1.5]' : 'flex-none'} flex items-center gap-1 ${isLargeScreen ? 'justify-end' : ''}`}>
+                  <button
+                    onClick={() => handleEnviarWhatsApp(pedido)}
+                    className="flex items-center gap-1 px-2 py-1 rounded bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
+                    title="Enviar WhatsApp"
+                  >
+                    <MessageCircle size={12} />
+                    <span className="text-xs">Enviar</span>
+                  </button>
 
-                <button
-                  onClick={() => handleEditarPedido(pedido.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
-                >
-                  <Edit size={14} />
-                  <span className="text-sm">Editar</span>
-                </button>
+                  <button
+                    onClick={() => handleEditarPedido(pedido.id)}
+                    className="flex items-center gap-1 px-2 py-1 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                    title="Editar pedido"
+                  >
+                    <Edit size={12} />
+                    <span className="text-xs">Editar</span>
+                  </button>
+                </div>
               </div>
             </motion.div>
           ))}

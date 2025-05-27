@@ -1044,59 +1044,64 @@ const ClientesPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-white">Clientes</h1>
-        <button
-          onClick={handleAddNew}
-          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Plus size={18} />
-          <span>Novo Cliente</span>
-        </button>
-      </div>
-
-      <div className="bg-background-card rounded-lg border border-gray-800 p-6 mb-6">
-        <div className="flex flex-col md:flex-row gap-4 mb-4">
-          {/* Barra de busca */}
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Buscar por nome, telefone ou email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-            />
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          </div>
-
+    <div className="container mx-auto px-4 py-1">
+      {/* Header Compacto - Título + Ações */}
+      <div className="flex justify-between items-center mb-2">
+        <h1 className="text-xl font-semibold text-white">Clientes</h1>
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="px-4 py-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+            className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${
+              showFilters
+                ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'
+            }`}
+            title="Filtros"
           >
             <Filter size={18} />
-            <span>Filtros</span>
+          </button>
+          <button
+            onClick={handleAddNew}
+            className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Plus size={18} />
+            <span>Novo Cliente</span>
           </button>
         </div>
+      </div>
 
-        {/* Filtros */}
+      {/* Barra de Busca + Filtros Colapsáveis */}
+      <div className="bg-background-card rounded-lg border border-gray-800 p-3 mb-3">
+        {/* Barra de busca sempre visível */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Buscar por nome, telefone ou email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+          />
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        </div>
+
+        {/* Filtros Colapsáveis - Ultra Compactos */}
         <AnimatePresence>
           {showFilters && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden"
+              className="overflow-hidden mt-2"
             >
-              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 space-y-3">
+              <div className="bg-gray-800/50 border border-gray-700 rounded p-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Empresa
+                  <label className="block text-xs font-medium text-gray-400 mb-2">
+                    Filtrar por Empresa
                   </label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       onClick={() => setEmpresaFilter('todas')}
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                         empresaFilter === 'todas'
                           ? 'bg-primary-500 text-white'
                           : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -1108,7 +1113,7 @@ const ClientesPage: React.FC = () => {
                       <button
                         key={empresa.id}
                         onClick={() => setEmpresaFilter(empresa.id)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                           empresaFilter === empresa.id
                             ? 'bg-primary-500 text-white'
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -1158,85 +1163,107 @@ const ClientesPage: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-2">
           {filteredClientes.map((cliente) => (
             <motion.div
               key={cliente.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 bg-background-card rounded-lg border border-gray-800 flex flex-col h-full"
+              className="p-2.5 bg-background-card rounded border border-gray-800"
             >
-              <div className="flex-1">
-                <h3 className="text-white font-medium text-lg">{cliente.nome}</h3>
+              {/* Layout em três colunas - Ultra Compacto */}
+              <div className="flex items-start gap-3">
+                {/* Coluna Esquerda - Nome e Contato */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-white font-medium text-base truncate">{cliente.nome}</h3>
 
-                {/* Telefones */}
-                <div className="space-y-1 mt-2">
-                  {cliente.telefones && cliente.telefones.length > 0 ? (
-                    cliente.telefones.map((tel, index) => (
-                      <div key={index} className="flex items-center gap-1 text-gray-400 text-sm">
-                        <Phone size={14} className={tel.whatsapp ? "text-green-500" : ""} />
-                        <span>
-                          {formatarTelefone(tel.numero, tel.tipo)}
-                          <span className="text-xs ml-1">
-                            ({tel.tipo}{tel.whatsapp ? " - WhatsApp" : ""})
+                  {/* Telefones - Ultra Compacto */}
+                  <div className="space-y-0.5 mt-0.5">
+                    {cliente.telefones && cliente.telefones.length > 0 ? (
+                      cliente.telefones.slice(0, 2).map((tel, index) => (
+                        <div key={index} className="flex items-center gap-1 text-gray-400 text-xs">
+                          <Phone size={12} className={tel.whatsapp ? "text-green-500" : ""} />
+                          <span>
+                            {formatarTelefone(tel.numero, tel.tipo)}
+                            <span className="text-xs ml-1">
+                              ({tel.tipo}{tel.whatsapp ? " - WhatsApp" : ""})
+                            </span>
                           </span>
-                        </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-center gap-1 text-gray-400 text-xs">
+                        <Phone size={12} />
+                        <span>{formatarTelefone(cliente.telefone)}</span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="flex items-center gap-1 text-gray-400 text-sm">
-                      <Phone size={14} />
-                      <span>{formatarTelefone(cliente.telefone)}</span>
+                    )}
+                    {cliente.telefones && cliente.telefones.length > 2 && (
+                      <div className="text-xs text-gray-500">
+                        +{cliente.telefones.length - 2} telefone(s)
+                      </div>
+                    )}
+                  </div>
+
+                  {cliente.email && (
+                    <div className="flex items-center gap-1 text-gray-400 text-xs mt-0.5">
+                      <Mail size={12} />
+                      <span className="truncate">{cliente.email}</span>
                     </div>
                   )}
                 </div>
 
-                {cliente.email && (
-                  <div className="flex items-center gap-1 text-gray-400 text-sm mt-2">
-                    <Mail size={14} />
-                    <span className="truncate">{cliente.email}</span>
-                  </div>
-                )}
+                {/* Coluna Central - Endereço e Empresa */}
+                <div className="flex-1 min-w-0">
+                  {/* Endereço Completo */}
+                  {(cliente.endereco || cliente.bairro || cliente.cidade) && (
+                    <div className="flex items-start gap-1 text-gray-400 text-xs mb-0.5">
+                      <MapPin size={12} className="mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="truncate">
+                          {cliente.endereco && `${cliente.endereco}${cliente.numero ? `, ${cliente.numero}` : ''}`}
+                        </div>
+                        {(cliente.bairro || cliente.cidade) && (
+                          <div className="truncate">
+                            {cliente.bairro && `${cliente.bairro}`}
+                            {cliente.cidade && (cliente.bairro ? `, ${cliente.cidade}` : cliente.cidade)}
+                            {cliente.estado && `/${cliente.estado}`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-                {(cliente.endereco || cliente.bairro || cliente.cidade) && (
-                  <div className="flex items-center gap-1 text-gray-400 text-sm mt-2">
-                    <MapPin size={14} />
-                    <span className="truncate">
-                      {cliente.endereco && `${cliente.endereco}${cliente.numero ? `, ${cliente.numero}` : ''}`}
-                      {cliente.bairro && (cliente.endereco ? `, ${cliente.bairro}` : cliente.bairro)}
-                      {cliente.cidade && (cliente.endereco || cliente.bairro ? `, ${cliente.cidade}` : cliente.cidade)}
-                      {cliente.estado && `/${cliente.estado}`}
-                    </span>
-                  </div>
-                )}
+                  {/* Empresa */}
+                  {cliente.empresa_nome && (
+                    <div className="flex items-center gap-1 text-gray-500 text-xs mb-0.5">
+                      <Building size={12} />
+                      <span className="truncate">{cliente.empresa_nome}</span>
+                    </div>
+                  )}
 
-                {cliente.empresa_nome && (
-                  <div className="flex items-center gap-1 text-gray-500 text-xs mt-3">
-                    <Building size={12} />
-                    <span>{cliente.empresa_nome}</span>
+                  {/* Data de cadastro */}
+                  <div className="text-xs text-gray-500">
+                    Cadastrado em: {formatarData(cliente.created_at)}
                   </div>
-                )}
-
-                <div className="text-xs text-gray-500 mt-3">
-                  Cadastrado em: {formatarData(cliente.created_at)}
                 </div>
-              </div>
 
-              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-gray-800">
-                <button
-                  onClick={() => handleEdit(cliente)}
-                  className="p-2 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
-                  title="Editar"
-                >
-                  <Edit size={16} />
-                </button>
-                <button
-                  onClick={() => handleDelete(cliente.id)}
-                  className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                  title="Excluir"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {/* Coluna Direita - Ações */}
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => handleEdit(cliente)}
+                    className="p-1.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                    title="Editar"
+                  >
+                    <Edit size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(cliente.id)}
+                    className="p-1.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+                    title="Excluir"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             </motion.div>
           ))}

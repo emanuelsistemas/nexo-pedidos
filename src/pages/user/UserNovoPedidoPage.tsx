@@ -1200,29 +1200,29 @@ const UserNovoPedidoPage: React.FC = () => {
   };
 
   return (
-    <div className={`${shouldCenterContent ? 'max-w-4xl mx-auto' : ''} space-y-6 pb-20`}>
+    <div className={`${shouldCenterContent ? 'max-w-4xl mx-auto' : ''} space-y-3 pb-20`}>
       <div className="flex items-center gap-2">
         <button
           onClick={handleGoBack}
-          className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors"
+          className="p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors"
           type="button" // Importante: tipo button para não acionar o submit do formulário
         >
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-xl font-semibold text-white">{isEditMode ? 'Editar Pedido' : 'Novo Pedido'}</h1>
+        <h1 className="text-lg font-semibold text-white">{isEditMode ? 'Editar Pedido' : 'Novo Pedido'}</h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-3">
         {/* Dados do cliente e empresa */}
-        <div className="bg-background-card rounded-lg border border-gray-800 p-4 space-y-4">
-          <h2 className="text-lg font-medium text-white mb-2">Dados do Pedido</h2>
+        <div className="bg-background-card rounded-lg border border-gray-800 p-3 space-y-3">
+          <h2 className="text-base font-medium text-white mb-1">Dados do Pedido</h2>
 
           {/* Empresa - Campo oculto */}
           <input type="hidden" value={empresaSelecionada} />
 
           {/* Cliente */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">
               Cliente <span className="text-red-500">*</span>
             </label>
             <ClienteDropdown
@@ -1289,12 +1289,12 @@ const UserNovoPedidoPage: React.FC = () => {
         </div>
 
         {/* Adicionar itens */}
-        <div className="bg-background-card rounded-lg border border-gray-800 p-4 space-y-4">
-          <h2 className="text-lg font-medium text-white mb-2">Itens do Pedido</h2>
+        <div className="bg-background-card rounded-lg border border-gray-800 p-3 space-y-3">
+          <h2 className="text-base font-medium text-white mb-1">Itens do Pedido</h2>
 
           {/* Produto */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">
               Produto
             </label>
 
@@ -1356,7 +1356,7 @@ const UserNovoPedidoPage: React.FC = () => {
 
           {/* Quantidade */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">
               Quantidade
             </label>
             <div className="relative">
@@ -1417,7 +1417,7 @@ const UserNovoPedidoPage: React.FC = () => {
 
           {/* Observação */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
+            <label className="block text-sm font-medium text-gray-400 mb-1.5">
               Observação
             </label>
             <textarea
@@ -1434,29 +1434,29 @@ const UserNovoPedidoPage: React.FC = () => {
             type="button"
             onClick={handleAddItem}
             disabled={!produtoSelecionadoObj}
-            className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-2.5 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Plus size={18} />
+            <Plus size={16} />
             <span>Adicionar Item</span>
           </button>
         </div>
 
         {/* Lista de itens */}
-        <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-          <h2 className="text-lg font-medium text-white mb-4">Itens Adicionados</h2>
+        <div className="bg-background-card rounded-lg border border-gray-800 p-3">
+          <h2 className="text-base font-medium text-white mb-2">Itens Adicionados</h2>
 
           {itensPedido.length === 0 ? (
-            <div className="text-center py-6">
+            <div className="text-center py-4">
               <p className="text-gray-400">Nenhum item adicionado ao pedido</p>
             </div>
           ) : (
-            <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+            <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-2">
               {itensPedido.map((item) => (
                 <motion.div
                   key={item.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="p-3 bg-gray-800/50 rounded-lg"
+                  className="p-2.5 bg-gray-800/50 rounded-lg"
                 >
                   <div className="flex justify-between items-start">
                     <div>
@@ -1529,13 +1529,13 @@ const UserNovoPedidoPage: React.FC = () => {
 
         {/* Resumo do Pedido */}
         {itensPedido.length > 0 && (
-          <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-            <div className="space-y-3">
+          <div className="bg-background-card rounded-lg border border-gray-800 p-3">
+            <div className="space-y-2">
                 {/* Resumo do pedido */}
-                <div className="bg-gray-800/50 rounded-lg p-3">
-                  <h3 className="text-white font-medium mb-2">Resumo do Pedido</h3>
+                <div className="bg-gray-800/50 rounded-lg p-2.5">
+                  <h3 className="text-base font-medium mb-1.5">Resumo do Pedido</h3>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {/* Quantidade de itens */}
                     <div className="flex justify-between items-center">
                       <span className="text-gray-400">Quantidade de itens:</span>
@@ -1580,10 +1580,10 @@ const UserNovoPedidoPage: React.FC = () => {
 
         {/* Opções de Faturamento */}
         {clienteId && clienteData && itensPedido.length > 0 && (
-          <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-            <div className="space-y-3">
-              <div className="bg-gray-800/50 rounded-lg p-3">
-                    <h3 className="text-white font-medium mb-2">Opções de Faturamento</h3>
+          <div className="bg-background-card rounded-lg border border-gray-800 p-3">
+            <div className="space-y-2">
+              <div className="bg-gray-800/50 rounded-lg p-2.5">
+                    <h3 className="text-base font-medium mb-1.5">Opções de Faturamento</h3>
 
                     {/* Descontos por prazo */}
                     {descontosPrazo.length > 0 && (
@@ -1705,52 +1705,52 @@ const UserNovoPedidoPage: React.FC = () => {
 
         {/* Forma de Pagamento */}
         {clienteId && clienteData && itensPedido.length > 0 && (
-          <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-            <div className="space-y-3">
-              <div className="bg-gray-800/30 rounded-lg p-4 border border-gray-700">
-                      <h3 className="text-white font-medium mb-4 text-base border-b border-gray-700 pb-2">Forma de Pagamento</h3>
+          <div className="bg-background-card rounded-lg border border-gray-800 p-3">
+            <div className="space-y-2">
+              <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-700">
+                      <h3 className="text-base font-medium mb-3 border-b border-gray-700 pb-2">Forma de Pagamento</h3>
 
                       {/* Opções de tipo de pagamento */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <label className="flex items-center gap-3 cursor-pointer bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <label className="flex items-center gap-2.5 cursor-pointer bg-gray-800/50 p-2.5 rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors">
                           <input
                             type="radio"
                             name="tipoPagamento"
                             checked={tipoPagamento === 'unico'}
                             onChange={() => setTipoPagamento('unico')}
-                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
+                            className="w-4 h-4 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
                           />
                           <div>
-                            <span className="text-white font-medium">À Vista</span>
-                            <p className="text-gray-400 text-xs mt-1">Uma única forma de pagamento</p>
+                            <span className="text-white font-medium text-sm">À Vista</span>
+                            <p className="text-gray-400 text-xs mt-0.5">Uma única forma de pagamento</p>
                           </div>
                         </label>
-                        <label className="flex items-center gap-3 cursor-pointer bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors">
+                        <label className="flex items-center gap-2.5 cursor-pointer bg-gray-800/50 p-2.5 rounded-lg border border-gray-700 hover:bg-gray-800 transition-colors">
                           <input
                             type="radio"
                             name="tipoPagamento"
                             checked={tipoPagamento === 'parcial'}
                             onChange={() => setTipoPagamento('parcial')}
-                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
+                            className="w-4 h-4 text-primary-500 bg-gray-800 border-gray-700 focus:ring-primary-500/20"
                           />
                           <div>
-                            <span className="text-white font-medium">Diversos</span>
-                            <p className="text-gray-400 text-xs mt-1">Múltiplas formas de pagamento</p>
+                            <span className="text-white font-medium text-sm">Diversos</span>
+                            <p className="text-gray-400 text-xs mt-0.5">Múltiplas formas de pagamento</p>
                           </div>
                         </label>
                       </div>
 
                       {/* Pagamento único */}
                       {tipoPagamento === 'unico' && (
-                        <div className="space-y-4 mt-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <div className="space-y-3 mt-3 p-2.5 bg-gray-800/50 rounded-lg border border-gray-700">
                           <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                            <label className="block text-sm font-medium text-gray-300 mb-1.5">
                               Selecione a forma de pagamento
                             </label>
                             <select
                               value={formaPagamentoSelecionada || ''}
                               onChange={(e) => setFormaPagamentoSelecionada(e.target.value || null)}
-                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                             >
                               <option value="">Selecione uma forma de pagamento</option>
                               {formasPagamento.map(forma => (
@@ -1762,13 +1762,13 @@ const UserNovoPedidoPage: React.FC = () => {
                           {/* Campo de parcelas para cartão de crédito na opção À Vista */}
                           {formaPagamentoSelecionada && formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.tipo === 'cartao_credito' && (
                             <div>
-                              <label className="block text-sm font-medium text-gray-300 mb-2">
+                              <label className="block text-sm font-medium text-gray-300 mb-1.5">
                                 Número de Parcelas
                               </label>
                               <select
                                 value={novaFormaPagamentoParcelas}
                                 onChange={(e) => setNovaFormaPagamentoParcelas(Number(e.target.value))}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 px-4 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2.5 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               >
                                 {Array.from(
                                   { length: formasPagamento.find(f => f.id === formaPagamentoSelecionada)?.max_parcelas || 12 },
@@ -1784,39 +1784,39 @@ const UserNovoPedidoPage: React.FC = () => {
 
                       {/* Pagamento parcial */}
                       {tipoPagamento === 'parcial' && (
-                        <div className="space-y-4 mt-4">
+                        <div className="space-y-3 mt-3">
                           {/* Lista de formas de pagamento adicionadas */}
                           {formasPagamentoParciais.length > 0 && (
-                            <div className="space-y-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                              <h4 className="text-sm font-medium text-gray-300 mb-2">Formas de pagamento adicionadas</h4>
+                            <div className="space-y-2 p-2.5 bg-gray-800/50 rounded-lg border border-gray-700">
+                              <h4 className="text-sm font-medium text-gray-300 mb-1.5">Formas de pagamento adicionadas</h4>
 
-                              <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
+                              <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                                 {formasPagamentoParciais.map((forma) => (
-                                  <div key={forma.id} className="flex justify-between items-center bg-gray-800 border border-gray-700 rounded-lg p-3">
+                                  <div key={forma.id} className="flex justify-between items-center bg-gray-800 border border-gray-700 rounded-lg p-2.5">
                                     <div className="flex items-center gap-2">
-                                      <DollarSign size={18} className="text-primary-400" />
-                                      <span className="text-white">
+                                      <DollarSign size={16} className="text-primary-400" />
+                                      <span className="text-white text-sm">
                                         {forma.forma_pagamento_nome}
                                         {forma.parcelas && forma.parcelas > 1 && (
                                           <span className="text-primary-400 ml-2">({forma.parcelas}x)</span>
                                         )}
                                       </span>
                                     </div>
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-primary-400 font-medium">{formatarPreco(forma.valor)}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-primary-400 font-medium text-sm">{formatarPreco(forma.valor)}</span>
                                       <button
                                         type="button"
                                         onClick={() => removerFormaPagamentoParcial(forma.id)}
-                                        className="p-1.5 bg-red-500/10 rounded-lg text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                                        className="p-1 bg-red-500/10 rounded-lg text-red-400 hover:bg-red-500/20 hover:text-red-300"
                                       >
-                                        <Trash2 size={16} />
+                                        <Trash2 size={14} />
                                       </button>
                                     </div>
                                   </div>
                                 ))}
 
                                 {/* Valor restante */}
-                                <div className="flex justify-between items-center p-3 bg-gray-800 rounded-lg border border-gray-700 mt-3">
+                                <div className="flex justify-between items-center p-2.5 bg-gray-800 rounded-lg border border-gray-700 mt-2">
                                   <span className="text-gray-300 font-medium">Valor restante:</span>
                                   <span className={`font-medium ${calcularValorRestante() > 0 ? "text-red-400" : "text-green-400"}`}>
                                     {formatarPreco(calcularValorRestante())}
@@ -1827,8 +1827,8 @@ const UserNovoPedidoPage: React.FC = () => {
                           )}
 
                           {/* Adicionar nova forma de pagamento */}
-                          <div className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                            <h4 className="text-sm font-medium text-gray-300 mb-3">Adicionar forma de pagamento</h4>
+                          <div className="p-2.5 bg-gray-800/50 rounded-lg border border-gray-700">
+                            <h4 className="text-sm font-medium text-gray-300 mb-2">Adicionar forma de pagamento</h4>
 
                             <div className={`grid ${formaPagamentoSelecionadaObj?.tipo === 'cartao_credito' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'} gap-3`}>
                               <div className="col-span-1">
@@ -1896,7 +1896,7 @@ const UserNovoPedidoPage: React.FC = () => {
         <button
           type="submit"
           disabled={isSaving || itensPedido.length === 0}
-          className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-3 px-4 rounded-lg transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-2 bg-primary-500 hover:bg-primary-600 text-white py-2.5 px-4 rounded-lg transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {isSaving ? (
             <>
@@ -1905,7 +1905,7 @@ const UserNovoPedidoPage: React.FC = () => {
             </>
           ) : (
             <>
-              <Save size={18} />
+              <Save size={16} />
               <span>{isEditMode ? 'Salvar Alterações' : 'Finalizar Pedido'}</span>
             </>
           )}
