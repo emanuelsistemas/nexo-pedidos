@@ -4076,10 +4076,10 @@ const PDVPage: React.FC = () => {
         className="flex-1 bg-background-dark overflow-hidden"
         style={{ height: '100vh' }}
       >
-      {/* Header */}
-      <div className="bg-background-card border-b border-gray-800 h-16 flex items-center justify-between pl-2 pr-4">
-        {/* Botões do lado esquerdo */}
-        <div className="flex items-center gap-2">
+      {/* Header - Compacto */}
+      <div className="bg-background-card border-b border-gray-800 h-14 flex items-center justify-between pl-2 pr-3">
+        {/* Botões do lado esquerdo - Compactos */}
+        <div className="flex items-center gap-1.5">
           {/* Botão para mostrar/ocultar menu */}
           <button
             onClick={() => {
@@ -4089,7 +4089,7 @@ const PDVPage: React.FC = () => {
                 toggle();
               }
             }}
-            className="w-8 h-8 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
+            className="w-9 h-9 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
             title={showMenuPDV ? "Ocultar menu" : "Mostrar menu"}
           >
             {showMenuPDV ? (
@@ -4108,7 +4108,7 @@ const PDVPage: React.FC = () => {
                 enterFullscreen();
               }
             }}
-            className="w-8 h-8 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
+            className="w-9 h-9 bg-gray-600/20 hover:bg-gray-500/30 border border-gray-600/20 hover:border-gray-500/40 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-300 transition-all duration-200 group"
             title={isFullscreen ? "Sair do modo tela cheia" : "Entrar em tela cheia"}
           >
             {isFullscreen ? (
@@ -4118,15 +4118,15 @@ const PDVPage: React.FC = () => {
             )}
           </button>
         </div>
-        <div className="text-5xl font-bold text-primary-400">
+        <div className="text-4xl font-bold text-primary-400">
           {formatCurrencyWithoutSymbol(calcularTotal())}
         </div>
         <div className="text-right">
-          <div className="text-sm text-gray-400 flex items-center justify-end gap-1 mb-1">
-            <User size={14} />
+          <div className="text-xs text-gray-400 flex items-center justify-end gap-1 mb-0.5">
+            <User size={12} />
             {userData?.nome || 'Usuário'}
           </div>
-          <div className="text-sm text-gray-400 font-mono">
+          <div className="text-xs text-gray-400 font-mono">
             {formatDateTime(currentDateTime)}
           </div>
         </div>
@@ -4134,7 +4134,7 @@ const PDVPage: React.FC = () => {
 
       <div
         className="flex overflow-hidden relative"
-        style={{ height: 'calc(100vh - 64px)' }}
+        style={{ height: 'calc(100vh - 56px)' }}
       >
         {/* Área dos Itens do Carrinho - mantém largura fixa quando há itens */}
         <div className={`${carrinho.length > 0 ? 'w-2/3' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
@@ -4145,8 +4145,8 @@ const PDVPage: React.FC = () => {
             <div className="h-full flex flex-col">
 
 
-              {/* Barra de Busca */}
-              <div className="mb-4">
+              {/* Barra de Busca - Compacta */}
+              <div className="mb-3">
                 <div className="relative">
                   <input
                     type="text"
@@ -4155,17 +4155,17 @@ const PDVPage: React.FC = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                     onKeyDown={handleSearchKeyPress}
                     autoFocus
-                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-12 text-white placeholder-gray-300 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-9 pr-12 text-white placeholder-gray-300 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                   />
-                  <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+                  <QrCode size={18} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300" />
 
-                  {/* Ícone de busca com F1 - clicável */}
+                  {/* Ícone de busca com F1 - clicável - Compacto */}
                   <button
                     onClick={abrirModalProdutos}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 hover:bg-gray-700/50 rounded px-1 py-1 transition-colors"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 hover:bg-gray-700/50 rounded px-1 py-0.5 transition-colors"
                     title="Abrir lista de produtos (F1)"
                   >
-                    <Search size={16} className="text-gray-300 hover:text-gray-200" />
+                    <Search size={14} className="text-gray-300 hover:text-gray-200" />
                     <span className="text-xs text-gray-300 bg-gray-700 px-1 py-0.5 rounded">F1</span>
                   </button>
 
@@ -4197,41 +4197,41 @@ const PDVPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Lista de Itens do Carrinho */}
+              {/* Lista de Itens do Carrinho - Compacta */}
               <div
                 className="flex-1 overflow-y-auto custom-scrollbar"
-                style={{ paddingBottom: '60px' }}
+                style={{ paddingBottom: '50px' }}
               >
                 {carrinho.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-gray-500">
-                      <ShoppingCart size={64} className="mx-auto mb-4 opacity-50" />
-                      <p className="text-lg font-medium mb-2">Carrinho vazio</p>
+                      <ShoppingCart size={56} className="mx-auto mb-3 opacity-50" />
+                      <p className="text-base font-medium mb-2">Carrinho vazio</p>
                       <p className="text-sm">Use o botão "Produtos" para adicionar itens</p>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {carrinho.map((item, index) => (
                       <motion.div
                         key={item.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className="bg-gray-800/50 rounded-lg p-3"
+                        className="bg-gray-800/50 rounded p-2.5"
                       >
-                        {/* Layout responsivo baseado na largura da tela */}
-                        <div className="flex gap-3">
-                          {/* Número sequencial do item */}
-                          <div className="w-6 h-6 bg-background-card border border-gray-700 rounded-full flex items-center justify-center flex-shrink-0 self-center shadow-lg">
+                        {/* Layout responsivo baseado na largura da tela - Compacto */}
+                        <div className="flex gap-2.5">
+                          {/* Número sequencial do item - Compacto */}
+                          <div className="w-5 h-5 bg-background-card border border-gray-700 rounded-full flex items-center justify-center flex-shrink-0 self-center shadow-lg">
                             <span className="text-xs font-medium text-gray-100">
                               {index + 1}
                             </span>
                           </div>
 
-                          {/* Foto do Produto - Alinhada apenas com dados principais */}
+                          {/* Foto do Produto - Compacta */}
                           <div
-                            className="w-16 h-16 lg:w-12 lg:h-12 bg-gray-900 rounded-lg overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative self-start"
+                            className="w-12 h-12 lg:w-10 lg:h-10 bg-gray-900 rounded overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative self-start"
                             onClick={(e) => abrirGaleria(item.produto, e)}
                           >
                             {getFotoPrincipal(item.produto) ? (
@@ -4242,11 +4242,11 @@ const PDVPage: React.FC = () => {
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
-                                <Package size={16} className="text-gray-700" />
+                                <Package size={14} className="text-gray-700" />
                               </div>
                             )}
 
-                            {/* Indicador de múltiplas fotos */}
+                            {/* Indicador de múltiplas fotos - Compacto */}
                             {item.produto.produto_fotos && item.produto.produto_fotos.length > 1 && (
                               <div className="absolute top-0.5 left-0.5 bg-black/60 text-white text-xs px-1 py-0.5 rounded">
                                 {item.produto.produto_fotos.length}
@@ -4355,64 +4355,64 @@ const PDVPage: React.FC = () => {
                                   </button>
                                 </div>
 
-                              {/* Controles de quantidade - desktop */}
-                              <div className="hidden lg:flex items-center gap-2">
+                              {/* Controles de quantidade - desktop - Compactos */}
+                              <div className="hidden lg:flex items-center gap-1.5">
                                 <button
                                   onClick={() => alterarQuantidade(item.id, item.quantidade - 1)}
-                                  className="w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
+                                  className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
                                 >
-                                  <Minus size={12} />
+                                  <Minus size={10} />
                                 </button>
-                                <span className="text-white font-medium min-w-[1.5rem] text-center text-sm">
+                                <span className="text-white font-medium min-w-[1.2rem] text-center text-xs">
                                   {item.quantidade}
                                 </span>
                                 <button
                                   onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
-                                  className="w-7 h-7 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors"
+                                  className="w-6 h-6 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors"
                                 >
-                                  <Plus size={12} />
+                                  <Plus size={10} />
                                 </button>
 
-                                {/* Botões de desconto - desktop */}
+                                {/* Botões de desconto - desktop - Compactos */}
                                 {pdvConfig?.desconto_no_item && !item.desconto && (
                                   <button
                                     onClick={() => abrirModalDesconto(item.id)}
-                                    className="w-7 h-7 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors"
+                                    className="w-6 h-6 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors"
                                     title="Aplicar desconto"
                                   >
-                                    <Percent size={12} />
+                                    <Percent size={10} />
                                   </button>
                                 )}
 
                                 {pdvConfig?.desconto_no_item && item.desconto && (
                                   <button
                                     onClick={() => removerDesconto(item.id)}
-                                    className="w-7 h-7 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
+                                    className="w-6 h-6 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
                                     title="Remover desconto"
                                   >
-                                    <X size={12} />
+                                    <X size={10} />
                                   </button>
                                 )}
 
-                                {/* Botão para opções adicionais - desktop */}
+                                {/* Botão para opções adicionais - desktop - Compacto */}
                                 {item.temOpcoesAdicionais && (
                                   <button
                                     onClick={() => abrirOpcoesAdicionais(item)}
-                                    className="w-7 h-7 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors"
+                                    className="w-6 h-6 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors"
                                     title="Opções adicionais"
                                   >
-                                    <Plus size={12} />
+                                    <Plus size={10} />
                                   </button>
                                 )}
 
-                                {/* Botão para observação adicional - desktop */}
+                                {/* Botão para observação adicional - desktop - Compacto */}
                                 {pdvConfig?.observacao_no_item && (
                                   <button
                                     onClick={() => abrirModalObservacao(item.id)}
-                                    className="w-7 h-7 bg-blue-600/20 hover:bg-blue-600/40 rounded-full flex items-center justify-center text-blue-200 transition-colors"
+                                    className="w-6 h-6 bg-blue-600/20 hover:bg-blue-600/40 rounded-full flex items-center justify-center text-blue-200 transition-colors"
                                     title="Adicionar observação"
                                   >
-                                    <MessageSquare size={12} />
+                                    <MessageSquare size={10} />
                                   </button>
                                 )}
                               </div>
@@ -4656,22 +4656,22 @@ const PDVPage: React.FC = () => {
                 )}
               </div>
 
-            {/* Menu Fixo no Footer da Área de Produtos - Só aparece quando NÃO está na finalização */}
+            {/* Menu Fixo no Footer da Área de Produtos - Só aparece quando NÃO está na finalização - Compacto */}
             {!showFinalizacaoFinal && (
               <div className="absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40">
-                {/* Container sem padding para maximizar espaço */}
-                <div className="h-14 flex items-center">
-                  {/* Botão Anterior */}
+                {/* Container sem padding para maximizar espaço - Compacto */}
+                <div className="h-12 flex items-center">
+                  {/* Botão Anterior - Compacto */}
                   {menuStartIndex > 0 && (
                     <button
                       onClick={navegarMenuAnterior}
-                      className="w-10 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-r border-gray-800"
+                      className="w-9 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-r border-gray-800"
                     >
-                      <ChevronLeft size={20} />
+                      <ChevronLeft size={18} />
                     </button>
                   )}
 
-                  {/* Itens do Menu Visíveis */}
+                  {/* Itens do Menu Visíveis - Compactos */}
                   <div className="flex items-center h-full flex-1">
                     {menuPDVItems.slice(menuStartIndex, menuStartIndex + visibleMenuItems).map((item, index) => {
                       const IconComponent = item.icon;
@@ -4682,11 +4682,11 @@ const PDVPage: React.FC = () => {
                           key={item.id}
                           onClick={(e) => item.onClick(e)}
                           className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative`}
-                          style={{ flex: '1 1 120px', minWidth: '120px' }}
+                          style={{ flex: '1 1 100px', minWidth: '100px' }}
                         >
-                          {/* Wrapper do ícone com contador */}
+                          {/* Wrapper do ícone com contador - Compacto */}
                           <div className="relative">
-                            <IconComponent size={20} />
+                            <IconComponent size={18} />
                             {/* Contador de pedidos pendentes - só aparece no botão Pedidos */}
                             {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
                               <div className="absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
@@ -4694,7 +4694,7 @@ const PDVPage: React.FC = () => {
                               </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-1 mt-1">
+                          <div className="flex items-center gap-1 mt-0.5">
                             <span className="text-xs whitespace-nowrap">{item.label}</span>
                             <span className="text-xs bg-gray-700 px-1 py-0.5 rounded text-gray-300 font-mono">
                               {teclaAtalho}
@@ -4705,13 +4705,13 @@ const PDVPage: React.FC = () => {
                     })}
                   </div>
 
-                  {/* Botão Próximo */}
+                  {/* Botão Próximo - Compacto */}
                   {menuStartIndex + visibleMenuItems < menuPDVItems.length && (
                     <button
                       onClick={navegarMenuProximo}
-                      className="w-10 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-l border-gray-800"
+                      className="w-9 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-l border-gray-800"
                     >
-                      <ChevronRight size={20} />
+                      <ChevronRight size={18} />
                     </button>
                   )}
                 </div>
@@ -4839,11 +4839,11 @@ const PDVPage: React.FC = () => {
                           ))}
                         </div>
 
-                        {/* Lista de pagamentos adicionados */}
+                        {/* Lista de pagamentos adicionados - Compacta */}
                         {pagamentosParciais.length > 0 && (
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium text-gray-400">Pagamentos Adicionados:</span>
+                              <span className="text-xs font-medium text-gray-400">Pagamentos Adicionados:</span>
                               <button
                                 onClick={confirmarLimparTodos}
                                 className="text-xs text-red-400 hover:text-red-300"
@@ -4855,30 +4855,30 @@ const PDVPage: React.FC = () => {
                             {pagamentosParciais.map((pagamento) => {
                               const forma = formasPagamento.find(f => f.id === pagamento.forma);
                               return (
-                                <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
+                                <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded p-1.5">
                                   <div>
-                                    <span className="text-white text-sm">{forma?.nome || pagamento.forma}</span>
-                                    <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
+                                    <span className="text-white text-xs">{forma?.nome || pagamento.forma}</span>
+                                    <span className="text-primary-400 text-xs ml-2">{formatCurrency(pagamento.valor)}</span>
                                   </div>
                                   <button
                                     onClick={() => confirmarRemocaoItem(pagamento.id)}
                                     className="text-red-400 hover:text-red-300"
                                   >
-                                    <X size={16} />
+                                    <X size={14} />
                                   </button>
                                 </div>
                               );
                             })}
 
-                            {/* Resumo dos valores */}
-                            <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
-                              <div className="flex justify-between text-sm">
+                            {/* Resumo dos valores - Compacto */}
+                            <div className="bg-gray-800/50 rounded p-2 space-y-1">
+                              <div className="flex justify-between text-xs">
                                 <span className="text-gray-400">Total da Venda:</span>
-                                <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
+                                <span className="text-white font-medium">{formatCurrency(calcularTotalComDesconto())}</span>
                               </div>
                               {/* Restante só aparece para pagamentos parciais */}
                               {tipoPagamento === 'parcial' && (
-                                <div className="flex justify-between text-sm font-bold">
+                                <div className="flex justify-between text-xs font-bold">
                                   <span className="text-gray-400">Restante:</span>
                                   <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
                                     {formatCurrency(calcularRestante())}
@@ -4886,9 +4886,9 @@ const PDVPage: React.FC = () => {
                                 </div>
                               )}
                               {trocoCalculado > 0 && (
-                                <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
-                                  <span className="text-gray-400 text-base">Troco:</span>
-                                  <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                                <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1">
+                                  <span className="text-gray-400 text-xs">Troco:</span>
+                                  <span className="text-blue-400 text-sm font-extrabold">{formatCurrency(trocoCalculado)}</span>
                                 </div>
                               )}
                             </div>
@@ -4934,51 +4934,65 @@ const PDVPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Informações dos Pedidos Importados */}
+                  {/* Informações dos Pedidos Importados - Compacto */}
                   {pedidosImportados.map((pedido, index) => (
-                    <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 relative">
+                    <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded p-2.5 relative">
                       {/* Botão X para remover pedido */}
                       <button
                         onClick={() => {
                           setPedidoParaRemover(pedido);
                           setShowConfirmRemovePedidoImportado(true);
                         }}
-                        className="absolute top-2 right-2 text-red-400 hover:text-red-300 transition-colors"
+                        className="absolute top-1.5 right-1.5 text-red-400 hover:text-red-300 transition-colors"
                         title="Remover pedido importado"
                       >
-                        <X size={16} />
+                        <X size={14} />
                       </button>
 
-                      <div className="flex items-center gap-2 mb-3 pr-6">
-                        <ShoppingBag size={16} className="text-green-400" />
-                        <div className="flex-1">
-                          <div className="text-sm text-green-400">Pedido Importado</div>
-                          <div className="text-white font-medium">#{pedido.numero}</div>
+                      {/* Layout em duas colunas */}
+                      <div className="flex items-start gap-3 mb-2 pr-6">
+                        {/* Coluna Esquerda */}
+                        <div className="flex items-start gap-2 flex-1">
+                          <ShoppingBag size={14} className="text-green-400 mt-0.5" />
+                          <div className="flex-1">
+                            <div className="text-xs text-green-400 font-medium">Pedido Importado</div>
+                            <div className="text-white font-medium text-sm">#{pedido.numero}</div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(pedido.created_at).toLocaleDateString('pt-BR')}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Coluna Direita */}
+                        <div className="text-right">
                           <div className="text-xs text-gray-400">
-                            {new Date(pedido.created_at).toLocaleString('pt-BR')}
+                            {new Date(pedido.created_at).toLocaleTimeString('pt-BR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </div>
                           {/* Informações do Vendedor */}
                           {pedido.usuario && (
-                            <div className="text-xs text-gray-400 mt-1">
-                              Vendedor: {pedido.usuario.nome}
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              {pedido.usuario.nome}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      {/* Opções de Faturamento do Pedido Importado */}
+                      {/* Opções de Faturamento do Pedido Importado - Compacto */}
                       {(pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && (
-                        <div className="border-t border-green-500/20 pt-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-3 h-3 bg-green-500 rounded flex items-center justify-center">
+                        <div className="border-t border-green-500/20 pt-2">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="w-2.5 h-2.5 bg-green-500 rounded flex items-center justify-center">
                               <span className="text-white text-xs font-bold">%</span>
                             </div>
                             <div className="text-xs text-green-400 font-medium">Opções de Faturamento</div>
                           </div>
 
-                          {/* Descontos por Prazo */}
+                          {/* Descontos por Prazo - Compacto */}
                           {descontosCliente.prazo.length > 0 && (
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <div className="text-xs text-gray-400 mb-1">Prazo de Faturamento</div>
                               <div className="grid grid-cols-2 gap-1">
                                 {descontosCliente.prazo.map((desconto, idx) => {
@@ -4987,7 +5001,7 @@ const PDVPage: React.FC = () => {
                                   return (
                                     <div
                                       key={idx}
-                                      className={`p-1.5 rounded border cursor-pointer transition-colors text-xs ${
+                                      className={`p-1 rounded border cursor-pointer transition-colors text-xs ${
                                         isSelected
                                           ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
                                           : wasOriginallySelected
@@ -4999,11 +5013,11 @@ const PDVPage: React.FC = () => {
                                       onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
                                     >
                                       <div className="relative flex items-center justify-center">
-                                        <div className="flex items-center gap-1">
-                                          <span className="text-white font-medium">
+                                        <div className="flex items-center gap-0.5">
+                                          <span className="text-white font-medium text-xs">
                                             {desconto.prazo_dias}d
                                           </span>
-                                          <span className={`${
+                                          <span className={`text-xs ${
                                             isSelected
                                               ? 'text-blue-400'
                                               : wasOriginallySelected
@@ -5014,10 +5028,10 @@ const PDVPage: React.FC = () => {
                                           </span>
                                         </div>
                                         {isSelected && (
-                                          <span className="absolute right-0 text-xs text-blue-400">✓</span>
+                                          <span className="absolute right-0.5 text-xs text-blue-400">✓</span>
                                         )}
                                         {!isSelected && wasOriginallySelected && (
-                                          <span className="absolute right-0 text-xs text-green-400">Orig</span>
+                                          <span className="absolute right-0.5 text-xs text-green-400">Orig</span>
                                         )}
                                       </div>
                                     </div>
@@ -5027,21 +5041,21 @@ const PDVPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Desconto por Valor (se aplicável) */}
+                          {/* Desconto por Valor (se aplicável) - Compacto */}
                           {(() => {
                             const descontoValor = calcularDescontoPorValor(calcularTotal());
                             return descontoValor && (
-                              <div className="mt-2 pt-2 border-t border-green-500/20">
+                              <div className="mt-1.5 pt-1.5 border-t border-green-500/20">
                                 <div className="text-xs text-gray-400 mb-1">Desconto por Valor</div>
-                                <div className={`p-1.5 rounded border text-center text-xs ${
+                                <div className={`p-1 rounded border text-center text-xs ${
                                   descontoValor.tipo === 'desconto'
                                     ? 'bg-green-500/10 border-green-500/30'
                                     : 'bg-red-500/10 border-red-500/30'
                                 }`}>
-                                  <div className="text-white font-medium">
+                                  <div className="text-white font-medium text-xs">
                                     A partir de {formatCurrency(descontoValor.valorMinimo)}
                                   </div>
-                                  <div className={`${
+                                  <div className={`text-xs ${
                                     descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
                                   }`}>
                                     {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
@@ -5142,24 +5156,24 @@ const PDVPage: React.FC = () => {
 
             </div>
 
-            {/* Área fixa de pagamento - sempre visível quando há itens */}
+            {/* Área fixa de pagamento - sempre visível quando há itens - Compacta */}
             {carrinho.length > 0 && (
-              <div className="p-4 bg-background-card flex-shrink-0">
+              <div className="p-3 bg-background-card flex-shrink-0">
                 {/* Seções de pagamento quando HÁ pedidos importados */}
                 {pedidosImportados.length > 0 && (
                   <>
-                    {/* Tipo de Pagamento */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-white mb-2">
+                    {/* Tipo de Pagamento - Compacto */}
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-white mb-1.5">
                         Tipo de Pagamento
                       </label>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5">
                         <button
                           onClick={() => {
                             setTipoPagamento('vista');
                             limparPagamentosParciais();
                           }}
-                          className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                          className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
                             tipoPagamento === 'vista'
                               ? 'bg-gray-700 border-gray-600 text-white'
                               : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
@@ -5172,7 +5186,7 @@ const PDVPage: React.FC = () => {
                             setTipoPagamento('parcial');
                             setFormaPagamentoSelecionada(null);
                           }}
-                          className={`flex-1 py-2 px-3 rounded-lg border transition-colors ${
+                          className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
                             tipoPagamento === 'parcial'
                               ? 'bg-gray-700 border-gray-600 text-white'
                               : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
@@ -5183,20 +5197,20 @@ const PDVPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Formas de Pagamento */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-white mb-2">
+                    {/* Formas de Pagamento - Compacto */}
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-white mb-1.5">
                         {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
                       </label>
 
                       {tipoPagamento === 'vista' ? (
-                        // Pagamento à vista - interface original
-                        <div className="grid grid-cols-2 gap-2">
+                        // Pagamento à vista - interface compacta
+                        <div className="grid grid-cols-2 gap-1.5">
                           {formasPagamento.map((forma) => (
                             <button
                               key={forma.id}
                               onClick={() => setFormaPagamentoSelecionada(forma.id)}
-                              className={`p-3 rounded-lg border transition-colors text-sm ${
+                              className={`p-2 rounded border transition-colors text-sm ${
                                 formaPagamentoSelecionada === forma.id
                                   ? 'bg-gray-700 border-gray-600 text-white'
                                   : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
@@ -5207,11 +5221,11 @@ const PDVPage: React.FC = () => {
                           ))}
                         </div>
                       ) : (
-                        // Pagamentos parciais - nova interface
-                        <div className="space-y-4">
-                          {/* Campo de valor */}
+                        // Pagamentos parciais - interface compacta
+                        <div className="space-y-3">
+                          {/* Campo de valor - Compacto */}
                           <div>
-                            <label className="block text-sm font-medium text-white mb-2">
+                            <label className="block text-sm font-medium text-white mb-1.5">
                               Valor do Pagamento
                             </label>
                             <input
@@ -5219,15 +5233,15 @@ const PDVPage: React.FC = () => {
                               value={valorParcial}
                               onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
                               placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
-                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                             />
                             <div className="text-xs text-gray-500 mt-1">
                               💡 Deixe vazio para usar o valor restante automaticamente
                             </div>
                           </div>
 
-                          {/* Botões das formas de pagamento */}
-                          <div className="grid grid-cols-2 gap-2">
+                          {/* Botões das formas de pagamento - Compacto */}
+                          <div className="grid grid-cols-2 gap-1.5">
                             {formasPagamento.map((forma) => (
                               <button
                                 key={forma.id}
@@ -5236,18 +5250,18 @@ const PDVPage: React.FC = () => {
                                   forma.nome, // Usar o nome da forma para exibição
                                   forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
                                 )}
-                                className="p-3 rounded-lg border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
+                                className="p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
                               >
                                 {forma.nome}
                               </button>
                             ))}
                           </div>
 
-                          {/* Lista de pagamentos adicionados */}
+                          {/* Lista de pagamentos adicionados - Compacta */}
                           {pagamentosParciais.length > 0 && (
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-gray-400">Pagamentos Adicionados:</span>
+                                <span className="text-xs font-medium text-gray-400">Pagamentos Adicionados:</span>
                                 <button
                                   onClick={confirmarLimparTodos}
                                   className="text-xs text-red-400 hover:text-red-300"
@@ -5259,30 +5273,30 @@ const PDVPage: React.FC = () => {
                               {pagamentosParciais.map((pagamento) => {
                                 const forma = formasPagamento.find(f => f.id === pagamento.forma);
                                 return (
-                                  <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded-lg p-2">
+                                  <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded p-1.5">
                                     <div>
-                                      <span className="text-white text-sm">{forma?.nome || pagamento.forma}</span>
-                                      <span className="text-primary-400 text-sm ml-2">{formatCurrency(pagamento.valor)}</span>
+                                      <span className="text-white text-xs">{forma?.nome || pagamento.forma}</span>
+                                      <span className="text-primary-400 text-xs ml-2">{formatCurrency(pagamento.valor)}</span>
                                     </div>
                                     <button
                                       onClick={() => confirmarRemocaoItem(pagamento.id)}
                                       className="text-red-400 hover:text-red-300"
                                     >
-                                      <X size={16} />
+                                      <X size={14} />
                                     </button>
                                   </div>
                                 );
                               })}
 
-                              {/* Resumo dos valores */}
-                              <div className="bg-gray-800/50 rounded-lg p-3 space-y-1">
-                                <div className="flex justify-between text-sm">
+                              {/* Resumo dos valores - Compacto */}
+                              <div className="bg-gray-800/50 rounded p-2 space-y-1">
+                                <div className="flex justify-between text-xs">
                                   <span className="text-gray-400">Total da Venda:</span>
-                                  <span className="text-white">{formatCurrency(calcularTotalComDesconto())}</span>
+                                  <span className="text-white font-medium">{formatCurrency(calcularTotalComDesconto())}</span>
                                 </div>
                                 {/* Restante só aparece para pagamentos parciais */}
                                 {tipoPagamento === 'parcial' && (
-                                  <div className="flex justify-between text-sm font-bold">
+                                  <div className="flex justify-between text-xs font-bold">
                                     <span className="text-gray-400">Restante:</span>
                                     <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
                                       {formatCurrency(calcularRestante())}
@@ -5290,9 +5304,9 @@ const PDVPage: React.FC = () => {
                                   </div>
                                 )}
                                 {trocoCalculado > 0 && (
-                                  <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-2 mt-2">
-                                    <span className="text-gray-400 text-base">Troco:</span>
-                                    <span className="text-blue-400 text-xl font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                                  <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1">
+                                    <span className="text-gray-400 text-xs">Troco:</span>
+                                    <span className="text-blue-400 text-sm font-extrabold">{formatCurrency(trocoCalculado)}</span>
                                   </div>
                                 )}
                               </div>
@@ -5304,8 +5318,8 @@ const PDVPage: React.FC = () => {
                   </>
                 )}
 
-                {/* Resumo da Venda - sempre presente */}
-                <div className="bg-gray-800/50 rounded-lg p-4 mb-2">
+                {/* Resumo da Venda - sempre presente - Compacto */}
+                <div className="bg-gray-800/50 rounded p-2.5 mb-1">
                   {(() => {
                     const subtotal = calcularTotal();
                     const totalFinal = calcularTotalComDesconto();
@@ -5333,25 +5347,25 @@ const PDVPage: React.FC = () => {
 
                     return (
                       <>
-                        {/* Subtotal */}
-                        <div className="flex justify-between items-center text-sm mb-2">
+                        {/* Subtotal - Compacto */}
+                        <div className="flex justify-between items-center text-xs mb-1.5">
                           <span className="text-white">Subtotal:</span>
                           <span className="text-white">{formatCurrency(subtotal)}</span>
                         </div>
 
-                        {/* Itens */}
-                        <div className="flex justify-between items-center text-sm mb-2">
+                        {/* Itens - Compacto */}
+                        <div className="flex justify-between items-center text-xs mb-1.5">
                           <span className="text-white">Itens:</span>
                           <span className="text-white">{carrinho.reduce((total, item) => total + item.quantidade, 0)}</span>
                         </div>
 
-                        {/* Desconto por Prazo (se aplicável) */}
+                        {/* Desconto por Prazo (se aplicável) - Compacto */}
                         {descontoPrazo && (
-                          <div className="flex justify-between items-center text-sm mb-2">
+                          <div className="flex justify-between items-center text-xs mb-1.5">
                             <span className={`${
                               descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
                             }`}>
-                              {descontoPrazo.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} Prazo ({descontoPrazo.prazo_dias} dias):
+                              {descontoPrazo.tipo === 'desconto' ? 'Desconto' : 'Acréscimo'} Prazo ({descontoPrazo.prazo_dias}d):
                             </span>
                             <span className={`${
                               descontoPrazo.tipo === 'desconto' ? 'text-blue-400' : 'text-orange-400'
@@ -5361,9 +5375,9 @@ const PDVPage: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Desconto por Valor (se aplicável) */}
+                        {/* Desconto por Valor (se aplicável) - Compacto */}
                         {descontoValor && (
-                          <div className="flex justify-between items-center text-sm mb-2">
+                          <div className="flex justify-between items-center text-xs mb-1.5">
                             <span className={`${
                               descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
                             }`}>
@@ -5377,10 +5391,10 @@ const PDVPage: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Total Final */}
-                        <div className="flex justify-between items-center mb-2 pt-2 border-t border-gray-700">
-                          <span className="text-white">Total da Venda:</span>
-                          <span className="text-2xl font-bold text-primary-400">
+                        {/* Total Final - Compacto */}
+                        <div className="flex justify-between items-center mb-0 pt-1.5 border-t border-gray-700">
+                          <span className="text-white text-sm">Total da Venda:</span>
+                          <span className="text-lg font-bold text-primary-400">
                             {formatCurrency(totalFinal)}
                           </span>
                         </div>
@@ -5391,13 +5405,13 @@ const PDVPage: React.FC = () => {
               </div>
             )}
 
-            {/* Footer fixo com botões de ação - Só aparece quando há itens */}
+            {/* Footer fixo com botões de ação - Só aparece quando há itens - Compacto */}
             {carrinho.length > 0 && (
-              <div className="px-4 pt-4 pb-2 flex-shrink-0">
-                <div className="flex gap-3">
+              <div className="px-3 pt-1 pb-2 flex-shrink-0">
+                <div className="flex gap-2">
                   <button
                     onClick={() => setShowConfirmLimparTudoPDV(true)}
-                    className="flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white py-3 px-4 rounded-lg transition-colors"
+                    className="flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white py-2 px-3 rounded transition-colors text-sm"
                   >
                     Cancelar
                   </button>
@@ -5429,7 +5443,7 @@ const PDVPage: React.FC = () => {
                       }
                     }}
                     disabled={tipoPagamento === 'parcial' && calcularRestante() > 0}
-                    className={`flex-1 py-3 px-4 rounded-lg border transition-colors ${
+                    className={`flex-1 py-2 px-3 rounded border transition-colors text-sm ${
                       tipoPagamento === 'parcial' && calcularRestante() > 0
                         ? 'bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed'
                         : 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-white'
@@ -8319,15 +8333,15 @@ const PDVPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Grid de Produtos */}
+                {/* Grid de Produtos - Compacto */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                   {produtosFiltrados.length === 0 ? (
-                    <div className="text-center py-8">
-                      <Package size={48} className="mx-auto mb-4 text-gray-500" />
-                      <p className="text-gray-400">Nenhum produto encontrado</p>
+                    <div className="text-center py-6">
+                      <Package size={40} className="mx-auto mb-3 text-gray-500" />
+                      <p className="text-gray-400 text-sm">Nenhum produto encontrado</p>
                     </div>
                   ) : (
-                    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+                    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
                       {produtosFiltrados.map(produto => (
                         <motion.div
                           key={produto.id}
@@ -8337,11 +8351,11 @@ const PDVPage: React.FC = () => {
                             adicionarAoCarrinho(produto);
                             setShowAreaProdutos(false);
                           }}
-                          className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer flex flex-col"
+                          className="bg-gray-800 rounded overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer flex flex-col"
                         >
-                          {/* Imagem do produto */}
+                          {/* Imagem do produto - Compacta */}
                           <div
-                            className="h-24 bg-gray-900 relative cursor-pointer"
+                            className="h-20 bg-gray-900 relative cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
                               abrirGaleria(produto, e);
@@ -8355,20 +8369,20 @@ const PDVPage: React.FC = () => {
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
-                                <Package size={24} className="text-gray-700" />
+                                <Package size={20} className="text-gray-700" />
                               </div>
                             )}
 
-                            {/* Indicador de múltiplas fotos */}
+                            {/* Indicador de múltiplas fotos - Compacto */}
                             {produto.produto_fotos && produto.produto_fotos.length > 1 && (
-                              <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
-                                {produto.produto_fotos.length} fotos
+                              <div className="absolute top-0.5 left-0.5 bg-black/60 text-white text-xs px-1 py-0.5 rounded">
+                                {produto.produto_fotos.length}
                               </div>
                             )}
 
-                            {/* Badge de promoção */}
+                            {/* Badge de promoção - Compacto */}
                             {produto.promocao && (
-                              <div className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold px-1 py-0.5 rounded">
+                              <div className="absolute top-0.5 right-0.5 bg-red-500 text-white text-xs font-bold px-1 py-0.5 rounded">
                                 {produto.tipo_desconto === 'percentual'
                                   ? `-${produto.valor_desconto}%`
                                   : formatCurrency(produto.valor_desconto || 0)}
@@ -8376,16 +8390,16 @@ const PDVPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Informações do produto */}
-                          <div className="p-2.5">
-                            <h3 className="text-white text-xs font-medium line-clamp-2 mb-1.5">{produto.nome}</h3>
+                          {/* Informações do produto - Compactas */}
+                          <div className="p-2">
+                            <h3 className="text-white text-xs font-medium line-clamp-2 mb-1">{produto.nome}</h3>
 
-                            <div className="mb-1.5">
+                            <div className="mb-1">
                               <p className="text-gray-400 text-xs">Código {produto.codigo}</p>
                             </div>
 
-                            {/* Preço */}
-                            <div className="mb-1.5">
+                            {/* Preço - Compacto */}
+                            <div className="mb-1">
                               {produto.promocao ? (
                                 <div>
                                   <span className="text-gray-400 line-through text-xs block">
@@ -8416,8 +8430,8 @@ const PDVPage: React.FC = () => {
                               )}
                             </div>
 
-                            {/* Estoque */}
-                            <div className="text-xs text-gray-300 mb-1">
+                            {/* Estoque - Compacto */}
+                            <div className="text-xs text-gray-300 mb-0.5">
                               Estoque: {
                                 produtosEstoque[produto.id]
                                   ? formatarEstoque(produtosEstoque[produto.id].total, produto)
@@ -8427,7 +8441,7 @@ const PDVPage: React.FC = () => {
                               }
                             </div>
 
-                            {/* Desconto por quantidade */}
+                            {/* Desconto por quantidade - Compacto */}
                             {produto.desconto_quantidade && produto.quantidade_minima &&
                              ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
                               (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade)) && (
