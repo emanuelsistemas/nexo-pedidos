@@ -256,7 +256,11 @@ const ConfiguracoesPage: React.FC = () => {
     complemento: '',
     bairro: '',
     cidade: '',
-    estado: ''
+    estado: '',
+    inscricao_estadual: '',
+    regime_tributario: 3,
+    codigo_municipio: '',
+    email: ''
   });
 
   // Estados para deletar conta
@@ -1634,6 +1638,9 @@ const ConfiguracoesPage: React.FC = () => {
       const data = await response.json();
 
       if (response.ok) {
+        // Buscar código IBGE do município
+        const codigoIBGE = await buscarCodigoIBGE(data.municipio, data.uf);
+
         setEmpresaForm(prev => ({
           ...prev,
           razao_social: data.razao_social || '',
@@ -1644,10 +1651,15 @@ const ConfiguracoesPage: React.FC = () => {
           complemento: data.complemento || '',
           bairro: data.bairro || '',
           cidade: data.municipio || '',
-          estado: data.uf || ''
+          estado: data.uf || '',
+          codigo_municipio: codigoIBGE || ''
         }));
 
-        showMessage('success', 'Dados do CNPJ carregados com sucesso!');
+        if (codigoIBGE) {
+          showMessage('success', 'Dados do CNPJ e código IBGE carregados com sucesso!');
+        } else {
+          showMessage('success', 'Dados do CNPJ carregados! Código IBGE não encontrado automaticamente.');
+        }
       } else {
         showMessage('error', data.message || 'CNPJ não encontrado');
       }
@@ -1657,6 +1669,26 @@ const ConfiguracoesPage: React.FC = () => {
     } finally {
       // Desativar o loading específico do CNPJ
       setIsCnpjLoading(false);
+    }
+  };
+
+  // Função para buscar código IBGE do município
+  const buscarCodigoIBGE = async (cidade: string, estado: string) => {
+    try {
+      if (!cidade || !estado) return null;
+
+      const response = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${estado}/municipios`);
+      const municipios = await response.json();
+
+      const municipio = municipios.find((m: any) =>
+        m.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') ===
+        cidade.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      );
+
+      return municipio ? municipio.id.toString() : null;
+    } catch (error) {
+      console.error('Erro ao buscar código IBGE:', error);
+      return null;
     }
   };
 
@@ -1670,14 +1702,23 @@ const ConfiguracoesPage: React.FC = () => {
       const data = await response.json();
 
       if (!data.erro) {
+        // Buscar código IBGE do município
+        const codigoIBGE = await buscarCodigoIBGE(data.localidade, data.uf);
+
         setEmpresaForm(prev => ({
           ...prev,
           endereco: data.logradouro,
           bairro: data.bairro,
           cidade: data.localidade,
-          estado: data.uf
+          estado: data.uf,
+          codigo_municipio: codigoIBGE || ''
         }));
-        showMessage('success', 'Endereço carregado com sucesso!');
+
+        if (codigoIBGE) {
+          showMessage('success', 'Endereço e código IBGE carregados com sucesso!');
+        } else {
+          showMessage('success', 'Endereço carregado! Código IBGE não encontrado automaticamente.');
+        }
       } else {
         showMessage('error', 'CEP não encontrado');
       }
@@ -2502,7 +2543,11 @@ const ConfiguracoesPage: React.FC = () => {
                       complemento: '',
                       bairro: '',
                       cidade: '',
-                      estado: ''
+                      estado: '',
+                      inscricao_estadual: '',
+                      regime_tributario: 3,
+                      codigo_municipio: '',
+                      email: ''
                     });
                     setShowSidebar(true);
                   }}
@@ -2606,6 +2651,41 @@ const ConfiguracoesPage: React.FC = () => {
                         <p className="text-white">
                           {empresa.cidade}
                           {empresa.estado && `/${empresa.estado}`}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                          Código do Município (IBGE)
+                        </label>
+                        <p className="text-white">{empresa.codigo_municipio || '-'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-medium text-white mb-4">Dados Fiscais</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                          Email da Empresa
+                        </label>
+                        <p className="text-white">{empresa.email || '-'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                          Inscrição Estadual
+                        </label>
+                        <p className="text-white">{empresa.inscricao_estadual || '-'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">
+                          Regime Tributário
+                        </label>
+                        <p className="text-white">
+                          {empresa.regime_tributario === 1 && '1 - Simples Nacional'}
+                          {empresa.regime_tributario === 2 && '2 - Simples Nacional - Excesso'}
+                          {empresa.regime_tributario === 3 && '3 - Regime Normal'}
+                          {!empresa.regime_tributario && '-'}
                         </p>
                       </div>
                     </div>
@@ -4134,6 +4214,94 @@ const ConfiguracoesPage: React.FC = () => {
                         />
                       </div>
                     </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Código do Município (IBGE) *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={empresaForm.codigo_municipio}
+                          onChange={(e) => setEmpresaForm(prev => ({ ...prev, codigo_municipio: e.target.value }))}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-3 pr-10 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          placeholder="3525904 (7 dígitos)"
+                          maxLength={7}
+                          pattern="[0-9]{7}"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (empresaForm.cidade && empresaForm.estado) {
+                              const codigoIBGE = await buscarCodigoIBGE(empresaForm.cidade, empresaForm.estado);
+                              if (codigoIBGE) {
+                                setEmpresaForm(prev => ({ ...prev, codigo_municipio: codigoIBGE }));
+                                showMessage('success', 'Código IBGE encontrado!');
+                              } else {
+                                showMessage('error', 'Código IBGE não encontrado para esta cidade/estado.');
+                              }
+                            } else {
+                              showMessage('error', 'Preencha cidade e estado primeiro.');
+                            }
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                          title="Buscar código IBGE automaticamente"
+                        >
+                          <Search size={18} />
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Código IBGE de 7 dígitos do município (obrigatório para NFe). Preenchido automaticamente ao buscar por CNPJ ou CEP.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                          Email da Empresa *
+                        </label>
+                        <input
+                          type="email"
+                          value={empresaForm.email}
+                          onChange={(e) => setEmpresaForm(prev => ({ ...prev, email: e.target.value }))}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          placeholder="contato@empresa.com.br"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                          Inscrição Estadual *
+                        </label>
+                        <input
+                          type="text"
+                          value={empresaForm.inscricao_estadual}
+                          onChange={(e) => setEmpresaForm(prev => ({ ...prev, inscricao_estadual: e.target.value }))}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          placeholder="123456789 ou ISENTO"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Regime Tributário *
+                      </label>
+                      <select
+                        value={empresaForm.regime_tributario}
+                        onChange={(e) => setEmpresaForm(prev => ({ ...prev, regime_tributario: parseInt(e.target.value) }))}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        required
+                      >
+                        <option value={1}>1 - Simples Nacional</option>
+                        <option value={2}>2 - Simples Nacional - Excesso</option>
+                        <option value={3}>3 - Regime Normal</option>
+                      </select>
+                    </div>
+
+
 
                     <div className="flex gap-4 pt-4">
                       <Button
