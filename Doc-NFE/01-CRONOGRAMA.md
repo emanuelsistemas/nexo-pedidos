@@ -62,7 +62,7 @@ Implementar sistema completo de geração de NFe no Nexo Pedidos de forma organi
 
 ### ✅ Alterações em Tabelas Existentes
 - [x] **3.11** Adicionar campos fiscais em `empresas` ✅ **CONCLUÍDO** - 4 campos adicionados
-- [ ] **3.12** Adicionar campos fiscais em `clientes`
+- [x] **3.12** Adicionar campos fiscais em `clientes` ✅ **CONCLUÍDO** - 3 campos adicionados + Frontend atualizado
 - [ ] **3.13** Adicionar campos fiscais em `produtos`
 - [ ] **3.14** Adicionar campos de NFe em `pdv`
 - [ ] **3.15** Executar e testar todas as migrations
@@ -188,13 +188,13 @@ Implementar sistema completo de geração de NFe no Nexo Pedidos de forma organi
 ## 📊 Resumo do Progresso
 
 **Total de tarefas:** 80
-**Concluídas:** 6
-**Progresso:** 7.5%
+**Concluídas:** 7
+**Progresso:** 8.75%
 
 ### Por Fase:
 - **Fase 1:** 5/10 (50%) ✅ **QUASE COMPLETA**
 - **Fase 2:** 0/10 (0%)
-- **Fase 3:** 1/15 (7%) 🔄 **EM ANDAMENTO**
+- **Fase 3:** 2/15 (13%) 🔄 **EM ANDAMENTO**
 - **Fase 4:** 0/15 (0%)
 - **Fase 5:** 0/15 (0%)
 - **Fase 6:** 0/15 (0%)
@@ -213,16 +213,17 @@ Implementar sistema completo de geração de NFe no Nexo Pedidos de forma organi
 - [x] **1.4** Análise completa das tabelas `pdv` e `pdv_itens` no Supabase
 - [x] **1.5** Documentação completa da estrutura atual
 - [x] **3.11** Campos fiscais adicionados na tabela `empresas` + Frontend atualizado
+- [x] **3.12** Campos fiscais adicionados na tabela `clientes` + Frontend atualizado
 
 **Próximas tarefas:**
 - [ ] **1.6** Definir estrutura de tabelas para NFe
 - [ ] **1.7** Planejar migrations necessárias
-- [ ] **3.12** Adicionar campos fiscais na tabela `clientes`
+- [ ] **3.13** Adicionar campos fiscais na tabela `produtos`
 
 **Observações:**
 - 🎉 **DESCOBERTA INCRÍVEL**: Sistema já possui **74% dos campos necessários** para NFe!
 - ✅ **Tabela `empresas`**: **100% PRONTA** - Todos os 4 campos adicionados + Frontend atualizado
-- ✅ **Tabela `clientes`**: 95% pronta (faltam 3 campos)
+- ✅ **Tabela `clientes`**: **100% PRONTA** - Todos os 3 campos adicionados + Frontend atualizado
 - ⚠️ **Tabela `produtos`**: 45% pronta (faltam 11 campos fiscais)
 - ✅ **Tabelas `pdv`**: 85% prontas (faltam campos de controle NFe)
 

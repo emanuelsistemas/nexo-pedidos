@@ -64,7 +64,10 @@ const ClientesPage: React.FC = () => {
     bairro: '',
     cidade: '',
     estado: '',
-    empresa_id: ''
+    empresa_id: '',
+    indicador_ie: 9,
+    codigo_municipio: '',
+    inscricao_estadual: ''
   });
 
   // Estado para controlar a aba ativa no formulário
@@ -117,6 +120,7 @@ const ClientesPage: React.FC = () => {
     email: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [temPedidosVinculados, setTemPedidosVinculados] = useState(false);
 
   useEffect(() => {
     loadClientes();
@@ -382,6 +386,19 @@ const ClientesPage: React.FC = () => {
     });
   };
 
+  const handleTipoDocumentoChange = (tipo: 'CNPJ' | 'CPF') => {
+    // Atualizar indicador IE baseado no tipo de documento
+    const indicadorIE = tipo === 'CPF' ? 9 : 1; // 9 para PF (não contribuinte), 1 para PJ (contribuinte)
+
+    setFormData({
+      ...formData,
+      tipo_documento: tipo,
+      documento: '', // Limpar documento ao mudar tipo
+      indicador_ie: indicadorIE,
+      inscricao_estadual: tipo === 'CPF' ? '' : formData.inscricao_estadual // Limpar IE se for CPF
+    });
+  };
+
   const validarCNPJ = (cnpj: string) => {
     cnpj = cnpj.replace(/[^\d]+/g, '');
 
@@ -478,6 +495,26 @@ const ClientesPage: React.FC = () => {
     return true;
   };
 
+  // Função para buscar código IBGE do município
+  const buscarCodigoIBGE = async (cidade: string, estado: string) => {
+    try {
+      if (!cidade || !estado) return null;
+
+      const response = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${estado}/municipios`);
+      const municipios = await response.json();
+
+      const municipio = municipios.find((m: any) =>
+        m.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') ===
+        cidade.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      );
+
+      return municipio ? municipio.id.toString() : null;
+    } catch (error) {
+      console.error('Erro ao buscar código IBGE:', error);
+      return null;
+    }
+  };
+
   const buscarCNPJ = async () => {
     try {
       // Remove caracteres não numéricos para a busca
@@ -500,6 +537,12 @@ const ClientesPage: React.FC = () => {
       const data = await response.json();
 
       if (response.ok) {
+        // Buscar código IBGE do município
+        const codigoIBGE = await buscarCodigoIBGE(data.municipio, data.uf);
+
+        // Determinar indicador IE baseado no tipo de documento
+        const indicadorIE = formData.tipo_documento === 'CPF' ? 9 : 1; // 9 para PF, 1 para PJ (assumindo contribuinte)
+
         setFormData({
           ...formData,
           razao_social: data.razao_social || '',
@@ -511,10 +554,16 @@ const ClientesPage: React.FC = () => {
           complemento: data.complemento || '',
           bairro: data.bairro || '',
           cidade: data.municipio || '',
-          estado: data.uf || ''
+          estado: data.uf || '',
+          codigo_municipio: codigoIBGE || '',
+          indicador_ie: indicadorIE
         });
 
-        toast.success('Dados do CNPJ carregados com sucesso!');
+        if (codigoIBGE) {
+          toast.success('Dados do CNPJ e código IBGE carregados com sucesso!');
+        } else {
+          toast.success('Dados do CNPJ carregados! Código IBGE não encontrado automaticamente.');
+        }
       } else {
         toast.error(data.message || 'CNPJ não encontrado');
       }
@@ -561,15 +610,23 @@ const ClientesPage: React.FC = () => {
         return;
       }
 
+      // Buscar código IBGE do município
+      const codigoIBGE = await buscarCodigoIBGE(data.localidade, data.uf);
+
       setFormData({
         ...formData,
         endereco: data.logradouro || '',
         bairro: data.bairro || '',
         cidade: data.localidade || '',
-        estado: data.uf || ''
+        estado: data.uf || '',
+        codigo_municipio: codigoIBGE || ''
       });
 
-      toast.success('Endereço encontrado com sucesso!');
+      if (codigoIBGE) {
+        toast.success('Endereço e código IBGE encontrados com sucesso!');
+      } else {
+        toast.success('Endereço encontrado! Código IBGE não encontrado automaticamente.');
+      }
     } catch (error) {
       console.error('Erro ao buscar CEP:', error);
       toast.error('Erro ao buscar CEP. Tente novamente.');
@@ -668,6 +725,10 @@ const ClientesPage: React.FC = () => {
         cidade: formData.cidade || null,
         estado: formData.estado || null,
         cep: formData.cep ? formData.cep.replace(/\D/g, '') : null,
+        // Campos NFe
+        indicador_ie: formData.indicador_ie,
+        codigo_municipio: formData.codigo_municipio || null,
+        inscricao_estadual: formData.inscricao_estadual || null,
         empresa_id: formData.empresa_id,
         usuario_id: (await supabase.auth.getUser()).data.user?.id
       };
@@ -684,14 +745,27 @@ const ClientesPage: React.FC = () => {
         if (error) throw error;
         clienteId = editingCliente.id;
 
-        // Excluir descontos existentes para recriar
-        const { error: deleteDescontosPrazoError } = await supabase
-          .from('cliente_descontos_prazo')
-          .delete()
-          .eq('cliente_id', clienteId);
+        // Verificar se há pedidos que referenciam os descontos antes de deletar
+        const { data: pedidosComDesconto, error: checkError } = await supabase
+          .from('pedidos')
+          .select('id, desconto_prazo_id')
+          .eq('cliente_id', clienteId)
+          .not('desconto_prazo_id', 'is', null);
 
-        if (deleteDescontosPrazoError) throw deleteDescontosPrazoError;
+        if (checkError) throw checkError;
 
+        // Se não há pedidos referenciando os descontos, pode deletar
+        if (!pedidosComDesconto || pedidosComDesconto.length === 0) {
+          // Excluir descontos existentes para recriar
+          const { error: deleteDescontosPrazoError } = await supabase
+            .from('cliente_descontos_prazo')
+            .delete()
+            .eq('cliente_id', clienteId);
+
+          if (deleteDescontosPrazoError) throw deleteDescontosPrazoError;
+        }
+
+        // Descontos por valor podem ser sempre deletados (não há FK em pedidos)
         const { error: deleteDescontosValorError } = await supabase
           .from('cliente_descontos_valor')
           .delete()
@@ -715,21 +789,39 @@ const ClientesPage: React.FC = () => {
         toast.success('Cliente cadastrado com sucesso!');
       }
 
-      // Salvar descontos por prazo
+      // Salvar descontos por prazo (apenas se não há pedidos referenciando ou é novo cliente)
       if (descontosPrazo.length > 0) {
-        const descontosPrazoData = descontosPrazo.map(desconto => ({
-          cliente_id: clienteId,
-          empresa_id: formData.empresa_id,
-          prazo_dias: desconto.prazo_dias,
-          percentual: desconto.percentual,
-          tipo: desconto.tipo
-        }));
+        // Verificar se é edição e se há pedidos com desconto
+        let podeInserirDescontos = true;
 
-        const { error: descontosPrazoError } = await supabase
-          .from('cliente_descontos_prazo')
-          .insert(descontosPrazoData);
+        if (editingCliente) {
+          const { data: pedidosComDesconto } = await supabase
+            .from('pedidos')
+            .select('id')
+            .eq('cliente_id', clienteId)
+            .not('desconto_prazo_id', 'is', null);
 
-        if (descontosPrazoError) throw descontosPrazoError;
+          podeInserirDescontos = !pedidosComDesconto || pedidosComDesconto.length === 0;
+        }
+
+        if (podeInserirDescontos) {
+          const descontosPrazoData = descontosPrazo.map(desconto => ({
+            cliente_id: clienteId,
+            empresa_id: formData.empresa_id,
+            prazo_dias: desconto.prazo_dias,
+            percentual: desconto.percentual,
+            tipo: desconto.tipo
+          }));
+
+          const { error: descontosPrazoError } = await supabase
+            .from('cliente_descontos_prazo')
+            .insert(descontosPrazoData);
+
+          if (descontosPrazoError) throw descontosPrazoError;
+        } else {
+          // Avisar que os descontos por prazo não foram atualizados devido a pedidos existentes
+          toast.warning('Descontos por prazo não foram atualizados pois há pedidos vinculados a eles.');
+        }
       }
 
       // Salvar descontos por valor
@@ -829,7 +921,10 @@ const ClientesPage: React.FC = () => {
       bairro,
       cidade,
       estado,
-      empresa_id: cliente.empresa_id
+      empresa_id: cliente.empresa_id,
+      indicador_ie: (cliente as any).indicador_ie || 9,
+      codigo_municipio: (cliente as any).codigo_municipio || '',
+      inscricao_estadual: (cliente as any).inscricao_estadual || ''
     });
 
     // Carregar os descontos do cliente
@@ -876,7 +971,10 @@ const ClientesPage: React.FC = () => {
       bairro: '',
       cidade: '',
       estado: '',
-      empresa_id: currentEmpresaId
+      empresa_id: currentEmpresaId,
+      indicador_ie: 9,
+      codigo_municipio: '',
+      inscricao_estadual: ''
     });
 
     setNovoTelefone({
@@ -914,6 +1012,7 @@ const ClientesPage: React.FC = () => {
     setActiveTab('dados-gerais');
 
     setEditingCliente(null);
+    setTemPedidosVinculados(false);
   };
 
   // Função para carregar os descontos do cliente
@@ -938,6 +1037,16 @@ const ClientesPage: React.FC = () => {
 
       if (descontosValorError) throw descontosValorError;
       setDescontosValor(descontosValorData || []);
+
+      // Verificar se há pedidos vinculados aos descontos
+      const { data: pedidosComDesconto, error: checkError } = await supabase
+        .from('pedidos')
+        .select('id')
+        .eq('cliente_id', clienteId)
+        .not('desconto_prazo_id', 'is', null);
+
+      if (checkError) throw checkError;
+      setTemPedidosVinculados(pedidosComDesconto && pedidosComDesconto.length > 0);
 
       // Resetar os inputs para os valores padrão
       setPrazoPercentualInput('0');
@@ -1341,7 +1450,7 @@ const ClientesPage: React.FC = () => {
                             <input
                               type="radio"
                               checked={formData.tipo_documento === 'CNPJ'}
-                              onChange={() => setFormData({ ...formData, tipo_documento: 'CNPJ', documento: '' })}
+                              onChange={() => handleTipoDocumentoChange('CNPJ')}
                               className="mr-2 text-primary-500 focus:ring-primary-500/20"
                             />
                             <span className="text-white">CNPJ</span>
@@ -1350,7 +1459,7 @@ const ClientesPage: React.FC = () => {
                             <input
                               type="radio"
                               checked={formData.tipo_documento === 'CPF'}
-                              onChange={() => setFormData({ ...formData, tipo_documento: 'CPF', documento: '', razao_social: '' })}
+                              onChange={() => handleTipoDocumentoChange('CPF')}
                               className="mr-2 text-primary-500 focus:ring-primary-500/20"
                             />
                             <span className="text-white">CPF</span>
@@ -1687,6 +1796,86 @@ const ClientesPage: React.FC = () => {
                       />
                     </div>
                   </div>
+
+                  {/* Código do Município (IBGE) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">
+                      Código do Município (IBGE) <span className="text-gray-500 text-xs">(NFe)</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={formData.codigo_municipio}
+                        onChange={(e) => setFormData({ ...formData, codigo_municipio: e.target.value })}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-3 pr-10 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        placeholder="3525904 (7 dígitos)"
+                        maxLength={7}
+                        pattern="[0-9]{7}"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (formData.cidade && formData.estado) {
+                            const codigoIBGE = await buscarCodigoIBGE(formData.cidade, formData.estado);
+                            if (codigoIBGE) {
+                              setFormData(prev => ({ ...prev, codigo_municipio: codigoIBGE }));
+                              toast.success('Código IBGE encontrado!');
+                            } else {
+                              toast.error('Código IBGE não encontrado para esta cidade/estado.');
+                            }
+                          } else {
+                            toast.error('Preencha cidade e estado primeiro.');
+                          }
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                        title="Buscar código IBGE automaticamente"
+                      >
+                        <Search size={18} />
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Preenchido automaticamente ao buscar por CNPJ ou CEP
+                    </p>
+                  </div>
+
+                  {/* Indicador de Inscrição Estadual */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-1">
+                      Indicador de Inscrição Estadual <span className="text-gray-500 text-xs">(NFe)</span>
+                    </label>
+                    <select
+                      value={formData.indicador_ie}
+                      onChange={(e) => setFormData({ ...formData, indicador_ie: parseInt(e.target.value) })}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    >
+                      <option value={1}>1 - Contribuinte ICMS</option>
+                      <option value={2}>2 - Contribuinte isento de IE</option>
+                      <option value={9}>9 - Não contribuinte</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Automaticamente definido: CPF = Não contribuinte, CNPJ = Contribuinte
+                    </p>
+                  </div>
+
+                  {/* Inscrição Estadual (apenas se for contribuinte) */}
+                  {formData.indicador_ie === 1 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">
+                        Inscrição Estadual <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.inscricao_estadual}
+                        onChange={(e) => setFormData({ ...formData, inscricao_estadual: e.target.value })}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        placeholder="123456789"
+                        required={formData.indicador_ie === 1}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Obrigatório para contribuintes ICMS
+                      </p>
+                    </div>
+                  )}
 
                   {/* Campo oculto para empresa - selecionada automaticamente */}
                   <input type="hidden" value={formData.empresa_id} />

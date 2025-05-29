@@ -171,6 +171,20 @@ const ProdutosPage: React.FC = () => {
     valor_desconto_quantidade: 0,
     estoque_inicial: 0,
     estoque_minimo: 0,
+    // Campos fiscais NFe
+    ncm: '',
+    cfop: '5102',
+    origem_produto: 0,
+    situacao_tributaria: 'tributado_integral',
+    cst_icms: '',
+    csosn_icms: '',
+    cst_pis: '01',
+    cst_cofins: '01',
+    aliquota_icms: 0,
+    aliquota_pis: 1.65,
+    aliquota_cofins: 7.60,
+    cest: '',
+    peso_liquido: 0,
     estoque_minimo_ativo: false,
   });
 

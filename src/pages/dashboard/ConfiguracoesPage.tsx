@@ -3476,15 +3476,15 @@ const ConfiguracoesPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-120px)] gap-6">
+    <div className="flex min-h-[calc(100vh-120px)] gap-6">
       {/* Sidebar de Configurações */}
-      <div className="w-80 bg-background-card rounded-lg border border-gray-800 p-4">
+      <div className="w-80 bg-background-card rounded-lg border border-gray-800 p-4 flex flex-col overflow-hidden h-full">
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-white mb-2">Configurações</h2>
           <p className="text-gray-400 text-sm">Gerencie as configurações do seu sistema</p>
         </div>
 
-        <nav className="space-y-2">
+        <nav className="space-y-2 flex-1 overflow-y-auto custom-scrollbar">
           {/* Seção Empresa */}
           <div className="mb-4">
             <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Empresa</h3>
