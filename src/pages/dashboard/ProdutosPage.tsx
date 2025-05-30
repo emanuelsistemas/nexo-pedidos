@@ -4446,12 +4446,23 @@ const ProdutosPage: React.FC = () => {
                                   let newSituacaoTributaria = novoProduto.situacao_tributaria;
 
                                   // Aplicar regras fiscais obrigatórias baseadas no CFOP
+                                  let newAliquotaIcms = novoProduto.aliquota_icms;
+
                                   if (newCfop === '5102' || newCfop === '5101') {
                                     // CFOP 5102/5101: CST 00 (Normal) ou CSOSN 102 (Simples)
                                     newSituacaoTributaria = 'tributado_integral';
+                                    // CFOP 5102: Alíquota ICMS 18%
+                                    if (newCfop === '5102') {
+                                      newAliquotaIcms = 18;
+                                    }
                                   } else if (newCfop === '5405' || newCfop === '5401' || newCfop === '5403') {
                                     // CFOP 5405/5401/5403: CST 60 (Normal) ou CSOSN 500 (Simples)
                                     newSituacaoTributaria = 'tributado_st';
+                                    // Outros CFOPs: Alíquota ICMS 0%
+                                    newAliquotaIcms = 0;
+                                  } else {
+                                    // Outros CFOPs: Alíquota ICMS 0%
+                                    newAliquotaIcms = 0;
                                   }
 
                                   // Se o CFOP não for 5405, limpar o CEST
@@ -4460,13 +4471,15 @@ const ProdutosPage: React.FC = () => {
                                       ...novoProduto,
                                       cfop: newCfop,
                                       cest: '',
-                                      situacao_tributaria: newSituacaoTributaria
+                                      situacao_tributaria: newSituacaoTributaria,
+                                      aliquota_icms: newAliquotaIcms
                                     });
                                   } else {
                                     setNovoProduto({
                                       ...novoProduto,
                                       cfop: newCfop,
-                                      situacao_tributaria: newSituacaoTributaria
+                                      situacao_tributaria: newSituacaoTributaria,
+                                      aliquota_icms: newAliquotaIcms
                                     });
                                   }
                                 }}
@@ -4513,6 +4526,11 @@ const ProdutosPage: React.FC = () => {
                                     {(novoProduto.cfop === '5102' || novoProduto.cfop === '5101') && 'CFOP requer situação tributária "Tributada integralmente" (CST 00/CSOSN 102)'}
                                     {(novoProduto.cfop === '5405' || novoProduto.cfop === '5401' || novoProduto.cfop === '5403') && 'CFOP requer situação tributária "ICMS por substituição tributária" (CST 60/CSOSN 500)'}
                                   </p>
+                                  {novoProduto.cfop === '5102' && (
+                                    <p className="text-yellow-200 mt-1 text-xs">
+                                      💡 CFOP 5102 sugere alíquota ICMS de 18% (varia por estado)
+                                    </p>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -4679,6 +4697,11 @@ const ProdutosPage: React.FC = () => {
                                   min="0"
                                   max="100"
                                 />
+                                {novoProduto.cfop === '5102' && (
+                                  <p className="text-xs text-blue-400 mt-1">
+                                    💡 CFOP 5102 sugere alíquota ICMS de 18% (pode variar por estado - ajuste conforme necessário)
+                                  </p>
+                                )}
                               </div>
                               <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-2">
