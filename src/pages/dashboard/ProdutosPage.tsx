@@ -216,7 +216,7 @@ const ProdutosPage: React.FC = () => {
   const [expandedOpcoesForm, setExpandedOpcoesForm] = useState<Record<string, boolean>>({});
 
   // Estados para as abas
-  const [activeTab, setActiveTab] = useState<'dados' | 'fotos' | 'estoque' | 'adicionais'>('dados');
+  const [activeTab, setActiveTab] = useState<'dados' | 'fotos' | 'estoque' | 'adicionais' | 'impostos'>('dados');
   const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -227,6 +227,9 @@ const ProdutosPage: React.FC = () => {
 
   // Estado para unidades de medida
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadeMedida[]>([]);
+
+  // Estado para regime tributário da empresa
+  const [regimeTributario, setRegimeTributario] = useState<number>(3);
 
   // Estado para controlar o formulário de unidade de medida
   const [showUnidadeMedidaForm, setShowUnidadeMedidaForm] = useState(false);
@@ -285,7 +288,35 @@ const ProdutosPage: React.FC = () => {
     loadTipoControleEstoque();
     loadProdutosEstoque();
     loadOpcoesAdicionaisConfig();
+    loadRegimeTributario();
   }, []);
+
+  const loadRegimeTributario = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('regime_tributario')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      if (empresaData?.regime_tributario) {
+        setRegimeTributario(empresaData.regime_tributario);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar regime tributário:', error);
+    }
+  };
 
   // useEffect separado para verificar produto para editar após grupos carregarem
   useEffect(() => {
@@ -944,6 +975,20 @@ const ProdutosPage: React.FC = () => {
       estoque_inicial: 0,
       estoque_minimo: 0,
       estoque_minimo_ativo: false,
+      // Campos fiscais NFe com valores padrão
+      ncm: '',
+      cfop: '5102',
+      origem_produto: 0,
+      situacao_tributaria: 'tributado_integral',
+      cst_icms: '',
+      csosn_icms: '',
+      cst_pis: '01',
+      cst_cofins: '01',
+      aliquota_icms: 0,
+      aliquota_pis: 1.65,
+      aliquota_cofins: 7.60,
+      cest: '',
+      peso_liquido: 0,
     });
 
     // Inicializa o preço formatado
@@ -1102,6 +1147,20 @@ const ProdutosPage: React.FC = () => {
       estoque_inicial: produto.estoque_inicial || 0,
       estoque_minimo: produto.estoque_minimo || 0,
       estoque_minimo_ativo: produto.estoque_minimo_ativo || false,
+      // Campos fiscais NFe
+      ncm: produto.ncm || '',
+      cfop: produto.cfop || '5102',
+      origem_produto: produto.origem_produto || 0,
+      situacao_tributaria: produto.situacao_tributaria || 'tributado_integral',
+      cst_icms: produto.cst_icms || '',
+      csosn_icms: produto.csosn_icms || '',
+      cst_pis: produto.cst_pis || '01',
+      cst_cofins: produto.cst_cofins || '01',
+      aliquota_icms: produto.aliquota_icms || 0,
+      aliquota_pis: produto.aliquota_pis || 1.65,
+      aliquota_cofins: produto.aliquota_cofins || 7.60,
+      cest: produto.cest || '',
+      peso_liquido: produto.peso_liquido || 0,
     };
 
     // Definir o estado do novo produto
@@ -2909,6 +2968,16 @@ const ProdutosPage: React.FC = () => {
                           Adicionais
                         </button>
                       )}
+                      <button
+                        className={`px-4 py-2 font-medium text-sm ${
+                          activeTab === 'impostos'
+                            ? 'text-primary-500 border-b-2 border-primary-500'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                        onClick={() => setActiveTab('impostos')}
+                      >
+                        Impostos
+                      </button>
                     </div>
 
                     {activeTab === 'dados' && (
@@ -4131,6 +4200,380 @@ const ProdutosPage: React.FC = () => {
                             variant="primary"
                             className="flex-1"
                             onClick={async () => {
+                              // Simular o evento de submit do formulário
+                              const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                              await handleSubmitProduto(fakeEvent);
+                            }}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? 'Salvando...' : 'Concluir'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === 'impostos' && (
+                      <div className="space-y-6">
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                          <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                              <polyline points="14,2 14,8 20,8"></polyline>
+                              <line x1="16" y1="13" x2="8" y2="13"></line>
+                              <line x1="16" y1="17" x2="8" y2="17"></line>
+                              <polyline points="10,9 9,9 8,9"></polyline>
+                            </svg>
+                            Dados Fiscais (NFe)
+                          </h3>
+                          <p className="text-sm text-gray-400 mb-6">
+                            Configure os dados fiscais necessários para emissão de NFe. Os códigos CST/CSOSN são definidos automaticamente baseados no regime tributário da empresa.
+                          </p>
+
+                          <div className="space-y-6">
+                            {/* NCM - Obrigatório */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                NCM (Nomenclatura Comum do Mercosul) <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={novoProduto.ncm || ''}
+                                onChange={(e) => {
+                                  // Permitir apenas números e limitar a 8 dígitos
+                                  const valor = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                  setNovoProduto({ ...novoProduto, ncm: valor });
+                                }}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                placeholder="12345678 (8 dígitos)"
+                                maxLength={8}
+                                pattern="[0-9]{8}"
+                                required
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Código de 8 dígitos obrigatório para NFe. Consulte a tabela NCM oficial.
+                              </p>
+                            </div>
+
+                            {/* CFOP */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                CFOP (Código Fiscal de Operações) <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                value={novoProduto.cfop || '5102'}
+                                onChange={(e) => setNovoProduto({ ...novoProduto, cfop: e.target.value })}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                style={{
+                                  maxWidth: '100%',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                required
+                                title={`${novoProduto.cfop || '5102'} - ${
+                                  novoProduto.cfop === '5102' ? 'Venda de mercadoria adquirida ou recebida de terceiros' :
+                                  novoProduto.cfop === '5101' ? 'Venda de produção do estabelecimento' :
+                                  novoProduto.cfop === '5405' ? 'Venda de mercadoria adquirida ou recebida de terceiros (ST)' :
+                                  novoProduto.cfop === '5401' ? 'Venda de produção do estabelecimento (ST)' :
+                                  novoProduto.cfop === '5403' ? 'Venda de mercadoria adquirida ou recebida de terceiros, sujeita ao regime de substituição tributária' :
+                                  'Código CFOP selecionado'
+                                }`}
+                              >
+                                <option value="5102" title="5102 - Venda de mercadoria adquirida ou recebida de terceiros">
+                                  5102 - Venda de mercadoria de terceiros
+                                </option>
+                                <option value="5101" title="5101 - Venda de produção do estabelecimento">
+                                  5101 - Venda de produção própria
+                                </option>
+                                <option value="5405" title="5405 - Venda de mercadoria adquirida ou recebida de terceiros (ST)">
+                                  5405 - Venda de mercadoria de terceiros (ST)
+                                </option>
+                                <option value="5401" title="5401 - Venda de produção do estabelecimento (ST)">
+                                  5401 - Venda de produção própria (ST)
+                                </option>
+                                <option value="5403" title="5403 - Venda de mercadoria adquirida ou recebida de terceiros, sujeita ao regime de substituição tributária">
+                                  5403 - Venda com substituição tributária
+                                </option>
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Passe o mouse sobre as opções para ver a descrição completa
+                              </p>
+                            </div>
+
+                            {/* Origem do Produto */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Origem do Produto <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                value={novoProduto.origem_produto || 0}
+                                onChange={(e) => setNovoProduto({ ...novoProduto, origem_produto: parseInt(e.target.value) })}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                style={{
+                                  maxWidth: '100%',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                required
+                              >
+                                <option value={0} title="0 - Nacional, exceto as indicadas nos códigos 3, 4, 5 e 8">
+                                  0 - Nacional (padrão)
+                                </option>
+                                <option value={1} title="1 - Estrangeira - Importação direta, exceto a indicada no código 6">
+                                  1 - Estrangeira - Importação direta
+                                </option>
+                                <option value={2} title="2 - Estrangeira - Adquirida no mercado interno, exceto a indicada no código 7">
+                                  2 - Estrangeira - Mercado interno
+                                </option>
+                                <option value={3} title="3 - Nacional, mercadoria ou bem com Conteúdo de Importação superior a 40% e inferior ou igual a 70%">
+                                  3 - Nacional - Conteúdo importação 40-70%
+                                </option>
+                                <option value={4} title="4 - Nacional, cuja produção tenha sido feita em conformidade com os processos produtivos básicos">
+                                  4 - Nacional - Processos produtivos básicos
+                                </option>
+                                <option value={5} title="5 - Nacional, mercadoria ou bem com Conteúdo de Importação inferior ou igual a 40%">
+                                  5 - Nacional - Conteúdo importação ≤40%
+                                </option>
+                                <option value={6} title="6 - Estrangeira - Importação direta, sem similar nacional, constante em lista da CAMEX e gás natural">
+                                  6 - Estrangeira - Sem similar nacional
+                                </option>
+                                <option value={7} title="7 - Estrangeira - Adquirida no mercado interno, sem similar nacional, constante lista CAMEX e gás natural">
+                                  7 - Estrangeira - Mercado interno sem similar
+                                </option>
+                                <option value={8} title="8 - Nacional, mercadoria ou bem com Conteúdo de Importação superior a 70%">
+                                  8 - Nacional - Conteúdo importação &gt;70%
+                                </option>
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Passe o mouse sobre as opções para ver a descrição completa
+                              </p>
+                            </div>
+
+                            {/* Situação Tributária */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Situação Tributária <span className="text-red-500">*</span>
+                              </label>
+                              <select
+                                value={novoProduto.situacao_tributaria || 'tributado_integral'}
+                                onChange={(e) => setNovoProduto({ ...novoProduto, situacao_tributaria: e.target.value })}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                style={{
+                                  maxWidth: '100%',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                required
+                              >
+                                <option
+                                  value="tributado_integral"
+                                  title={regimeTributario === 1 || regimeTributario === 2
+                                    ? '102 - Tributada sem permissão de crédito (Simples Nacional)'
+                                    : '00 - Tributada integralmente (Regime Normal)'
+                                  }
+                                >
+                                  {regimeTributario === 1 || regimeTributario === 2
+                                    ? '102 - Tributada sem permissão de crédito'
+                                    : '00 - Tributada integralmente'
+                                  }
+                                </option>
+                                <option
+                                  value="tributado_st"
+                                  title={regimeTributario === 1 || regimeTributario === 2
+                                    ? '500 - ICMS cobrado por substituição tributária (Simples Nacional)'
+                                    : '60 - ICMS cobrado por substituição tributária (Regime Normal)'
+                                  }
+                                >
+                                  {regimeTributario === 1 || regimeTributario === 2
+                                    ? '500 - ICMS por substituição tributária'
+                                    : '60 - ICMS por substituição tributária'
+                                  }
+                                </option>
+                                <option
+                                  value="isento"
+                                  title={regimeTributario === 1 || regimeTributario === 2
+                                    ? '300 - Imune/Não tributada/Isenta (Simples Nacional)'
+                                    : '40 - Isenta/Imune/Não tributada (Regime Normal)'
+                                  }
+                                >
+                                  {regimeTributario === 1 || regimeTributario === 2
+                                    ? '300 - Imune/Não tributada/Isenta'
+                                    : '40 - Isenta/Imune/Não tributada'
+                                  }
+                                </option>
+                                <option
+                                  value="nao_tributado"
+                                  title={regimeTributario === 1 || regimeTributario === 2
+                                    ? '400 - Não tributada pelo Simples Nacional'
+                                    : '41 - Não tributada (Regime Normal)'
+                                  }
+                                >
+                                  {regimeTributario === 1 || regimeTributario === 2
+                                    ? '400 - Não tributada pelo Simples'
+                                    : '41 - Não tributada'
+                                  }
+                                </option>
+                                <option
+                                  value="suspenso"
+                                  title={regimeTributario === 1 || regimeTributario === 2
+                                    ? '103 - Tributada com permissão de crédito (Simples Nacional)'
+                                    : '50 - Suspensão (Regime Normal)'
+                                  }
+                                >
+                                  {regimeTributario === 1 || regimeTributario === 2
+                                    ? '103 - Tributada com permissão de crédito'
+                                    : '50 - Suspensão'
+                                  }
+                                </option>
+                              </select>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {regimeTributario === 1 || regimeTributario === 2
+                                  ? 'Códigos CSOSN para Simples Nacional. Passe o mouse sobre as opções para ver detalhes.'
+                                  : 'Códigos CST para Regime Normal. Passe o mouse sobre as opções para ver detalhes.'
+                                }
+                              </p>
+                            </div>
+
+                            {/* Alíquotas */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  Alíquota ICMS (%)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={novoProduto.aliquota_icms || 0}
+                                  onChange={(e) => setNovoProduto({ ...novoProduto, aliquota_icms: parseFloat(e.target.value) || 0 })}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder="18.00"
+                                  step="0.01"
+                                  min="0"
+                                  max="100"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  Alíquota PIS (%)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={novoProduto.aliquota_pis || 1.65}
+                                  onChange={(e) => setNovoProduto({ ...novoProduto, aliquota_pis: parseFloat(e.target.value) || 0 })}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder="1.65"
+                                  step="0.01"
+                                  min="0"
+                                  max="100"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  Alíquota COFINS (%)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={novoProduto.aliquota_cofins || 7.60}
+                                  onChange={(e) => setNovoProduto({ ...novoProduto, aliquota_cofins: parseFloat(e.target.value) || 0 })}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder="7.60"
+                                  step="0.01"
+                                  min="0"
+                                  max="100"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Campos Opcionais */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  CEST (Código Especificador ST)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={novoProduto.cest || ''}
+                                  onChange={(e) => {
+                                    // Permitir apenas números e limitar a 7 dígitos
+                                    const valor = e.target.value.replace(/\D/g, '').slice(0, 7);
+                                    setNovoProduto({ ...novoProduto, cest: valor });
+                                  }}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder="1234567 (7 dígitos)"
+                                  maxLength={7}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Opcional. Apenas para produtos sujeitos à ST.
+                                </p>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">
+                                  Peso Líquido (kg)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={novoProduto.peso_liquido || 0}
+                                  onChange={(e) => setNovoProduto({ ...novoProduto, peso_liquido: parseFloat(e.target.value) || 0 })}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder="0.000"
+                                  step="0.001"
+                                  min="0"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Peso líquido do produto em quilogramas.
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Informação sobre regime tributário */}
+                            <div className="bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="bg-blue-500/20 rounded-full p-1 mt-0.5">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="l9 12 2 2 4-4"></path>
+                                  </svg>
+                                </div>
+                                <div>
+                                  <h4 className="text-blue-300 font-medium text-sm mb-1">Regime Tributário da Empresa</h4>
+                                  <p className="text-blue-200 text-xs">
+                                    {regimeTributario === 1 && 'Simples Nacional - Utiliza códigos CSOSN (Código de Situação da Operação no Simples Nacional).'}
+                                    {regimeTributario === 2 && 'Simples Nacional (Excesso) - Utiliza códigos CSOSN (Código de Situação da Operação no Simples Nacional).'}
+                                    {regimeTributario === 3 && 'Regime Normal - Utiliza códigos CST (Código de Situação Tributária).'}
+                                  </p>
+                                  <p className="text-blue-200 text-xs mt-1">
+                                    {regimeTributario === 1 || regimeTributario === 2
+                                      ? 'Se a empresa mudar para Regime Normal, os códigos CSOSN serão convertidos automaticamente para CST.'
+                                      : 'Se a empresa mudar para Simples Nacional, os códigos CST serão convertidos automaticamente para CSOSN.'
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-4 pt-4">
+                          <Button
+                            type="button"
+                            variant="text"
+                            className="flex-1"
+                            onClick={() => setActiveTab('dados')}
+                          >
+                            Voltar
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="primary"
+                            className="flex-1"
+                            onClick={async () => {
+                              // Validar NCM obrigatório
+                              if (!novoProduto.ncm || novoProduto.ncm.length !== 8) {
+                                showMessage('error', 'NCM é obrigatório e deve ter 8 dígitos');
+                                return;
+                              }
+
                               // Simular o evento de submit do formulário
                               const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
                               await handleSubmitProduto(fakeEvent);

@@ -22,6 +22,20 @@ export interface Produto {
   unidade_medida_id?: string;
   created_at?: string;
   opcoes_adicionais?: OpcaoAdicional[];
+  // Campos fiscais NFe
+  ncm?: string;
+  cfop?: string;
+  origem_produto?: number;
+  situacao_tributaria?: string;
+  cst_icms?: string;
+  csosn_icms?: string;
+  cst_pis?: string;
+  cst_cofins?: string;
+  aliquota_icms?: number;
+  aliquota_pis?: number;
+  aliquota_cofins?: number;
+  cest?: string;
+  peso_liquido?: number;
 }
 
 export interface Grupo {
