@@ -315,6 +315,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       valor_credito_sn: 0
     },
     pagamentos: [],
+    chaves_ref: [],
     empresa: null
   });
 
@@ -652,7 +653,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           />
         );
       case 'chaves_ref':
-        return <ChavesRefSection />;
+        return (
+          <ChavesRefSection
+            data={nfeData.chaves_ref}
+            onChange={(data) => setNfeData(prev => ({ ...prev, chaves_ref: data }))}
+          />
+        );
       case 'transportadora':
         return <TransportadoraSection />;
       case 'intermediador':
@@ -2011,16 +2017,136 @@ const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void
   );
 };
 
-const ChavesRefSection: React.FC = () => (
-  <div className="p-4">
-    <h2 className="text-xl font-bold text-white mb-4">Lista de Chaves Referenciadas</h2>
-    <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-      <div className="text-center py-8">
-        <p className="text-gray-400">Nenhuma chave referenciada</p>
+const ChavesRefSection: React.FC<{ data: any[]; onChange: (data: any[]) => void }> = ({ data: chaves = [], onChange }) => {
+  const [chaveForm, setChaveForm] = useState('');
+
+  const handleAdicionarChave = () => {
+    if (!chaveForm.trim()) {
+      alert('Digite uma chave de acesso válida');
+      return;
+    }
+
+    // Validar formato da chave (44 dígitos)
+    const chaveNumeros = chaveForm.replace(/\D/g, '');
+    if (chaveNumeros.length !== 44) {
+      alert('Chave de acesso deve ter 44 dígitos');
+      return;
+    }
+
+    // Verificar se a chave já existe
+    if (chaves && chaves.some(c => c.chave === chaveNumeros)) {
+      alert('Esta chave já foi adicionada');
+      return;
+    }
+
+    const novaChave = {
+      id: Date.now().toString(),
+      chave: chaveNumeros,
+      chave_formatada: formatarChave(chaveNumeros)
+    };
+
+    onChange([...(chaves || []), novaChave]);
+    setChaveForm('');
+  };
+
+  const handleRemoverChave = (id: string) => {
+    onChange((chaves || []).filter(c => c.id !== id));
+  };
+
+  const formatarChave = (chave: string) => {
+    // Formatar chave: 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000
+    return chave.replace(/(\d{4})/g, '$1 ').trim();
+  };
+
+  const handleChaveChange = (value: string) => {
+    // Permitir apenas números e limitar a 44 dígitos
+    const numeros = value.replace(/\D/g, '').slice(0, 44);
+    setChaveForm(numeros);
+  };
+
+  return (
+    <div className="p-4">
+      <h2 className="text-xl font-bold text-white mb-4">Lista de Chaves Referenciadas</h2>
+
+      {/* Formulário para adicionar chave */}
+      <div className="mb-6">
+        <h3 className="text-lg font-bold text-white mb-4">Nova Chave Referenciada</h3>
+        <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Chave
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chaveForm}
+                  onChange={(e) => handleChaveChange(e.target.value)}
+                  placeholder="Digite a chave de acesso (44 dígitos)"
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 font-mono text-sm"
+                  maxLength={44}
+                />
+                <button
+                  type="button"
+                  onClick={handleAdicionarChave}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2 whitespace-nowrap"
+                >
+                  <Plus size={16} />
+                  ADICIONAR
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {chaveForm.length}/44 dígitos
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de chaves */}
+      <div>
+        <h3 className="text-lg font-bold text-white mb-4">Chaves Adicionadas</h3>
+        <div className="bg-background-card rounded-lg border border-gray-800 overflow-hidden">
+          {(chaves || []).length === 0 ? (
+            <div className="p-8 text-center">
+              <p className="text-gray-400">Nenhuma chave referenciada</p>
+              <p className="text-sm text-gray-500 mt-1">Use o formulário acima para adicionar chaves de acesso</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-800/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-300 uppercase">Chave de Acesso</th>
+                    <th className="px-4 py-3 text-right text-sm font-medium text-gray-300 uppercase">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {(chaves || []).map((chave) => (
+                    <tr key={chave.id} className="hover:bg-gray-800/30">
+                      <td className="px-4 py-3 text-sm text-white font-mono">
+                        {chave.chave_formatada}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-white text-right">
+                        <button
+                          onClick={() => handleRemoverChave(chave.id)}
+                          className="text-red-400 hover:text-red-300 p-1"
+                          title="Remover chave"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const TransportadoraSection: React.FC = () => (
   <div className="p-4">
