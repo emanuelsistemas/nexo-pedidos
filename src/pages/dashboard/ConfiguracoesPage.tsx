@@ -7,6 +7,7 @@ import SearchableSelect from '../../components/comum/SearchableSelect';
 import { showMessage, translateErrorMessage } from '../../utils/toast';
 import { TipoUserConfig } from '../../types';
 import { useAuthSession } from '../../hooks/useAuthSession';
+import { extractCertificateInfo, checkCertificateExpiry } from '../../api/certificateApi';
 
 // Componente de Skeleton Loading para Configurações
 const ConfigSkeletonLoader = () => (
@@ -271,6 +272,7 @@ const ConfiguracoesPage: React.FC = () => {
   // Estados para certificado digital
   const [certificadoFile, setCertificadoFile] = useState<File | null>(null);
   const [certificadoSenha, setCertificadoSenha] = useState('');
+  const [certificadoValidade, setCertificadoValidade] = useState('');
   const [certificadoInfo, setCertificadoInfo] = useState<any>(null);
   const [isUploadingCertificado, setIsUploadingCertificado] = useState(false);
   const [showRemoveCertificadoModal, setShowRemoveCertificadoModal] = useState(false);
@@ -1715,19 +1717,17 @@ const ConfiguracoesPage: React.FC = () => {
   // Função para extrair informações do certificado digital
   const extrairInfoCertificado = async (file: File, senha: string) => {
     try {
-      // Aqui você pode implementar a lógica para extrair informações do certificado
-      // Por enquanto, vamos simular a extração de dados
-      const dataValidade = new Date();
-      dataValidade.setFullYear(dataValidade.getFullYear() + 1); // Simula 1 ano de validade
+      // Usar o utilitário de extração de certificado
+      const info = await extractCertificateInfo(file, senha);
 
       return {
-        nome: file.name.replace(/\.[^/.]+$/, ""), // Remove extensão
-        validade: dataValidade.toISOString(),
-        status: 'ativo'
+        nome: info.nome,
+        validade: info.validade,
+        status: info.status
       };
     } catch (error) {
-      console.error('Erro ao extrair informações do certificado:', error);
-      throw new Error('Erro ao processar certificado digital');
+      console.error('❌ Erro ao extrair informações do certificado:', error);
+      throw new Error('Erro ao processar certificado digital. Verifique se o arquivo e a senha estão corretos.');
     }
   };
 
@@ -3624,33 +3624,60 @@ const ConfiguracoesPage: React.FC = () => {
                         <h3 className="text-green-400 font-medium mb-3">Certificado Digital Configurado</h3>
 
                         {/* Destaque da Validade */}
-                        {certificadoInfo.certificado_digital_validade && (
-                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-3">
-                            <div className="flex items-center gap-2">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                              </svg>
-                              <span className="text-blue-400 font-medium">Válido até:</span>
-                              <span className="text-white font-bold text-lg">
-                                {new Date(certificadoInfo.certificado_digital_validade).toLocaleDateString('pt-BR')}
-                              </span>
-                              {(() => {
-                                const hoje = new Date();
-                                const validade = new Date(certificadoInfo.certificado_digital_validade);
-                                const diasRestantes = Math.ceil((validade.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+                        {certificadoInfo.certificado_digital_validade ? (() => {
+                          const expiryCheck = checkCertificateExpiry(certificadoInfo.certificado_digital_validade);
+                          const colorClasses = {
+                            red: 'bg-red-500/10 border-red-500/20 text-red-400',
+                            yellow: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400',
+                            green: 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                          };
 
-                                if (diasRestantes < 0) {
-                                  return <span className="text-red-400 font-medium ml-2">⚠️ VENCIDO</span>;
-                                } else if (diasRestantes <= 30) {
-                                  return <span className="text-yellow-400 font-medium ml-2">⚠️ Vence em {diasRestantes} dias</span>;
-                                } else {
-                                  return <span className="text-green-400 font-medium ml-2">✅ {diasRestantes} dias restantes</span>;
-                                }
-                              })()}
+                          return (
+                            <div className={`${colorClasses[expiryCheck.color]} rounded-lg p-3 mb-3`}>
+                              <div className="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-${expiryCheck.color}-400`}>
+                                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span className={`text-${expiryCheck.color}-400 font-medium`}>Válido até:</span>
+                                <span className="text-white font-bold text-lg">
+                                  {new Date(certificadoInfo.certificado_digital_validade).toLocaleDateString('pt-BR')}
+                                </span>
+                                <span className={`text-${expiryCheck.color}-400 font-medium ml-2`}>
+                                  {expiryCheck.status === 'expired' && '⚠️ '}
+                                  {expiryCheck.status === 'expiring' && '⚠️ '}
+                                  {expiryCheck.status === 'valid' && '✅ '}
+                                  {expiryCheck.message}
+                                </span>
+                              </div>
+                              {expiryCheck.status === 'expired' && (
+                                <p className="text-sm text-red-300 mt-1 font-medium">
+                                  🚨 CERTIFICADO VENCIDO! Renove imediatamente para continuar emitindo NFe.
+                                </p>
+                              )}
+                              {expiryCheck.status === 'expiring' && (
+                                <p className="text-sm text-yellow-300 mt-1 font-medium">
+                                  ⚠️ Certificado próximo do vencimento! Providencie a renovação.
+                                </p>
+                              )}
                             </div>
+                          );
+                        })() : (
+                          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-3">
+                            <div className="flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                              </svg>
+                              <span className="text-red-400 font-medium">⚠️ ATENÇÃO: Data de validade não extraída</span>
+                            </div>
+                            <p className="text-sm text-red-300 mt-1 font-medium">
+                              🚨 CRÍTICO: Sem a data de validade, não podemos alertar sobre vencimento!
+                              Verifique manualmente e considere reenviar o certificado.
+                            </p>
                           </div>
                         )}
 
@@ -3660,6 +3687,7 @@ const ConfiguracoesPage: React.FC = () => {
                           {certificadoInfo.certificado_digital_uploaded_at && (
                             <p><strong>Enviado em:</strong> {new Date(certificadoInfo.certificado_digital_uploaded_at).toLocaleDateString('pt-BR')}</p>
                           )}
+
                         </div>
                         <div className="mt-3">
                           <Button
