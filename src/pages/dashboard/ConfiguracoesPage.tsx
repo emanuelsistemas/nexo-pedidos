@@ -276,6 +276,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [certificadoInfo, setCertificadoInfo] = useState<any>(null);
   const [isUploadingCertificado, setIsUploadingCertificado] = useState(false);
   const [showRemoveCertificadoModal, setShowRemoveCertificadoModal] = useState(false);
+  const [ambienteNFe, setAmbienteNFe] = useState<'1' | '2'>('2'); // 1=Produção, 2=Homologação
 
   useEffect(() => {
     const loadDataWithLoading = async () => {
@@ -704,13 +705,14 @@ const ConfiguracoesPage: React.FC = () => {
       if (activeSection === 'certificado') {
         const { data: empresaData } = await supabase
           .from('empresas')
-          .select('certificado_digital_path, certificado_digital_senha, certificado_digital_validade, certificado_digital_status, certificado_digital_nome, certificado_digital_uploaded_at')
+          .select('certificado_digital_path, certificado_digital_senha, certificado_digital_validade, certificado_digital_status, certificado_digital_nome, certificado_digital_uploaded_at, ambiente_nfe')
           .eq('id', usuarioData.empresa_id)
           .single();
 
         if (empresaData) {
           setCertificadoInfo(empresaData);
           setCertificadoSenha(empresaData.certificado_digital_senha || '');
+          setAmbienteNFe(empresaData.ambiente_nfe || '2'); // Padrão homologação
         }
       }
     });
@@ -1876,6 +1878,36 @@ const ConfiguracoesPage: React.FC = () => {
     } catch (error: any) {
       showMessage('error', 'Erro ao remover certificado: ' + error.message);
       setShowRemoveCertificadoModal(false);
+    }
+  };
+
+  // Função para salvar ambiente NFe
+  const handleSalvarAmbienteNFe = async (novoAmbiente: '1' | '2') => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { error } = await supabase
+        .from('empresas')
+        .update({ ambiente_nfe: novoAmbiente })
+        .eq('id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      setAmbienteNFe(novoAmbiente);
+      showMessage('success', `Ambiente alterado para ${novoAmbiente === '1' ? 'Produção' : 'Homologação'}`);
+
+    } catch (error) {
+      console.error('Erro ao salvar ambiente NFe:', error);
+      showMessage('error', 'Erro ao salvar ambiente NFe');
     }
   };
 
@@ -3818,8 +3850,91 @@ const ConfiguracoesPage: React.FC = () => {
                         <li>• Você será notificado quando o certificado estiver próximo do vencimento</li>
                       </ul>
                     </div>
+                  </div>
+                </div>
 
+                {/* Configuração de Ambiente NFe */}
+                <div className="mt-8">
+                  <h3 className="text-lg font-medium text-white mb-4">Ambiente NFe</h3>
 
+                  <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-3">
+                          Selecione o ambiente para emissão de NFe
+                        </label>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Homologação */}
+                          <div
+                            onClick={() => handleSalvarAmbienteNFe('2')}
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                              ambienteNFe === '2'
+                                ? 'border-orange-500 bg-orange-500/10'
+                                : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className={`font-medium ${ambienteNFe === '2' ? 'text-orange-400' : 'text-white'}`}>
+                                🧪 Homologação
+                              </h4>
+                              {ambienteNFe === '2' && (
+                                <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center">
+                                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-400">
+                              Para testes e desenvolvimento. NFe emitidas não têm valor fiscal.
+                            </p>
+                            <div className="mt-2 text-xs text-orange-400 font-medium">
+                              Recomendado para testes
+                            </div>
+                          </div>
+
+                          {/* Produção */}
+                          <div
+                            onClick={() => handleSalvarAmbienteNFe('1')}
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                              ambienteNFe === '1'
+                                ? 'border-green-500 bg-green-500/10'
+                                : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className={`font-medium ${ambienteNFe === '1' ? 'text-green-400' : 'text-white'}`}>
+                                🚀 Produção
+                              </h4>
+                              {ambienteNFe === '1' && (
+                                <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-400">
+                              Para emissão oficial. NFe têm valor fiscal e são enviadas à SEFAZ.
+                            </p>
+                            <div className="mt-2 text-xs text-green-400 font-medium">
+                              Ambiente oficial
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                        <h4 className="text-yellow-400 font-medium mb-2">⚠️ Importante</h4>
+                        <ul className="text-sm text-gray-300 space-y-1">
+                          <li>• <strong>Homologação:</strong> Use para testes. NFe não têm valor fiscal</li>
+                          <li>• <strong>Produção:</strong> Use apenas quando tudo estiver funcionando perfeitamente</li>
+                          <li>• Você pode alternar entre os ambientes a qualquer momento</li>
+                          <li>• O certificado digital deve ser válido para ambos os ambientes</li>
+                        </ul>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

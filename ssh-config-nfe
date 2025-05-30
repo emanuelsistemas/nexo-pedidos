@@ -1,0 +1,43 @@
+# Configuração SSH para VPS NFe
+# Copie este arquivo para: ~/.ssh/config
+
+Host nfe
+    HostName 157.180.88.133
+    User root
+    IdentityFile ~/.ssh/id_rsa_nexo-suporte
+    Port 22
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+# INSTRUÇÕES PARA USAR NO VSCODE:
+# 
+# 1. INSTALAR EXTENSÃO (se não tiver):
+#    - Abra VSCode
+#    - Vá em Extensions (Ctrl+Shift+X)
+#    - Procure por "Remote - SSH"
+#    - Instale a extensão da Microsoft
+#
+# 2. COPIAR ESTE ARQUIVO:
+#    - Copie este arquivo para: C:\Users\Usuario\.ssh\config
+#    - Se a pasta .ssh não existir, crie ela
+#
+# 3. CONECTAR NA VPS:
+#    - Pressione Ctrl+Shift+P
+#    - Digite: "Remote-SSH: Connect to Host"
+#    - Selecione: "nfe"
+#    - O VSCode conectará automaticamente!
+#
+# 4. ALTERNATIVA VIA TERMINAL:
+#    - Abra terminal no VSCode (Ctrl+`)
+#    - Digite: ssh nfe
+#    - Conectará automaticamente sem senha!
+
+# CONFIGURAÇÕES EXPLICADAS:
+# - HostName: IP da sua VPS
+# - User: usuário root
+# - IdentityFile: sua chave SSH privada
+# - ServerAliveInterval: mantém conexão ativa
+# - StrictHostKeyChecking no: não pergunta sobre host key
+# - UserKnownHostsFile /dev/null: não salva host key
