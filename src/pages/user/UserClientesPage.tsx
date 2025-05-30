@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Phone, Mail, MapPin, AlertCircle, X, Building } from 'lucide-react';
+import { Search, Filter, Phone, Mail, MapPin, AlertCircle, X, Building, User } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Cliente {
@@ -19,6 +19,12 @@ interface Cliente {
   empresa_id: string;
   empresa_nome?: string;
   created_at: string;
+  // Tipos de cliente
+  is_cliente?: boolean;
+  is_funcionario?: boolean;
+  is_vendedor?: boolean;
+  is_fornecedor?: boolean;
+  is_transportadora?: boolean;
 }
 
 const UserClientesPage: React.FC = () => {
@@ -29,6 +35,7 @@ const UserClientesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [empresaFilter, setEmpresaFilter] = useState<string>('todas');
+  const [tipoClienteFilter, setTipoClienteFilter] = useState<string>('todos');
   const [empresas, setEmpresas] = useState<{id: string, nome: string}[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(false);
 
@@ -89,7 +96,7 @@ const UserClientesPage: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [clientes, searchTerm, empresaFilter]);
+  }, [clientes, searchTerm, empresaFilter, tipoClienteFilter]);
 
   const loadEmpresas = async () => {
     try {
@@ -213,6 +220,26 @@ const UserClientesPage: React.FC = () => {
       filtered = filtered.filter(cliente => cliente.empresa_id === empresaFilter);
     }
 
+    // Aplicar filtro de tipo de cliente
+    if (tipoClienteFilter !== 'todos') {
+      filtered = filtered.filter(cliente => {
+        switch (tipoClienteFilter) {
+          case 'cliente':
+            return cliente.is_cliente === true;
+          case 'funcionario':
+            return cliente.is_funcionario === true;
+          case 'vendedor':
+            return cliente.is_vendedor === true;
+          case 'fornecedor':
+            return cliente.is_fornecedor === true;
+          case 'transportadora':
+            return cliente.is_transportadora === true;
+          default:
+            return true;
+        }
+      });
+    }
+
     setFilteredClientes(filtered);
   };
 
@@ -278,14 +305,86 @@ const UserClientesPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-white">Meus Clientes</h1>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors"
-        >
-          <Filter size={18} />
-        </button>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-white">Meus Clientes</h1>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:text-white transition-colors"
+          >
+            <Filter size={18} />
+          </button>
+        </div>
+
+        {/* Tags de Filtro por Tipo de Cliente */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setTipoClienteFilter('todos')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'todos'
+                ? 'bg-primary-500 text-white'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+            }`}
+          >
+            <User size={14} />
+            Todos
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('cliente')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'cliente'
+                ? 'bg-blue-500 text-white'
+                : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30'
+            }`}
+          >
+            <User size={14} />
+            Cliente
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('funcionario')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'funcionario'
+                ? 'bg-green-500 text-white'
+                : 'bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/30'
+            }`}
+          >
+            <User size={14} />
+            Funcionário
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('vendedor')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'vendedor'
+                ? 'bg-purple-500 text-white'
+                : 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30'
+            }`}
+          >
+            <User size={14} />
+            Vendedor
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('fornecedor')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'fornecedor'
+                ? 'bg-orange-500 text-white'
+                : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border border-orange-500/30'
+            }`}
+          >
+            <User size={14} />
+            Fornecedor
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('transportadora')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'transportadora'
+                ? 'bg-red-500 text-white'
+                : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30'
+            }`}
+          >
+            <User size={14} />
+            Transportadora
+          </button>
+        </div>
       </div>
 
       {/* Barra de busca */}

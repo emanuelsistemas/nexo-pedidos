@@ -270,6 +270,13 @@ const NfePage: React.FC = () => {
 const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack, onSave }) => {
   const [activeSection, setActiveSection] = useState('identificacao');
   const [isLoading, setIsLoading] = useState(false);
+  const [nfeEmitida, setNfeEmitida] = useState(false);
+  const [dadosAutorizacao, setDadosAutorizacao] = useState({
+    chave_acesso: '',
+    protocolo_uso: '',
+    data_autorizacao: '',
+    status: ''
+  });
   const [nfeData, setNfeData] = useState({
     identificacao: {
       modelo: 55,
@@ -316,6 +323,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     },
     pagamentos: [],
     chaves_ref: [],
+    transportadora: {
+      transportadora_id: '',
+      transportadora_nome: '',
+      transportadora_documento: '',
+      transportadora_endereco: '',
+      modalidade_frete: '9'
+    },
     empresa: null
   });
 
@@ -518,9 +532,22 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           // Salvar NFe no banco de dados
           await salvarNFeNoBanco(result.data, sefazResult.data);
 
+          // Atualizar dados de autorização
+          setDadosAutorizacao({
+            chave_acesso: result.data.chave,
+            protocolo_uso: sefazResult.data.protocolo || '',
+            data_autorizacao: new Date().toISOString(),
+            status: 'autorizada'
+          });
+
+          // Marcar NFe como emitida
+          setNfeEmitida(true);
+
+          // Mudar para a aba de autorização
+          setActiveSection('autorizacao');
+
           alert(`✅ NFe emitida com sucesso!\n\n📄 Chave: ${result.data.chave}\n🔒 Protocolo: ${sefazResult.data.protocolo || 'N/A'}\n💰 Valor: R$ ${nfeData.totais.valor_total.toFixed(2)}`);
           onSave();
-          onBack();
         } else {
           console.error('Erro SEFAZ:', sefazResult);
           alert(`❌ NFe gerada, mas erro ao enviar para SEFAZ:\n\n${sefazResult.error || 'Erro desconhecido'}\n\nChave gerada: ${result.data.chave}`);
@@ -599,7 +626,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     { id: 'chaves_ref', label: 'Chaves Ref.', icon: FileText },
     { id: 'transportadora', label: 'Transportadora', icon: FileText },
     { id: 'intermediador', label: 'Intermediador', icon: FileText },
-    { id: 'autorizacao', label: 'Autorização', icon: FileText },
+    // Só mostrar a aba de Autorização após a NFe ser emitida
+    ...(nfeEmitida ? [{ id: 'autorizacao', label: 'Autorização', icon: FileText }] : []),
   ];
 
   const renderContent = () => {
@@ -660,11 +688,21 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           />
         );
       case 'transportadora':
-        return <TransportadoraSection />;
+        return (
+          <TransportadoraSection
+            data={nfeData.transportadora}
+            onChange={(data) => setNfeData(prev => ({ ...prev, transportadora: data }))}
+          />
+        );
       case 'intermediador':
         return <IntermediadorSection />;
       case 'autorizacao':
-        return <AutorizacaoSection />;
+        return (
+          <AutorizacaoSection
+            dados={dadosAutorizacao}
+            onChange={setDadosAutorizacao}
+          />
+        );
       default:
         return (
           <IdentificacaoSection
@@ -2148,44 +2186,80 @@ const ChavesRefSection: React.FC<{ data: any[]; onChange: (data: any[]) => void 
   );
 };
 
-const TransportadoraSection: React.FC = () => (
-  <div className="p-4">
-    <h2 className="text-xl font-bold text-white mb-4">Transportadora dos Produtos</h2>
-    <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Transportadora
-          </label>
-          <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              placeholder="Selecione ou digite a transportadora"
-              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-            />
-            <button className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-              +
-            </button>
+const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({ data, onChange }) => {
+  const [showTransportadoraModal, setShowTransportadoraModal] = useState(false);
+  const [transportadoraSelecionada, setTransportadoraSelecionada] = useState<any>(null);
+
+  const handleSelecionarTransportadora = (transportadora: any) => {
+    setTransportadoraSelecionada(transportadora);
+    onChange({
+      ...data,
+      transportadora_id: transportadora.id,
+      transportadora_nome: transportadora.nome,
+      transportadora_documento: transportadora.documento,
+      transportadora_endereco: transportadora.endereco_completo
+    });
+    setShowTransportadoraModal(false);
+  };
+
+  return (
+    <div className="p-4">
+      <h2 className="text-xl font-bold text-white mb-4">Transportadora dos Produtos</h2>
+      <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Transportadora
+            </label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={transportadoraSelecionada ? transportadoraSelecionada.nome : ''}
+                placeholder="Selecione uma transportadora"
+                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                readOnly
+              />
+              <button
+                type="button"
+                onClick={() => setShowTransportadoraModal(true)}
+                className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <Search size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Identificação do Frete
+            </label>
+            <select
+              value={data.modalidade_frete || '9'}
+              onChange={(e) => onChange({ ...data, modalidade_frete: e.target.value })}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            >
+              <option value="1">1 - Contratação do Frete por conta do Destinatário (FOB)</option>
+              <option value="0">0 - Contratação do Frete por conta do Remetente (CIF)</option>
+              <option value="2">2 - Contratação do Frete por conta de Terceiros</option>
+              <option value="3">3 - Transporte Próprio por conta do Remetente</option>
+              <option value="4">4 - Transporte Próprio por conta do Destinatário</option>
+              <option value="9">9 - Sem Ocorrência de Transporte</option>
+            </select>
           </div>
         </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Identificação do Frete
-          </label>
-          <select className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500">
-            <option value="1">1 - Contratação do Frete por conta do Destinatário (FOB)</option>
-            <option value="0">0 - Contratação do Frete por conta do Remetente (CIF)</option>
-            <option value="2">2 - Contratação do Frete por conta de Terceiros</option>
-            <option value="3">3 - Transporte Próprio por conta do Remetente</option>
-            <option value="4">4 - Transporte Próprio por conta do Destinatário</option>
-            <option value="9">9 - Sem Ocorrência de Transporte</option>
-          </select>
-        </div>
       </div>
+
+      {/* Modal de Transportadoras */}
+      {showTransportadoraModal && (
+        <TransportadoraSeletorModal
+          isOpen={showTransportadoraModal}
+          onClose={() => setShowTransportadoraModal(false)}
+          onSelect={handleSelecionarTransportadora}
+        />
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const IntermediadorSection: React.FC = () => (
   <div className="p-4">
@@ -2210,99 +2284,348 @@ const IntermediadorSection: React.FC = () => (
   </div>
 );
 
-const AutorizacaoSection: React.FC = () => {
-  // Simular status da NFe - em produção isso viria do estado da NFe
-  const [nfeAutorizada, setNfeAutorizada] = useState(false);
-  const [chaveAcesso, setChaveAcesso] = useState('');
-  const [protocoloUso, setProtocoloUso] = useState('');
+const AutorizacaoSection: React.FC<{ dados: any; onChange: (dados: any) => void }> = ({ dados, onChange }) => {
+  const formatarData = (dataISO: string) => {
+    if (!dataISO) return '';
+    const data = new Date(dataISO);
+    return data.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
 
-  if (!nfeAutorizada) {
-    return (
-      <div className="p-4">
-        <h2 className="text-xl font-bold text-white mb-4">Autorização da NFe</h2>
-        <div className="bg-background-card rounded-lg border border-gray-800 p-8">
-          <div className="text-center">
-            <div className="mb-4">
-              <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText size={32} className="text-yellow-500" />
-              </div>
-              <h3 className="text-lg font-medium text-white mb-2">NFe Não Autorizada</h3>
-              <p className="text-gray-400 mb-6">
-                Esta seção ficará disponível após a NFe ser enviada e aprovada pela SEFAZ.
-              </p>
-              <p className="text-sm text-gray-500">
-                As informações de Chave de Acesso e Protocolo de Uso serão preenchidas automaticamente após a autorização.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const formatarChave = (chave: string) => {
+    if (!chave) return '';
+    // Formatar chave: 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000
+    return chave.replace(/(\d{4})/g, '$1 ').trim();
+  };
 
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold text-white mb-4">Autorização da NFe</h2>
-      <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+      {/* Status da NFe */}
+      <div className="bg-background-card rounded-lg border border-gray-800 p-4 mb-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+            <FileText size={24} className="text-green-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-medium text-white">NFe Autorizada com Sucesso</h3>
+            <p className="text-sm text-gray-400">
+              {dados.data_autorizacao && `Autorizada em ${formatarData(dados.data_autorizacao)}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Chave de Acesso
             </label>
-            <input
-              type="text"
-              value={chaveAcesso}
-              readOnly
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none font-mono text-sm"
-              placeholder="Será preenchido após autorização da SEFAZ"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={formatarChave(dados.chave_acesso)}
+                readOnly
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none font-mono text-sm"
+              />
+              <button
+                onClick={() => navigator.clipboard.writeText(dados.chave_acesso)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white"
+                title="Copiar chave"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Protocolo de Uso
             </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={dados.protocolo_uso}
+                readOnly
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none"
+              />
+              <button
+                onClick={() => navigator.clipboard.writeText(dados.protocolo_uso)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white"
+                title="Copiar protocolo"
+              >
+                <Copy size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Status
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">
+              ✓ {dados.status?.toUpperCase() || 'AUTORIZADA'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Ações Pós-Autorização */}
+      <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+        <h3 className="text-lg font-medium text-white mb-4">Ações Pós-Autorização</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Sequência CCe
+            </label>
             <input
-              type="text"
-              value={protocoloUso}
-              readOnly
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none"
-              placeholder="Será preenchido após autorização da SEFAZ"
+              type="number"
+              value={dados.sequencia_cce || ''}
+              onChange={(e) => onChange({ ...dados, sequencia_cce: e.target.value })}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              placeholder="Sequência para Carta de Correção"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              Número sequencial para Carta de Correção Eletrônica
+            </p>
           </div>
         </div>
 
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Sequencia CCe
-          </label>
-          <input
-            type="text"
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
-            placeholder="Sequência para Carta de Correção"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Carta de correção
+            Carta de Correção
           </label>
           <textarea
             rows={3}
+            value={dados.carta_correcao || ''}
+            onChange={(e) => onChange({ ...dados, carta_correcao: e.target.value })}
             className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none"
-            placeholder="Digite a carta de correção..."
+            placeholder="Digite a correção que deseja fazer na NFe..."
           />
+          <p className="text-xs text-gray-500 mt-1">
+            Use para corrigir dados que não alterem o valor do documento
+          </p>
         </div>
 
-        <div>
+        <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Motivo do Cancelamento
           </label>
           <textarea
             rows={3}
+            value={dados.motivo_cancelamento || ''}
+            onChange={(e) => onChange({ ...dados, motivo_cancelamento: e.target.value })}
             className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none"
-            placeholder="Digite o motivo do cancelamento..."
+            placeholder="Digite o motivo do cancelamento (mínimo 15 caracteres)..."
           />
+          <p className="text-xs text-gray-500 mt-1">
+            Motivo deve ter no mínimo 15 caracteres
+          </p>
+        </div>
+
+        {/* Botões de Ação */}
+        <div className="flex flex-wrap gap-3">
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2">
+            <Download size={16} />
+            Baixar XML
+          </button>
+          <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center gap-2">
+            <Download size={16} />
+            Baixar PDF
+          </button>
+          <button className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 flex items-center gap-2">
+            <Send size={16} />
+            Enviar CCe
+          </button>
+          <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center gap-2">
+            <X size={16} />
+            Cancelar NFe
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Modal de seleção de transportadoras
+const TransportadoraSeletorModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (transportadora: any) => void;
+}> = ({ isOpen, onClose, onSelect }) => {
+  const [transportadoras, setTransportadoras] = useState<any[]>([]);
+  const [filteredTransportadoras, setFilteredTransportadoras] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadTransportadoras();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (searchTerm) {
+      const filtered = transportadoras.filter(transportadora =>
+        transportadora.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transportadora.documento && transportadora.documento.includes(searchTerm))
+      );
+      setFilteredTransportadoras(filtered);
+    } else {
+      setFilteredTransportadoras(transportadoras);
+    }
+  }, [searchTerm, transportadoras]);
+
+  const loadTransportadoras = async () => {
+    try {
+      setIsLoading(true);
+
+      // Obter o usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Obter a empresa do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar clientes que são transportadoras
+      const { data: clientesData, error } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('is_transportadora', true)
+        .or('deletado.is.null,deletado.eq.false')
+        .order('nome');
+
+      if (error) throw error;
+
+      // Formatar dados das transportadoras
+      const transportadorasFormatadas = (clientesData || []).map(cliente => ({
+        id: cliente.id,
+        nome: cliente.nome,
+        documento: cliente.documento,
+        telefone: cliente.telefone,
+        email: cliente.email,
+        endereco_completo: [
+          cliente.endereco,
+          cliente.numero,
+          cliente.bairro,
+          cliente.cidade,
+          cliente.estado
+        ].filter(Boolean).join(', ')
+      }));
+
+      setTransportadoras(transportadorasFormatadas);
+      setFilteredTransportadoras(transportadorasFormatadas);
+    } catch (error) {
+      console.error('Erro ao carregar transportadoras:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatarDocumento = (documento: string) => {
+    if (!documento) return '';
+    const limpo = documento.replace(/\D/g, '');
+    if (limpo.length === 14) {
+      return limpo.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    } else if (limpo.length === 11) {
+      return limpo.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }
+    return documento;
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl max-h-[80vh] overflow-hidden">
+        <div className="p-4 border-b border-gray-800">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-white">Selecionar Transportadora</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="mt-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Buscar por nome ou documento..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-3 py-2 pl-10 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+              />
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 overflow-y-auto max-h-96">
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="w-8 h-8 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin mx-auto mb-2"></div>
+              <p className="text-gray-400">Carregando transportadoras...</p>
+            </div>
+          ) : filteredTransportadoras.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-400">
+                {searchTerm ? 'Nenhuma transportadora encontrada' : 'Nenhuma transportadora cadastrada'}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                {!searchTerm && 'Cadastre clientes marcados como "Transportadora" para aparecerem aqui'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredTransportadoras.map((transportadora) => (
+                <div
+                  key={transportadora.id}
+                  onClick={() => onSelect(transportadora)}
+                  className="p-3 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-primary-500 cursor-pointer transition-colors"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h4 className="text-white font-medium">{transportadora.nome}</h4>
+                      {transportadora.documento && (
+                        <p className="text-sm text-gray-400 mt-1">
+                          {formatarDocumento(transportadora.documento)}
+                        </p>
+                      )}
+                      {transportadora.telefone && (
+                        <p className="text-sm text-gray-400">
+                          📞 {transportadora.telefone}
+                        </p>
+                      )}
+                      {transportadora.endereco_completo && (
+                        <p className="text-sm text-gray-400">
+                          📍 {transportadora.endereco_completo}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

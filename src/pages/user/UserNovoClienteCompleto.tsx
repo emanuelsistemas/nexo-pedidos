@@ -39,6 +39,13 @@ const UserNovoClienteCompleto: React.FC = () => {
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
 
+  // Tipos de cliente
+  const [isCliente, setIsCliente] = useState(true);
+  const [isFuncionario, setIsFuncionario] = useState(false);
+  const [isVendedor, setIsVendedor] = useState(false);
+  const [isFornecedor, setIsFornecedor] = useState(false);
+  const [isTransportadora, setIsTransportadora] = useState(false);
+
 
 
 
@@ -434,6 +441,12 @@ const UserNovoClienteCompleto: React.FC = () => {
           bairro: bairro || null,
           cidade: cidade || null,
           estado: estado || null,
+          // Tipos de cliente
+          is_cliente: isCliente,
+          is_funcionario: isFuncionario,
+          is_vendedor: isVendedor,
+          is_fornecedor: isFornecedor,
+          is_transportadora: isTransportadora,
           empresa_id: usuarioData.empresa_id,
           usuario_id: userData.user.id
         })
@@ -819,6 +832,111 @@ const UserNovoClienteCompleto: React.FC = () => {
                 placeholder="UF"
                 maxLength={2}
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Tipos de Cliente */}
+        <div className="bg-background-card rounded-lg border border-gray-800 p-4 space-y-4">
+          <h2 className="text-lg font-medium text-white mb-2">Tipos de Cliente</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            Selecione os tipos que se aplicam a este cliente. Você pode marcar múltiplas opções.
+          </p>
+
+          <div className="space-y-3">
+            {/* Cliente */}
+            <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <User size={16} className="text-blue-400" />
+                </div>
+                <span className="text-white font-medium whitespace-nowrap">Cliente</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                <input
+                  type="checkbox"
+                  checked={isCliente}
+                  onChange={(e) => setIsCliente(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+              </label>
+            </div>
+
+            {/* Funcionário */}
+            <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <User size={16} className="text-green-400" />
+                </div>
+                <span className="text-white font-medium whitespace-nowrap">Funcionário</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                <input
+                  type="checkbox"
+                  checked={isFuncionario}
+                  onChange={(e) => setIsFuncionario(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+              </label>
+            </div>
+
+            {/* Vendedor */}
+            <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <User size={16} className="text-purple-400" />
+                </div>
+                <span className="text-white font-medium whitespace-nowrap">Vendedor</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                <input
+                  type="checkbox"
+                  checked={isVendedor}
+                  onChange={(e) => setIsVendedor(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+              </label>
+            </div>
+
+            {/* Fornecedor */}
+            <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <User size={16} className="text-orange-400" />
+                </div>
+                <span className="text-white font-medium whitespace-nowrap">Fornecedor</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                <input
+                  type="checkbox"
+                  checked={isFornecedor}
+                  onChange={(e) => setIsFornecedor(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+              </label>
+            </div>
+
+            {/* Transportadora */}
+            <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <User size={16} className="text-red-400" />
+                </div>
+                <span className="text-white font-medium whitespace-nowrap">Transportadora</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                <input
+                  type="checkbox"
+                  checked={isTransportadora}
+                  onChange={(e) => setIsTransportadora(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+              </label>
             </div>
           </div>
         </div>

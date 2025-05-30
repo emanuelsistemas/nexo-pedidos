@@ -44,6 +44,7 @@ const ClientesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [empresaFilter, setEmpresaFilter] = useState<string>('todas');
+  const [tipoClienteFilter, setTipoClienteFilter] = useState<string>('todos');
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [showSidebar, setShowSidebar] = useState(false);
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
@@ -67,7 +68,13 @@ const ClientesPage: React.FC = () => {
     empresa_id: '',
     indicador_ie: 9,
     codigo_municipio: '',
-    inscricao_estadual: ''
+    inscricao_estadual: '',
+    // Tipos de cliente
+    is_cliente: true,
+    is_funcionario: false,
+    is_vendedor: false,
+    is_fornecedor: false,
+    is_transportadora: false
   });
 
   // Estado para controlar a aba ativa no formulário
@@ -139,7 +146,7 @@ const ClientesPage: React.FC = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [clientes, searchTerm, empresaFilter]);
+  }, [clientes, searchTerm, empresaFilter, tipoClienteFilter]);
 
   const loadEmpresas = async () => {
     try {
@@ -237,6 +244,26 @@ const ClientesPage: React.FC = () => {
     // Aplicar filtro de empresa
     if (empresaFilter !== 'todas') {
       filtered = filtered.filter(cliente => cliente.empresa_id === empresaFilter);
+    }
+
+    // Aplicar filtro de tipo de cliente
+    if (tipoClienteFilter !== 'todos') {
+      filtered = filtered.filter(cliente => {
+        switch (tipoClienteFilter) {
+          case 'cliente':
+            return cliente.is_cliente === true;
+          case 'funcionario':
+            return cliente.is_funcionario === true;
+          case 'vendedor':
+            return cliente.is_vendedor === true;
+          case 'fornecedor':
+            return cliente.is_fornecedor === true;
+          case 'transportadora':
+            return cliente.is_transportadora === true;
+          default:
+            return true;
+        }
+      });
     }
 
     setFilteredClientes(filtered);
@@ -727,6 +754,12 @@ const ClientesPage: React.FC = () => {
         cep: formData.cep ? formData.cep.replace(/\D/g, '') : null,
         // Campos NFe
         indicador_ie: formData.indicador_ie,
+        // Tipos de cliente
+        is_cliente: formData.is_cliente,
+        is_funcionario: formData.is_funcionario,
+        is_vendedor: formData.is_vendedor,
+        is_fornecedor: formData.is_fornecedor,
+        is_transportadora: formData.is_transportadora,
         codigo_municipio: formData.codigo_municipio || null,
         inscricao_estadual: formData.inscricao_estadual || null,
         empresa_id: formData.empresa_id,
@@ -1154,10 +1187,10 @@ const ClientesPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-1">
-      {/* Header Compacto - Título + Ações */}
-      <div className="flex justify-between items-center mb-2">
-        <h1 className="text-xl font-semibold text-white">Clientes</h1>
-        <div className="flex items-center gap-2">
+      {/* Header Compacto - Título + Tags de Filtro */}
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-3">
+          <h1 className="text-xl font-semibold text-white">Clientes</h1>
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-lg transition-colors flex items-center gap-1 ${
@@ -1169,12 +1202,75 @@ const ClientesPage: React.FC = () => {
           >
             <Filter size={18} />
           </button>
+        </div>
+
+        {/* Tags de Filtro por Tipo de Cliente */}
+        <div className="flex flex-wrap gap-2">
           <button
-            onClick={handleAddNew}
-            className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            onClick={() => setTipoClienteFilter('todos')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'todos'
+                ? 'bg-primary-500 text-white'
+                : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+            }`}
           >
-            <Plus size={18} />
-            <span>Novo Cliente</span>
+            <User size={14} />
+            Todos
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('cliente')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'cliente'
+                ? 'bg-blue-500 text-white'
+                : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30'
+            }`}
+          >
+            <User size={14} />
+            Cliente
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('funcionario')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'funcionario'
+                ? 'bg-green-500 text-white'
+                : 'bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/30'
+            }`}
+          >
+            <User size={14} />
+            Funcionário
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('vendedor')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'vendedor'
+                ? 'bg-purple-500 text-white'
+                : 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/30'
+            }`}
+          >
+            <User size={14} />
+            Vendedor
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('fornecedor')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'fornecedor'
+                ? 'bg-orange-500 text-white'
+                : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 border border-orange-500/30'
+            }`}
+          >
+            <User size={14} />
+            Fornecedor
+          </button>
+          <button
+            onClick={() => setTipoClienteFilter('transportadora')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              tipoClienteFilter === 'transportadora'
+                ? 'bg-red-500 text-white'
+                : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30'
+            }`}
+          >
+            <User size={14} />
+            Transportadora
           </button>
         </div>
       </div>
@@ -1877,6 +1973,111 @@ const ClientesPage: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Tipos de Cliente */}
+                  <div className="bg-gray-800/30 rounded-lg border border-gray-700 p-4">
+                    <h3 className="text-white font-medium mb-4">Tipos de Cliente</h3>
+                    <p className="text-sm text-gray-400 mb-4">
+                      Selecione os tipos que se aplicam a este cliente. Você pode marcar múltiplas opções.
+                    </p>
+
+                    <div className="space-y-3">
+                      {/* Cliente */}
+                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <User size={16} className="text-blue-400" />
+                          </div>
+                          <span className="text-white font-medium whitespace-nowrap">Cliente</span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                          <input
+                            type="checkbox"
+                            checked={formData.is_cliente}
+                            onChange={(e) => setFormData({ ...formData, is_cliente: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                        </label>
+                      </div>
+
+                      {/* Funcionário */}
+                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <User size={16} className="text-green-400" />
+                          </div>
+                          <span className="text-white font-medium whitespace-nowrap">Funcionário</span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                          <input
+                            type="checkbox"
+                            checked={formData.is_funcionario}
+                            onChange={(e) => setFormData({ ...formData, is_funcionario: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                        </label>
+                      </div>
+
+                      {/* Vendedor */}
+                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <User size={16} className="text-purple-400" />
+                          </div>
+                          <span className="text-white font-medium whitespace-nowrap">Vendedor</span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                          <input
+                            type="checkbox"
+                            checked={formData.is_vendedor}
+                            onChange={(e) => setFormData({ ...formData, is_vendedor: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                        </label>
+                      </div>
+
+                      {/* Fornecedor */}
+                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <User size={16} className="text-orange-400" />
+                          </div>
+                          <span className="text-white font-medium whitespace-nowrap">Fornecedor</span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                          <input
+                            type="checkbox"
+                            checked={formData.is_fornecedor}
+                            onChange={(e) => setFormData({ ...formData, is_fornecedor: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                        </label>
+                      </div>
+
+                      {/* Transportadora */}
+                      <div className="flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700 min-h-[60px]">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <User size={16} className="text-red-400" />
+                          </div>
+                          <span className="text-white font-medium whitespace-nowrap">Transportadora</span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-3">
+                          <input
+                            type="checkbox"
+                            checked={formData.is_transportadora}
+                            onChange={(e) => setFormData({ ...formData, is_transportadora: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Campo oculto para empresa - selecionada automaticamente */}
                   <input type="hidden" value={formData.empresa_id} />
 
@@ -2210,6 +2411,15 @@ const ClientesPage: React.FC = () => {
           </>
         )}
       </AnimatePresence>
+
+      {/* Botão Flutuante para Novo Cliente */}
+      <button
+        onClick={handleAddNew}
+        className="fixed bottom-6 right-6 bg-primary-500 hover:bg-primary-600 text-white p-4 rounded-full shadow-lg transition-all duration-300 hover:scale-110 z-30"
+        title="Novo Cliente"
+      >
+        <Plus size={24} />
+      </button>
     </div>
   );
 };
