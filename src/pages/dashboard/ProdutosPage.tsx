@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -7,6 +7,19 @@ import { showMessage } from '../../utils/toast';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import Button from '../../components/comum/Button';
 import FotoGaleria from '../../components/comum/FotoGaleria';
+
+// Função debounce para otimizar chamadas de API
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: any[]) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
 
 interface UnidadeMedida {
   id: string;
@@ -231,6 +244,19 @@ const ProdutosPage: React.FC = () => {
   // Estado para regime tributário da empresa
   const [regimeTributario, setRegimeTributario] = useState<number>(3);
 
+  // Estados para validação de NCM
+  const [ncmValidacao, setNcmValidacao] = useState<{
+    validando: boolean;
+    valido: boolean | null;
+    descricao: string;
+    erro: string;
+  }>({
+    validando: false,
+    valido: null,
+    descricao: '',
+    erro: ''
+  });
+
   // Estado para controlar o formulário de unidade de medida
   const [showUnidadeMedidaForm, setShowUnidadeMedidaForm] = useState(false);
   const [novaUnidadeMedida, setNovaUnidadeMedida] = useState<{sigla: string, nome: string}>({
@@ -317,6 +343,72 @@ const ProdutosPage: React.FC = () => {
       console.error('Erro ao carregar regime tributário:', error);
     }
   };
+
+  // Função para validar NCM usando BrasilAPI
+  const validarNCM = async (codigo: string) => {
+    if (!codigo || codigo.length !== 8) {
+      setNcmValidacao({
+        validando: false,
+        valido: null,
+        descricao: '',
+        erro: ''
+      });
+      return;
+    }
+
+    setNcmValidacao(prev => ({ ...prev, validando: true }));
+
+    try {
+      const response = await fetch(`https://brasilapi.com.br/api/ncm/v1/${codigo}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setNcmValidacao({
+          validando: false,
+          valido: true,
+          descricao: data.descricao || '',
+          erro: ''
+        });
+      } else {
+        setNcmValidacao({
+          validando: false,
+          valido: false,
+          descricao: '',
+          erro: 'NCM não encontrado na base de dados'
+        });
+      }
+    } catch (error) {
+      setNcmValidacao({
+        validando: false,
+        valido: false,
+        descricao: '',
+        erro: 'Erro ao validar NCM. Verifique sua conexão.'
+      });
+    }
+  };
+
+  // Função para aplicar máscara no NCM (0000.00.00)
+  const aplicarMascaraNCM = (valor: string) => {
+    // Remove tudo que não é número
+    const apenasNumeros = valor.replace(/\D/g, '');
+
+    // Aplica a máscara 0000.00.00
+    if (apenasNumeros.length <= 4) {
+      return apenasNumeros;
+    } else if (apenasNumeros.length <= 6) {
+      return `${apenasNumeros.slice(0, 4)}.${apenasNumeros.slice(4)}`;
+    } else {
+      return `${apenasNumeros.slice(0, 4)}.${apenasNumeros.slice(4, 6)}.${apenasNumeros.slice(6, 8)}`;
+    }
+  };
+
+  // Debounce para validação de NCM
+  const debounceValidarNCM = useCallback(
+    debounce((codigo: string) => {
+      validarNCM(codigo);
+    }, 800),
+    []
+  );
 
   // useEffect separado para verificar produto para editar após grupos carregarem
   useEffect(() => {
@@ -1006,6 +1098,14 @@ const ProdutosPage: React.FC = () => {
     // Resetar a flag de formulário resetado
     setFormularioResetado(false);
 
+    // Resetar validação de NCM
+    setNcmValidacao({
+      validando: false,
+      valido: null,
+      descricao: '',
+      erro: ''
+    });
+
     setShowSidebar(true);
   };
 
@@ -1183,6 +1283,18 @@ const ProdutosPage: React.FC = () => {
       setDescontoQuantidadeFormatado(produto.percentual_desconto_quantidade.toString());
     } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade !== undefined) {
       setDescontoQuantidadeFormatado(formatarPreco(produto.valor_desconto_quantidade));
+    }
+
+    // Validar NCM se existir
+    if (produto.ncm && produto.ncm.length === 8) {
+      validarNCM(produto.ncm);
+    } else {
+      setNcmValidacao({
+        validando: false,
+        valido: null,
+        descricao: '',
+        erro: ''
+      });
     }
 
     // Abrir o sidebar imediatamente
@@ -2176,6 +2288,14 @@ const ProdutosPage: React.FC = () => {
     setSelectedOpcoes([]);
     setActiveTab('dados');
     setProdutoFotos([]);
+
+    // Resetar validação de NCM
+    setNcmValidacao({
+      validando: false,
+      valido: null,
+      descricao: '',
+      erro: ''
+    });
 
     // Definir uma flag para indicar que o formulário foi resetado
     setFormularioResetado(true);
@@ -4235,23 +4355,83 @@ const ProdutosPage: React.FC = () => {
                               <label className="block text-sm font-medium text-gray-400 mb-2">
                                 NCM (Nomenclatura Comum do Mercosul) <span className="text-red-500">*</span>
                               </label>
-                              <input
-                                type="text"
-                                value={novoProduto.ncm || ''}
-                                onChange={(e) => {
-                                  // Permitir apenas números e limitar a 8 dígitos
-                                  const valor = e.target.value.replace(/\D/g, '').slice(0, 8);
-                                  setNovoProduto({ ...novoProduto, ncm: valor });
-                                }}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                placeholder="12345678 (8 dígitos)"
-                                maxLength={8}
-                                pattern="[0-9]{8}"
-                                required
-                              />
-                              <p className="text-xs text-gray-500 mt-1">
-                                Código de 8 dígitos obrigatório para NFe. Consulte a tabela NCM oficial.
-                              </p>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={aplicarMascaraNCM(novoProduto.ncm || '')}
+                                  onChange={(e) => {
+                                    // Remover máscara e permitir apenas números, limitando a 8 dígitos
+                                    const apenasNumeros = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                    setNovoProduto({ ...novoProduto, ncm: apenasNumeros });
+
+                                    // Validar NCM se tiver 8 dígitos
+                                    if (apenasNumeros.length === 8) {
+                                      debounceValidarNCM(apenasNumeros);
+                                    } else {
+                                      setNcmValidacao({
+                                        validando: false,
+                                        valido: null,
+                                        descricao: '',
+                                        erro: ''
+                                      });
+                                    }
+                                  }}
+                                  className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 pr-10 text-white focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
+                                    ncmValidacao.valido === true
+                                      ? 'border-green-500 focus:border-green-500'
+                                      : ncmValidacao.valido === false
+                                      ? 'border-red-500 focus:border-red-500'
+                                      : 'border-gray-700 focus:border-primary-500'
+                                  }`}
+                                  placeholder="0000.00.00"
+                                  maxLength={10} // Considerando a máscara
+                                  required
+                                />
+
+                                {/* Ícone de status */}
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                  {ncmValidacao.validando && (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                  )}
+                                  {!ncmValidacao.validando && ncmValidacao.valido === true && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
+                                      <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                  )}
+                                  {!ncmValidacao.validando && ncmValidacao.valido === false && (
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500">
+                                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Mensagem de status */}
+                              {ncmValidacao.valido === true && ncmValidacao.descricao && (
+                                <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded text-xs">
+                                  <p className="text-green-300 font-medium">✓ NCM válido</p>
+                                  <p className="text-green-200 mt-1 line-clamp-2">
+                                    {ncmValidacao.descricao.length > 100
+                                      ? `${ncmValidacao.descricao.substring(0, 100)}...`
+                                      : ncmValidacao.descricao
+                                    }
+                                  </p>
+                                </div>
+                              )}
+
+                              {ncmValidacao.valido === false && ncmValidacao.erro && (
+                                <div className="mt-2 p-2 bg-red-900/20 border border-red-700/50 rounded text-xs">
+                                  <p className="text-red-300 font-medium">✗ NCM inválido</p>
+                                  <p className="text-red-200 mt-1">{ncmValidacao.erro}</p>
+                                </div>
+                              )}
+
+                              {!ncmValidacao.validando && ncmValidacao.valido === null && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Digite o código NCM de 8 dígitos para validação automática
+                                </p>
+                              )}
                             </div>
 
                             {/* CFOP */}
@@ -4261,7 +4441,35 @@ const ProdutosPage: React.FC = () => {
                               </label>
                               <select
                                 value={novoProduto.cfop || '5102'}
-                                onChange={(e) => setNovoProduto({ ...novoProduto, cfop: e.target.value })}
+                                onChange={(e) => {
+                                  const newCfop = e.target.value;
+                                  let newSituacaoTributaria = novoProduto.situacao_tributaria;
+
+                                  // Aplicar regras fiscais obrigatórias baseadas no CFOP
+                                  if (newCfop === '5102' || newCfop === '5101') {
+                                    // CFOP 5102/5101: CST 00 (Normal) ou CSOSN 102 (Simples)
+                                    newSituacaoTributaria = 'tributado_integral';
+                                  } else if (newCfop === '5405' || newCfop === '5401' || newCfop === '5403') {
+                                    // CFOP 5405/5401/5403: CST 60 (Normal) ou CSOSN 500 (Simples)
+                                    newSituacaoTributaria = 'tributado_st';
+                                  }
+
+                                  // Se o CFOP não for 5405, limpar o CEST
+                                  if (newCfop !== '5405') {
+                                    setNovoProduto({
+                                      ...novoProduto,
+                                      cfop: newCfop,
+                                      cest: '',
+                                      situacao_tributaria: newSituacaoTributaria
+                                    });
+                                  } else {
+                                    setNovoProduto({
+                                      ...novoProduto,
+                                      cfop: newCfop,
+                                      situacao_tributaria: newSituacaoTributaria
+                                    });
+                                  }
+                                }}
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                 style={{
                                   maxWidth: '100%',
@@ -4298,6 +4506,15 @@ const ProdutosPage: React.FC = () => {
                               <p className="text-xs text-gray-500 mt-1">
                                 Passe o mouse sobre as opções para ver a descrição completa
                               </p>
+                              {(['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')) && (
+                                <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-700/50 rounded text-xs">
+                                  <p className="text-yellow-300 font-medium">⚠️ Regra Fiscal Aplicada</p>
+                                  <p className="text-yellow-200 mt-1">
+                                    {(novoProduto.cfop === '5102' || novoProduto.cfop === '5101') && 'CFOP requer situação tributária "Tributada integralmente" (CST 00/CSOSN 102)'}
+                                    {(novoProduto.cfop === '5405' || novoProduto.cfop === '5401' || novoProduto.cfop === '5403') && 'CFOP requer situação tributária "ICMS por substituição tributária" (CST 60/CSOSN 500)'}
+                                  </p>
+                                </div>
+                              )}
                             </div>
 
                             {/* Origem do Produto */}
@@ -4358,7 +4575,12 @@ const ProdutosPage: React.FC = () => {
                               <select
                                 value={novoProduto.situacao_tributaria || 'tributado_integral'}
                                 onChange={(e) => setNovoProduto({ ...novoProduto, situacao_tributaria: e.target.value })}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                disabled={['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')}
+                                className={`w-full border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
+                                  ['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')
+                                    ? 'bg-gray-700/50 border-gray-600 cursor-not-allowed opacity-75'
+                                    : 'bg-gray-800/50 border-gray-700 focus:border-primary-500'
+                                }`}
                                 style={{
                                   maxWidth: '100%',
                                   overflow: 'hidden',
@@ -4429,10 +4651,15 @@ const ProdutosPage: React.FC = () => {
                                 </option>
                               </select>
                               <p className="text-xs text-gray-500 mt-1">
-                                {regimeTributario === 1 || regimeTributario === 2
-                                  ? 'Códigos CSOSN para Simples Nacional. Passe o mouse sobre as opções para ver detalhes.'
-                                  : 'Códigos CST para Regime Normal. Passe o mouse sobre as opções para ver detalhes.'
-                                }
+                                {['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '') ? (
+                                  <span className="text-yellow-400">
+                                    🔒 Campo bloqueado - Situação tributária definida automaticamente pelo CFOP selecionado
+                                  </span>
+                                ) : (
+                                  regimeTributario === 1 || regimeTributario === 2
+                                    ? 'Códigos CSOSN para Simples Nacional. Passe o mouse sobre as opções para ver detalhes.'
+                                    : 'Códigos CST para Regime Normal. Passe o mouse sobre as opções para ver detalhes.'
+                                )}
                               </p>
                             </div>
 
@@ -4487,26 +4714,31 @@ const ProdutosPage: React.FC = () => {
 
                             {/* Campos Opcionais */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">
-                                  CEST (Código Especificador ST)
-                                </label>
-                                <input
-                                  type="text"
-                                  value={novoProduto.cest || ''}
-                                  onChange={(e) => {
-                                    // Permitir apenas números e limitar a 7 dígitos
-                                    const valor = e.target.value.replace(/\D/g, '').slice(0, 7);
-                                    setNovoProduto({ ...novoProduto, cest: valor });
-                                  }}
-                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                  placeholder="1234567 (7 dígitos)"
-                                  maxLength={7}
-                                />
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Opcional. Apenas para produtos sujeitos à ST.
-                                </p>
-                              </div>
+                              {/* CEST - Mostrar apenas se CFOP for 5405 */}
+                              {novoProduto.cfop === '5405' && (
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                                    CEST (Código Especificador ST) <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={novoProduto.cest || ''}
+                                    onChange={(e) => {
+                                      // Permitir apenas números e limitar a 7 dígitos
+                                      const valor = e.target.value.replace(/\D/g, '').slice(0, 7);
+                                      setNovoProduto({ ...novoProduto, cest: valor });
+                                    }}
+                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                    placeholder="1234567 (7 dígitos)"
+                                    maxLength={7}
+                                    required
+                                  />
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    Obrigatório para CFOP 5405 - Venda de mercadoria sujeita à Substituição Tributária.
+                                  </p>
+                                </div>
+                              )}
+
                               <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-2">
                                   Peso Líquido (kg)
@@ -4572,6 +4804,26 @@ const ProdutosPage: React.FC = () => {
                               if (!novoProduto.ncm || novoProduto.ncm.length !== 8) {
                                 showMessage('error', 'NCM é obrigatório e deve ter 8 dígitos');
                                 return;
+                              }
+
+                              // Validar se NCM é válido (se foi validado)
+                              if (ncmValidacao.valido === false) {
+                                showMessage('error', 'NCM inválido. Verifique o código informado.');
+                                return;
+                              }
+
+                              // Se NCM ainda está sendo validado, aguardar
+                              if (ncmValidacao.validando) {
+                                showMessage('warning', 'Aguarde a validação do NCM...');
+                                return;
+                              }
+
+                              // Validar CEST se CFOP for 5405
+                              if (novoProduto.cfop === '5405') {
+                                if (!novoProduto.cest || novoProduto.cest.length !== 7) {
+                                  showMessage('error', 'CEST é obrigatório e deve ter 7 dígitos para CFOP 5405');
+                                  return;
+                                }
                               }
 
                               // Simular o evento de submit do formulário
