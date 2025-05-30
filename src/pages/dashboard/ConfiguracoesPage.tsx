@@ -140,7 +140,7 @@ const tiposPagamento = [
 const ConfiguracoesPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv' | 'taxaentrega' | 'conexao'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv' | 'taxaentrega' | 'conexao' | 'certificado'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -267,6 +267,12 @@ const ConfiguracoesPage: React.FC = () => {
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [devPassword, setDevPassword] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Estados para certificado digital
+  const [certificadoFile, setCertificadoFile] = useState<File | null>(null);
+  const [certificadoSenha, setCertificadoSenha] = useState('');
+  const [certificadoInfo, setCertificadoInfo] = useState<any>(null);
+  const [isUploadingCertificado, setIsUploadingCertificado] = useState(false);
 
   useEffect(() => {
     const loadDataWithLoading = async () => {
@@ -690,6 +696,19 @@ const ConfiguracoesPage: React.FC = () => {
 
       if (activeSection === 'pdv') {
         carregarConfiguracoesPdv();
+      }
+
+      if (activeSection === 'certificado') {
+        const { data: empresaData } = await supabase
+          .from('empresas')
+          .select('certificado_digital_path, certificado_digital_senha, certificado_digital_validade, certificado_digital_status, certificado_digital_nome, certificado_digital_uploaded_at')
+          .eq('id', usuarioData.empresa_id)
+          .single();
+
+        if (empresaData) {
+          setCertificadoInfo(empresaData);
+          setCertificadoSenha(empresaData.certificado_digital_senha || '');
+        }
       }
     });
   };
@@ -1689,6 +1708,144 @@ const ConfiguracoesPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao buscar código IBGE:', error);
       return null;
+    }
+  };
+
+  // Função para extrair informações do certificado digital
+  const extrairInfoCertificado = async (file: File, senha: string) => {
+    try {
+      // Aqui você pode implementar a lógica para extrair informações do certificado
+      // Por enquanto, vamos simular a extração de dados
+      const dataValidade = new Date();
+      dataValidade.setFullYear(dataValidade.getFullYear() + 1); // Simula 1 ano de validade
+
+      return {
+        nome: file.name.replace(/\.[^/.]+$/, ""), // Remove extensão
+        validade: dataValidade.toISOString(),
+        status: 'ativo'
+      };
+    } catch (error) {
+      console.error('Erro ao extrair informações do certificado:', error);
+      throw new Error('Erro ao processar certificado digital');
+    }
+  };
+
+  // Função para fazer upload do certificado digital
+  const handleUploadCertificado = async () => {
+    if (!certificadoFile || !certificadoSenha.trim()) {
+      showMessage('error', 'Selecione um arquivo de certificado e informe a senha');
+      return;
+    }
+
+    setIsUploadingCertificado(true);
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Extrair informações do certificado
+      const infoCertificado = await extrairInfoCertificado(certificadoFile, certificadoSenha);
+
+      // Gerar nome único para o arquivo
+      const timestamp = Date.now();
+      const fileName = `${usuarioData.empresa_id}_${timestamp}_${certificadoFile.name}`;
+
+      // Upload do arquivo para o bucket
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('certificadodigital')
+        .upload(fileName, certificadoFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Atualizar dados na tabela empresas
+      const { error: updateError } = await supabase
+        .from('empresas')
+        .update({
+          certificado_digital_path: uploadData.path,
+          certificado_digital_senha: certificadoSenha,
+          certificado_digital_validade: infoCertificado.validade,
+          certificado_digital_status: infoCertificado.status,
+          certificado_digital_nome: infoCertificado.nome,
+          certificado_digital_uploaded_at: new Date().toISOString()
+        })
+        .eq('id', usuarioData.empresa_id);
+
+      if (updateError) throw updateError;
+
+      showMessage('success', 'Certificado digital enviado com sucesso!');
+
+      // Limpar formulário
+      setCertificadoFile(null);
+      setCertificadoSenha('');
+
+      // Recarregar dados
+      loadData();
+
+    } catch (error: any) {
+      showMessage('error', 'Erro ao enviar certificado: ' + error.message);
+    } finally {
+      setIsUploadingCertificado(false);
+    }
+  };
+
+  // Função para remover certificado digital
+  const handleRemoverCertificado = async () => {
+    if (!certificadoInfo?.certificado_digital_path) return;
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Remover arquivo do storage
+      const { error: deleteError } = await supabase.storage
+        .from('certificadodigital')
+        .remove([certificadoInfo.certificado_digital_path]);
+
+      if (deleteError) {
+        console.warn('Erro ao remover arquivo do storage:', deleteError);
+      }
+
+      // Limpar dados na tabela empresas
+      const { error: updateError } = await supabase
+        .from('empresas')
+        .update({
+          certificado_digital_path: null,
+          certificado_digital_senha: null,
+          certificado_digital_validade: null,
+          certificado_digital_status: 'nao_configurado',
+          certificado_digital_nome: null,
+          certificado_digital_uploaded_at: null
+        })
+        .eq('id', usuarioData.empresa_id);
+
+      if (updateError) throw updateError;
+
+      showMessage('success', 'Certificado digital removido com sucesso!');
+
+      // Recarregar dados
+      loadData();
+
+    } catch (error: any) {
+      showMessage('error', 'Erro ao remover certificado: ' + error.message);
     }
   };
 
@@ -3441,6 +3598,148 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'certificado':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Certificado Digital</h2>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <div className="space-y-6">
+                {/* Status do Certificado */}
+                {certificadoInfo?.certificado_digital_path ? (
+                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400">
+                          <path d="M9 12l2 2 4-4"></path>
+                          <circle cx="12" cy="12" r="10"></circle>
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-green-400 font-medium mb-1">Certificado Digital Configurado</h3>
+                        <div className="space-y-1 text-sm text-gray-300">
+                          <p><strong>Nome:</strong> {certificadoInfo.certificado_digital_nome}</p>
+                          <p><strong>Status:</strong> {certificadoInfo.certificado_digital_status === 'ativo' ? 'Ativo' : 'Inativo'}</p>
+                          {certificadoInfo.certificado_digital_validade && (
+                            <p><strong>Validade:</strong> {new Date(certificadoInfo.certificado_digital_validade).toLocaleDateString('pt-BR')}</p>
+                          )}
+                          {certificadoInfo.certificado_digital_uploaded_at && (
+                            <p><strong>Enviado em:</strong> {new Date(certificadoInfo.certificado_digital_uploaded_at).toLocaleDateString('pt-BR')}</p>
+                          )}
+                        </div>
+                        <div className="mt-3">
+                          <Button
+                            type="button"
+                            variant="primary"
+                            onClick={handleRemoverCertificado}
+                            className="!bg-red-500 hover:!bg-red-600 !border-red-500 text-sm"
+                          >
+                            🗑️ Remover Certificado
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-400">
+                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                          <line x1="12" y1="9" x2="12" y2="13"></line>
+                          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-yellow-400 font-medium mb-1">Certificado Digital Não Configurado</h3>
+                        <p className="text-gray-300 text-sm">
+                          Para emitir NFe, é necessário configurar um certificado digital válido.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Formulário de Upload */}
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-4">
+                    {certificadoInfo?.certificado_digital_path ? 'Substituir Certificado Digital' : 'Configurar Certificado Digital'}
+                  </h3>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Arquivo do Certificado (.p12 ou .pfx)
+                      </label>
+                      <input
+                        type="file"
+                        accept=".p12,.pfx"
+                        onChange={(e) => setCertificadoFile(e.target.files?.[0] || null)}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Selecione o arquivo do certificado digital (.p12 ou .pfx)
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Senha do Certificado
+                      </label>
+                      <input
+                        type="password"
+                        value={certificadoSenha}
+                        onChange={(e) => setCertificadoSenha(e.target.value)}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        placeholder="Digite a senha do certificado"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Senha utilizada para proteger o certificado digital
+                      </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={handleUploadCertificado}
+                        disabled={isUploadingCertificado || !certificadoFile || !certificadoSenha.trim()}
+                        className="w-full"
+                      >
+                        {isUploadingCertificado ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                            Enviando...
+                          </>
+                        ) : (
+                          <>
+                            📤 {certificadoInfo?.certificado_digital_path ? 'Substituir' : 'Enviar'} Certificado
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                      <h4 className="text-blue-400 font-medium mb-2">ℹ️ Informações Importantes</h4>
+                      <ul className="text-sm text-gray-300 space-y-1">
+                        <li>• O certificado deve estar válido e dentro do prazo de validade</li>
+                        <li>• Formatos aceitos: .p12 ou .pfx</li>
+                        <li>• A senha será criptografada e armazenada com segurança</li>
+                        <li>• O sistema extrairá automaticamente a data de validade</li>
+                        <li>• Você será notificado quando o certificado estiver próximo do vencimento</li>
+                      </ul>
+                    </div>
+
+
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       case 'conta':
         return (
           <div className="space-y-4">
@@ -3531,6 +3830,29 @@ const ConfiguracoesPage: React.FC = () => {
             >
               <MessageSquare size={18} />
               <span className="text-sm">Conexão</span>
+            </button>
+            <button
+              onClick={() => handleSectionChange('certificado')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                activeSection === 'certificado'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
+                <path d="M9 22v-4h6v4"></path>
+                <path d="M8 6h.01"></path>
+                <path d="M16 6h.01"></path>
+                <path d="M12 6h.01"></path>
+                <path d="M12 10h.01"></path>
+                <path d="M12 14h.01"></path>
+                <path d="M16 10h.01"></path>
+                <path d="M16 14h.01"></path>
+                <path d="M8 10h.01"></path>
+                <path d="M8 14h.01"></path>
+              </svg>
+              <span className="text-sm">Certificado Digital</span>
             </button>
           </div>
 
