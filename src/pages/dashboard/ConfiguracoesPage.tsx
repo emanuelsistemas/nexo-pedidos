@@ -1794,9 +1794,33 @@ const ConfiguracoesPage: React.FC = () => {
       loadData();
 
     } catch (error: any) {
-      showMessage('error', 'Erro ao enviar certificado: ' + error.message);
+      // Limpar campos em caso de erro
+      limparCamposCertificado();
+
+      // Verificar se é erro de senha
+      if (error.message.includes('Senha incorreta') ||
+          error.message.includes('senha pode estar incorreta') ||
+          error.message.includes('Invalid password') ||
+          error.message.includes('PKCS#12 MAC could not be verified')) {
+        showMessage('error', '🔐 Senha do certificado incorreta. Verifique a senha e tente novamente.');
+      } else {
+        showMessage('error', 'Erro ao enviar certificado: ' + error.message);
+      }
     } finally {
       setIsUploadingCertificado(false);
+    }
+  };
+
+  // Função auxiliar para limpar campos do certificado
+  const limparCamposCertificado = () => {
+    setCertificadoFile(null);
+    setCertificadoSenha('');
+    setCertificadoInfo(null);
+
+    // Limpar o input file (forçar reset do campo)
+    const fileInput = document.querySelector('input[type="file"][accept=".p12,.pfx"]') as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
     }
   };
 
@@ -1839,6 +1863,9 @@ const ConfiguracoesPage: React.FC = () => {
         .eq('id', usuarioData.empresa_id);
 
       if (updateError) throw updateError;
+
+      // Limpar todos os campos do formulário de certificado
+      limparCamposCertificado();
 
       showMessage('success', 'Certificado digital removido com sucesso!');
       setShowRemoveCertificadoModal(false);
