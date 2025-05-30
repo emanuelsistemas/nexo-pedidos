@@ -273,6 +273,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [certificadoSenha, setCertificadoSenha] = useState('');
   const [certificadoInfo, setCertificadoInfo] = useState<any>(null);
   const [isUploadingCertificado, setIsUploadingCertificado] = useState(false);
+  const [showRemoveCertificadoModal, setShowRemoveCertificadoModal] = useState(false);
 
   useEffect(() => {
     const loadDataWithLoading = async () => {
@@ -1840,12 +1841,14 @@ const ConfiguracoesPage: React.FC = () => {
       if (updateError) throw updateError;
 
       showMessage('success', 'Certificado digital removido com sucesso!');
+      setShowRemoveCertificadoModal(false);
 
       // Recarregar dados
       loadData();
 
     } catch (error: any) {
       showMessage('error', 'Erro ao remover certificado: ' + error.message);
+      setShowRemoveCertificadoModal(false);
     }
   };
 
@@ -3618,13 +3621,42 @@ const ConfiguracoesPage: React.FC = () => {
                         </svg>
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-green-400 font-medium mb-1">Certificado Digital Configurado</h3>
+                        <h3 className="text-green-400 font-medium mb-3">Certificado Digital Configurado</h3>
+
+                        {/* Destaque da Validade */}
+                        {certificadoInfo.certificado_digital_validade && (
+                          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-3">
+                            <div className="flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                              </svg>
+                              <span className="text-blue-400 font-medium">Válido até:</span>
+                              <span className="text-white font-bold text-lg">
+                                {new Date(certificadoInfo.certificado_digital_validade).toLocaleDateString('pt-BR')}
+                              </span>
+                              {(() => {
+                                const hoje = new Date();
+                                const validade = new Date(certificadoInfo.certificado_digital_validade);
+                                const diasRestantes = Math.ceil((validade.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+                                if (diasRestantes < 0) {
+                                  return <span className="text-red-400 font-medium ml-2">⚠️ VENCIDO</span>;
+                                } else if (diasRestantes <= 30) {
+                                  return <span className="text-yellow-400 font-medium ml-2">⚠️ Vence em {diasRestantes} dias</span>;
+                                } else {
+                                  return <span className="text-green-400 font-medium ml-2">✅ {diasRestantes} dias restantes</span>;
+                                }
+                              })()}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="space-y-1 text-sm text-gray-300">
                           <p><strong>Nome:</strong> {certificadoInfo.certificado_digital_nome}</p>
                           <p><strong>Status:</strong> {certificadoInfo.certificado_digital_status === 'ativo' ? 'Ativo' : 'Inativo'}</p>
-                          {certificadoInfo.certificado_digital_validade && (
-                            <p><strong>Validade:</strong> {new Date(certificadoInfo.certificado_digital_validade).toLocaleDateString('pt-BR')}</p>
-                          )}
                           {certificadoInfo.certificado_digital_uploaded_at && (
                             <p><strong>Enviado em:</strong> {new Date(certificadoInfo.certificado_digital_uploaded_at).toLocaleDateString('pt-BR')}</p>
                           )}
@@ -3633,7 +3665,7 @@ const ConfiguracoesPage: React.FC = () => {
                           <Button
                             type="button"
                             variant="primary"
-                            onClick={handleRemoverCertificado}
+                            onClick={() => setShowRemoveCertificadoModal(true)}
                             className="!bg-red-500 hover:!bg-red-600 !border-red-500 text-sm"
                           >
                             🗑️ Remover Certificado
@@ -4741,6 +4773,79 @@ const ConfiguracoesPage: React.FC = () => {
                     {isDeletingAccount ? 'Deletando...' : 'DELETAR EMPRESA'}
                   </Button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação para Remover Certificado */}
+      <AnimatePresence>
+        {showRemoveCertificadoModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card p-6 rounded-lg shadow-xl max-w-md mx-4 w-full border border-red-500/20"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-400">
+                    <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
+                    <path d="M9 22v-4h6v4"></path>
+                    <path d="M8 6h.01"></path>
+                    <path d="M16 6h.01"></path>
+                    <path d="M12 6h.01"></path>
+                    <path d="M12 10h.01"></path>
+                    <path d="M12 14h.01"></path>
+                    <path d="M16 10h.01"></path>
+                    <path d="M16 14h.01"></path>
+                    <path d="M8 10h.01"></path>
+                    <path d="M8 14h.01"></path>
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Remover Certificado Digital</h3>
+                <p className="text-gray-400 mb-4">
+                  Tem certeza que deseja remover o certificado digital? Esta ação irá impedir a emissão de NFe até que um novo certificado seja configurado.
+                </p>
+
+                {certificadoInfo?.certificado_digital_nome && (
+                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-gray-300">
+                      <strong>Certificado:</strong> {certificadoInfo.certificado_digital_nome}
+                    </p>
+                    {certificadoInfo.certificado_digital_validade && (
+                      <p className="text-sm text-gray-300">
+                        <strong>Validade:</strong> {new Date(certificadoInfo.certificado_digital_validade).toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-4">
+                <Button
+                  type="button"
+                  variant="text"
+                  className="flex-1"
+                  onClick={() => setShowRemoveCertificadoModal(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="flex-1 !bg-red-500 hover:!bg-red-600 !border-red-500"
+                  onClick={handleRemoverCertificado}
+                >
+                  🗑️ Remover Certificado
+                </Button>
               </div>
             </motion.div>
           </motion.div>
