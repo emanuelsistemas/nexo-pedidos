@@ -20,6 +20,7 @@ import TaxaEntregaPage from './pages/dashboard/TaxaEntregaPage';
 import ConfiguracoesPage from './pages/dashboard/ConfiguracoesPage';
 import PDVPage from './pages/dashboard/PDVPage';
 import EstoqueMinimoPage from './pages/dashboard/EstoqueMinimoPage';
+import NfePage from './pages/dashboard/NfePage';
 
 // Páginas de usuário mobile
 import UserMobileLayout from './components/dashboard/UserMobileLayout';
@@ -62,6 +63,7 @@ function App() {
           <Route path="entregador" element={<EntregadorPage />} />
           <Route path="entregador/taxa" element={<TaxaEntregaPage />} />
           <Route path="estoque-minimo" element={<EstoqueMinimoPage />} />
+          <Route path="nfe" element={<NfePage />} />
           <Route path="configuracoes" element={<ConfiguracoesPage />} />
         </Route>
 
