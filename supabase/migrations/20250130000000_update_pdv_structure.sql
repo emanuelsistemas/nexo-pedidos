@@ -146,6 +146,30 @@ ALTER TABLE pdv_itens ADD COLUMN IF NOT EXISTS observacao_item TEXT;
 -- 3. CHAVES ESTRANGEIRAS
 -- =====================================================
 
+-- Criar tabela clientes se não existir
+CREATE TABLE IF NOT EXISTS clientes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome TEXT NOT NULL,
+  email TEXT,
+  telefone TEXT,
+  telefones JSONB,
+  documento TEXT,
+  tipo_documento TEXT,
+  razao_social TEXT,
+  nome_fantasia TEXT,
+  cep TEXT,
+  endereco TEXT,
+  numero TEXT,
+  complemento TEXT,
+  bairro TEXT,
+  cidade TEXT,
+  empresa_id UUID REFERENCES empresas(id) ON DELETE CASCADE,
+  usuario_id UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  deletado BOOLEAN DEFAULT FALSE
+);
+
 -- Chaves estrangeiras para PDV
 DO $$
 BEGIN

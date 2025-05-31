@@ -8,7 +8,7 @@ interface Cliente {
   id: string;
   nome: string;
   telefone: string;
-  email?: string;
+  emails?: string[];
   endereco?: string;
   numero?: string;
   complemento?: string;
@@ -210,7 +210,7 @@ const UserClientesPage: React.FC = () => {
         cliente =>
           cliente.nome?.toLowerCase().includes(searchLower) ||
           cliente.telefone?.toLowerCase().includes(searchLower) ||
-          cliente.email?.toLowerCase().includes(searchLower) ||
+          (cliente.emails && cliente.emails.some(email => email.toLowerCase().includes(searchLower))) ||
           cliente.endereco?.toLowerCase().includes(searchLower)
       );
     }
@@ -494,10 +494,16 @@ const UserClientesPage: React.FC = () => {
                     <span>{formatarTelefone(cliente.telefone)}</span>
                   </div>
 
-                  {cliente.email && (
+                  {/* Emails - Exibir primeiro email */}
+                  {cliente.emails && cliente.emails.length > 0 && (
                     <div className="flex items-center gap-1 text-gray-400 text-sm mt-1">
                       <Mail size={14} />
-                      <span>{cliente.email}</span>
+                      <span>{cliente.emails[0]}</span>
+                      {cliente.emails.length > 1 && (
+                        <span className="text-xs text-gray-500">
+                          +{cliente.emails.length - 1}
+                        </span>
+                      )}
                     </div>
                   )}
 

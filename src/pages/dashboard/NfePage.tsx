@@ -9,13 +9,17 @@ interface NFe {
   serie_documento: number;
   numero_documento: number;
   modelo_documento: number; // 55 = NFe, 65 = NFC-e
-  status_nfe: 'pendente' | 'autorizada' | 'cancelada' | 'rejeitada';
+  status_nfe: 'pendente' | 'autorizada' | 'cancelada' | 'rejeitada' | 'rascunho';
   natureza_operacao: string;
   nome_cliente: string;
   created_at: string;
   valor_total: number;
   numero_nfe?: string;
   chave_nfe?: string;
+  dados_nfe?: string; // JSON com dados completos da NFe para rascunhos
+  data_rascunho?: string;
+  usuario_rascunho?: string;
+  observacoes_rascunho?: string;
 }
 
 const NfePage: React.FC = () => {
@@ -68,6 +72,8 @@ const NfePage: React.FC = () => {
         return 'bg-green-500/10 text-green-400 border-green-500/20';
       case 'pendente':
         return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
+      case 'rascunho':
+        return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
       case 'cancelada':
         return 'bg-red-500/10 text-red-400 border-red-500/20';
       case 'rejeitada':
@@ -83,6 +89,8 @@ const NfePage: React.FC = () => {
         return 'Autorizada';
       case 'pendente':
         return 'Pendente';
+      case 'rascunho':
+        return 'Rascunho';
       case 'cancelada':
         return 'Cancelada';
       case 'rejeitada':
@@ -145,6 +153,7 @@ const NfePage: React.FC = () => {
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
               <option value="todos">Todos os Status</option>
+              <option value="rascunho">Rascunhos</option>
               <option value="pendente">Pendente</option>
               <option value="autorizada">Autorizada</option>
               <option value="cancelada">Cancelada</option>
@@ -242,10 +251,17 @@ const NfePage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => {
+                            if (nfe.status_nfe === 'rascunho') {
+                              handleEditarRascunho(nfe);
+                            } else {
+                              alert('Funcionalidade de visualização em desenvolvimento');
+                            }
+                          }}
                           className="text-blue-400 hover:text-blue-300 p-1"
-                          title="Editar"
+                          title={nfe.status_nfe === 'rascunho' ? 'Continuar editando' : 'Visualizar'}
                         >
-                          <Edit size={16} />
+                          {nfe.status_nfe === 'rascunho' ? <Edit size={16} /> : <Eye size={16} />}
                         </button>
                         <button
                           className="text-gray-400 hover:text-gray-300 p-1"
@@ -271,6 +287,16 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   const [activeSection, setActiveSection] = useState('identificacao');
   const [isLoading, setIsLoading] = useState(false);
   const [nfeEmitida, setNfeEmitida] = useState(false);
+  const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressSteps, setProgressSteps] = useState([
+    { id: 'validacao', label: 'Validando dados da NFe', status: 'pending', message: '' },
+    { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
+    { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+    { id: 'banco', label: 'Salvando no banco de dados', status: 'pending', message: '' },
+    { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
+  ]);
+  const [logs, setLogs] = useState<string[]>([]);
   const [dadosAutorizacao, setDadosAutorizacao] = useState({
     chave_acesso: '',
     protocolo_uso: '',
@@ -297,7 +323,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       cidade: '',
       uf: '',
       cep: '',
-      email: '',
+      emails: [],
       ie_destinatario: '9',
       operacao: '1',
       consumidor_final: '1'
@@ -365,6 +391,172 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     }
   };
 
+  // Funções auxiliares para gerenciar progresso
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+  };
+
+  const updateStep = (stepId: string, status: 'pending' | 'loading' | 'success' | 'error', message: string = '') => {
+    setProgressSteps(prev => prev.map(step =>
+      step.id === stepId ? { ...step, status, message } : step
+    ));
+  };
+
+  const resetProgress = () => {
+    setProgressSteps([
+      { id: 'validacao', label: 'Validando dados da NFe', status: 'pending', message: '' },
+      { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
+      { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+      { id: 'banco', label: 'Salvando no banco de dados', status: 'pending', message: '' },
+      { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
+    ]);
+    setLogs([]);
+  };
+
+  const copyLogsToClipboard = () => {
+    const logsText = logs.join('\n');
+    navigator.clipboard.writeText(logsText).then(() => {
+      alert('Logs copiados para a área de transferência!');
+    }).catch(() => {
+      alert('Erro ao copiar logs. Tente selecionar e copiar manualmente.');
+    });
+  };
+
+  // Função para salvar rascunho da NFe
+  // Função para carregar e editar rascunho
+  const handleEditarRascunho = (rascunho: NFe) => {
+    try {
+      // Se tem dados_nfe salvos, carregar eles
+      if (rascunho.dados_nfe) {
+        const dadosCarregados = JSON.parse(rascunho.dados_nfe);
+        setNfeData(dadosCarregados);
+      } else {
+        // Carregar dados básicos do rascunho
+        setNfeData(prev => ({
+          ...prev,
+          identificacao: {
+            ...prev.identificacao,
+            numero: rascunho.numero_documento?.toString() || '',
+            serie: rascunho.serie_documento || 1,
+            natureza_operacao: rascunho.natureza_operacao || 'VENDA'
+          },
+          destinatario: {
+            ...prev.destinatario,
+            nome: rascunho.nome_cliente || ''
+          },
+          totais: {
+            ...prev.totais,
+            valor_total: rascunho.valor_total || 0
+          }
+        }));
+      }
+
+      // Abrir formulário de edição
+      setShowForm(true);
+
+    } catch (error) {
+      console.error('Erro ao carregar rascunho:', error);
+      alert('Erro ao carregar rascunho para edição');
+    }
+  };
+
+  const handleSalvarRascunho = async () => {
+    try {
+      setIsLoading(true);
+
+      // Validações básicas para rascunho (menos rigorosas)
+      if (!nfeData.empresa) {
+        alert('Dados da empresa não carregados');
+        return;
+      }
+
+      if (!nfeData.identificacao.natureza_operacao) {
+        alert('Natureza da operação é obrigatória');
+        return;
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        alert('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        alert('Empresa não encontrada');
+        return;
+      }
+
+      // Preparar dados do rascunho
+      const rascunhoData = {
+        empresa_id: usuarioData.empresa_id,
+        modelo_documento: 55,
+        serie_documento: parseInt(nfeData.identificacao.serie) || 1,
+        numero_documento: parseInt(nfeData.identificacao.numero) || 0,
+        status_nfe: 'rascunho',
+        natureza_operacao: nfeData.identificacao.natureza_operacao,
+        nome_cliente: nfeData.destinatario.nome || 'Cliente não informado',
+        valor_total: nfeData.totais.valor_total || 0,
+        data_rascunho: new Date().toISOString(),
+        usuario_rascunho: userData.user.id,
+        observacoes_rascunho: 'Rascunho salvo automaticamente',
+        // Salvar dados completos da NFe em JSON
+        dados_nfe: JSON.stringify(nfeData)
+      };
+
+      // Salvar rascunho
+      const { data: rascunhoSalvo, error } = await supabase
+        .from('pdv')
+        .insert(rascunhoData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar rascunho:', error);
+        alert('Erro ao salvar rascunho: ' + error.message);
+        return;
+      }
+
+      // Salvar itens se existirem
+      if (nfeData.produtos.length > 0) {
+        const itensRascunho = nfeData.produtos.map((produto, index) => ({
+          pdv_id: rascunhoSalvo.id,
+          produto_id: produto.produto_id || null,
+          codigo_produto: produto.codigo,
+          nome_produto: produto.descricao,
+          quantidade: produto.quantidade,
+          valor_unitario: produto.valor_unitario,
+          valor_total: produto.valor_total,
+          ordem: index + 1
+        }));
+
+        const { error: itensError } = await supabase
+          .from('pdv_itens')
+          .insert(itensRascunho);
+
+        if (itensError) {
+          console.error('Erro ao salvar itens do rascunho:', itensError);
+          // Não bloqueia o salvamento, apenas avisa
+          alert('Rascunho salvo, mas houve erro ao salvar alguns itens');
+        }
+      }
+
+      alert('✅ Rascunho salvo com sucesso!\n\nVocê pode continuar editando ou voltar depois para finalizar a NFe.');
+
+    } catch (error) {
+      console.error('Erro ao salvar rascunho:', error);
+      alert('Erro inesperado ao salvar rascunho');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Buscar dados da empresa e próximo número
   useEffect(() => {
     const loadEmpresaData = async () => {
@@ -380,11 +572,35 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
         if (!usuarioData?.empresa_id) return;
 
+        // Carregar dados da empresa
         const { data: empresaData } = await supabase
           .from('empresas')
           .select('*')
           .eq('id', usuarioData.empresa_id)
           .single();
+
+        // Carregar configuração NFe da nova tabela
+        const { data: nfeConfigData } = await supabase
+          .from('nfe_config')
+          .select('ambiente')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        if (nfeConfigData) {
+          setAmbienteNFe(nfeConfigData.ambiente);
+        } else {
+          // Se não encontrou configuração, criar uma nova com padrão homologação
+          const { error: insertError } = await supabase
+            .from('nfe_config')
+            .insert({
+              empresa_id: usuarioData.empresa_id,
+              ambiente: 'homologacao'
+            });
+
+          if (!insertError) {
+            setAmbienteNFe('homologacao');
+          }
+        }
 
         if (empresaData) {
           // Buscar próximo número NFe para esta empresa
@@ -426,12 +642,31 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   const handleEmitirNFe = async () => {
     try {
       setIsLoading(true);
+      setShowProgressModal(true);
+      resetProgress();
+
+      // ETAPA 1: VALIDAÇÃO
+      updateStep('validacao', 'loading');
+      addLog('Iniciando processo de emissão da NFe');
+      addLog(`Ambiente selecionado: ${ambienteNFe.toUpperCase()}`);
 
       // Validações robustas
       const validationErrors = [];
 
       if (!nfeData.empresa) {
         validationErrors.push('Dados da empresa não carregados');
+      }
+
+      if (!nfeData.empresa?.certificado_digital) {
+        validationErrors.push('Certificado digital não configurado para a empresa');
+      }
+
+      // Validação específica para ambiente de produção
+      if (ambienteNFe === 'producao') {
+        if (!nfeData.empresa?.certificado_digital) {
+          validationErrors.push('Certificado digital REAL é obrigatório para ambiente de produção');
+        }
+        // Adicionar outras validações específicas de produção se necessário
       }
 
       if (!nfeData.destinatario.documento || !nfeData.destinatario.nome) {
@@ -458,12 +693,38 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       }
 
       if (validationErrors.length > 0) {
-        alert('Erros de validação:\n\n' + validationErrors.join('\n'));
+        updateStep('validacao', 'error', 'Erros de validação encontrados');
+        addLog('ERRO: Validação falhou');
+        validationErrors.forEach(error => addLog(`- ${error}`));
         return;
+      }
+
+      addLog('Validação concluída com sucesso');
+      updateStep('validacao', 'success', 'Dados validados');
+
+      // Confirmação para ambiente de produção
+      if (ambienteNFe === 'producao') {
+        setShowProgressModal(false); // Fechar modal para mostrar confirmação
+        const confirmacao = confirm(
+          '⚠️ ATENÇÃO: AMBIENTE DE PRODUÇÃO\n\n' +
+          'Você está prestes a emitir uma NFe REAL no ambiente de PRODUÇÃO.\n' +
+          'Esta NFe terá valor fiscal e será enviada para a SEFAZ oficial.\n\n' +
+          '📄 Valor: R$ ' + nfeData.totais.valor_total.toFixed(2) + '\n' +
+          '👤 Cliente: ' + nfeData.destinatario.nome + '\n\n' +
+          'Deseja continuar?'
+        );
+
+        if (!confirmacao) {
+          setShowProgressModal(false);
+          setIsLoading(false);
+          return;
+        }
+        setShowProgressModal(true); // Reabrir modal
       }
 
       // Preparar payload conforme documentação da API
       const payload = {
+        ambiente: ambienteNFe === 'producao' ? 1 : 2, // 1=Produção, 2=Homologação
         empresa: nfeData.empresa,
         cliente: {
           documento: nfeData.destinatario.documento,
@@ -475,7 +736,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           state: nfeData.destinatario.uf,
           zip_code: nfeData.destinatario.cep,
           codigo_municipio: nfeData.destinatario.codigo_municipio || 3550308,
-          email: nfeData.destinatario.email
+          emails: nfeData.destinatario.emails || []
         },
         produtos: nfeData.produtos,
         totais: {
@@ -487,9 +748,14 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         pagamentos: nfeData.pagamentos
       };
 
-      console.log('Enviando NFe para API:', payload);
+      // ETAPA 2: GERAÇÃO DO XML
+      updateStep('geracao', 'loading');
+      addLog('Preparando dados para geração do XML');
+      addLog(`Valor total: R$ ${nfeData.totais.valor_total.toFixed(2)}`);
+      addLog(`Cliente: ${nfeData.destinatario.nome}`);
 
       // Chamar API para gerar NFe
+      addLog('Enviando dados para API de geração...');
       const response = await fetch('https://apinfe.nexopdv.com/api/gerar-nfe', {
         method: 'POST',
         headers: {
@@ -500,87 +766,144 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
       if (!response.ok) {
         const errorText = await response.text();
+        updateStep('geracao', 'error', `Erro HTTP ${response.status}`);
+        addLog(`ERRO: Falha na geração do XML - HTTP ${response.status}`);
+        addLog(`Detalhes: ${errorText}`);
         throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
       }
 
       const result = await response.json();
 
-      if (result.success) {
-        console.log('NFe gerada com sucesso:', result.data);
-
-        // Enviar para SEFAZ
-        const sefazResponse = await fetch('https://apinfe.nexopdv.com/api/enviar-sefaz', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            xml: result.data.xml,
-            chave: result.data.chave,
-            empresa_id: nfeData.empresa.id
-          })
-        });
-
-        if (!sefazResponse.ok) {
-          const errorText = await sefazResponse.text();
-          throw new Error(`Erro SEFAZ HTTP ${sefazResponse.status}: ${errorText}`);
-        }
-
-        const sefazResult = await sefazResponse.json();
-
-        if (sefazResult.success) {
-          // Salvar NFe no banco de dados
-          await salvarNFeNoBanco(result.data, sefazResult.data);
-
-          // Atualizar dados de autorização
-          setDadosAutorizacao({
-            chave_acesso: result.data.chave,
-            protocolo_uso: sefazResult.data.protocolo || '',
-            data_autorizacao: new Date().toISOString(),
-            status: 'autorizada'
-          });
-
-          // Marcar NFe como emitida
-          setNfeEmitida(true);
-
-          // Mudar para a aba de autorização
-          setActiveSection('autorizacao');
-
-          alert(`✅ NFe emitida com sucesso!\n\n📄 Chave: ${result.data.chave}\n🔒 Protocolo: ${sefazResult.data.protocolo || 'N/A'}\n💰 Valor: R$ ${nfeData.totais.valor_total.toFixed(2)}`);
-          onSave();
-        } else {
-          console.error('Erro SEFAZ:', sefazResult);
-          alert(`❌ NFe gerada, mas erro ao enviar para SEFAZ:\n\n${sefazResult.error || 'Erro desconhecido'}\n\nChave gerada: ${result.data.chave}`);
-        }
-      } else {
-        console.error('Erro na geração:', result);
-        alert(`❌ Erro ao gerar NFe:\n\n${result.error || 'Erro desconhecido'}`);
+      if (!result.success) {
+        updateStep('geracao', 'error', 'Falha na geração do XML');
+        addLog('ERRO: API retornou falha na geração');
+        addLog(`Detalhes: ${result.error || 'Erro desconhecido'}`);
+        throw new Error(result.error || 'Erro na geração do XML');
       }
+
+      addLog('XML gerado com sucesso');
+      addLog(`Chave NFe: ${result.data.chave}`);
+      updateStep('geracao', 'success', 'XML gerado');
+
+      // ETAPA 3: ENVIO PARA SEFAZ
+      updateStep('sefaz', 'loading');
+      addLog('Iniciando envio para SEFAZ...');
+      addLog(`Ambiente SEFAZ: ${ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}`);
+
+      const sefazResponse = await fetch('https://apinfe.nexopdv.com/api/enviar-sefaz', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ambiente: ambienteNFe === 'producao' ? 1 : 2, // 1=Produção, 2=Homologação
+          xml: result.data.xml,
+          chave: result.data.chave,
+          empresa_id: nfeData.empresa.id
+        })
+      });
+
+      if (!sefazResponse.ok) {
+        const errorText = await sefazResponse.text();
+        updateStep('sefaz', 'error', `Erro HTTP ${sefazResponse.status}`);
+        addLog(`ERRO: Falha na comunicação com SEFAZ - HTTP ${sefazResponse.status}`);
+        addLog(`Detalhes: ${errorText}`);
+        throw new Error(`Erro SEFAZ HTTP ${sefazResponse.status}: ${errorText}`);
+      }
+
+      const sefazResult = await sefazResponse.json();
+
+      if (!sefazResult.success) {
+        updateStep('sefaz', 'error', 'SEFAZ rejeitou a NFe');
+        addLog('ERRO: SEFAZ rejeitou a NFe');
+        addLog(`Detalhes: ${sefazResult.error || 'Erro desconhecido'}`);
+        throw new Error(sefazResult.error || 'Erro no envio para SEFAZ');
+      }
+
+      addLog('NFe autorizada pela SEFAZ');
+      addLog(`Protocolo: ${sefazResult.data.protocolo || 'N/A'}`);
+      updateStep('sefaz', 'success', 'Autorizada pela SEFAZ');
+
+      // ETAPA 4: SALVAMENTO NO BANCO
+      updateStep('banco', 'loading');
+      addLog('Salvando NFe no banco de dados...');
+
+      try {
+        await salvarNFeNoBanco(result.data, sefazResult.data);
+        addLog('NFe salva no banco com sucesso');
+        updateStep('banco', 'success', 'Salva no banco');
+      } catch (dbError) {
+        updateStep('banco', 'error', 'Erro ao salvar no banco');
+        addLog('AVISO: Erro ao salvar no banco local');
+        addLog(`Detalhes: ${dbError.message || 'Erro desconhecido'}`);
+        addLog('NFe foi autorizada pela SEFAZ, mas pode não aparecer na listagem');
+      }
+
+      // ETAPA 5: FINALIZAÇÃO
+      updateStep('finalizacao', 'loading');
+      addLog('Finalizando processo...');
+
+      // Atualizar dados de autorização
+      setDadosAutorizacao({
+        chave_acesso: result.data.chave,
+        protocolo_uso: sefazResult.data.protocolo || '',
+        data_autorizacao: new Date().toISOString(),
+        status: 'autorizada'
+      });
+
+      // Marcar NFe como emitida
+      setNfeEmitida(true);
+
+      addLog('✅ NFe emitida com sucesso!');
+      addLog(`Chave: ${result.data.chave}`);
+      addLog(`Protocolo: ${sefazResult.data.protocolo || 'N/A'}`);
+      addLog(`Valor: R$ ${nfeData.totais.valor_total.toFixed(2)}`);
+      updateStep('finalizacao', 'success', 'Processo concluído');
+
+      // Aguardar 2 segundos para mostrar o sucesso
+      setTimeout(() => {
+        setShowProgressModal(false);
+        onBack(); // Voltar para a grid de NFe
+      }, 2000);
     } catch (error) {
       console.error('Erro ao emitir NFe:', error);
 
-      let errorMessage = '❌ Erro ao emitir NFe:\n\n';
+      // Adicionar erro aos logs
+      addLog('❌ ERRO CRÍTICO NO PROCESSO');
+      addLog(`Detalhes: ${error.message || 'Erro desconhecido'}`);
 
-      if (error.message.includes('Failed to fetch')) {
-        errorMessage += '🌐 Erro de conexão com a API.\nVerifique sua conexão com a internet e se a API está funcionando.';
-      } else if (error.message.includes('HTTP 404')) {
-        errorMessage += '🔍 Endpoint não encontrado.\nVerifique se a API está configurada corretamente.';
-      } else if (error.message.includes('HTTP 500')) {
-        errorMessage += '⚠️ Erro interno do servidor.\nTente novamente em alguns minutos.';
-      } else if (error.message.includes('timeout')) {
-        errorMessage += '⏱️ Timeout na requisição.\nA operação demorou muito para responder.';
-      } else {
-        errorMessage += error.message || 'Erro desconhecido';
+      // Determinar qual etapa falhou e marcar como erro
+      const currentStep = progressSteps.find(step => step.status === 'loading');
+      if (currentStep) {
+        updateStep(currentStep.id, 'error', 'Falha na execução');
       }
 
-      alert(errorMessage);
+      // Categorizar o erro para logs mais detalhados
+      if (error.message.includes('Failed to fetch')) {
+        addLog('Tipo: Erro de conexão com a API');
+        addLog('Solução: Verifique sua conexão e se a API está funcionando');
+      } else if (error.message.includes('HTTP 404')) {
+        addLog('Tipo: Endpoint não encontrado');
+        addLog('Solução: Verifique se a API está configurada corretamente');
+      } else if (error.message.includes('HTTP 500')) {
+        addLog('Tipo: Erro interno do servidor');
+        addLog('Solução: Tente novamente em alguns minutos');
+      } else if (error.message.includes('timeout')) {
+        addLog('Tipo: Timeout na requisição');
+        addLog('Solução: A operação demorou muito para responder');
+      } else {
+        addLog('Tipo: Erro não categorizado');
+      }
+
+      addLog('');
+      addLog('📋 Use o botão "Copiar Logs" para enviar os detalhes para suporte');
     } finally {
       setIsLoading(false);
     }
   };
 
   // Função para salvar NFe no banco de dados
-  const salvarNFeNoBanco = async (nfeData: any, sefazData: any) => {
+  const salvarNFeNoBanco = async (nfeApiData: any, sefazData: any) => {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
@@ -598,22 +921,27 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         .insert({
           empresa_id: usuarioData.empresa_id,
           modelo_documento: 55,
-          serie_documento: nfeData.serie || 1,
-          numero_documento: nfeData.numero_nfe,
-          chave_nfe: nfeData.chave,
+          serie_documento: parseInt(nfeData.identificacao.serie) || 1,
+          numero_documento: parseInt(nfeApiData.numero_nfe) || parseInt(nfeData.identificacao.numero),
+          chave_nfe: nfeApiData.chave,
           status_nfe: 'autorizada',
           protocolo_uso: sefazData.protocolo,
-          nome_cliente: nfeData.destinatario?.nome || 'Cliente',
-          valor_total: nfeData.totais?.valor_total || 0,
-          natureza_operacao: nfeData.identificacao?.natureza_operacao || 'VENDA',
-          xml_nfe: nfeData.xml
+          nome_cliente: nfeData.destinatario.nome || 'Cliente',
+          valor_total: nfeData.totais.valor_total || 0,
+          natureza_operacao: nfeData.identificacao.natureza_operacao || 'VENDA',
+          xml_nfe: nfeApiData.xml,
+          data_emissao: nfeData.identificacao.data_emissao || new Date().toISOString()
         });
 
       if (error) {
         console.error('Erro ao salvar NFe no banco:', error);
+        throw error;
       }
+
+      console.log('NFe salva no banco com sucesso');
     } catch (error) {
       console.error('Erro ao salvar NFe no banco:', error);
+      throw error;
     }
   };
 
@@ -714,33 +1042,101 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="fixed inset-0 bg-background flex z-50">
       {/* Sidebar com abas */}
-      <div className="w-72 bg-background-card border-r border-gray-800 flex flex-col">
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-lg font-bold text-white">Nova NFe</h1>
-              <p className="text-xs text-gray-400">Preencha os dados da nota fiscal</p>
+      <div className="w-72 bg-background-card border-r border-gray-800 flex flex-col h-full">
+        <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onBack}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <ArrowLeft size={20} />
+              </button>
+              <div>
+                <h1 className="text-lg font-bold text-white">Nova NFe</h1>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={ambienteNFe}
+                onChange={async (e) => {
+                  const novoAmbiente = e.target.value as 'homologacao' | 'producao';
+
+                  // Confirmação para mudança para produção
+                  if (novoAmbiente === 'producao') {
+                    const confirmacao = confirm(
+                      '⚠️ MUDANÇA PARA AMBIENTE DE PRODUÇÃO\n\n' +
+                      'Você está alterando para o ambiente de PRODUÇÃO.\n' +
+                      'As próximas NFe emitidas serão REAIS e terão valor fiscal.\n\n' +
+                      'Certifique-se de que:\n' +
+                      '✅ Possui certificado digital REAL\n' +
+                      '✅ Os dados estão corretos\n' +
+                      '✅ Está autorizado a emitir NFe real\n\n' +
+                      'Confirma a mudança?'
+                    );
+
+                    if (!confirmacao) {
+                      return; // Cancela a mudança
+                    }
+                  }
+
+                  setAmbienteNFe(novoAmbiente);
+
+                  // Salvar no banco de dados
+                  try {
+                    const { data: userData } = await supabase.auth.getUser();
+                    if (userData.user) {
+                      const { data: usuarioData } = await supabase
+                        .from('usuarios')
+                        .select('empresa_id')
+                        .eq('id', userData.user.id)
+                        .single();
+
+                      if (usuarioData?.empresa_id) {
+                        const { error } = await supabase
+                          .from('nfe_config')
+                          .upsert({
+                            empresa_id: usuarioData.empresa_id,
+                            ambiente: novoAmbiente
+                          });
+
+                        if (error) {
+                          console.error('Erro ao salvar configuração:', error);
+                          alert('Erro ao salvar configuração de ambiente');
+                        } else {
+                          console.log(`Ambiente alterado para: ${novoAmbiente}`);
+                        }
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Erro ao salvar ambiente:', error);
+                  }
+                }}
+                className={`px-2 py-1 rounded text-xs font-medium border ${
+                  ambienteNFe === 'producao'
+                    ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                    : 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                } focus:outline-none focus:ring-1 focus:ring-primary-500`}
+                title="Selecionar ambiente de emissão"
+              >
+                <option value="homologacao">HOMOLOGAÇÃO</option>
+                <option value="producao">PRODUÇÃO</option>
+              </select>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 px-2">
-          <div className="space-y-1">
+        <nav className="flex-1 overflow-y-auto">
+          <div className="space-y-0">
             {sections.map((section) => (
               <button
                 key={section.id}
                 onClick={() => setActiveSection(section.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-gray-800/50 ${
                   activeSection === section.id
-                    ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
+                    ? 'bg-primary-500/10 text-primary-400 border-l-2 border-l-primary-500'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                 }`}
               >
@@ -752,17 +1148,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         </nav>
 
         {/* Botões de ação */}
-        <div className="p-3 border-t border-gray-800 space-y-2">
+        <div className="p-3 border-t border-gray-800 space-y-2 flex-shrink-0">
           <Button
             variant="primary"
-            className="w-full flex items-center justify-center gap-2 text-sm py-2"
-            disabled={isLoading}
-          >
-            <Save size={14} />
-            Salvar
-          </Button>
-          <Button
-            variant="success"
             className="w-full flex items-center justify-center gap-2 text-sm py-2"
             onClick={handleEmitirNFe}
             disabled={isLoading}
@@ -779,15 +1167,29 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
               </>
             )}
           </Button>
+          <Button
+            variant="success"
+            className="w-full flex items-center justify-center gap-2 text-sm py-2"
+            onClick={handleSalvarRascunho}
+            disabled={isLoading}
+          >
+            <Save size={14} />
+            Salvar Rascunho
+          </Button>
           <div className="flex gap-2">
-            <Button variant="secondary" className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5">
+            <Button
+              variant="secondary"
+              className={`${nfeEmitida ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 text-xs py-1.5`}
+            >
               <Download size={12} />
               Espelho
             </Button>
-            <Button variant="secondary" className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5">
-              <Copy size={12} />
-              Duplicar
-            </Button>
+            {nfeEmitida && (
+              <Button variant="secondary" className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5">
+                <Copy size={12} />
+                Duplicar
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -798,6 +1200,118 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           {renderContent()}
         </div>
       </div>
+
+      {/* Modal de Progresso */}
+      {showProgressModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
+          <div className="bg-background-card rounded-lg border border-gray-800 w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-800">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">Emitindo NFe</h3>
+                <div className={`px-3 py-1 rounded text-sm font-medium ${
+                  ambienteNFe === 'producao'
+                    ? 'bg-green-500/15 text-green-400'
+                    : 'bg-orange-500/15 text-orange-400'
+                }`}>
+                  {ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}
+                </div>
+              </div>
+            </div>
+
+            {/* Progress Steps */}
+            <div className="p-6 border-b border-gray-800">
+              <div className="space-y-4">
+                {progressSteps.map((step, index) => (
+                  <div key={step.id} className="flex items-center gap-4">
+                    {/* Step Icon */}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      step.status === 'success'
+                        ? 'bg-green-500 text-white'
+                        : step.status === 'error'
+                        ? 'bg-red-500 text-white'
+                        : step.status === 'loading'
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-gray-700 text-gray-400'
+                    }`}>
+                      {step.status === 'success' ? '✓' :
+                       step.status === 'error' ? '✗' :
+                       step.status === 'loading' ? (
+                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                       ) : index + 1}
+                    </div>
+
+                    {/* Step Content */}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className={`font-medium ${
+                          step.status === 'success' ? 'text-green-400' :
+                          step.status === 'error' ? 'text-red-400' :
+                          step.status === 'loading' ? 'text-primary-400' :
+                          'text-gray-400'
+                        }`}>
+                          {step.label}
+                        </span>
+                        {step.message && (
+                          <span className="text-sm text-gray-500">{step.message}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Logs Area */}
+            <div className="flex-1 p-6 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-semibold text-white">Logs do Processo</h4>
+                <button
+                  onClick={copyLogsToClipboard}
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm flex items-center gap-2 transition-colors"
+                >
+                  <Copy size={14} />
+                  Copiar Logs
+                </button>
+              </div>
+
+              <div className="flex-1 bg-gray-900 rounded border border-gray-700 p-4 overflow-y-auto">
+                <div className="space-y-1 font-mono text-sm">
+                  {logs.map((log, index) => (
+                    <div key={index} className={`${
+                      log.includes('ERRO') || log.includes('❌') ? 'text-red-400' :
+                      log.includes('✅') || log.includes('sucesso') ? 'text-green-400' :
+                      log.includes('AVISO') ? 'text-yellow-400' :
+                      'text-gray-300'
+                    }`}>
+                      {log}
+                    </div>
+                  ))}
+                  {logs.length === 0 && (
+                    <div className="text-gray-500 italic">Aguardando início do processo...</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-800">
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-gray-400">
+                  {progressSteps.filter(s => s.status === 'success').length} de {progressSteps.length} etapas concluídas
+                </div>
+                <button
+                  onClick={() => setShowProgressModal(false)}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+                  disabled={isLoading && !progressSteps.some(s => s.status === 'error')}
+                >
+                  {isLoading && !progressSteps.some(s => s.status === 'error') ? 'Processando...' : 'Fechar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -816,49 +1330,9 @@ const IdentificacaoSection: React.FC<{ data: any; onChange: (data: any) => void 
       <h2 className="text-xl font-bold text-white mb-4">Identificação da NFe</h2>
 
       <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Primeira linha */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Código (cNF) *
-            </label>
-            <input
-              type="text"
-              value="Gerado pela API"
-              readOnly
-              className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 cursor-not-allowed"
-              title="Código Numérico que compõe a Chave de Acesso (8 dígitos)"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Código Numérico da Chave de Acesso (baseado no número da NFe + controle)
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Modelo *
-            </label>
-            <input
-              type="text"
-              value="55"
-              readOnly
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Série *
-            </label>
-            <input
-              type="number"
-              value={data.serie}
-              onChange={(e) => updateField('serie', parseInt(e.target.value) || 1)}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
-            />
-          </div>
-
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
+          {/* Primeira linha - Layout otimizado */}
+          <div className="lg:col-span-1">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Número *
             </label>
@@ -878,12 +1352,46 @@ const IdentificacaoSection: React.FC<{ data: any; onChange: (data: any) => void 
                 </div>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Próximo número sequencial para esta empresa (modelo 55, série 1)
-            </p>
           </div>
 
-          <div>
+          <div className="lg:col-span-1">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Modelo *
+            </label>
+            <input
+              type="text"
+              value="55"
+              readOnly
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            />
+          </div>
+
+          <div className="lg:col-span-1">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Série *
+            </label>
+            <input
+              type="number"
+              value={data.serie}
+              onChange={(e) => updateField('serie', parseInt(e.target.value) || 1)}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            />
+          </div>
+
+          <div className="lg:col-span-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Código
+            </label>
+            <input
+              type="text"
+              value="Gerado pela API"
+              readOnly
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 cursor-not-allowed"
+              title="Código Numérico que compõe a Chave de Acesso (8 dígitos)"
+            />
+          </div>
+
+          <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Emitida em
             </label>
@@ -896,7 +1404,7 @@ const IdentificacaoSection: React.FC<{ data: any; onChange: (data: any) => void 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Tipo Documento
@@ -1033,7 +1541,7 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
       cidade: cliente.cidade || '',
       uf: cliente.estado || '',
       cep: cliente.cep || '',
-      email: cliente.email || ''
+      emails: cliente.emails || []
     });
     setShowClienteModal(false);
     setSearchTerm('');
@@ -1071,8 +1579,9 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
       </div>
 
       <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
+        {/* Primeira linha: CNPJ/CPF e Nome */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               CNPJ/CPF *
             </label>
@@ -1085,7 +1594,7 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
             />
           </div>
 
-          <div>
+          <div className="lg:col-span-3">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Nome/Razão Social *
             </label>
@@ -1099,8 +1608,9 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
+        {/* Segunda linha: Endereço e Número */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          <div className="lg:col-span-4">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Endereço
             </label>
@@ -1113,7 +1623,7 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
             />
           </div>
 
-          <div>
+          <div className="lg:col-span-1">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Número
             </label>
@@ -1127,8 +1637,9 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div>
+        {/* Terceira linha: Bairro, Cidade, UF */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Bairro
             </label>
@@ -1141,7 +1652,7 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
             />
           </div>
 
-          <div>
+          <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Cidade
             </label>
@@ -1154,7 +1665,7 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
             />
           </div>
 
-          <div>
+          <div className="lg:col-span-1">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               UF
             </label>
@@ -1175,8 +1686,9 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
+        {/* Quarta linha: CEP */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-300 mb-2">
               CEP
             </label>
@@ -1188,22 +1700,37 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
             />
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              value={data.email}
-              onChange={(e) => updateField('email', e.target.value)}
-              placeholder="email@exemplo.com"
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-            />
-          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Seção de Emails do Cliente */}
+        {data.emails && data.emails.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Emails do Cliente
+            </label>
+            <div className="bg-gray-800/30 rounded-lg border border-gray-700 p-3">
+              <div className="space-y-2">
+                {data.emails.map((email: string, index: number) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <div className="w-2 h-2 bg-primary-500 rounded-full flex-shrink-0"></div>
+                    <span className="text-white">{email}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <p className="text-xs text-gray-500">
+                  Estes emails serão incluídos nos dados da NFe para envio automático
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quinta linha: Campos de identificação */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Identificador da IE
@@ -1302,8 +1829,8 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
                             {cliente.telefone && (
                               <span>📞 {cliente.telefone}</span>
                             )}
-                            {cliente.email && (
-                              <span>✉️ {cliente.email}</span>
+                            {cliente.emails && cliente.emails.length > 0 && (
+                              <span>✉️ {cliente.emails[0]}{cliente.emails.length > 1 && ` +${cliente.emails.length - 1}`}</span>
                             )}
                           </div>
                           {(cliente.endereco || cliente.cidade) && (
@@ -1410,90 +1937,88 @@ const ProdutosSection: React.FC<{ produtos: any[]; empresaId?: string; onChange:
       <div className="mb-6">
         <h3 className="text-lg font-bold text-white mb-4">Novo Produto</h3>
         <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-          <div className="space-y-6">
-            {/* Campo Produto - linha separada */}
+          {/* Campo Produto - linha completa */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Produto *
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={produtoSelecionado ? produtoSelecionado.nome : ''}
+                placeholder="Selecione ou digite o produto"
+                className="w-full px-3 py-2 pr-10 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                readOnly
+              />
+              <button
+                type="button"
+                onClick={() => setShowProdutoModal(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+                title="Buscar produto"
+              >
+                <Search size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Campos de valores - grid corrigido */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Valor Unitário */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Produto *
+                Valor Unitário *
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={produtoSelecionado ? produtoSelecionado.nome : ''}
-                  placeholder="Selecione ou digite o produto"
-                  className="w-full px-3 py-2 pr-10 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                  readOnly
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowProdutoModal(true)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
-                  title="Buscar produto"
-                >
-                  <Search size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Campos de valores - grid responsivo */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Valor Unitário */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Valor Unitário *
-                </label>
-                <div className="flex items-center">
-                  <span className="text-sm text-gray-400 mr-2">R$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={produtoForm.valor_unitario || ''}
-                    onChange={(e) => updateProdutoForm('valor_unitario', parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-              </div>
-
-              {/* Quantidade */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Quantidade *
-                </label>
+              <div className="flex items-center">
+                <span className="text-sm text-gray-400 mr-2">R$</span>
                 <input
                   type="number"
-                  step="0.001"
-                  value={produtoForm.quantidade || ''}
-                  onChange={(e) => updateProdutoForm('quantidade', parseFloat(e.target.value) || 0)}
-                  placeholder="1"
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                  step="0.01"
+                  value={produtoForm.valor_unitario || ''}
+                  onChange={(e) => updateProdutoForm('valor_unitario', parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
                 />
-              </div>
-
-              {/* Total */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Total
-                </label>
-                <div className="flex items-center">
-                  <span className="text-sm text-gray-400 mr-2">R$</span>
-                  <input
-                    type="text"
-                    value={(produtoForm.valor_total || 0).toFixed(2)}
-                    placeholder="0.00"
-                    readOnly
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none bg-gray-900"
-                  />
-                </div>
               </div>
             </div>
 
-            {/* Botão em linha separada para melhor responsividade */}
-            <div className="flex justify-end">
+            {/* Quantidade */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Quantidade *
+              </label>
+              <input
+                type="number"
+                step="0.001"
+                value={produtoForm.quantidade || ''}
+                onChange={(e) => updateProdutoForm('quantidade', parseFloat(e.target.value) || 0)}
+                placeholder="1"
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+              />
+            </div>
+
+            {/* Total */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Total
+              </label>
+              <div className="flex items-center">
+                <span className="text-sm text-gray-400 mr-2">R$</span>
+                <input
+                  type="text"
+                  value={(produtoForm.valor_total || 0).toFixed(2)}
+                  placeholder="0.00"
+                  readOnly
+                  className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            {/* Botão Adicionar */}
+            <div className="flex items-end">
               <button
                 type="button"
                 onClick={handleAdicionarProduto}
-                className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center gap-2"
+                className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center justify-center gap-2"
               >
                 <Plus size={16} />
                 ADICIONAR
@@ -1596,7 +2121,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
     <h2 className="text-xl font-bold text-white mb-4">Totais da NFe</h2>
     <div className="bg-background-card rounded-lg border border-gray-800 p-4">
       {/* Primeira linha - Total dos produtos e Crédito SN */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Total dos produtos
@@ -1632,7 +2157,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
       </div>
 
       {/* Segunda linha - PIS, COFINS, IPI */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Total PIS
@@ -1669,7 +2194,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Total do IPI
+            Total IPI
           </label>
           <div className="flex items-center">
             <span className="text-sm text-gray-400 mr-2">R$</span>
@@ -1686,7 +2211,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
       </div>
 
       {/* Terceira linha - ICMS BC, ICMS, FCP */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Total ICMS BC
@@ -1740,7 +2265,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
       </div>
 
       {/* Quarta linha - ICMS BC ST, ICMS ST, FCP ST */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Total ICMS BC ST
@@ -1794,10 +2319,10 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
       </div>
 
       {/* Quinta linha - Desconto, Frete, Seguro, Outros */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Total Desconto
+            Desconto
           </label>
           <div className="flex items-center">
             <span className="text-sm text-gray-400 mr-2">R$</span>
@@ -1814,7 +2339,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Total Frete
+            Frete
           </label>
           <div className="flex items-center">
             <span className="text-sm text-gray-400 mr-2">R$</span>
@@ -1831,7 +2356,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Total Seguro
+            Seguro
           </label>
           <div className="flex items-center">
             <span className="text-sm text-gray-400 mr-2">R$</span>
@@ -1848,7 +2373,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Total Outros
+            Outros
           </label>
           <div className="flex items-center">
             <span className="text-sm text-gray-400 mr-2">R$</span>
@@ -1866,7 +2391,7 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
 
       {/* Total da Nota */}
       <div className="pt-4 border-t border-gray-700">
-        <div className="w-48">
+        <div className="w-64">
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Total Nota
           </label>

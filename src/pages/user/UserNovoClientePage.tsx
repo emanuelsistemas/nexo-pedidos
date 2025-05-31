@@ -29,7 +29,8 @@ const UserNovoClientePage: React.FC = () => {
     tipo: 'Celular' as 'Fixo' | 'Celular',
     whatsapp: false
   });
-  const [email, setEmail] = useState('');
+  const [emails, setEmails] = useState<string[]>([]);
+  const [novoEmail, setNovoEmail] = useState('');
   const [cep, setCep] = useState('');
   const [endereco, setEndereco] = useState('');
   const [numero, setNumero] = useState('');
@@ -136,6 +137,41 @@ const UserNovoClientePage: React.FC = () => {
     const novosTelefones = [...telefones];
     novosTelefones.splice(index, 1);
     setTelefones(novosTelefones);
+  };
+
+  const validarEmail = (email: string) => {
+    const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    return emailRegex.test(email);
+  };
+
+  const adicionarEmail = () => {
+    if (!novoEmail.trim()) {
+      showMessage('error', 'Digite um email');
+      return;
+    }
+
+    if (!validarEmail(novoEmail)) {
+      showMessage('error', 'Email inválido');
+      return;
+    }
+
+    // Verificar se o email já existe na lista
+    if (emails.includes(novoEmail.toLowerCase())) {
+      showMessage('error', 'Este email já foi adicionado');
+      return;
+    }
+
+    // Adicionar à lista de emails
+    setEmails([...emails, novoEmail.toLowerCase()]);
+
+    // Limpar o campo para adicionar outro email
+    setNovoEmail('');
+  };
+
+  const removerEmail = (index: number) => {
+    const novosEmails = [...emails];
+    novosEmails.splice(index, 1);
+    setEmails(novosEmails);
   };
 
   const formatarCNPJ = (cnpj: string) => {
@@ -361,10 +397,9 @@ const UserNovoClientePage: React.FC = () => {
     }
   };
 
-  const validateEmail = (email: string) => {
-    if (!email) return true; // Email é opcional
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+  const validateEmails = () => {
+    if (emails.length === 0) return true; // Emails são opcionais
+    return emails.every(email => validarEmail(email));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -381,8 +416,8 @@ const UserNovoClientePage: React.FC = () => {
       return;
     }
 
-    if (email && !validateEmail(email)) {
-      showMessage('error', 'O email informado é inválido');
+    if (!validateEmails()) {
+      showMessage('error', 'Um ou mais emails são inválidos');
       return;
     }
 
@@ -449,7 +484,7 @@ const UserNovoClientePage: React.FC = () => {
           nome,
           telefone: telefonePrincipal,
           telefones: telefonesParaSalvar,
-          email: email || null,
+          emails: emails.length > 0 ? emails : [],
           // Salvar cada campo de endereço separadamente
           endereco: endereco || null,
           numero: numero || null,
@@ -711,22 +746,70 @@ const UserNovoClientePage: React.FC = () => {
 
           </div>
 
-          {/* Email */}
+          {/* Emails */}
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
-              Email <span className="text-gray-500 text-xs">(opcional)</span>
+              Emails <span className="text-gray-500 text-xs">(opcional)</span>
             </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail size={18} className="text-gray-500" />
+
+            {/* Lista de emails adicionados */}
+            {emails.length > 0 && (
+              <div className="mb-3 space-y-2">
+                {emails.map((email, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between bg-gray-800/70 rounded-lg p-2 border border-gray-700"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Mail size={18} className="text-gray-500" />
+                      <div>
+                        <p className="text-white">{email}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removerEmail(index)}
+                      className="text-red-400 hover:text-red-300 p-1"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
               </div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                placeholder="email@exemplo.com"
-              />
+            )}
+
+            {/* Formulário para adicionar novo email */}
+            <div className="space-y-3 bg-gray-800/30 p-3 rounded-lg border border-gray-700">
+              <h4 className="text-sm font-medium text-gray-300">Adicionar email</h4>
+
+              {/* Campo de email */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Mail size={18} className="text-gray-500" />
+                  </div>
+                  <input
+                    type="email"
+                    value={novoEmail}
+                    onChange={(e) => setNovoEmail(e.target.value)}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    placeholder="email@exemplo.com"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        adicionarEmail();
+                      }
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={adicionarEmail}
+                  className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
             </div>
           </div>
 

@@ -703,16 +703,40 @@ const ConfiguracoesPage: React.FC = () => {
       }
 
       if (activeSection === 'certificado') {
+        // Carregar dados do certificado digital
         const { data: empresaData } = await supabase
           .from('empresas')
-          .select('certificado_digital_path, certificado_digital_senha, certificado_digital_validade, certificado_digital_status, certificado_digital_nome, certificado_digital_uploaded_at, ambiente_nfe')
+          .select('certificado_digital_path, certificado_digital_senha, certificado_digital_validade, certificado_digital_status, certificado_digital_nome, certificado_digital_uploaded_at')
           .eq('id', usuarioData.empresa_id)
           .single();
 
         if (empresaData) {
           setCertificadoInfo(empresaData);
           setCertificadoSenha(empresaData.certificado_digital_senha || '');
-          setAmbienteNFe(empresaData.ambiente_nfe || '2'); // Padrão homologação
+        }
+
+        // Carregar configuração NFe da nova tabela
+        const { data: nfeConfigData } = await supabase
+          .from('nfe_config')
+          .select('ambiente')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        if (nfeConfigData) {
+          // Converter de 'homologacao'/'producao' para '2'/'1'
+          setAmbienteNFe(nfeConfigData.ambiente === 'producao' ? '1' : '2');
+        } else {
+          // Se não encontrou configuração, criar uma nova com padrão homologação
+          const { error: insertError } = await supabase
+            .from('nfe_config')
+            .insert({
+              empresa_id: usuarioData.empresa_id,
+              ambiente: 'homologacao'
+            });
+
+          if (!insertError) {
+            setAmbienteNFe('2'); // Homologação
+          }
         }
       }
     });
@@ -1895,12 +1919,35 @@ const ConfiguracoesPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      const { error } = await supabase
-        .from('empresas')
-        .update({ ambiente_nfe: novoAmbiente })
-        .eq('id', usuarioData.empresa_id);
+      // Converter de '1'/'2' para 'producao'/'homologacao'
+      const ambienteTexto = novoAmbiente === '1' ? 'producao' : 'homologacao';
 
-      if (error) throw error;
+      // Verificar se já existe configuração
+      const { data: existingConfig } = await supabase
+        .from('nfe_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (existingConfig) {
+        // Atualizar configuração existente
+        const { error } = await supabase
+          .from('nfe_config')
+          .update({ ambiente: ambienteTexto })
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        // Criar nova configuração
+        const { error } = await supabase
+          .from('nfe_config')
+          .insert({
+            empresa_id: usuarioData.empresa_id,
+            ambiente: ambienteTexto
+          });
+
+        if (error) throw error;
+      }
 
       setAmbienteNFe(novoAmbiente);
       showMessage('success', `Ambiente alterado para ${novoAmbiente === '1' ? 'Produção' : 'Homologação'}`);

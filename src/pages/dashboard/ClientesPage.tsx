@@ -19,7 +19,7 @@ interface Cliente {
   nome: string;
   telefone: string;
   telefones?: Telefone[];
-  email?: string;
+  emails?: string[];
   endereco?: string;
   numero?: string;
   complemento?: string;
@@ -57,7 +57,7 @@ const ClientesPage: React.FC = () => {
     nome_fantasia: '',
     nome: '',
     telefones: [] as Telefone[],
-    email: '',
+    emails: [] as string[],
     cep: '',
     endereco: '',
     numero: '',
@@ -121,6 +121,7 @@ const ClientesPage: React.FC = () => {
     tipo: 'Celular' as 'Fixo' | 'Celular',
     whatsapp: false
   });
+  const [novoEmail, setNovoEmail] = useState('');
   const [formErrors, setFormErrors] = useState({
     nome: '',
     telefone: '',
@@ -236,7 +237,7 @@ const ClientesPage: React.FC = () => {
         cliente =>
           cliente.nome?.toLowerCase().includes(searchLower) ||
           cliente.telefone?.toLowerCase().includes(searchLower) ||
-          cliente.email?.toLowerCase().includes(searchLower) ||
+          (cliente.emails && cliente.emails.some(email => email.toLowerCase().includes(searchLower))) ||
           cliente.endereco?.toLowerCase().includes(searchLower)
       );
     }
@@ -369,6 +370,47 @@ const ClientesPage: React.FC = () => {
     setFormData({
       ...formData,
       telefones: novosTelefones
+    });
+  };
+
+  const validarEmail = (email: string) => {
+    const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    return emailRegex.test(email);
+  };
+
+  const adicionarEmail = () => {
+    if (!novoEmail.trim()) {
+      toast.error('Digite um email');
+      return;
+    }
+
+    if (!validarEmail(novoEmail)) {
+      toast.error('Email inválido');
+      return;
+    }
+
+    // Verificar se o email já existe na lista
+    if (formData.emails.includes(novoEmail.toLowerCase())) {
+      toast.error('Este email já foi adicionado');
+      return;
+    }
+
+    // Adicionar à lista de emails
+    setFormData({
+      ...formData,
+      emails: [...formData.emails, novoEmail.toLowerCase()]
+    });
+
+    // Limpar o campo para adicionar outro email
+    setNovoEmail('');
+  };
+
+  const removerEmail = (index: number) => {
+    const novosEmails = [...formData.emails];
+    novosEmails.splice(index, 1);
+    setFormData({
+      ...formData,
+      emails: novosEmails
     });
   };
 
@@ -687,9 +729,13 @@ const ClientesPage: React.FC = () => {
       valid = false;
     }
 
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Email inválido';
-      valid = false;
+    // Validar emails se houver algum
+    if (formData.emails.length > 0) {
+      const emailsInvalidos = formData.emails.filter(email => !validarEmail(email));
+      if (emailsInvalidos.length > 0) {
+        errors.email = 'Um ou mais emails são inválidos';
+        valid = false;
+      }
     }
 
     // Não validamos mais a empresa_id, pois será selecionada automaticamente
@@ -743,7 +789,7 @@ const ClientesPage: React.FC = () => {
         nome: formData.nome,
         telefone: telefonePrincipal,
         telefones: telefonesParaSalvar,
-        email: formData.email || null,
+        emails: formData.emails.length > 0 ? formData.emails : [],
         // Salvar cada campo de endereço separadamente
         endereco: formData.endereco || null,
         numero: formData.numero || null,
@@ -946,7 +992,7 @@ const ClientesPage: React.FC = () => {
       nome_fantasia: nomeFantasia,
       nome: cliente.nome,
       telefones,
-      email: cliente.email || '',
+      emails: cliente.emails || [],
       cep,
       endereco,
       numero,
@@ -996,7 +1042,7 @@ const ClientesPage: React.FC = () => {
       nome_fantasia: '',
       nome: '',
       telefones: [],
-      email: '',
+      emails: [],
       cep: '',
       endereco: '',
       numero: '',
@@ -1409,10 +1455,20 @@ const ClientesPage: React.FC = () => {
                     )}
                   </div>
 
-                  {cliente.email && (
-                    <div className="flex items-center gap-1 text-gray-400 text-xs mt-0.5">
-                      <Mail size={12} />
-                      <span className="truncate">{cliente.email}</span>
+                  {/* Emails - Exibir até 2 emails */}
+                  {cliente.emails && cliente.emails.length > 0 && (
+                    <div className="space-y-0.5 mt-0.5">
+                      {cliente.emails.slice(0, 2).map((email, index) => (
+                        <div key={index} className="flex items-center gap-1 text-gray-400 text-xs">
+                          <Mail size={12} />
+                          <span className="truncate">{email}</span>
+                        </div>
+                      ))}
+                      {cliente.emails.length > 2 && (
+                        <div className="text-xs text-gray-500">
+                          +{cliente.emails.length - 2} email(s)
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1753,25 +1809,72 @@ const ClientesPage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Email */}
+                  {/* Emails */}
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-1">
-                      Email <span className="text-gray-500 text-xs">(opcional)</span>
+                      Emails <span className="text-gray-500 text-xs">(opcional)</span>
                     </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Mail size={18} className="text-gray-500" />
+
+                    {/* Lista de emails adicionados */}
+                    {formData.emails.length > 0 && (
+                      <div className="mb-3 space-y-2">
+                        {formData.emails.map((email, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between bg-gray-800/70 rounded-lg p-2 border border-gray-700"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Mail size={18} className="text-gray-500" />
+                              <div>
+                                <p className="text-white">{email}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removerEmail(index)}
+                              className="text-red-400 hover:text-red-300 p-1"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className={`w-full bg-gray-800/50 border ${
-                          formErrors.email ? 'border-red-500' : 'border-gray-700'
-                        } rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20`}
-                        placeholder="email@exemplo.com"
-                      />
+                    )}
+
+                    {/* Formulário para adicionar novo email */}
+                    <div className="space-y-3 bg-gray-800/30 p-3 rounded-lg border border-gray-700">
+                      <h4 className="text-sm font-medium text-gray-300">Adicionar email</h4>
+
+                      {/* Campo de email */}
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Mail size={18} className="text-gray-500" />
+                          </div>
+                          <input
+                            type="email"
+                            value={novoEmail}
+                            onChange={(e) => setNovoEmail(e.target.value)}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="email@exemplo.com"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                adicionarEmail();
+                              }
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={adicionarEmail}
+                          className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
                     </div>
+
                     {formErrors.email && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>
                     )}
