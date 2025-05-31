@@ -1571,7 +1571,7 @@ const ClientesPage: React.FC = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.3 }}
-              className="fixed right-0 top-0 h-screen w-full max-w-md bg-background-card border-l border-gray-800 z-50 overflow-y-auto custom-scrollbar"
+              className="fixed right-0 top-0 h-screen w-full max-w-lg bg-background-card border-l border-gray-800 z-50 overflow-y-auto custom-scrollbar"
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
@@ -1588,11 +1588,11 @@ const ClientesPage: React.FC = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {/* Abas */}
-                  <div className="flex border-b border-gray-700 mb-4 overflow-x-auto">
+                  <div className="flex border-b border-gray-700 mb-4">
                     <button
                       type="button"
                       onClick={() => setActiveTab('dados-gerais')}
-                      className={`py-2 px-3 font-medium text-sm border-b-2 whitespace-nowrap ${
+                      className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
                         activeTab === 'dados-gerais'
                           ? 'border-primary-500 text-primary-500'
                           : 'border-transparent text-gray-400 hover:text-white'
@@ -1603,18 +1603,18 @@ const ClientesPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setActiveTab('descontos')}
-                      className={`py-2 px-3 font-medium text-sm border-b-2 whitespace-nowrap ${
+                      className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
                         activeTab === 'descontos'
                           ? 'border-primary-500 text-primary-500'
                           : 'border-transparent text-gray-400 hover:text-white'
                       } transition-colors`}
                     >
-                      Descontos / Acréscimos
+                      Descontos
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('financeiro')}
-                      className={`py-2 px-3 font-medium text-sm border-b-2 whitespace-nowrap ${
+                      className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
                         activeTab === 'financeiro'
                           ? 'border-primary-500 text-primary-500'
                           : 'border-transparent text-gray-400 hover:text-white'
@@ -1625,7 +1625,7 @@ const ClientesPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setActiveTab('observacao')}
-                      className={`py-2 px-3 font-medium text-sm border-b-2 whitespace-nowrap ${
+                      className={`py-2 px-2 font-medium text-xs border-b-2 flex-1 text-center ${
                         activeTab === 'observacao'
                           ? 'border-primary-500 text-primary-500'
                           : 'border-transparent text-gray-400 hover:text-white'

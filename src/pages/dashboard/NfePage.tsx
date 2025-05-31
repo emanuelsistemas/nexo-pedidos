@@ -702,6 +702,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [naturezasOperacao, setNaturezasOperacao] = useState<Array<{id: number, descricao: string}>>([]);
+  const [apiStatus, setApiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [sefazStatus, setSefazStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [progressSteps, setProgressSteps] = useState([
     { id: 'validacao', label: 'Validando dados da NFe', status: 'pending', message: '' },
     { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
@@ -728,7 +730,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       tipo_documento: '1',
       finalidade: '1',
       presenca: '9',
-      natureza_operacao: ''
+      natureza_operacao: 'Venda de Mercadoria',
+      informacao_adicional: ''
     },
     destinatario: {
       documento: '',
@@ -1063,7 +1066,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
                 ...prev.identificacao,
                 numero: rascunho.numero_documento?.toString() || '',
                 serie: rascunho.serie_documento || 1,
-                natureza_operacao: rascunho.natureza_operacao || ''
+                natureza_operacao: rascunho.natureza_operacao || '',
+                informacao_adicional: rascunho.informacao_adicional || ''
               },
               destinatario: {
                 ...prev.destinatario,
@@ -1185,6 +1189,72 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     loadEmpresaData();
   }, [isEditingRascunho]); // Reagir à mudança da flag de edição
 
+  // Função para verificar status da API NFe
+  const checkApiStatus = async () => {
+    try {
+      setApiStatus('checking');
+      const response = await fetch('https://apinfe.nexopdv.com/api/status', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Timeout de 5 segundos
+        signal: AbortSignal.timeout(5000)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.status && result.status.includes('Online')) {
+          setApiStatus('online');
+        } else {
+          setApiStatus('offline');
+        }
+      } else {
+        setApiStatus('offline');
+      }
+    } catch (error) {
+      console.error('Erro ao verificar status da API NFe:', error);
+      setApiStatus('offline');
+    }
+  };
+
+  // Função para verificar status da SEFAZ
+  const checkSefazStatus = async () => {
+    try {
+      setSefazStatus('checking');
+      const response = await fetch('https://apinfe.nexopdv.com/api/status-sefaz', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Timeout de 10 segundos (SEFAZ pode ser mais lenta)
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          // Verificar se NFe ou NFC-e estão disponíveis
+          const nfeDisponivel = result.data.nfe?.disponivel === true;
+          const nfceDisponivel = result.data.nfce?.disponivel === true;
+
+          if (nfeDisponivel || nfceDisponivel) {
+            setSefazStatus('online');
+          } else {
+            setSefazStatus('offline');
+          }
+        } else {
+          setSefazStatus('offline');
+        }
+      } else {
+        setSefazStatus('offline');
+      }
+    } catch (error) {
+      console.error('Erro ao verificar status da SEFAZ:', error);
+      setSefazStatus('offline');
+    }
+  };
+
   // Carregar naturezas de operação
   useEffect(() => {
     const loadNaturezasOperacao = async () => {
@@ -1207,6 +1277,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     };
 
     loadNaturezasOperacao();
+  }, []);
+
+  // Verificar status da API e SEFAZ ao carregar a página
+  useEffect(() => {
+    checkApiStatus();
+    checkSefazStatus();
   }, []);
 
   // Função para emitir NFe
@@ -1316,7 +1392,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           valor_total: nfeData.totais.valor_total,
           natureza_operacao: nfeData.identificacao.natureza_operacao
         },
-        pagamentos: nfeData.pagamentos
+        pagamentos: nfeData.pagamentos,
+        informacao_adicional: nfeData.identificacao.informacao_adicional || ''
       };
 
       // ETAPA 2: GERAÇÃO DO XML
@@ -1513,11 +1590,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   };
 
   const sections = [
-    { id: 'identificacao', label: 'Identificação', icon: FileText },
-    { id: 'destinatario', label: 'Destinatário', icon: FileText },
-    { id: 'produtos', label: 'Produtos', icon: FileText },
-    { id: 'totais', label: 'Totais', icon: FileText },
-    { id: 'pagamentos', label: 'Pagamentos', icon: FileText },
+    { id: 'identificacao', label: 'Identificação', number: 1 },
+    { id: 'destinatario', label: 'Destinatário', number: 2 },
+    { id: 'produtos', label: 'Produtos', number: 3 },
+    { id: 'totais', label: 'Totais', number: 4 },
+    { id: 'pagamentos', label: 'Pagamentos', number: 5 },
     { id: 'chaves_ref', label: 'Chaves Ref.', icon: FileText },
     { id: 'transportadora', label: 'Transportadora', icon: FileText },
     { id: 'intermediador', label: 'Intermediador', icon: FileText },
@@ -1540,6 +1617,17 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           <DestinatarioSection
             data={nfeData.destinatario}
             onChange={(data) => setNfeData(prev => ({ ...prev, destinatario: data }))}
+            onClienteSelected={(observacaoNfe) => {
+              if (observacaoNfe && observacaoNfe.trim()) {
+                setNfeData(prev => ({
+                  ...prev,
+                  identificacao: {
+                    ...prev.identificacao,
+                    informacao_adicional: observacaoNfe.trim()
+                  }
+                }));
+              }
+            }}
           />
         );
       case 'produtos':
@@ -1611,11 +1699,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   };
 
   return (
-    <div className="fixed inset-0 bg-background flex z-50">
-      {/* Sidebar com abas */}
-      <div className="w-72 bg-background-card border-r border-gray-800 flex flex-col h-full">
-        <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
-          <div className="flex items-center justify-between gap-3">
+    <div className="fixed inset-0 bg-background flex flex-col z-50">
+      {/* Cabeçalho de ponta a ponta */}
+      <div className="bg-background-card border-b border-gray-800 px-6 py-2 flex-shrink-0">
+        {/* Linha única - Título, Status API/SEFAZ e Ambiente */}
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex items-center gap-6">
             <div className="flex items-center gap-3">
               <button
                 onClick={handleTryExit}
@@ -1623,158 +1712,237 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
               >
                 <ArrowLeft size={20} />
               </button>
-              <div>
-                <h1 className="text-lg font-bold text-white">Nova NFe</h1>
+              <h1 className="text-xl font-bold text-white">Nova NFe</h1>
+            </div>
+
+            {/* Status da API e SEFAZ */}
+            <div className="flex items-center gap-3">
+              {/* Status da API */}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+                apiStatus === 'online'
+                  ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                  : apiStatus === 'offline'
+                  ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                  : 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'
+              }`}>
+                <div className={`w-3 h-3 rounded-full ${
+                  apiStatus === 'online'
+                    ? 'bg-green-400'
+                    : apiStatus === 'offline'
+                    ? 'bg-red-400'
+                    : 'bg-yellow-400 animate-pulse'
+                }`}></div>
+                <span>
+                  {apiStatus === 'online' ? 'API Online' :
+                   apiStatus === 'offline' ? 'API Offline' :
+                   'Verificando API...'}
+                </span>
+                {apiStatus !== 'checking' && (
+                  <button
+                    onClick={checkApiStatus}
+                    className="ml-1 hover:opacity-70 transition-opacity"
+                    title="Verificar status da API novamente"
+                  >
+                    🔄
+                  </button>
+                )}
+              </div>
+
+              {/* Status da SEFAZ */}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border ${
+                sefazStatus === 'online'
+                  ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                  : sefazStatus === 'offline'
+                  ? 'bg-red-500/15 text-red-400 border-red-500/30'
+                  : 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30'
+              }`}>
+                <div className={`w-3 h-3 rounded-full ${
+                  sefazStatus === 'online'
+                    ? 'bg-green-400'
+                    : sefazStatus === 'offline'
+                    ? 'bg-red-400'
+                    : 'bg-yellow-400 animate-pulse'
+                }`}></div>
+                <span>
+                  {sefazStatus === 'online' ? 'Sefaz Online' :
+                   sefazStatus === 'offline' ? 'Sefaz Offline' :
+                   'Verificando Sefaz...'}
+                </span>
+                {sefazStatus !== 'checking' && (
+                  <button
+                    onClick={checkSefazStatus}
+                    className="ml-1 hover:opacity-70 transition-opacity"
+                    title="Verificar status da SEFAZ novamente"
+                  >
+                    🔄
+                  </button>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={ambienteNFe}
-                onChange={async (e) => {
-                  const novoAmbiente = e.target.value as 'homologacao' | 'producao';
+          </div>
 
-                  // Confirmação para mudança para produção
-                  if (novoAmbiente === 'producao') {
-                    const confirmacao = confirm(
-                      '⚠️ MUDANÇA PARA AMBIENTE DE PRODUÇÃO\n\n' +
-                      'Você está alterando para o ambiente de PRODUÇÃO.\n' +
-                      'As próximas NFe emitidas serão REAIS e terão valor fiscal.\n\n' +
-                      'Certifique-se de que:\n' +
-                      '✅ Possui certificado digital REAL\n' +
-                      '✅ Os dados estão corretos\n' +
-                      '✅ Está autorizado a emitir NFe real\n\n' +
-                      'Confirma a mudança?'
-                    );
+          <select
+            value={ambienteNFe}
+            onChange={async (e) => {
+              const novoAmbiente = e.target.value as 'homologacao' | 'producao';
 
-                    if (!confirmacao) {
-                      return; // Cancela a mudança
+              // Confirmação para mudança para produção
+              if (novoAmbiente === 'producao') {
+                const confirmacao = confirm(
+                  '⚠️ MUDANÇA PARA AMBIENTE DE PRODUÇÃO\n\n' +
+                  'Você está alterando para o ambiente de PRODUÇÃO.\n' +
+                  'As próximas NFe emitidas serão REAIS e terão valor fiscal.\n\n' +
+                  'Certifique-se de que:\n' +
+                  '✅ Possui certificado digital REAL\n' +
+                  '✅ Os dados estão corretos\n' +
+                  '✅ Está autorizado a emitir NFe real\n\n' +
+                  'Confirma a mudança?'
+                );
+
+                if (!confirmacao) {
+                  return; // Cancela a mudança
+                }
+              }
+
+              setAmbienteNFe(novoAmbiente);
+
+              // Salvar no banco de dados
+              try {
+                const { data: userData } = await supabase.auth.getUser();
+                if (userData.user) {
+                  const { data: usuarioData } = await supabase
+                    .from('usuarios')
+                    .select('empresa_id')
+                    .eq('id', userData.user.id)
+                    .single();
+
+                  if (usuarioData?.empresa_id) {
+                    const { error } = await supabase
+                      .from('nfe_config')
+                      .upsert({
+                        empresa_id: usuarioData.empresa_id,
+                        ambiente: novoAmbiente
+                      });
+
+                    if (error) {
+                      console.error('Erro ao salvar configuração:', error);
+                      alert('Erro ao salvar configuração de ambiente');
+                    } else {
+                      console.log(`Ambiente alterado para: ${novoAmbiente}`);
                     }
                   }
-
-                  setAmbienteNFe(novoAmbiente);
-
-                  // Salvar no banco de dados
-                  try {
-                    const { data: userData } = await supabase.auth.getUser();
-                    if (userData.user) {
-                      const { data: usuarioData } = await supabase
-                        .from('usuarios')
-                        .select('empresa_id')
-                        .eq('id', userData.user.id)
-                        .single();
-
-                      if (usuarioData?.empresa_id) {
-                        const { error } = await supabase
-                          .from('nfe_config')
-                          .upsert({
-                            empresa_id: usuarioData.empresa_id,
-                            ambiente: novoAmbiente
-                          });
-
-                        if (error) {
-                          console.error('Erro ao salvar configuração:', error);
-                          alert('Erro ao salvar configuração de ambiente');
-                        } else {
-                          console.log(`Ambiente alterado para: ${novoAmbiente}`);
-                        }
-                      }
-                    }
-                  } catch (error) {
-                    console.error('Erro ao salvar ambiente:', error);
-                  }
-                }}
-                className={`px-2 py-1 rounded text-xs font-medium border ${
-                  ambienteNFe === 'producao'
-                    ? 'bg-green-500/15 text-green-400 border-green-500/30'
-                    : 'bg-orange-500/15 text-orange-400 border-orange-500/30'
-                } focus:outline-none focus:ring-1 focus:ring-primary-500`}
-                title="Selecionar ambiente de emissão"
-              >
-                <option value="homologacao">HOMOLOGAÇÃO</option>
-                <option value="producao">PRODUÇÃO</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto">
-          <div className="space-y-0">
-            {sections.map((section) => (
-              <button
-                key={section.id}
-                onClick={() => setActiveSection(section.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-gray-800/50 ${
-                  activeSection === section.id
-                    ? 'bg-primary-500/10 text-primary-400 border-l-2 border-l-primary-500'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-                }`}
-              >
-                <section.icon size={18} />
-                <span className="font-medium text-sm">{section.label}</span>
-              </button>
-            ))}
-          </div>
-        </nav>
-
-        {/* Botões de ação */}
-        <div className="p-3 border-t border-gray-800 space-y-2 flex-shrink-0">
-          <Button
-            variant="primary"
-            className="w-full flex items-center justify-center gap-2 text-sm py-2"
-            onClick={handleEmitirNFe}
-            disabled={isLoading}
+                }
+              } catch (error) {
+                console.error('Erro ao salvar ambiente:', error);
+              }
+            }}
+            className={`px-3 py-2 rounded text-sm font-medium border ${
+              ambienteNFe === 'producao'
+                ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                : 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+            } focus:outline-none focus:ring-1 focus:ring-primary-500`}
+            title="Selecionar ambiente de emissão"
           >
-            {isLoading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Emitindo...
-              </>
-            ) : (
-              <>
-                <Send size={14} />
-                Emitir NFe
-              </>
-            )}
-          </Button>
-          <Button
-            variant="success"
-            className="w-full flex items-center justify-center gap-2 text-sm py-2"
-            onClick={handleSalvarRascunho}
-            disabled={isSavingRascunho}
-          >
-            {isSavingRascunho ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Salvando...
-              </>
-            ) : (
-              <>
-                <Save size={14} />
-                Salvar Rascunho
-              </>
-            )}
-          </Button>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              className={`${nfeEmitida ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 text-xs py-1.5`}
-            >
-              <Download size={12} />
-              Espelho
-            </Button>
-            {nfeEmitida && (
-              <Button variant="secondary" className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5">
-                <Copy size={12} />
-                Duplicar
-              </Button>
-            )}
-          </div>
+            <option value="homologacao">HOMOLOGAÇÃO</option>
+            <option value="producao">PRODUÇÃO</option>
+          </select>
         </div>
       </div>
 
-      {/* Conteúdo principal */}
-      <div className="flex-1 overflow-auto">
-        <div className="h-full">
+      {/* Área principal com sidebar e conteúdo */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar com abas */}
+        <div className="w-56 bg-background-card border-r border-gray-800 flex flex-col h-full">
+          <nav className="flex-1 overflow-y-auto">
+            <div className="space-y-0">
+              {sections.map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => setActiveSection(section.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors border-b border-gray-800/50 ${
+                    activeSection === section.id
+                      ? 'bg-primary-500/10 text-primary-400 border-l-2 border-l-primary-500'
+                      : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                  }`}
+                >
+                  {/* Número com borda redonda para seções principais ou ícone para seções opcionais */}
+                  {section.number ? (
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold ${
+                      activeSection === section.id
+                        ? 'border-primary-400 text-primary-400 bg-primary-500/10'
+                        : 'border-gray-500 text-gray-400'
+                    }`}>
+                      {section.number}
+                    </div>
+                  ) : (
+                    <section.icon size={18} className={
+                      activeSection === section.id ? 'text-primary-400' : 'text-gray-400'
+                    } />
+                  )}
+                  <span className="font-medium text-sm">{section.label}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
+
+          {/* Botões de ação */}
+          <div className="p-2 border-t border-gray-800 space-y-2 flex-shrink-0">
+            <Button
+              variant="primary"
+              className="w-full flex items-center justify-center gap-2 text-sm py-2"
+              onClick={handleEmitirNFe}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Emitindo...
+                </>
+              ) : (
+                <>
+                  <Send size={14} />
+                  Emitir NFe
+                </>
+              )}
+            </Button>
+            <Button
+              variant="success"
+              className="w-full flex items-center justify-center gap-2 text-sm py-2"
+              onClick={handleSalvarRascunho}
+              disabled={isSavingRascunho}
+            >
+              {isSavingRascunho ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save size={14} />
+                  Salvar Rascunho
+                </>
+              )}
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                className={`${nfeEmitida ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 text-xs py-1.5`}
+              >
+                <Download size={12} />
+                Espelho
+              </Button>
+              {nfeEmitida && (
+                <Button variant="secondary" className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5">
+                  <Copy size={12} />
+                  Duplicar
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Conteúdo principal */}
+        <div className="flex-1 overflow-auto">
           {renderContent()}
         </div>
       </div>
@@ -2124,20 +2292,22 @@ const IdentificacaoSection: React.FC<{
         </div>
 
         <div className="mt-6">
-          <button className="flex items-center gap-2 text-primary-400 hover:text-primary-300 text-sm">
-            <Plus size={16} />
-            PREENCHER INFORMAÇÃO ADICIONAL
-          </button>
-
-          <div className="mt-4">
+          <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Informação Adicional
             </label>
             <textarea
               rows={3}
+              value={data.informacao_adicional || ''}
+              onChange={(e) => updateField('informacao_adicional', e.target.value)}
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none"
-              placeholder="Informações adicionais da NFe..."
+              placeholder="Informações adicionais da NFe... (preenchido automaticamente com observação do cliente)"
             />
+            {data.informacao_adicional && (
+              <p className="text-xs text-green-400 mt-1">
+                ✓ Observação do cliente incluída automaticamente
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -2146,7 +2316,11 @@ const IdentificacaoSection: React.FC<{
 };
 
 // Seção de Destinatário
-const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({ data, onChange }) => {
+const DestinatarioSection: React.FC<{
+  data: any;
+  onChange: (data: any) => void;
+  onClienteSelected?: (observacaoNfe: string) => void;
+}> = ({ data, onChange, onClienteSelected }) => {
   const [showClienteModal, setShowClienteModal] = useState(false);
   const [clientes, setClientes] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -2177,7 +2351,7 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
 
       let query = supabase
         .from('clientes')
-        .select('*')
+        .select('*, observacao_nfe')
         .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
 
@@ -2199,6 +2373,8 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
 
   // Selecionar cliente e preencher campos
   const selecionarCliente = (cliente: any) => {
+    console.log('🎯 Selecionando cliente:', cliente.nome);
+
     onChange({
       ...data,
       documento: cliente.documento || '',
@@ -2211,6 +2387,13 @@ const DestinatarioSection: React.FC<{ data: any; onChange: (data: any) => void }
       cep: cliente.cep || '',
       emails: cliente.emails || []
     });
+
+    // Se o cliente tem observação NFe, chamar callback para incluir no campo de informação adicional
+    if (cliente.observacao_nfe && cliente.observacao_nfe.trim() && onClienteSelected) {
+      console.log('📝 Incluindo observação NFe:', cliente.observacao_nfe);
+      onClienteSelected(cliente.observacao_nfe);
+    }
+
     setShowClienteModal(false);
     setSearchTerm('');
   };
@@ -2554,7 +2737,6 @@ const ProdutosSection: React.FC<{ produtos: any[]; empresaId?: string; onChange:
   // Função para adicionar produto à lista
   const handleAdicionarProduto = () => {
     if (!produtoSelecionado) {
-      alert('Selecione um produto');
       return;
     }
 
@@ -2686,7 +2868,13 @@ const ProdutosSection: React.FC<{ produtos: any[]; empresaId?: string; onChange:
               <button
                 type="button"
                 onClick={handleAdicionarProduto}
-                className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center justify-center gap-2"
+                disabled={!produtoSelecionado}
+                className={`w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 flex items-center justify-center gap-2 transition-colors ${
+                  produtoSelecionado
+                    ? 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500'
+                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                }`}
+                title={!produtoSelecionado ? 'Selecione um produto para adicionar' : 'Adicionar produto à NFe'}
               >
                 <Plus size={16} />
                 ADICIONAR
