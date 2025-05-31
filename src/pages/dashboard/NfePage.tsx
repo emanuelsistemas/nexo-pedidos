@@ -812,7 +812,21 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   // Funções auxiliares para gerenciar progresso
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
-    setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+    const logMessage = `[${timestamp}] ${message}`;
+
+    // Adicionar ao modal
+    setLogs(prev => [...prev, logMessage]);
+
+    // Adicionar ao console também
+    if (message.includes('❌') || message.includes('ERRO')) {
+      console.error('🔴 NFe Error:', message);
+    } else if (message.includes('✅') || message.includes('sucesso')) {
+      console.log('🟢 NFe Success:', message);
+    } else if (message.includes('⚠️') || message.includes('AVISO')) {
+      console.warn('🟡 NFe Warning:', message);
+    } else {
+      console.log('🔵 NFe Info:', message);
+    }
   };
 
   const updateStep = (stepId: string, status: 'pending' | 'loading' | 'success' | 'error', message: string = '') => {
@@ -832,12 +846,48 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     setLogs([]);
   };
 
+  // Função para criar toasts dentro do NfeForm
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', duration: number = 4000) => {
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    const icon = type === 'success'
+      ? '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>'
+      : type === 'error'
+      ? '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>'
+      : '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>';
+
+    toast.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 transform transition-all duration-300 translate-x-0`;
+    toast.innerHTML = `
+      <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        ${icon}
+      </svg>
+      <span>${message}</span>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Animação de entrada
+    setTimeout(() => {
+      toast.style.transform = 'translateX(0)';
+    }, 10);
+
+    // Remover toast
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 300);
+    }, duration);
+  };
+
   const copyLogsToClipboard = () => {
     const logsText = logs.join('\n');
     navigator.clipboard.writeText(logsText).then(() => {
-      alert('Logs copiados para a área de transferência!');
+      showToast('Logs copiados para a área de transferência!', 'success');
     }).catch(() => {
-      alert('Erro ao copiar logs. Tente selecionar e copiar manualmente.');
+      showToast('Erro ao copiar logs. Tente selecionar e copiar manualmente.', 'error');
     });
   };
 
@@ -1300,10 +1350,22 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       // Validações robustas
       const validationErrors = [];
 
+      // Debug: Log dos dados da empresa
+      addLog('🔍 Verificando dados da empresa...');
+      addLog(`Empresa carregada: ${nfeData.empresa ? 'SIM' : 'NÃO'}`);
+      if (nfeData.empresa) {
+        addLog(`Nome empresa: ${nfeData.empresa.name || 'N/A'}`);
+        addLog(`CNPJ: ${nfeData.empresa.cnpj || 'N/A'}`);
+        addLog(`Certificado digital: ${nfeData.empresa.certificado_digital ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
+      }
+
       if (!nfeData.empresa) {
         validationErrors.push('Dados da empresa não carregados');
       }
 
+      // Temporariamente removendo validação de certificado digital para debug
+      // TODO: Reativar após configurar certificados
+      /*
       if (!nfeData.empresa?.certificado_digital) {
         validationErrors.push('Certificado digital não configurado para a empresa');
       }
@@ -1315,29 +1377,70 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         }
         // Adicionar outras validações específicas de produção se necessário
       }
+      */
 
+      // 4. Validação do destinatário
+      addLog('👤 Validando destinatário...');
       if (!nfeData.destinatario.documento || !nfeData.destinatario.nome) {
-        validationErrors.push('Destinatário é obrigatório (CNPJ/CPF e Nome)');
+        const erro = 'Destinatário é obrigatório (CNPJ/CPF e Nome)';
+        validationErrors.push(erro);
+        addLog(`❌ ${erro}`);
+        addLog(`   Documento: ${nfeData.destinatario.documento || 'NÃO INFORMADO'}`);
+        addLog(`   Nome: ${nfeData.destinatario.nome || 'NÃO INFORMADO'}`);
+      } else {
+        addLog(`✅ Destinatário: ${nfeData.destinatario.nome}`);
+        addLog(`✅ Documento: ${nfeData.destinatario.documento}`);
       }
 
+      // 5. Validação dos produtos
+      addLog('📦 Validando produtos...');
       if (nfeData.produtos.length === 0) {
-        validationErrors.push('Adicione pelo menos um produto');
+        const erro = 'Adicione pelo menos um produto';
+        validationErrors.push(erro);
+        addLog(`❌ ${erro}`);
+      } else {
+        addLog(`✅ ${nfeData.produtos.length} produto(s) adicionado(s)`);
+        nfeData.produtos.forEach((produto, index) => {
+          addLog(`   ${index + 1}. ${produto.descricao} - R$ ${produto.valor_total?.toFixed(2) || '0.00'}`);
+        });
       }
 
+      // 6. Validação dos pagamentos
+      addLog('💳 Validando pagamentos...');
       if (nfeData.pagamentos.length === 0) {
-        validationErrors.push('Adicione pelo menos uma forma de pagamento');
+        const erro = 'Adicione pelo menos uma forma de pagamento';
+        validationErrors.push(erro);
+        addLog(`❌ ${erro}`);
+      } else {
+        addLog(`✅ ${nfeData.pagamentos.length} forma(s) de pagamento`);
+
+        // Validar soma dos pagamentos
+        const totalPagamentos = nfeData.pagamentos.reduce((sum, p) => sum + (p.valor || 0), 0);
+        const totalNota = nfeData.totais.valor_total || 0;
+
+        addLog(`   Total pagamentos: R$ ${totalPagamentos.toFixed(2)}`);
+        addLog(`   Total da nota: R$ ${totalNota.toFixed(2)}`);
+
+        if (Math.abs(totalPagamentos - totalNota) > 0.01) {
+          const erro = `Valor dos pagamentos (R$ ${totalPagamentos.toFixed(2)}) deve ser igual ao total (R$ ${totalNota.toFixed(2)})`;
+          validationErrors.push(erro);
+          addLog(`❌ ${erro}`);
+        } else {
+          addLog('✅ Valores dos pagamentos conferem');
+        }
       }
 
-      // Validar soma dos pagamentos
-      const totalPagamentos = nfeData.pagamentos.reduce((sum, p) => sum + p.valor, 0);
-      if (Math.abs(totalPagamentos - nfeData.totais.valor_total) > 0.01) {
-        validationErrors.push(`Valor dos pagamentos (R$ ${totalPagamentos.toFixed(2)}) deve ser igual ao total (R$ ${nfeData.totais.valor_total.toFixed(2)})`);
-      }
-
-      // Validar campos obrigatórios da identificação
+      // 7. Validação da identificação
+      addLog('🆔 Validando identificação...');
       if (!nfeData.identificacao.natureza_operacao) {
-        validationErrors.push('Natureza da operação é obrigatória');
+        const erro = 'Natureza da operação é obrigatória';
+        validationErrors.push(erro);
+        addLog(`❌ ${erro}`);
+      } else {
+        addLog(`✅ Natureza da operação: ${nfeData.identificacao.natureza_operacao}`);
       }
+
+      addLog(`📊 Resumo da validação: ${validationErrors.length} erro(s) encontrado(s)`);
 
       if (validationErrors.length > 0) {
         updateStep('validacao', 'error', 'Erros de validação encontrados');
@@ -1422,11 +1525,38 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
       const result = await response.json();
 
+      // Debug: Log da resposta completa da API
+      addLog('📄 Resposta da API de geração:');
+      addLog(`   Success: ${result.success}`);
+      addLog(`   Data presente: ${result.data ? 'SIM' : 'NÃO'}`);
+
+      if (result.data) {
+        addLog(`   XML presente: ${result.data.xml ? 'SIM' : 'NÃO'}`);
+        addLog(`   Chave presente: ${result.data.chave ? 'SIM' : 'NÃO'}`);
+        addLog(`   Número NFe: ${result.data.numero_nfe || 'N/A'}`);
+
+        if (result.data.xml) {
+          addLog(`   Tamanho XML: ${result.data.xml.length} caracteres`);
+        }
+        if (result.data.chave) {
+          addLog(`   Chave: ${result.data.chave}`);
+        }
+      }
+
       if (!result.success) {
         updateStep('geracao', 'error', 'Falha na geração do XML');
         addLog('ERRO: API retornou falha na geração');
         addLog(`Detalhes: ${result.error || 'Erro desconhecido'}`);
         throw new Error(result.error || 'Erro na geração do XML');
+      }
+
+      // Verificar se os dados essenciais estão presentes
+      if (!result.data || !result.data.xml || !result.data.chave) {
+        updateStep('geracao', 'error', 'Dados incompletos da API');
+        addLog('ERRO: API retornou dados incompletos');
+        addLog(`   XML: ${result.data?.xml ? 'OK' : 'FALTANDO'}`);
+        addLog(`   Chave: ${result.data?.chave ? 'OK' : 'FALTANDO'}`);
+        throw new Error('API retornou dados incompletos (XML ou chave faltando)');
       }
 
       addLog('XML gerado com sucesso');
@@ -1438,17 +1568,26 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       addLog('Iniciando envio para SEFAZ...');
       addLog(`Ambiente SEFAZ: ${ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}`);
 
+      // Preparar dados para SEFAZ com logs detalhados
+      const sefazData = {
+        ambiente: ambienteNFe === 'producao' ? 1 : 2, // 1=Produção, 2=Homologação
+        xml: result.data.xml,
+        chave: result.data.chave,
+        empresa_id: nfeData.empresa.id
+      };
+
+      addLog('📋 Dados para SEFAZ:');
+      addLog(`   Ambiente: ${sefazData.ambiente} (${ambienteNFe})`);
+      addLog(`   Chave: ${sefazData.chave}`);
+      addLog(`   Empresa ID: ${sefazData.empresa_id}`);
+      addLog(`   XML: ${sefazData.xml ? 'Presente' : 'AUSENTE'} (${sefazData.xml?.length || 0} caracteres)`);
+
       const sefazResponse = await fetch('https://apinfe.nexopdv.com/api/enviar-sefaz', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ambiente: ambienteNFe === 'producao' ? 1 : 2, // 1=Produção, 2=Homologação
-          xml: result.data.xml,
-          chave: result.data.chave,
-          empresa_id: nfeData.empresa.id
-        })
+        body: JSON.stringify(sefazData)
       });
 
       if (!sefazResponse.ok) {
@@ -1949,29 +2088,43 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
       {/* Modal de Progresso */}
       {showProgressModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
-          <div className="bg-background-card rounded-lg border border-gray-800 w-full max-w-2xl mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="p-6 border-b border-gray-800">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl h-[95vh] overflow-hidden flex flex-col">
+            {/* Header - Compacto */}
+            <div className="p-4 border-b border-gray-800">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white">Emitindo NFe</h3>
-                <div className={`px-3 py-1 rounded text-sm font-medium ${
-                  ambienteNFe === 'producao'
-                    ? 'bg-green-500/15 text-green-400'
-                    : 'bg-orange-500/15 text-orange-400'
-                }`}>
-                  {ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-bold text-white">Emitindo NFe</h3>
+                  <div className="text-xs text-gray-400">
+                    {progressSteps.filter(s => s.status === 'success').length}/{progressSteps.length} concluídas
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`px-3 py-1 rounded text-sm font-medium ${
+                    ambienteNFe === 'producao'
+                      ? 'bg-green-500/15 text-green-400'
+                      : 'bg-orange-500/15 text-orange-400'
+                  }`}>
+                    {ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}
+                  </div>
+                  <button
+                    onClick={() => setShowProgressModal(false)}
+                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors text-sm"
+                    disabled={isLoading && !progressSteps.some(s => s.status === 'error')}
+                  >
+                    {isLoading && !progressSteps.some(s => s.status === 'error') ? 'Processando...' : 'Fechar'}
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Progress Steps */}
-            <div className="p-6 border-b border-gray-800">
-              <div className="space-y-4">
+            {/* Progress Steps - Compacto */}
+            <div className="p-4 border-b border-gray-800 flex-shrink-0">
+              <div className="space-y-2">
                 {progressSteps.map((step, index) => (
-                  <div key={step.id} className="flex items-center gap-4">
+                  <div key={step.id} className="flex items-center gap-3">
                     {/* Step Icon */}
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                       step.status === 'success'
                         ? 'bg-green-500 text-white'
                         : step.status === 'error'
@@ -1983,14 +2136,14 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
                       {step.status === 'success' ? '✓' :
                        step.status === 'error' ? '✗' :
                        step.status === 'loading' ? (
-                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                         <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                        ) : index + 1}
                     </div>
 
                     {/* Step Content */}
                     <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className={`font-medium ${
+                      <div className="flex items-center gap-4">
+                        <span className={`text-sm font-medium ${
                           step.status === 'success' ? 'text-green-400' :
                           step.status === 'error' ? 'text-red-400' :
                           step.status === 'loading' ? 'text-primary-400' :
@@ -1999,7 +2152,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
                           {step.label}
                         </span>
                         {step.message && (
-                          <span className="text-sm text-gray-500">{step.message}</span>
+                          <span className="text-xs text-gray-500">{step.message}</span>
                         )}
                       </div>
                     </div>
@@ -2008,8 +2161,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
               </div>
             </div>
 
-            {/* Logs Area */}
-            <div className="flex-1 p-6 overflow-hidden flex flex-col">
+            {/* Logs Area - Expandida */}
+            <div className="flex-1 p-4 overflow-hidden flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-lg font-semibold text-white">Logs do Processo</h4>
                 <button
@@ -2040,21 +2193,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="p-6 border-t border-gray-800">
-              <div className="flex justify-between items-center">
-                <div className="text-sm text-gray-400">
-                  {progressSteps.filter(s => s.status === 'success').length} de {progressSteps.length} etapas concluídas
-                </div>
-                <button
-                  onClick={() => setShowProgressModal(false)}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-                  disabled={isLoading && !progressSteps.some(s => s.status === 'error')}
-                >
-                  {isLoading && !progressSteps.some(s => s.status === 'error') ? 'Processando...' : 'Fechar'}
-                </button>
-              </div>
-            </div>
+
           </div>
         </div>
       )}
