@@ -74,11 +74,14 @@ const ClientesPage: React.FC = () => {
     is_funcionario: false,
     is_vendedor: false,
     is_fornecedor: false,
-    is_transportadora: false
+    is_transportadora: false,
+    // Observações
+    observacao_nfe: '',
+    observacao_interna: ''
   });
 
   // Estado para controlar a aba ativa no formulário
-  const [activeTab, setActiveTab] = useState<'dados-gerais' | 'descontos'>('dados-gerais');
+  const [activeTab, setActiveTab] = useState<'dados-gerais' | 'descontos' | 'financeiro' | 'observacao'>('dados-gerais');
 
   // Estado para os descontos por prazo
   const [descontosPrazo, setDescontosPrazo] = useState<Array<{
@@ -808,6 +811,9 @@ const ClientesPage: React.FC = () => {
         is_transportadora: formData.is_transportadora,
         codigo_municipio: formData.codigo_municipio || null,
         inscricao_estadual: formData.inscricao_estadual || null,
+        // Observações
+        observacao_nfe: formData.observacao_nfe || null,
+        observacao_interna: formData.observacao_interna || null,
         empresa_id: formData.empresa_id,
         usuario_id: (await supabase.auth.getUser()).data.user?.id
       };
@@ -1003,7 +1009,16 @@ const ClientesPage: React.FC = () => {
       empresa_id: cliente.empresa_id,
       indicador_ie: (cliente as any).indicador_ie || 9,
       codigo_municipio: (cliente as any).codigo_municipio || '',
-      inscricao_estadual: (cliente as any).inscricao_estadual || ''
+      inscricao_estadual: (cliente as any).inscricao_estadual || '',
+      // Tipos de cliente
+      is_cliente: (cliente as any).is_cliente ?? true,
+      is_funcionario: (cliente as any).is_funcionario ?? false,
+      is_vendedor: (cliente as any).is_vendedor ?? false,
+      is_fornecedor: (cliente as any).is_fornecedor ?? false,
+      is_transportadora: (cliente as any).is_transportadora ?? false,
+      // Observações
+      observacao_nfe: (cliente as any).observacao_nfe || '',
+      observacao_interna: (cliente as any).observacao_interna || ''
     });
 
     // Carregar os descontos do cliente
@@ -1053,7 +1068,16 @@ const ClientesPage: React.FC = () => {
       empresa_id: currentEmpresaId,
       indicador_ie: 9,
       codigo_municipio: '',
-      inscricao_estadual: ''
+      inscricao_estadual: '',
+      // Tipos de cliente
+      is_cliente: true,
+      is_funcionario: false,
+      is_vendedor: false,
+      is_fornecedor: false,
+      is_transportadora: false,
+      // Observações
+      observacao_nfe: '',
+      observacao_interna: ''
     });
 
     setNovoTelefone({
@@ -1564,11 +1588,11 @@ const ClientesPage: React.FC = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {/* Abas */}
-                  <div className="flex border-b border-gray-700 mb-4">
+                  <div className="flex border-b border-gray-700 mb-4 overflow-x-auto">
                     <button
                       type="button"
                       onClick={() => setActiveTab('dados-gerais')}
-                      className={`py-2 px-4 font-medium text-sm border-b-2 ${
+                      className={`py-2 px-3 font-medium text-sm border-b-2 whitespace-nowrap ${
                         activeTab === 'dados-gerais'
                           ? 'border-primary-500 text-primary-500'
                           : 'border-transparent text-gray-400 hover:text-white'
@@ -1579,13 +1603,35 @@ const ClientesPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setActiveTab('descontos')}
-                      className={`py-2 px-4 font-medium text-sm border-b-2 ${
+                      className={`py-2 px-3 font-medium text-sm border-b-2 whitespace-nowrap ${
                         activeTab === 'descontos'
                           ? 'border-primary-500 text-primary-500'
                           : 'border-transparent text-gray-400 hover:text-white'
                       } transition-colors`}
                     >
                       Descontos / Acréscimos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('financeiro')}
+                      className={`py-2 px-3 font-medium text-sm border-b-2 whitespace-nowrap ${
+                        activeTab === 'financeiro'
+                          ? 'border-primary-500 text-primary-500'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      } transition-colors`}
+                    >
+                      Financeiro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('observacao')}
+                      className={`py-2 px-3 font-medium text-sm border-b-2 whitespace-nowrap ${
+                        activeTab === 'observacao'
+                          ? 'border-primary-500 text-primary-500'
+                          : 'border-transparent text-gray-400 hover:text-white'
+                      } transition-colors`}
+                    >
+                      Observação
                     </button>
                   </div>
 
@@ -2185,10 +2231,7 @@ const ClientesPage: React.FC = () => {
                   <input type="hidden" value={formData.empresa_id} />
 
                     </div>
-                  ) : null}
-
-                  {/* Conteúdo da aba Descontos */}
-                  {activeTab === 'descontos' && (
+                  ) : activeTab === 'descontos' ? (
                     <div className="space-y-6">
                       {/* Descontos por Prazo de Faturamento */}
                       <div className="space-y-4">
@@ -2480,7 +2523,50 @@ const ClientesPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  )}
+                  ) : activeTab === 'financeiro' ? (
+                    <div className="space-y-4">
+                      <div className="text-center py-8">
+                        <h3 className="text-lg font-medium text-white mb-2">Aba Financeiro</h3>
+                        <p className="text-gray-400">Esta funcionalidade será implementada em breve.</p>
+                      </div>
+                    </div>
+                  ) : activeTab === 'observacao' ? (
+                    <div className="space-y-4">
+                      {/* Observação NFe */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                          Observação NFe
+                        </label>
+                        <textarea
+                          value={formData.observacao_nfe}
+                          onChange={(e) => setFormData({ ...formData, observacao_nfe: e.target.value })}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 resize-none"
+                          placeholder="Observações que aparecerão na NFe..."
+                          rows={4}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Esta observação será incluída na NFe quando emitida para este cliente.
+                        </p>
+                      </div>
+
+                      {/* Observação Interna */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2">
+                          Observação Interna
+                        </label>
+                        <textarea
+                          value={formData.observacao_interna}
+                          onChange={(e) => setFormData({ ...formData, observacao_interna: e.target.value })}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 resize-none"
+                          placeholder="Observações internas sobre o cliente..."
+                          rows={4}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Esta observação é apenas para uso interno e não aparecerá em documentos.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="flex gap-4 pt-4">
                     <button

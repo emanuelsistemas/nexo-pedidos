@@ -47,6 +47,10 @@ const UserNovoClienteCompleto: React.FC = () => {
   const [isFornecedor, setIsFornecedor] = useState(false);
   const [isTransportadora, setIsTransportadora] = useState(false);
 
+  // Observações
+  const [observacaoNfe, setObservacaoNfe] = useState('');
+  const [observacaoInterna, setObservacaoInterna] = useState('');
+
 
 
 
@@ -482,6 +486,9 @@ const UserNovoClienteCompleto: React.FC = () => {
           is_vendedor: isVendedor,
           is_fornecedor: isFornecedor,
           is_transportadora: isTransportadora,
+          // Observações
+          observacao_nfe: observacaoNfe || null,
+          observacao_interna: observacaoInterna || null,
           empresa_id: usuarioData.empresa_id,
           usuario_id: userData.user.id
         })
@@ -1021,6 +1028,45 @@ const UserNovoClienteCompleto: React.FC = () => {
                 <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-500/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
               </label>
             </div>
+          </div>
+        </div>
+
+        {/* Observações */}
+        <div className="bg-background-card rounded-lg border border-gray-800 p-4 space-y-4">
+          <h2 className="text-lg font-medium text-white mb-2">Observações</h2>
+
+          {/* Observação NFe */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Observação NFe
+            </label>
+            <textarea
+              value={observacaoNfe}
+              onChange={(e) => setObservacaoNfe(e.target.value)}
+              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 resize-none"
+              placeholder="Observações que aparecerão na NFe..."
+              rows={3}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Esta observação será incluída na NFe quando emitida para este cliente.
+            </p>
+          </div>
+
+          {/* Observação Interna */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Observação Interna
+            </label>
+            <textarea
+              value={observacaoInterna}
+              onChange={(e) => setObservacaoInterna(e.target.value)}
+              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 resize-none"
+              placeholder="Observações internas sobre o cliente..."
+              rows={3}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Esta observação é apenas para uso interno e não aparecerá em documentos.
+            </p>
           </div>
         </div>
 
