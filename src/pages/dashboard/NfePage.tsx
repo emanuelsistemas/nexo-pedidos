@@ -32,6 +32,7 @@ const NfePage: React.FC = () => {
   // Estados para filtro avançado
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const [naturezaFilter, setNaturezaFilter] = useState('');
+  const [naturezasOperacao, setNaturezasOperacao] = useState<Array<{id: number, descricao: string}>>([]);
   const [dataInicioFilter, setDataInicioFilter] = useState(() => {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -75,6 +76,7 @@ const NfePage: React.FC = () => {
 
   useEffect(() => {
     loadNfes();
+    loadNaturezasOperacao();
   }, []);
 
   const loadNfes = async () => {
@@ -107,6 +109,26 @@ const NfePage: React.FC = () => {
       // Erro ao carregar NFes
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Carregar naturezas de operação
+  const loadNaturezasOperacao = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('nfe_natureza_op')
+        .select('id, descricao')
+        .eq('ativo', true)
+        .order('descricao');
+
+      if (error) {
+        console.error('Erro ao carregar naturezas de operação:', error);
+        return;
+      }
+
+      setNaturezasOperacao(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar naturezas de operação:', error);
     }
   };
 
@@ -240,7 +262,7 @@ const NfePage: React.FC = () => {
       if (confirmacao) {
         // TODO: Implementar chamada para API de reenvio de email
         showToast(`Funcionalidade de reenvio de email em desenvolvimento`, 'info');
-        console.log('Reenviar email NFe:', nfe.id, 'Email:', email);
+
       }
     } else if (email !== null) {
       showToast('Digite um email válido', 'error');
@@ -426,35 +448,11 @@ const NfePage: React.FC = () => {
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
                 >
                   <option value="">Todas as Naturezas</option>
-                  <option value="VENDA">VENDA</option>
-                  <option value="Venda de mercadoria">Venda de mercadoria</option>
-                  <option value="VENDA DE MERCADORIA">VENDA DE MERCADORIA</option>
-                  <option value="VENDA DE PRODUTOS">VENDA DE PRODUTOS</option>
-                  <option value="VENDA DE SERVIÇOS">VENDA DE SERVIÇOS</option>
-                  <option value="DEVOLUÇÃO">DEVOLUÇÃO</option>
-                  <option value="DEVOLUÇÃO DE VENDA">DEVOLUÇÃO DE VENDA</option>
-                  <option value="DEVOLUÇÃO DE COMPRA">DEVOLUÇÃO DE COMPRA</option>
-                  <option value="REMESSA">REMESSA</option>
-                  <option value="REMESSA PARA CONSERTO">REMESSA PARA CONSERTO</option>
-                  <option value="REMESSA PARA DEMONSTRAÇÃO">REMESSA PARA DEMONSTRAÇÃO</option>
-                  <option value="REMESSA PARA INDUSTRIALIZAÇÃO">REMESSA PARA INDUSTRIALIZAÇÃO</option>
-                  <option value="RETORNO">RETORNO</option>
-                  <option value="RETORNO DE CONSERTO">RETORNO DE CONSERTO</option>
-                  <option value="RETORNO DE DEMONSTRAÇÃO">RETORNO DE DEMONSTRAÇÃO</option>
-                  <option value="RETORNO DE INDUSTRIALIZAÇÃO">RETORNO DE INDUSTRIALIZAÇÃO</option>
-                  <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
-                  <option value="TRANSFERÊNCIA ENTRE FILIAIS">TRANSFERÊNCIA ENTRE FILIAIS</option>
-                  <option value="CONSIGNAÇÃO">CONSIGNAÇÃO</option>
-                  <option value="REMESSA EM CONSIGNAÇÃO">REMESSA EM CONSIGNAÇÃO</option>
-                  <option value="RETORNO DE CONSIGNAÇÃO">RETORNO DE CONSIGNAÇÃO</option>
-                  <option value="DEMONSTRAÇÃO">DEMONSTRAÇÃO</option>
-                  <option value="BRINDE">BRINDE</option>
-                  <option value="DOAÇÃO">DOAÇÃO</option>
-                  <option value="AMOSTRA GRÁTIS">AMOSTRA GRÁTIS</option>
-                  <option value="BONIFICAÇÃO">BONIFICAÇÃO</option>
-                  <option value="TROCA">TROCA</option>
-                  <option value="GARANTIA">GARANTIA</option>
-                  <option value="OUTRAS">OUTRAS</option>
+                  {naturezasOperacao.map((natureza) => (
+                    <option key={natureza.id} value={natureza.descricao}>
+                      {natureza.descricao}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -703,6 +701,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   const [nfeEmitida, setNfeEmitida] = useState(false);
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [naturezasOperacao, setNaturezasOperacao] = useState<Array<{id: number, descricao: string}>>([]);
   const [progressSteps, setProgressSteps] = useState([
     { id: 'validacao', label: 'Validando dados da NFe', status: 'pending', message: '' },
     { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
@@ -729,7 +728,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       tipo_documento: '1',
       finalidade: '1',
       presenca: '9',
-      natureza_operacao: 'VENDA'
+      natureza_operacao: ''
     },
     destinatario: {
       documento: '',
@@ -842,7 +841,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   // Função para verificar se há dados não salvos
   const hasUnsavedData = () => {
     // Verificar se há dados preenchidos que indicam trabalho em progresso
-    const hasIdentificacao = nfeData.identificacao.natureza_operacao !== 'VENDA' ||
+    const hasIdentificacao = nfeData.identificacao.natureza_operacao !== '' ||
                              nfeData.identificacao.numero !== '';
     const hasDestinatario = nfeData.destinatario.nome !== '' ||
                             nfeData.destinatario.documento !== '';
@@ -877,7 +876,6 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   const resetEditingState = () => {
     setIsEditingRascunho(false);
     setRascunhoId(null);
-    console.log('🔄 Estado de edição resetado para nova NFe');
   };
 
   // Função para salvar rascunho da NFe
@@ -1036,7 +1034,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       try {
         // Se tem dados_nfe salvos, carregar eles
         if (rascunho.dados_nfe) {
-          console.log('📦 Carregando dados completos do JSON...');
+
           const dadosCarregados = JSON.parse(rascunho.dados_nfe);
 
           // Aguardar um pouco para garantir que os dados da empresa foram carregados primeiro
@@ -1045,10 +1043,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
               ...dadosCarregados,
               empresa: prev.empresa || dadosCarregados.empresa // Preservar empresa se já carregada
             }));
-            console.log('✅ Dados carregados do JSON:', dadosCarregados);
+
           }, 100);
         } else {
-          console.log('📋 Carregando dados básicos e buscando itens...');
+
           // Carregar dados básicos do rascunho e buscar itens
           const { data: itens } = await supabase
             .from('pdv_itens')
@@ -1065,7 +1063,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
                 ...prev.identificacao,
                 numero: rascunho.numero_documento?.toString() || '',
                 serie: rascunho.serie_documento || 1,
-                natureza_operacao: rascunho.natureza_operacao || 'VENDA'
+                natureza_operacao: rascunho.natureza_operacao || ''
               },
               destinatario: {
                 ...prev.destinatario,
@@ -1084,21 +1082,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
                 valor_total: item.valor_total_item
               })) : []
             }));
-            console.log('✅ Dados básicos carregados');
+
           }, 100);
         }
       } catch (error) {
-        console.error('❌ Erro ao carregar dados do rascunho:', error);
+        // Erro ao carregar dados do rascunho
       }
     };
 
-    console.log('🔗 Adicionando listener loadRascunho...');
     // Adicionar listener
     window.addEventListener('loadRascunho', handleLoadRascunho as EventListener);
 
     // Cleanup
     return () => {
-      console.log('🗑️ Removendo listener loadRascunho...');
       window.removeEventListener('loadRascunho', handleLoadRascunho as EventListener);
     };
   }, []);
@@ -1154,9 +1150,6 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           if (!isEditingRascunho) {
             const numero = await buscarProximoNumeroNFe(usuarioData.empresa_id, 55, 1);
             proximoNumero = numero.toString();
-            console.log('🔢 Número automático gerado para nova NFe:', proximoNumero);
-          } else {
-            console.log('✏️ Editando rascunho - número não será alterado automaticamente');
           }
 
           setNfeData(prev => ({
@@ -1185,12 +1178,36 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           }));
         }
       } catch (error) {
-        console.error('Erro ao carregar dados da empresa:', error);
+        // Erro ao carregar dados da empresa
       }
     };
 
     loadEmpresaData();
   }, [isEditingRascunho]); // Reagir à mudança da flag de edição
+
+  // Carregar naturezas de operação
+  useEffect(() => {
+    const loadNaturezasOperacao = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('nfe_natureza_op')
+          .select('id, descricao')
+          .eq('ativo', true)
+          .order('descricao');
+
+        if (error) {
+          console.error('Erro ao carregar naturezas de operação:', error);
+          return;
+        }
+
+        setNaturezasOperacao(data || []);
+      } catch (error) {
+        console.error('Erro ao carregar naturezas de operação:', error);
+      }
+    };
+
+    loadNaturezasOperacao();
+  }, []);
 
   // Função para emitir NFe
   const handleEmitirNFe = async () => {
@@ -1487,13 +1504,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         });
 
       if (error) {
-        console.error('Erro ao salvar NFe no banco:', error);
         throw error;
       }
 
-      console.log('NFe salva no banco com sucesso');
     } catch (error) {
-      console.error('Erro ao salvar NFe no banco:', error);
       throw error;
     }
   };
@@ -1518,6 +1532,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           <IdentificacaoSection
             data={nfeData.identificacao}
             onChange={(data) => setNfeData(prev => ({ ...prev, identificacao: data }))}
+            naturezasOperacao={naturezasOperacao}
           />
         );
       case 'destinatario':
@@ -1589,6 +1604,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           <IdentificacaoSection
             data={nfeData.identificacao}
             onChange={(data) => setNfeData(prev => ({ ...prev, identificacao: data }))}
+            naturezasOperacao={naturezasOperacao}
           />
         );
     }
@@ -1960,7 +1976,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 };
 
 // Seção de Identificação
-const IdentificacaoSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({ data, onChange }) => {
+const IdentificacaoSection: React.FC<{
+  data: any;
+  onChange: (data: any) => void;
+  naturezasOperacao?: Array<{id: number, descricao: string}>;
+}> = ({ data, onChange, naturezasOperacao = [] }) => {
   const updateField = (field: string, value: any) => {
     onChange({
       ...data,
@@ -2089,13 +2109,18 @@ const IdentificacaoSection: React.FC<{ data: any; onChange: (data: any) => void 
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Natureza da Operação *
           </label>
-          <input
-            type="text"
+          <select
             value={data.natureza_operacao}
             onChange={(e) => updateField('natureza_operacao', e.target.value)}
-            placeholder="Ex: VENDA, DEVOLUÇÃO, etc."
             className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
-          />
+          >
+            <option value="">Selecione a natureza da operação</option>
+            {naturezasOperacao.map((natureza) => (
+              <option key={natureza.id} value={natureza.descricao}>
+                {natureza.descricao}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="mt-6">
