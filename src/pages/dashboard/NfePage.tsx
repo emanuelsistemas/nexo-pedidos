@@ -956,17 +956,35 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
       console.log(`🎯 Próximo número NFe: ${proximoNumero}`);
 
-      // Atualizar apenas o número no formulário
+      // Gerar código numérico também
+      console.log('🔢 Gerando código numérico para nova NFe...');
+      let codigoGerado = '';
+      try {
+        codigoGerado = await gerarCodigoNumericoUnico(
+          usuarioData.empresa_id,
+          proximoNumero,
+          1,
+          ambienteNFe,
+          55
+        );
+        console.log(`✅ Código numérico gerado: ${codigoGerado}`);
+      } catch (error) {
+        console.error('❌ Erro ao gerar código numérico:', error);
+        codigoGerado = 'ERRO_GERACAO';
+      }
+
+      // Atualizar número e código no formulário
       setNfeData(prev => {
         console.log('🔄 Atualizando estado do formulário...');
         const novoEstado = {
           ...prev,
           identificacao: {
             ...prev.identificacao,
-            numero: proximoNumero.toString()
+            numero: proximoNumero.toString(),
+            codigo_numerico: codigoGerado
           }
         };
-        console.log('✅ Novo estado:', novoEstado.identificacao.numero);
+        console.log('✅ Novo estado - Número:', novoEstado.identificacao.numero, 'Código:', novoEstado.identificacao.codigo_numerico);
         return novoEstado;
       });
 
@@ -976,6 +994,21 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   };
 
 
+
+  // Função para calcular dígito verificador do código numérico
+  const calcularDigitoVerificador = (codigo: string): string => {
+    // Algoritmo módulo 11 conforme especificação SEFAZ
+    const sequencia = '4329876543298765432987654329876543298765432987654329';
+    let soma = 0;
+
+    for (let i = 0; i < codigo.length; i++) {
+      soma += parseInt(codigo[i]) * parseInt(sequencia[i]);
+    }
+
+    const resto = soma % 11;
+    const dv = resto < 2 ? 0 : 11 - resto;
+    return dv.toString();
+  };
 
   // Função para gerar código numérico único com controle SaaS
   const gerarCodigoNumericoUnico = async (
@@ -989,18 +1022,21 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
     for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
       try {
-        // Gerar código aleatório de 8 dígitos (conforme regras SEFAZ)
-        const min = 10000000;
-        const max = 99999999;
-        const codigoAleatorio = Math.floor(Math.random() * (max - min + 1)) + min;
-        const codigoNumerico = codigoAleatorio.toString();
+        // Gerar código aleatório de 8 dígitos conforme SEFAZ
+        // Segundo documentação oficial: "número aleatório de 8 dígitos"
+        const min = 10000000; // 8 dígitos mínimo
+        const max = 99999999; // 8 dígitos máximo
+        const codigoNumerico = Math.floor(Math.random() * (max - min + 1)) + min;
+        const codigoNumericoStr = codigoNumerico.toString();
+
+        console.log(`🔢 Código gerado: ${codigoNumericoStr} (8 dígitos aleatórios)`);
 
         // Verificar se o código já existe para esta empresa/ambiente
         const { data: existente, error: errorCheck } = await supabase
           .from('nfe_numero_controle')
           .select('id')
           .eq('empresa_id', empresaId)
-          .eq('codigo_numerico', codigoNumerico)
+          .eq('codigo_numerico', codigoNumericoStr)
           .eq('ambiente', ambiente)
           .eq('modelo_documento', modeloDocumento)
           .single();
@@ -1016,7 +1052,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
             .from('nfe_numero_controle')
             .insert({
               empresa_id: empresaId,
-              codigo_numerico: codigoNumerico,
+              codigo_numerico: codigoNumericoStr,
               numero_nfe: numeroNFe,
               serie_nfe: serieNFe,
               modelo_documento: modeloDocumento,
@@ -1025,13 +1061,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
             });
 
           if (!errorInsert) {
-            console.log(`✅ Código numérico reservado: ${codigoNumerico} (tentativa ${tentativa})`);
-            return codigoNumerico;
+            console.log(`✅ Código numérico reservado: ${codigoNumericoStr} (tentativa ${tentativa})`);
+            return codigoNumericoStr;
           } else {
-            console.warn(`⚠️ Erro ao reservar código ${codigoNumerico}:`, errorInsert);
+            console.warn(`⚠️ Erro ao reservar código ${codigoNumericoStr}:`, errorInsert);
           }
         } else {
-          console.log(`🔄 Código ${codigoNumerico} já existe, gerando novo... (tentativa ${tentativa})`);
+          console.log(`🔄 Código ${codigoNumericoStr} já existe, gerando novo... (tentativa ${tentativa})`);
         }
       } catch (error) {
         console.error(`Erro na tentativa ${tentativa}:`, error);
@@ -1039,11 +1075,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     }
 
     // Fallback: usar timestamp + random se todas as tentativas falharam
-    const timestamp = Date.now().toString().slice(-4);
-    const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-    const codigoFallback = timestamp + random;
+    const timestamp = Date.now().toString().slice(-4); // 4 dígitos
+    const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0'); // 4 dígitos
+    const codigoFallback = (timestamp + random).padStart(8, '0'); // Garantir 8 dígitos
 
-    console.warn(`⚠️ Usando código fallback: ${codigoFallback}`);
+    console.warn(`⚠️ Usando código fallback: ${codigoFallback} (8 dígitos aleatórios)`);
     return codigoFallback;
   };
 
