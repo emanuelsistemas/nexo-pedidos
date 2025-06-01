@@ -1,0 +1,63 @@
+{
+  "ambiente": 2,
+  "numero_nfe": 1,
+  "empresa": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "cnpj": "24.163.237/0001-51",
+    "name": "EMANUEL LUIS PEREIRA SOUZA VALESIS INFORMATICA",
+    "razao_social": "EMANUEL LUIS PEREIRA SOUZA VALESIS INFORMATICA",
+    "inscricao_estadual": "123456789",
+    "endereco": "RUA TESTE",
+    "numero": "123",
+    "bairro": "CENTRO",
+    "cidade": "SAO PAULO",
+    "uf": "SP",
+    "cep": "01000-000",
+    "codigo_municipio": 3550308,
+    "telefone": "11999999999",
+    "email": "teste@teste.com"
+  },
+  "cliente": {
+    "documento": "12345678901",
+    "name": "CLIENTE TESTE",
+    "address": "RUA CLIENTE",
+    "numero_endereco": "456",
+    "bairro": "CENTRO",
+    "city": "SAO PAULO",
+    "state": "SP",
+    "zip_code": "01000-000",
+    "codigo_municipio": 3550308,
+    "emails": ["cliente@teste.com"]
+  },
+  "produtos": [
+    {
+      "codigo": "PROD001",
+      "descricao": "PRODUTO TESTE",
+      "quantidade": 1,
+      "valor_unitario": 100.00,
+      "valor_total": 100.00,
+      "ncm": "22030000",
+      "cfop": "5102",
+      "unidade": "UN"
+    }
+  ],
+  "totais": {
+    "valor_produtos": 100.00,
+    "valor_desconto": 0.00,
+    "valor_total": 100.00,
+    "natureza_operacao": "VENDA"
+  },
+  "pagamentos": [
+    {
+      "forma_pagamento": "01",
+      "valor": 100.00
+    }
+  ],
+  "informacao_adicional": "Teste de NFe",
+  "identificacao": {
+    "numero": 1,
+    "serie": 1,
+    "codigo_numerico": "12345678",
+    "natureza_operacao": "VENDA"
+  }
+}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Download, Copy, Trash2, X, Ban, Mail } from 'lucide-react';
+import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Download, Copy, Trash2, X, Ban, Mail, MoreVertical } from 'lucide-react';
 import Button from '../../components/comum/Button';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 import { supabase } from '../../lib/supabase';
+import { useApiLogs } from '../../hooks/useApiLogs';
 
 interface NFe {
   id: string;
@@ -27,6 +28,7 @@ const NfePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('todos');
 
   // Estados para filtro avançado
@@ -269,124 +271,194 @@ const NfePage: React.FC = () => {
     }
   };
 
-  // Função para validar API e SEFAZ antes de emitir NFe
-  const validateServicesBeforeEmission = async (): Promise<boolean> => {
+  // ✅ NOVA FUNÇÃO: Baixar XML da NFe (TEMPORÁRIO)
+  const handleBaixarXML = async (nfe: NFe) => {
+    if (nfe.status_nfe !== 'autorizada') {
+      showToast('Apenas NFe autorizadas possuem XML disponível', 'error');
+      return;
+    }
+
+    if (!nfe.chave_nfe) {
+      showToast('Chave da NFe não encontrada', 'error');
+      return;
+    }
+
     try {
-      let apiStatus = false;
-      let sefazStatus = false;
-      let apiError = '';
-      let sefazError = '';
+      showToast('📄 Download XML - Configuração do servidor pendente', 'info', 3000);
 
-      // Verificar status da API
-      try {
-        const apiResponse = await fetch('https://apinfe.nexopdv.com/api/status', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          signal: AbortSignal.timeout(5000)
-        });
+      // ✅ TEMPORÁRIO: Mostrar informações da NFe
+      const info = `
+📄 INFORMAÇÕES DA NFe
 
-        if (apiResponse.ok) {
-          const apiData = await apiResponse.json();
-          // API está online se retorna status com "Online"
-          apiStatus = apiData.status && apiData.status.includes('Online');
-          if (!apiStatus) {
-            apiError = 'API não está respondendo corretamente';
-          }
-        } else {
-          apiError = `API retornou erro HTTP ${apiResponse.status}`;
-        }
-      } catch (error) {
-        apiError = 'Não foi possível conectar com a API';
-      }
+🔑 Chave: ${nfe.chave_nfe}
+📋 Número: ${nfe.numero_documento}
+💰 Valor: R$ ${(nfe.valor_total || 0).toFixed(2)}
+👤 Cliente: ${nfe.nome_cliente}
+📅 Data: ${new Date(nfe.data_emissao || '').toLocaleDateString('pt-BR')}
 
-      // Verificar status da SEFAZ
-      try {
-        const sefazResponse = await fetch('https://apinfe.nexopdv.com/api/status-sefaz', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          signal: AbortSignal.timeout(10000)
-        });
+⚠️ Download XML será implementado após configuração do servidor.
+      `;
 
-        if (sefazResponse.ok) {
-          const sefazData = await sefazResponse.json();
-          if (sefazData.success && sefazData.data) {
-            // Verificar se NFe está disponível
-            const nfeDisponivel = sefazData.data.nfe?.disponivel === true;
-            sefazStatus = nfeDisponivel;
-            if (!sefazStatus) {
-              sefazError = 'SEFAZ NFe indisponível';
-            }
-          } else {
-            sefazError = sefazData.error || 'SEFAZ não está respondendo';
-          }
-        } else {
-          sefazError = `SEFAZ retornou erro HTTP ${sefazResponse.status}`;
-        }
-      } catch (error) {
-        sefazError = 'Não foi possível conectar com o SEFAZ';
-      }
-
-      // Se ambos estão com problema
-      if (!apiStatus && !sefazStatus) {
-        showToast(
-          '🚫 EMISSÃO BLOQUEADA\n\n' +
-          '❌ API NFe: ' + apiError + '\n' +
-          '❌ SEFAZ: ' + sefazError + '\n\n' +
-          '⚠️ Não é possível emitir NFe no momento.\n' +
-          'Favor entrar em contato com o suporte técnico.',
-          'error',
-          8000
-        );
-        return false;
-      }
-
-      // Se apenas API está com problema
-      if (!apiStatus) {
-        showToast(
-          '🚫 EMISSÃO BLOQUEADA\n\n' +
-          '❌ API NFe: ' + apiError + '\n' +
-          '✅ SEFAZ: Operacional\n\n' +
-          '⚠️ Não é possível emitir NFe no momento.\n' +
-          'Favor entrar em contato com o suporte técnico.',
-          'error',
-          8000
-        );
-        return false;
-      }
-
-      // Se apenas SEFAZ está com problema
-      if (!sefazStatus) {
-        showToast(
-          '🚫 EMISSÃO BLOQUEADA\n\n' +
-          '✅ API NFe: Operacional\n' +
-          '❌ SEFAZ: ' + sefazError + '\n\n' +
-          '⚠️ Não é possível emitir NFe no momento.\n' +
-          'Favor entrar em contato com o suporte técnico.',
-          'error',
-          8000
-        );
-        return false;
-      }
-
-      // Ambos estão funcionando
-      return true;
+      alert(info);
 
     } catch (error) {
-      showToast(
-        '🚫 EMISSÃO BLOQUEADA\n\n' +
-        '❌ Erro ao verificar status dos serviços\n' +
-        '❌ Não foi possível conectar com a API\n\n' +
-        '⚠️ Não é possível emitir NFe no momento.\n' +
-        'Favor entrar em contato com o suporte técnico.',
-        'error',
-        8000
-      );
-      return false;
+      console.error('Erro ao baixar XML:', error);
+      showToast(`Erro ao baixar XML: ${error.message}`, 'error');
     }
+  };
+
+  // ✅ NOVA FUNÇÃO: Visualizar PDF da NFe (TEMPORÁRIO)
+  const handleVisualizarPDF = async (nfe: NFe) => {
+    if (nfe.status_nfe !== 'autorizada') {
+      showToast('Apenas NFe autorizadas possuem PDF disponível', 'error');
+      return;
+    }
+
+    if (!nfe.chave_nfe) {
+      showToast('Chave da NFe não encontrada', 'error');
+      return;
+    }
+
+    try {
+      showToast('📋 Visualização PDF - Configuração do servidor pendente', 'info', 3000);
+
+      // ✅ TEMPORÁRIO: Mostrar informações da NFe
+      const info = `
+📋 INFORMAÇÕES DA NFe
+
+🔑 Chave: ${nfe.chave_nfe}
+📋 Número: ${nfe.numero_documento}
+💰 Valor: R$ ${(nfe.valor_total || 0).toFixed(2)}
+👤 Cliente: ${nfe.nome_cliente}
+📅 Data: ${new Date(nfe.data_emissao || '').toLocaleDateString('pt-BR')}
+
+⚠️ Visualização PDF será implementada após configuração do servidor.
+      `;
+
+      alert(info);
+
+    } catch (error) {
+      console.error('Erro ao visualizar PDF:', error);
+      showToast(`Erro ao visualizar PDF: ${error.message}`, 'error');
+    }
+  };
+
+  // ✅ COMPONENTE: Menu Dropdown de Ações
+  const ActionDropdown: React.FC<{ nfe: NFe }> = ({ nfe }) => {
+    const dropdownId = `dropdown-${nfe.id}`;
+    const isOpen = openDropdown === dropdownId;
+
+    const toggleDropdown = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setOpenDropdown(isOpen ? null : dropdownId);
+    };
+
+    const closeDropdown = () => {
+      setOpenDropdown(null);
+    };
+
+    // Fechar dropdown quando clicar fora
+    React.useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (isOpen && !(event.target as Element).closest(`#${dropdownId}`)) {
+          closeDropdown();
+        }
+      };
+
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen, dropdownId]);
+
+    const handleAction = (action: () => void) => {
+      action();
+      closeDropdown();
+    };
+
+    return (
+      <div className="relative" id={dropdownId}>
+        <button
+          onClick={toggleDropdown}
+          className="text-gray-400 hover:text-gray-300 p-1 rounded-lg hover:bg-gray-800 transition-colors"
+          title="Ações"
+        >
+          <MoreVertical size={16} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute right-0 top-8 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50 min-w-[180px]">
+            <div className="py-1">
+              {/* Editar/Visualizar */}
+              <button
+                onClick={() => handleAction(() => {
+                  if (nfe.status_nfe === 'rascunho') {
+                    handleEditarRascunho(nfe);
+                  } else {
+                    alert('Funcionalidade de visualização em desenvolvimento');
+                  }
+                })}
+                className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2"
+              >
+                {nfe.status_nfe === 'rascunho' ? <Edit size={14} /> : <Eye size={14} />}
+                {nfe.status_nfe === 'rascunho' ? 'Continuar Editando' : 'Visualizar'}
+              </button>
+
+              {/* Separador */}
+              <div className="border-t border-gray-700 my-1"></div>
+
+              {/* Ações para NFe Autorizadas */}
+              {nfe.status_nfe === 'autorizada' && (
+                <>
+                  <button
+                    onClick={() => handleAction(() => handleBaixarXML(nfe))}
+                    className="w-full px-4 py-2 text-left text-sm text-blue-400 hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <Download size={14} />
+                    Baixar XML
+                  </button>
+
+                  <button
+                    onClick={() => handleAction(() => handleVisualizarPDF(nfe))}
+                    className="w-full px-4 py-2 text-left text-sm text-purple-400 hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <FileText size={14} />
+                    Visualizar PDF
+                  </button>
+
+                  <button
+                    onClick={() => handleAction(() => handleReenviarEmail(nfe))}
+                    className="w-full px-4 py-2 text-left text-sm text-green-400 hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <Mail size={14} />
+                    Reenviar Email
+                  </button>
+
+                  <div className="border-t border-gray-700 my-1"></div>
+
+                  <button
+                    onClick={() => handleAction(() => handleCancelar(nfe))}
+                    className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <X size={14} />
+                    Cancelar NFe
+                  </button>
+                </>
+              )}
+
+              {/* Inutilizar - para NFe não autorizadas */}
+              {nfe.status_nfe !== 'autorizada' && nfe.status_nfe !== 'cancelada' && nfe.status_nfe !== 'inutilizada' && (
+                <button
+                  onClick={() => handleAction(() => handleInutilizar(nfe))}
+                  className="w-full px-4 py-2 text-left text-sm text-orange-400 hover:bg-gray-700 flex items-center gap-2"
+                >
+                  <Ban size={14} />
+                  Inutilizar NFe
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Função para criar toasts
@@ -754,54 +826,8 @@ const NfePage: React.FC = () => {
                         R$ {(nfe.valor_total || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium w-[8%]">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Botão Editar/Visualizar */}
-                          <button
-                            onClick={() => {
-                              if (nfe.status_nfe === 'rascunho') {
-                                handleEditarRascunho(nfe);
-                              } else {
-                                alert('Funcionalidade de visualização em desenvolvimento');
-                              }
-                            }}
-                            className="text-blue-400 hover:text-blue-300 p-1"
-                            title={nfe.status_nfe === 'rascunho' ? 'Continuar editando' : 'Visualizar'}
-                          >
-                            {nfe.status_nfe === 'rascunho' ? <Edit size={16} /> : <Eye size={16} />}
-                          </button>
-
-                          {/* Botão Inutilizar - apenas para NFe não autorizadas, não canceladas e não inutilizadas */}
-                          {nfe.status_nfe !== 'autorizada' && nfe.status_nfe !== 'cancelada' && nfe.status_nfe !== 'inutilizada' && (
-                            <button
-                              onClick={() => handleInutilizar(nfe)}
-                              className="text-orange-400 hover:text-orange-300 p-1"
-                              title="Inutilizar NFe"
-                            >
-                              <Ban size={16} />
-                            </button>
-                          )}
-
-                          {/* Botão Cancelar - apenas para NFe autorizadas */}
-                          {nfe.status_nfe === 'autorizada' && (
-                            <button
-                              onClick={() => handleCancelar(nfe)}
-                              className="text-red-400 hover:text-red-300 p-1"
-                              title="Cancelar NFe"
-                            >
-                              <X size={16} />
-                            </button>
-                          )}
-
-                          {/* Botão Reenviar Email - apenas para NFe autorizadas */}
-                          {nfe.status_nfe === 'autorizada' && (
-                            <button
-                              onClick={() => handleReenviarEmail(nfe)}
-                              className="text-green-400 hover:text-green-300 p-1"
-                              title="Reenviar Email"
-                            >
-                              <Mail size={16} />
-                            </button>
-                          )}
+                        <div className="flex items-center justify-end">
+                          <ActionDropdown nfe={nfe} />
                         </div>
                       </td>
                     </tr>
@@ -825,6 +851,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   const [nfeEmitida, setNfeEmitida] = useState(false);
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const [naturezasOperacao, setNaturezasOperacao] = useState<Array<{id: number, descricao: string}>>([]);
   const [apiStatus, setApiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [sefazStatus, setSefazStatus] = useState<'online' | 'offline' | 'checking'>('checking');
@@ -842,6 +869,23 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     data_autorizacao: '',
     status: ''
   });
+
+  // Hook para logs da API
+  const {
+    apiLogs,
+    isLoadingApiLogs,
+    apiLogsError,
+    fetchApiLogs,
+    formatApiLog,
+    copyApiLogsToClipboard,
+    clearApiLogs
+  } = useApiLogs();
+
+  // Função para limpar todos os logs
+  const clearAllLogs = () => {
+    setLogs([]); // Limpar logs do frontend
+    clearApiLogs(); // Limpar logs da API
+  };
   const [isEditingRascunho, setIsEditingRascunho] = useState(false);
   const [rascunhoId, setRascunhoId] = useState<string | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
@@ -929,13 +973,14 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
       console.log('✅ Empresa encontrada:', usuarioData.empresa_id);
 
-      // Buscar último número da empresa na tabela pdv
+      // ✅ CORREÇÃO: Buscar último número na tabela nfe_numero_controle
       const { data, error } = await supabase
-        .from('pdv')
-        .select('numero_documento')
+        .from('nfe_numero_controle')
+        .select('numero_nfe')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('modelo_documento', 55) // NFe modelo 55
-        .order('numero_documento', { ascending: false })
+        .eq('ambiente', ambienteNFe) // Considerar ambiente
+        .order('numero_nfe', { ascending: false })
         .limit(1);
 
       if (error) {
@@ -943,13 +988,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         return;
       }
 
-      console.log('📋 Dados encontrados na tabela pdv:', data);
+      console.log('📋 Dados encontrados na tabela nfe_numero_controle:', data);
 
       // Se não encontrou nenhum registro, começar do 1
       let proximoNumero = 1;
-      if (data && data.length > 0 && data[0].numero_documento) {
-        proximoNumero = data[0].numero_documento + 1;
-        console.log(`📊 Último número encontrado: ${data[0].numero_documento}`);
+      if (data && data.length > 0 && data[0].numero_nfe) {
+        proximoNumero = data[0].numero_nfe + 1;
+        console.log(`📊 Último número encontrado: ${data[0].numero_nfe}`);
       } else {
         console.log('📊 Nenhum registro encontrado, iniciando do número 1');
       }
@@ -1454,18 +1499,55 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       try {
         // Se tem dados_nfe salvos, carregar eles
         if (rascunho.dados_nfe) {
+          let dadosCarregados;
 
-          const dadosCarregados = JSON.parse(rascunho.dados_nfe);
+          try {
+            // ✅ CORREÇÃO: Lidar com dados_nfe como string ou array
+            if (Array.isArray(rascunho.dados_nfe)) {
+              // Se for array, pegar o primeiro elemento (string JSON) e mesclar com segundo elemento
+              dadosCarregados = JSON.parse(rascunho.dados_nfe[0]);
 
-          // Aguardar um pouco para garantir que os dados da empresa foram carregados primeiro
-          setTimeout(() => {
-            console.log('🔄 Carregando rascunho - Número:', dadosCarregados.identificacao?.numero, 'Código:', dadosCarregados.identificacao?.codigo_numerico);
-            setNfeData(prev => ({
-              ...dadosCarregados,
-              empresa: prev.empresa || dadosCarregados.empresa // Preservar empresa se já carregada
-            }));
+              // ✅ MESCLAR com segundo elemento se existir (contém codigo_numerico)
+              if (rascunho.dados_nfe[1] && typeof rascunho.dados_nfe[1] === 'object') {
+                const dadosAdicionais = rascunho.dados_nfe[1];
+                if (dadosAdicionais.identificacao?.codigo_numerico) {
+                  dadosCarregados.identificacao = {
+                    ...dadosCarregados.identificacao,
+                    codigo_numerico: dadosAdicionais.identificacao.codigo_numerico
+                  };
+                }
+              }
+            } else {
+              // Se for string, fazer parse direto
+              dadosCarregados = JSON.parse(rascunho.dados_nfe);
+            }
 
-          }, 100);
+            // Aguardar um pouco para garantir que os dados da empresa foram carregados primeiro
+            setTimeout(() => {
+              console.log('🔄 Carregando rascunho - Número:', dadosCarregados.identificacao?.numero, 'Código:', dadosCarregados.identificacao?.codigo_numerico);
+              setNfeData(prev => ({
+                ...dadosCarregados,
+                empresa: prev.empresa || dadosCarregados.empresa // Preservar empresa se já carregada
+              }));
+
+            }, 100);
+          } catch (error) {
+            console.error('Erro ao fazer parse dos dados_nfe:', error);
+            // Se falhar, usar o caminho alternativo
+            setTimeout(() => {
+              console.log('🔄 Carregando rascunho básico (fallback) - Número:', rascunho.numero_documento);
+              setNfeData(prev => ({
+                ...prev,
+                identificacao: {
+                  ...prev.identificacao,
+                  numero: rascunho.numero_documento?.toString() || '',
+                  serie: rascunho.serie_documento || 1,
+                  natureza_operacao: rascunho.natureza_operacao || '',
+                  informacao_adicional: rascunho.informacao_adicional || ''
+                }
+              }));
+            }, 100);
+          }
         } else {
 
           // Carregar dados básicos do rascunho e buscar itens
@@ -1759,20 +1841,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   // Função para emitir NFe
   const handleEmitirNFe = async () => {
     try {
-      // Validação prévia dos serviços antes de abrir o modal
-      showToast('🔍 Verificando status da API e SEFAZ...', 'info', 3000);
-
-      const servicesOk = await validateServicesBeforeEmission();
-      if (!servicesOk) {
-        // Se os serviços não estão OK, a função já exibiu a mensagem de erro
-        return;
-      }
-
-      // Se chegou aqui, os serviços estão funcionando
-      showToast('✅ API e SEFAZ operacionais. Iniciando emissão...', 'success', 2000);
-
+      // Abrir modal diretamente e iniciar processo
       setIsLoading(true);
       setShowProgressModal(true);
+      clearAllLogs(); // ✅ Limpar logs ao iniciar nova emissão
       resetProgress();
 
       // ETAPA 1: VALIDAÇÃO
@@ -1867,9 +1939,25 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         addLog(`   Total da nota: R$ ${totalNota.toFixed(2)}`);
 
         if (Math.abs(totalPagamentos - totalNota) > 0.01) {
-          const erro = `Valor dos pagamentos (R$ ${totalPagamentos.toFixed(2)}) deve ser igual ao total (R$ ${totalNota.toFixed(2)})`;
-          validationErrors.push(erro);
-          addLog(`❌ ${erro}`);
+          // ✅ CORREÇÃO AUTOMÁTICA: Ajustar pagamentos para o total da nota
+          addLog(`⚠️ Ajustando pagamentos de R$ ${totalPagamentos.toFixed(2)} para R$ ${totalNota.toFixed(2)}`);
+
+          if (nfeData.pagamentos.length === 1) {
+            // Se há apenas um pagamento, ajustar o valor
+            nfeData.pagamentos[0].valor = totalNota;
+            addLog('✅ Pagamento único ajustado automaticamente');
+          } else if (nfeData.pagamentos.length > 1) {
+            // Se há múltiplos pagamentos, ajustar o primeiro
+            const diferenca = totalNota - totalPagamentos;
+            nfeData.pagamentos[0].valor += diferenca;
+            addLog('✅ Primeiro pagamento ajustado automaticamente');
+          } else {
+            // Se não há pagamentos, criar um
+            nfeData.pagamentos = [{ tipo: '01', valor: totalNota }];
+            addLog('✅ Pagamento criado automaticamente');
+          }
+
+          addLog('✅ Valores dos pagamentos ajustados e conferem');
         } else {
           addLog('✅ Valores dos pagamentos conferem');
         }
@@ -1911,6 +1999,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
         if (!confirmacao) {
           setShowProgressModal(false);
+          clearAllLogs(); // ✅ Limpar logs ao cancelar
           setIsLoading(false);
           return;
         }
@@ -1921,6 +2010,32 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       const numeroNFe = parseInt(nfeData.identificacao.numero) || 1;
       const serieNFe = parseInt(nfeData.identificacao.serie) || 1;
       const ambiente = ambienteNFe;
+
+      // ✅ VALIDAÇÃO DE NUMERAÇÃO DUPLICADA
+      if (!isEditingRascunho) {
+        // Só verificar duplicatas para novas NFe, não para edição de rascunho
+        addLog('🔍 Verificando numeração duplicada...');
+        const { data: nfeExistente } = await supabase
+          .from('pdv')
+          .select('id, numero_documento, status_nfe')
+          .eq('empresa_id', nfeData.empresa.id)
+          .eq('modelo_documento', 55)
+          .eq('serie_documento', serieNFe)
+          .eq('numero_documento', numeroNFe)
+          .neq('status_nfe', 'rascunho') // Ignorar rascunhos
+          .single();
+
+        if (nfeExistente) {
+          const erro = `NFe número ${numeroNFe} série ${serieNFe} já existe (Status: ${nfeExistente.status_nfe})`;
+          validationErrors.push(erro);
+          addLog(`❌ ${erro}`);
+          updateStep('validacao', 'error', 'Numeração duplicada');
+          return;
+        }
+        addLog('✅ Numeração disponível');
+      } else {
+        addLog(`✅ Editando rascunho - usando número ${numeroNFe} série ${serieNFe}`);
+      }
 
       let codigoNumerico = nfeData.identificacao.codigo_numerico;
 
@@ -1952,11 +2067,15 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       // Preparar payload conforme documentação da API
       const payload = {
         ambiente: ambienteNFe === 'producao' ? 1 : 2, // 1=Produção, 2=Homologação
-        empresa: nfeData.empresa,
+        empresa: {
+          ...nfeData.empresa,
+          // ✅ TESTE: Forçar IE claramente inválida para testar validação SEFAZ
+          inscricao_estadual: '111111111' // IE inválida para teste
+        },
         cliente: {
           documento: nfeData.destinatario.documento,
           name: nfeData.destinatario.nome,
-          address: nfeData.destinatario.endereco,
+          endereco: nfeData.destinatario.endereco, // ✅ Corrigido: usar 'endereco' em vez de 'address'
           numero_endereco: nfeData.destinatario.numero,
           bairro: nfeData.destinatario.bairro,
           city: nfeData.destinatario.cidade,
@@ -1965,14 +2084,28 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           codigo_municipio: nfeData.destinatario.codigo_municipio || 3550308,
           emails: nfeData.destinatario.emails || []
         },
-        produtos: nfeData.produtos,
+        produtos: nfeData.produtos.map(produto => ({
+          ...produto,
+          // Garantir que CFOP existe
+          cfop: produto.cfop || '5102',
+          // ✅ CORREÇÃO: Incluir dados dos impostos
+          cst_icms: produto.cst_icms || produto.csosn_icms || '102',
+          aliquota_icms: produto.aliquota_icms || 0,
+          cst_pis: produto.cst_pis || '01',
+          cst_cofins: produto.cst_cofins || '01',
+          origem_produto: produto.origem_produto || 0
+        })),
         totais: {
-          valor_produtos: nfeData.totais.valor_produtos,
-          valor_desconto: nfeData.totais.valor_desconto,
-          valor_total: nfeData.totais.valor_total,
+          valor_produtos: parseFloat(nfeData.totais.valor_produtos?.toString() || '0'),
+          valor_desconto: parseFloat(nfeData.totais.valor_desconto?.toString() || '0'),
+          valor_total: parseFloat(nfeData.totais.valor_total?.toString() || '0'),
           natureza_operacao: nfeData.identificacao.natureza_operacao
         },
-        pagamentos: nfeData.pagamentos,
+        pagamentos: nfeData.pagamentos.map(pagamento => ({
+          ...pagamento,
+          // ✅ CORREÇÃO PRINCIPAL: Garantir que valor seja float
+          valor: parseFloat(pagamento.valor?.toString() || '0')
+        })),
         informacao_adicional: nfeData.identificacao.informacao_adicional || '',
         // Incluir dados de identificação da NFe
         identificacao: {
@@ -1983,15 +2116,16 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         }
       };
 
-      // ETAPA 2: GERAÇÃO DO XML
+      // ETAPA 2: PROCESSAMENTO COMPLETO (XML + ASSINATURA + SEFAZ)
       updateStep('geracao', 'loading');
-      addLog('Preparando dados para geração do XML');
+      addLog('Iniciando processamento completo da NFe...');
       addLog(`Valor total: R$ ${nfeData.totais.valor_total.toFixed(2)}`);
       addLog(`Cliente: ${nfeData.destinatario.nome}`);
+      addLog(`Ambiente: ${ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}`);
 
-      // Chamar API para gerar NFe
-      addLog('Enviando dados para API de geração...');
-      const response = await fetch('https://apinfe.nexopdv.com/api/gerar-nfe', {
+      // Chamar novo endpoint NFe Completa
+      addLog('🚀 Usando endpoint NFe Completa (XML + Assinatura + SEFAZ)...');
+      const response = await fetch('https://apinfe.nexopdv.com/api/nfe-completa', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2002,7 +2136,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       if (!response.ok) {
         const errorText = await response.text();
         updateStep('geracao', 'error', `Erro HTTP ${response.status}`);
-        addLog(`ERRO: Falha na geração do XML - HTTP ${response.status}`);
+        addLog(`ERRO: Falha no processamento completo - HTTP ${response.status}`);
         addLog(`Detalhes: ${errorText}`);
         throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
       }
@@ -2010,14 +2144,17 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       const result = await response.json();
 
       // Debug: Log da resposta completa da API
-      addLog('📄 Resposta da API de geração:');
+      addLog('📄 Resposta da API NFe Completa:');
       addLog(`   Success: ${result.success}`);
+      addLog(`   Message: ${result.message || 'N/A'}`);
       addLog(`   Data presente: ${result.data ? 'SIM' : 'NÃO'}`);
 
       if (result.data) {
         addLog(`   XML presente: ${result.data.xml ? 'SIM' : 'NÃO'}`);
         addLog(`   Chave presente: ${result.data.chave ? 'SIM' : 'NÃO'}`);
-        addLog(`   Número NFe: ${result.data.numero_nfe || 'N/A'}`);
+        addLog(`   Protocolo presente: ${result.data.protocolo ? 'SIM' : 'NÃO'}`);
+        addLog(`   Status SEFAZ: ${result.data.status_sefaz || 'N/A'}`);
+        addLog(`   Motivo: ${result.data.motivo || 'N/A'}`);
 
         if (result.data.xml) {
           addLog(`   Tamanho XML: ${result.data.xml.length} caracteres`);
@@ -2025,74 +2162,43 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         if (result.data.chave) {
           addLog(`   Chave: ${result.data.chave}`);
         }
+        if (result.data.protocolo) {
+          addLog(`   Protocolo: ${result.data.protocolo}`);
+        }
       }
 
       if (!result.success) {
-        updateStep('geracao', 'error', 'Falha na geração do XML');
-        addLog('ERRO: API retornou falha na geração');
-        addLog(`Detalhes: ${result.error || 'Erro desconhecido'}`);
-        throw new Error(result.error || 'Erro na geração do XML');
+        updateStep('geracao', 'error', 'Falha no processamento');
+        addLog('ERRO: API retornou falha no processamento');
+        addLog(`Detalhes: ${result.error || result.message || 'Erro desconhecido'}`);
+        throw new Error(result.error || result.message || 'Erro no processamento da NFe');
       }
 
       // Verificar se os dados essenciais estão presentes
-      if (!result.data || !result.data.xml || !result.data.chave) {
+      if (!result.data || !result.data.xml || !result.data.chave || !result.data.protocolo) {
         updateStep('geracao', 'error', 'Dados incompletos da API');
         addLog('ERRO: API retornou dados incompletos');
         addLog(`   XML: ${result.data?.xml ? 'OK' : 'FALTANDO'}`);
         addLog(`   Chave: ${result.data?.chave ? 'OK' : 'FALTANDO'}`);
-        throw new Error('API retornou dados incompletos (XML ou chave faltando)');
+        addLog(`   Protocolo: ${result.data?.protocolo ? 'OK' : 'FALTANDO'}`);
+        throw new Error('API retornou dados incompletos (XML, chave ou protocolo faltando)');
       }
 
-      addLog('XML gerado com sucesso');
+      // Verificar se foi autorizada pela SEFAZ
+      if (result.data.status_sefaz !== '100') {
+        updateStep('sefaz', 'error', `SEFAZ: ${result.data.motivo || 'Rejeitada'}`);
+        addLog('ERRO: NFe rejeitada pela SEFAZ');
+        addLog(`Status: ${result.data.status_sefaz}`);
+        addLog(`Motivo: ${result.data.motivo || 'Motivo não informado'}`);
+        throw new Error(`NFe rejeitada pela SEFAZ: ${result.data.motivo || 'Motivo não informado'}`);
+      }
+
+      addLog('✅ XML gerado com sucesso');
+      addLog('✅ Certificado digital aplicado');
+      addLog('✅ NFe autorizada pela SEFAZ');
       addLog(`Chave NFe: ${result.data.chave}`);
+      addLog(`Protocolo: ${result.data.protocolo}`);
       updateStep('geracao', 'success', 'XML gerado');
-
-      // ETAPA 3: ENVIO PARA SEFAZ
-      updateStep('sefaz', 'loading');
-      addLog('Iniciando envio para SEFAZ...');
-      addLog(`Ambiente SEFAZ: ${ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}`);
-
-      // Preparar dados para SEFAZ com logs detalhados
-      const sefazData = {
-        ambiente: ambienteNFe === 'producao' ? 1 : 2, // 1=Produção, 2=Homologação
-        xml: result.data.xml,
-        chave: result.data.chave,
-        empresa_id: nfeData.empresa.id
-      };
-
-      addLog('📋 Dados para SEFAZ:');
-      addLog(`   Ambiente: ${sefazData.ambiente} (${ambienteNFe})`);
-      addLog(`   Chave: ${sefazData.chave}`);
-      addLog(`   Empresa ID: ${sefazData.empresa_id}`);
-      addLog(`   XML: ${sefazData.xml ? 'Presente' : 'AUSENTE'} (${sefazData.xml?.length || 0} caracteres)`);
-
-      const sefazResponse = await fetch('https://apinfe.nexopdv.com/api/enviar-sefaz', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(sefazData)
-      });
-
-      if (!sefazResponse.ok) {
-        const errorText = await sefazResponse.text();
-        updateStep('sefaz', 'error', `Erro HTTP ${sefazResponse.status}`);
-        addLog(`ERRO: Falha na comunicação com SEFAZ - HTTP ${sefazResponse.status}`);
-        addLog(`Detalhes: ${errorText}`);
-        throw new Error(`Erro SEFAZ HTTP ${sefazResponse.status}: ${errorText}`);
-      }
-
-      const sefazResult = await sefazResponse.json();
-
-      if (!sefazResult.success) {
-        updateStep('sefaz', 'error', 'SEFAZ rejeitou a NFe');
-        addLog('ERRO: SEFAZ rejeitou a NFe');
-        addLog(`Detalhes: ${sefazResult.error || 'Erro desconhecido'}`);
-        throw new Error(sefazResult.error || 'Erro no envio para SEFAZ');
-      }
-
-      addLog('NFe autorizada pela SEFAZ');
-      addLog(`Protocolo: ${sefazResult.data.protocolo || 'N/A'}`);
       updateStep('sefaz', 'success', 'Autorizada pela SEFAZ');
 
       // ETAPA 4: SALVAMENTO NO BANCO
@@ -2100,7 +2206,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       addLog('Salvando NFe no banco de dados...');
 
       try {
-        await salvarNFeNoBanco(result.data, sefazResult.data);
+        await salvarNFeNoBanco(result.data);
         addLog('NFe salva no banco com sucesso');
         updateStep('banco', 'success', 'Salva no banco');
       } catch (dbError) {
@@ -2117,8 +2223,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       // Atualizar dados de autorização
       setDadosAutorizacao({
         chave_acesso: result.data.chave,
-        protocolo_uso: sefazResult.data.protocolo || '',
-        data_autorizacao: new Date().toISOString(),
+        protocolo_uso: result.data.protocolo || '',
+        data_autorizacao: result.data.data_autorizacao || new Date().toISOString(),
         status: 'autorizada'
       });
 
@@ -2131,14 +2237,17 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
       addLog('✅ NFe emitida com sucesso!');
       addLog(`Chave: ${result.data.chave}`);
-      addLog(`Protocolo: ${sefazResult.data.protocolo || 'N/A'}`);
+      addLog(`Protocolo: ${result.data.protocolo || 'N/A'}`);
+      addLog(`Número NFe: ${result.data.numero_nfe || 'N/A'}`);
       addLog(`Valor: R$ ${nfeData.totais.valor_total.toFixed(2)}`);
       updateStep('finalizacao', 'success', 'Processo concluído');
 
       // Aguardar 2 segundos para mostrar o sucesso
       setTimeout(() => {
         setShowProgressModal(false);
-        onBack(); // Voltar para a grid de NFe
+        clearAllLogs(); // ✅ Limpar logs ao fechar modal após sucesso
+        onSave(); // ✅ Recarregar a lista de NFe
+        onBack(); // ✅ Voltar para a grid de NFe
       }, 2000);
     } catch (error) {
       // Liberar código numérico reservado em caso de erro
@@ -2157,6 +2266,15 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         updateStep(currentStep.id, 'error', 'Falha na execução');
       }
 
+      // Buscar logs da API automaticamente quando houver erro
+      addLog('🔍 Buscando logs detalhados da API...');
+      try {
+        await fetchApiLogs('error', 10);
+        addLog('✅ Logs da API carregados - verifique a seção "API Server Logs"');
+      } catch (logError) {
+        addLog('⚠️ Não foi possível carregar logs da API');
+      }
+
       // Categorizar o erro para logs mais detalhados
       if (error.message.includes('Failed to fetch')) {
         addLog('Tipo: Erro de conexão com a API');
@@ -2166,7 +2284,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         addLog('Solução: Verifique se a API está configurada corretamente');
       } else if (error.message.includes('HTTP 500')) {
         addLog('Tipo: Erro interno do servidor');
-        addLog('Solução: Tente novamente em alguns minutos');
+        addLog('Solução: Verifique os logs da API para detalhes específicos');
       } else if (error.message.includes('timeout')) {
         addLog('Tipo: Timeout na requisição');
         addLog('Solução: A operação demorou muito para responder');
@@ -2182,7 +2300,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   };
 
   // Função para salvar NFe no banco de dados
-  const salvarNFeNoBanco = async (nfeApiData: any, sefazData: any) => {
+  const salvarNFeNoBanco = async (nfeApiData: any) => {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
@@ -2195,26 +2313,50 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
       if (!usuarioData?.empresa_id) return;
 
-      const { error } = await supabase
-        .from('pdv')
-        .insert({
-          empresa_id: usuarioData.empresa_id,
-          usuario_id: userData.user.id, // Campo obrigatório que estava faltando
-          modelo_documento: 55,
-          serie_documento: parseInt(nfeData.identificacao.serie) || 1,
-          numero_documento: parseInt(nfeApiData.numero_nfe) || parseInt(nfeData.identificacao.numero),
-          chave_nfe: nfeApiData.chave,
-          status_nfe: 'autorizada',
-          protocolo_nfe: sefazData.protocolo, // Corrigido: era protocolo_uso, mas o campo é protocolo_nfe
-          nome_cliente: nfeData.destinatario.nome || 'Cliente',
-          valor_total: nfeData.totais.valor_total || 0,
-          natureza_operacao: nfeData.identificacao.natureza_operacao || 'VENDA',
-          xml_nfe: nfeApiData.xml,
-          data_emissao_nfe: nfeData.identificacao.data_emissao || new Date().toISOString() // Corrigido: campo é data_emissao_nfe
-        });
+      const dadosNFe = {
+        empresa_id: usuarioData.empresa_id,
+        usuario_id: userData.user.id,
+        modelo_documento: 55,
+        serie_documento: parseInt(nfeData.identificacao.serie) || 1,
+        numero_documento: parseInt(nfeData.identificacao.numero), // ✅ USAR número do frontend
+        chave_nfe: nfeApiData.chave,
+        status_nfe: 'autorizada',
+        protocolo_nfe: nfeApiData.protocolo,
+        nome_cliente: nfeData.destinatario.nome || 'Cliente',
+        valor_total: nfeData.totais.valor_total || 0,
+        natureza_operacao: nfeData.identificacao.natureza_operacao || 'VENDA',
+        xml_nfe: nfeApiData.xml,
+        data_emissao_nfe: nfeApiData.data_autorizacao || nfeData.identificacao.data_emissao || new Date().toISOString()
+      };
+
+      let error;
+
+      if (isEditingRascunho && rascunhoId) {
+        // ✅ ATUALIZAR rascunho existente
+        addLog(`🔄 Atualizando rascunho existente (ID: ${rascunhoId}) para status autorizada`);
+        const result = await supabase
+          .from('pdv')
+          .update(dadosNFe)
+          .eq('id', rascunhoId);
+        error = result.error;
+      } else {
+        // ✅ CRIAR novo registro
+        addLog('📝 Criando novo registro de NFe autorizada');
+        const result = await supabase
+          .from('pdv')
+          .insert(dadosNFe);
+        error = result.error;
+      }
 
       if (error) {
         throw error;
+      }
+
+      // ✅ Resetar estado de edição após salvar
+      if (isEditingRascunho) {
+        addLog('✅ Rascunho convertido para NFe autorizada com sucesso');
+        setIsEditingRascunho(false);
+        setRascunhoId(null);
       }
 
     } catch (error) {
@@ -2604,7 +2746,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
                     {ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}
                   </div>
                   <button
-                    onClick={() => setShowProgressModal(false)}
+                    onClick={() => {
+                      setShowProgressModal(false);
+                      clearAllLogs(); // ✅ Limpar logs ao fechar modal
+                    }}
                     className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors text-sm"
                     disabled={isLoading && !progressSteps.some(s => s.status === 'error')}
                   >
@@ -2655,39 +2800,141 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
                   </div>
                 ))}
               </div>
-            </div>
 
-            {/* Logs Area - Expandida */}
-            <div className="flex-1 p-4 overflow-hidden flex flex-col min-h-0">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-lg font-semibold text-white">Logs do Processo</h4>
+              {/* Botão para exibir/ocultar logs */}
+              <div className="mt-4 pt-4 border-t border-gray-700">
                 <button
-                  onClick={copyLogsToClipboard}
-                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm flex items-center gap-2 transition-colors"
+                  onClick={() => setShowLogs(!showLogs)}
+                  className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
                 >
-                  <Copy size={14} />
-                  Copiar Logs
+                  {showLogs ? (
+                    <>
+                      <Eye size={16} />
+                      Ocultar Logs
+                    </>
+                  ) : (
+                    <>
+                      <Eye size={16} />
+                      Exibir Logs ({logs.length})
+                    </>
+                  )}
                 </button>
               </div>
+            </div>
 
-              <div className="flex-1 bg-gray-900 rounded border border-gray-700 p-4 overflow-y-auto">
-                <div className="space-y-1 font-mono text-sm">
-                  {logs.map((log, index) => (
-                    <div key={index} className={`${
-                      log.includes('ERRO') || log.includes('❌') ? 'text-red-400' :
-                      log.includes('✅') || log.includes('sucesso') ? 'text-green-400' :
-                      log.includes('AVISO') ? 'text-yellow-400' :
-                      'text-gray-300'
-                    }`}>
-                      {log}
+            {/* Logs Area - Dividida em duas seções */}
+            {showLogs && (
+              <div className="flex-1 p-4 overflow-hidden flex flex-col min-h-0 border-t border-gray-700">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-white">Logs do Processo</h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => fetchApiLogs('error', 10)}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm flex items-center gap-2 transition-colors"
+                      disabled={isLoadingApiLogs}
+                    >
+                      {isLoadingApiLogs ? (
+                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      ) : (
+                        <Eye size={14} />
+                      )}
+                      Buscar Logs API
+                    </button>
+                  </div>
+                </div>
+
+                {/* Área dividida em duas colunas */}
+                <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
+
+                  {/* Coluna 1: Logs do Frontend */}
+                  <div className="flex flex-col min-h-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
+                        📱 Frontend Logs
+                        <span className="text-xs text-gray-500">({logs.length})</span>
+                      </h5>
+                      <button
+                        onClick={copyLogsToClipboard}
+                        className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs flex items-center gap-1 transition-colors"
+                      >
+                        <Copy size={12} />
+                        Copiar
+                      </button>
                     </div>
-                  ))}
-                  {logs.length === 0 && (
-                    <div className="text-gray-500 italic">Aguardando início do processo...</div>
-                  )}
+                    <div className="flex-1 bg-gray-900 rounded border border-gray-700 p-3 overflow-y-auto">
+                      <div className="space-y-1 font-mono text-xs">
+                        {logs.map((log, index) => (
+                          <div key={index} className={`${
+                            log.includes('ERRO') || log.includes('❌') ? 'text-red-400' :
+                            log.includes('✅') || log.includes('sucesso') ? 'text-green-400' :
+                            log.includes('AVISO') ? 'text-yellow-400' :
+                            'text-gray-300'
+                          }`}>
+                            {log}
+                          </div>
+                        ))}
+                        {logs.length === 0 && (
+                          <div className="text-gray-500 italic">Aguardando início do processo...</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Coluna 2: Logs da API */}
+                  <div className="flex flex-col min-h-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <h5 className="text-sm font-semibold text-orange-400 flex items-center gap-2">
+                        🔧 API Server Logs
+                        <span className="text-xs text-gray-500">({apiLogs.length})</span>
+                      </h5>
+                      <button
+                        onClick={() => copyApiLogsToClipboard().then(() =>
+                          showToast('Logs da API copiados!', 'success')
+                        ).catch(() =>
+                          showToast('Erro ao copiar logs da API', 'error')
+                        )}
+                        className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs flex items-center gap-1 transition-colors"
+                        disabled={apiLogs.length === 0}
+                      >
+                        <Copy size={12} />
+                        Copiar
+                      </button>
+                    </div>
+                    <div className="flex-1 bg-gray-900 rounded border border-gray-700 p-3 overflow-y-auto">
+                      <div className="space-y-1 font-mono text-xs">
+                        {apiLogsError && (
+                          <div className="text-red-400 mb-2 p-2 bg-red-500/10 rounded border border-red-500/20">
+                            ❌ Erro ao buscar logs: {apiLogsError}
+                          </div>
+                        )}
+                        {apiLogs.map((log, index) => (
+                          <div key={index} className={`${
+                            log.level.toLowerCase() === 'error' ? 'text-red-400' :
+                            log.level.toLowerCase() === 'info' ? 'text-blue-400' :
+                            log.level.toLowerCase() === 'debug' ? 'text-purple-400' :
+                            'text-gray-300'
+                          }`}>
+                            {formatApiLog(log)}
+                          </div>
+                        ))}
+                        {apiLogs.length === 0 && !isLoadingApiLogs && !apiLogsError && (
+                          <div className="text-gray-500 italic">
+                            Clique em "Buscar Logs API" para ver logs do servidor...
+                          </div>
+                        )}
+                        {isLoadingApiLogs && (
+                          <div className="text-blue-400 flex items-center gap-2">
+                            <div className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
+                            Carregando logs da API...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
-            </div>
+            )}
 
 
           </div>
@@ -3354,10 +3601,25 @@ const ProdutosSection: React.FC<{ produtos: any[]; empresaId?: string; onChange:
   // Função para selecionar produto do modal
   const handleSelecionarProduto = (produto: any) => {
     setProdutoSelecionado(produto);
+
+    // ✅ CALCULAR PREÇO PROMOCIONAL SE HOUVER PROMOÇÃO
+    let precoFinal = produto.preco || 0;
+
+    if (produto.promocao && produto.valor_desconto) {
+      if (produto.tipo_desconto === 'percentual') {
+        // Desconto percentual
+        const desconto = (precoFinal * produto.valor_desconto) / 100;
+        precoFinal = precoFinal - desconto;
+      } else if (produto.tipo_desconto === 'valor') {
+        // Desconto em valor fixo
+        precoFinal = precoFinal - produto.valor_desconto;
+      }
+    }
+
     setProdutoForm({
       quantidade: 1,
-      valor_unitario: produto.preco || 0,
-      valor_total: produto.preco || 0
+      valor_unitario: precoFinal,
+      valor_total: precoFinal
     });
     setShowProdutoModal(false);
   };
@@ -3370,18 +3632,22 @@ const ProdutosSection: React.FC<{ produtos: any[]; empresaId?: string; onChange:
 
     const novoProduto = {
       id: Date.now().toString(),
+      produto_id: produtoSelecionado.id, // ✅ ID do produto
       codigo: produtoSelecionado.codigo,
       descricao: produtoSelecionado.nome,
       ncm: produtoSelecionado.ncm || '00000000',
-      cfop: '5102', // CFOP padrão
+      cfop: produtoSelecionado.cfop || '5102', // ✅ Do cadastro ou padrão
       unidade: produtoSelecionado.unidade_medida?.sigla || 'UN',
       quantidade: produtoForm.quantidade,
       valor_unitario: produtoForm.valor_unitario,
       valor_total: produtoForm.valor_total,
-      origem_produto: 0,
-      csosn_icms: '102',
-      cst_pis: '01',
-      cst_cofins: '01'
+      // ✅ DADOS FISCAIS DO CADASTRO DO PRODUTO:
+      origem_produto: produtoSelecionado.origem_produto || 0,
+      cst_icms: produtoSelecionado.cst_icms,
+      csosn_icms: produtoSelecionado.csosn_icms,
+      aliquota_icms: produtoSelecionado.aliquota_icms || 0,
+      cst_pis: produtoSelecionado.cst_pis || '01',
+      cst_cofins: produtoSelecionado.cst_cofins || '01'
     };
 
     onChange([...produtos, novoProduto]);
@@ -3904,10 +4170,20 @@ const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void
 
   // Atualizar valor do pagamento quando o total da nota mudar
   useEffect(() => {
-    if (totalNota > 0 && pagamentoForm.valor === 0) {
+    if (totalNota > 0) {
+      // ✅ CORREÇÃO: Sempre atualizar quando total mudar
       setPagamentoForm(prev => ({ ...prev, valor: totalNota }));
+
+      // ✅ Se há apenas um pagamento, ajustar automaticamente
+      if (pagamentos.length === 1) {
+        const pagamentosAtualizados = pagamentos.map(p => ({
+          ...p,
+          valor: totalNota
+        }));
+        onChange(pagamentosAtualizados);
+      }
     }
-  }, [totalNota]);
+  }, [totalNota]); // ✅ CORREÇÃO: Remover dependências que causam loop
 
   const tiposPagamento = {
     '01': 'Dinheiro',

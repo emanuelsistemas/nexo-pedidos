@@ -1,0 +1,1 @@
+{"command": "find /var/www -name index.php -type f"}
