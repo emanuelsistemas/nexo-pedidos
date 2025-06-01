@@ -27,6 +27,7 @@ const NfePage: React.FC = () => {
   const [nfes, setNfes] = useState<NFe[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [isViewMode, setIsViewMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -271,7 +272,7 @@ const NfePage: React.FC = () => {
     }
   };
 
-  // ✅ NOVA FUNÇÃO: Baixar XML da NFe (TEMPORÁRIO)
+  // ✅ FUNÇÃO: Baixar XML da NFe
   const handleBaixarXML = async (nfe: NFe) => {
     if (nfe.status_nfe !== 'autorizada') {
       showToast('Apenas NFe autorizadas possuem XML disponível', 'error');
@@ -284,30 +285,25 @@ const NfePage: React.FC = () => {
     }
 
     try {
-      showToast('📄 Download XML - Configuração do servidor pendente', 'info', 3000);
+      // ✅ Usar novo endpoint serve-file.php
+      const xmlUrl = `https://apinfe.nexopdv.com/serve-file.php?type=xml&chave=${nfe.chave_nfe}`;
 
-      // ✅ TEMPORÁRIO: Mostrar informações da NFe
-      const info = `
-📄 INFORMAÇÕES DA NFe
+      // Criar link temporário para download
+      const link = document.createElement('a');
+      link.href = xmlUrl;
+      link.download = `NFe_${nfe.chave_nfe}.xml`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-🔑 Chave: ${nfe.chave_nfe}
-📋 Número: ${nfe.numero_documento}
-💰 Valor: R$ ${(nfe.valor_total || 0).toFixed(2)}
-👤 Cliente: ${nfe.nome_cliente}
-📅 Data: ${new Date(nfe.data_emissao || '').toLocaleDateString('pt-BR')}
-
-⚠️ Download XML será implementado após configuração do servidor.
-      `;
-
-      alert(info);
-
+      showToast('Download do XML iniciado', 'success');
     } catch (error) {
       console.error('Erro ao baixar XML:', error);
       showToast(`Erro ao baixar XML: ${error.message}`, 'error');
     }
   };
 
-  // ✅ NOVA FUNÇÃO: Visualizar PDF da NFe (TEMPORÁRIO)
+  // ✅ FUNÇÃO: Visualizar PDF da NFe
   const handleVisualizarPDF = async (nfe: NFe) => {
     if (nfe.status_nfe !== 'autorizada') {
       showToast('Apenas NFe autorizadas possuem PDF disponível', 'error');
@@ -320,23 +316,13 @@ const NfePage: React.FC = () => {
     }
 
     try {
-      showToast('📋 Visualização PDF - Configuração do servidor pendente', 'info', 3000);
+      // ✅ Usar novo endpoint serve-file.php
+      const pdfUrl = `https://apinfe.nexopdv.com/serve-file.php?type=pdf&chave=${nfe.chave_nfe}`;
 
-      // ✅ TEMPORÁRIO: Mostrar informações da NFe
-      const info = `
-📋 INFORMAÇÕES DA NFe
+      // Abrir PDF em nova aba
+      window.open(pdfUrl, '_blank');
 
-🔑 Chave: ${nfe.chave_nfe}
-📋 Número: ${nfe.numero_documento}
-💰 Valor: R$ ${(nfe.valor_total || 0).toFixed(2)}
-👤 Cliente: ${nfe.nome_cliente}
-📅 Data: ${new Date(nfe.data_emissao || '').toLocaleDateString('pt-BR')}
-
-⚠️ Visualização PDF será implementada após configuração do servidor.
-      `;
-
-      alert(info);
-
+      showToast('PDF aberto em nova aba', 'success');
     } catch (error) {
       console.error('Erro ao visualizar PDF:', error);
       showToast(`Erro ao visualizar PDF: ${error.message}`, 'error');
@@ -393,7 +379,7 @@ const NfePage: React.FC = () => {
                   if (nfe.status_nfe === 'rascunho') {
                     handleEditarRascunho(nfe);
                   } else {
-                    alert('Funcionalidade de visualização em desenvolvimento');
+                    handleVisualizarNFe(nfe);
                   }
                 })}
                 className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-700 flex items-center gap-2"
@@ -504,6 +490,7 @@ const NfePage: React.FC = () => {
   // Função para criar nova NFe
   const handleNovaNFe = () => {
     console.log('🆕 handleNovaNFe chamada - Criando nova NFe');
+    setIsViewMode(false); // Resetar modo de visualização
     setShowForm(true);
 
     // Disparar evento para resetar flag de edição no formulário
@@ -519,7 +506,8 @@ const NfePage: React.FC = () => {
     try {
       showToast(`Carregando rascunho NFe nº ${rascunho.numero_documento || 'S/N'}...`, 'info', 2000);
 
-      // Criar um novo formulário com os dados do rascunho
+      // Resetar modo de visualização e criar um novo formulário com os dados do rascunho
+      setIsViewMode(false);
       setShowForm(true);
 
       // Aguardar um pouco para o formulário ser montado
@@ -535,6 +523,35 @@ const NfePage: React.FC = () => {
 
     } catch (error) {
       showToast('Erro ao carregar rascunho para edição', 'error', 5000);
+    }
+  };
+
+  // Função para visualizar NFe em modo somente leitura
+  const handleVisualizarNFe = async (nfe: NFe) => {
+    try {
+      console.log('🔍 INICIANDO VISUALIZAÇÃO DA NFe:', nfe);
+      showToast(`Carregando NFe nº ${nfe.numero_documento || 'S/N'} para visualização...`, 'info', 2000);
+
+      // Ativar modo de visualização
+      setIsViewMode(true);
+      setShowForm(true);
+
+      // Aguardar um pouco para o formulário ser montado
+      setTimeout(async () => {
+        console.log('📤 Disparando evento loadNfeView com dados:', nfe);
+
+        // Disparar evento customizado para carregar a NFe em modo visualização
+        const event = new CustomEvent('loadNfeView', {
+          detail: nfe
+        });
+        window.dispatchEvent(event);
+
+        showToast(`NFe nº ${nfe.numero_documento || 'S/N'} carregada em modo visualização`, 'success', 3000);
+      }, 500);
+
+    } catch (error) {
+      console.error('Erro ao carregar NFe para visualização:', error);
+      showToast(`Erro ao carregar NFe: ${error.message}`, 'error');
     }
   };
 
@@ -563,7 +580,14 @@ const NfePage: React.FC = () => {
   // Filtros aplicados com sucesso
 
   if (showForm) {
-    return <NfeForm onBack={() => setShowForm(false)} onSave={loadNfes} />;
+    return <NfeForm
+      onBack={() => {
+        setShowForm(false);
+        setIsViewMode(false); // Resetar modo de visualização ao voltar
+      }}
+      onSave={loadNfes}
+      isViewMode={isViewMode}
+    />;
   }
 
   return (
@@ -844,7 +868,7 @@ const NfePage: React.FC = () => {
 };
 
 // Componente do formulário de NFe com abas laterais
-const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack, onSave }) => {
+const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: boolean }> = ({ onBack, onSave, isViewMode = false }) => {
   const [activeSection, setActiveSection] = useState('identificacao');
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingRascunho, setIsSavingRascunho] = useState(false);
@@ -1642,13 +1666,206 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       }, 200);
     };
 
+    // Listener para carregar NFe em modo visualização
+    const handleLoadNfeView = async (event: CustomEvent) => {
+      const nfe = event.detail;
+      console.log('👁️ Evento loadNfeView recebido:', nfe);
+      console.log('📊 Campos disponíveis na NFe:', Object.keys(nfe));
+      console.log('📄 dados_nfe presente?', !!nfe.dados_nfe);
+      console.log('📄 dados_nfe tipo:', typeof nfe.dados_nfe);
+      console.log('📄 dados_nfe conteúdo:', nfe.dados_nfe);
+
+      try {
+        // Carregar dados da NFe para visualização
+        if (nfe.dados_nfe) {
+          console.log('✅ Encontrou dados_nfe, tentando fazer parse...');
+          let dadosCarregados;
+
+          try {
+            if (Array.isArray(nfe.dados_nfe)) {
+              console.log('📋 dados_nfe é array, fazendo parse do primeiro elemento');
+              dadosCarregados = JSON.parse(nfe.dados_nfe[0]);
+              if (nfe.dados_nfe[1] && typeof nfe.dados_nfe[1] === 'object') {
+                const dadosAdicionais = nfe.dados_nfe[1];
+                if (dadosAdicionais.identificacao?.codigo_numerico) {
+                  dadosCarregados.identificacao = {
+                    ...dadosCarregados.identificacao,
+                    codigo_numerico: dadosAdicionais.identificacao.codigo_numerico
+                  };
+                }
+              }
+            } else {
+              console.log('📄 dados_nfe é string, fazendo parse direto');
+              dadosCarregados = JSON.parse(nfe.dados_nfe);
+            }
+
+            console.log('✅ Parse bem-sucedido, dados carregados:', dadosCarregados);
+
+            setTimeout(() => {
+              console.log('👁️ Aplicando dados completos da NFe para visualização');
+              setNfeData(dadosCarregados);
+            }, 100);
+          } catch (error) {
+            console.error('❌ Erro ao fazer parse dos dados_nfe:', error);
+            // Fallback para dados básicos
+            carregarDadosBasicos(nfe);
+          }
+        } else {
+          // Se não há dados_nfe, carregar dados básicos + itens do banco
+          console.log('⚠️ Sem dados_nfe salvos, carregando dados básicos + itens');
+          await carregarDadosBasicosComItens(nfe);
+        }
+      } catch (error) {
+        console.error('❌ Erro geral ao carregar NFe para visualização:', error);
+        // Fallback final
+        carregarDadosBasicos(nfe);
+      }
+    };
+
+    // Função auxiliar para carregar dados básicos
+    const carregarDadosBasicos = (nfe: any) => {
+      setTimeout(() => {
+        console.log('👁️ Carregando dados básicos da NFe');
+        console.log('🔍 TODOS OS DADOS DA NFe:', nfe);
+        console.log('🔍 CAMPOS ESPECÍFICOS:');
+        console.log('  - documento_cliente:', nfe.documento_cliente);
+        console.log('  - tipo_documento_cliente:', nfe.tipo_documento_cliente);
+        console.log('  - rua_entrega:', nfe.rua_entrega);
+        console.log('  - numero_entrega:', nfe.numero_entrega);
+        console.log('  - bairro_entrega:', nfe.bairro_entrega);
+        console.log('  - cidade_entrega:', nfe.cidade_entrega);
+        console.log('  - estado_entrega:', nfe.estado_entrega);
+        console.log('  - cep_entrega:', nfe.cep_entrega);
+
+        // Converter data para formato datetime-local (YYYY-MM-DDTHH:mm)
+        let dataEmissaoFormatada = new Date().toISOString().slice(0, 16);
+        if (nfe.data_emissao_nfe) {
+          try {
+            dataEmissaoFormatada = new Date(nfe.data_emissao_nfe).toISOString().slice(0, 16);
+          } catch (error) {
+            console.warn('Erro ao converter data_emissao_nfe:', error);
+          }
+        } else if (nfe.created_at) {
+          try {
+            dataEmissaoFormatada = new Date(nfe.created_at).toISOString().slice(0, 16);
+          } catch (error) {
+            console.warn('Erro ao converter created_at:', error);
+          }
+        }
+
+        console.log('📅 Data formatada para datetime-local:', dataEmissaoFormatada);
+
+        setNfeData(prev => ({
+          ...prev,
+          identificacao: {
+            ...prev.identificacao,
+            numero: nfe.numero_documento?.toString() || '',
+            serie: nfe.serie_documento || 1,
+            natureza_operacao: nfe.natureza_operacao || '',
+            informacao_adicional: nfe.informacoes_adicionais || nfe.observacoes_nfe || '',
+            data_emissao: dataEmissaoFormatada
+          },
+          destinatario: {
+            ...prev.destinatario,
+            nome: nfe.nome_cliente || '',
+            documento: nfe.documento_cliente || '',
+            endereco: nfe.rua_entrega || '',
+            numero: nfe.numero_entrega || '',
+            bairro: nfe.bairro_entrega || '',
+            cidade: nfe.cidade_entrega || '',
+            uf: nfe.estado_entrega || '',
+            cep: nfe.cep_entrega || ''
+          },
+          totais: {
+            ...prev.totais,
+            valor_total: nfe.valor_total || 0,
+            valor_produtos: nfe.valor_subtotal || nfe.valor_total || 0,
+            valor_desconto: nfe.valor_desconto || 0
+          }
+        }));
+      }, 100);
+    };
+
+    // Função auxiliar para carregar dados básicos + itens
+    const carregarDadosBasicosComItens = async (nfe: any) => {
+      try {
+        // Buscar itens da NFe
+        const { data: itens } = await supabase
+          .from('pdv_itens')
+          .select('*')
+          .eq('pdv_id', nfe.id);
+
+        console.log('📦 Itens encontrados para visualização:', itens);
+
+        // Converter data para formato datetime-local (YYYY-MM-DDTHH:mm)
+        let dataEmissaoFormatada = new Date().toISOString().slice(0, 16);
+        if (nfe.data_emissao_nfe) {
+          try {
+            dataEmissaoFormatada = new Date(nfe.data_emissao_nfe).toISOString().slice(0, 16);
+          } catch (error) {
+            console.warn('Erro ao converter data_emissao_nfe:', error);
+          }
+        } else if (nfe.created_at) {
+          try {
+            dataEmissaoFormatada = new Date(nfe.created_at).toISOString().slice(0, 16);
+          } catch (error) {
+            console.warn('Erro ao converter created_at:', error);
+          }
+        }
+
+        setTimeout(() => {
+          setNfeData(prev => ({
+            ...prev,
+            identificacao: {
+              ...prev.identificacao,
+              numero: nfe.numero_documento?.toString() || '',
+              serie: nfe.serie_documento || 1,
+              natureza_operacao: nfe.natureza_operacao || '',
+              informacao_adicional: nfe.informacoes_adicionais || nfe.observacoes_nfe || '',
+              data_emissao: dataEmissaoFormatada
+            },
+            destinatario: {
+              ...prev.destinatario,
+              nome: nfe.nome_cliente || '',
+              documento: nfe.documento_cliente || '',
+              endereco: nfe.rua_entrega || '',
+              numero: nfe.numero_entrega || '',
+              bairro: nfe.bairro_entrega || '',
+              cidade: nfe.cidade_entrega || '',
+              uf: nfe.estado_entrega || '',
+              cep: nfe.cep_entrega || ''
+            },
+            produtos: itens ? itens.map(item => ({
+              produto_id: item.produto_id,
+              codigo: item.codigo_produto,
+              descricao: item.nome_produto,
+              quantidade: item.quantidade,
+              valor_unitario: item.valor_unitario,
+              valor_total: item.valor_total_item
+            })) : [],
+            totais: {
+              ...prev.totais,
+              valor_total: nfe.valor_total || 0,
+              valor_produtos: nfe.valor_subtotal || nfe.valor_total || 0,
+              valor_desconto: nfe.valor_desconto || 0
+            }
+          }));
+        }, 100);
+      } catch (error) {
+        console.error('Erro ao carregar itens da NFe:', error);
+        carregarDadosBasicos(nfe);
+      }
+    };
+
     // Adicionar listeners
     window.addEventListener('loadRascunho', handleLoadRascunho as EventListener);
+    window.addEventListener('loadNfeView', handleLoadNfeView as EventListener);
     window.addEventListener('resetEditingFlag', handleResetEditingFlag as EventListener);
 
     // Cleanup
     return () => {
       window.removeEventListener('loadRascunho', handleLoadRascunho as EventListener);
+      window.removeEventListener('loadNfeView', handleLoadNfeView as EventListener);
       window.removeEventListener('resetEditingFlag', handleResetEditingFlag as EventListener);
     };
   }, []);
@@ -2326,7 +2543,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         valor_total: nfeData.totais.valor_total || 0,
         natureza_operacao: nfeData.identificacao.natureza_operacao || 'VENDA',
         xml_nfe: nfeApiData.xml,
-        data_emissao_nfe: nfeApiData.data_autorizacao || nfeData.identificacao.data_emissao || new Date().toISOString()
+        data_emissao_nfe: nfeApiData.data_autorizacao || nfeData.identificacao.data_emissao || new Date().toISOString(),
+        // ✅ ADICIONAR: Salvar dados completos da NFe para visualização
+        dados_nfe: JSON.stringify(nfeData),
+        // ✅ CORRIGIDO: Campo correto é informacoes_adicionais (plural)
+        informacoes_adicionais: nfeData.identificacao.informacao_adicional || ''
       };
 
       let error;
@@ -2350,6 +2571,42 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
       if (error) {
         throw error;
+      }
+
+      // ✅ Salvar itens da NFe se não for atualização de rascunho
+      if (!isEditingRascunho && nfeData.produtos.length > 0) {
+        addLog('📦 Salvando itens da NFe...');
+
+        // Buscar o ID da NFe recém-criada
+        const { data: nfeRecemCriada } = await supabase
+          .from('pdv')
+          .select('id')
+          .eq('chave_nfe', nfeApiData.chave)
+          .single();
+
+        if (nfeRecemCriada) {
+          const itensNFe = nfeData.produtos.map((produto) => ({
+            empresa_id: usuarioData.empresa_id,
+            usuario_id: userData.user.id,
+            pdv_id: nfeRecemCriada.id,
+            produto_id: produto.produto_id || null,
+            codigo_produto: produto.codigo,
+            nome_produto: produto.descricao,
+            quantidade: produto.quantidade,
+            valor_unitario: produto.valor_unitario,
+            valor_total_item: produto.valor_total
+          }));
+
+          const { error: itensError } = await supabase
+            .from('pdv_itens')
+            .insert(itensNFe);
+
+          if (itensError) {
+            addLog('⚠️ Erro ao salvar itens da NFe: ' + itensError.message);
+          } else {
+            addLog('✅ Itens da NFe salvos com sucesso');
+          }
+        }
       }
 
       // ✅ Resetar estado de edição após salvar
@@ -2386,6 +2643,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
             onChange={(data) => setNfeData(prev => ({ ...prev, identificacao: data }))}
             naturezasOperacao={naturezasOperacao}
             isEditingRascunho={isEditingRascunho}
+            isViewMode={isViewMode}
           />
         );
       case 'destinatario':
@@ -2489,7 +2747,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
               >
                 <ArrowLeft size={20} />
               </button>
-              <h1 className="text-xl font-bold text-white">Nova NFe</h1>
+              <h1 className="text-xl font-bold text-white">
+                {isViewMode ? 'Visualizar NFe' : 'Nova NFe'}
+              </h1>
             </div>
 
             {/* Status da API e SEFAZ */}
@@ -2662,60 +2922,72 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
             </div>
           </nav>
 
-          {/* Botões de ação */}
-          <div className="p-2 border-t border-gray-800 space-y-2 flex-shrink-0">
-            <Button
-              variant="primary"
-              className="w-full flex items-center justify-center gap-2 text-sm py-2"
-              onClick={handleEmitirNFe}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Emitindo...
-                </>
-              ) : (
-                <>
-                  <Send size={14} />
-                  Emitir NFe
-                </>
-              )}
-            </Button>
-            <Button
-              variant="success"
-              className="w-full flex items-center justify-center gap-2 text-sm py-2"
-              onClick={handleSalvarRascunho}
-              disabled={isSavingRascunho}
-            >
-              {isSavingRascunho ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Salvando...
-                </>
-              ) : (
-                <>
-                  <Save size={14} />
-                  Salvar Rascunho
-                </>
-              )}
-            </Button>
-            <div className="flex gap-2">
+          {/* Botões de ação - Ocultos em modo visualização */}
+          {!isViewMode && (
+            <div className="p-2 border-t border-gray-800 space-y-2 flex-shrink-0">
               <Button
-                variant="secondary"
-                className={`${nfeEmitida ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 text-xs py-1.5`}
+                variant="primary"
+                className="w-full flex items-center justify-center gap-2 text-sm py-2"
+                onClick={handleEmitirNFe}
+                disabled={isLoading}
               >
-                <Download size={12} />
-                Espelho
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Emitindo...
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} />
+                    Emitir NFe
+                  </>
+                )}
               </Button>
-              {nfeEmitida && (
-                <Button variant="secondary" className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5">
-                  <Copy size={12} />
-                  Duplicar
+              <Button
+                variant="success"
+                className="w-full flex items-center justify-center gap-2 text-sm py-2"
+                onClick={handleSalvarRascunho}
+                disabled={isSavingRascunho}
+              >
+                {isSavingRascunho ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Save size={14} />
+                    Salvar Rascunho
+                  </>
+                )}
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className={`${nfeEmitida ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 text-xs py-1.5`}
+                >
+                  <Download size={12} />
+                  Espelho
                 </Button>
-              )}
+                {nfeEmitida && (
+                  <Button variant="secondary" className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5">
+                    <Copy size={12} />
+                    Duplicar
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Indicador de modo visualização */}
+          {isViewMode && (
+            <div className="p-3 border-t border-gray-800 bg-blue-500/10 border-blue-500/20">
+              <div className="flex items-center justify-center gap-2 text-blue-400">
+                <Eye size={16} />
+                <span className="text-sm font-medium">Modo Visualização - Somente Leitura</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Conteúdo principal */}
@@ -3030,7 +3302,9 @@ const IdentificacaoSection: React.FC<{
   data: any;
   onChange: (data: any) => void;
   naturezasOperacao?: Array<{id: number, descricao: string}>;
-}> = ({ data, onChange, naturezasOperacao = [] }) => {
+  isEditingRascunho?: boolean;
+  isViewMode?: boolean;
+}> = ({ data, onChange, naturezasOperacao = [], isEditingRascunho = false, isViewMode = false }) => {
   const updateField = (field: string, value: any) => {
     onChange({
       ...data,
@@ -3053,9 +3327,12 @@ const IdentificacaoSection: React.FC<{
               <input
                 type="number"
                 value={data.numero}
-                onChange={(e) => updateField('numero', e.target.value)}
+                onChange={(e) => !isViewMode && updateField('numero', e.target.value)}
                 placeholder="Digite o número da NFe"
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                disabled={isViewMode}
+                className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
+                  isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
+                }`}
               />
             </div>
           </div>
@@ -3079,8 +3356,11 @@ const IdentificacaoSection: React.FC<{
             <input
               type="number"
               value={data.serie}
-              onChange={(e) => updateField('serie', parseInt(e.target.value) || 1)}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              onChange={(e) => !isViewMode && updateField('serie', parseInt(e.target.value) || 1)}
+              disabled={isViewMode}
+              className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
+                isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
+              }`}
             />
           </div>
 
@@ -3104,8 +3384,11 @@ const IdentificacaoSection: React.FC<{
             <input
               type="datetime-local"
               value={data.data_emissao}
-              onChange={(e) => updateField('data_emissao', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+              onChange={(e) => !isViewMode && updateField('data_emissao', e.target.value)}
+              disabled={isViewMode}
+              className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
+                isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
+              }`}
             />
           </div>
         </div>
@@ -3115,7 +3398,12 @@ const IdentificacaoSection: React.FC<{
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Tipo Documento
             </label>
-            <select className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500">
+            <select
+              disabled={isViewMode}
+              className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
+                isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
+              }`}
+            >
               <option value="1">1 - Saída</option>
               <option value="0">0 - Entrada</option>
             </select>
@@ -3125,7 +3413,12 @@ const IdentificacaoSection: React.FC<{
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Finalidade Emissão
             </label>
-            <select className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500">
+            <select
+              disabled={isViewMode}
+              className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
+                isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
+              }`}
+            >
               <option value="1">1 - NFe normal</option>
               <option value="2">2 - NFe complementar</option>
               <option value="3">3 - NFe de ajuste</option>
@@ -3137,7 +3430,12 @@ const IdentificacaoSection: React.FC<{
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Presença
             </label>
-            <select className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500">
+            <select
+              disabled={isViewMode}
+              className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
+                isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
+              }`}
+            >
               <option value="9">9 - Operação não presencial, outros</option>
               <option value="1">1 - Operação presencial</option>
               <option value="2">2 - Operação não presencial, pela Internet</option>
@@ -3154,8 +3452,11 @@ const IdentificacaoSection: React.FC<{
           </label>
           <select
             value={data.natureza_operacao}
-            onChange={(e) => updateField('natureza_operacao', e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            onChange={(e) => !isViewMode && updateField('natureza_operacao', e.target.value)}
+            disabled={isViewMode}
+            className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
+              isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
+            }`}
           >
             <option value="">Selecione a natureza da operação</option>
             {naturezasOperacao.map((natureza) => (
@@ -3174,8 +3475,11 @@ const IdentificacaoSection: React.FC<{
             <textarea
               rows={3}
               value={data.informacao_adicional || ''}
-              onChange={(e) => updateField('informacao_adicional', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none"
+              onChange={(e) => !isViewMode && updateField('informacao_adicional', e.target.value)}
+              disabled={isViewMode}
+              className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none ${
+                isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
+              }`}
               placeholder="Informações adicionais da NFe... (preenchido automaticamente com observação do cliente)"
             />
             {data.informacao_adicional && (
