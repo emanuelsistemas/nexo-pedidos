@@ -34,9 +34,10 @@ const NfePage: React.FC = () => {
   const [naturezaFilter, setNaturezaFilter] = useState('');
   const [naturezasOperacao, setNaturezasOperacao] = useState<Array<{id: number, descricao: string}>>([]);
   const [dataInicioFilter, setDataInicioFilter] = useState(() => {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    return hoje.toISOString().slice(0, 16);
+    const trintaDiasAtras = new Date();
+    trintaDiasAtras.setDate(trintaDiasAtras.getDate() - 30);
+    trintaDiasAtras.setHours(0, 0, 0, 0);
+    return trintaDiasAtras.toISOString().slice(0, 16);
   });
   const [dataFimFilter, setDataFimFilter] = useState(() => {
     const hoje = new Date();
@@ -99,7 +100,6 @@ const NfePage: React.FC = () => {
         .select('*')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('modelo_documento', 55) // Apenas NFe (modelo 55)
-        .not('numero_documento', 'is', null) // Apenas registros com número de documento
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -269,6 +269,126 @@ const NfePage: React.FC = () => {
     }
   };
 
+  // Função para validar API e SEFAZ antes de emitir NFe
+  const validateServicesBeforeEmission = async (): Promise<boolean> => {
+    try {
+      let apiStatus = false;
+      let sefazStatus = false;
+      let apiError = '';
+      let sefazError = '';
+
+      // Verificar status da API
+      try {
+        const apiResponse = await fetch('https://apinfe.nexopdv.com/api/status', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(5000)
+        });
+
+        if (apiResponse.ok) {
+          const apiData = await apiResponse.json();
+          // API está online se retorna status com "Online"
+          apiStatus = apiData.status && apiData.status.includes('Online');
+          if (!apiStatus) {
+            apiError = 'API não está respondendo corretamente';
+          }
+        } else {
+          apiError = `API retornou erro HTTP ${apiResponse.status}`;
+        }
+      } catch (error) {
+        apiError = 'Não foi possível conectar com a API';
+      }
+
+      // Verificar status da SEFAZ
+      try {
+        const sefazResponse = await fetch('https://apinfe.nexopdv.com/api/status-sefaz', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(10000)
+        });
+
+        if (sefazResponse.ok) {
+          const sefazData = await sefazResponse.json();
+          if (sefazData.success && sefazData.data) {
+            // Verificar se NFe está disponível
+            const nfeDisponivel = sefazData.data.nfe?.disponivel === true;
+            sefazStatus = nfeDisponivel;
+            if (!sefazStatus) {
+              sefazError = 'SEFAZ NFe indisponível';
+            }
+          } else {
+            sefazError = sefazData.error || 'SEFAZ não está respondendo';
+          }
+        } else {
+          sefazError = `SEFAZ retornou erro HTTP ${sefazResponse.status}`;
+        }
+      } catch (error) {
+        sefazError = 'Não foi possível conectar com o SEFAZ';
+      }
+
+      // Se ambos estão com problema
+      if (!apiStatus && !sefazStatus) {
+        showToast(
+          '🚫 EMISSÃO BLOQUEADA\n\n' +
+          '❌ API NFe: ' + apiError + '\n' +
+          '❌ SEFAZ: ' + sefazError + '\n\n' +
+          '⚠️ Não é possível emitir NFe no momento.\n' +
+          'Favor entrar em contato com o suporte técnico.',
+          'error',
+          8000
+        );
+        return false;
+      }
+
+      // Se apenas API está com problema
+      if (!apiStatus) {
+        showToast(
+          '🚫 EMISSÃO BLOQUEADA\n\n' +
+          '❌ API NFe: ' + apiError + '\n' +
+          '✅ SEFAZ: Operacional\n\n' +
+          '⚠️ Não é possível emitir NFe no momento.\n' +
+          'Favor entrar em contato com o suporte técnico.',
+          'error',
+          8000
+        );
+        return false;
+      }
+
+      // Se apenas SEFAZ está com problema
+      if (!sefazStatus) {
+        showToast(
+          '🚫 EMISSÃO BLOQUEADA\n\n' +
+          '✅ API NFe: Operacional\n' +
+          '❌ SEFAZ: ' + sefazError + '\n\n' +
+          '⚠️ Não é possível emitir NFe no momento.\n' +
+          'Favor entrar em contato com o suporte técnico.',
+          'error',
+          8000
+        );
+        return false;
+      }
+
+      // Ambos estão funcionando
+      return true;
+
+    } catch (error) {
+      showToast(
+        '🚫 EMISSÃO BLOQUEADA\n\n' +
+        '❌ Erro ao verificar status dos serviços\n' +
+        '❌ Não foi possível conectar com a API\n\n' +
+        '⚠️ Não é possível emitir NFe no momento.\n' +
+        'Favor entrar em contato com o suporte técnico.',
+        'error',
+        8000
+      );
+      return false;
+    }
+  };
+
   // Função para criar toasts
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', duration: number = 4000) => {
     const toast = document.createElement('div');
@@ -279,12 +399,12 @@ const NfePage: React.FC = () => {
       ? '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>'
       : '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>';
 
-    toast.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 transform transition-all duration-300 translate-x-0`;
+    toast.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-start gap-2 transform transition-all duration-300 translate-x-0 max-w-md`;
     toast.innerHTML = `
-      <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+      <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
         ${icon}
       </svg>
-      <span>${message}</span>
+      <span class="whitespace-pre-line text-sm leading-relaxed">${message}</span>
     `;
 
     document.body.appendChild(toast);
@@ -305,12 +425,18 @@ const NfePage: React.FC = () => {
     }, duration);
   };
 
+
+
+
+
   // Função para criar nova NFe
   const handleNovaNFe = () => {
+    console.log('🆕 handleNovaNFe chamada - Criando nova NFe');
     setShowForm(true);
 
     // Disparar evento para resetar flag de edição no formulário
     setTimeout(() => {
+      console.log('🔄 Disparando evento resetEditingFlag');
       const event = new CustomEvent('resetEditingFlag');
       window.dispatchEvent(event);
     }, 100);
@@ -357,8 +483,12 @@ const NfePage: React.FC = () => {
     const dataFim = new Date(dataFimFilter);
     const matchesData = nfeDate >= dataInicio && nfeDate <= dataFim;
 
+    // Filtros aplicados (debug removido para performance)
+
     return matchesSearch && matchesStatus && matchesNatureza && matchesData;
   });
+
+  // Filtros aplicados com sucesso
 
   if (showForm) {
     return <NfeForm onBack={() => setShowForm(false)} onSave={loadNfes} />;
@@ -389,10 +519,7 @@ const NfePage: React.FC = () => {
           {/* Botão Nova NFe */}
           <Button
             variant="primary"
-            onClick={() => {
-              // Resetar flag de edição ao criar nova NFe
-              setShowForm(true);
-            }}
+            onClick={handleNovaNFe}
             className="flex items-center gap-2"
           >
             <Plus size={20} />
@@ -551,10 +678,7 @@ const NfePage: React.FC = () => {
             {!searchTerm && statusFilter === 'todos' && (
               <Button
                 variant="primary"
-                onClick={() => {
-                  // Resetar flag de edição ao criar nova NFe
-                  setShowForm(true);
-                }}
+                onClick={handleNovaNFe}
                 className="flex items-center gap-2 mx-auto"
               >
                 <Plus size={20} />
@@ -726,6 +850,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       modelo: 55,
       serie: 1,
       numero: '',
+      codigo_numerico: '', // Campo para armazenar o código gerado
       data_emissao: new Date().toISOString().slice(0, 16),
       tipo_documento: '1',
       finalidade: '1',
@@ -778,32 +903,194 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     empresa: null
   });
 
-  // Função para buscar próximo número NFe baseado na empresa
-  const buscarProximoNumeroNFe = async (empresaId: string, modelo: number = 55, serie: number = 1) => {
+  // Função para buscar próximo número NFe (apenas para Nova NFe)
+  const buscarProximoNumero = async () => {
+    console.log('🔍 Iniciando busca do próximo número...');
+
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.log('❌ Usuário não autenticado');
+        return;
+      }
+
+      console.log('✅ Usuário autenticado:', userData.user.id);
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        console.log('❌ Empresa não encontrada para o usuário');
+        return;
+      }
+
+      console.log('✅ Empresa encontrada:', usuarioData.empresa_id);
+
+      // Buscar último número da empresa na tabela pdv
       const { data, error } = await supabase
         .from('pdv')
         .select('numero_documento')
-        .eq('empresa_id', empresaId)
-        .eq('modelo_documento', modelo)
-        .eq('serie_documento', serie)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('modelo_documento', 55) // NFe modelo 55
         .order('numero_documento', { ascending: false })
         .limit(1);
 
       if (error) {
-        console.error('Erro ao buscar último número:', error);
-        return 1;
+        console.error('❌ Erro ao buscar último número:', error);
+        return;
       }
+
+      console.log('📋 Dados encontrados na tabela pdv:', data);
 
       // Se não encontrou nenhum registro, começar do 1
-      if (!data || data.length === 0) {
-        return 1;
+      let proximoNumero = 1;
+      if (data && data.length > 0 && data[0].numero_documento) {
+        proximoNumero = data[0].numero_documento + 1;
+        console.log(`📊 Último número encontrado: ${data[0].numero_documento}`);
+      } else {
+        console.log('📊 Nenhum registro encontrado, iniciando do número 1');
       }
 
-      const proximoNumero = (data[0].numero_documento || 0) + 1;
-      return proximoNumero;
+      console.log(`🎯 Próximo número NFe: ${proximoNumero}`);
+
+      // Atualizar apenas o número no formulário
+      setNfeData(prev => {
+        console.log('🔄 Atualizando estado do formulário...');
+        const novoEstado = {
+          ...prev,
+          identificacao: {
+            ...prev.identificacao,
+            numero: proximoNumero.toString()
+          }
+        };
+        console.log('✅ Novo estado:', novoEstado.identificacao.numero);
+        return novoEstado;
+      });
+
     } catch (error) {
-      return 1;
+      console.error('❌ Erro geral ao buscar próximo número:', error);
+    }
+  };
+
+
+
+  // Função para gerar código numérico único com controle SaaS
+  const gerarCodigoNumericoUnico = async (
+    empresaId: string,
+    numeroNFe: number,
+    serieNFe: number = 1,
+    ambiente: string = 'homologacao',
+    modeloDocumento: number = 55
+  ): Promise<string> => {
+    const maxTentativas = 10;
+
+    for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+      try {
+        // Gerar código aleatório de 8 dígitos (conforme regras SEFAZ)
+        const min = 10000000;
+        const max = 99999999;
+        const codigoAleatorio = Math.floor(Math.random() * (max - min + 1)) + min;
+        const codigoNumerico = codigoAleatorio.toString();
+
+        // Verificar se o código já existe para esta empresa/ambiente
+        const { data: existente, error: errorCheck } = await supabase
+          .from('nfe_numero_controle')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('codigo_numerico', codigoNumerico)
+          .eq('ambiente', ambiente)
+          .eq('modelo_documento', modeloDocumento)
+          .single();
+
+        if (errorCheck && errorCheck.code !== 'PGRST116') {
+          console.error('Erro ao verificar código:', errorCheck);
+          continue; // Tentar próximo código
+        }
+
+        // Se código não existe, reservar na tabela de controle
+        if (!existente) {
+          const { error: errorInsert } = await supabase
+            .from('nfe_numero_controle')
+            .insert({
+              empresa_id: empresaId,
+              codigo_numerico: codigoNumerico,
+              numero_nfe: numeroNFe,
+              serie_nfe: serieNFe,
+              modelo_documento: modeloDocumento,
+              ambiente: ambiente,
+              status: 'reservado'
+            });
+
+          if (!errorInsert) {
+            console.log(`✅ Código numérico reservado: ${codigoNumerico} (tentativa ${tentativa})`);
+            return codigoNumerico;
+          } else {
+            console.warn(`⚠️ Erro ao reservar código ${codigoNumerico}:`, errorInsert);
+          }
+        } else {
+          console.log(`🔄 Código ${codigoNumerico} já existe, gerando novo... (tentativa ${tentativa})`);
+        }
+      } catch (error) {
+        console.error(`Erro na tentativa ${tentativa}:`, error);
+      }
+    }
+
+    // Fallback: usar timestamp + random se todas as tentativas falharam
+    const timestamp = Date.now().toString().slice(-4);
+    const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+    const codigoFallback = timestamp + random;
+
+    console.warn(`⚠️ Usando código fallback: ${codigoFallback}`);
+    return codigoFallback;
+  };
+
+  // Função para marcar código como usado após emissão bem-sucedida
+  const marcarCodigoComoUsado = async (codigoNumerico: string, chaveNFe: string, empresaId: string) => {
+    try {
+      const { error } = await supabase
+        .from('nfe_numero_controle')
+        .update({
+          status: 'usado',
+          chave_nfe: chaveNFe,
+          data_uso: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('codigo_numerico', codigoNumerico)
+        .eq('empresa_id', empresaId);
+
+      if (error) {
+        console.error('Erro ao marcar código como usado:', error);
+      } else {
+        console.log(`✅ Código ${codigoNumerico} marcado como usado`);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar status do código:', error);
+    }
+  };
+
+  // Função para liberar código em caso de erro na emissão
+  const liberarCodigoReservado = async (codigoNumerico: string, empresaId: string) => {
+    try {
+      const { error } = await supabase
+        .from('nfe_numero_controle')
+        .update({
+          status: 'cancelado',
+          updated_at: new Date().toISOString()
+        })
+        .eq('codigo_numerico', codigoNumerico)
+        .eq('empresa_id', empresaId)
+        .eq('status', 'reservado');
+
+      if (error) {
+        console.error('Erro ao liberar código reservado:', error);
+      } else {
+        console.log(`🔄 Código ${codigoNumerico} liberado para reuso`);
+      }
+    } catch (error) {
+      console.error('Erro ao liberar código:', error);
     }
   };
 
@@ -965,22 +1252,62 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         return;
       }
 
+      // Garantir que o rascunho tenha número e código numérico
+      let numeroFinal = nfeData.identificacao.numero;
+      let codigoFinal = nfeData.identificacao.codigo_numerico;
+
+      // REMOVIDO: Não gerar números automaticamente
+      console.log(`📋 Usando número do formulário: ${numeroFinal || 'vazio'}`);
+
+      // Se não tem número, deixar vazio (usuário deve preencher manualmente)
+      if (!numeroFinal) {
+        numeroFinal = '';
+        console.log('⚠️ Número vazio - usuário deve preencher manualmente');
+      }
+
+      // Se não tem código, gerar um
+      if (!codigoFinal) {
+        try {
+          codigoFinal = await gerarCodigoNumericoUnico(
+            usuarioData.empresa_id,
+            parseInt(numeroFinal),
+            1,
+            ambienteNFe,
+            55
+          );
+          console.log(`🔢 Código gerado para rascunho: ${codigoFinal}`);
+        } catch (error) {
+          console.error('❌ Erro ao gerar código para rascunho:', error);
+          codigoFinal = 'ERRO_GERACAO';
+        }
+      }
+
+      // Atualizar os dados da NFe com número e código
+      const nfeDataAtualizada = {
+        ...nfeData,
+        identificacao: {
+          ...nfeData.identificacao,
+          numero: numeroFinal,
+          codigo_numerico: codigoFinal
+        }
+      };
+
       // Preparar dados do rascunho
       const rascunhoData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id, // Campo obrigatório que estava faltando
         modelo_documento: 55,
-        serie_documento: parseInt(nfeData.identificacao.serie) || 1,
-        numero_documento: parseInt(nfeData.identificacao.numero) || 0,
+        serie_documento: parseInt(nfeDataAtualizada.identificacao.serie) || 1,
+        numero_documento: parseInt(numeroFinal) || 0,
         status_nfe: 'rascunho',
-        natureza_operacao: nfeData.identificacao.natureza_operacao,
-        nome_cliente: nfeData.destinatario.nome || 'Cliente não informado',
-        valor_total: nfeData.totais.valor_total || 0,
+        natureza_operacao: nfeDataAtualizada.identificacao.natureza_operacao,
+        nome_cliente: nfeDataAtualizada.destinatario.nome || 'Cliente não informado',
+        valor_total: nfeDataAtualizada.totais.valor_total || 0,
         data_rascunho: new Date().toISOString(),
         usuario_rascunho: userData.user.id,
         observacoes_rascunho: 'Rascunho salvo automaticamente',
-        // Salvar dados completos da NFe em JSON
-        dados_nfe: JSON.stringify(nfeData)
+        // Salvar dados completos da NFe em JSON (com número e código atualizados)
+        dados_nfe: JSON.stringify(nfeDataAtualizada)
       };
 
       let rascunhoSalvo;
@@ -1029,9 +1356,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         setRascunhoId(data.id);
       }
 
+      // Atualizar estado da NFe com os dados atualizados
+      setNfeData(nfeDataAtualizada);
+
       // Salvar itens se existirem
-      if (nfeData.produtos.length > 0) {
-        const itensRascunho = nfeData.produtos.map((produto, index) => ({
+      if (nfeDataAtualizada.produtos.length > 0) {
+        const itensRascunho = nfeDataAtualizada.produtos.map((produto, index) => ({
           empresa_id: usuarioData.empresa_id, // Campo obrigatório
           usuario_id: userData.user.id, // Campo obrigatório
           pdv_id: rascunhoSalvo.id,
@@ -1081,6 +1411,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       console.log('🎯 Evento loadRascunho recebido:', rascunho);
 
       // Marcar que estamos editando um rascunho e armazenar o ID
+      console.log('🔄 ATIVANDO modo de edição - Geração automática será DESABILITADA');
       setIsEditingRascunho(true);
       setRascunhoId(rascunho.id);
 
@@ -1092,6 +1423,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
           // Aguardar um pouco para garantir que os dados da empresa foram carregados primeiro
           setTimeout(() => {
+            console.log('🔄 Carregando rascunho - Número:', dadosCarregados.identificacao?.numero, 'Código:', dadosCarregados.identificacao?.codigo_numerico);
             setNfeData(prev => ({
               ...dadosCarregados,
               empresa: prev.empresa || dadosCarregados.empresa // Preservar empresa se já carregada
@@ -1110,6 +1442,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
           // Aguardar um pouco para garantir que os dados da empresa foram carregados primeiro
           setTimeout(() => {
+            console.log('🔄 Carregando rascunho básico - Número:', rascunho.numero_documento);
             setNfeData(prev => ({
               ...prev,
               identificacao: {
@@ -1144,16 +1477,65 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       }
     };
 
-    // Adicionar listener
+    // Listener para resetar flag de edição (nova NFe)
+    const handleResetEditingFlag = () => {
+      console.log('🆕 Evento resetEditingFlag recebido - Resetando estado de edição');
+      console.log('✅ DESATIVANDO modo de edição - Geração automática será HABILITADA');
+      setIsEditingRascunho(false);
+      setRascunhoId(null);
+
+      // Limpar dados do formulário para nova NFe
+      setNfeData(prev => ({
+        ...prev,
+        identificacao: {
+          ...prev.identificacao,
+          numero: '', // Limpar número para permitir nova geração
+          codigo_numerico: '', // Limpar código para permitir nova geração
+          natureza_operacao: 'Venda de Mercadoria',
+          informacao_adicional: ''
+        },
+        destinatario: {
+          documento: '',
+          nome: '',
+          endereco: '',
+          numero: '',
+          bairro: '',
+          cidade: '',
+          uf: '',
+          cep: '',
+          emails: [],
+          ie_destinatario: '9',
+          operacao: '1',
+          consumidor_final: '1'
+        },
+        produtos: [],
+        pagamentos: [],
+        totais: {
+          valor_produtos: 0,
+          valor_desconto: 0,
+          valor_total: 0
+        }
+      }));
+
+      // Buscar próximo número após resetar
+      setTimeout(() => {
+        console.log('🔍 Chamando buscarProximoNumero após reset...');
+        buscarProximoNumero();
+      }, 200);
+    };
+
+    // Adicionar listeners
     window.addEventListener('loadRascunho', handleLoadRascunho as EventListener);
+    window.addEventListener('resetEditingFlag', handleResetEditingFlag as EventListener);
 
     // Cleanup
     return () => {
       window.removeEventListener('loadRascunho', handleLoadRascunho as EventListener);
+      window.removeEventListener('resetEditingFlag', handleResetEditingFlag as EventListener);
     };
   }, []);
 
-  // Buscar dados da empresa e próximo número
+  // Buscar dados da empresa (executar apenas uma vez)
   useEffect(() => {
     const loadEmpresaData = async () => {
       try {
@@ -1168,7 +1550,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
 
         if (!usuarioData?.empresa_id) return;
 
-        // Carregar dados da empresa
+        // Carregar dados da empresa incluindo certificado digital
         const { data: empresaData } = await supabase
           .from('empresas')
           .select('*')
@@ -1199,18 +1581,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         }
 
         if (empresaData) {
-          // Só buscar próximo número NFe se NÃO for edição de rascunho
-          let proximoNumero = '';
-          if (!isEditingRascunho) {
-            const numero = await buscarProximoNumeroNFe(usuarioData.empresa_id, 55, 1);
-            proximoNumero = numero.toString();
-          }
-
           setNfeData(prev => ({
             ...prev,
             empresa: {
               id: empresaData.id,
-              cnpj: empresaData.cnpj,
+              cnpj: empresaData.documento, // Corrigido: campo correto é 'documento'
               name: empresaData.razao_social,
               nome_fantasia: empresaData.nome_fantasia,
               inscricao_estadual: empresaData.inscricao_estadual,
@@ -1222,12 +1597,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
               state: empresaData.uf,
               zip_code: empresaData.cep,
               codigo_municipio: empresaData.codigo_municipio,
-              phone: empresaData.telefone
-            },
-            identificacao: {
-              ...prev.identificacao,
-              // Só atualizar o número se não for edição de rascunho E se o número atual estiver vazio
-              ...(isEditingRascunho || prev.identificacao.numero ? {} : { numero: proximoNumero })
+              phone: empresaData.telefone,
+              // Campos do certificado digital
+              certificado_digital_path: empresaData.certificado_digital_path,
+              certificado_digital_status: empresaData.certificado_digital_status
             }
           }));
         }
@@ -1237,7 +1610,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
     };
 
     loadEmpresaData();
-  }, [isEditingRascunho]); // Reagir à mudança da flag de edição
+  }, []); // Executar apenas uma vez
+
+  // REMOVIDO: useEffect de geração automática de números
+  // Agora os números devem ser preenchidos manualmente pelo usuário
+
+  // Monitor do estado de edição para logs de debugging
+  useEffect(() => {
+    if (isEditingRascunho) {
+      console.log('🔒 ESTADO DE EDIÇÃO ATIVADO - Todas as gerações automáticas estão BLOQUEADAS');
+    } else {
+      console.log('🔓 ESTADO DE EDIÇÃO DESATIVADO - Geração automática pode ser executada');
+    }
+  }, [isEditingRascunho]);
 
   // Função para verificar status da API NFe
   const checkApiStatus = async () => {
@@ -1338,6 +1723,18 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
   // Função para emitir NFe
   const handleEmitirNFe = async () => {
     try {
+      // Validação prévia dos serviços antes de abrir o modal
+      showToast('🔍 Verificando status da API e SEFAZ...', 'info', 3000);
+
+      const servicesOk = await validateServicesBeforeEmission();
+      if (!servicesOk) {
+        // Se os serviços não estão OK, a função já exibiu a mensagem de erro
+        return;
+      }
+
+      // Se chegou aqui, os serviços estão funcionando
+      showToast('✅ API e SEFAZ operacionais. Iniciando emissão...', 'success', 2000);
+
       setIsLoading(true);
       setShowProgressModal(true);
       resetProgress();
@@ -1356,28 +1753,40 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
       if (nfeData.empresa) {
         addLog(`Nome empresa: ${nfeData.empresa.name || 'N/A'}`);
         addLog(`CNPJ: ${nfeData.empresa.cnpj || 'N/A'}`);
-        addLog(`Certificado digital: ${nfeData.empresa.certificado_digital ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
+        // Verificar se certificado está configurado baseado no path e status
+        const certificadoConfigurado = nfeData.empresa.certificado_digital_path &&
+                                     nfeData.empresa.certificado_digital_status !== 'nao_configurado';
+        addLog(`Certificado digital: ${certificadoConfigurado ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
+        if (certificadoConfigurado) {
+          addLog(`Status certificado: ${nfeData.empresa.certificado_digital_status || 'N/A'}`);
+        }
       }
 
       if (!nfeData.empresa) {
         validationErrors.push('Dados da empresa não carregados');
       }
 
-      // Temporariamente removendo validação de certificado digital para debug
-      // TODO: Reativar após configurar certificados
-      /*
-      if (!nfeData.empresa?.certificado_digital) {
+      // Validação do certificado digital
+      const certificadoConfigurado = nfeData.empresa?.certificado_digital_path &&
+                                   nfeData.empresa?.certificado_digital_status !== 'nao_configurado';
+
+      if (!certificadoConfigurado) {
         validationErrors.push('Certificado digital não configurado para a empresa');
+        addLog('❌ Certificado digital é obrigatório para emissão de NFe');
       }
 
       // Validação específica para ambiente de produção
       if (ambienteNFe === 'producao') {
-        if (!nfeData.empresa?.certificado_digital) {
+        if (!certificadoConfigurado) {
           validationErrors.push('Certificado digital REAL é obrigatório para ambiente de produção');
+          addLog('❌ Ambiente de produção requer certificado digital válido');
         }
-        // Adicionar outras validações específicas de produção se necessário
+        // Verificar se certificado não está vencido
+        if (nfeData.empresa?.certificado_digital_status === 'vencido') {
+          validationErrors.push('Certificado digital está vencido');
+          addLog('❌ Certificado digital vencido não pode ser usado em produção');
+        }
       }
-      */
 
       // 4. Validação do destinatário
       addLog('👤 Validando destinatário...');
@@ -1472,6 +1881,38 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         setShowProgressModal(true); // Reabrir modal
       }
 
+      // Usar código numérico já gerado ou gerar novo se necessário
+      const numeroNFe = parseInt(nfeData.identificacao.numero) || 1;
+      const serieNFe = parseInt(nfeData.identificacao.serie) || 1;
+      const ambiente = ambienteNFe;
+
+      let codigoNumerico = nfeData.identificacao.codigo_numerico;
+
+      // Verificar se há código gerado
+      if (!codigoNumerico) {
+        if (isEditingRascunho) {
+          // Se está editando um rascunho e não tem código, é um erro
+          const erro = 'Rascunho sem código numérico válido. Salve como rascunho novamente para gerar um código.';
+          validationErrors.push(erro);
+          addLog(`❌ ${erro}`);
+          updateStep('validacao', 'error', 'Código numérico ausente');
+          return;
+        } else {
+          // Se é uma nova NFe, gerar código
+          addLog('🔢 Gerando código numérico único...');
+          codigoNumerico = await gerarCodigoNumericoUnico(
+            nfeData.empresa.id,
+            numeroNFe,
+            serieNFe,
+            ambiente,
+            55 // NFe modelo 55
+          );
+          addLog(`✅ Código numérico reservado: ${codigoNumerico}`);
+        }
+      } else {
+        addLog(`✅ Usando código pré-gerado: ${codigoNumerico}`);
+      }
+
       // Preparar payload conforme documentação da API
       const payload = {
         ambiente: ambienteNFe === 'producao' ? 1 : 2, // 1=Produção, 2=Homologação
@@ -1496,7 +1937,14 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
           natureza_operacao: nfeData.identificacao.natureza_operacao
         },
         pagamentos: nfeData.pagamentos,
-        informacao_adicional: nfeData.identificacao.informacao_adicional || ''
+        informacao_adicional: nfeData.identificacao.informacao_adicional || '',
+        // Incluir dados de identificação da NFe
+        identificacao: {
+          numero: numeroNFe,
+          serie: parseInt(nfeData.identificacao.serie) || 1,
+          codigo_numerico: codigoNumerico,
+          natureza_operacao: nfeData.identificacao.natureza_operacao
+        }
       };
 
       // ETAPA 2: GERAÇÃO DO XML
@@ -1638,6 +2086,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         status: 'autorizada'
       });
 
+      // Marcar código numérico como usado
+      addLog('🔢 Marcando código numérico como usado...');
+      await marcarCodigoComoUsado(codigoNumerico, result.data.chave, nfeData.empresa.id);
+
       // Marcar NFe como emitida
       setNfeEmitida(true);
 
@@ -1653,6 +2105,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
         onBack(); // Voltar para a grid de NFe
       }, 2000);
     } catch (error) {
+      // Liberar código numérico reservado em caso de erro
+      if (typeof codigoNumerico !== 'undefined') {
+        addLog('🔄 Liberando código numérico reservado...');
+        await liberarCodigoReservado(codigoNumerico, nfeData.empresa.id);
+      }
+
       // Adicionar erro aos logs
       addLog('❌ ERRO CRÍTICO NO PROCESSO');
       addLog(`Detalhes: ${error.message || 'Erro desconhecido'}`);
@@ -1749,6 +2207,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
             data={nfeData.identificacao}
             onChange={(data) => setNfeData(prev => ({ ...prev, identificacao: data }))}
             naturezasOperacao={naturezasOperacao}
+            isEditingRascunho={isEditingRascunho}
           />
         );
       case 'destinatario':
@@ -1832,6 +2291,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void }> = ({ onBack,
             data={nfeData.identificacao}
             onChange={(data) => setNfeData(prev => ({ ...prev, identificacao: data }))}
             naturezasOperacao={naturezasOperacao}
+            isEditingRascunho={isEditingRascunho}
           />
         );
     }
@@ -2311,16 +2771,9 @@ const IdentificacaoSection: React.FC<{
                 type="number"
                 value={data.numero}
                 onChange={(e) => updateField('numero', e.target.value)}
-                placeholder="Próximo número disponível"
+                placeholder="Digite o número da NFe"
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
               />
-              {data.numero && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                  <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded" title="Número carregado automaticamente">
-                    Auto
-                  </span>
-                </div>
-              )}
             </div>
           </div>
 
@@ -2354,10 +2807,10 @@ const IdentificacaoSection: React.FC<{
             </label>
             <input
               type="text"
-              value="Gerado pela API"
+              value={data.codigo_numerico || "Gerando..."}
               readOnly
               className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-400 cursor-not-allowed"
-              title="Código Numérico que compõe a Chave de Acesso (8 dígitos)"
+              title="Código Numérico que compõe a Chave de Acesso (8 dígitos) - Gerado automaticamente"
             />
           </div>
 
