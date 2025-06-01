@@ -21,6 +21,7 @@ interface NFe {
   data_rascunho?: string;
   usuario_rascunho?: string;
   observacoes_rascunho?: string;
+  ambiente?: 'homologacao' | 'producao'; // Ambiente da NFe
 }
 
 const NfePage: React.FC = () => {
@@ -316,16 +317,106 @@ const NfePage: React.FC = () => {
     }
 
     try {
-      // ✅ Usar novo endpoint serve-file.php
+      showToast('Gerando PDF da NFe...', 'info');
+
+      // ✅ PRIMEIRO: Tentar gerar o PDF via API
+      const gerarPdfUrl = `https://apinfe.nexopdv.com/gerar-pdf.php`;
+
+      const response = await fetch(gerarPdfUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chave: nfe.chave_nfe,
+          empresa_id: 'acd26a4f-7220-405e-9c96-faffb7e6480e' // ID da empresa
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.sucesso) {
+        throw new Error(result.erro || 'Erro ao gerar PDF');
+      }
+
+      // ✅ SEGUNDO: Abrir o PDF gerado
       const pdfUrl = `https://apinfe.nexopdv.com/serve-file.php?type=pdf&chave=${nfe.chave_nfe}`;
 
-      // Abrir PDF em nova aba
-      window.open(pdfUrl, '_blank');
+      // Aguardar um pouco para o arquivo ser salvo
+      setTimeout(() => {
+        window.open(pdfUrl, '_blank');
+        showToast('PDF gerado e aberto em nova aba', 'success');
+      }, 1000);
 
-      showToast('PDF aberto em nova aba', 'success');
     } catch (error) {
       console.error('Erro ao visualizar PDF:', error);
-      showToast(`Erro ao visualizar PDF: ${error.message}`, 'error');
+
+      // ✅ FALLBACK: Tentar abrir diretamente (caso já exista)
+      try {
+        const pdfUrl = `https://apinfe.nexopdv.com/serve-file.php?type=pdf&chave=${nfe.chave_nfe}`;
+        window.open(pdfUrl, '_blank');
+        showToast('PDF aberto em nova aba', 'success');
+      } catch (fallbackError) {
+        showToast(`Erro ao gerar/visualizar PDF: ${error.message}`, 'error');
+      }
+    }
+  };
+
+  // ✅ FUNÇÃO: Copiar Chave da NFe
+  const handleCopiarChave = async (nfe: NFe) => {
+    if (nfe.status_nfe !== 'autorizada') {
+      showToast('Apenas NFe autorizadas possuem chave disponível', 'error');
+      return;
+    }
+
+    if (!nfe.chave_nfe) {
+      showToast('Chave da NFe não encontrada', 'error');
+      return;
+    }
+
+    try {
+      // Copiar chave para a área de transferência
+      await navigator.clipboard.writeText(nfe.chave_nfe);
+
+      showToast(
+        `Chave NFe copiada!\n\n${nfe.chave_nfe}\n\nA chave foi copiada para a área de transferência.`,
+        'success',
+        6000
+      );
+    } catch (error) {
+      // Fallback para navegadores que não suportam clipboard API
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = nfe.chave_nfe;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+
+        showToast(
+          `Chave NFe copiada!\n\n${nfe.chave_nfe}\n\nA chave foi copiada para a área de transferência.`,
+          'success',
+          6000
+        );
+      } catch (fallbackError) {
+        console.error('Erro ao copiar chave:', fallbackError);
+
+        // Mostrar a chave em um prompt para o usuário copiar manualmente
+        prompt(
+          'Chave da NFe (Ctrl+C para copiar):',
+          nfe.chave_nfe
+        );
+
+        showToast('Chave exibida para cópia manual', 'info');
+      }
     }
   };
 
@@ -411,6 +502,14 @@ const NfePage: React.FC = () => {
                   </button>
 
                   <button
+                    onClick={() => handleAction(() => handleCopiarChave(nfe))}
+                    className="w-full px-4 py-2 text-left text-sm text-yellow-400 hover:bg-gray-700 flex items-center gap-2"
+                  >
+                    <Copy size={14} />
+                    Chave NFe
+                  </button>
+
+                  <button
                     onClick={() => handleAction(() => handleReenviarEmail(nfe))}
                     className="w-full px-4 py-2 text-left text-sm text-green-400 hover:bg-gray-700 flex items-center gap-2"
                   >
@@ -447,41 +546,7 @@ const NfePage: React.FC = () => {
     );
   };
 
-  // Função para criar toasts
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', duration: number = 4000) => {
-    const toast = document.createElement('div');
-    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
-    const icon = type === 'success'
-      ? '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>'
-      : type === 'error'
-      ? '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>'
-      : '<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>';
 
-    toast.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-start gap-2 transform transition-all duration-300 translate-x-0 max-w-md`;
-    toast.innerHTML = `
-      <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-        ${icon}
-      </svg>
-      <span class="whitespace-pre-line text-sm leading-relaxed">${message}</span>
-    `;
-
-    document.body.appendChild(toast);
-
-    // Animação de entrada
-    setTimeout(() => {
-      toast.style.transform = 'translateX(0)';
-    }, 10);
-
-    // Remover toast
-    setTimeout(() => {
-      toast.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (document.body.contains(toast)) {
-          document.body.removeChild(toast);
-        }
-      }, 300);
-    }, duration);
-  };
 
 
 
@@ -795,8 +860,11 @@ const NfePage: React.FC = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-[10%] whitespace-nowrap">
                       Número
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-[12%] whitespace-nowrap">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-[10%] whitespace-nowrap">
                       Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-[10%] whitespace-nowrap">
+                      Ambiente
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-[15%] whitespace-nowrap">
                       Natureza Op.
@@ -832,9 +900,18 @@ const NfePage: React.FC = () => {
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-white w-[10%]">
                         {nfe.numero_documento || '-'}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap w-[12%]">
+                      <td className="px-4 py-3 whitespace-nowrap w-[10%]">
                         <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(nfe.status_nfe)}`}>
                           {getStatusLabel(nfe.status_nfe)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap w-[10%]">
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${
+                          (nfe.ambiente || 'homologacao') === 'producao'
+                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                            : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                        }`}>
+                          {(nfe.ambiente || 'homologacao') === 'producao' ? 'PRODUÇÃO' : 'HOMOLOG.'}
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-white w-[15%]">
@@ -883,15 +960,18 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     { id: 'validacao', label: 'Validando dados da NFe', status: 'pending', message: '' },
     { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
     { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
+    { id: 'validacao_xml', label: 'Validando geração do XML', status: 'pending', message: '' },
+    { id: 'validacao_pdf', label: 'Validando geração do PDF', status: 'pending', message: '' },
     { id: 'banco', label: 'Salvando no banco de dados', status: 'pending', message: '' },
     { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
   ]);
   const [logs, setLogs] = useState<string[]>([]);
   const [dadosAutorizacao, setDadosAutorizacao] = useState({
-    chave_acesso: '',
-    protocolo_uso: '',
-    data_autorizacao: '',
-    status: ''
+    chave: '',
+    protocolo: '',
+    dataAutorizacao: '',
+    status: '',
+    ambiente: 'homologacao'
   });
 
   // Hook para logs da API
@@ -1298,6 +1378,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
   // Função para lidar com tentativa de sair
   const handleTryExit = () => {
+    // ✅ Se estiver em modo visualização, sair diretamente sem modal
+    if (isViewMode) {
+      onBack();
+      return;
+    }
+
+    // Para modo de edição/criação, verificar se há dados não salvos
     if (hasUnsavedData() && !nfeEmitida) {
       setShowExitModal(true);
     } else {
@@ -1714,6 +1801,34 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           // Se não há dados_nfe, carregar dados básicos + itens do banco
           console.log('⚠️ Sem dados_nfe salvos, carregando dados básicos + itens');
           await carregarDadosBasicosComItens(nfe);
+        }
+
+        // ✅ SEMPRE carregar dados de autorização para NFes autorizadas
+        console.log('🔍 VERIFICANDO DADOS DE AUTORIZAÇÃO:');
+        console.log('  - status_nfe:', nfe.status_nfe);
+        console.log('  - chave_nfe:', nfe.chave_nfe);
+        console.log('  - protocolo_nfe:', nfe.protocolo_nfe);
+        console.log('  - data_emissao_nfe:', nfe.data_emissao_nfe);
+
+        if (nfe.status_nfe === 'autorizada' && (nfe.chave_nfe || nfe.protocolo_nfe)) {
+          console.log('🔐 ✅ CONDIÇÕES ATENDIDAS - Carregando dados de autorização da NFe');
+          const dadosAuth = {
+            chave: nfe.chave_nfe || '',
+            protocolo: nfe.protocolo_nfe || '',
+            status: 'autorizada',
+            dataAutorizacao: nfe.data_emissao_nfe || nfe.created_at || '',
+            ambiente: 'homologacao' // Pode ser determinado pela chave ou configuração
+          };
+          console.log('🔐 Dados de autorização preparados:', dadosAuth);
+
+          setTimeout(() => {
+            console.log('🔐 APLICANDO dados de autorização...');
+            setDadosAutorizacao(dadosAuth);
+          }, 200);
+        } else {
+          console.log('❌ CONDIÇÕES NÃO ATENDIDAS para carregar dados de autorização');
+          console.log('  - É autorizada?', nfe.status_nfe === 'autorizada');
+          console.log('  - Tem chave ou protocolo?', !!(nfe.chave_nfe || nfe.protocolo_nfe));
         }
       } catch (error) {
         console.error('❌ Erro geral ao carregar NFe para visualização:', error);
@@ -2418,7 +2533,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       updateStep('geracao', 'success', 'XML gerado');
       updateStep('sefaz', 'success', 'Autorizada pela SEFAZ');
 
-      // ETAPA 4: SALVAMENTO NO BANCO
+      // ETAPA 4: VALIDAÇÃO DO XML
+      updateStep('validacao_xml', 'loading');
+      addLog('🔍 Validando se o XML foi gerado corretamente...');
+      await validarArquivoXML(result.data.chave);
+      updateStep('validacao_xml', 'success', 'XML validado com sucesso');
+
+      // ETAPA 5: VALIDAÇÃO DO PDF
+      updateStep('validacao_pdf', 'loading');
+      addLog('🔍 Validando se o PDF foi gerado corretamente...');
+      await validarArquivoPDF(result.data.chave);
+      updateStep('validacao_pdf', 'success', 'PDF validado com sucesso');
+
+      // ETAPA 6: SALVAMENTO NO BANCO
       updateStep('banco', 'loading');
       addLog('Salvando NFe no banco de dados...');
 
@@ -2433,7 +2560,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         addLog('NFe foi autorizada pela SEFAZ, mas pode não aparecer na listagem');
       }
 
-      // ETAPA 5: FINALIZAÇÃO
+      // ETAPA 7: FINALIZAÇÃO
       updateStep('finalizacao', 'loading');
       addLog('Finalizando processo...');
 
@@ -2516,6 +2643,60 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     }
   };
 
+  // ✅ FUNÇÃO: Validar se o arquivo XML foi gerado corretamente
+  const validarArquivoXML = async (chave: string) => {
+    try {
+      addLog('📄 Verificando se o arquivo XML existe no servidor...');
+
+      const xmlUrl = `https://apinfe.nexopdv.com/serve-file.php?type=xml&chave=${chave}`;
+
+      const response = await fetch(xmlUrl, { method: 'HEAD' });
+
+      if (!response.ok) {
+        throw new Error(`XML não encontrado no servidor (Status: ${response.status})`);
+      }
+
+      // Verificar se o Content-Type é XML
+      const contentType = response.headers.get('Content-Type');
+      if (!contentType || !contentType.includes('xml')) {
+        throw new Error('Arquivo encontrado mas não é um XML válido');
+      }
+
+      addLog('✅ XML validado: arquivo existe e é válido');
+
+    } catch (error) {
+      addLog(`❌ ERRO na validação do XML: ${error.message}`);
+      throw new Error(`Falha na validação do XML: ${error.message}`);
+    }
+  };
+
+  // ✅ FUNÇÃO: Validar se o arquivo PDF foi gerado corretamente
+  const validarArquivoPDF = async (chave: string) => {
+    try {
+      addLog('📄 Verificando se o arquivo PDF existe no servidor...');
+
+      const pdfUrl = `https://apinfe.nexopdv.com/serve-file.php?type=pdf&chave=${chave}`;
+
+      const response = await fetch(pdfUrl, { method: 'HEAD' });
+
+      if (!response.ok) {
+        throw new Error(`PDF não encontrado no servidor (Status: ${response.status})`);
+      }
+
+      // Verificar se o Content-Type é PDF
+      const contentType = response.headers.get('Content-Type');
+      if (!contentType || !contentType.includes('pdf')) {
+        throw new Error('Arquivo encontrado mas não é um PDF válido');
+      }
+
+      addLog('✅ PDF validado: arquivo existe e é válido');
+
+    } catch (error) {
+      addLog(`❌ ERRO na validação do PDF: ${error.message}`);
+      throw new Error(`Falha na validação do PDF: ${error.message}`);
+    }
+  };
+
   // Função para salvar NFe no banco de dados
   const salvarNFeNoBanco = async (nfeApiData: any) => {
     try {
@@ -2547,7 +2728,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         // ✅ ADICIONAR: Salvar dados completos da NFe para visualização
         dados_nfe: JSON.stringify(nfeData),
         // ✅ CORRIGIDO: Campo correto é informacoes_adicionais (plural)
-        informacoes_adicionais: nfeData.identificacao.informacao_adicional || ''
+        informacoes_adicionais: nfeData.identificacao.informacao_adicional || '',
+        // ✅ NOVO: Salvar ambiente da NFe
+        ambiente: ambienteNFe
       };
 
       let error;
@@ -2630,8 +2813,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     { id: 'chaves_ref', label: 'Chaves Ref.', icon: FileText },
     { id: 'transportadora', label: 'Transportadora', icon: FileText },
     { id: 'intermediador', label: 'Intermediador', icon: FileText },
-    // Só mostrar a aba de Autorização após a NFe ser emitida
-    ...(nfeEmitida ? [{ id: 'autorizacao', label: 'Autorização', icon: FileText }] : []),
+    // Só mostrar a aba de Autorização após a NFe ser emitida OU em modo visualização de NFe autorizada
+    ...(nfeEmitida || isViewMode ? [{ id: 'autorizacao', label: 'Autorização', icon: FileText }] : []),
   ];
 
   const renderContent = () => {
@@ -2719,6 +2902,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           <AutorizacaoSection
             dados={dadosAutorizacao}
             onChange={setDadosAutorizacao}
+            isViewMode={isViewMode}
           />
         );
       default:
@@ -4906,7 +5090,7 @@ const AutorizacaoSection: React.FC<{ dados: any; onChange: (dados: any) => void 
           <div>
             <h3 className="text-lg font-medium text-white">NFe Autorizada com Sucesso</h3>
             <p className="text-sm text-gray-400">
-              {dados.data_autorizacao && `Autorizada em ${formatarData(dados.data_autorizacao)}`}
+              {dados.dataAutorizacao && `Autorizada em ${formatarData(dados.dataAutorizacao)}`}
             </p>
           </div>
         </div>
@@ -4919,12 +5103,12 @@ const AutorizacaoSection: React.FC<{ dados: any; onChange: (dados: any) => void 
             <div className="relative">
               <input
                 type="text"
-                value={formatarChave(dados.chave_acesso)}
+                value={formatarChave(dados.chave)}
                 readOnly
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none font-mono text-sm"
               />
               <button
-                onClick={() => navigator.clipboard.writeText(dados.chave_acesso)}
+                onClick={() => navigator.clipboard.writeText(dados.chave)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white"
                 title="Copiar chave"
               >
@@ -4940,12 +5124,12 @@ const AutorizacaoSection: React.FC<{ dados: any; onChange: (dados: any) => void 
             <div className="relative">
               <input
                 type="text"
-                value={dados.protocolo_uso}
+                value={dados.protocolo}
                 readOnly
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none"
               />
               <button
-                onClick={() => navigator.clipboard.writeText(dados.protocolo_uso)}
+                onClick={() => navigator.clipboard.writeText(dados.protocolo)}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white"
                 title="Copiar protocolo"
               >
