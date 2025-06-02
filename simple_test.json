@@ -1,0 +1,21 @@
+{
+  "empresa": {
+    "id": "acd26a4f-7220-405e-9c96-faffb7e6480e"
+  },
+  "cliente": {
+    "nome": "Teste Simples"
+  },
+  "produtos": [
+    {
+      "descricao": "Produto Teste",
+      "quantidade": 1,
+      "valor_unitario": 10.00,
+      "valor_total": 10.00
+    }
+  ],
+  "totais": {
+    "valor_produtos": 10.00,
+    "valor_total": 10.00
+  },
+  "ambiente": 2
+}

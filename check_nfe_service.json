@@ -1,0 +1,3 @@
+{
+  "command": "ls -la /var/www/nfe-api/src/Services/NFeServiceCompleto.php && echo '--- PRIMEIRAS LINHAS ---' && head -10 /var/www/nfe-api/src/Services/NFeServiceCompleto.php"
+}

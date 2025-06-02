@@ -1,0 +1,3 @@
+{
+  "command": "wc -l /var/www/nfe-api/src/Services/NFeServiceCompleto.php && echo '--- FINAL DO ARQUIVO ---' && tail -5 /var/www/nfe-api/src/Services/NFeServiceCompleto.php"
+}

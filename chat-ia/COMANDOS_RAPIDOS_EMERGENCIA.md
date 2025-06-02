@@ -1,8 +1,53 @@
 # ⚡ COMANDOS RÁPIDOS DE EMERGÊNCIA
 
+**Data:** 02/06/2025
+**Status:** EMERGÊNCIA - API NFe erro 500 + SupabaseService implementado
+
 ## 🚨 **PARA SITUAÇÕES CRÍTICAS**
 
 Este documento contém comandos prontos para resolver problemas rapidamente.
+
+---
+
+## 🔥 **EMERGÊNCIA ATUAL: API NFe Erro 500**
+
+### **Diagnóstico Rápido:**
+```bash
+# Verificar status da API
+curl -s https://apinfe.nexopdv.com/api/status
+
+# Verificar logs de erro
+tail -50 /var/log/nginx/nfe-api.error.log
+tail -50 /var/log/php8.3-fpm.log
+
+# Verificar se SupabaseService existe
+ls -la /var/www/nfe-api/src/Services/SupabaseService.php
+
+# Testar SupabaseService isoladamente
+php -r "
+require_once '/var/www/nfe-api/src/Services/SupabaseService.php';
+try {
+    \$s = new \NexoNFe\Services\SupabaseService();
+    \$e = \$s->buscarEmpresa('acd26a4f-7220-405e-9c96-faffb7e6480e');
+    echo 'OK: ' . \$e['razao_social'];
+} catch (Exception \$ex) {
+    echo 'ERRO: ' . \$ex->getMessage();
+}
+"
+```
+
+### **Teste de Payload:**
+```bash
+curl -X POST https://apinfe.nexopdv.com/api/nfe-completa \
+  -H "Content-Type: application/json" \
+  -d '{
+    "empresa": {"id": "acd26a4f-7220-405e-9c96-faffb7e6480e"},
+    "cliente": {"nome": "Teste"},
+    "produtos": [{"descricao": "Produto", "quantidade": 1, "valor_unitario": 10, "valor_total": 10}],
+    "totais": {"valor_produtos": 10, "valor_total": 10},
+    "ambiente": 2
+  }'
+```
 
 ---
 
@@ -183,32 +228,23 @@ openssl pkcs12 -in certificado.pfx -nokeys -passin pass:senha | openssl x509 -no
 
 ## 🔥 **EMERGÊNCIA 7: Numeração NFe Duplicada**
 
-### **Limpar Controle:**
-```sql
--- No Supabase SQL Editor
-DELETE FROM nfe_numero_controle 
-WHERE status = 'reservado' 
-AND created_at < NOW() - INTERVAL '1 hour';
-```
+### **✅ ATUALIZADO - Tabela nfe_numero_controle REMOVIDA**
 
 ### **Verificar Último Número:**
 ```sql
-SELECT MAX(numero_documento) 
-FROM pdv 
-WHERE empresa_id = 'uuid-empresa' 
-AND modelo_documento = 55;
+-- ✅ NOVA CONSULTA - Dados reais da tabela PDV
+SELECT MAX(numero_documento)
+FROM pdv
+WHERE empresa_id = 'uuid-empresa'
+AND modelo_documento = 55
+AND status_nfe != 'rascunho';
 ```
 
-### **Regenerar Código:**
+### **Regenerar Código (Simplificado):**
 ```typescript
-// No frontend - console do navegador
-const novocodigo = await gerarCodigoNumericoUnico(
-  'uuid-empresa',
-  1, // numero
-  1, // serie
-  2, // ambiente (homologacao)
-  55 // modelo NFe
-);
+// ✅ NOVO MÉTODO - Geração simples
+const novocodigo = Math.floor(10000000 + Math.random() * 90000000).toString();
+console.log('Código gerado:', novocodigo);
 ```
 
 ---

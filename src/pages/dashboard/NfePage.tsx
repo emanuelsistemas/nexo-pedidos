@@ -560,8 +560,10 @@ const NfePage: React.FC = () => {
 
     // Disparar evento para resetar flag de edição no formulário
     setTimeout(() => {
-      console.log('🔄 Disparando evento resetEditingFlag');
-      const event = new CustomEvent('resetEditingFlag');
+      console.log('🔄 Disparando evento resetEditingFlag para NOVA NFe');
+      const event = new CustomEvent('resetEditingFlag', {
+        detail: { isNewNfe: true } // ✅ Indicar que é uma nova NFe
+      });
       window.dispatchEvent(event);
     }, 100);
   };
@@ -649,6 +651,15 @@ const NfePage: React.FC = () => {
       onBack={() => {
         setShowForm(false);
         setIsViewMode(false); // Resetar modo de visualização ao voltar
+
+        // ✅ CORREÇÃO: Disparar evento de reset SEM buscar próximo número
+        setTimeout(() => {
+          console.log('🔙 Voltando do formulário - Resetando SEM buscar número');
+          const event = new CustomEvent('resetEditingFlag', {
+            detail: { isNewNfe: false } // ✅ NÃO é nova NFe, apenas saindo
+          });
+          window.dispatchEvent(event);
+        }, 100);
       }}
       onSave={loadNfes}
       isViewMode={isViewMode}
@@ -1055,6 +1066,18 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
   const buscarProximoNumero = async () => {
     console.log('🔍 Iniciando busca do próximo número...');
 
+    // ✅ VALIDAÇÃO EXTRA: Só buscar se não estiver editando rascunho
+    if (isEditingRascunho) {
+      console.log('🚫 Editando rascunho - Pulando busca de próximo número');
+      return;
+    }
+
+    // ✅ VALIDAÇÃO EXTRA: Só buscar se número atual estiver vazio
+    if (nfeData.identificacao.numero && nfeData.identificacao.numero !== '') {
+      console.log('🚫 Número já preenchido - Pulando busca:', nfeData.identificacao.numero);
+      return;
+    }
+
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
@@ -1077,14 +1100,15 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       console.log('✅ Empresa encontrada:', usuarioData.empresa_id);
 
-      // ✅ CORREÇÃO: Buscar último número na tabela nfe_numero_controle
+      // ✅ CORREÇÃO: Buscar último número na tabela PDV (dados reais)
       const { data, error } = await supabase
-        .from('nfe_numero_controle')
-        .select('numero_nfe')
+        .from('pdv')
+        .select('numero_documento')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('modelo_documento', 55) // NFe modelo 55
         .eq('ambiente', ambienteNFe) // Considerar ambiente
-        .order('numero_nfe', { ascending: false })
+        .not('status_nfe', 'eq', 'rascunho') // Ignorar rascunhos
+        .order('numero_documento', { ascending: false })
         .limit(1);
 
       if (error) {
@@ -1092,35 +1116,23 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         return;
       }
 
-      console.log('📋 Dados encontrados na tabela nfe_numero_controle:', data);
+      console.log('📋 Dados encontrados na tabela PDV (dados reais):', data);
 
       // Se não encontrou nenhum registro, começar do 1
       let proximoNumero = 1;
-      if (data && data.length > 0 && data[0].numero_nfe) {
-        proximoNumero = data[0].numero_nfe + 1;
-        console.log(`📊 Último número encontrado: ${data[0].numero_nfe}`);
+      if (data && data.length > 0 && data[0].numero_documento) {
+        proximoNumero = data[0].numero_documento + 1;
+        console.log(`📊 Último número encontrado: ${data[0].numero_documento}`);
       } else {
         console.log('📊 Nenhum registro encontrado, iniciando do número 1');
       }
 
       console.log(`🎯 Próximo número NFe: ${proximoNumero}`);
 
-      // Gerar código numérico também
-      console.log('🔢 Gerando código numérico para nova NFe...');
-      let codigoGerado = '';
-      try {
-        codigoGerado = await gerarCodigoNumericoUnico(
-          usuarioData.empresa_id,
-          proximoNumero,
-          1,
-          ambienteNFe,
-          55
-        );
-        console.log(`✅ Código numérico gerado: ${codigoGerado}`);
-      } catch (error) {
-        console.error('❌ Erro ao gerar código numérico:', error);
-        codigoGerado = 'ERRO_GERACAO';
-      }
+      // ✅ SIMPLIFICADO: Gerar código numérico simples (8 dígitos aleatórios)
+      console.log('🔢 Gerando código numérico simples para nova NFe...');
+      const codigoGerado = Math.floor(10000000 + Math.random() * 90000000).toString();
+      console.log(`✅ Código numérico gerado: ${codigoGerado}`);
 
       // Atualizar número e código no formulário
       setNfeData(prev => {
@@ -1159,125 +1171,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     return dv.toString();
   };
 
-  // Função para gerar código numérico único com controle SaaS
-  const gerarCodigoNumericoUnico = async (
-    empresaId: string,
-    numeroNFe: number,
-    serieNFe: number = 1,
-    ambiente: string = 'homologacao',
-    modeloDocumento: number = 55
-  ): Promise<string> => {
-    const maxTentativas = 10;
-
-    for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
-      try {
-        // Gerar código aleatório de 8 dígitos conforme SEFAZ
-        // Segundo documentação oficial: "número aleatório de 8 dígitos"
-        const min = 10000000; // 8 dígitos mínimo
-        const max = 99999999; // 8 dígitos máximo
-        const codigoNumerico = Math.floor(Math.random() * (max - min + 1)) + min;
-        const codigoNumericoStr = codigoNumerico.toString();
-
-        console.log(`🔢 Código gerado: ${codigoNumericoStr} (8 dígitos aleatórios)`);
-
-        // Verificar se o código já existe para esta empresa/ambiente
-        const { data: existente, error: errorCheck } = await supabase
-          .from('nfe_numero_controle')
-          .select('id')
-          .eq('empresa_id', empresaId)
-          .eq('codigo_numerico', codigoNumericoStr)
-          .eq('ambiente', ambiente)
-          .eq('modelo_documento', modeloDocumento)
-          .single();
-
-        if (errorCheck && errorCheck.code !== 'PGRST116') {
-          console.error('Erro ao verificar código:', errorCheck);
-          continue; // Tentar próximo código
-        }
-
-        // Se código não existe, reservar na tabela de controle
-        if (!existente) {
-          const { error: errorInsert } = await supabase
-            .from('nfe_numero_controle')
-            .insert({
-              empresa_id: empresaId,
-              codigo_numerico: codigoNumericoStr,
-              numero_nfe: numeroNFe,
-              serie_nfe: serieNFe,
-              modelo_documento: modeloDocumento,
-              ambiente: ambiente,
-              status: 'reservado'
-            });
-
-          if (!errorInsert) {
-            console.log(`✅ Código numérico reservado: ${codigoNumericoStr} (tentativa ${tentativa})`);
-            return codigoNumericoStr;
-          } else {
-            console.warn(`⚠️ Erro ao reservar código ${codigoNumericoStr}:`, errorInsert);
-          }
-        } else {
-          console.log(`🔄 Código ${codigoNumericoStr} já existe, gerando novo... (tentativa ${tentativa})`);
-        }
-      } catch (error) {
-        console.error(`Erro na tentativa ${tentativa}:`, error);
-      }
-    }
-
-    // Fallback: usar timestamp + random se todas as tentativas falharam
-    const timestamp = Date.now().toString().slice(-4); // 4 dígitos
-    const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0'); // 4 dígitos
-    const codigoFallback = (timestamp + random).padStart(8, '0'); // Garantir 8 dígitos
-
-    console.warn(`⚠️ Usando código fallback: ${codigoFallback} (8 dígitos aleatórios)`);
-    return codigoFallback;
-  };
-
-  // Função para marcar código como usado após emissão bem-sucedida
-  const marcarCodigoComoUsado = async (codigoNumerico: string, chaveNFe: string, empresaId: string) => {
-    try {
-      const { error } = await supabase
-        .from('nfe_numero_controle')
-        .update({
-          status: 'usado',
-          chave_nfe: chaveNFe,
-          data_uso: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('codigo_numerico', codigoNumerico)
-        .eq('empresa_id', empresaId);
-
-      if (error) {
-        console.error('Erro ao marcar código como usado:', error);
-      } else {
-        console.log(`✅ Código ${codigoNumerico} marcado como usado`);
-      }
-    } catch (error) {
-      console.error('Erro ao atualizar status do código:', error);
-    }
-  };
-
-  // Função para liberar código em caso de erro na emissão
-  const liberarCodigoReservado = async (codigoNumerico: string, empresaId: string) => {
-    try {
-      const { error } = await supabase
-        .from('nfe_numero_controle')
-        .update({
-          status: 'cancelado',
-          updated_at: new Date().toISOString()
-        })
-        .eq('codigo_numerico', codigoNumerico)
-        .eq('empresa_id', empresaId)
-        .eq('status', 'reservado');
-
-      if (error) {
-        console.error('Erro ao liberar código reservado:', error);
-      } else {
-        console.log(`🔄 Código ${codigoNumerico} liberado para reuso`);
-      }
-    } catch (error) {
-      console.error('Erro ao liberar código:', error);
-    }
-  };
+  // ✅ REMOVIDAS: Funções complexas da tabela nfe_numero_controle
+  // Agora usamos apenas: Math.floor(10000000 + Math.random() * 90000000)
 
 
 
@@ -1457,21 +1352,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         console.log('⚠️ Número vazio - usuário deve preencher manualmente');
       }
 
-      // Se não tem código, gerar um
+      // Se não tem código, gerar um simples
       if (!codigoFinal) {
-        try {
-          codigoFinal = await gerarCodigoNumericoUnico(
-            usuarioData.empresa_id,
-            parseInt(numeroFinal),
-            1,
-            ambienteNFe,
-            55
-          );
-          console.log(`🔢 Código gerado para rascunho: ${codigoFinal}`);
-        } catch (error) {
-          console.error('❌ Erro ao gerar código para rascunho:', error);
-          codigoFinal = 'ERRO_GERACAO';
-        }
+        codigoFinal = Math.floor(10000000 + Math.random() * 90000000).toString();
+        console.log(`🔢 Código gerado para rascunho: ${codigoFinal}`);
       }
 
       // Atualizar os dados da NFe com número e código
@@ -1707,9 +1591,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     };
 
     // Listener para resetar flag de edição (nova NFe)
-    const handleResetEditingFlag = () => {
+    const handleResetEditingFlag = (event: CustomEvent) => {
+      const isNewNfe = event.detail?.isNewNfe || false;
+
       console.log('🆕 Evento resetEditingFlag recebido - Resetando estado de edição');
+      console.log('🔍 É nova NFe?', isNewNfe);
       console.log('✅ DESATIVANDO modo de edição - Geração automática será HABILITADA');
+
       setIsEditingRascunho(false);
       setRascunhoId(null);
 
@@ -1746,11 +1634,15 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         }
       }));
 
-      // Buscar próximo número após resetar
-      setTimeout(() => {
-        console.log('🔍 Chamando buscarProximoNumero após reset...');
-        buscarProximoNumero();
-      }, 200);
+      // ✅ CORREÇÃO: Buscar próximo número APENAS se for uma nova NFe
+      if (isNewNfe) {
+        setTimeout(() => {
+          console.log('🔍 É NOVA NFe - Chamando buscarProximoNumero...');
+          buscarProximoNumero();
+        }, 200);
+      } else {
+        console.log('🚫 NÃO é nova NFe - Pulando buscarProximoNumero');
+      }
     };
 
     // Listener para carregar NFe em modo visualização
@@ -2381,16 +2273,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           updateStep('validacao', 'error', 'Código numérico ausente');
           return;
         } else {
-          // Se é uma nova NFe, gerar código
-          addLog('🔢 Gerando código numérico único...');
-          codigoNumerico = await gerarCodigoNumericoUnico(
-            nfeData.empresa.id,
-            numeroNFe,
-            serieNFe,
-            ambiente,
-            55 // NFe modelo 55
-          );
-          addLog(`✅ Código numérico reservado: ${codigoNumerico}`);
+          // Se é uma nova NFe, gerar código simples
+          addLog('🔢 Gerando código numérico simples...');
+          codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
+          addLog(`✅ Código numérico gerado: ${codigoNumerico}`);
         }
       } else {
         addLog(`✅ Usando código pré-gerado: ${codigoNumerico}`);
@@ -2572,9 +2458,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         status: 'autorizada'
       });
 
-      // Marcar código numérico como usado
-      addLog('🔢 Marcando código numérico como usado...');
-      await marcarCodigoComoUsado(codigoNumerico, result.data.chave, nfeData.empresa.id);
+      // ✅ REMOVIDO: Não precisamos mais marcar código como usado
+      addLog('✅ Código numérico utilizado com sucesso');
 
       // Marcar NFe como emitida
       setNfeEmitida(true);
@@ -2594,10 +2479,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         onBack(); // ✅ Voltar para a grid de NFe
       }, 2000);
     } catch (error) {
-      // Liberar código numérico reservado em caso de erro
+      // ✅ REMOVIDO: Não precisamos mais liberar código reservado
       if (typeof codigoNumerico !== 'undefined') {
-        addLog('🔄 Liberando código numérico reservado...');
-        await liberarCodigoReservado(codigoNumerico, nfeData.empresa.id);
+        addLog('ℹ️ Código numérico não será reutilizado');
       }
 
       // Adicionar erro aos logs
@@ -2650,19 +2534,53 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       const xmlUrl = `https://apinfe.nexopdv.com/serve-file.php?type=xml&chave=${chave}`;
 
-      const response = await fetch(xmlUrl, { method: 'HEAD' });
+      // Primeiro, verificar se o arquivo existe
+      const headResponse = await fetch(xmlUrl, { method: 'HEAD' });
 
-      if (!response.ok) {
-        throw new Error(`XML não encontrado no servidor (Status: ${response.status})`);
+      if (!headResponse.ok) {
+        throw new Error(`XML não encontrado no servidor (Status: ${headResponse.status})`);
       }
 
       // Verificar se o Content-Type é XML
-      const contentType = response.headers.get('Content-Type');
+      const contentType = headResponse.headers.get('Content-Type');
       if (!contentType || !contentType.includes('xml')) {
         throw new Error('Arquivo encontrado mas não é um XML válido');
       }
 
-      addLog('✅ XML validado: arquivo existe e é válido');
+      addLog('📄 Baixando XML para validação de conteúdo...');
+
+      // Baixar o XML para validar o conteúdo
+      const getResponse = await fetch(xmlUrl);
+
+      if (!getResponse.ok) {
+        throw new Error(`Erro ao baixar XML (Status: ${getResponse.status})`);
+      }
+
+      const xmlContent = await getResponse.text();
+
+      // Validações básicas do XML
+      if (!xmlContent || xmlContent.trim().length === 0) {
+        throw new Error('XML está vazio');
+      }
+
+      if (!xmlContent.includes('<?xml')) {
+        throw new Error('XML não possui declaração XML válida');
+      }
+
+      if (!xmlContent.includes('<NFe') || !xmlContent.includes('</NFe>')) {
+        throw new Error('XML não contém estrutura NFe válida');
+      }
+
+      if (!xmlContent.includes('<infNFe') || !xmlContent.includes('</infNFe>')) {
+        throw new Error('XML não contém informações da NFe (infNFe)');
+      }
+
+      // Verificar se contém a chave
+      if (!xmlContent.includes(chave)) {
+        throw new Error('XML não contém a chave de acesso esperada');
+      }
+
+      addLog('✅ XML validado: arquivo existe, é válido e contém dados corretos');
 
     } catch (error) {
       addLog(`❌ ERRO na validação do XML: ${error.message}`);
@@ -2677,19 +2595,48 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       const pdfUrl = `https://apinfe.nexopdv.com/serve-file.php?type=pdf&chave=${chave}`;
 
-      const response = await fetch(pdfUrl, { method: 'HEAD' });
+      // Primeiro, verificar se o arquivo existe
+      const headResponse = await fetch(pdfUrl, { method: 'HEAD' });
 
-      if (!response.ok) {
-        throw new Error(`PDF não encontrado no servidor (Status: ${response.status})`);
+      if (!headResponse.ok) {
+        throw new Error(`PDF não encontrado no servidor (Status: ${headResponse.status})`);
       }
 
       // Verificar se o Content-Type é PDF
-      const contentType = response.headers.get('Content-Type');
+      const contentType = headResponse.headers.get('Content-Type');
       if (!contentType || !contentType.includes('pdf')) {
         throw new Error('Arquivo encontrado mas não é um PDF válido');
       }
 
-      addLog('✅ PDF validado: arquivo existe e é válido');
+      // Verificar o tamanho do arquivo
+      const contentLength = headResponse.headers.get('Content-Length');
+      if (contentLength && parseInt(contentLength) < 1000) {
+        throw new Error('PDF muito pequeno, pode estar corrompido ou vazio');
+      }
+
+      addLog('📄 Fazendo download parcial do PDF para validação...');
+
+      // Fazer um download parcial para verificar se é um PDF válido
+      const getResponse = await fetch(pdfUrl, {
+        headers: {
+          'Range': 'bytes=0-1023' // Primeiros 1KB
+        }
+      });
+
+      if (getResponse.ok || getResponse.status === 206) { // 206 = Partial Content
+        const pdfHeader = await getResponse.arrayBuffer();
+        const headerBytes = new Uint8Array(pdfHeader);
+
+        // Verificar se começa com %PDF
+        const pdfSignature = String.fromCharCode(...headerBytes.slice(0, 4));
+        if (pdfSignature !== '%PDF') {
+          throw new Error('Arquivo não é um PDF válido (assinatura incorreta)');
+        }
+
+        addLog('✅ PDF validado: arquivo existe, é válido e tem estrutura correta');
+      } else {
+        throw new Error(`Erro ao validar conteúdo do PDF (Status: ${getResponse.status})`);
+      }
 
     } catch (error) {
       addLog(`❌ ERRO na validação do PDF: ${error.message}`);

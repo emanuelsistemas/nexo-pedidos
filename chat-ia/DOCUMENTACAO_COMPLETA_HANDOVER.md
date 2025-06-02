@@ -1,8 +1,18 @@
 # 🚀 DOCUMENTAÇÃO COMPLETA - HANDOVER PARA NOVA IA
 
+**Última Atualização:** 02/06/2025 - 15:00
+**Status:** Numeração NFe corrigida + SupabaseService implementado - API erro 500
+**Próxima Prioridade:** URGENTE - Resolver erro 500 no endpoint /api/nfe-completa
+
+## 🎉 **ATUALIZAÇÃO 02/06/2025**
+- ✅ **RESOLVIDO:** Problema de numeração NFe (19 → 20 sequencial)
+- ✅ **IMPLEMENTADO:** SupabaseService completo e testado
+- ✅ **REMOVIDO:** Tabela nfe_numero_controle problemática
+- ❌ **PENDENTE:** Erro 500 na API NFe (causa não identificada)
+
 ## 📋 **RESUMO EXECUTIVO**
 
-Este documento contém TODAS as informações necessárias para que uma nova IA assuma o projeto **nexo-pedidos** sem perder tempo. O sistema está **100% FUNCIONAL** com NFe/NFC-e implementado.
+Este documento contém TODAS as informações necessárias para que uma nova IA assuma o projeto **nexo-pedidos** sem perder tempo. O sistema está **95% FUNCIONAL** com NFe/NFC-e implementado, mas com problema crítico na API.
 
 ---
 

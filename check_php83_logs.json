@@ -1,0 +1,3 @@
+{
+  "command": "tail -30 /var/log/php8.3-fpm.log"
+}

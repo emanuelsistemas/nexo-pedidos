@@ -1,0 +1,3 @@
+{
+  "command": "ls -la /var/www/nfe-api/src/Services/SupabaseService.php && echo '--- CONTEÚDO ---' && head -20 /var/www/nfe-api/src/Services/SupabaseService.php"
+}

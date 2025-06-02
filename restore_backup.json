@@ -1,0 +1,3 @@
+{
+  "command": "cp /var/www/nfe-api/src/Services/NFeServiceCompleto.php.backup /var/www/nfe-api/src/Services/NFeServiceCompleto.php"
+}

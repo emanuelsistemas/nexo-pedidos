@@ -1,8 +1,85 @@
 # 🚨 PROBLEMAS CONHECIDOS E SOLUÇÕES
 
+**Última Atualização:** 01/06/2025 - 22:10
+**Status:** PROBLEMA CRÍTICO IDENTIFICADO - API NFe com XML malformado
+
 ## 📋 **RESUMO**
 
 Este documento lista todos os problemas conhecidos do sistema NFe/NFC-e e suas soluções testadas e aprovadas.
+
+---
+
+## 🔥 **ATUALIZAÇÃO 02/06/2025 - PROBLEMA ATUAL**
+
+### **❌ API NFe Retorna Erro 500 no Endpoint /api/nfe-completa**
+- **Status:** 🔴 **CRÍTICO** - Impede emissão de NFe
+- **Descoberto:** 02/06/2025
+- **Causa Provável:** SupabaseService não carregando ou NFeServiceCompleto corrompido
+- **Progresso:** SupabaseService criado e testado, mas API ainda falha
+- **Próximo Passo:** Diagnosticar logs detalhados do servidor
+
+### **✅ RESOLVIDO: Numeração NFe Pulando Números**
+- **Problema:** Numeração pulava de 19 → 26 (7 números perdidos)
+- **Causa:** Sistema consultava tabela `nfe_numero_controle` em vez de `pdv`
+- **Solução:** Tabela `nfe_numero_controle` removida, consulta direta à `pdv`
+- **Resultado:** Numeração sequencial correta (19 → 20 → 21...)
+- **Data Resolução:** 02/06/2025
+
+---
+
+## 🚨 **PROBLEMA CRÍTICO: API NFe com XML Malformado**
+
+### **📋 Descrição:**
+A API NFe está gerando XML com elementos obrigatórios faltando e não está criando arquivos PDF.
+
+### **🔍 Sintomas:**
+- ✅ API responde normalmente (Status 200)
+- ✅ SEFAZ autoriza NFe (Status 100)
+- ❌ XML gerado está malformado (elementos faltando)
+- ❌ PDF não é gerado (arquivo não existe)
+- ❌ Validações falham por arquivos inexistentes
+
+### **📊 Logs NGINX:**
+```
+Element '{http://www.portalfiscal.inf.br/nfe}NFe': Missing child element(s). Expected is one of ( {h...
+PHP message: Continuando sem assinatura para teste...
+PHP message: NFe processada - Status: 100 - Protocolo: ...
+```
+
+### **🔧 Possíveis Causas:**
+1. **Certificado digital** com problema ou expirado
+2. **Configuração NFePHP** incorreta ou incompleta
+3. **Elementos XML obrigatórios** não sendo incluídos
+4. **Geração PDF** não configurada ou falhando
+5. **Permissões de arquivo** no servidor VPS
+
+### **🚀 Soluções Sugeridas:**
+1. **Verificar certificado** no Supabase (empresa_id: acd26a4f-7220-405e-9c96-faffb7e6480e)
+2. **Analisar logs PHP** detalhados no servidor
+3. **Testar API** com dados mínimos obrigatórios
+4. **Verificar configuração** da biblioteca NFePHP
+5. **Implementar geração PDF** se não estiver configurada
+
+### **🛠️ Comandos para Diagnóstico:**
+```bash
+# Acessar servidor e verificar logs
+ssh usuario@apinfe.nexopdv.com
+tail -f /var/log/nginx/error.log
+
+# Verificar arquivos gerados
+ls -la /path/to/nfe/files/
+
+# Testar API diretamente
+curl -X POST https://apinfe.nexopdv.com/api/nfe-completa \
+  -H "Content-Type: application/json" \
+  -d '{"empresa_id":"acd26a4f-7220-405e-9c96-faffb7e6480e"}'
+```
+
+### **⚠️ Status:**
+- **Prioridade:** CRÍTICA
+- **Impacto:** Sistema não gera arquivos XML/PDF válidos
+- **Workaround:** Nenhum disponível
+- **Próxima ação:** Diagnosticar e corrigir API NFe
 
 ---
 

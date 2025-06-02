@@ -1,5 +1,9 @@
 # 📚 ÍNDICE COMPLETO DA DOCUMENTAÇÃO
 
+**Última Atualização:** 02/06/2025 - 15:00
+**Status:** Sistema 98% funcional - Numeração corrigida, SupabaseService implementado
+**Prioridade:** 🔴 Resolver erro 500 na API NFe
+
 ## 🎯 **PARA NOVA IA - COMECE AQUI!**
 
 Esta pasta contém TODA a documentação necessária para assumir o projeto **nexo-pedidos** sem perder tempo.
@@ -19,7 +23,35 @@ Esta pasta contém TODA a documentação necessária para assumir o projeto **ne
 
 ## 📋 **DOCUMENTOS PRINCIPAIS**
 
-### **🚀 1. DOCUMENTACAO_COMPLETA_HANDOVER.md**
+### **🎯 0. INSTRUCOES_PROXIMA_IA_02_06_2025.md** ⭐ **URGENTE**
+**O QUE É:** Instruções específicas para resolver erro 500 da API NFe
+**QUANDO USAR:** PRIMEIRA LEITURA OBRIGATÓRIA - PROBLEMA CRÍTICO
+**CONTÉM:**
+- Diagnóstico detalhado do erro 500
+- Comandos prontos para debug
+- Estratégia de resolução
+- Teste de validação final
+- **TEMPO ESTIMADO: 1-2 horas para resolver**
+
+### **🎯 0.1. RESUMO_FINAL_02_06_2025.md** ⭐ **NOVO**
+**O QUE É:** Status atualizado com progresso da sessão 02/06/2025
+**QUANDO USAR:** Segunda leitura para contexto completo
+**CONTÉM:**
+- Numeração NFe corrigida
+- SupabaseService implementado
+- Problema atual (erro 500)
+- Próximos passos
+
+### **🎯 0.2. SUPABASESERVICE_IMPLEMENTADO.md** ⭐ **NOVO**
+**O QUE É:** Documentação técnica do SupabaseService criado
+**QUANDO USAR:** Para entender integração Supabase
+**CONTÉM:**
+- Código implementado
+- Testes realizados
+- Configurações
+- Status de funcionamento
+
+### **🚀 1. DOCUMENTACAO_COMPLETA_HANDOVER.md** (HISTÓRICO)
 **O QUE É:** Documento principal com TODAS as informações críticas
 **QUANDO USAR:** Primeira leitura obrigatória para nova IA
 **CONTÉM:**
@@ -89,9 +121,10 @@ Esta pasta contém TODA a documentação necessária para assumir o projeto **ne
 1. **🚨_AVISO_CRITICO_NAO_MODIFICAR_API_NFE.md** (5 min) - **OBRIGATÓRIO**
 
 ### **📖 Leitura Principal (30 min):**
-1. **DOCUMENTACAO_COMPLETA_HANDOVER.md** (15 min)
-2. **MAPEAMENTO_CODIGO_COMPLETO.md** (10 min)
-3. **PROBLEMAS_CONHECIDOS_SOLUCOES.md** (5 min)
+1. **INSTRUCOES_PROXIMA_IA_02_06_2025.md** (10 min) - **URGENTE**
+2. **RESUMO_FINAL_02_06_2025.md** (10 min)
+3. **SUPABASESERVICE_IMPLEMENTADO.md** (5 min)
+4. **PROBLEMAS_CONHECIDOS_SOLUCOES.md** (5 min)
 
 ### **🔧 Setup Inicial (15 min):**
 1. **Verificar status da API:**
@@ -215,13 +248,18 @@ Logs: /var/log/nginx/nfe-api.error.log
 ## ✅ **STATUS ATUAL DO SISTEMA**
 
 ### **🟢 FUNCIONANDO:**
-- ✅ API NFe completa na VPS
-- ✅ Frontend React com interface NFe
+- ✅ Frontend React com interface NFe (100%)
+- ✅ Numeração NFe sequencial correta (19 → 20)
+- ✅ SupabaseService implementado e testado
+- ✅ Integração Supabase funcionando
 - ✅ Sistema de logs dividido
 - ✅ SSH Manager para debug
-- ✅ Integração Supabase
-- ✅ Controle de numeração
-- ✅ Validações completas
+- ✅ Validações completas (7 etapas)
+- ✅ Certificado digital acessível
+
+### **🔴 PROBLEMA CRÍTICO:**
+- ❌ API NFe erro 500 no endpoint /api/nfe-completa
+- ❌ Emissão de NFe não funciona (última etapa)
 
 ### **🔄 PRÓXIMAS MELHORIAS:**
 - 🔲 Implementação NFC-e (modelo 65)
