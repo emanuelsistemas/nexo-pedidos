@@ -1958,8 +1958,29 @@ const ProdutosPage: React.FC = () => {
           // Incluir os campos de estoque mínimo
           estoque_minimo: novoProduto.estoque_minimo_ativo ? (novoProduto.estoque_minimo || 0) : 0,
           estoque_minimo_ativo: novoProduto.estoque_minimo_ativo || false,
+          // CAMPOS FISCAIS NFe - ERAM ESTES QUE ESTAVAM FALTANDO!
+          ncm: novoProduto.ncm,
+          cfop: novoProduto.cfop,
+          origem_produto: novoProduto.origem_produto,
+          situacao_tributaria: novoProduto.situacao_tributaria,
+          cst_icms: novoProduto.cst_icms,
+          csosn_icms: novoProduto.csosn_icms,
+          aliquota_icms: novoProduto.aliquota_icms,
+          cst_pis: novoProduto.cst_pis,
+          aliquota_pis: novoProduto.aliquota_pis,
+          cst_cofins: novoProduto.cst_cofins,
+          aliquota_cofins: novoProduto.aliquota_cofins,
           empresa_id: usuarioData.empresa_id
         };
+
+        // Log para confirmar que os dados fiscais estão sendo salvos
+        console.log('=== SALVANDO DADOS FISCAIS (EDIÇÃO) ===');
+        console.log('NCM:', updateData.ncm);
+        console.log('CFOP:', updateData.cfop);
+        console.log('Origem:', updateData.origem_produto);
+        console.log('CST ICMS:', updateData.cst_icms);
+        console.log('CSOSN ICMS:', updateData.csosn_icms);
+        console.log('Alíquota ICMS:', updateData.aliquota_icms);
 
         const { data, error } = await supabase
           .from('produtos')
@@ -1996,6 +2017,15 @@ const ProdutosPage: React.FC = () => {
           estoque_minimo: novoProduto.estoque_minimo_ativo ? (novoProduto.estoque_minimo || 0) : 0,
           estoque_minimo_ativo: novoProduto.estoque_minimo_ativo || false,
         };
+
+        // Log para confirmar que os dados fiscais estão sendo salvos
+        console.log('=== SALVANDO DADOS FISCAIS (CRIAÇÃO) ===');
+        console.log('NCM:', produtoData.ncm);
+        console.log('CFOP:', produtoData.cfop);
+        console.log('Origem:', produtoData.origem_produto);
+        console.log('CST ICMS:', produtoData.cst_icms);
+        console.log('CSOSN ICMS:', produtoData.csosn_icms);
+        console.log('Alíquota ICMS:', produtoData.aliquota_icms);
 
         const { data, error } = await supabase
           .from('produtos')

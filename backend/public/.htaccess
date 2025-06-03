@@ -1,0 +1,41 @@
+# Configuração Apache para pasta public do backend NFe
+
+# Habilitar rewrite
+RewriteEngine On
+
+# Permitir acesso a arquivos PHP
+<Files "*.php">
+    Order allow,deny
+    Allow from all
+</Files>
+
+# Headers de segurança
+Header always set X-Content-Type-Options nosniff
+Header always set X-Frame-Options DENY
+Header always set X-XSS-Protection "1; mode=block"
+
+# CORS para arquivos NFe (se necessário)
+<FilesMatch "\.(xml|pdf)$">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</FilesMatch>
+
+# Cache para arquivos estáticos
+<IfModule mod_expires.c>
+    ExpiresActive on
+    ExpiresByType application/xml "access plus 1 hour"
+    ExpiresByType application/pdf "access plus 1 hour"
+</IfModule>
+
+# Compressão
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/pdf
+</IfModule>
+
+# Negar acesso a arquivos sensíveis
+<FilesMatch "\.(pfx|p12|key|pem|env)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>

@@ -259,3 +259,33 @@ export const checkCertificateExpiry = (validityDate) => {
     };
   }
 };
+
+/**
+ * Verifica o status do certificado no backend local
+ */
+export const checkCertificateStatus = async (empresaId) => {
+  try {
+    // Configuração da URL do backend
+    const getBackendUrl = () => {
+      const origin = window.location.origin;
+      return `${origin}/backend/public`;
+    };
+
+    const response = await fetch(`${getBackendUrl()}/check-certificado.php?empresa_id=${empresaId}`);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+
+  } catch (error) {
+    console.error('Erro ao verificar status do certificado:', error);
+    return {
+      success: false,
+      exists: false,
+      error: error.message
+    };
+  }
+};

@@ -4,6 +4,7 @@ import Button from '../../components/comum/Button';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 import { supabase } from '../../lib/supabase';
 import { useApiLogs } from '../../hooks/useApiLogs';
+import { showMessage } from '../../utils/toast';
 
 interface NFe {
   id: string;
@@ -32,6 +33,11 @@ const NfePage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+
+  // Função showToast para compatibilidade
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', duration?: number) => {
+    showMessage(type, message);
+  };
 
   // Estados para filtro avançado
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
@@ -286,8 +292,21 @@ const NfePage: React.FC = () => {
     }
 
     try {
-      // ✅ Usar novo endpoint serve-file.php
-      const xmlUrl = `https://apinfe.nexopdv.com/serve-file.php?type=xml&chave=${nfe.chave_nfe}`;
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showToast('Empresa não identificada', 'error');
+        return;
+      }
+
+      // Usar endpoint local para download
+      const xmlUrl = `/backend/public/download-arquivo.php?type=xml&chave=${nfe.chave_nfe}&empresa_id=${usuarioData.empresa_id}`;
 
       // Criar link temporário para download
       const link = document.createElement('a');
@@ -319,8 +338,21 @@ const NfePage: React.FC = () => {
     try {
       showToast('Gerando PDF da NFe...', 'info');
 
-      // ✅ PRIMEIRO: Tentar gerar o PDF via API
-      const gerarPdfUrl = `https://apinfe.nexopdv.com/gerar-pdf.php`;
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showToast('Empresa não identificada', 'error');
+        return;
+      }
+
+      // PRIMEIRO: Tentar gerar o PDF via endpoint local
+      const gerarPdfUrl = `/backend/public/gerar-danfe.php`;
 
       const response = await fetch(gerarPdfUrl, {
         method: 'POST',
@@ -329,7 +361,7 @@ const NfePage: React.FC = () => {
         },
         body: JSON.stringify({
           chave: nfe.chave_nfe,
-          empresa_id: 'acd26a4f-7220-405e-9c96-faffb7e6480e' // ID da empresa
+          empresa_id: usuarioData.empresa_id
         })
       });
 
@@ -343,8 +375,8 @@ const NfePage: React.FC = () => {
         throw new Error(result.erro || 'Erro ao gerar PDF');
       }
 
-      // ✅ SEGUNDO: Abrir o PDF gerado
-      const pdfUrl = `https://apinfe.nexopdv.com/serve-file.php?type=pdf&chave=${nfe.chave_nfe}`;
+      // SEGUNDO: Abrir o PDF gerado
+      const pdfUrl = `/backend/public/download-arquivo.php?type=pdf&chave=${nfe.chave_nfe}&empresa_id=${usuarioData.empresa_id}&action=view`;
 
       // Aguardar um pouco para o arquivo ser salvo
       setTimeout(() => {
@@ -355,11 +387,23 @@ const NfePage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao visualizar PDF:', error);
 
-      // ✅ FALLBACK: Tentar abrir diretamente (caso já exista)
+      // FALLBACK: Tentar abrir diretamente (caso já exista)
       try {
-        const pdfUrl = `https://apinfe.nexopdv.com/serve-file.php?type=pdf&chave=${nfe.chave_nfe}`;
-        window.open(pdfUrl, '_blank');
-        showToast('PDF aberto em nova aba', 'success');
+        // Obter empresa_id novamente para fallback
+        const { data: userData } = await supabase.auth.getUser();
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (usuarioData?.empresa_id) {
+          const pdfUrl = `/backend/public/download-arquivo.php?type=pdf&chave=${nfe.chave_nfe}&empresa_id=${usuarioData.empresa_id}&action=view`;
+          window.open(pdfUrl, '_blank');
+          showToast('PDF aberto em nova aba', 'success');
+        } else {
+          throw new Error('Empresa não identificada');
+        }
       } catch (fallbackError) {
         showToast(`Erro ao gerar/visualizar PDF: ${error.message}`, 'error');
       }
@@ -1936,7 +1980,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
               numero_endereco: empresaData.numero,
               bairro: empresaData.bairro,
               city: empresaData.cidade,
-              state: empresaData.uf,
+              state: empresaData.estado, // Corrigido: campo correto é 'estado'
+              uf: empresaData.estado, // Adicionar também como 'uf' para compatibilidade
               zip_code: empresaData.cep,
               codigo_municipio: empresaData.codigo_municipio,
               phone: empresaData.telefone,
@@ -1966,11 +2011,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     }
   }, [isEditingRascunho]);
 
-  // Função para verificar status da API NFe
+  // Função para verificar status da API NFe (BACKEND LOCAL)
   const checkApiStatus = async () => {
     try {
       setApiStatus('checking');
-      const response = await fetch('https://apinfe.nexopdv.com/api/status', {
+      const response = await fetch('/backend/public/status-nfe.php', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1981,7 +2026,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       if (response.ok) {
         const result = await response.json();
-        if (result.status && result.status.includes('Online')) {
+        if (result.success && result.status && result.status.includes('Online')) {
           setApiStatus('online');
         } else {
           setApiStatus('offline');
@@ -1995,11 +2040,30 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     }
   };
 
-  // Função para verificar status da SEFAZ
+  // Função para verificar status da SEFAZ (BACKEND LOCAL)
   const checkSefazStatus = async () => {
     try {
       setSefazStatus('checking');
-      const response = await fetch('https://apinfe.nexopdv.com/api/status-sefaz', {
+
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        setSefazStatus('offline');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        setSefazStatus('offline');
+        return;
+      }
+
+      const response = await fetch(`/backend/public/status-sefaz.php?empresa_id=${usuarioData.empresa_id}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -2010,16 +2074,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.data) {
-          // Verificar se NFe ou NFC-e estão disponíveis
-          const nfeDisponivel = result.data.nfe?.disponivel === true;
-          const nfceDisponivel = result.data.nfce?.disponivel === true;
-
-          if (nfeDisponivel || nfceDisponivel) {
-            setSefazStatus('online');
-          } else {
-            setSefazStatus('offline');
-          }
+        if (result.success && result.status === 'online') {
+          setSefazStatus('online');
         } else {
           setSefazStatus('offline');
         }
@@ -2085,12 +2141,42 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       if (nfeData.empresa) {
         addLog(`Nome empresa: ${nfeData.empresa.name || 'N/A'}`);
         addLog(`CNPJ: ${nfeData.empresa.cnpj || 'N/A'}`);
-        // Verificar se certificado está configurado baseado no path e status
-        const certificadoConfigurado = nfeData.empresa.certificado_digital_path &&
-                                     nfeData.empresa.certificado_digital_status !== 'nao_configurado';
-        addLog(`Certificado digital: ${certificadoConfigurado ? 'CONFIGURADO' : 'NÃO CONFIGURADO'}`);
-        if (certificadoConfigurado) {
-          addLog(`Status certificado: ${nfeData.empresa.certificado_digital_status || 'N/A'}`);
+        addLog(`UF: ${nfeData.empresa.state || nfeData.empresa.uf || 'N/A'}`);
+        addLog(`Inscrição Estadual: ${nfeData.empresa.inscricao_estadual || 'N/A'}`);
+        addLog(`Regime Tributário: ${nfeData.empresa.regime_tributario || 'N/A'}`);
+        addLog(`Código Município: ${nfeData.empresa.codigo_municipio || 'N/A'}`);
+
+        // Verificar certificado no backend local
+        addLog('🔍 Verificando certificado digital no backend...');
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          const { data: usuarioData } = await supabase
+            .from('usuarios')
+            .select('empresa_id')
+            .eq('id', userData.user.id)
+            .single();
+
+          if (usuarioData?.empresa_id) {
+            const certificadoStatus = await fetch(`/backend/public/check-certificado.php?empresa_id=${usuarioData.empresa_id}`);
+            const certificadoResult = await certificadoStatus.json();
+
+            if (certificadoResult.success && certificadoResult.exists) {
+              addLog(`✅ Certificado digital: CONFIGURADO`);
+              addLog(`   Nome: ${certificadoResult.data.nome_certificado || 'N/A'}`);
+              addLog(`   Status: ${certificadoResult.data.status || 'N/A'}`);
+              addLog(`   Validade: ${certificadoResult.data.validade || 'N/A'}`);
+
+              // Marcar como configurado para validação
+              nfeData.empresa.certificado_configurado = true;
+              nfeData.empresa.certificado_status = certificadoResult.data.status;
+            } else {
+              addLog(`❌ Certificado digital: NÃO CONFIGURADO`);
+              nfeData.empresa.certificado_configurado = false;
+            }
+          }
+        } catch (certError) {
+          addLog(`⚠️ Erro ao verificar certificado: ${certError.message}`);
+          nfeData.empresa.certificado_configurado = false;
         }
       }
 
@@ -2098,9 +2184,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         validationErrors.push('Dados da empresa não carregados');
       }
 
-      // Validação do certificado digital
-      const certificadoConfigurado = nfeData.empresa?.certificado_digital_path &&
-                                   nfeData.empresa?.certificado_digital_status !== 'nao_configurado';
+      // Validação do certificado digital (usando verificação local)
+      const certificadoConfigurado = nfeData.empresa?.certificado_configurado === true;
 
       if (!certificadoConfigurado) {
         validationErrors.push('Certificado digital não configurado para a empresa');
@@ -2114,7 +2199,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           addLog('❌ Ambiente de produção requer certificado digital válido');
         }
         // Verificar se certificado não está vencido
-        if (nfeData.empresa?.certificado_digital_status === 'vencido') {
+        if (nfeData.empresa?.certificado_status === 'vencido') {
           validationErrors.push('Certificado digital está vencido');
           addLog('❌ Certificado digital vencido não pode ser usado em produção');
         }
@@ -2341,14 +2426,105 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       addLog(`Cliente: ${nfeData.destinatario.nome}`);
       addLog(`Ambiente: ${ambienteNFe === 'producao' ? 'PRODUÇÃO' : 'HOMOLOGAÇÃO'}`);
 
-      // Chamar novo endpoint NFe Completa
-      addLog('🚀 Usando endpoint NFe Completa (XML + Assinatura + SEFAZ)...');
-      const response = await fetch('https://apinfe.nexopdv.com/api/nfe-completa', {
+      // Chamar endpoint local de emissão NFe
+      addLog('🚀 Usando endpoint local NFe (XML + Assinatura + SEFAZ)...');
+
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não identificada para o usuário');
+      }
+
+      // Preparar payload para backend local - SEM FALLBACKS
+      // Validar dados obrigatórios da empresa antes de enviar
+      if (!nfeData.empresa.name && !nfeData.empresa.razao_social) {
+        throw new Error('Razão social da empresa não foi carregada');
+      }
+      if (!nfeData.empresa.cnpj && !nfeData.empresa.documento) {
+        throw new Error('CNPJ da empresa não foi carregado');
+      }
+      if (!nfeData.empresa.state && !nfeData.empresa.uf) {
+        throw new Error('UF da empresa não foi carregada');
+      }
+      if (!nfeData.empresa.inscricao_estadual) {
+        throw new Error('Inscrição Estadual da empresa não foi carregada');
+      }
+      if (!nfeData.empresa.regime_tributario) {
+        throw new Error('Regime tributário da empresa não foi carregado');
+      }
+      if (!nfeData.empresa.codigo_municipio) {
+        throw new Error('Código do município da empresa não foi carregado');
+      }
+
+      const localPayload = {
+        empresa_id: usuarioData.empresa_id,
+        nfe_data: {
+          empresa: {
+            razao_social: nfeData.empresa.name || nfeData.empresa.razao_social,
+            cnpj: nfeData.empresa.cnpj || nfeData.empresa.documento,
+            nome_fantasia: nfeData.empresa.nome_fantasia,
+            inscricao_estadual: nfeData.empresa.inscricao_estadual,
+            regime_tributario: nfeData.empresa.regime_tributario,
+            uf: nfeData.empresa.state || nfeData.empresa.uf,
+            codigo_municipio: nfeData.empresa.codigo_municipio,
+            endereco: {
+              logradouro: nfeData.empresa.address || nfeData.empresa.endereco,
+              numero: nfeData.empresa.numero_endereco || nfeData.empresa.numero,
+              bairro: nfeData.empresa.bairro,
+              cidade: nfeData.empresa.city || nfeData.empresa.cidade,
+              cep: nfeData.empresa.zip_code || nfeData.empresa.cep
+            }
+          },
+          destinatario: payload.cliente,
+          produtos: payload.produtos,
+          totais: payload.totais,
+          pagamentos: payload.pagamentos,
+          identificacao: payload.identificacao,
+          ambiente: ambienteNFe
+        }
+      };
+
+      // 🔍 DEBUG: Primeiro enviar para debug para ver estrutura
+      addLog('🔍 Analisando estrutura dos dados...');
+
+      try {
+        const debugResponse = await fetch('/backend/public/debug-nfe.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(localPayload)
+        });
+
+        const debugResult = await debugResponse.json();
+        addLog('📊 Estrutura dos dados analisada:');
+        addLog(`   Total produtos: ${debugResult.analise?.total_produtos || 0}`);
+        addLog(`   Campos encontrados: ${debugResult.analise?.campos_encontrados?.join(', ') || 'nenhum'}`);
+
+        if (debugResult.analise?.estrutura_produtos?.length > 0) {
+          debugResult.analise.estrutura_produtos.forEach((prod, index) => {
+            addLog(`   Produto ${index + 1}: ${prod.campos_disponiveis?.join(', ') || 'sem campos'}`);
+          });
+        }
+      } catch (debugError) {
+        addLog(`⚠️ Erro no debug: ${debugError.message}`);
+      }
+
+      // 🚀 ENVIAR PARA API LOCAL
+      addLog('🚀 Enviando NFe para emissão...');
+
+      const response = await fetch('/backend/public/emitir-nfe.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(localPayload)
       });
 
       if (!response.ok) {
@@ -2371,7 +2547,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         addLog(`   XML presente: ${result.data.xml ? 'SIM' : 'NÃO'}`);
         addLog(`   Chave presente: ${result.data.chave ? 'SIM' : 'NÃO'}`);
         addLog(`   Protocolo presente: ${result.data.protocolo ? 'SIM' : 'NÃO'}`);
-        addLog(`   Status SEFAZ: ${result.data.status_sefaz || 'N/A'}`);
+        addLog(`   Status SEFAZ: ${result.data.status || 'N/A'}`);
         addLog(`   Motivo: ${result.data.motivo || 'N/A'}`);
 
         if (result.data.xml) {
@@ -2402,18 +2578,39 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         throw new Error('API retornou dados incompletos (XML, chave ou protocolo faltando)');
       }
 
-      // Verificar se foi autorizada pela SEFAZ
-      if (result.data.status_sefaz !== '100') {
+      // ✅ ETAPA 4: VERIFICAÇÃO SEFAZ
+      updateStep('sefaz', 'loading');
+      addLog('🔍 Verificando autorização da SEFAZ...');
+
+      // Verificar status SEFAZ - Status 103 = Lote recebido com sucesso (não é erro!)
+      const statusSefaz = result.data.status;
+      if (statusSefaz === '100') {
+        // NFe autorizada
+        updateStep('sefaz', 'success', 'NFe autorizada pela SEFAZ');
+        addLog('✅ NFe autorizada pela SEFAZ');
+      } else if (statusSefaz === '103') {
+        // Lote recebido com sucesso - aguardando processamento
+        updateStep('sefaz', 'success', 'Lote recebido pela SEFAZ');
+        addLog('✅ Lote recebido com sucesso pela SEFAZ');
+        addLog(`📋 Recibo: ${result.data.recibo || 'N/A'}`);
+        addLog('ℹ️ NFe está sendo processada pela SEFAZ');
+      } else if (statusSefaz && parseInt(statusSefaz) >= 200) {
+        // Status de erro (200+)
         updateStep('sefaz', 'error', `SEFAZ: ${result.data.motivo || 'Rejeitada'}`);
         addLog('ERRO: NFe rejeitada pela SEFAZ');
-        addLog(`Status: ${result.data.status_sefaz}`);
+        addLog(`Status: ${statusSefaz}`);
         addLog(`Motivo: ${result.data.motivo || 'Motivo não informado'}`);
         throw new Error(`NFe rejeitada pela SEFAZ: ${result.data.motivo || 'Motivo não informado'}`);
+      } else {
+        // Status desconhecido ou indefinido
+        updateStep('sefaz', 'success', 'Processamento em andamento');
+        addLog('ℹ️ NFe enviada para SEFAZ - status em processamento');
+        addLog(`Status: ${statusSefaz || 'Indefinido'}`);
+        addLog(`Motivo: ${result.data.motivo || 'Processamento em andamento'}`);
       }
 
       addLog('✅ XML gerado com sucesso');
       addLog('✅ Certificado digital aplicado');
-      addLog('✅ NFe autorizada pela SEFAZ');
       addLog(`Chave NFe: ${result.data.chave}`);
       addLog(`Protocolo: ${result.data.protocolo}`);
       updateStep('geracao', 'success', 'XML gerado');
@@ -2425,11 +2622,27 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       await validarArquivoXML(result.data.chave);
       updateStep('validacao_xml', 'success', 'XML validado com sucesso');
 
-      // ETAPA 5: VALIDAÇÃO DO PDF
+      // ETAPA 5: VALIDAÇÃO DO PDF (CONDICIONAL)
       updateStep('validacao_pdf', 'loading');
       addLog('🔍 Validando se o PDF foi gerado corretamente...');
-      await validarArquivoPDF(result.data.chave);
-      updateStep('validacao_pdf', 'success', 'PDF validado com sucesso');
+
+      if (result.data.pdf_path && result.data.pdf_path !== null) {
+        // PDF foi gerado - validar
+        try {
+          await validarArquivoPDF(result.data.chave);
+          updateStep('validacao_pdf', 'success', 'PDF validado com sucesso');
+          addLog('✅ PDF validado com sucesso');
+        } catch (pdfError) {
+          updateStep('validacao_pdf', 'error', 'Erro na validação do PDF');
+          addLog(`❌ Erro na validação do PDF: ${pdfError.message}`);
+          throw new Error(`Falha na validação do PDF: ${pdfError.message}`);
+        }
+      } else {
+        // PDF não foi gerado (normal para status 103)
+        updateStep('validacao_pdf', 'warning', 'PDF será gerado após autorização');
+        addLog('ℹ️ PDF não foi gerado - será criado após autorização da SEFAZ');
+        addLog('📋 Para status 103, o PDF é gerado apenas após autorização final');
+      }
 
       // ETAPA 6: SALVAMENTO NO BANCO
       updateStep('banco', 'loading');
@@ -2532,7 +2745,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     try {
       addLog('📄 Verificando se o arquivo XML existe no servidor...');
 
-      const xmlUrl = `https://apinfe.nexopdv.com/serve-file.php?type=xml&chave=${chave}`;
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não identificada para validação');
+      }
+
+      const xmlUrl = `/backend/public/download-arquivo.php?type=xml&chave=${chave}&empresa_id=${usuarioData.empresa_id}`;
 
       // Primeiro, verificar se o arquivo existe
       const headResponse = await fetch(xmlUrl, { method: 'HEAD' });
@@ -2593,7 +2818,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     try {
       addLog('📄 Verificando se o arquivo PDF existe no servidor...');
 
-      const pdfUrl = `https://apinfe.nexopdv.com/serve-file.php?type=pdf&chave=${chave}`;
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não identificada para validação');
+      }
+
+      const pdfUrl = `/backend/public/download-arquivo.php?type=pdf&chave=${chave}&empresa_id=${usuarioData.empresa_id}`;
 
       // Primeiro, verificar se o arquivo existe
       const headResponse = await fetch(pdfUrl, { method: 'HEAD' });
@@ -2799,6 +3036,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           <ProdutosSection
             produtos={nfeData.produtos}
             empresaId={nfeData.empresa?.id}
+            showToast={showToast}
             onChange={(produtos) => {
               const valorProdutos = produtos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
               setNfeData(prev => ({
@@ -4024,7 +4262,12 @@ const DestinatarioSection: React.FC<{
 };
 
 // Seção de Produtos
-const ProdutosSection: React.FC<{ produtos: any[]; empresaId?: string; onChange: (produtos: any[]) => void }> = ({ produtos, empresaId, onChange }) => {
+const ProdutosSection: React.FC<{
+  produtos: any[];
+  empresaId?: string;
+  onChange: (produtos: any[]) => void;
+  showToast: (message: string, type: 'success' | 'error' | 'info', duration?: number) => void;
+}> = ({ produtos, empresaId, onChange, showToast }) => {
   const [showProdutoModal, setShowProdutoModal] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [produtoForm, setProdutoForm] = useState({
@@ -4099,6 +4342,120 @@ const ProdutosSection: React.FC<{ produtos: any[]; empresaId?: string; onChange:
   // Função para remover produto
   const handleRemoverProduto = (id: string) => {
     onChange(produtos.filter(p => p.id !== id));
+  };
+
+  // Função para atualizar dados fiscais dos produtos com informações do cadastro
+  const handleAtualizarDadosProdutos = async () => {
+    if (produtos.length === 0) {
+      showToast('Nenhum produto para atualizar', 'warning');
+      return;
+    }
+
+    try {
+      showToast('Atualizando dados dos produtos...', 'info');
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Buscar dados atualizados dos produtos no cadastro
+      const produtoIds = produtos
+        .filter(p => p.produto_id) // Apenas produtos que têm ID (vieram do cadastro)
+        .map(p => p.produto_id);
+
+      if (produtoIds.length === 0) {
+        showToast('Nenhum produto vinculado ao cadastro para atualizar', 'warning');
+        return;
+      }
+
+      const { data: produtosCadastro, error } = await supabase
+        .from('produtos')
+        .select(`
+          id,
+          codigo,
+          nome,
+          preco,
+          ncm,
+          cfop,
+          origem_produto,
+          situacao_tributaria,
+          cst_icms,
+          csosn_icms,
+          aliquota_icms,
+          cst_pis,
+          aliquota_pis,
+          cst_cofins,
+          aliquota_cofins,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome
+          )
+        `)
+        .in('id', produtoIds)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .eq('deletado', false);
+
+      if (error) throw error;
+
+      if (!produtosCadastro || produtosCadastro.length === 0) {
+        showToast('Nenhum produto encontrado no cadastro', 'warning');
+        return;
+      }
+
+      // Atualizar produtos na NFe com dados do cadastro
+      const produtosAtualizados = produtos.map(produtoNfe => {
+        const produtoCadastro = produtosCadastro.find(p => p.id === produtoNfe.produto_id);
+
+        if (produtoCadastro) {
+          return {
+            ...produtoNfe,
+            // Atualizar dados fiscais
+            ncm: produtoCadastro.ncm || produtoNfe.ncm,
+            cfop: produtoCadastro.cfop || produtoNfe.cfop,
+            origem_produto: produtoCadastro.origem_produto ?? produtoNfe.origem_produto,
+            situacao_tributaria: produtoCadastro.situacao_tributaria || produtoNfe.situacao_tributaria,
+            cst_icms: produtoCadastro.cst_icms || produtoNfe.cst_icms,
+            csosn_icms: produtoCadastro.csosn_icms || produtoNfe.csosn_icms,
+            aliquota_icms: produtoCadastro.aliquota_icms ?? produtoNfe.aliquota_icms,
+            cst_pis: produtoCadastro.cst_pis || produtoNfe.cst_pis,
+            aliquota_pis: produtoCadastro.aliquota_pis ?? produtoNfe.aliquota_pis,
+            cst_cofins: produtoCadastro.cst_cofins || produtoNfe.cst_cofins,
+            aliquota_cofins: produtoCadastro.aliquota_cofins ?? produtoNfe.aliquota_cofins,
+            // Atualizar também preço se necessário
+            valor_unitario: produtoCadastro.preco || produtoNfe.valor_unitario,
+            valor_total: (produtoCadastro.preco || produtoNfe.valor_unitario) * produtoNfe.quantidade
+          };
+        }
+
+        return produtoNfe; // Manter produto inalterado se não encontrado no cadastro
+      });
+
+      // Aplicar atualizações
+      onChange(produtosAtualizados);
+
+      const produtosAtualizadosCount = produtosCadastro.length;
+      showToast(`${produtosAtualizadosCount} produto(s) atualizado(s) com dados do cadastro`, 'success');
+
+      console.log('✅ Produtos atualizados:', {
+        total: produtos.length,
+        atualizados: produtosAtualizadosCount,
+        produtosCadastro
+      });
+
+    } catch (error: any) {
+      console.error('Erro ao atualizar dados dos produtos:', error);
+      showToast(`Erro ao atualizar produtos: ${error.message}`, 'error');
+    }
   };
 
   // Função para atualizar campos e calcular total
@@ -4215,7 +4572,24 @@ const ProdutosSection: React.FC<{ produtos: any[]; empresaId?: string; onChange:
 
       {/* Lista de produtos */}
       <div>
-        <h3 className="text-lg font-bold text-white mb-4">Lista de Produtos</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-white">Lista de Produtos</h3>
+          {produtos.length > 0 && (
+            <button
+              onClick={handleAtualizarDadosProdutos}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              title="Atualizar dados fiscais dos produtos com informações do cadastro"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                <path d="M3 21v-5h5"/>
+              </svg>
+              Atualizar dados dos produtos
+            </button>
+          )}
+        </div>
         <div className="bg-background-card rounded-lg border border-gray-800 overflow-hidden">
           {produtos.length === 0 ? (
             <div className="p-8 text-center">

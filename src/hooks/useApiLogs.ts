@@ -37,7 +37,7 @@ export const useApiLogs = () => {
         offset: '0'
       });
 
-      const response = await fetch(`https://apinfe.nexopdv.com/api/logs?${params}`);
+      const response = await fetch(`/backend/public/logs.php?${params}`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);

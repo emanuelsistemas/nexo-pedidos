@@ -7,7 +7,8 @@ import SearchableSelect from '../../components/comum/SearchableSelect';
 import { showMessage, translateErrorMessage } from '../../utils/toast';
 import { TipoUserConfig } from '../../types';
 import { useAuthSession } from '../../hooks/useAuthSession';
-import { extractCertificateInfo, checkCertificateExpiry } from '../../api/certificateApi';
+import { extractCertificateInfo, checkCertificateExpiry, checkCertificateStatus } from '../../api/certificateApi';
+import { useCertificateUpload } from '../../hooks/useCertificateUpload';
 
 // Componente de Skeleton Loading para Configurações
 const ConfigSkeletonLoader = () => (
@@ -140,6 +141,7 @@ const tiposPagamento = [
 
 const ConfiguracoesPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
+  const { uploadCertificateLocal, removeCertificateLocal, isUploading: isUploadingLocal } = useCertificateUpload();
   const [showSidebar, setShowSidebar] = useState(false);
   const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv' | 'taxaentrega' | 'conexao' | 'certificado'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
@@ -703,16 +705,27 @@ const ConfiguracoesPage: React.FC = () => {
       }
 
       if (activeSection === 'certificado') {
-        // Carregar dados do certificado digital
-        const { data: empresaData } = await supabase
-          .from('empresas')
-          .select('certificado_digital_path, certificado_digital_senha, certificado_digital_validade, certificado_digital_status, certificado_digital_nome, certificado_digital_uploaded_at')
-          .eq('id', usuarioData.empresa_id)
-          .single();
+        // Carregar dados do certificado digital do backend local
+        try {
+          const certificadoStatus = await checkCertificateStatus(usuarioData.empresa_id);
 
-        if (empresaData) {
-          setCertificadoInfo(empresaData);
-          setCertificadoSenha(empresaData.certificado_digital_senha || '');
+          if (certificadoStatus.success && certificadoStatus.data) {
+            // Converter dados do backend para o formato esperado pela interface
+            setCertificadoInfo({
+              certificado_digital_path: certificadoStatus.data.path || 'local_storage',
+              certificado_digital_senha: '', // Não retornar senha por segurança
+              certificado_digital_validade: certificadoStatus.data.validade,
+              certificado_digital_status: certificadoStatus.data.status || 'ativo',
+              certificado_digital_nome: certificadoStatus.data.nome_certificado,
+              certificado_digital_uploaded_at: certificadoStatus.data.uploaded_at
+            });
+          } else {
+            // Certificado não encontrado - limpar dados
+            setCertificadoInfo(null);
+          }
+        } catch (error) {
+          console.error('Erro ao carregar status do certificado:', error);
+          setCertificadoInfo(null);
         }
 
         // Carregar configuração NFe da nova tabela
@@ -1757,14 +1770,12 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
-  // Função para fazer upload do certificado digital
+  // Função para fazer upload do certificado digital (NOVO - Storage Local)
   const handleUploadCertificado = async () => {
     if (!certificadoFile || !certificadoSenha.trim()) {
       showMessage('error', 'Selecione um arquivo de certificado e informe a senha');
       return;
     }
-
-    setIsUploadingCertificado(true);
 
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -1778,62 +1789,26 @@ const ConfiguracoesPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
-      // Extrair informações do certificado
-      const infoCertificado = await extrairInfoCertificado(certificadoFile, certificadoSenha);
+      // Upload para storage local usando o novo hook
+      const result = await uploadCertificateLocal(
+        certificadoFile,
+        certificadoSenha,
+        usuarioData.empresa_id
+      );
 
-      // Gerar nome único para o arquivo
-      const timestamp = Date.now();
-      const fileName = `${usuarioData.empresa_id}_${timestamp}_${certificadoFile.name}`;
+      if (result.success) {
+        // Limpar formulário
+        setCertificadoFile(null);
+        setCertificadoSenha('');
 
-      // Upload do arquivo para o bucket
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('certificadodigital')
-        .upload(fileName, certificadoFile, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Atualizar dados na tabela empresas
-      const { error: updateError } = await supabase
-        .from('empresas')
-        .update({
-          certificado_digital_path: uploadData.path,
-          certificado_digital_senha: certificadoSenha,
-          certificado_digital_validade: infoCertificado.validade,
-          certificado_digital_status: infoCertificado.status,
-          certificado_digital_nome: infoCertificado.nome,
-          certificado_digital_uploaded_at: new Date().toISOString()
-        })
-        .eq('id', usuarioData.empresa_id);
-
-      if (updateError) throw updateError;
-
-      showMessage('success', 'Certificado digital enviado com sucesso!');
-
-      // Limpar formulário
-      setCertificadoFile(null);
-      setCertificadoSenha('');
-
-      // Recarregar dados
-      loadData();
+        // Recarregar dados
+        loadData();
+      }
 
     } catch (error: any) {
       // Limpar campos em caso de erro
       limparCamposCertificado();
-
-      // Verificar se é erro de senha
-      if (error.message.includes('Senha incorreta') ||
-          error.message.includes('senha pode estar incorreta') ||
-          error.message.includes('Invalid password') ||
-          error.message.includes('PKCS#12 MAC could not be verified')) {
-        showMessage('error', '🔐 Senha do certificado incorreta. Verifique a senha e tente novamente.');
-      } else {
-        showMessage('error', 'Erro ao enviar certificado: ' + error.message);
-      }
-    } finally {
-      setIsUploadingCertificado(false);
+      console.error('❌ Erro no upload:', error);
     }
   };
 
@@ -3714,6 +3689,8 @@ const ConfiguracoesPage: React.FC = () => {
               <h2 className="text-xl font-semibold text-white">Certificado Digital</h2>
             </div>
 
+
+
             <div className="bg-background-card p-6 rounded-lg border border-gray-800">
               <div className="space-y-6">
                 {/* Status do Certificado */}
@@ -3871,10 +3848,10 @@ const ConfiguracoesPage: React.FC = () => {
                         type="button"
                         variant="primary"
                         onClick={handleUploadCertificado}
-                        disabled={isUploadingCertificado || !certificadoFile || !certificadoSenha.trim()}
+                        disabled={isUploadingLocal || !certificadoFile || !certificadoSenha.trim()}
                         className="w-full"
                       >
-                        {isUploadingCertificado ? (
+                        {isUploadingLocal ? (
                           <>
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
                             Enviando...

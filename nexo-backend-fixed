@@ -1,0 +1,96 @@
+server {
+    listen 80 default_server;
+    server_name _;
+    
+    # Frontend buildado (React)
+    root /root/nexo/nexo-pedidos/dist;
+    index index.html;
+    
+    # Logs
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+    
+    # Frontend - Servir arquivos estáticos e SPA
+    location / {
+        try_files $uri $uri/ /index.html;
+        
+        # Cache para assets
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            add_header Access-Control-Allow-Origin "*";
+        }
+    }
+    
+    # Backend PHP - Com CORS
+    location /backend/public/ {
+        root /root/nexo/nexo-pedidos;
+        
+        # CORS Headers
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+        
+        # Handle OPTIONS requests
+        if ($request_method = 'OPTIONS') {
+            return 200;
+        }
+        
+        # PHP processing
+        location ~ \.php$ {
+            try_files $uri =404;
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+
+            # Aumentar buffers para headers grandes (logs de debug)
+            fastcgi_buffer_size 32k;
+            fastcgi_buffers 8 32k;
+            fastcgi_busy_buffers_size 32k;
+        }
+        
+        # Negar acesso a arquivos sensíveis
+        location ~ \.(pfx|p12|key|pem)$ {
+            deny all;
+            return 403;
+        }
+    }
+    
+    # Servir arquivos NFe (XMLs e PDFs)
+    location /storage/ {
+        alias /root/nexo/nexo-pedidos/backend/storage/;
+        
+        # CORS para arquivos
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        
+        # Permitir apenas XMLs e PDFs
+        location ~* \.(xml|pdf)$ {
+            expires 1h;
+            add_header Cache-Control "public, max-age=3600";
+            try_files $uri =404;
+        }
+        
+        # Negar acesso a certificados
+        location /storage/certificados/ {
+            deny all;
+            return 403;
+        }
+        
+        # Negar outros tipos de arquivo
+        location ~ \.(pfx|p12|key|pem|json)$ {
+            deny all;
+            return 403;
+        }
+    }
+    
+    # Upload limit
+    client_max_body_size 10M;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+}

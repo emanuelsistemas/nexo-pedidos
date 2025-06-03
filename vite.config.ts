@@ -5,12 +5,31 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
+    include: [
+      'react', 
+      'react-dom', 
+      'react-router-dom', 
+      '@supabase/supabase-js', 
+      'react-toastify', 
+      'framer-motion'
+    ],
     exclude: ['lucide-react'],
+  },
+  server: {
+    hmr: {
+      overlay: false, // Desativa overlay de erro que pode ser pesado
+    },
+    watch: {
+      usePolling: false, // Reduz uso de CPU
+    },
+    host: 'localhost',
+    port: 5173,
+// Proxy removido temporariamente - usando URLs absolutas
   },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: true,
+    sourcemap: false, // Mudado para false em desenvolvimento para melhorar o desempenho
     rollupOptions: {
       output: {
         manualChunks: {
