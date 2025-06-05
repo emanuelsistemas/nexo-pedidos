@@ -3163,15 +3163,23 @@ const ProdutosPage: React.FC = () => {
 
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-2">
-                            Código de Barras
+                            Código de Barras (EAN-13)
                           </label>
                           <input
                             type="text"
                             value={novoProduto.codigo_barras || ''}
-                            onChange={(e) => setNovoProduto({ ...novoProduto, codigo_barras: e.target.value })}
+                            onChange={(e) => {
+                              // Permitir apenas números e limitar a 13 dígitos
+                              const valor = e.target.value.replace(/\D/g, '').slice(0, 13);
+                              setNovoProduto({ ...novoProduto, codigo_barras: valor });
+                            }}
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                            placeholder="Código de barras do produto"
+                            placeholder="1234567890123 (13 dígitos)"
+                            maxLength={13}
                           />
+                          <p className="text-xs text-gray-500 mt-1">
+                            EAN-13: Apenas números, máximo 13 dígitos
+                          </p>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-2">

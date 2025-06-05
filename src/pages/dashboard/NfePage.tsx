@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Download, Copy, Trash2, X, Ban, Mail, MoreVertical } from 'lucide-react';
+import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Download, Copy, Trash2, X, Ban, Mail, MoreVertical, ImageIcon } from 'lucide-react';
 import Button from '../../components/comum/Button';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 import { supabase } from '../../lib/supabase';
@@ -2389,14 +2389,22 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         },
         produtos: nfeData.produtos.map(produto => ({
           ...produto,
-          // Garantir que CFOP existe
-          cfop: produto.cfop || '5102',
-          // ✅ CORREÇÃO: Incluir dados dos impostos
-          cst_icms: produto.cst_icms || produto.csosn_icms || '102',
-          aliquota_icms: produto.aliquota_icms || 0,
-          cst_pis: produto.cst_pis || '01',
-          cst_cofins: produto.cst_cofins || '01',
-          origem_produto: produto.origem_produto || 0
+          // ✅ ENVIAR DADOS REAIS SEM FALLBACKS (backend validará se estão completos)
+          cfop: produto.cfop,
+          ncm: produto.ncm,
+          ean: produto.ean,
+          unidade: produto.unidade,
+          origem_produto: produto.origem_produto,
+          cst_icms: produto.cst_icms,
+          csosn_icms: produto.csosn_icms,
+          aliquota_icms: produto.aliquota_icms,
+          cst_pis: produto.cst_pis,
+          cst_cofins: produto.cst_cofins,
+          aliquota_pis: produto.aliquota_pis,
+          aliquota_cofins: produto.aliquota_cofins,
+          cst_ipi: produto.cst_ipi,
+          aliquota_ipi: produto.aliquota_ipi,
+          cest: produto.cest
         })),
         totais: {
           valor_produtos: parseFloat(nfeData.totais.valor_produtos?.toString() || '0'),
@@ -2665,10 +2673,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       // Atualizar dados de autorização
       setDadosAutorizacao({
-        chave_acesso: result.data.chave,
-        protocolo_uso: result.data.protocolo || '',
-        data_autorizacao: result.data.data_autorizacao || new Date().toISOString(),
-        status: 'autorizada'
+        chave: result.data.chave,
+        protocolo: result.data.protocolo || '',
+        dataAutorizacao: result.data.data_autorizacao || new Date().toISOString(),
+        status: 'autorizada',
+        ambiente: ambienteNFe
       });
 
       // ✅ REMOVIDO: Não precisamos mais marcar código como usado
@@ -2959,9 +2968,44 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             produto_id: produto.produto_id || null,
             codigo_produto: produto.codigo,
             nome_produto: produto.descricao,
+            descricao_produto: produto.descricao,
             quantidade: produto.quantidade,
             valor_unitario: produto.valor_unitario,
-            valor_total_item: produto.valor_total
+            valor_total_item: produto.valor_total,
+
+            // ✅ TODOS OS CAMPOS FISCAIS SALVOS NA TABELA PDV_ITENS:
+            ncm: produto.ncm,
+            cfop: produto.cfop,
+            origem_produto: produto.origem_produto,
+            cst_icms: produto.cst_icms,
+            csosn_icms: produto.csosn_icms,
+            cst_pis: produto.cst_pis,
+            cst_cofins: produto.cst_cofins,
+            cst_ipi: produto.cst_ipi,
+            aliquota_icms: produto.aliquota_icms || 0,
+            aliquota_pis: produto.aliquota_pis || 0,
+            aliquota_cofins: produto.aliquota_cofins || 0,
+            aliquota_ipi: produto.aliquota_ipi || 0,
+            valor_icms: produto.valor_icms || 0,
+            valor_pis: produto.valor_pis || 0,
+            valor_cofins: produto.valor_cofins || 0,
+            valor_ipi: produto.valor_ipi || 0,
+
+            // CAMPOS ADICIONAIS:
+            unidade: produto.unidade,
+            ean: produto.ean,
+            cest: produto.cest,
+            codigo_beneficio_fiscal: produto.codigo_beneficio_fiscal,
+            valor_frete: produto.valor_frete || 0,
+            valor_seguro: produto.valor_seguro || 0,
+            valor_outras_despesas: produto.valor_outras_despesas || 0,
+            informacoes_adicionais_item: produto.informacoes_adicionais_item,
+            base_calculo_icms: produto.base_calculo_icms || 0,
+            base_calculo_icms_st: produto.base_calculo_icms_st || 0,
+            valor_icms_st: produto.valor_icms_st || 0,
+            aliquota_icms_st: produto.aliquota_icms_st || 0,
+            margem_valor_agregado: produto.margem_valor_agregado || 0,
+            reducao_base_calculo: produto.reducao_base_calculo || 0
           }));
 
           const { error: itensError } = await supabase
@@ -4269,7 +4313,9 @@ const ProdutosSection: React.FC<{
   showToast: (message: string, type: 'success' | 'error' | 'info', duration?: number) => void;
 }> = ({ produtos, empresaId, onChange, showToast }) => {
   const [showProdutoModal, setShowProdutoModal] = useState(false);
+  const [showDetalhesFiscaisModal, setShowDetalhesFiscaisModal] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
+  const [produtoDetalhesFiscais, setProdutoDetalhesFiscais] = useState(null);
   const [produtoForm, setProdutoForm] = useState({
     quantidade: 1,
     valor_unitario: 0,
@@ -4313,19 +4359,36 @@ const ProdutosSection: React.FC<{
       produto_id: produtoSelecionado.id, // ✅ ID do produto
       codigo: produtoSelecionado.codigo,
       descricao: produtoSelecionado.nome,
-      ncm: produtoSelecionado.ncm || '00000000',
-      cfop: produtoSelecionado.cfop || '5102', // ✅ Do cadastro ou padrão
-      unidade: produtoSelecionado.unidade_medida?.sigla || 'UN',
       quantidade: produtoForm.quantidade,
       valor_unitario: produtoForm.valor_unitario,
       valor_total: produtoForm.valor_total,
-      // ✅ DADOS FISCAIS DO CADASTRO DO PRODUTO:
-      origem_produto: produtoSelecionado.origem_produto || 0,
+
+      // ✅ TODOS OS DADOS FISCAIS DO CADASTRO DO PRODUTO (SEM FALLBACKS):
+      ncm: produtoSelecionado.ncm,
+      cfop: produtoSelecionado.cfop,
+      unidade: produtoSelecionado.unidade_medida?.sigla,
+      ean: produtoSelecionado.codigo_barras, // ✅ EAN vem do codigo_barras
+      origem_produto: produtoSelecionado.origem_produto,
+      situacao_tributaria: produtoSelecionado.situacao_tributaria,
+
+      // ICMS
       cst_icms: produtoSelecionado.cst_icms,
       csosn_icms: produtoSelecionado.csosn_icms,
-      aliquota_icms: produtoSelecionado.aliquota_icms || 0,
-      cst_pis: produtoSelecionado.cst_pis || '01',
-      cst_cofins: produtoSelecionado.cst_cofins || '01'
+      aliquota_icms: produtoSelecionado.aliquota_icms,
+
+      // PIS/COFINS
+      cst_pis: produtoSelecionado.cst_pis,
+      cst_cofins: produtoSelecionado.cst_cofins,
+      aliquota_pis: produtoSelecionado.aliquota_pis,
+      aliquota_cofins: produtoSelecionado.aliquota_cofins,
+
+      // IPI
+      cst_ipi: produtoSelecionado.cst_ipi,
+      aliquota_ipi: produtoSelecionado.aliquota_ipi,
+
+      // OUTROS
+      cest: produtoSelecionado.cest,
+      peso_liquido: produtoSelecionado.peso_liquido
     };
 
     onChange([...produtos, novoProduto]);
@@ -4342,6 +4405,49 @@ const ProdutosSection: React.FC<{
   // Função para remover produto
   const handleRemoverProduto = (id: string) => {
     onChange(produtos.filter(p => p.id !== id));
+  };
+
+  // Função para abrir modal de detalhes fiscais
+  const handleAbrirDetalhesFiscais = async (produto: any) => {
+    try {
+      // Buscar foto principal do produto
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioData?.empresa_id) {
+        const { data: fotosData } = await supabase
+          .from('produto_fotos')
+          .select('id, produto_id, url, principal')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('produto_id', produto.produto_id);
+
+        // Encontrar foto principal ou primeira foto
+        let fotoUrl = null;
+        if (fotosData && fotosData.length > 0) {
+          const fotoPrincipal = fotosData.find(foto => foto.principal);
+          fotoUrl = fotoPrincipal ? fotoPrincipal.url : fotosData[0].url;
+        }
+
+        // Adicionar foto ao produto
+        const produtoComFoto = {
+          ...produto,
+          foto_url: fotoUrl
+        };
+
+        setProdutoDetalhesFiscais(produtoComFoto);
+      } else {
+        setProdutoDetalhesFiscais(produto);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar foto do produto:', error);
+      setProdutoDetalhesFiscais(produto);
+    }
+
+    setShowDetalhesFiscaisModal(true);
   };
 
   // Função para atualizar dados fiscais dos produtos com informações do cadastro
@@ -4381,6 +4487,7 @@ const ProdutosSection: React.FC<{
         .select(`
           id,
           codigo,
+          codigo_barras,
           nome,
           preco,
           ncm,
@@ -4389,11 +4496,15 @@ const ProdutosSection: React.FC<{
           situacao_tributaria,
           cst_icms,
           csosn_icms,
-          aliquota_icms,
           cst_pis,
-          aliquota_pis,
           cst_cofins,
+          cst_ipi,
+          aliquota_icms,
+          aliquota_pis,
           aliquota_cofins,
+          aliquota_ipi,
+          cest,
+          peso_liquido,
           unidade_medida:unidade_medida_id (
             id,
             sigla,
@@ -4419,18 +4530,33 @@ const ProdutosSection: React.FC<{
         if (produtoCadastro) {
           return {
             ...produtoNfe,
-            // Atualizar dados fiscais
+            // ✅ ATUALIZAR TODOS OS DADOS FISCAIS DO CADASTRO:
             ncm: produtoCadastro.ncm || produtoNfe.ncm,
             cfop: produtoCadastro.cfop || produtoNfe.cfop,
+            ean: produtoCadastro.codigo_barras || produtoNfe.ean,
+            unidade: produtoCadastro.unidade_medida?.sigla || produtoNfe.unidade,
             origem_produto: produtoCadastro.origem_produto ?? produtoNfe.origem_produto,
             situacao_tributaria: produtoCadastro.situacao_tributaria || produtoNfe.situacao_tributaria,
+
+            // ICMS
             cst_icms: produtoCadastro.cst_icms || produtoNfe.cst_icms,
             csosn_icms: produtoCadastro.csosn_icms || produtoNfe.csosn_icms,
             aliquota_icms: produtoCadastro.aliquota_icms ?? produtoNfe.aliquota_icms,
+
+            // PIS/COFINS
             cst_pis: produtoCadastro.cst_pis || produtoNfe.cst_pis,
-            aliquota_pis: produtoCadastro.aliquota_pis ?? produtoNfe.aliquota_pis,
             cst_cofins: produtoCadastro.cst_cofins || produtoNfe.cst_cofins,
+            aliquota_pis: produtoCadastro.aliquota_pis ?? produtoNfe.aliquota_pis,
             aliquota_cofins: produtoCadastro.aliquota_cofins ?? produtoNfe.aliquota_cofins,
+
+            // IPI
+            cst_ipi: produtoCadastro.cst_ipi || produtoNfe.cst_ipi,
+            aliquota_ipi: produtoCadastro.aliquota_ipi ?? produtoNfe.aliquota_ipi,
+
+            // OUTROS
+            cest: produtoCadastro.cest || produtoNfe.cest,
+            peso_liquido: produtoCadastro.peso_liquido ?? produtoNfe.peso_liquido,
+
             // Atualizar também preço se necessário
             valor_unitario: produtoCadastro.preco || produtoNfe.valor_unitario,
             valor_total: (produtoCadastro.preco || produtoNfe.valor_unitario) * produtoNfe.quantidade
@@ -4603,8 +4729,10 @@ const ProdutosSection: React.FC<{
                   <tr>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">Item</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">Código</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">Cód. Barras</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">Descrição</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">Valor Unit</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">Unidade</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">Quantidade</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">Total</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-300 uppercase">NCM</th>
@@ -4618,21 +4746,40 @@ const ProdutosSection: React.FC<{
                     <tr key={produto.id} className="hover:bg-gray-800/30">
                       <td className="px-3 py-2 text-sm text-white">{index + 1}</td>
                       <td className="px-3 py-2 text-sm text-white">{produto.codigo}</td>
+                      <td className="px-3 py-2 text-sm text-white">
+                        <span className="text-xs text-gray-400">
+                          {produto.ean || 'SEM EAN'}
+                        </span>
+                      </td>
                       <td className="px-3 py-2 text-sm text-white">{produto.descricao}</td>
                       <td className="px-3 py-2 text-sm text-white">R$ {produto.valor_unitario.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-sm text-white">
+                        <span className="text-xs bg-gray-700 px-2 py-1 rounded">
+                          {produto.unidade || 'UN'}
+                        </span>
+                      </td>
                       <td className="px-3 py-2 text-sm text-white">{produto.quantidade}</td>
                       <td className="px-3 py-2 text-sm text-white">R$ {produto.valor_total.toFixed(2)}</td>
                       <td className="px-3 py-2 text-sm text-white">{produto.ncm}</td>
                       <td className="px-3 py-2 text-sm text-white">{produto.cfop}</td>
                       <td className="px-3 py-2 text-sm text-white">{produto.csosn_icms}</td>
                       <td className="px-3 py-2 text-sm text-white text-right">
-                        <button
-                          onClick={() => handleRemoverProduto(produto.id)}
-                          className="text-red-400 hover:text-red-300 p-1"
-                          title="Remover produto"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleAbrirDetalhesFiscais(produto)}
+                            className="text-blue-400 hover:text-blue-300 p-1"
+                            title="Ver detalhes fiscais"
+                          >
+                            <Plus size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleRemoverProduto(produto.id)}
+                            className="text-red-400 hover:text-red-300 p-1"
+                            title="Remover produto"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -4651,6 +4798,151 @@ const ProdutosSection: React.FC<{
           onSelect={handleSelecionarProduto}
           empresaId={empresaId}
         />
+      )}
+
+      {/* Modal de Detalhes Fiscais */}
+      {showDetalhesFiscaisModal && produtoDetalhesFiscais && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-background-card rounded-lg border border-gray-800 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white">
+                Detalhes Fiscais - {produtoDetalhesFiscais.descricao}
+              </h3>
+              <button
+                onClick={() => setShowDetalhesFiscaisModal(false)}
+                className="text-gray-400 hover:text-white p-1"
+                title="Fechar"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Informações do Produto com Foto */}
+            <div className="mb-6 p-4 bg-gray-800/50 rounded-lg">
+              <div className="flex gap-4">
+                {/* Foto do Produto */}
+                <div className="flex-shrink-0">
+                  <div className="w-24 h-24 bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
+                    {produtoDetalhesFiscais.foto_url ? (
+                      <img
+                        src={produtoDetalhesFiscais.foto_url}
+                        alt={produtoDetalhesFiscais.descricao}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageIcon size={32} className="text-gray-600" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Informações Básicas */}
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-400">Código:</span>
+                    <span className="text-white ml-2">{produtoDetalhesFiscais.codigo}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">EAN:</span>
+                    <span className="text-white ml-2">{produtoDetalhesFiscais.ean || 'SEM EAN'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">NCM:</span>
+                    <span className="text-white ml-2">{produtoDetalhesFiscais.ncm}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">CFOP:</span>
+                    <span className="text-white ml-2">{produtoDetalhesFiscais.cfop}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Detalhes Fiscais */}
+            <div className="space-y-6">
+              {/* ICMS */}
+              <div className="bg-gray-800/30 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-white mb-4">ICMS</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Alíquota de ICMS (%)
+                    </label>
+                    <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                      {produtoDetalhesFiscais.aliquota_icms || '0,00'}%
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Base de Cálculo de ICMS
+                    </label>
+                    <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                      R$ {(produtoDetalhesFiscais.base_calculo_icms || 0).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* PIS */}
+              <div className="bg-gray-800/30 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-white mb-4">PIS</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      PIS CST
+                    </label>
+                    <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                      {produtoDetalhesFiscais.cst_pis || 'Não informado'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      PIS Alíquota (%)
+                    </label>
+                    <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                      {produtoDetalhesFiscais.aliquota_pis || '0,00'}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* COFINS */}
+              <div className="bg-gray-800/30 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-white mb-4">COFINS</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      COFINS CST
+                    </label>
+                    <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                      {produtoDetalhesFiscais.cst_cofins || 'Não informado'}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      COFINS Alíquota (%)
+                    </label>
+                    <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                      {produtoDetalhesFiscais.aliquota_cofins || '0,00'}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Rodapé */}
+            <div className="mt-6 pt-4 border-t border-gray-700">
+              <button
+                onClick={() => setShowDetalhesFiscaisModal(false)}
+                className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

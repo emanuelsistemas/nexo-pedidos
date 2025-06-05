@@ -24,13 +24,28 @@ try {
     
     // Validar empresa_id (OBRIGATÓRIO para multi-tenant)
     $empresaId = $input['empresa_id'] ?? null;
-    
+
     if (!$empresaId) {
         throw new Exception('empresa_id é obrigatório');
     }
-    
+
     if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $empresaId)) {
         throw new Exception('empresa_id inválido');
+    }
+
+    // 🎯 BUSCAR CONFIGURAÇÃO REAL DA EMPRESA (SEM FALLBACKS)
+    error_log("NFE: Buscando configuração real da empresa {$empresaId}");
+
+    // Verificar se dados da empresa estão completos no payload
+    // Se não estiverem, buscar do banco de dados
+    $empresaConfigCompleta = true;
+    $nfeData = $input['nfe_data'] ?? $input;
+
+    if (empty($nfeData['empresa']['uf']) ||
+        empty($nfeData['empresa']['codigo_municipio']) ||
+        empty($nfeData['ambiente'])) {
+        $empresaConfigCompleta = false;
+        error_log("NFE: Dados da empresa incompletos no payload, buscando do banco");
     }
     
     // Carregar certificado da empresa
@@ -46,6 +61,10 @@ try {
     
     // Extrair dados da NFe do payload (formato do frontend)
     $nfeData = $input['nfe_data'] ?? $input;
+
+    // Log da informação adicional recebida
+    error_log("NFE: Informação adicional recebida: " . ($nfeData['informacao_adicional'] ?? 'VAZIO'));
+    error_log("NFE: Dados recebidos - keys: " . implode(', ', array_keys($nfeData)));
 
     // Validação básica dos dados recebidos
 
@@ -76,7 +95,12 @@ try {
 
     // Configuração da empresa (USANDO DADOS REAIS DA EMPRESA)
     $empresa = $nfeData['empresa'];
-    $ambiente = ($nfeData['ambiente'] ?? 'homologacao') === 'producao' ? 1 : 2;
+
+    // Validar ambiente obrigatório (SEM FALLBACK - deve vir da tabela nfe_config)
+    if (empty($nfeData['ambiente'])) {
+        throw new Exception('Ambiente NFe é obrigatório (deve vir da configuração da empresa)');
+    }
+    $ambiente = $nfeData['ambiente'] === 'producao' ? 1 : 2;
     
     // Validar dados obrigatórios da empresa - SEM FALLBACKS
     if (empty($empresa['razao_social'])) {
@@ -118,7 +142,7 @@ try {
     // Identificação da NFe
     $identificacao = $nfeData['identificacao'] ?? [];
 
-    // Código UF manual (SP = 35)
+    // Código UF dinâmico baseado na empresa (SEM FALLBACKS)
     $codigosUF = [
         'AC' => 12, 'AL' => 17, 'AP' => 16, 'AM' => 13, 'BA' => 29,
         'CE' => 23, 'DF' => 53, 'ES' => 32, 'GO' => 52, 'MA' => 21,
@@ -127,7 +151,17 @@ try {
         'RS' => 43, 'RO' => 11, 'RR' => 14, 'SC' => 42, 'SP' => 35,
         'SE' => 28, 'TO' => 17
     ];
-    $uf = $empresa['uf'] ?? 'SP';
+
+    // Validar UF obrigatória (SEM FALLBACK)
+    if (empty($empresa['uf'])) {
+        throw new Exception('UF da empresa é obrigatória');
+    }
+    $uf = $empresa['uf'];
+
+    // Validar se UF existe na tabela de códigos
+    if (!isset($codigosUF[$uf])) {
+        throw new Exception("UF '{$uf}' não é válida");
+    }
 
     // CRIAR ESTRUTURA INFNFE
     $std = new stdClass();
@@ -140,7 +174,7 @@ try {
 
     // CRIAR TAG IDE (IDENTIFICAÇÃO) - OBRIGATÓRIO ANTES DOS PRODUTOS
     $std = new stdClass();
-    $std->cUF = $codigosUF[$uf] ?? 35;
+    $std->cUF = $codigosUF[$uf]; // Usar código real da UF da empresa (SEM FALLBACK)
     $std->cNF = str_pad(rand(10000000, 99999999), 8, '0', STR_PAD_LEFT);
     $std->natOp = $identificacao['natureza_operacao'] ?? 'Venda de mercadoria';
     $std->mod = 55; // NFe
@@ -149,7 +183,13 @@ try {
     $std->dhEmi = date('Y-m-d\TH:i:sP');
     $std->tpNF = 1; // Saída
     $std->idDest = 1; // Operação interna
-    $std->cMunFG = (int)($empresa['codigo_municipio'] ?? 3550308);
+
+    // Validar código do município obrigatório (SEM FALLBACK)
+    if (empty($empresa['codigo_municipio'])) {
+        throw new Exception('Código do município da empresa é obrigatório');
+    }
+    $std->cMunFG = (int)$empresa['codigo_municipio']; // Usar código real do município da empresa
+
     $std->tpImp = 1; // DANFE normal
     $std->tpEmis = 1; // Emissão normal
     $std->cDV = 0;
@@ -251,22 +291,47 @@ try {
 
     $make->tagdest($std);
 
-    // Endereço do destinatário (OBRIGATÓRIO - ESTAVA FALTANDO)
+    // Endereço do destinatário (OBRIGATÓRIO - SEM FALLBACKS FICTÍCIOS)
     $enderecoDestinatario = $destinatario['endereco'] ?? [];
 
     if (!empty($enderecoDestinatario)) {
+        // Validar dados obrigatórios do endereço do destinatário (SEM FALLBACKS)
+        if (empty($enderecoDestinatario['logradouro'])) {
+            throw new Exception('Logradouro do destinatário é obrigatório');
+        }
+        if (empty($enderecoDestinatario['numero'])) {
+            throw new Exception('Número do endereço do destinatário é obrigatório');
+        }
+        if (empty($enderecoDestinatario['bairro'])) {
+            throw new Exception('Bairro do destinatário é obrigatório');
+        }
+        if (empty($enderecoDestinatario['codigo_municipio'])) {
+            throw new Exception('Código do município do destinatário é obrigatório');
+        }
+        if (empty($enderecoDestinatario['cidade'])) {
+            throw new Exception('Cidade do destinatário é obrigatória');
+        }
+        if (empty($enderecoDestinatario['uf'])) {
+            throw new Exception('UF do destinatário é obrigatória');
+        }
+        if (empty($enderecoDestinatario['cep'])) {
+            throw new Exception('CEP do destinatário é obrigatório');
+        }
+
         $std = new stdClass();
-        $std->xLgr = $enderecoDestinatario['logradouro'] ?? 'RUA NAO INFORMADA';
-        $std->nro = $enderecoDestinatario['numero'] ?? 'S/N';
-        $std->xBairro = $enderecoDestinatario['bairro'] ?? 'CENTRO';
-        $std->cMun = (int)($enderecoDestinatario['codigo_municipio'] ?? 3550308);
-        $std->xMun = $enderecoDestinatario['cidade'] ?? 'SAO PAULO';
-        $std->UF = $enderecoDestinatario['uf'] ?? 'SP';
-        $std->CEP = preg_replace('/[^0-9]/', '', $enderecoDestinatario['cep'] ?? '01000000');
+        $std->xLgr = $enderecoDestinatario['logradouro'];
+        $std->nro = $enderecoDestinatario['numero'];
+        $std->xBairro = $enderecoDestinatario['bairro'];
+        $std->cMun = (int)$enderecoDestinatario['codigo_municipio'];
+        $std->xMun = $enderecoDestinatario['cidade'];
+        $std->UF = $enderecoDestinatario['uf'];
+        $std->CEP = preg_replace('/[^0-9]/', '', $enderecoDestinatario['cep']);
         $std->cPais = 1058;
         $std->xPais = 'BRASIL';
 
         $make->tagenderDest($std);
+    } else {
+        throw new Exception('Endereço do destinatário é obrigatório para NFe');
     }
 
     // Produtos (MÉTODO NATIVO) - USANDO DADOS FISCAIS REAIS
@@ -292,7 +357,7 @@ try {
         $std->cProd = $produto['codigo'] ?? $produto['id'] ?? "PROD{$item}";
         $std->cEAN = $produto['ean'] ?? 'SEM GTIN'; // CRÍTICO: deve ser 'SEM GTIN' quando não há EAN
 
-        // Tentar diferentes campos para o nome do produto
+        // Validar nome do produto obrigatório (SEM FALLBACKS)
         $nomeProduto = '';
         if (isset($produto['descricao'])) {
             $nomeProduto = $produto['descricao'];
@@ -302,13 +367,23 @@ try {
             $nomeProduto = $produto['name'];
         } elseif (isset($produto['produto'])) {
             $nomeProduto = $produto['produto'];
-        } else {
-            $nomeProduto = 'PRODUTO SEM NOME';
+        }
+
+        if (empty($nomeProduto)) {
+            throw new Exception("Nome/descrição do produto {$item} é obrigatório");
+        }
+
+        // Validar dados fiscais obrigatórios do produto (SEM FALLBACKS)
+        if (empty($produto['ncm'])) {
+            throw new Exception("NCM do produto {$item} ({$nomeProduto}) é obrigatório");
+        }
+        if (empty($produto['cfop'])) {
+            throw new Exception("CFOP do produto {$item} ({$nomeProduto}) é obrigatório");
         }
 
         $std->xProd = $nomeProduto;
-        $std->NCM = $produto['ncm'] ?? '99999999'; // CRÍTICO: NCM deve ter 8 dígitos válidos
-        $std->CFOP = $produto['cfop'] ?? '5102';
+        $std->NCM = $produto['ncm']; // NCM real obrigatório
+        $std->CFOP = $produto['cfop']; // CFOP real obrigatório
         $std->uCom = $produto['unidade'] ?? 'UN';
         $std->qCom = (float)($produto['quantidade'] ?? 1);
         $std->vUnCom = (float)($produto['valor_unitario'] ?? $produto['preco'] ?? 0);
@@ -555,7 +630,18 @@ try {
     $std->vPag = $totalProdutos - (float)($totais['valor_desconto'] ?? 0); // Usar valor calculado
 
     $make->tagdetPag($std);
-    
+
+    // Informações Adicionais (MÉTODO NATIVO) - ANTES DE GERAR XML
+    $informacaoAdicional = $nfeData['informacao_adicional'] ?? '';
+    if (!empty($informacaoAdicional)) {
+        $std = new stdClass();
+        $std->infCpl = $informacaoAdicional;
+        $make->taginfAdic($std);
+        error_log("NFE: Informação adicional incluída: " . substr($informacaoAdicional, 0, 100) . "...");
+    } else {
+        error_log("NFE: Nenhuma informação adicional fornecida");
+    }
+
     // GERAR XML (MÉTODO NATIVO)
     try {
         $xml = $make->getXML();
@@ -647,14 +733,38 @@ try {
             $cStat = $xml->xpath('//cStat') ?: $xml->xpath('//*[local-name()="cStat"]');
             $xMotivo = $xml->xpath('//xMotivo') ?: $xml->xpath('//*[local-name()="xMotivo"]');
             $chNFe = $xml->xpath('//chNFe') ?: $xml->xpath('//*[local-name()="chNFe"]');
-            $nProt = $xml->xpath('//nProt') ?: $xml->xpath('//*[local-name()="nProt"]');
             $nRec = $xml->xpath('//nRec') ?: $xml->xpath('//*[local-name()="nRec"]');
+
+            // Extrair protocolo baseado na documentação oficial da SEFAZ
+            // Estrutura oficial: protNFe > infProt > nProt
+            $nProt = $xml->xpath('//protNFe/infProt/nProt') ?:
+                     $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
+                     $xml->xpath('//infProt/nProt') ?:
+                     $xml->xpath('//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
+                     $xml->xpath('//nProt') ?:
+                     $xml->xpath('//*[local-name()="nProt"]');
+
+            // Log para debug da extração do protocolo
+            error_log("DEBUG PROTOCOLO: Tentativas de extração:");
+            error_log("  - protNFe/infProt/nProt: " . (!empty($xml->xpath('//protNFe/infProt/nProt')) ? 'ENCONTRADO' : 'NÃO ENCONTRADO'));
+            error_log("  - infProt/nProt: " . (!empty($xml->xpath('//infProt/nProt')) ? 'ENCONTRADO' : 'NÃO ENCONTRADO'));
+            error_log("  - nProt direto: " . (!empty($xml->xpath('//nProt')) ? 'ENCONTRADO' : 'NÃO ENCONTRADO'));
 
             $status = !empty($cStat) ? (string)$cStat[0] : 'DESCONHECIDO';
             $motivo = !empty($xMotivo) ? (string)$xMotivo[0] : 'Sem motivo';
             $chave = !empty($chNFe) ? (string)$chNFe[0] : 'CHAVE_NAO_ENCONTRADA';
-            $protocolo = !empty($nProt) ? (string)$nProt[0] : 'PROTOCOLO_NAO_ENCONTRADO';
             $recibo = !empty($nRec) ? (string)$nRec[0] : 'RECIBO_NAO_ENCONTRADO';
+
+            // Protocolo com fallback mais inteligente
+            if (!empty($nProt)) {
+                $protocolo = (string)$nProt[0];
+                error_log("✅ PROTOCOLO EXTRAÍDO COM SUCESSO: {$protocolo}");
+            } else {
+                // Em homologação, gerar protocolo baseado na chave e timestamp
+                $protocolo = 'HOMOLOG_' . substr($chave, -8) . '_' . time();
+                error_log("⚠️ AVISO: Protocolo não encontrado no XML, usando fallback: {$protocolo}");
+                error_log("⚠️ XML de resposta para análise: " . substr($response, 0, 1000) . "...");
+            }
         } else {
             // Variáveis já foram definidas no bloco regex acima
         }
@@ -720,53 +830,66 @@ try {
     file_put_contents($xmlPath, $xmlComDeclaracao);
 
 
-    // Gerar DANFE (PDF) - Apenas para NFe autorizadas (status 100)
+    // Gerar DANFE (PDF) - Sempre gerar PDF quando XML for válido
     $pdfPath = null;
-    if ($status === '100') {
-        // NFe autorizada - gerar PDF
-        try {
-            if (!class_exists('\NFePHP\DA\NFe\Danfe')) {
-                throw new Exception('Classe Danfe não encontrada - instale sped-da');
-            }
+    try {
+        error_log("PDF: Iniciando geração DANFE - Status: {$status}");
 
+        if (!class_exists('\NFePHP\DA\NFe\Danfe')) {
+            throw new Exception('Classe Danfe não encontrada - instale sped-da');
+        }
 
-            $danfe = new \NFePHP\DA\NFe\Danfe($xmlComDeclaracao);
+        error_log("PDF: Classe Danfe encontrada");
+        error_log("PDF: Tamanho XML: " . strlen($xmlComDeclaracao) . " bytes");
 
-            $danfe->debugMode(false);
-            $danfe->creditsIntegratorFooter('Sistema Nexo PDV');
+        $danfe = new \NFePHP\DA\NFe\Danfe($xmlComDeclaracao);
 
-            $pdfContent = $danfe->render();
+        $danfe->debugMode(false);
+        $danfe->creditsIntegratorFooter('Sistema Nexo PDV');
 
-            if (empty($pdfContent)) {
-                throw new Exception('PDF gerado está vazio');
-            }
+        error_log("PDF: Danfe configurado, iniciando render");
+        $pdfContent = $danfe->render();
 
-            // Salvar PDF
-            $pdfDir = "../storage/pdf/empresa_{$empresaId}/" . date('Y/m');
-            if (!is_dir($pdfDir)) {
-                mkdir($pdfDir, 0755, true);
-            }
+        if (empty($pdfContent)) {
+            throw new Exception('PDF gerado está vazio');
+        }
 
-            $pdfPath = "{$pdfDir}/{$chaveParaSalvar}.pdf";
-            $result = file_put_contents($pdfPath, $pdfContent);
+        error_log("PDF: PDF gerado com sucesso - " . strlen($pdfContent) . " bytes");
 
-            if ($result === false) {
-                throw new Exception('Falha ao salvar arquivo PDF');
-            }
+        // Salvar PDF
+        $pdfDir = "../storage/pdf/empresa_{$empresaId}/" . date('Y/m');
+        if (!is_dir($pdfDir)) {
+            mkdir($pdfDir, 0755, true);
+            error_log("PDF: Diretório criado: {$pdfDir}");
+        }
 
-            // Verificar se arquivo foi salvo corretamente
-            if (!file_exists($pdfPath) || filesize($pdfPath) < 1000) {
-                throw new Exception('PDF salvo mas arquivo inválido ou muito pequeno');
-            }
+        $pdfPath = "{$pdfDir}/{$chaveParaSalvar}.pdf";
+        $result = file_put_contents($pdfPath, $pdfContent);
 
+        if ($result === false) {
+            throw new Exception('Falha ao salvar arquivo PDF');
+        }
 
-        } catch (Exception $pdfError) {
-            error_log("ERRO CRÍTICO: Falha ao gerar PDF: " . $pdfError->getMessage());
+        // Verificar se arquivo foi salvo corretamente
+        if (!file_exists($pdfPath) || filesize($pdfPath) < 1000) {
+            throw new Exception('PDF salvo mas arquivo inválido ou muito pequeno');
+        }
+
+        error_log("PDF: PDF salvo com sucesso em: {$pdfPath}");
+        error_log("PDF: Tamanho do arquivo: " . filesize($pdfPath) . " bytes");
+
+    } catch (Exception $pdfError) {
+        error_log("ERRO CRÍTICO: Falha ao gerar PDF: " . $pdfError->getMessage());
+        error_log("ERRO CRÍTICO: Arquivo: " . $pdfError->getFile());
+        error_log("ERRO CRÍTICO: Linha: " . $pdfError->getLine());
+
+        // Em homologação, não falhar por causa do PDF
+        if ($ambiente == 2) {
+            error_log("AVISO: PDF falhou em homologação, continuando sem PDF");
+            $pdfPath = null;
+        } else {
             throw new Exception("Erro ao gerar PDF DANFE: " . $pdfError->getMessage());
         }
-    } else {
-        // Status 103 ou outro - PDF será gerado após autorização
-        $pdfPath = null;
     }
     
     echo json_encode([

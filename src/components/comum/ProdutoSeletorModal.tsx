@@ -8,6 +8,7 @@ interface Produto {
   nome: string;
   preco: number;
   codigo: string;
+  codigo_barras?: string; // ✅ EAN/GTIN
   descricao?: string;
   grupo_id?: string;
   promocao?: boolean;
@@ -26,6 +27,23 @@ interface Produto {
     sigla: string;
     nome: string;
   };
+  // ✅ CAMPOS FISCAIS COMPLETOS (seguindo as 3 leis):
+  ncm?: string;
+  cfop?: string;
+  origem_produto?: number;
+  situacao_tributaria?: string;
+  cst_icms?: string;
+  csosn_icms?: string;
+  cst_pis?: string;
+  cst_cofins?: string;
+  cst_ipi?: string;
+  aliquota_icms?: number;
+  aliquota_pis?: number;
+  aliquota_cofins?: number;
+  aliquota_ipi?: number;
+  valor_ipi?: number;
+  cest?: string;
+  peso_liquido?: number;
 }
 
 interface ProdutoFoto {
@@ -149,7 +167,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
     try {
       setIsLoading(true);
 
-      // Buscar produtos com informações adicionais
+      // Buscar produtos com TODOS OS CAMPOS FISCAIS (seguindo as 3 leis)
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
         .select(`
@@ -157,6 +175,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           nome,
           preco,
           codigo,
+          codigo_barras,
           descricao,
           grupo_id,
           promocao,
@@ -170,12 +189,20 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           unidade_medida_id,
           ncm,
           cfop,
+          origem_produto,
+          situacao_tributaria,
           cst_icms,
           csosn_icms,
-          aliquota_icms,
           cst_pis,
           cst_cofins,
-          origem_produto,
+          cst_ipi,
+          aliquota_icms,
+          aliquota_pis,
+          aliquota_cofins,
+          aliquota_ipi,
+          valor_ipi,
+          cest,
+          peso_liquido,
           unidade_medida:unidade_medida_id (
             id,
             sigla,
@@ -187,7 +214,10 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
         .eq('deletado', false)
         .order('nome');
 
-      if (produtosError) throw produtosError;
+      if (produtosError) {
+        console.error('Erro ao buscar produtos:', produtosError);
+        throw produtosError;
+      }
 
       // Buscar fotos dos produtos
       const { data: fotosData, error: fotosError } = await supabase
