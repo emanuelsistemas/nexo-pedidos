@@ -2527,6 +2527,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           totais: payload.totais,
           pagamentos: payload.pagamentos,
           identificacao: payload.identificacao,
+          // ✅ CORREÇÃO: Adicionar informação adicional que estava faltando
+          informacao_adicional: nfeData.identificacao.informacao_adicional || '',
           ambiente: ambienteNFe
         }
       };
@@ -2575,6 +2577,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         addLog(`   CEP: ${localPayload.nfe_data.destinatario.endereco.cep || 'VAZIO'}`);
         addLog(`   Código Município: ${localPayload.nfe_data.destinatario.endereco.codigo_municipio || 'VAZIO'}`);
       }
+
+      // 🔍 DEBUG: Log da informação adicional
+      addLog('🔍 DEBUG - Informação Adicional:');
+      addLog(`   Valor: "${localPayload.nfe_data.informacao_adicional || 'VAZIO'}"`);
+      addLog(`   Tamanho: ${(localPayload.nfe_data.informacao_adicional || '').length} caracteres`);
 
       const response = await fetch('/backend/public/emitir-nfe.php', {
         method: 'POST',
