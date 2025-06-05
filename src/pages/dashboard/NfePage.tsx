@@ -2406,16 +2406,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         cliente: {
           documento: nfeData.destinatario.documento,
           name: nfeData.destinatario.nome,
-          logradouro: nfeData.destinatario.endereco, // ✅ CORREÇÃO: Backend espera 'logradouro'
-          numero_endereco: nfeData.destinatario.numero,
-          bairro: nfeData.destinatario.bairro,
-          city: nfeData.destinatario.cidade,
-          state: nfeData.destinatario.uf,
-          zip_code: nfeData.destinatario.cep,
-          codigo_municipio: nfeData.destinatario.codigo_municipio || 3550308,
           ie_destinatario: nfeData.destinatario.ie_destinatario || 9,
           inscricao_estadual: nfeData.destinatario.inscricao_estadual || '',
-          emails: nfeData.destinatario.emails || []
+          emails: nfeData.destinatario.emails || [],
+          // ✅ CORREÇÃO: Backend espera sub-array 'endereco'
+          endereco: {
+            logradouro: nfeData.destinatario.endereco,
+            numero: nfeData.destinatario.numero,
+            bairro: nfeData.destinatario.bairro,
+            cidade: nfeData.destinatario.cidade,
+            uf: nfeData.destinatario.uf,
+            cep: nfeData.destinatario.cep,
+            codigo_municipio: nfeData.destinatario.codigo_municipio || 3550308
+          }
         },
         produtos: nfeData.produtos.map(produto => ({
           ...produto,
@@ -2561,14 +2564,17 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       addLog('🔍 DEBUG - Dados do destinatário sendo enviados:');
       addLog(`   Nome: ${localPayload.nfe_data.destinatario.name || 'VAZIO'}`);
       addLog(`   Documento: ${localPayload.nfe_data.destinatario.documento || 'VAZIO'}`);
-      addLog(`   Logradouro: ${localPayload.nfe_data.destinatario.logradouro || 'VAZIO'}`);
-      addLog(`   Número: ${localPayload.nfe_data.destinatario.numero_endereco || 'VAZIO'}`);
-      addLog(`   Bairro: ${localPayload.nfe_data.destinatario.bairro || 'VAZIO'}`);
-      addLog(`   Cidade: ${localPayload.nfe_data.destinatario.city || 'VAZIO'}`);
-      addLog(`   UF: ${localPayload.nfe_data.destinatario.state || 'VAZIO'}`);
-      addLog(`   CEP: ${localPayload.nfe_data.destinatario.zip_code || 'VAZIO'}`);
-      addLog(`   Código Município: ${localPayload.nfe_data.destinatario.codigo_municipio || 'VAZIO'}`);
       addLog(`   IE Destinatário: ${localPayload.nfe_data.destinatario.ie_destinatario || 'VAZIO'}`);
+      addLog(`   Endereço presente: ${localPayload.nfe_data.destinatario.endereco ? 'SIM' : 'NÃO'}`);
+      if (localPayload.nfe_data.destinatario.endereco) {
+        addLog(`   Logradouro: ${localPayload.nfe_data.destinatario.endereco.logradouro || 'VAZIO'}`);
+        addLog(`   Número: ${localPayload.nfe_data.destinatario.endereco.numero || 'VAZIO'}`);
+        addLog(`   Bairro: ${localPayload.nfe_data.destinatario.endereco.bairro || 'VAZIO'}`);
+        addLog(`   Cidade: ${localPayload.nfe_data.destinatario.endereco.cidade || 'VAZIO'}`);
+        addLog(`   UF: ${localPayload.nfe_data.destinatario.endereco.uf || 'VAZIO'}`);
+        addLog(`   CEP: ${localPayload.nfe_data.destinatario.endereco.cep || 'VAZIO'}`);
+        addLog(`   Código Município: ${localPayload.nfe_data.destinatario.endereco.codigo_municipio || 'VAZIO'}`);
+      }
 
       const response = await fetch('/backend/public/emitir-nfe.php', {
         method: 'POST',
