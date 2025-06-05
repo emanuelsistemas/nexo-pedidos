@@ -2218,6 +2218,34 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         addLog(`✅ Documento: ${nfeData.destinatario.documento}`);
       }
 
+      // 4.1. Validação do endereço do destinatário (obrigatório para NFe)
+      if (!nfeData.destinatario.endereco || !nfeData.destinatario.endereco.trim()) {
+        const erro = 'Endereço do destinatário é obrigatório';
+        validationErrors.push(erro);
+        addLog(`❌ ${erro}`);
+        addLog(`   Endereço: ${nfeData.destinatario.endereco || 'NÃO INFORMADO'}`);
+      } else {
+        addLog(`✅ Endereço: ${nfeData.destinatario.endereco}`);
+      }
+
+      // 4.2. Validação de outros campos obrigatórios do endereço
+      const camposEndereco = [
+        { campo: 'bairro', nome: 'Bairro' },
+        { campo: 'cidade', nome: 'Cidade' },
+        { campo: 'uf', nome: 'UF' },
+        { campo: 'cep', nome: 'CEP' }
+      ];
+
+      camposEndereco.forEach(({ campo, nome }) => {
+        if (!nfeData.destinatario[campo] || !nfeData.destinatario[campo].trim()) {
+          const erro = `${nome} do destinatário é obrigatório`;
+          validationErrors.push(erro);
+          addLog(`❌ ${erro}`);
+        } else {
+          addLog(`✅ ${nome}: ${nfeData.destinatario[campo]}`);
+        }
+      });
+
       // 5. Validação dos produtos
       addLog('📦 Validando produtos...');
       if (nfeData.produtos.length === 0) {
@@ -2378,13 +2406,15 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         cliente: {
           documento: nfeData.destinatario.documento,
           name: nfeData.destinatario.nome,
-          endereco: nfeData.destinatario.endereco, // ✅ Corrigido: usar 'endereco' em vez de 'address'
+          logradouro: nfeData.destinatario.endereco, // ✅ CORREÇÃO: Backend espera 'logradouro'
           numero_endereco: nfeData.destinatario.numero,
           bairro: nfeData.destinatario.bairro,
           city: nfeData.destinatario.cidade,
           state: nfeData.destinatario.uf,
           zip_code: nfeData.destinatario.cep,
           codigo_municipio: nfeData.destinatario.codigo_municipio || 3550308,
+          ie_destinatario: nfeData.destinatario.ie_destinatario || 9,
+          inscricao_estadual: nfeData.destinatario.inscricao_estadual || '',
           emails: nfeData.destinatario.emails || []
         },
         produtos: nfeData.produtos.map(produto => ({
@@ -2526,6 +2556,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       // 🚀 ENVIAR PARA API LOCAL
       addLog('🚀 Enviando NFe para emissão...');
+
+      // 🔍 DEBUG: Log dos dados do destinatário sendo enviados
+      addLog('🔍 DEBUG - Dados do destinatário sendo enviados:');
+      addLog(`   Nome: ${localPayload.nfe_data.destinatario.name || 'VAZIO'}`);
+      addLog(`   Documento: ${localPayload.nfe_data.destinatario.documento || 'VAZIO'}`);
+      addLog(`   Logradouro: ${localPayload.nfe_data.destinatario.logradouro || 'VAZIO'}`);
+      addLog(`   Número: ${localPayload.nfe_data.destinatario.numero_endereco || 'VAZIO'}`);
+      addLog(`   Bairro: ${localPayload.nfe_data.destinatario.bairro || 'VAZIO'}`);
+      addLog(`   Cidade: ${localPayload.nfe_data.destinatario.city || 'VAZIO'}`);
+      addLog(`   UF: ${localPayload.nfe_data.destinatario.state || 'VAZIO'}`);
+      addLog(`   CEP: ${localPayload.nfe_data.destinatario.zip_code || 'VAZIO'}`);
+      addLog(`   Código Município: ${localPayload.nfe_data.destinatario.codigo_municipio || 'VAZIO'}`);
+      addLog(`   IE Destinatário: ${localPayload.nfe_data.destinatario.ie_destinatario || 'VAZIO'}`);
 
       const response = await fetch('/backend/public/emitir-nfe.php', {
         method: 'POST',
@@ -3977,7 +4020,11 @@ const DestinatarioSection: React.FC<{
       cidade: cliente.cidade || '',
       uf: cliente.estado || '',
       cep: cliente.cep || '',
-      emails: cliente.emails || []
+      emails: cliente.emails || [],
+      // ✅ CORREÇÃO: Adicionar campos fiscais faltantes
+      codigo_municipio: cliente.codigo_municipio || '',
+      ie_destinatario: cliente.indicador_ie || 9, // 9 = Não Contribuinte (padrão)
+      inscricao_estadual: cliente.inscricao_estadual || ''
     });
 
     // Se o cliente tem observação NFe, chamar callback para incluir no campo de informação adicional
@@ -4129,7 +4176,7 @@ const DestinatarioSection: React.FC<{
           </div>
         </div>
 
-        {/* Quarta linha: CEP */}
+        {/* Quarta linha: CEP e Código do Município */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
           <div className="lg:col-span-2">
             <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -4140,6 +4187,18 @@ const DestinatarioSection: React.FC<{
               value={data.cep}
               onChange={(e) => updateField('cep', e.target.value)}
               placeholder="00000-000"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Código do Município
+            </label>
+            <input
+              type="text"
+              value={data.codigo_municipio || ''}
+              onChange={(e) => updateField('codigo_municipio', e.target.value)}
+              placeholder="3550308"
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
             />
           </div>
@@ -4173,12 +4232,16 @@ const DestinatarioSection: React.FC<{
         )}
 
         {/* Quinta linha: Campos de identificação */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Identificador da IE
             </label>
-            <select className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500">
+            <select
+              value={data.ie_destinatario || 9}
+              onChange={(e) => updateField('ie_destinatario', parseInt(e.target.value))}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            >
               <option value="9">9 - Não Contribuinte, que pode ou não possuir Inscrição</option>
               <option value="1">1 - Contribuinte ICMS</option>
               <option value="2">2 - Contribuinte isento de Inscrição</option>
@@ -4187,9 +4250,29 @@ const DestinatarioSection: React.FC<{
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
+              Inscrição Estadual
+            </label>
+            <input
+              type="text"
+              value={data.inscricao_estadual || ''}
+              onChange={(e) => updateField('inscricao_estadual', e.target.value)}
+              placeholder="123123123"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+            />
+          </div>
+        </div>
+
+        {/* Sexta linha: Outros campos de identificação */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Identificador de Operação
             </label>
-            <select className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500">
+            <select
+              value={data.operacao || 1}
+              onChange={(e) => updateField('operacao', parseInt(e.target.value))}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            >
               <option value="1">1 - Operação Interna</option>
               <option value="2">2 - Operação Interestadual</option>
               <option value="3">3 - Operação com Exterior</option>
@@ -4200,7 +4283,11 @@ const DestinatarioSection: React.FC<{
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Consumidor
             </label>
-            <select className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500">
+            <select
+              value={data.consumidor_final || 1}
+              onChange={(e) => updateField('consumidor_final', parseInt(e.target.value))}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+            >
               <option value="1">1 - Consumidor final</option>
               <option value="0">0 - Normal</option>
             </select>
