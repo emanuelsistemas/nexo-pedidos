@@ -413,6 +413,64 @@ const NfePage: React.FC = () => {
     }
   };
 
+  // Função para visualizar PDF da CCe
+  const handleVisualizarPDFCCe = async (chave: string, sequencia: number) => {
+    console.log('📄 Iniciando visualização do PDF da CCe:', chave, 'sequência:', sequencia);
+
+    try {
+      showToast('Gerando PDF da CCe...', 'info');
+
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showToast('Empresa não identificada', 'error');
+        return;
+      }
+
+      // Tentar gerar o PDF da CCe
+      const response = await fetch('/backend/public/gerar-pdf-cce.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chave: chave,
+          empresa_id: usuarioData.empresa_id,
+          sequencia: sequencia
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Erro ao gerar PDF da CCe');
+      }
+
+      // Abrir o PDF gerado em nova aba
+      const pdfUrl = `/backend/public/download-arquivo.php?type=pdf_cce&chave=${chave}&empresa_id=${usuarioData.empresa_id}&sequencia=${sequencia}&action=view`;
+
+      // Aguardar um pouco para o arquivo ser salvo
+      setTimeout(() => {
+        window.open(pdfUrl, '_blank');
+        showToast('PDF da CCe aberto em nova aba', 'success');
+      }, 1000);
+
+    } catch (error) {
+      console.error('Erro ao visualizar PDF da CCe:', error);
+      showToast(`Erro ao gerar/visualizar PDF da CCe: ${error.message}`, 'error');
+    }
+  };
+
   // ✅ FUNÇÃO: Copiar Chave da NFe
   const handleCopiarChave = async (nfe: NFe) => {
     if (nfe.status_nfe !== 'autorizada') {
@@ -1019,6 +1077,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
   ]);
   const [logs, setLogs] = useState<string[]>([]);
+  const [showCCeModal, setShowCCeModal] = useState(false);
+  const [cceStatus, setCceStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [cceMessage, setCceMessage] = useState('');
   const [dadosAutorizacao, setDadosAutorizacao] = useState<{
     chave: string;
     protocolo: string;
@@ -1791,21 +1852,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         if ((nfe.status_nfe === 'autorizada' || nfe.status_nfe === 'cancelada') && (nfe.chave_nfe || nfe.protocolo_nfe)) {
           console.log('🔐 ✅ CONDIÇÕES ATENDIDAS - Carregando dados de autorização da NFe');
 
-          // Calcular próxima sequência baseada nas CCe existentes
-          let proximaSequencia = 1;
-          if (nfe.cartas_correcao) {
-            try {
-              const ccesExistentes = typeof nfe.cartas_correcao === 'string'
-                ? JSON.parse(nfe.cartas_correcao)
-                : nfe.cartas_correcao;
 
-              if (Array.isArray(ccesExistentes) && ccesExistentes.length > 0) {
-                proximaSequencia = ccesExistentes.length + 1;
-              }
-            } catch (error) {
-              console.error('❌ Erro ao calcular próxima sequência CCe:', error);
-            }
-          }
 
           // Carregar CCe existentes do banco de dados
           let ccesExistentes = [];
@@ -1826,6 +1873,18 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             }
           }
 
+          // ✅ CALCULAR PRÓXIMA SEQUÊNCIA BASEADA NAS CCe EXISTENTES
+          let proximaSequenciaCorreta = 1;
+          if (ccesExistentes.length > 0) {
+            // Encontrar a maior sequência existente e adicionar 1
+            const sequenciasExistentes = ccesExistentes.map(cce => parseInt(cce.sequencia) || 0);
+            const maiorSequencia = Math.max(...sequenciasExistentes);
+            proximaSequenciaCorreta = maiorSequencia + 1;
+            console.log('🔢 Sequências existentes:', sequenciasExistentes);
+            console.log('🔢 Maior sequência encontrada:', maiorSequencia);
+            console.log('🔢 Próxima sequência calculada:', proximaSequenciaCorreta);
+          }
+
           const dadosAuth = {
             chave: nfe.chave_nfe || '',
             protocolo: nfe.protocolo_nfe || '',
@@ -1834,7 +1893,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             ambiente: 'homologacao', // Pode ser determinado pela chave ou configuração
             motivo_cancelamento: nfe.motivo_cancelamento || '',
             data_cancelamento: nfe.cancelada_em || '',
-            sequencia_cce: proximaSequencia, // Próxima sequência calculada
+            sequencia_cce: proximaSequenciaCorreta, // ✅ Usar sequência correta baseada nas CCe existentes
             carta_correcao: '', // Campo para o texto da carta de correção
             cartas_correcao: ccesExistentes // Array com CCe carregadas do banco
           };
@@ -3333,6 +3392,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         return;
       }
 
+      // Abrir modal de loading
+      setShowCCeModal(true);
+      setCceStatus('loading');
+      setCceMessage('Enviando Carta de Correção para a SEFAZ...');
+
       // Sequência será calculada automaticamente pelo backend se não informada
 
       // Obter dados do usuário atual
@@ -3361,7 +3425,6 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       };
 
       console.log('📝 Enviando CCe:', cceData);
-      showToast('Enviando Carta de Correção...', 'info');
 
       // Enviar CCe para o backend
       const response = await fetch('/backend/public/carta-correcao.php', {
@@ -3379,7 +3442,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       }
 
       console.log('✅ CCe enviada com sucesso:', result);
-      showToast('Carta de Correção enviada com sucesso!', 'success');
+
+      // Atualizar modal para sucesso
+      setCceStatus('success');
+      setCceMessage('Carta de Correção enviada com sucesso!');
 
       // Gerar PDF da CCe automaticamente
       try {
@@ -3433,7 +3499,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
     } catch (error: any) {
       console.error('❌ Erro ao enviar CCe:', error);
-      showToast(`Erro ao enviar Carta de Correção: ${error.message}`, 'error');
+
+      // Atualizar modal para erro
+      setCceStatus('error');
+      setCceMessage(`Erro ao enviar Carta de Correção: ${error.message}`);
     }
   };
 
@@ -4095,6 +4164,66 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 >
                   Sair sem Salvar
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de CCe */}
+      {showCCeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-md mx-4 border border-gray-700">
+            <div className="text-center">
+              {/* Ícone baseado no status */}
+              <div className="mb-4">
+                {cceStatus === 'loading' && (
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
+                )}
+                {cceStatus === 'success' && (
+                  <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+                {cceStatus === 'error' && (
+                  <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              {/* Título */}
+              <h3 className="text-lg font-semibold text-white mb-2">
+                {cceStatus === 'loading' && 'Enviando CCe'}
+                {cceStatus === 'success' && 'CCe Enviada'}
+                {cceStatus === 'error' && 'Erro no Envio'}
+              </h3>
+
+              {/* Mensagem */}
+              <p className="text-gray-300 mb-6">
+                {cceMessage}
+              </p>
+
+              {/* Botões */}
+              <div className="flex gap-3 justify-center">
+                {cceStatus !== 'loading' && (
+                  <button
+                    onClick={() => {
+                      setShowCCeModal(false);
+                      if (cceStatus === 'success') {
+                        // Recarregar dados da NFe para mostrar a nova CCe
+                        window.location.reload();
+                      }
+                    }}
+                    className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                  >
+                    {cceStatus === 'success' ? 'Fechar' : 'Tentar Novamente'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -6377,6 +6506,16 @@ const AutorizacaoSection: React.FC<{
                             <span className="text-xs text-gray-400">
                               Protocolo: {cce.protocolo}
                             </span>
+                            <button
+                              onClick={() => {
+                                // TODO: Implementar visualização do PDF da CCe
+                                console.log('Clicou no botão PDF da CCe:', cce.sequencia);
+                              }}
+                              className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                              title="Visualizar PDF da CCe"
+                            >
+                              📄 PDF
+                            </button>
                           </div>
                         </div>
                       ))}
