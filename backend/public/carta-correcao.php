@@ -235,7 +235,7 @@ try {
     
     // 10. Executar Carta de Correção na SEFAZ (MÉTODO NATIVO)
     error_log("📝 CCe - Enviando para SEFAZ...");
-    
+
     $response = $tools->sefazCCe($chaveNFe, $correcao, $sequencia);
     
     error_log("📝 CCe - Resposta SEFAZ: " . $response);
@@ -363,23 +363,34 @@ try {
     
     error_log("✅ CCe ACEITA - Protocolo: {$protocoloCCe}");
     
-    // 15. SALVAR XML DE CCe (OBRIGATÓRIO PARA CONTABILIDADE)
-    error_log("💾 CCe - Salvando XML para contabilidade...");
-    
+    // 15. GERAR E SALVAR XML COMPLETO DE CCe (procEventoNFe)
+    error_log("💾 CCe - Gerando XML completo do evento...");
+
+    try {
+        // ✅ USAR MÉTODO OFICIAL DA BIBLIOTECA PARA GERAR procEventoNFe
+        $xmlCompletoEvento = \NFePHP\NFe\Complements::addEnvEventoProtocol($eventoOriginal, $response);
+        error_log("✅ CCe - XML completo do evento gerado com sucesso");
+    } catch (Exception $e) {
+        error_log("❌ CCe - Erro ao gerar XML completo: " . $e->getMessage());
+        // Fallback: salvar apenas a resposta da SEFAZ
+        $xmlCompletoEvento = $response;
+        error_log("⚠️ CCe - Usando resposta da SEFAZ como fallback");
+    }
+
     // Diretório para XMLs de CCe por empresa - ESTRUTURA ORGANIZADA
     $xmlCceDir = "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/CCe/" . date('Y/m');
     if (!is_dir($xmlCceDir)) {
         mkdir($xmlCceDir, 0755, true);
         error_log("📁 Diretório de CCe criado: {$xmlCceDir}");
     }
-    
+
     // Nome do arquivo: chave_nfe + _cce_ + sequencia.xml
     $nomeArquivoCce = $chaveNFe . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '.xml';
     $caminhoArquivoCce = $xmlCceDir . '/' . $nomeArquivoCce;
-    
-    // Salvar XML completo de CCe (resposta da SEFAZ)
-    if (file_put_contents($caminhoArquivoCce, $response)) {
-        error_log("✅ XML de CCe salvo: {$caminhoArquivoCce}");
+
+    // Salvar XML completo de CCe (procEventoNFe)
+    if (file_put_contents($caminhoArquivoCce, $xmlCompletoEvento)) {
+        error_log("✅ XML completo de CCe salvo: {$caminhoArquivoCce}");
     } else {
         error_log("❌ Erro ao salvar XML de CCe");
         throw new Exception('Erro ao salvar XML da Carta de Correção');

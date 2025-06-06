@@ -4173,7 +4173,18 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       {/* Modal de CCe */}
       {showCCeModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-md mx-4 border border-gray-700">
+          <div className="bg-gray-900 rounded-lg p-6 w-full max-w-md mx-4 border border-gray-700 relative">
+            {/* Botão de fechar */}
+            <button
+              onClick={() => setShowCCeModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-gray-300 hover:text-white transition-colors"
+              title="Fechar"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
             <div className="text-center">
               {/* Ícone baseado no status */}
               <div className="mb-4">
@@ -6507,10 +6518,7 @@ const AutorizacaoSection: React.FC<{
                               Protocolo: {cce.protocolo}
                             </span>
                             <button
-                              onClick={() => {
-                                // TODO: Implementar visualização do PDF da CCe
-                                console.log('Clicou no botão PDF da CCe:', cce.sequencia);
-                              }}
+                              onClick={() => handleVisualizarPDFCCe(dadosAutorizacao.chave, cce.sequencia)}
                               className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
                               title="Visualizar PDF da CCe"
                             >

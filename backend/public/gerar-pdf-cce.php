@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/../vendor/autoload.php';
-use NFePHP\DA\CCe\Dace;
+use NFePHP\DA\NFe\Daevento;
 
 try {
     
@@ -133,26 +133,40 @@ try {
     
     error_log("📄 PDF CCe - XML NFe original encontrado: {$xmlNfeEncontrado}");
     
-    // 8. Gerar PDF da CCe usando método nativo da biblioteca
-    $dace = new Dace($xmlNfeContent, $xmlContent);
-    $dace->debugMode(false);
-    $dace->creditsIntegratorFooter('Sistema Nexo PDV');
-    
-    // 9. Configurações opcionais do DACE
+    // 8. Preparar dados do emitente (necessário para Daevento)
+    $dadosEmitente = [
+        'razao' => 'Empresa Emitente', // Será extraído do XML da NFe
+        'logradouro' => '',
+        'numero' => '',
+        'complemento' => '',
+        'bairro' => '',
+        'CEP' => '',
+        'municipio' => '',
+        'UF' => '',
+        'telefone' => '',
+        'email' => ''
+    ];
+
+    // 9. Gerar PDF da CCe usando método nativo da biblioteca
+    $daevento = new Daevento($xmlContent, $dadosEmitente);
+    $daevento->debugMode(false);
+    $daevento->creditsIntegratorFooter('Sistema Nexo PDV');
+
+    // 10. Configurações opcionais do Daevento
     if (isset($input['logo_path']) && file_exists($input['logo_path'])) {
-        $dace->logoParameters($input['logo_path'], 'C', true);
+        $daevento->logoParameters($input['logo_path'], 'C', true);
     }
-    
-    // 10. Gerar PDF
-    $pdfContent = $dace->render();
+
+    // 11. Gerar PDF
+    $pdfContent = $daevento->render();
     
     if (!$pdfContent) {
         throw new Exception('Erro ao gerar PDF da Carta de Correção');
     }
-    
+
     error_log("📄 PDF CCe - PDF gerado com sucesso - " . strlen($pdfContent) . " bytes");
-    
-    // 11. Salvar PDF na estrutura organizada
+
+    // 12. Salvar PDF na estrutura organizada
     $pdfCceDir = "../storage/pdf/empresa_{$empresaId}/CCe/" . date('Y/m');
     if (!is_dir($pdfCceDir)) {
         mkdir($pdfCceDir, 0755, true);
@@ -167,15 +181,15 @@ try {
         throw new Exception('Falha ao salvar arquivo PDF da CCe');
     }
     
-    // 12. Verificar se arquivo foi salvo corretamente
+    // 13. Verificar se arquivo foi salvo corretamente
     if (!file_exists($pdfPath) || filesize($pdfPath) < 1000) {
         throw new Exception('PDF da CCe salvo mas arquivo inválido ou muito pequeno');
     }
-    
+
     error_log("📄 PDF CCe - PDF salvo com sucesso em: {$pdfPath}");
     error_log("📄 PDF CCe - Tamanho do arquivo: " . filesize($pdfPath) . " bytes");
-    
-    // 13. Retornar sucesso
+
+    // 14. Retornar sucesso
     echo json_encode([
         'success' => true,
         'message' => 'PDF da Carta de Correção gerado com sucesso',
