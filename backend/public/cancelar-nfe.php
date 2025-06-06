@@ -108,13 +108,33 @@ try {
     $consultaResponse = $tools->sefazConsultaChave($chaveNFe);
     error_log("🔍 Resposta consulta SEFAZ: " . $consultaResponse);
 
-    $consultaXml = simplexml_load_string($consultaResponse);
+    // SEGUINDO AS 4 LEIS NFe - PROCESSAR XML SOAP CORRETAMENTE
+    $consultaXml = false;
+
+    // Tentar processar XML direto
+    $consultaXml = @simplexml_load_string($consultaResponse);
+
+    // Se falhou, extrair conteúdo do envelope SOAP
+    if (!$consultaXml) {
+        if (preg_match('/<retConsSitNFe[^>]*>.*?<\/retConsSitNFe>/s', $consultaResponse, $xmlMatch)) {
+            $xmlLimpo = $xmlMatch[0];
+            $consultaXml = @simplexml_load_string($xmlLimpo);
+            error_log("✅ XML NFe extraído do envelope SOAP para consulta");
+        }
+    }
+
     if (!$consultaXml) {
         throw new Exception('Erro ao consultar NFe na SEFAZ');
     }
 
-    $consultaCstat = (string)$consultaXml->xpath('//cStat')[0] ?? '';
-    $consultaMotivo = (string)$consultaXml->xpath('//xMotivo')[0] ?? '';
+    // Extrair status e motivo usando XPath com e sem namespace
+    $cStatArray = $consultaXml->xpath('//cStat') ?: $consultaXml->xpath('//*[local-name()="cStat"]');
+    $xMotivoArray = $consultaXml->xpath('//xMotivo') ?: $consultaXml->xpath('//*[local-name()="xMotivo"]');
+
+    $consultaCstat = !empty($cStatArray) ? (string)$cStatArray[0] : '';
+    $consultaMotivo = !empty($xMotivoArray) ? (string)$xMotivoArray[0] : '';
+
+    error_log("🔍 Status extraído da consulta: '{$consultaCstat}' - '{$consultaMotivo}'");
 
     // Verificar se NFe existe e está autorizada
     if ($consultaCstat !== '100') {
@@ -139,12 +159,17 @@ try {
         throw new Exception("NFe não pode ser cancelada. {$mensagemEspecifica}");
     }
 
-    // Extrair protocolo real da SEFAZ
+    // Extrair protocolo real da SEFAZ usando XPath com e sem namespace
     $nProtReal = $consultaXml->xpath('//protNFe/infProt/nProt') ?:
+                 $consultaXml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
                  $consultaXml->xpath('//infProt/nProt') ?:
-                 $consultaXml->xpath('//nProt');
+                 $consultaXml->xpath('//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
+                 $consultaXml->xpath('//nProt') ?:
+                 $consultaXml->xpath('//*[local-name()="nProt"]');
 
     $protocoloReal = !empty($nProtReal) ? (string)$nProtReal[0] : null;
+
+    error_log("🔍 Protocolo extraído da consulta: '{$protocoloReal}'");
 
     if (!$protocoloReal) {
         throw new Exception('Protocolo real não encontrado na consulta SEFAZ');
@@ -165,19 +190,141 @@ try {
     
     error_log("🚫 Resposta SEFAZ: " . $response);
 
-    // 15. Processar resposta da SEFAZ
-    $xml = simplexml_load_string($response);
+    // 15. Processar resposta da SEFAZ (seguindo as 4 Leis NFe)
+    $xml = false;
+
+    // Tentar processar XML direto
+    $xml = @simplexml_load_string($response);
+
+    // Se falhou, extrair conteúdo do envelope SOAP
     if (!$xml) {
+        if (preg_match('/<retEnvEvento[^>]*>.*?<\/retEnvEvento>/s', $response, $xmlMatch)) {
+            $xmlLimpo = $xmlMatch[0];
+            $xml = @simplexml_load_string($xmlLimpo);
+            error_log("✅ XML Evento extraído do envelope SOAP para cancelamento");
+        }
+    }
+
+    if (!$xml) {
+        error_log("❌ ERRO: Não foi possível processar resposta da SEFAZ");
+        error_log("📋 Resposta recebida (primeiros 500 chars): " . substr($response, 0, 500));
         throw new Exception('Resposta inválida da SEFAZ');
     }
 
-    // Extrair informações da resposta
-    $cStat = (string)$xml->xpath('//cStat')[0] ?? '';
-    $xMotivo = (string)$xml->xpath('//xMotivo')[0] ?? '';
-    $nProt = (string)$xml->xpath('//nProt')[0] ?? '';
+    // Extrair informações da resposta usando XPath robusto
+    $cStatArray = $xml->xpath('//cStat') ?: $xml->xpath('//*[local-name()="cStat"]');
+    $xMotivoArray = $xml->xpath('//xMotivo') ?: $xml->xpath('//*[local-name()="xMotivo"]');
+    $nProtArray = $xml->xpath('//nProt') ?: $xml->xpath('//*[local-name()="nProt"]');
+
+    $cStat = !empty($cStatArray) ? (string)$cStatArray[0] : '';
+    $xMotivo = !empty($xMotivoArray) ? (string)$xMotivoArray[0] : '';
+    $nProt = !empty($nProtArray) ? (string)$nProtArray[0] : '';
+
+    error_log("🔍 Resposta cancelamento extraída - Status: '{$cStat}' - '{$xMotivo}' - Protocolo: '{$nProt}'");
 
     // 16. Verificar se cancelamento foi aceito
-    if ($cStat !== '135') { // 135 = Evento registrado e vinculado a NFe
+    // Status 135 = Evento registrado e vinculado a NFe (sucesso imediato)
+    // Status 128 = Lote de Evento Processado (implementar retry inteligente)
+
+    if ($cStat === '128') {
+        error_log("📋 STATUS 128 DETECTADO - Lote de Evento Processado");
+        error_log("🔄 SEGUINDO AS 4 LEIS NFe - Implementando retry inteligente");
+
+        // Configuração do retry (intervalos em segundos)
+        $retryIntervals = [3, 5, 8]; // 3 tentativas com intervalos crescentes
+        $maxTentativas = count($retryIntervals);
+        $cancelamentoConfirmado = false;
+
+        for ($tentativa = 1; $tentativa <= $maxTentativas; $tentativa++) {
+            error_log("🔄 TENTATIVA {$tentativa}/{$maxTentativas} - Aguardando {$retryIntervals[$tentativa-1]} segundos...");
+
+            // Aguardar intervalo antes da consulta
+            sleep($retryIntervals[$tentativa-1]);
+
+            // Consultar status atual da NFe usando método oficial da biblioteca
+            error_log("🔍 CONSULTANDO STATUS DA NFe (Tentativa {$tentativa})...");
+            $consultaCancelamento = $tools->sefazConsultaChave($chaveNFe);
+
+            // Processar XML da consulta
+            $xmlConsulta = false;
+
+            // Tentar processar XML direto
+            $xmlConsulta = @simplexml_load_string($consultaCancelamento);
+
+            // Se falhou, extrair conteúdo do envelope SOAP
+            if (!$xmlConsulta) {
+                if (preg_match('/<retConsSitNFe[^>]*>.*?<\/retConsSitNFe>/s', $consultaCancelamento, $xmlMatch)) {
+                    $xmlLimpo = $xmlMatch[0];
+                    $xmlConsulta = @simplexml_load_string($xmlLimpo);
+                    error_log("✅ XML consulta extraído do envelope SOAP (Tentativa {$tentativa})");
+                }
+            }
+
+            if (!$xmlConsulta) {
+                error_log("❌ Erro ao processar XML na tentativa {$tentativa}");
+                continue; // Tentar próxima iteração
+            }
+
+            // Extrair status atual da NFe
+            $cStatAtualArray = $xmlConsulta->xpath('//cStat') ?: $xmlConsulta->xpath('//*[local-name()="cStat"]');
+            $xMotivoAtualArray = $xmlConsulta->xpath('//xMotivo') ?: $xmlConsulta->xpath('//*[local-name()="xMotivo"]');
+
+            $cStatAtual = !empty($cStatAtualArray) ? (string)$cStatAtualArray[0] : '';
+            $xMotivoAtual = !empty($xMotivoAtualArray) ? (string)$xMotivoAtualArray[0] : '';
+
+            error_log("🔍 Tentativa {$tentativa} - Status: '{$cStatAtual}' - '{$xMotivoAtual}'");
+
+            // Verificar se cancelamento foi confirmado
+            if ($cStatAtual === '101') {
+                // Status 101 = Cancelamento de NF-e homologado (SUCESSO!)
+                error_log("✅ CANCELAMENTO CONFIRMADO na tentativa {$tentativa}!");
+                error_log("✅ Status 101: Cancelamento de NF-e homologado");
+
+                // Extrair protocolo de cancelamento
+                $nProtCancelArray = $xmlConsulta->xpath('//retCancNFe//nProt') ?:
+                                   $xmlConsulta->xpath('//*[local-name()="retCancNFe"]//*[local-name()="nProt"]') ?:
+                                   $xmlConsulta->xpath('//nProt') ?:
+                                   $xmlConsulta->xpath('//*[local-name()="nProt"]');
+
+                $protocoloCancelamento = !empty($nProtCancelArray) ? (string)$nProtCancelArray[0] : $protocoloReal;
+
+                // Atualizar variáveis para retorno de sucesso
+                $cStat = '135'; // Compatibilidade com código de sucesso
+                $xMotivo = 'Evento registrado e vinculado a NFe';
+                $nProt = $protocoloCancelamento;
+
+                $cancelamentoConfirmado = true;
+                error_log("✅ Protocolo cancelamento: {$protocoloCancelamento}");
+                break; // Sair do loop - sucesso!
+
+            } elseif ($cStatAtual === '100') {
+                // Ainda autorizada - cancelamento não processado ainda
+                error_log("⏳ Tentativa {$tentativa} - NFe ainda autorizada, aguardando processamento...");
+
+                if ($tentativa === $maxTentativas) {
+                    // Última tentativa e ainda não cancelou
+                    throw new Exception("Timeout: Cancelamento não foi processado pela SEFAZ após {$maxTentativas} tentativas. Tente novamente em alguns minutos.");
+                }
+                // Continuar para próxima tentativa
+
+            } else {
+                // Outro status - erro ou situação inesperada
+                error_log("❌ Tentativa {$tentativa} - Status inesperado: {$cStatAtual} - {$xMotivoAtual}");
+
+                if ($tentativa === $maxTentativas) {
+                    throw new Exception("Erro no cancelamento. Status final: {$cStatAtual} - {$xMotivoAtual}");
+                }
+                // Continuar para próxima tentativa
+            }
+        }
+
+        // Verificar se cancelamento foi confirmado após todas as tentativas
+        if (!$cancelamentoConfirmado) {
+            throw new Exception("Cancelamento não foi confirmado após {$maxTentativas} tentativas. Verifique o status da NFe manualmente.");
+        }
+
+    } elseif ($cStat !== '135') {
+        // Outros status que não são sucesso imediato
         throw new Exception("Cancelamento rejeitado pela SEFAZ. Código: {$cStat} - {$xMotivo}");
     }
 
