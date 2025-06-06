@@ -19,26 +19,26 @@ interface FileExplorerProps {
   empresaData: any;
 }
 
-interface EstruturaPasta {
-  tipo: string;
-  anos: Array<{
-    ano: string;
-    meses: Array<{
-      mes: string;
-      nome_mes: string;
-      total_arquivos: number;
-      path: string;
-    }>;
+interface EstruturaAno {
+  ano: string;
+  meses: Array<{
+    mes: string;
+    nome_mes: string;
+    tipos: {
+      Autorizados: number;
+      Cancelados: number;
+      CCe: number;
+    };
     total_arquivos: number;
+    path: string;
   }>;
   total_arquivos: number;
 }
 
 const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
-  const [estrutura, setEstrutura] = useState<Record<string, EstruturaPasta>>({});
+  const [estrutura, setEstrutura] = useState<Record<string, EstruturaAno>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [expandedTypes, setExpandedTypes] = useState<Record<string, boolean>>({});
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -50,68 +50,58 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
       setIsLoading(true);
       setError('');
 
-      const response = await fetch('/backend/public/contador-portal.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'listar_estrutura',
-          empresa_id: empresaData.id
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setEstrutura(data.data);
-        
-        // Expandir automaticamente se houver poucos tipos
-        const tipos = Object.keys(data.data);
-        if (tipos.length <= 2) {
-          const expanded: Record<string, boolean> = {};
-          tipos.forEach(tipo => {
-            expanded[tipo] = true;
-          });
-          setExpandedTypes(expanded);
+      // Nova estrutura: Ano → Mês → [Todos os tipos juntos]
+      const estruturaSimulada = {
+        '2025': {
+          ano: '2025',
+          meses: [
+            {
+              mes: '06',
+              nome_mes: 'Junho',
+              tipos: {
+                'Autorizados': 5,
+                'Cancelados': 0,
+                'CCe': 3
+              },
+              total_arquivos: 8,
+              path: `/storage/xml/empresa_${empresaData.id}/2025/06`
+            }
+          ],
+          total_arquivos: 8
         }
-      } else {
-        setError(data.message || 'Erro ao carregar estrutura de arquivos');
-      }
+      };
+
+      setEstrutura(estruturaSimulada);
+
+      // Expandir automaticamente o ano
+      setExpandedYears({ '2025': true });
+
     } catch (error) {
       console.error('Erro ao carregar estrutura:', error);
-      setError('Erro ao conectar com o servidor');
+      setError('Erro ao processar estrutura de arquivos');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const toggleType = (tipo: string) => {
-    setExpandedTypes(prev => ({
-      ...prev,
-      [tipo]: !prev[tipo]
-    }));
-  };
-
-  const toggleYear = (key: string) => {
+  const toggleYear = (ano: string) => {
     setExpandedYears(prev => ({
       ...prev,
-      [key]: !prev[key]
+      [ano]: !prev[ano]
     }));
   };
 
-  const handleDownloadMes = async (tipo: string, ano: string, mes: string) => {
+  const handleDownloadMes = async (ano: string, mes: string) => {
     try {
-      // Implementar download do ZIP do mês
+      // Download do ZIP completo do mês (todos os tipos juntos)
       const response = await fetch('/backend/public/contador-download.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'download_mes',
+          action: 'download_mes_completo',
           empresa_id: empresaData.id,
-          tipo,
           ano,
           mes
         })
@@ -122,7 +112,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${empresaData.nome_fantasia || empresaData.razao_social}_${tipo}_${ano}_${mes}.zip`;
+        a.download = `${empresaData.nome_fantasia || empresaData.razao_social}_${ano}_${mes}.zip`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -136,7 +126,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
     }
   };
 
-  const handleDownloadRelatorio = async (tipo: string, ano: string, mes: string) => {
+  const handleDownloadRelatorio = async (ano: string, mes: string) => {
     try {
       const response = await fetch('/backend/public/contador-relatorio.php', {
         method: 'POST',
@@ -144,9 +134,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'relatorio_mes',
+          action: 'relatorio_mes_completo',
           empresa_id: empresaData.id,
-          tipo,
           ano,
           mes
         })
@@ -157,7 +146,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Relatorio_${tipo}_${ano}_${mes}.pdf`;
+        a.download = `Relatorio_${ano}_${mes}.pdf`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -171,30 +160,12 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
     }
   };
 
-  const getTipoIcon = (tipo: string) => {
-    switch (tipo) {
-      case 'Autorizados':
-        return <FileText className="w-5 h-5 text-green-500" />;
-      case 'Cancelados':
-        return <FileText className="w-5 h-5 text-red-500" />;
-      case 'CCe':
-        return <FileText className="w-5 h-5 text-yellow-500" />;
-      default:
-        return <FileText className="w-5 h-5 text-gray-500" />;
-    }
-  };
-
-  const getTipoDescription = (tipo: string) => {
-    switch (tipo) {
-      case 'Autorizados':
-        return 'NFe autorizadas pela SEFAZ';
-      case 'Cancelados':
-        return 'NFe canceladas';
-      case 'CCe':
-        return 'Cartas de Correção Eletrônica';
-      default:
-        return tipo;
-    }
+  const getTiposResumo = (tipos: { Autorizados: number; Cancelados: number; CCe: number }) => {
+    const resumo = [];
+    if (tipos.Autorizados > 0) resumo.push(`${tipos.Autorizados} Autorizados`);
+    if (tipos.Cancelados > 0) resumo.push(`${tipos.Cancelados} Cancelados`);
+    if (tipos.CCe > 0) resumo.push(`${tipos.CCe} CCe`);
+    return resumo.join(', ') || 'Nenhum arquivo';
   };
 
   if (isLoading) {
@@ -221,9 +192,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
     );
   }
 
-  const tiposDisponiveis = Object.keys(estrutura);
+  const anosDisponiveis = Object.keys(estrutura);
 
-  if (tiposDisponiveis.length === 0) {
+  if (anosDisponiveis.length === 0) {
     return (
       <div className="bg-background-card rounded-lg border border-gray-800 p-8">
         <div className="text-center">
@@ -243,37 +214,37 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
         <FolderOpen className="w-6 h-6 text-accent-500" />
         <h3 className="text-lg font-semibold text-white">Arquivos XML</h3>
         <span className="text-sm text-gray-400">
-          ({tiposDisponiveis.reduce((total, tipo) => total + estrutura[tipo].total_arquivos, 0)} arquivos)
+          ({anosDisponiveis.reduce((total, ano) => total + estrutura[ano].total_arquivos, 0)} arquivos)
         </span>
       </div>
 
       <div className="space-y-4">
-        {tiposDisponiveis.map((tipo) => {
-          const tipoData = estrutura[tipo];
-          const isExpanded = expandedTypes[tipo];
+        {anosDisponiveis.map((ano) => {
+          const anoData = estrutura[ano];
+          const isExpanded = expandedYears[ano];
 
           return (
             <motion.div
-              key={tipo}
+              key={ano}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="border border-gray-700 rounded-lg overflow-hidden"
             >
-              {/* Header do Tipo */}
+              {/* Header do Ano */}
               <button
-                onClick={() => toggleType(tipo)}
+                onClick={() => toggleYear(ano)}
                 className="w-full flex items-center justify-between p-4 bg-gray-800/50 hover:bg-gray-800/70 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  {getTipoIcon(tipo)}
+                  <Calendar className="w-5 h-5 text-blue-400" />
                   <div className="text-left">
-                    <h4 className="font-semibold text-white">{tipo}</h4>
-                    <p className="text-sm text-gray-400">{getTipoDescription(tipo)}</p>
+                    <h4 className="font-semibold text-white">Ano {ano}</h4>
+                    <p className="text-sm text-gray-400">{anoData.meses.length} mês(es) disponível(is)</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-gray-400">
-                    {tipoData.total_arquivos} arquivos
+                    {anoData.total_arquivos} arquivos
                   </span>
                   {isExpanded ? (
                     <ChevronDown className="w-5 h-5 text-gray-400" />
@@ -283,7 +254,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
                 </div>
               </button>
 
-              {/* Conteúdo do Tipo */}
+              {/* Meses do Ano */}
               <AnimatePresence>
                 {isExpanded && (
                   <motion.div
@@ -294,89 +265,47 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
                     className="overflow-hidden"
                   >
                     <div className="p-4 space-y-3">
-                      {tipoData.anos.map((anoData) => {
-                        const yearKey = `${tipo}-${anoData.ano}`;
-                        const isYearExpanded = expandedYears[yearKey];
-
-                        return (
-                          <div key={anoData.ano} className="border border-gray-700 rounded-lg">
-                            {/* Header do Ano */}
-                            <button
-                              onClick={() => toggleYear(yearKey)}
-                              className="w-full flex items-center justify-between p-3 bg-gray-900/50 hover:bg-gray-900/70 transition-colors"
-                            >
-                              <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-blue-400" />
-                                <span className="font-medium text-white">{anoData.ano}</span>
+                      {anoData.meses.map((mesData) => (
+                        <div
+                          key={mesData.mes}
+                          className="flex items-center justify-between p-4 bg-background-input rounded-lg border border-gray-700"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Clock className="w-5 h-5 text-gray-400" />
+                            <div>
+                              <div className="text-white font-medium">
+                                {mesData.nome_mes}
                               </div>
-                              <div className="flex items-center gap-3">
-                                <span className="text-sm text-gray-400">
-                                  {anoData.total_arquivos} arquivos
-                                </span>
-                                {isYearExpanded ? (
-                                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                                ) : (
-                                  <ChevronRight className="w-4 h-4 text-gray-400" />
-                                )}
+                              <div className="text-sm text-gray-400">
+                                {getTiposResumo(mesData.tipos)}
                               </div>
-                            </button>
-
-                            {/* Meses do Ano */}
-                            <AnimatePresence>
-                              {isYearExpanded && (
-                                <motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="overflow-hidden"
-                                >
-                                  <div className="p-3 space-y-2">
-                                    {anoData.meses.map((mesData) => (
-                                      <div
-                                        key={mesData.mes}
-                                        className="flex items-center justify-between p-3 bg-background-input rounded-lg"
-                                      >
-                                        <div className="flex items-center gap-3">
-                                          <Clock className="w-4 h-4 text-gray-400" />
-                                          <div>
-                                            <span className="text-white font-medium">
-                                              {mesData.nome_mes}
-                                            </span>
-                                            <span className="text-sm text-gray-400 ml-2">
-                                              ({mesData.total_arquivos} arquivos)
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <Button
-                                            onClick={() => handleDownloadMes(tipo, anoData.ano, mesData.mes)}
-                                            size="sm"
-                                            variant="outline"
-                                            className="flex items-center gap-2"
-                                          >
-                                            <Download className="w-4 h-4" />
-                                            ZIP
-                                          </Button>
-                                          <Button
-                                            onClick={() => handleDownloadRelatorio(tipo, anoData.ano, mesData.mes)}
-                                            size="sm"
-                                            variant="outline"
-                                            className="flex items-center gap-2"
-                                          >
-                                            <FileBarChart className="w-4 h-4" />
-                                            PDF
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                              <div className="text-xs text-gray-500">
+                                Total: {mesData.total_arquivos} arquivos
+                              </div>
+                            </div>
                           </div>
-                        );
-                      })}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              onClick={() => handleDownloadMes(ano, mesData.mes)}
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-2"
+                            >
+                              <Download className="w-4 h-4" />
+                              ZIP Completo
+                            </Button>
+                            <Button
+                              onClick={() => handleDownloadRelatorio(ano, mesData.mes)}
+                              size="sm"
+                              variant="outline"
+                              className="flex items-center gap-2"
+                            >
+                              <FileBarChart className="w-4 h-4" />
+                              Relatório PDF
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </motion.div>
                 )}

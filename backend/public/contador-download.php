@@ -22,15 +22,19 @@ switch ($action) {
     case 'download_mes':
         downloadMes($input);
         break;
-    
+
+    case 'download_mes_completo':
+        downloadMesCompleto($input);
+        break;
+
     case 'download_ano':
         downloadAno($input);
         break;
-    
+
     case 'download_tipo':
         downloadTipo($input);
         break;
-    
+
     default:
         http_response_code(400);
         echo json_encode([
@@ -38,6 +42,94 @@ switch ($action) {
             'message' => 'Ação não especificada'
         ]);
         break;
+}
+
+/**
+ * Download completo dos XMLs de um mês (todos os tipos juntos)
+ */
+function downloadMesCompleto($input) {
+    try {
+        $empresaId = $input['empresa_id'] ?? '';
+        $ano = $input['ano'] ?? '';
+        $mes = $input['mes'] ?? '';
+
+        if (empty($empresaId) || empty($ano) || empty($mes)) {
+            throw new Exception('Parâmetros obrigatórios não informados');
+        }
+
+        $basePath = "../storage/xml/empresa_{$empresaId}";
+
+        if (!is_dir($basePath)) {
+            throw new Exception('Pasta da empresa não encontrada');
+        }
+
+        // Criar nome do arquivo ZIP
+        $nomeEmpresa = sanitizeFilename("Empresa_{$empresaId}");
+        $nomeMes = getNomeMes($mes);
+        $zipFilename = "{$nomeEmpresa}_{$ano}_{$nomeMes}.zip";
+
+        // Criar ZIP temporário
+        $tempZipPath = sys_get_temp_dir() . '/' . uniqid('contador_') . '.zip';
+
+        $zip = new ZipArchive();
+        if ($zip->open($tempZipPath, ZipArchive::CREATE) !== TRUE) {
+            throw new Exception('Erro ao criar arquivo ZIP');
+        }
+
+        $totalArquivos = 0;
+        $tipos = ['Autorizados', 'Cancelados', 'CCe'];
+
+        // Adicionar arquivos de cada tipo
+        foreach ($tipos as $tipo) {
+            $tipoPath = "{$basePath}/{$tipo}/{$ano}/{$mes}";
+
+            if (is_dir($tipoPath)) {
+                $xmlFiles = glob("{$tipoPath}/*.xml");
+
+                foreach ($xmlFiles as $xmlFile) {
+                    $filename = "{$tipo}/" . basename($xmlFile);
+                    $zip->addFile($xmlFile, $filename);
+                    $totalArquivos++;
+                }
+            }
+        }
+
+        if ($totalArquivos === 0) {
+            throw new Exception('Nenhum arquivo XML encontrado para este período');
+        }
+
+        // Adicionar relatório de resumo
+        $relatorio = gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos);
+        $zip->addFromString('RELATORIO_' . strtoupper($nomeMes) . '_' . $ano . '.txt', $relatorio);
+
+        $zip->close();
+
+        // Verificar se o ZIP foi criado
+        if (!file_exists($tempZipPath)) {
+            throw new Exception('Erro ao gerar arquivo ZIP');
+        }
+
+        // Configurar headers para download
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="' . $zipFilename . '"');
+        header('Content-Length: ' . filesize($tempZipPath));
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+
+        // Enviar arquivo
+        readfile($tempZipPath);
+
+        // Limpar arquivo temporário
+        unlink($tempZipPath);
+
+    } catch (Exception $e) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    }
 }
 
 /**
@@ -199,6 +291,54 @@ function downloadAno($input) {
             'message' => $e->getMessage()
         ]);
     }
+}
+
+/**
+ * Gera relatório de resumo para um mês completo (todos os tipos)
+ */
+function gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos) {
+    $nomeMes = getNomeMes($mes);
+    $totalGeral = 0;
+
+    $relatorio = "RELATÓRIO COMPLETO DE XMLs\n";
+    $relatorio .= "Período: {$nomeMes}/{$ano}\n";
+    $relatorio .= "Data de geração: " . date('d/m/Y H:i:s') . "\n\n";
+
+    foreach ($tipos as $tipo) {
+        $tipoPath = "{$basePath}/{$tipo}/{$ano}/{$mes}";
+
+        if (is_dir($tipoPath)) {
+            $xmlFiles = glob("{$tipoPath}/*.xml");
+            $totalTipo = count($xmlFiles);
+            $totalGeral += $totalTipo;
+
+            $relatorio .= "=== {$tipo} ===\n";
+            $relatorio .= "Total: {$totalTipo} arquivos\n";
+
+            if ($totalTipo > 0) {
+                foreach ($xmlFiles as $xmlFile) {
+                    $filename = basename($xmlFile);
+                    $size = filesize($xmlFile);
+                    $date = date('d/m/Y H:i:s', filemtime($xmlFile));
+
+                    $relatorio .= sprintf("  %-40s %10s %s\n",
+                        $filename,
+                        formatBytes($size),
+                        $date
+                    );
+                }
+            } else {
+                $relatorio .= "  Nenhum arquivo encontrado\n";
+            }
+
+            $relatorio .= "\n";
+        }
+    }
+
+    $relatorio .= str_repeat("=", 50) . "\n";
+    $relatorio .= "TOTAL GERAL: {$totalGeral} arquivos\n";
+
+    return $relatorio;
 }
 
 /**

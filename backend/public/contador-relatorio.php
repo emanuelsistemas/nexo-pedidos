@@ -27,11 +27,15 @@ switch ($action) {
     case 'relatorio_mes':
         gerarRelatorioMes($input);
         break;
-    
+
+    case 'relatorio_mes_completo':
+        gerarRelatorioMesCompleto($input);
+        break;
+
     case 'relatorio_ano':
         gerarRelatorioAno($input);
         break;
-    
+
     default:
         http_response_code(400);
         echo json_encode([
@@ -39,6 +43,86 @@ switch ($action) {
             'message' => 'Ação não especificada'
         ]);
         break;
+}
+
+/**
+ * Gera relatório PDF completo de um mês (todos os tipos)
+ */
+function gerarRelatorioMesCompleto($input) {
+    try {
+        $empresaId = $input['empresa_id'] ?? '';
+        $ano = $input['ano'] ?? '';
+        $mes = $input['mes'] ?? '';
+
+        if (empty($empresaId) || empty($ano) || empty($mes)) {
+            throw new Exception('Parâmetros obrigatórios não informados');
+        }
+
+        $basePath = "../storage/xml/empresa_{$empresaId}";
+
+        if (!is_dir($basePath)) {
+            throw new Exception('Pasta da empresa não encontrada');
+        }
+
+        $tipos = ['Autorizados', 'Cancelados', 'CCe'];
+        $todosXMLs = [];
+
+        // Buscar XMLs de todos os tipos
+        foreach ($tipos as $tipo) {
+            $tipoPath = "{$basePath}/{$tipo}/{$ano}/{$mes}";
+
+            if (is_dir($tipoPath)) {
+                $xmlFiles = glob("{$tipoPath}/*.xml");
+
+                foreach ($xmlFiles as $xmlFile) {
+                    $todosXMLs[] = [
+                        'arquivo' => $xmlFile,
+                        'tipo' => $tipo
+                    ];
+                }
+            }
+        }
+
+        if (empty($todosXMLs)) {
+            throw new Exception('Nenhum arquivo XML encontrado');
+        }
+
+        // Processar XMLs e agrupar por dia
+        $dadosPorDia = processarXMLsPorDiaCompleto($todosXMLs);
+
+        // Gerar HTML do relatório (versão simplificada)
+        $html = gerarHTMLRelatorio($dadosPorDia, 'COMPLETO', $ano, $mes, $empresaId);
+
+        // Configurar Dompdf
+        $options = new Options();
+        $options->set('defaultFont', 'Arial');
+        $options->set('isRemoteEnabled', true);
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        // Configurar headers para download
+        $nomeMes = getNomeMes($mes);
+        $filename = "Relatorio_Completo_{$nomeMes}_{$ano}.pdf";
+
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+
+        // Enviar PDF
+        echo $dompdf->output();
+
+    } catch (Exception $e) {
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => false,
+            'message' => $e->getMessage()
+        ]);
+    }
 }
 
 /**
@@ -104,6 +188,96 @@ function gerarRelatorioMes($input) {
             'message' => $e->getMessage()
         ]);
     }
+}
+
+/**
+ * Processa XMLs completos (todos os tipos) e agrupa por dia
+ */
+function processarXMLsPorDiaCompleto($todosXMLs) {
+    $dadosPorDia = [];
+
+    foreach ($todosXMLs as $xmlData) {
+        try {
+            $xmlFile = $xmlData['arquivo'];
+            $tipo = $xmlData['tipo'];
+
+            $xml = simplexml_load_file($xmlFile);
+
+            if (!$xml) {
+                continue;
+            }
+
+            // Extrair data de emissão
+            $dataEmissao = '';
+            if (isset($xml->NFe->infNFe->ide->dhEmi)) {
+                $dataEmissao = (string)$xml->NFe->infNFe->ide->dhEmi;
+            } elseif (isset($xml->NFe->infNFe->ide->dEmi)) {
+                $dataEmissao = (string)$xml->NFe->infNFe->ide->dEmi;
+            }
+
+            if (empty($dataEmissao)) {
+                continue;
+            }
+
+            // Converter para data
+            $data = date('Y-m-d', strtotime($dataEmissao));
+            $dataFormatada = date('d/m/Y', strtotime($dataEmissao));
+
+            // Extrair valor total
+            $valorTotal = 0;
+            if (isset($xml->NFe->infNFe->total->ICMSTot->vNF)) {
+                $valorTotal = (float)$xml->NFe->infNFe->total->ICMSTot->vNF;
+            }
+
+            // Extrair número da NFe
+            $numeroNFe = '';
+            if (isset($xml->NFe->infNFe->ide->nNF)) {
+                $numeroNFe = (string)$xml->NFe->infNFe->ide->nNF;
+            }
+
+            // Extrair chave de acesso
+            $chaveAcesso = '';
+            if (isset($xml->NFe->infNFe['Id'])) {
+                $chaveAcesso = str_replace('NFe', '', (string)$xml->NFe->infNFe['Id']);
+            }
+
+            // Agrupar por dia
+            if (!isset($dadosPorDia[$data])) {
+                $dadosPorDia[$data] = [
+                    'data' => $dataFormatada,
+                    'nfes' => [],
+                    'total_valor' => 0,
+                    'total_nfes' => 0,
+                    'por_tipo' => [
+                        'Autorizados' => 0,
+                        'Cancelados' => 0,
+                        'CCe' => 0
+                    ]
+                ];
+            }
+
+            $dadosPorDia[$data]['nfes'][] = [
+                'numero' => $numeroNFe,
+                'chave' => $chaveAcesso,
+                'valor' => $valorTotal,
+                'tipo' => $tipo,
+                'arquivo' => basename($xmlFile)
+            ];
+
+            $dadosPorDia[$data]['total_valor'] += $valorTotal;
+            $dadosPorDia[$data]['total_nfes']++;
+            $dadosPorDia[$data]['por_tipo'][$tipo]++;
+
+        } catch (Exception $e) {
+            // Ignorar XMLs com erro
+            continue;
+        }
+    }
+
+    // Ordenar por data
+    ksort($dadosPorDia);
+
+    return $dadosPorDia;
 }
 
 /**
