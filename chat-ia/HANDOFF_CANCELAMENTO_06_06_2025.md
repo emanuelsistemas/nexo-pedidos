@@ -8,7 +8,7 @@
 - ✅ **Interface cancelamento**: 100% funcional (modal + validações)
 - ✅ **XML cancelamento**: Salvo corretamente para contabilidade
 - ✅ **Estrutura organizada**: Autorizados/ e Cancelados/ por empresa
-- ❌ **Grid status**: NÃO atualiza após cancelamento (PENDENTE)
+- ✅ **Grid status**: CORRIGIDO - Atualiza após cancelamento
 
 ### **⚖️ 4 LEIS NFe SEGUIDAS:**
 - ✅ **Dados reais**: Sem fallbacks, protocolos reais SEFAZ

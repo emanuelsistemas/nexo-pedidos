@@ -87,12 +87,12 @@ try {
     // Gerar PDF
     $pdfContent = $danfe->render();
     
-    // Salvar PDF
-    $pdfDir = "../storage/pdf/empresa_{$empresaId}/" . date('Y/m');
+    // Salvar PDF - NOVA ESTRUTURA ORGANIZADA (igual aos XMLs)
+    $pdfDir = "../storage/pdf/empresa_{$empresaId}/Autorizados/" . date('Y/m');
     if (!is_dir($pdfDir)) {
         mkdir($pdfDir, 0755, true);
     }
-    
+
     $pdfPath = "{$pdfDir}/{$chave}.pdf";
     $bytesWritten = file_put_contents($pdfPath, $pdfContent);
     

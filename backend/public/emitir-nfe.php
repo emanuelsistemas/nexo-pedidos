@@ -1200,11 +1200,11 @@ try {
 
         error_log("PDF: PDF gerado com sucesso - " . strlen($pdfContent) . " bytes");
 
-        // Salvar PDF
-        $pdfDir = "../storage/pdf/empresa_{$empresaId}/" . date('Y/m');
+        // Salvar PDF - NOVA ESTRUTURA ORGANIZADA (igual aos XMLs)
+        $pdfDir = "../storage/pdf/empresa_{$empresaId}/Autorizados/" . date('Y/m');
         if (!is_dir($pdfDir)) {
             mkdir($pdfDir, 0755, true);
-            error_log("PDF: Diretório criado: {$pdfDir}");
+            error_log("PDF: Diretório de PDFs autorizados criado: {$pdfDir}");
         }
 
         $pdfPath = "{$pdfDir}/{$chaveParaSalvar}.pdf";

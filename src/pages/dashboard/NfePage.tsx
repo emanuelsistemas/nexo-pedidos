@@ -564,15 +564,8 @@ const NfePage: React.FC = () => {
                     Reenviar Email
                   </button>
 
-                  <div className="border-t border-gray-700 my-1"></div>
-
-                  <button
-                    onClick={() => handleAction(() => handleCancelar(nfe))}
-                    className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-700 flex items-center gap-2"
-                  >
-                    <X size={14} />
-                    Cancelar NFe
-                  </button>
+                  {/* ✅ CANCELAMENTO REMOVIDO DA GRID - Agora é feito dentro da própria NFe */}
+                  {/* Cancelamento está disponível na seção "Autorização" da NFe */}
                 </>
               )}
 
@@ -1742,6 +1735,25 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             setTimeout(() => {
               console.log('👁️ Aplicando dados completos da NFe para visualização');
               setNfeData(dadosCarregados);
+
+              // Carregar CCe existentes do banco de dados
+              if (nfe.cartas_correcao) {
+                try {
+                  const ccesExistentes = typeof nfe.cartas_correcao === 'string'
+                    ? JSON.parse(nfe.cartas_correcao)
+                    : nfe.cartas_correcao;
+
+                  if (Array.isArray(ccesExistentes) && ccesExistentes.length > 0) {
+                    console.log('📝 Carregando CCe existentes:', ccesExistentes);
+                    setDadosAutorizacao(prev => ({
+                      ...prev,
+                      cartas_correcao: ccesExistentes
+                    }));
+                  }
+                } catch (error) {
+                  console.error('❌ Erro ao carregar CCe existentes:', error);
+                }
+              }
             }, 100);
           } catch (error) {
             console.error('❌ Erro ao fazer parse dos dados_nfe:', error);
@@ -3253,6 +3265,124 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     }
   };
 
+  // Função para enviar Carta de Correção (CCe)
+  const handleEnviarCCe = async () => {
+    try {
+      // Validações iniciais
+      if (!dadosAutorizacao?.chave) {
+        showToast('Chave da NFe não encontrada', 'error');
+        return;
+      }
+
+      if (!dadosAutorizacao?.carta_correcao || dadosAutorizacao.carta_correcao.length < 15) {
+        showToast('Carta de Correção deve ter pelo menos 15 caracteres', 'error');
+        return;
+      }
+
+      // Sequência será calculada automaticamente pelo backend se não informada
+
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada para o usuário');
+      }
+
+      // Preparar dados para CCe (sequência será calculada automaticamente)
+      const cceData = {
+        empresa_id: usuarioData.empresa_id,
+        chave_nfe: dadosAutorizacao.chave,
+        correcao: dadosAutorizacao.carta_correcao?.trim() || '',
+        sequencia: 'auto' // Backend calculará automaticamente
+      };
+
+      console.log('📝 Enviando CCe:', cceData);
+      showToast('Enviando Carta de Correção...', 'info');
+
+      // Enviar CCe para o backend
+      const response = await fetch('/backend/public/carta-correcao.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(cceData)
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao enviar Carta de Correção');
+      }
+
+      console.log('✅ CCe enviada com sucesso:', result);
+      showToast('Carta de Correção enviada com sucesso!', 'success');
+
+      // Gerar PDF da CCe automaticamente
+      try {
+        const pdfResponse = await fetch('/backend/public/gerar-pdf-cce.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            chave: dadosAutorizacao.chave,
+            empresa_id: usuarioData.empresa_id,
+            sequencia: result.data.sequencia // Usar sequência retornada pelo backend
+          })
+        });
+
+        const pdfResult = await pdfResponse.json();
+
+        if (pdfResult.success) {
+          console.log('✅ PDF da CCe gerado:', pdfResult);
+          showToast('PDF da Carta de Correção gerado com sucesso!', 'success');
+        } else {
+          console.warn('⚠️ Erro ao gerar PDF da CCe:', pdfResult.error);
+          showToast('CCe enviada, mas houve erro ao gerar PDF', 'info');
+        }
+      } catch (pdfError) {
+        console.warn('⚠️ Erro ao gerar PDF da CCe:', pdfError);
+        showToast('CCe enviada, mas houve erro ao gerar PDF', 'info');
+      }
+
+      // Atualizar dados da NFe com informações da CCe
+      setDadosAutorizacao(prev => ({
+        ...prev,
+        cce_enviada: true,
+        cce_protocolo: result.data.protocolo_cce,
+        cce_data: result.data.data_cce,
+        cce_sequencia: result.data.sequencia,
+        // Adicionar nova CCe ao histórico
+        cartas_correcao: [
+          ...(prev.cartas_correcao || []),
+          {
+            sequencia: result.data.sequencia,
+            data_envio: result.data.data_cce,
+            protocolo: result.data.protocolo_cce,
+            correcao: result.data.correcao || dadosAutorizacao.carta_correcao,
+            status: 'aceita',
+            codigo_status: result.data.codigo_status,
+            ambiente: result.data.ambiente
+          }
+        ]
+      }));
+
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar CCe:', error);
+      showToast(`Erro ao enviar Carta de Correção: ${error.message}`, 'error');
+    }
+  };
+
   const renderContent = () => {
     switch (activeSection) {
       case 'identificacao':
@@ -3341,10 +3471,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             onChange={setDadosAutorizacao}
             isViewMode={isViewMode}
             onCancelarNFe={handleCancelarNFeFromAutorizacao}
-            onUpdateGrid={() => {
-              console.log('🔄 Recarregando grid após cancelamento...');
-              loadNfes();
-            }}
+            onEnviarCCe={handleEnviarCCe}
           />
         );
       default:
@@ -5932,8 +6059,8 @@ const AutorizacaoSection: React.FC<{
   onChange: (dados: any) => void;
   isViewMode?: boolean;
   onCancelarNFe?: (motivo: string) => void;
-  onUpdateGrid?: () => void;
-}> = ({ dados, onChange, isViewMode, onCancelarNFe, onUpdateGrid }) => {
+  onEnviarCCe?: () => void;
+}> = ({ dados, onChange, isViewMode, onCancelarNFe, onEnviarCCe }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -6148,39 +6275,96 @@ const AutorizacaoSection: React.FC<{
       <div className="bg-background-card rounded-lg border border-gray-800 p-4">
         <h3 className="text-lg font-medium text-white mb-4">Ações Pós-Autorização</h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Sequência CCe
-            </label>
-            <input
-              type="number"
-              value={dados.sequencia_cce || ''}
-              onChange={(e) => onChange({ ...dados, sequencia_cce: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
-              placeholder="Sequência para Carta de Correção"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Número sequencial para Carta de Correção Eletrônica
+        {/* ✅ REGRA OFICIAL SEFAZ GA01: NFe cancelada NÃO pode receber Carta de Correção */}
+        {dados?.status !== 'cancelada' ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* Histórico de Cartas de Correção */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Cartas de Correção Enviadas
+                </label>
+                <div className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white min-h-[80px]">
+                  {dados.cartas_correcao && dados.cartas_correcao.length > 0 ? (
+                    <div className="space-y-2">
+                      {dados.cartas_correcao.map((cce: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-gray-700 rounded text-sm">
+                          <div className="flex items-center gap-3">
+                            <span className="bg-yellow-600 text-white px-2 py-1 rounded text-xs font-medium">
+                              CCe #{cce.sequencia}
+                            </span>
+                            <span className="text-gray-300">
+                              {new Date(cce.data_envio).toLocaleString('pt-BR')}
+                            </span>
+                            <span className="text-green-400 text-xs">
+                              ✓ {cce.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400">
+                              Protocolo: {cce.protocolo}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-xs text-gray-500 mt-2">
+                        Próxima sequência: {(dados.cartas_correcao.length + 1)} (máximo 20)
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-16 text-gray-500">
+                      <div className="text-center">
+                        <p className="text-sm">Nenhuma Carta de Correção enviada</p>
+                        <p className="text-xs">Próxima sequência será: 1</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Carta de Correção
+              </label>
+              <textarea
+                rows={3}
+                value={dados.carta_correcao || ''}
+                onChange={(e) => onChange({ ...dados, carta_correcao: e.target.value })}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none"
+                placeholder="Digite a correção que deseja fazer na NFe (mínimo 15 caracteres)..."
+                maxLength={1000}
+              />
+              <div className="flex justify-between items-center mt-1">
+                <p className="text-xs text-gray-500">
+                  Use para corrigir dados que não alterem o valor do documento
+                </p>
+                <p className={`text-xs font-medium ${
+                  (dados.carta_correcao || '').length >= 15
+                    ? 'text-green-400'
+                    : (dados.carta_correcao || '').length > 0
+                    ? 'text-yellow-400'
+                    : 'text-gray-500'
+                }`}>
+                  {(dados.carta_correcao || '').length}/15
+                </p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-2 text-red-400 mb-2">
+              <X size={16} />
+              <span className="font-medium">Carta de Correção Indisponível</span>
+            </div>
+            <p className="text-gray-300 text-sm">
+              <strong>Regra SEFAZ GA01:</strong> NFe cancelada não pode receber Carta de Correção Eletrônica (CCe).
+            </p>
+            <p className="text-gray-400 text-xs mt-1">
+              Apenas NFe com status "autorizada" podem ser corrigidas via CCe.
             </p>
           </div>
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Carta de Correção
-          </label>
-          <textarea
-            rows={3}
-            value={dados.carta_correcao || ''}
-            onChange={(e) => onChange({ ...dados, carta_correcao: e.target.value })}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none"
-            placeholder="Digite a correção que deseja fazer na NFe..."
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Use para corrigir dados que não alterem o valor do documento
-          </p>
-        </div>
+        )}
 
         {/* Área de Cancelamento */}
         <div className="mb-6">
@@ -6308,6 +6492,8 @@ const AutorizacaoSection: React.FC<{
 
         {/* Botões de Ação */}
         <div className="flex flex-wrap gap-3">
+          {/* ✅ BOTÕES XML/PDF TEMPORARIAMENTE OCULTOS - Implementação em desenvolvimento */}
+          {/*
           <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2">
             <Download size={16} />
             Baixar XML
@@ -6316,10 +6502,35 @@ const AutorizacaoSection: React.FC<{
             <Download size={16} />
             Baixar PDF
           </button>
-          <button className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 flex items-center gap-2">
-            <Send size={16} />
-            Enviar CCe
-          </button>
+          */}
+          {/* ✅ REGRA SEFAZ GA01: Só mostrar botão CCe se NFe não estiver cancelada */}
+          {dados?.status !== 'cancelada' && onEnviarCCe && (
+            <button
+              onClick={onEnviarCCe}
+              disabled={
+                !dados?.chave ||
+                !dados?.carta_correcao ||
+                dados.carta_correcao.length < 15
+              }
+              className={`px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 flex items-center gap-2 transition-colors ${
+                !dados?.chave ||
+                !dados?.carta_correcao ||
+                dados.carta_correcao.length < 15
+                  ? 'bg-gray-600 cursor-not-allowed'
+                  : 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500'
+              }`}
+              title={
+                !dados?.chave
+                  ? 'Chave da NFe não encontrada'
+                  : dados.carta_correcao?.length < 15
+                  ? 'Digite pelo menos 15 caracteres na correção'
+                  : 'Enviar Carta de Correção'
+              }
+            >
+              <Send size={16} />
+              Enviar CCe
+            </button>
+          )}
           {dados?.status !== 'cancelada' && (
             <button
               onClick={handleCancelarClick}

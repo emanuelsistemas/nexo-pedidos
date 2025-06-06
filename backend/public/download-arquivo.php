@@ -6,13 +6,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 try {
     // Parâmetros obrigatórios
-    $type = $_GET['type'] ?? null; // 'xml' ou 'pdf'
+    $type = $_GET['type'] ?? null; // 'xml', 'pdf', 'xml_cce', 'pdf_cce'
     $chave = $_GET['chave'] ?? null;
     $empresaId = $_GET['empresa_id'] ?? null;
-    
+    $sequencia = $_GET['sequencia'] ?? 1; // Para CCe
+
     // Validações
-    if (!$type || !in_array($type, ['xml', 'pdf'])) {
-        throw new Exception('Tipo inválido. Use: xml ou pdf');
+    if (!$type || !in_array($type, ['xml', 'pdf', 'xml_cce', 'pdf_cce'])) {
+        throw new Exception('Tipo inválido. Use: xml, pdf, xml_cce ou pdf_cce');
     }
     
     if (!$chave || strlen($chave) !== 44) {
@@ -27,12 +28,22 @@ try {
         throw new Exception('empresa_id inválido');
     }
     
-    // Determinar diretório base por empresa
-    $baseDir = "../storage/{$type}/empresa_{$empresaId}";
-    
+    // Determinar diretório base e extensão por tipo
+    if (in_array($type, ['xml_cce', 'pdf_cce'])) {
+        // Para CCe
+        $baseType = str_replace('_cce', '', $type);
+        $baseDir = "../storage/{$baseType}/empresa_{$empresaId}/CCe";
+        $extensao = $baseType;
+        $sufixoArquivo = '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT);
+    } else {
+        // Para NFe normal
+        $baseDir = "../storage/{$type}/empresa_{$empresaId}/Autorizados";
+        $extensao = $type;
+        $sufixoArquivo = '';
+    }
+
     // Buscar arquivo recursivamente (pode estar em subpastas por data)
     $arquivoEncontrado = null;
-    $extensao = $type === 'xml' ? 'xml' : 'pdf';
     
     // Função para buscar arquivo recursivamente
     function buscarArquivo($dir, $nomeArquivo) {
@@ -53,7 +64,7 @@ try {
         return null;
     }
     
-    $nomeArquivo = "{$chave}.{$extensao}";
+    $nomeArquivo = "{$chave}{$sufixoArquivo}.{$extensao}";
     $arquivoEncontrado = buscarArquivo($baseDir, $nomeArquivo);
     
     if (!$arquivoEncontrado || !file_exists($arquivoEncontrado)) {
@@ -74,9 +85,14 @@ try {
         }
     }
     
-    // Determinar tipo de conteúdo
-    $contentType = $type === 'xml' ? 'application/xml' : 'application/pdf';
-    $filename = $type === 'xml' ? "NFe_{$chave}.xml" : "DANFE_{$chave}.pdf";
+    // Determinar tipo de conteúdo e nome do arquivo
+    if (in_array($type, ['xml', 'xml_cce'])) {
+        $contentType = 'application/xml';
+        $filename = $type === 'xml_cce' ? "CCe_{$chave}_seq{$sequencia}.xml" : "NFe_{$chave}.xml";
+    } else {
+        $contentType = 'application/pdf';
+        $filename = $type === 'pdf_cce' ? "CCe_{$chave}_seq{$sequencia}.pdf" : "DANFE_{$chave}.pdf";
+    }
     
     // Verificar se é para download ou visualização
     $action = $_GET['action'] ?? 'download'; // 'download' ou 'view'
