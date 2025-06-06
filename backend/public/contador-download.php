@@ -298,11 +298,13 @@ function downloadAno($input) {
  */
 function gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos) {
     $nomeMes = getNomeMes($mes);
-    $totalGeral = 0;
+    $totalGeralArquivos = 0;
+    $totalGeralValor = 0;
 
     $relatorio = "RELATÓRIO COMPLETO DE XMLs\n";
     $relatorio .= "Período: {$nomeMes}/{$ano}\n";
-    $relatorio .= "Data de geração: " . date('d/m/Y H:i:s') . "\n\n";
+    $relatorio .= "Data de geração: " . date('d/m/Y H:i:s') . "\n";
+    $relatorio .= str_repeat("=", 80) . "\n\n";
 
     foreach ($tipos as $tipo) {
         $tipoPath = "{$basePath}/{$tipo}/{$ano}/{$mes}";
@@ -310,22 +312,54 @@ function gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos) {
         if (is_dir($tipoPath)) {
             $xmlFiles = glob("{$tipoPath}/*.xml");
             $totalTipo = count($xmlFiles);
-            $totalGeral += $totalTipo;
+            $totalValorTipo = 0;
+            $totalGeralArquivos += $totalTipo;
 
             $relatorio .= "=== {$tipo} ===\n";
             $relatorio .= "Total: {$totalTipo} arquivos\n";
 
             if ($totalTipo > 0) {
+                $relatorio .= sprintf("%-12s %-40s %-15s %-12s %s\n",
+                    "Número", "Arquivo", "Valor (R$)", "Tamanho", "Data"
+                );
+                $relatorio .= str_repeat("-", 80) . "\n";
+
                 foreach ($xmlFiles as $xmlFile) {
                     $filename = basename($xmlFile);
                     $size = filesize($xmlFile);
                     $date = date('d/m/Y H:i:s', filemtime($xmlFile));
 
-                    $relatorio .= sprintf("  %-40s %10s %s\n",
+                    // Extrair dados do XML
+                    $dadosXML = extrairDadosXML($xmlFile);
+                    $numeroNFe = $dadosXML['numero'] ?? 'N/A';
+                    $valorNFe = $dadosXML['valor'] ?? 0;
+
+                    // Somar valor apenas para Autorizados (NFe válidas)
+                    if ($tipo === 'Autorizados') {
+                        $totalValorTipo += $valorNFe;
+                    }
+
+                    $relatorio .= sprintf("%-12s %-40s R$ %-11s %-12s %s\n",
+                        $numeroNFe,
                         $filename,
+                        number_format($valorNFe, 2, ',', '.'),
                         formatBytes($size),
                         $date
                     );
+                }
+
+                $relatorio .= str_repeat("-", 80) . "\n";
+
+                // Mostrar total do tipo apenas para Autorizados
+                if ($tipo === 'Autorizados' && $totalValorTipo > 0) {
+                    $relatorio .= sprintf("TOTAL %s: %d arquivos - R$ %s\n",
+                        $tipo,
+                        $totalTipo,
+                        number_format($totalValorTipo, 2, ',', '.')
+                    );
+                    $totalGeralValor += $totalValorTipo;
+                } else {
+                    $relatorio .= sprintf("TOTAL %s: %d arquivos\n", $tipo, $totalTipo);
                 }
             } else {
                 $relatorio .= "  Nenhum arquivo encontrado\n";
@@ -335,8 +369,15 @@ function gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos) {
         }
     }
 
-    $relatorio .= str_repeat("=", 50) . "\n";
-    $relatorio .= "TOTAL GERAL: {$totalGeral} arquivos\n";
+    $relatorio .= str_repeat("=", 80) . "\n";
+    $relatorio .= sprintf("RESUMO GERAL:\n");
+    $relatorio .= sprintf("Total de arquivos: %d\n", $totalGeralArquivos);
+    if ($totalGeralValor > 0) {
+        $relatorio .= sprintf("Valor total das NFe Autorizadas: R$ %s\n",
+            number_format($totalGeralValor, 2, ',', '.')
+        );
+    }
+    $relatorio .= str_repeat("=", 80) . "\n";
 
     return $relatorio;
 }
@@ -411,6 +452,77 @@ function getEmpresaNome($empresaId) {
 }
 
 /**
+ * Extrai dados importantes do XML (número e valor da NFe)
+ */
+function extrairDadosXML($xmlFile) {
+    try {
+        // Carregar XML com namespace
+        $xmlContent = file_get_contents($xmlFile);
+        if (!$xmlContent) {
+            return ['numero' => 'N/A', 'valor' => 0];
+        }
+
+        $xml = simplexml_load_string($xmlContent);
+
+        if (!$xml) {
+            return ['numero' => 'N/A', 'valor' => 0];
+        }
+
+        $dados = ['numero' => 'N/A', 'valor' => 0];
+
+        // Registrar namespace se necessário
+        $namespaces = $xml->getNamespaces(true);
+        if (isset($namespaces[''])) {
+            $xml->registerXPathNamespace('nfe', $namespaces['']);
+        }
+
+        // Tentar diferentes formas de acessar os dados
+
+        // Método 1: Acesso direto (sem namespace)
+        if (isset($xml->infNFe->ide->nNF)) {
+            $dados['numero'] = (string)$xml->infNFe->ide->nNF;
+        }
+        if (isset($xml->infNFe->total->ICMSTot->vNF)) {
+            $dados['valor'] = (float)$xml->infNFe->total->ICMSTot->vNF;
+        }
+
+        // Método 2: Se não encontrou, tentar com xpath
+        if ($dados['numero'] === 'N/A') {
+            $numeroNodes = $xml->xpath('//nNF');
+            if (!empty($numeroNodes)) {
+                $dados['numero'] = (string)$numeroNodes[0];
+            }
+        }
+
+        if ($dados['valor'] === 0) {
+            $valorNodes = $xml->xpath('//vNF');
+            if (!empty($valorNodes)) {
+                $dados['valor'] = (float)$valorNodes[0];
+            }
+        }
+
+        // Método 3: Busca por regex se xpath falhar
+        if ($dados['numero'] === 'N/A') {
+            if (preg_match('/<nNF>(\d+)<\/nNF>/', $xmlContent, $matches)) {
+                $dados['numero'] = $matches[1];
+            }
+        }
+
+        if ($dados['valor'] === 0) {
+            if (preg_match('/<vNF>([\d.,]+)<\/vNF>/', $xmlContent, $matches)) {
+                $dados['valor'] = (float)str_replace(',', '.', $matches[1]);
+            }
+        }
+
+        return $dados;
+
+    } catch (Exception $e) {
+        error_log("Erro ao extrair dados do XML {$xmlFile}: " . $e->getMessage());
+        return ['numero' => 'ERRO', 'valor' => 0];
+    }
+}
+
+/**
  * Converte número do mês para nome
  */
 function getNomeMes($mes) {
@@ -420,7 +532,7 @@ function getNomeMes($mes) {
         '07' => 'Julho', '08' => 'Agosto', '09' => 'Setembro',
         '10' => 'Outubro', '11' => 'Novembro', '12' => 'Dezembro'
     ];
-    
+
     return $meses[$mes] ?? $mes;
 }
 

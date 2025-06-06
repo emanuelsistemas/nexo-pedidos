@@ -40,6 +40,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
+  const [downloadingZip, setDownloadingZip] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
 
   useEffect(() => {
     carregarEstrutura();
@@ -92,7 +94,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
   };
 
   const handleDownloadMes = async (ano: string, mes: string) => {
+    const downloadKey = `${ano}-${mes}`;
+
     try {
+      setDownloadingZip(downloadKey);
+
       // Download do ZIP completo do mês (todos os tipos juntos)
       const response = await fetch('/backend/public/contador-download.php', {
         method: 'POST',
@@ -123,11 +129,17 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
     } catch (error) {
       console.error('Erro no download:', error);
       alert('Erro ao baixar arquivo. Tente novamente.');
+    } finally {
+      setDownloadingZip(null);
     }
   };
 
   const handleDownloadRelatorio = async (ano: string, mes: string) => {
+    const downloadKey = `${ano}-${mes}`;
+
     try {
+      setDownloadingPdf(downloadKey);
+
       const response = await fetch('/backend/public/contador-relatorio.php', {
         method: 'POST',
         headers: {
@@ -157,6 +169,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
     } catch (error) {
       console.error('Erro no relatório:', error);
       alert('Erro ao gerar relatório. Tente novamente.');
+    } finally {
+      setDownloadingPdf(null);
     }
   };
 
@@ -289,19 +303,39 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
                               onClick={() => handleDownloadMes(ano, mesData.mes)}
                               size="sm"
                               variant="outline"
+                              disabled={downloadingZip === `${ano}-${mesData.mes}`}
                               className="flex items-center gap-2"
                             >
-                              <Download className="w-4 h-4" />
-                              ZIP Completo
+                              {downloadingZip === `${ano}-${mesData.mes}` ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-gray-400/20 border-t-gray-400 rounded-full animate-spin" />
+                                  Gerando ZIP...
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="w-4 h-4" />
+                                  ZIP Completo
+                                </>
+                              )}
                             </Button>
                             <Button
                               onClick={() => handleDownloadRelatorio(ano, mesData.mes)}
                               size="sm"
                               variant="outline"
+                              disabled={downloadingPdf === `${ano}-${mesData.mes}`}
                               className="flex items-center gap-2"
                             >
-                              <FileBarChart className="w-4 h-4" />
-                              Relatório PDF
+                              {downloadingPdf === `${ano}-${mesData.mes}` ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-gray-400/20 border-t-gray-400 rounded-full animate-spin" />
+                                  Gerando PDF...
+                                </>
+                              ) : (
+                                <>
+                                  <FileBarChart className="w-4 h-4" />
+                                  Relatório PDF
+                                </>
+                              )}
                             </Button>
                           </div>
                         </div>
