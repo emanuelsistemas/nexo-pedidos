@@ -1059,7 +1059,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       serie: 1,
       numero: '',
       codigo_numerico: '', // Campo para armazenar o código gerado
-      data_emissao: new Date().toISOString().slice(0, 16),
+      data_emissao: (() => {
+        // ✅ GERAR DATA BRASILEIRA CORRETA (UTC-3)
+        const agora = new Date();
+        const offsetBrasil = -3 * 60; // UTC-3 em minutos
+        const dataBrasil = new Date(agora.getTime() + (offsetBrasil * 60 * 1000));
+        return dataBrasil.toISOString().slice(0, 16);
+      })(),
       tipo_documento: '1',
       finalidade: '1',
       presenca: '9',
@@ -2997,7 +3003,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         valor_total: nfeData.totais.valor_total || 0,
         natureza_operacao: nfeData.identificacao.natureza_operacao || 'VENDA',
         xml_nfe: nfeApiData.xml,
-        data_emissao_nfe: nfeApiData.data_autorizacao || nfeData.identificacao.data_emissao || new Date().toISOString(),
+        data_emissao_nfe: nfeApiData.data_autorizacao || nfeData.identificacao.data_emissao || (() => {
+          const agora = new Date();
+          const offsetBrasil = -3 * 60; // UTC-3 em minutos
+          const dataBrasil = new Date(agora.getTime() + (offsetBrasil * 60 * 1000));
+          return dataBrasil.toISOString();
+        })(),
         // ✅ ADICIONAR: Salvar dados completos da NFe para visualização
         dados_nfe: JSON.stringify(nfeData),
         // ✅ CORRIGIDO: Campo correto é informacoes_adicionais (plural)
