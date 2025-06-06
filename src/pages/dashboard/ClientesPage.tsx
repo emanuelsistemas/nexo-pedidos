@@ -2111,13 +2111,19 @@ const ClientesPage: React.FC = () => {
                       <input
                         type="text"
                         value={formData.inscricao_estadual}
-                        onChange={(e) => setFormData({ ...formData, inscricao_estadual: e.target.value })}
+                        onChange={(e) => {
+                          // Formatar IE: apenas números, máximo 12 dígitos
+                          const numbersOnly = e.target.value.replace(/\D/g, '').slice(0, 12);
+                          setFormData({ ...formData, inscricao_estadual: numbersOnly });
+                        }}
                         className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="123456789"
+                        placeholder="123456789012 (12 dígitos)"
+                        maxLength={12}
+                        pattern="[0-9]{12}"
                         required={formData.indicador_ie === 1}
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        Obrigatório para contribuintes ICMS
+                        Apenas números, exatamente 12 dígitos
                       </p>
                     </div>
                   )}

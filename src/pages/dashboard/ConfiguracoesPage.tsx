@@ -1685,6 +1685,25 @@ const ConfiguracoesPage: React.FC = () => {
     }));
   };
 
+  // Função para formatar Inscrição Estadual (apenas números, máximo 12 dígitos)
+  const formatInscricaoEstadual = (value: string): string => {
+    // Remove tudo que não for número
+    const numbersOnly = value.replace(/\D/g, '');
+
+    // Limita a 12 dígitos
+    return numbersOnly.slice(0, 12);
+  };
+
+  const handleInscricaoEstadualChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const formattedValue = formatInscricaoEstadual(value);
+
+    setEmpresaForm(prev => ({
+      ...prev,
+      inscricao_estadual: formattedValue
+    }));
+  };
+
   const buscarCNPJ = async () => {
     const cnpj = empresaForm.documento.replace(/\D/g, '');
     if (cnpj.length !== 14) {
@@ -2825,11 +2844,19 @@ const ConfiguracoesPage: React.FC = () => {
                         </label>
                         <p className="text-white">{empresa.segmento || '-'}</p>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">
-                          {empresa.tipo_documento}
-                        </label>
-                        <p className="text-white">{empresa.documento || '-'}</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">
+                            {empresa.tipo_documento}
+                          </label>
+                          <p className="text-white">{empresa.documento || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">
+                            Inscrição Estadual
+                          </label>
+                          <p className="text-white">{empresa.inscricao_estadual || '-'}</p>
+                        </div>
                       </div>
                       {empresa.tipo_documento === 'CNPJ' && (
                         <div>
@@ -2911,12 +2938,6 @@ const ConfiguracoesPage: React.FC = () => {
                           Email da Empresa
                         </label>
                         <p className="text-white">{empresa.email || '-'}</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-400 mb-1">
-                          Inscrição Estadual
-                        </label>
-                        <p className="text-white">{empresa.inscricao_estadual || '-'}</p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-400 mb-1">
@@ -4825,11 +4846,16 @@ const ConfiguracoesPage: React.FC = () => {
                         <input
                           type="text"
                           value={empresaForm.inscricao_estadual}
-                          onChange={(e) => setEmpresaForm(prev => ({ ...prev, inscricao_estadual: e.target.value }))}
+                          onChange={handleInscricaoEstadualChange}
                           className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                          placeholder="123456789 ou ISENTO"
+                          placeholder="123456789012 (12 dígitos)"
+                          maxLength={12}
+                          pattern="[0-9]{12}"
                           required
                         />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Apenas números, exatamente 12 dígitos
+                        </p>
                       </div>
                     </div>
 

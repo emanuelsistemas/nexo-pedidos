@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Download, Copy, Trash2, X, Ban, Mail, MoreVertical, ImageIcon } from 'lucide-react';
+import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Download, Copy, Trash2, X, Ban, Mail, MoreVertical, ImageIcon, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/comum/Button';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 import { supabase } from '../../lib/supabase';
@@ -247,6 +248,8 @@ const NfePage: React.FC = () => {
       showToast('Justificativa deve ter pelo menos 15 caracteres', 'error');
     }
   };
+
+
 
   const handleReenviarEmail = (nfe: NFe) => {
     if (nfe.status_nfe !== 'autorizada') {
@@ -1109,6 +1112,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
   // Função para buscar próximo número NFe (apenas para Nova NFe)
   const buscarProximoNumero = async () => {
     console.log('🔍 Iniciando busca do próximo número...');
+    console.log('🔍 Estado atual - isEditingRascunho:', isEditingRascunho);
+    console.log('🔍 Estado atual - numero atual:', nfeData.identificacao.numero);
+    console.log('🔍 Estado atual - ambiente:', ambienteNFe);
 
     // ✅ VALIDAÇÃO EXTRA: Só buscar se não estiver editando rascunho
     if (isEditingRascunho) {
@@ -1144,14 +1150,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       console.log('✅ Empresa encontrada:', usuarioData.empresa_id);
 
-      // ✅ CORREÇÃO: Buscar último número na tabela PDV (dados reais)
+      // ✅ BUSCAR ÚLTIMO NÚMERO: empresa + modelo 55 + qualquer status
       const { data, error } = await supabase
         .from('pdv')
         .select('numero_documento')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('modelo_documento', 55) // NFe modelo 55
-        .eq('ambiente', ambienteNFe) // Considerar ambiente
-        .not('status_nfe', 'eq', 'rascunho') // Ignorar rascunhos
+        .not('numero_documento', 'is', null) // Ignorar registros sem número
         .order('numero_documento', { ascending: false })
         .limit(1);
 
@@ -2628,8 +2633,30 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       if (!result.success) {
         updateStep('geracao', 'error', 'Falha no processamento');
         addLog('ERRO: API retornou falha no processamento');
-        addLog(`Detalhes: ${result.error || result.message || 'Erro desconhecido'}`);
-        throw new Error(result.error || result.message || 'Erro no processamento da NFe');
+
+        // Tentar fazer parse do erro para ver se é um erro traduzido da SEFAZ
+        let erroDetalhado = result.error || result.message || 'Erro desconhecido';
+
+        try {
+          const erroJson = JSON.parse(erroDetalhado);
+          if (erroJson.tipo === 'erro_sefaz') {
+            // Exibir erro traduzido de forma amigável
+            addLog(`❌ ${erroJson.titulo}`);
+            addLog(`📋 ${erroJson.descricao}`);
+            addLog(`💡 ${erroJson.solucao}`);
+            addLog('');
+            addLog('🔧 Detalhes técnicos:');
+            addLog(`   Status SEFAZ: ${erroJson.detalhes_tecnicos.status}`);
+            addLog(`   Motivo: ${erroJson.detalhes_tecnicos.motivo}`);
+
+            throw new Error(`${erroJson.titulo}: ${erroJson.descricao}`);
+          }
+        } catch (parseError) {
+          // Se não conseguir fazer parse, usar erro original
+        }
+
+        addLog(`Detalhes: ${erroDetalhado}`);
+        throw new Error(erroDetalhado);
       }
 
       // Verificar se os dados essenciais estão presentes
@@ -2646,31 +2673,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       updateStep('sefaz', 'loading');
       addLog('🔍 Verificando autorização da SEFAZ...');
 
-      // Verificar status SEFAZ - Status 103 = Lote recebido com sucesso (não é erro!)
+      // SEGUINDO AS 4 LEIS NFe - APENAS STATUS 100 É AUTORIZADA
       const statusSefaz = result.data.status;
       if (statusSefaz === '100') {
-        // NFe autorizada
+        // NFe realmente autorizada pela SEFAZ
         updateStep('sefaz', 'success', 'NFe autorizada pela SEFAZ');
-        addLog('✅ NFe autorizada pela SEFAZ');
-      } else if (statusSefaz === '103') {
-        // Lote recebido com sucesso - aguardando processamento
-        updateStep('sefaz', 'success', 'Lote recebido pela SEFAZ');
-        addLog('✅ Lote recebido com sucesso pela SEFAZ');
-        addLog(`📋 Recibo: ${result.data.recibo || 'N/A'}`);
-        addLog('ℹ️ NFe está sendo processada pela SEFAZ');
-      } else if (statusSefaz && parseInt(statusSefaz) >= 200) {
-        // Status de erro (200+)
-        updateStep('sefaz', 'error', `SEFAZ: ${result.data.motivo || 'Rejeitada'}`);
-        addLog('ERRO: NFe rejeitada pela SEFAZ');
-        addLog(`Status: ${statusSefaz}`);
-        addLog(`Motivo: ${result.data.motivo || 'Motivo não informado'}`);
-        throw new Error(`NFe rejeitada pela SEFAZ: ${result.data.motivo || 'Motivo não informado'}`);
+        addLog('✅ NFe autorizada pela SEFAZ (Status 100)');
+        addLog(`✅ Protocolo real: ${result.data.protocolo}`);
       } else {
-        // Status desconhecido ou indefinido
-        updateStep('sefaz', 'success', 'Processamento em andamento');
-        addLog('ℹ️ NFe enviada para SEFAZ - status em processamento');
-        addLog(`Status: ${statusSefaz || 'Indefinido'}`);
-        addLog(`Motivo: ${result.data.motivo || 'Processamento em andamento'}`);
+        // Qualquer status diferente de 100 = NFe NÃO autorizada
+        updateStep('sefaz', 'error', `NFe não autorizada (Status ${statusSefaz})`);
+        addLog(`❌ NFe NÃO autorizada - Status: ${statusSefaz}`);
+        addLog(`❌ Motivo: ${result.data.motivo || 'Sem detalhes'}`);
+        throw new Error(`NFe não foi autorizada pela SEFAZ. Status: ${statusSefaz} - ${result.data.motivo}`);
       }
 
       addLog('✅ XML gerado com sucesso');
@@ -2727,12 +2742,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       updateStep('finalizacao', 'loading');
       addLog('Finalizando processo...');
 
-      // Atualizar dados de autorização
+      // SEGUINDO AS 4 LEIS NFe - DADOS DE AUTORIZAÇÃO REAIS
       setDadosAutorizacao({
         chave: result.data.chave,
-        protocolo: result.data.protocolo || '',
+        protocolo: result.data.protocolo, // ✅ PROTOCOLO REAL (15 dígitos)
         dataAutorizacao: result.data.data_autorizacao || new Date().toISOString(),
-        status: 'autorizada',
+        status: result.data.status === '100' ? 'autorizada' : 'rejeitada', // ✅ STATUS REAL
         ambiente: ambienteNFe
       });
 
@@ -2960,6 +2975,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       if (!usuarioData?.empresa_id) return;
 
+      // SEGUINDO AS 4 LEIS NFe - STATUS BASEADO NA SEFAZ REAL
+      const statusReal = nfeApiData.status === '100' ? 'autorizada' : 'rejeitada';
+
       const dadosNFe = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
@@ -2967,8 +2985,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         serie_documento: parseInt(nfeData.identificacao.serie) || 1,
         numero_documento: parseInt(nfeData.identificacao.numero), // ✅ USAR número do frontend
         chave_nfe: nfeApiData.chave,
-        status_nfe: 'autorizada',
-        protocolo_nfe: nfeApiData.protocolo,
+        status_nfe: statusReal, // ✅ STATUS REAL DA SEFAZ
+        protocolo_nfe: nfeApiData.protocolo, // ✅ PROTOCOLO REAL (15 dígitos)
         nome_cliente: nfeData.destinatario.nome || 'Cliente',
         valor_total: nfeData.totais.valor_total || 0,
         natureza_operacao: nfeData.identificacao.natureza_operacao || 'VENDA',
@@ -3101,6 +3119,71 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     ...(nfeEmitida || isViewMode ? [{ id: 'autorizacao', label: 'Autorização', icon: FileText }] : []),
   ];
 
+  // Função para cancelar NFe a partir da seção de Autorização
+  const handleCancelarNFeFromAutorizacao = async (motivo: string) => {
+    try {
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada para o usuário');
+      }
+
+      // Preparar dados para cancelamento
+      const cancelData = {
+        empresa_id: usuarioData.empresa_id,
+        chave_nfe: dadosAutorizacao?.chave,
+        motivo: motivo.trim(),
+        nfe_id: nfeEmitida?.id // ID da NFe no banco local
+      };
+
+      console.log('🚫 Enviando dados para cancelamento:', cancelData);
+
+      // Chamar API de cancelamento
+      const response = await fetch('/backend/public/cancelar-nfe.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(cancelData)
+      });
+
+      const result = await response.json();
+      console.log('🚫 Resposta do cancelamento:', result);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao cancelar NFe');
+      }
+
+      // Atualizar dados de autorização localmente
+      setDadosAutorizacao(prev => ({
+        ...prev,
+        status: 'cancelada',
+        motivo_cancelamento: motivo,
+        data_cancelamento: new Date().toISOString()
+      }));
+
+      // Recarregar lista de NFes para atualizar o status
+      // await loadNfes(); // Comentado pois loadNfes não está no escopo desta função
+
+      showMessage('success', 'NFe cancelada com sucesso!');
+
+    } catch (error: any) {
+      console.error('❌ Erro ao cancelar NFe:', error);
+      throw error;
+    }
+  };
+
   const renderContent = () => {
     switch (activeSection) {
       case 'identificacao':
@@ -3188,6 +3271,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             dados={dadosAutorizacao}
             onChange={setDadosAutorizacao}
             isViewMode={isViewMode}
+            onCancelarNFe={handleCancelarNFeFromAutorizacao}
           />
         );
       default:
@@ -5770,7 +5854,18 @@ const IntermediadorSection: React.FC = () => (
   </div>
 );
 
-const AutorizacaoSection: React.FC<{ dados: any; onChange: (dados: any) => void }> = ({ dados, onChange }) => {
+const AutorizacaoSection: React.FC<{
+  dados: any;
+  onChange: (dados: any) => void;
+  isViewMode?: boolean;
+  onCancelarNFe?: (motivo: string) => void;
+}> = ({ dados, onChange, isViewMode, onCancelarNFe }) => {
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
+  const [cancelStatus, setCancelStatus] = useState<'normal' | 'extemporaneo' | 'expirado'>('normal');
+
   const formatarData = (dataISO: string) => {
     if (!dataISO) return '';
     const data = new Date(dataISO);
@@ -5788,6 +5883,108 @@ const AutorizacaoSection: React.FC<{ dados: any; onChange: (dados: any) => void 
     if (!chave) return '';
     // Formatar chave: 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000
     return chave.replace(/(\d{4})/g, '$1 ').trim();
+  };
+
+  // Função para calcular tempo restante e status do cancelamento
+  const calculateCancelStatus = () => {
+    // Para teste, usar data de autorização simulada se não houver uma real
+    let dataAutorizacaoStr = dados?.dataAutorizacao;
+
+    // Se não há data de autorização, simular uma NFe autorizada há 5 horas para teste
+    if (!dataAutorizacaoStr && dados?.chave) {
+      const agora = new Date();
+      const dataSimulada = new Date(agora.getTime() - (5 * 60 * 60 * 1000)); // 5 horas atrás
+      dataAutorizacaoStr = dataSimulada.toISOString();
+      console.log('🧪 Usando data simulada para teste:', dataAutorizacaoStr);
+    }
+
+    if (!dataAutorizacaoStr) {
+      console.log('🚫 Sem data de autorização:', dados);
+      return;
+    }
+
+    const dataAutorizacao = new Date(dataAutorizacaoStr);
+    const agora = new Date();
+    const horasPassadas = (agora.getTime() - dataAutorizacao.getTime()) / (1000 * 60 * 60);
+
+    console.log('⏰ Calculando status de cancelamento:', {
+      dataAutorizacao: dataAutorizacaoStr,
+      horasPassadas: horasPassadas.toFixed(2)
+    });
+
+    if (horasPassadas <= 24) {
+      // Cancelamento normal (até 24h)
+      const horasRestantes = 24 - horasPassadas;
+      const horas = Math.floor(horasRestantes);
+      const minutos = Math.floor((horasRestantes - horas) * 60);
+
+      setTimeRemaining(`${horas}h ${minutos}m`);
+      setCancelStatus('normal');
+    } else if (horasPassadas <= 480) {
+      // Cancelamento extemporâneo (24h até 20 dias)
+      const horasRestantes = 480 - horasPassadas;
+      const dias = Math.floor(horasRestantes / 24);
+      const horas = Math.floor(horasRestantes % 24);
+
+      setTimeRemaining(`${dias}d ${horas}h`);
+      setCancelStatus('extemporaneo');
+    } else {
+      // Prazo expirado (após 20 dias)
+      setTimeRemaining('Expirado');
+      setCancelStatus('expirado');
+    }
+  };
+
+  // Atualizar status do cancelamento a cada minuto
+  useEffect(() => {
+    if (dados?.dataAutorizacao && dados?.status !== 'cancelada') {
+      console.log('🔄 Iniciando cálculo de status de cancelamento');
+      calculateCancelStatus();
+      const interval = setInterval(calculateCancelStatus, 60000); // Atualizar a cada minuto
+      return () => clearInterval(interval);
+    } else {
+      console.log('🚫 Não calculando status:', {
+        dataAutorizacao: dados?.dataAutorizacao,
+        status: dados?.status
+      });
+    }
+  }, [dados?.dataAutorizacao, dados?.status]);
+
+  const handleCancelarClick = () => {
+    if (!dados?.chave) {
+      showMessage('error', 'Chave da NFe não encontrada');
+      return;
+    }
+
+    if (dados?.status === 'cancelada') {
+      showMessage('error', 'Esta NFe já foi cancelada');
+      return;
+    }
+
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmarCancelamento = async () => {
+    const motivo = dados.motivo_cancelamento?.trim() || '';
+
+    if (!motivo || motivo.length < 15) {
+      showMessage('error', 'Motivo deve ter pelo menos 15 caracteres');
+      return;
+    }
+
+    setIsCancelling(true);
+
+    try {
+      if (onCancelarNFe) {
+        await onCancelarNFe(motivo);
+        setShowCancelModal(false);
+        showMessage('success', 'NFe cancelada com sucesso!');
+      }
+    } catch (error: any) {
+      showMessage('error', `Erro ao cancelar NFe: ${error.message}`);
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   return (
@@ -5902,20 +6099,128 @@ const AutorizacaoSection: React.FC<{ dados: any; onChange: (dados: any) => void 
           </p>
         </div>
 
+        {/* Área de Cancelamento */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Motivo do Cancelamento
-          </label>
-          <textarea
-            rows={3}
-            value={dados.motivo_cancelamento || ''}
-            onChange={(e) => onChange({ ...dados, motivo_cancelamento: e.target.value })}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none"
-            placeholder="Digite o motivo do cancelamento (mínimo 15 caracteres)..."
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Motivo deve ter no mínimo 15 caracteres
-          </p>
+          <h3 className="text-lg font-semibold text-white mb-4">Cancelamento da NFe</h3>
+
+          {dados?.status === 'cancelada' ? (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-red-400 mb-2">
+                <X size={16} />
+                <span className="font-medium">NFe Cancelada</span>
+              </div>
+              {dados.motivo_cancelamento && (
+                <p className="text-gray-300 text-sm">
+                  <strong>Motivo:</strong> {dados.motivo_cancelamento}
+                </p>
+              )}
+              {dados.data_cancelamento && (
+                <p className="text-gray-400 text-xs mt-1">
+                  Cancelada em: {formatarData(dados.data_cancelamento)}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Alerta sobre prazo de cancelamento */}
+              <div className={`border rounded-lg p-4 ${
+                cancelStatus === 'normal'
+                  ? 'bg-blue-500/10 border-blue-500/20'
+                  : cancelStatus === 'extemporaneo'
+                  ? 'bg-yellow-500/10 border-yellow-500/20'
+                  : 'bg-red-500/10 border-red-500/20'
+              }`}>
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className={`mt-0.5 flex-shrink-0 ${
+                    cancelStatus === 'normal'
+                      ? 'text-blue-400'
+                      : cancelStatus === 'extemporaneo'
+                      ? 'text-yellow-400'
+                      : 'text-red-400'
+                  }`} />
+                  <div className={`text-sm ${
+                    cancelStatus === 'normal'
+                      ? 'text-blue-300'
+                      : cancelStatus === 'extemporaneo'
+                      ? 'text-yellow-300'
+                      : 'text-red-300'
+                  }`}>
+                    <p className="font-medium mb-1">
+                      {cancelStatus === 'normal' && 'Cancelamento Normal'}
+                      {cancelStatus === 'extemporaneo' && 'Cancelamento Extemporâneo'}
+                      {cancelStatus === 'expirado' && 'Prazo de Cancelamento Expirado'}
+                    </p>
+                    <p className="mb-2">
+                      {cancelStatus === 'normal' &&
+                        `Você pode cancelar esta NFe diretamente no sistema. Tempo restante: ${timeRemaining}`
+                      }
+                      {cancelStatus === 'extemporaneo' && (
+                        <span className="flex items-center gap-1">
+                          Cancelamento extemporâneo (após 24h). Tempo restante: {timeRemaining}. Pode ser necessária manifestação do destinatário.
+                          <button
+                            onClick={() => setShowHelpModal(true)}
+                            className="inline-flex items-center justify-center w-4 h-4 bg-yellow-500/20 hover:bg-yellow-500/30 rounded-full text-yellow-300 hover:text-yellow-200 transition-colors ml-1"
+                            title="O que é manifestação do destinatário?"
+                          >
+                            <span className="text-xs font-bold">?</span>
+                          </button>
+                        </span>
+                      )}
+                      {cancelStatus === 'expirado' &&
+                        'O prazo de 20 dias para cancelamento expirou. É necessário protocolar pedido específico na SEFAZ.'
+                      }
+                    </p>
+                    {cancelStatus !== 'expirado' && (
+                      <p className="text-xs opacity-75">
+                        O cancelamento de NFe é uma ação irreversível e deve ser feita apenas em casos específicos previstos na legislação fiscal.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Motivo do Cancelamento
+                </label>
+                <textarea
+                  rows={3}
+                  value={dados.motivo_cancelamento || ''}
+                  onChange={(e) => onChange({ ...dados, motivo_cancelamento: e.target.value })}
+                  className={`w-full px-3 py-2 border rounded-lg text-white focus:outline-none resize-none ${
+                    cancelStatus === 'expirado' || dados?.status === 'cancelada'
+                      ? 'bg-gray-900 border-gray-600 cursor-not-allowed'
+                      : 'bg-gray-800 border-gray-700 focus:border-primary-500'
+                  }`}
+                  placeholder={
+                    cancelStatus === 'expirado'
+                      ? 'Prazo de cancelamento expirado - Entre em contato com a SEFAZ'
+                      : 'Digite o motivo do cancelamento (mínimo 15 caracteres)...'
+                  }
+                  disabled={cancelStatus === 'expirado' || dados?.status === 'cancelada'}
+                />
+                <div className="flex justify-between items-center mt-1">
+                  <p className="text-xs text-gray-500">
+                    {cancelStatus === 'expirado'
+                      ? 'Cancelamento não disponível - Prazo de 20 dias expirado'
+                      : 'Motivo deve ter no mínimo 15 caracteres'
+                    }
+                  </p>
+                  {cancelStatus !== 'expirado' && (
+                    <p className={`text-xs font-medium ${
+                      (dados.motivo_cancelamento || '').length >= 15
+                        ? 'text-green-400'
+                        : (dados.motivo_cancelamento || '').length > 0
+                        ? 'text-yellow-400'
+                        : 'text-gray-500'
+                    }`}>
+                      {(dados.motivo_cancelamento || '').length}/15
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Botões de Ação */}
@@ -5932,12 +6237,245 @@ const AutorizacaoSection: React.FC<{ dados: any; onChange: (dados: any) => void 
             <Send size={16} />
             Enviar CCe
           </button>
-          <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center gap-2">
-            <X size={16} />
-            Cancelar NFe
-          </button>
+          {dados?.status !== 'cancelada' && (
+            <button
+              onClick={handleCancelarClick}
+              disabled={
+                cancelStatus === 'expirado' ||
+                !dados?.chave ||
+                (dados.motivo_cancelamento || '').length < 15
+              }
+              className={`px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 flex items-center gap-2 transition-colors ${
+                cancelStatus === 'expirado' ||
+                !dados?.chave ||
+                (dados.motivo_cancelamento || '').length < 15
+                  ? 'bg-gray-600 cursor-not-allowed'
+                  : cancelStatus === 'extemporaneo'
+                  ? 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500'
+                  : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+              }`}
+              title={
+                cancelStatus === 'expirado'
+                  ? 'Prazo de cancelamento expirado (20 dias)'
+                  : (dados.motivo_cancelamento || '').length < 15
+                  ? 'Digite pelo menos 15 caracteres no motivo'
+                  : cancelStatus === 'extemporaneo'
+                  ? 'Cancelamento extemporâneo - Pode necessitar manifestação do destinatário'
+                  : 'Cancelamento normal'
+              }
+            >
+              <X size={16} />
+              {cancelStatus === 'extemporaneo' ? 'Cancelar NFe (Extemporâneo)' : 'Cancelar NFe'}
+            </button>
+          )}
+
+          {cancelStatus === 'expirado' && dados?.status !== 'cancelada' && (
+            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-sm text-red-300">
+                <strong>Prazo Expirado:</strong> Para cancelar esta NFe, é necessário protocolar pedido específico na SEFAZ conforme legislação vigente.
+              </p>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Modal de Ajuda - Manifestação do Destinatário */}
+      <AnimatePresence>
+        {showHelpModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowHelpModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                    <span className="text-yellow-400 font-bold">?</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">Manifestação do Destinatário</h3>
+                    <p className="text-sm text-gray-400">Entenda quando é necessária</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-sm">
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-300 mb-2">🎯 O que é?</h4>
+                  <p className="text-gray-300">
+                    A manifestação do destinatário é um <strong>evento oficial</strong> onde o destinatário da NFe declara à SEFAZ que não recebeu a mercadoria, desconhece a operação ou que a operação não ocorreu.
+                  </p>
+                </div>
+
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                  <h4 className="font-semibold text-yellow-300 mb-2">⚖️ Por que é necessária?</h4>
+                  <p className="text-gray-300">
+                    <strong>Proteção fiscal:</strong> Evita que empresas cancelem NFes após a mercadoria já ter sido entregue/recebida, o que seria uma fraude fiscal.
+                  </p>
+                </div>
+
+                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-300 mb-3">⏰ Quando é obrigatória?</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-red-400">❌</span>
+                      <span className="text-gray-300"><strong>Cancelamento Normal (0-24h):</strong> NÃO precisa</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-400">⚠️</span>
+                      <span className="text-gray-300"><strong>Cancelamento Extemporâneo (24h-20d):</strong> PODE precisar</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-400">✅</span>
+                      <span className="text-gray-300"><strong>Após 20 dias:</strong> SEMPRE precisa (via processo SEFAZ)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4">
+                  <h4 className="font-semibold text-purple-300 mb-3">🔍 Casos que PRECISAM de manifestação:</h4>
+                  <ul className="space-y-1 text-gray-300">
+                    <li>• Destinatário é <strong>pessoa jurídica</strong> com certificado digital</li>
+                    <li>• Destinatário é <strong>pessoa física</strong> com certificado digital</li>
+                    <li>• NFe foi emitida mas a <strong>operação não ocorreu</strong></li>
+                    <li>• Mercadoria <strong>não foi entregue/recebida</strong></li>
+                  </ul>
+                </div>
+
+                <div className="bg-gray-500/10 border border-gray-500/20 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-300 mb-3">❌ Casos que NÃO PRECISAM:</h4>
+                  <ul className="space-y-1 text-gray-300">
+                    <li>• Destinatário no <strong>exterior</strong></li>
+                    <li>• Destinatário <strong>pessoa física sem certificado</strong></li>
+                    <li>• Já passou <strong>180 dias</strong> da autorização</li>
+                    <li>• Destinatário já fez <strong>manifestação de desconhecimento</strong></li>
+                  </ul>
+                </div>
+
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
+                  <h4 className="font-semibold text-orange-300 mb-3">🔄 Como proceder:</h4>
+                  <ol className="space-y-1 text-gray-300 list-decimal list-inside">
+                    <li>Entre em contato com o destinatário</li>
+                    <li>Solicite que ele acesse o Portal da NFe (www.nfe.fazenda.gov.br)</li>
+                    <li>Peça para manifestar "Desconhecimento" ou "Operação não Realizada"</li>
+                    <li>Após a manifestação, você poderá cancelar no sistema</li>
+                    <li>Se o destinatário não tiver certificado digital, o cancelamento pode ser feito diretamente</li>
+                  </ol>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowHelpModal(false)}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                >
+                  Entendi
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação de Cancelamento */}
+      <AnimatePresence>
+        {showCancelModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => !isCancelling && setShowCancelModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
+                  <X size={20} className="text-red-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Cancelar NFe</h3>
+                  <p className="text-sm text-gray-400">Esta ação é irreversível</p>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 mb-4">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-yellow-300">
+                      <p className="font-medium">Atenção!</p>
+                      <p className="mt-1">O cancelamento será enviado para a SEFAZ e não poderá ser desfeito.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mostrar o motivo já digitado */}
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Motivo do Cancelamento
+                  </label>
+                  <p className="text-white text-sm leading-relaxed">
+                    {dados.motivo_cancelamento || 'Nenhum motivo informado'}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    {(dados.motivo_cancelamento || '').length} caracteres
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                  }}
+                  disabled={isCancelling}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 px-4 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmarCancelamento}
+                  disabled={isCancelling || (dados.motivo_cancelamento || '').trim().length < 15}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  {isCancelling ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Cancelando...
+                    </>
+                  ) : (
+                    <>
+                      <X size={16} />
+                      Confirmar Cancelamento
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

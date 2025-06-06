@@ -347,7 +347,8 @@ try {
                   ", CFOP: " . ($produto['cfop'] ?? 'N/A') .
                   ", ICMS: " . ($produto['aliquota_icms'] ?? 0) . "%" .
                   ", CST ICMS: " . ($produto['cst_icms'] ?? $produto['csosn_icms'] ?? 'N/A') .
-                  ", Origem: " . ($produto['origem_produto'] ?? 0));
+                  ", Origem: " . ($produto['origem_produto'] ?? 0) .
+                  ", EAN: " . ($produto['ean'] ?? 'VAZIO'));
 
         // Log da tag ICMS que será usada (será atualizado após processamento)
 
@@ -355,7 +356,15 @@ try {
         $std = new stdClass();
         $std->item = $item;
         $std->cProd = $produto['codigo'] ?? $produto['id'] ?? "PROD{$item}";
-        $std->cEAN = $produto['ean'] ?? 'SEM GTIN'; // CRÍTICO: deve ser 'SEM GTIN' quando não há EAN
+        // Validar EAN/GTIN - deve ser válido ou 'SEM GTIN'
+        $ean = $produto['ean'] ?? '';
+        if (empty($ean) || !preg_match('/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/', $ean)) {
+            // EAN vazio ou inválido - usar 'SEM GTIN'
+            $std->cEAN = 'SEM GTIN';
+        } else {
+            // EAN válido - usar o código
+            $std->cEAN = $ean;
+        }
 
         // Validar nome do produto obrigatório (SEM FALLBACKS)
         $nomeProduto = '';
@@ -717,8 +726,8 @@ try {
                 $status = $statusMatch[1];
                 $motivo = $motivoMatch[1] ?? 'Motivo não encontrado';
                 $recibo = $reciboMatch[1] ?? 'RECIBO_NAO_ENCONTRADO';
-                $chave = $chaveMatch[1] ?? 'CHAVE_REGEX_' . time();
-                $protocolo = $protocoloMatch[1] ?? 'PROTOCOLO_REGEX';
+                $chave = $chaveMatch[1] ?? 'CHAVE_NAO_ENCONTRADA';
+                $protocolo = !empty($protocoloMatch[1]) ? $protocoloMatch[1] : null;
 
             } else {
                 error_log("ERRO: Não foi possível extrair dados da resposta SEFAZ");
@@ -755,15 +764,15 @@ try {
             $chave = !empty($chNFe) ? (string)$chNFe[0] : 'CHAVE_NAO_ENCONTRADA';
             $recibo = !empty($nRec) ? (string)$nRec[0] : 'RECIBO_NAO_ENCONTRADO';
 
-            // Protocolo com fallback mais inteligente
+            // SEGUINDO AS 4 LEIS NFe - NUNCA USAR FALLBACKS PARA PROTOCOLO
             if (!empty($nProt)) {
                 $protocolo = (string)$nProt[0];
-                error_log("✅ PROTOCOLO EXTRAÍDO COM SUCESSO: {$protocolo}");
+                error_log("✅ PROTOCOLO REAL EXTRAÍDO: {$protocolo}");
             } else {
-                // Em homologação, gerar protocolo baseado na chave e timestamp
-                $protocolo = 'HOMOLOG_' . substr($chave, -8) . '_' . time();
-                error_log("⚠️ AVISO: Protocolo não encontrado no XML, usando fallback: {$protocolo}");
-                error_log("⚠️ XML de resposta para análise: " . substr($response, 0, 1000) . "...");
+                // SEM FALLBACKS - Se não há protocolo, NFe não foi autorizada
+                $protocolo = null;
+                error_log("❌ PROTOCOLO NÃO ENCONTRADO - NFe não foi autorizada pela SEFAZ");
+                error_log("❌ Status SEFAZ: {$status} - {$motivo}");
             }
         } else {
             // Variáveis já foram definidas no bloco regex acima
@@ -772,21 +781,345 @@ try {
 
     } catch (Exception $xmlError) {
         error_log("ERRO: Falha ao processar XML: " . $xmlError->getMessage());
-        // Se houver erro no XML, usar dados básicos
-        $chave = 'ERRO_XML_' . time();
-        $protocolo = 'ERRO_PROTOCOLO';
-        $status = 'ERRO';
-        $motivo = 'Erro ao processar resposta';
-        $recibo = 'ERRO_RECIBO';
+        // SEGUINDO AS 4 LEIS NFe - SEM DADOS FICTÍCIOS
+        throw new Exception("Erro ao processar resposta da SEFAZ: " . $xmlError->getMessage());
     }
 
-    // Resultado da resposta (XML string)
+    // SEGUINDO AS 4 LEIS NFe - FLUXO CORRETO DA SEFAZ
+    error_log("🔍 ANALISANDO RESPOSTA SEFAZ - Status: {$status} - {$motivo}");
+
+    // Status 103 = Lote recebido com sucesso (precisa consultar recibo)
+    if ($status === '103') {
+        error_log("📋 LOTE RECEBIDO - Consultando recibo para obter resultado final");
+
+        // Extrair número do recibo
+        if (empty($recibo) || $recibo === 'RECIBO_NAO_ENCONTRADO') {
+            throw new Exception("Recibo não encontrado na resposta da SEFAZ. Status: {$status}");
+        }
+
+        error_log("🔍 CONSULTANDO RECIBO: {$recibo}");
+
+        // Aguardar processamento (SEFAZ recomenda aguardar alguns segundos)
+        sleep(3);
+
+        // Consultar recibo para obter resultado final
+        try {
+            $consultaRecibo = $tools->sefazConsultaRecibo($recibo);
+            error_log("📋 RESPOSTA CONSULTA RECIBO: " . strlen($consultaRecibo) . " bytes recebidos");
+
+            // Processar resposta da consulta do recibo com múltiplas tentativas
+            $xmlRecibo = false;
+
+            // Tentativa 1: XML direto
+            $xmlRecibo = @simplexml_load_string($consultaRecibo);
+
+            // Tentativa 2: Limpar declaração XML e tentar novamente
+            if (!$xmlRecibo) {
+                $consultaReciboLimpo = preg_replace('/^<\?xml[^>]*\?>/', '', trim($consultaRecibo));
+                $xmlRecibo = @simplexml_load_string($consultaReciboLimpo);
+            }
+
+            // Tentativa 3: Usar DOMDocument para parsing mais robusto
+            if (!$xmlRecibo) {
+                $dom = new DOMDocument();
+                $dom->loadXML($consultaRecibo);
+                $xmlRecibo = simplexml_import_dom($dom);
+            }
+
+            // Se ainda não conseguiu processar, tentar extrair dados diretamente do XML string
+            if (!$xmlRecibo) {
+                error_log("⚠️ TENTATIVA FINAL: Extraindo dados diretamente do XML string");
+
+                // SEGUINDO AS 4 LEIS NFe - USAR BIBLIOTECA CORRETAMENTE
+                // Primeiro, remover envelope SOAP para processar apenas o conteúdo NFe
+                $xmlLimpo = $consultaRecibo;
+
+                // Extrair apenas o conteúdo retConsReciNFe do envelope SOAP
+                if (preg_match('/<retConsReciNFe[^>]*>.*?<\/retConsReciNFe>/s', $consultaRecibo, $xmlMatch)) {
+                    $xmlLimpo = $xmlMatch[0];
+                    error_log("✅ XML NFe extraído do envelope SOAP");
+                } else {
+                    error_log("⚠️ Não foi possível extrair XML do envelope SOAP, usando XML completo");
+                }
+
+                // Tentar processar XML limpo com SimpleXML
+                $xmlLimpoObj = @simplexml_load_string($xmlLimpo);
+                if ($xmlLimpoObj) {
+                    error_log("✅ XML limpo processado com sucesso via SimpleXML");
+
+                    // Extrair dados do lote (Status 104)
+                    $statusLote = (string)($xmlLimpoObj->cStat ?? '');
+                    $motivoLote = (string)($xmlLimpoObj->xMotivo ?? '');
+
+                    error_log("📋 DADOS DO LOTE - Status: {$statusLote} - {$motivoLote}");
+
+                    // CONFORME DOCUMENTAÇÃO OFICIAL SEFAZ - Status 104 contém resultados individuais
+                    if ($statusLote === '104') {
+                        error_log("📋 STATUS 104 DETECTADO - Extraindo resultado individual da NFe");
+
+                        // Buscar dados da NFe individual em protNFe/infProt
+                        $protNFe = $xmlLimpoObj->protNFe ?? null;
+                        if ($protNFe && isset($protNFe->infProt)) {
+                            $infProt = $protNFe->infProt;
+
+                            $statusNFe = (string)($infProt->cStat ?? '');
+                            $motivoNFe = (string)($infProt->xMotivo ?? '');
+                            $protocoloNFe = (string)($infProt->nProt ?? '');
+
+                            error_log("✅ RESULTADO INDIVIDUAL DA NFe EXTRAÍDO:");
+                            error_log("  - Status NFe: {$statusNFe}");
+                            error_log("  - Motivo NFe: {$motivoNFe}");
+                            error_log("  - Protocolo NFe: {$protocoloNFe}");
+
+                            // Usar dados da NFe individual (não do lote)
+                            $status = $statusNFe;
+                            $motivo = $motivoNFe;
+                            $protocolo = $protocoloNFe;
+
+                            // Pular processamento adicional
+                            goto validacao_final;
+
+                        } else {
+                            error_log("❌ ERRO: protNFe/infProt não encontrado no XML");
+                        }
+                    } else {
+                        // Para outros status, usar dados do lote
+                        $status = $statusLote;
+                        $motivo = $motivoLote;
+
+                        // Tentar extrair protocolo se disponível
+                        $protocoloLote = (string)($xmlLimpoObj->protNFe->infProt->nProt ?? '');
+                        $protocolo = $protocoloLote ?: null;
+
+                        error_log("✅ DADOS DO LOTE EXTRAÍDOS:");
+                        error_log("  - Status: {$status}");
+                        error_log("  - Motivo: {$motivo}");
+                        error_log("  - Protocolo: " . ($protocolo ?: 'NÃO ENCONTRADO'));
+
+                        goto validacao_final;
+                    }
+                }
+
+                // Se SimpleXML falhou, usar regex como último recurso (seguindo as 4 Leis)
+                error_log("⚠️ SimpleXML falhou, usando regex como último recurso");
+
+                // Extrair dados básicos do lote
+                preg_match('/<cStat>(\d+)<\/cStat>/', $consultaRecibo, $statusMatch);
+                preg_match('/<xMotivo>([^<]+)<\/xMotivo>/', $consultaRecibo, $motivoMatch);
+
+                if (!empty($statusMatch)) {
+                    $statusFinal = $statusMatch[1];
+                    $motivoFinal = $motivoMatch[1] ?? 'Motivo não encontrado';
+
+                    // Para Status 104, extrair dados da NFe individual usando regex específica
+                    if ($statusFinal === '104') {
+                        error_log("🔍 STATUS 104 - Buscando dados da NFe individual via regex");
+
+                        // Regex para extrair dados de protNFe/infProt (estrutura oficial SEFAZ)
+                        preg_match('/<protNFe[^>]*>.*?<infProt[^>]*>.*?<cStat>(\d+)<\/cStat>.*?<xMotivo>([^<]+)<\/xMotivo>.*?<nProt>(\d+)<\/nProt>.*?<\/infProt>.*?<\/protNFe>/s', $consultaRecibo, $nfeMatch);
+
+                        if (!empty($nfeMatch)) {
+                            $statusFinal = $nfeMatch[1];  // cStat da NFe
+                            $motivoFinal = $nfeMatch[2];  // xMotivo da NFe
+                            $protocoloFinal = $nfeMatch[3]; // nProt da NFe
+
+                            error_log("✅ DADOS DA NFe INDIVIDUAL EXTRAÍDOS VIA REGEX:");
+                            error_log("  - Status NFe: {$statusFinal}");
+                            error_log("  - Motivo NFe: {$motivoFinal}");
+                            error_log("  - Protocolo NFe: {$protocoloFinal}");
+                        } else {
+                            error_log("❌ ERRO: Não foi possível extrair dados da NFe individual via regex");
+                            $protocoloFinal = null;
+                        }
+                    } else {
+                        // Para outros status, tentar extrair protocolo diretamente
+                        preg_match('/<nProt>(\d+)<\/nProt>/', $consultaRecibo, $protocoloMatch);
+                        $protocoloFinal = $protocoloMatch[1] ?? null;
+
+                        error_log("✅ DADOS EXTRAÍDOS VIA REGEX:");
+                        error_log("  - Status: {$statusFinal}");
+                        error_log("  - Motivo: {$motivoFinal}");
+                        error_log("  - Protocolo: " . ($protocoloFinal ? $protocoloFinal : 'NÃO ENCONTRADO'));
+                    }
+
+                    // Atualizar variáveis com resultado final
+                    $status = $statusFinal;
+                    $motivo = $motivoFinal;
+                    $protocolo = $protocoloFinal;
+
+                    // Pular o processamento XML normal
+                    goto validacao_final;
+                }
+
+                error_log("❌ ERRO: XML da consulta do recibo inválido após múltiplas tentativas");
+                error_log("XML início: " . substr($consultaRecibo, 0, 200));
+                error_log("XML fim: " . substr($consultaRecibo, -200));
+                error_log("Tamanho total: " . strlen($consultaRecibo) . " bytes");
+                throw new Exception('Erro ao processar resposta da consulta do recibo - XML inválido');
+            }
+
+            // Extrair dados da consulta do recibo
+            // A estrutura da consulta do recibo é diferente do envio
+            $cStatRecibo = $xmlRecibo->xpath('//cStat') ?: $xmlRecibo->xpath('//*[local-name()="cStat"]');
+            $xMotivoRecibo = $xmlRecibo->xpath('//xMotivo') ?: $xmlRecibo->xpath('//*[local-name()="xMotivo"]');
+
+            // Para consulta de recibo, o protocolo está em protNFe/infProt/nProt dentro de cada NFe
+            $nProtRecibo = $xmlRecibo->xpath('//protNFe/infProt/nProt') ?:
+                          $xmlRecibo->xpath('//infProt/nProt') ?:
+                          $xmlRecibo->xpath('//nProt') ?:
+                          $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
+                          $xmlRecibo->xpath('//*[local-name()="nProt"]');
+
+            $statusFinal = !empty($cStatRecibo) ? (string)$cStatRecibo[0] : 'DESCONHECIDO';
+            $motivoFinal = !empty($xMotivoRecibo) ? (string)$xMotivoRecibo[0] : 'Sem motivo';
+            $protocoloFinal = !empty($nProtRecibo) ? (string)$nProtRecibo[0] : null;
+
+            error_log("🔍 DADOS EXTRAÍDOS DO RECIBO:");
+            error_log("  - Status: {$statusFinal}");
+            error_log("  - Motivo: {$motivoFinal}");
+            error_log("  - Protocolo: " . ($protocoloFinal ? $protocoloFinal : 'NÃO ENCONTRADO'));
+
+            // SEGUINDO DOCUMENTAÇÃO OFICIAL SEFAZ - Status 104 = "Lote processado"
+            // Conforme MOC: "cStat=104, com os resultados individuais de processamento das NF-e"
+            if ($statusFinal === '104') {
+                error_log("📋 STATUS 104 - Lote processado. Buscando resultado individual da NFe...");
+
+                // Buscar status específico da NFe dentro do elemento protNFe/infProt
+                // Conforme documentação: protNFe/infProt/cStat e protNFe/infProt/nProt
+                $cStatNFe = $xmlRecibo->xpath('//protNFe/infProt/cStat') ?:
+                           $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="cStat"]');
+
+                $xMotivoNFe = $xmlRecibo->xpath('//protNFe/infProt/xMotivo') ?:
+                             $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="xMotivo"]');
+
+                $nProtNFe = $xmlRecibo->xpath('//protNFe/infProt/nProt') ?:
+                           $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]');
+
+                if (!empty($cStatNFe)) {
+                    $statusFinal = (string)$cStatNFe[0];
+                    $motivoFinal = !empty($xMotivoNFe) ? (string)$xMotivoNFe[0] : $motivoFinal;
+                    $protocoloFinal = !empty($nProtNFe) ? (string)$nProtNFe[0] : $protocoloFinal;
+
+                    error_log("✅ RESULTADO INDIVIDUAL DA NFe ENCONTRADO:");
+                    error_log("  - Status NFe: {$statusFinal}");
+                    error_log("  - Motivo NFe: {$motivoFinal}");
+                    error_log("  - Protocolo NFe: " . ($protocoloFinal ? $protocoloFinal : 'NÃO ENCONTRADO'));
+                } else {
+                    error_log("❌ ERRO: Não foi possível encontrar resultado individual da NFe no lote processado");
+                }
+            }
+
+            error_log("📋 RESULTADO FINAL - Status: {$statusFinal} - {$motivoFinal}");
+
+            // Atualizar variáveis com resultado final
+            $status = $statusFinal;
+            $motivo = $motivoFinal;
+            $protocolo = $protocoloFinal;
+
+        } catch (Exception $consultaError) {
+            error_log("❌ ERRO ao consultar recibo: " . $consultaError->getMessage());
+            throw new Exception("Erro ao consultar recibo da SEFAZ: " . $consultaError->getMessage());
+        }
+    }
+
+    // Label para goto
+    validacao_final:
+
+    // TRADUZIR ERROS SEFAZ PARA MENSAGENS AMIGÁVEIS
+    function traduzirErroSefaz($status, $motivo) {
+        $errosComuns = [
+            '209' => [
+                'titulo' => 'Inscrição Estadual Inválida',
+                'descricao' => 'A Inscrição Estadual da empresa está incorreta ou inválida.',
+                'solucao' => 'Verifique e corrija a Inscrição Estadual da empresa nas configurações.'
+            ],
+            '204' => [
+                'titulo' => 'CNPJ Inválido',
+                'descricao' => 'O CNPJ da empresa está incorreto ou inválido.',
+                'solucao' => 'Verifique e corrija o CNPJ da empresa nas configurações.'
+            ],
+            '215' => [
+                'titulo' => 'CNPJ do Destinatário Inválido',
+                'descricao' => 'O CNPJ/CPF do destinatário está incorreto.',
+                'solucao' => 'Verifique e corrija o documento do destinatário.'
+            ],
+            '280' => [
+                'titulo' => 'Certificado Digital Inválido',
+                'descricao' => 'O certificado digital está vencido ou inválido.',
+                'solucao' => 'Renove ou reinstale o certificado digital da empresa.'
+            ],
+            '611' => [
+                'titulo' => 'Código EAN/GTIN Inválido',
+                'descricao' => 'O código de barras EAN/GTIN de um ou mais produtos está incorreto.',
+                'solucao' => 'Verifique e corrija os códigos EAN/GTIN dos produtos ou deixe em branco se não possuir.'
+            ],
+            '103' => [
+                'titulo' => 'Lote em Processamento',
+                'descricao' => 'A NFe foi enviada e está sendo processada pela SEFAZ.',
+                'solucao' => 'Aguarde alguns segundos e consulte o status novamente.'
+            ]
+        ];
+
+        if (isset($errosComuns[$status])) {
+            $erro = $errosComuns[$status];
+            return [
+                'titulo' => $erro['titulo'],
+                'descricao' => $erro['descricao'],
+                'solucao' => $erro['solucao'],
+                'status_original' => $status,
+                'motivo_original' => $motivo
+            ];
+        }
+
+        return [
+            'titulo' => 'Erro na Validação da NFe',
+            'descricao' => $motivo,
+            'solucao' => 'Verifique os dados da NFe e tente novamente.',
+            'status_original' => $status,
+            'motivo_original' => $motivo
+        ];
+    }
+
+    // VALIDAÇÃO CRÍTICA - SEGUINDO AS 4 LEIS NFe
+    // Verificar se NFe foi realmente autorizada (Status 100)
+    if ($status !== '100') {
+        error_log("❌ NFe NÃO AUTORIZADA - Status: {$status} - {$motivo}");
+
+        $erroTraduzido = traduzirErroSefaz($status, $motivo);
+
+        throw new Exception(json_encode([
+            'tipo' => 'erro_sefaz',
+            'titulo' => $erroTraduzido['titulo'],
+            'descricao' => $erroTraduzido['descricao'],
+            'solucao' => $erroTraduzido['solucao'],
+            'detalhes_tecnicos' => [
+                'status' => $status,
+                'motivo' => $motivo
+            ]
+        ]));
+    }
+
+    // Verificar se protocolo real existe
+    if (empty($protocolo)) {
+        error_log("❌ PROTOCOLO AUSENTE - NFe não pode ser considerada autorizada");
+        throw new Exception("Protocolo não encontrado. NFe não foi autorizada pela SEFAZ.");
+    }
+
+    // Validar formato do protocolo (15 dígitos numéricos)
+    if (!preg_match('/^\d{15}$/', $protocolo)) {
+        error_log("❌ PROTOCOLO INVÁLIDO: {$protocolo} - Deve ter 15 dígitos numéricos");
+        throw new Exception("Protocolo inválido recebido da SEFAZ: {$protocolo}");
+    }
+
+    error_log("✅ NFe VALIDADA - Status: {$status}, Protocolo: {$protocolo}");
+
+    // Resultado da resposta (apenas dados reais validados)
     $resultado = [
         'chave' => $chave,
         'protocolo' => $protocolo,
-        'recibo' => $recibo ?? 'RECIBO_NAO_ENCONTRADO',
-        'status' => $status ?? 'DESCONHECIDO',
-        'motivo' => $motivo ?? 'Sem motivo',
+        'recibo' => $recibo,
+        'status' => $status,
+        'motivo' => $motivo,
         'response_xml' => $response
     ];
     

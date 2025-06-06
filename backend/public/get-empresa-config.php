@@ -24,8 +24,8 @@ try {
     }
     
     // Configuração do Supabase
-    $supabaseUrl = 'https://your-project.supabase.co'; // Substitua pela sua URL
-    $supabaseKey = 'your-anon-key'; // Substitua pela sua chave
+    $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
+    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
     
     // Função para fazer requisições ao Supabase
     function supabaseRequest($url, $headers = []) {
