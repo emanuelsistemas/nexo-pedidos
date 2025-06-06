@@ -34,6 +34,7 @@ import UserPerfilPage from './pages/user/UserPerfilPage';
 
 // Páginas públicas
 import NotaPedidoPage from './pages/public/NotaPedidoPage';
+import ContadorPortalPage from './pages/public/ContadorPortalPage';
 
 function App() {
   return (
@@ -43,8 +44,9 @@ function App() {
         <Route path="/entrar" element={<EntrarPage />} />
         <Route path="/cadastrar" element={<CadastrarPage />} />
 
-        {/* Rota pública para visualização de pedidos */}
+        {/* Rotas públicas */}
         <Route path="/pedido/:codigoPedido" element={<NotaPedidoPage />} />
+        <Route path="/contador" element={<ContadorPortalPage />} />
 
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
