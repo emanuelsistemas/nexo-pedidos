@@ -979,7 +979,9 @@ const NfePage: React.FC = () => {
                         {nfe.nome_cliente || 'Consumidor Final'}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400 w-[12%]">
-                        {new Date(nfe.created_at).toLocaleDateString('pt-BR')}
+                        {new Date(nfe.created_at).toLocaleDateString('pt-BR', {
+                          timeZone: 'America/Sao_Paulo' // ✅ FORÇAR TIMEZONE BRASILEIRO
+                        })}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-white w-[10%]">
                         R$ {(nfe.valor_total || 0).toFixed(2)}
@@ -1227,7 +1229,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
   // Funções auxiliares para gerenciar progresso
   const addLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
+    const timestamp = new Date().toLocaleTimeString('pt-BR', {
+      timeZone: 'America/Sao_Paulo' // ✅ FORÇAR TIMEZONE BRASILEIRO
+    });
     const logMessage = `[${timestamp}] ${message}`;
 
     // Adicionar ao modal
@@ -3175,13 +3179,21 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         data_cancelamento: new Date().toISOString()
       }));
 
-      // ✅ RECARREGAR GRID DIRETAMENTE após cancelamento bem-sucedido
-      console.log('🔄 Recarregando grid após cancelamento bem-sucedido...');
+      // ✅ ATUALIZAR GRID DIRETAMENTE no estado local (SEM RECARREGAR)
+      console.log('🔄 Atualizando grid localmente após cancelamento bem-sucedido...');
 
-      // Usar setTimeout para garantir que a atualização do banco foi processada
-      setTimeout(() => {
-        loadNfes();
-      }, 1000);
+      setNfes(prev => prev.map(nfe =>
+        nfe.chave_nfe === dados.chave
+          ? {
+              ...nfe,
+              status_nfe: 'cancelada',
+              motivo_cancelamento: motivo,
+              cancelada_em: new Date().toISOString()
+            }
+          : nfe
+      ));
+
+      console.log('✅ Grid atualizada localmente - Status alterado para cancelada');
 
       showMessage('success', 'NFe cancelada com sucesso!');
 
@@ -5887,7 +5899,8 @@ const AutorizacaoSection: React.FC<{
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
+      second: '2-digit',
+      timeZone: 'America/Sao_Paulo' // ✅ FORÇAR TIMEZONE BRASILEIRO
     });
   };
 
@@ -5997,11 +6010,8 @@ const AutorizacaoSection: React.FC<{
         setShowCancelModal(false);
         showMessage('success', 'NFe cancelada com sucesso!');
 
-        // ✅ ATUALIZAR GRID após cancelamento bem-sucedido
-        if (onUpdateGrid) {
-          console.log('🔄 Atualizando grid após cancelamento...');
-          onUpdateGrid();
-        }
+        // ✅ Grid já foi atualizada no componente pai via state management
+        console.log('✅ Cancelamento concluído - Grid atualizada automaticamente');
       }
     } catch (error: any) {
       showMessage('error', `Erro ao cancelar NFe: ${error.message}`);

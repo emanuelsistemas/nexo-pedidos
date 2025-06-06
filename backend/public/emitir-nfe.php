@@ -1,4 +1,7 @@
 <?php
+// ✅ CONFIGURAR TIMEZONE BRASILEIRO PARA CORRIGIR HORÁRIO
+date_default_timezone_set('America/Sao_Paulo');
+
 header('Content-Type: application/json');
 
 // Handle preflight requests
@@ -175,12 +178,19 @@ try {
     // CRIAR TAG IDE (IDENTIFICAÇÃO) - OBRIGATÓRIO ANTES DOS PRODUTOS
     $std = new stdClass();
     $std->cUF = $codigosUF[$uf]; // Usar código real da UF da empresa (SEM FALLBACK)
-    $std->cNF = str_pad(rand(10000000, 99999999), 8, '0', STR_PAD_LEFT);
+
+    // ✅ USAR CÓDIGO NUMÉRICO DO FRONTEND (SEM FALLBACK)
+    $codigoNumerico = $identificacao['codigo_numerico'] ?? null;
+    if (empty($codigoNumerico)) {
+        throw new Exception('Código numérico da NFe é obrigatório');
+    }
+    $std->cNF = str_pad($codigoNumerico, 8, '0', STR_PAD_LEFT);
+
     $std->natOp = $identificacao['natureza_operacao'] ?? 'Venda de mercadoria';
     $std->mod = 55; // NFe
     $std->serie = (int)($identificacao['serie'] ?? 1);
     $std->nNF = (int)($identificacao['numero'] ?? 1);
-    $std->dhEmi = date('Y-m-d\TH:i:sP');
+    $std->dhEmi = date('Y-m-d\TH:i:sP'); // ✅ Agora com timezone brasileiro
     $std->tpNF = 1; // Saída
     $std->idDest = 1; // Operação interna
 
