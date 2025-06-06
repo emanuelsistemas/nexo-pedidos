@@ -147,6 +147,55 @@ try {
                 $mensagemEspecifica = 'NFe não encontrada na base da SEFAZ. Verifique se a NFe foi realmente autorizada.';
                 break;
             case '101':
+                // ✅ NFe já cancelada na SEFAZ - SINCRONIZAR BANCO LOCAL
+                error_log("⚠️ NFe já cancelada na SEFAZ - Sincronizando banco local...");
+
+                // Atualizar status no banco local para sincronizar
+                $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
+                $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMzMzk5NzEsImV4cCI6MjA0ODkxNTk3MX0.VmyrqjgFO8nT_Lqzq0_HQmJnKQiIkTtClQUEWdxwP5s';
+
+                $updateData = [
+                    'status_nfe' => 'cancelada',
+                    'cancelada_em' => date('c'),
+                    'motivo_cancelamento' => $motivo,
+                    'updated_at' => date('c')
+                ];
+
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $supabaseUrl . '/rest/v1/pdv?chave_nfe=eq.' . $chaveNFe);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $supabaseKey,
+                    'apikey: ' . $supabaseKey,
+                    'Prefer: return=minimal'
+                ]);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($updateData));
+
+                $updateResponse = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($httpCode >= 200 && $httpCode < 300) {
+                    error_log("✅ STATUS SINCRONIZADO - NFe já cancelada na SEFAZ, banco atualizado");
+
+                    // Retornar sucesso da sincronização
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'NFe já estava cancelada na SEFAZ - Status sincronizado no banco local',
+                        'data' => [
+                            'chave_nfe' => $chaveNFe,
+                            'motivo' => $motivo,
+                            'status' => 'cancelada',
+                            'sincronizado' => true
+                        ]
+                    ]);
+                    exit;
+                } else {
+                    error_log("❌ ERRO ao sincronizar status - HTTP {$httpCode}");
+                }
+
                 $mensagemEspecifica = 'NFe cancelada. Esta NFe já foi cancelada anteriormente.';
                 break;
             case '110':

@@ -3123,6 +3123,44 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     }
   };
 
+  // ✅ FUNÇÃO PARA SALVAR CANCELAMENTO NO BANCO (MESMO PADRÃO DA EMISSÃO)
+  const salvarCancelamentoNoBanco = async (cancelamentoData: any) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // ✅ ATUALIZAR STATUS NO BANCO (MESMO PADRÃO DA EMISSÃO)
+      const { error } = await supabase
+        .from('pdv')
+        .update({
+          status_nfe: 'cancelada',
+          motivo_cancelamento: cancelamentoData.motivo || 'Cancelamento via sistema',
+          cancelada_em: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('chave_nfe', cancelamentoData.chave_nfe)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (error) {
+        throw error;
+      }
+
+      console.log('✅ Status de cancelamento atualizado no banco via frontend');
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar cancelamento no banco:', error);
+      throw error;
+    }
+  };
+
   const sections = [
     { id: 'identificacao', label: 'Identificação', number: 1 },
     { id: 'destinatario', label: 'Destinatário', number: 2 },
@@ -3190,23 +3228,24 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         data_cancelamento: new Date().toISOString()
       }));
 
-      // ✅ ATUALIZAR GRID DIRETAMENTE no estado local (SEM RECARREGAR)
-      console.log('🔄 Atualizando grid localmente após cancelamento bem-sucedido...');
+      // ✅ SEGUIR EXATAMENTE O PADRÃO DA EMISSÃO: SALVAR NO BANCO VIA FRONTEND
+      console.log('✅ NFe cancelada com sucesso - Salvando no banco...');
 
-      setNfes(prev => prev.map(nfe =>
-        nfe.chave_nfe === dados.chave
-          ? {
-              ...nfe,
-              status_nfe: 'cancelada',
-              motivo_cancelamento: motivo,
-              cancelada_em: new Date().toISOString()
-            }
-          : nfe
-      ));
-
-      console.log('✅ Grid atualizada localmente - Status alterado para cancelada');
+      try {
+        await salvarCancelamentoNoBanco(result.data);
+        console.log('✅ Cancelamento salvo no banco com sucesso');
+      } catch (dbError) {
+        console.error('❌ Erro ao salvar cancelamento no banco:', dbError);
+        // Não falhar o processo - cancelamento já foi feito na SEFAZ
+      }
 
       showMessage('success', 'NFe cancelada com sucesso!');
+
+      // ✅ MESMO PADRÃO DA EMISSÃO: Aguardar 1 segundo e voltar para a grid
+      setTimeout(() => {
+        onSave(); // ✅ Recarregar a lista de NFe (mesmo que emissão)
+        onBack(); // ✅ Voltar para a grid de NFe (mesmo que emissão)
+      }, 1000);
 
     } catch (error: any) {
       console.error('❌ Erro ao cancelar NFe:', error);
@@ -6019,7 +6058,7 @@ const AutorizacaoSection: React.FC<{
       if (onCancelarNFe) {
         await onCancelarNFe(motivo);
         setShowCancelModal(false);
-        showMessage('success', 'NFe cancelada com sucesso!');
+        // ✅ Mensagem já é exibida no componente pai - não duplicar
 
         // ✅ Grid já foi atualizada no componente pai via state management
         console.log('✅ Cancelamento concluído - Grid atualizada automaticamente');
