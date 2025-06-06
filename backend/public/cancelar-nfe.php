@@ -328,14 +328,99 @@ try {
         throw new Exception("Cancelamento rejeitado pela SEFAZ. Código: {$cStat} - {$xMotivo}");
     }
 
-    // 17. Atualizar status no banco local (se nfe_id foi fornecido)
-    if ($nfeId) {
-        // Aqui você pode implementar a atualização no Supabase
-        // Por enquanto, vamos apenas logar
-        error_log("🚫 NFe cancelada com sucesso. ID local: {$nfeId}");
+    // 17. Atualizar status no banco local (OBRIGATÓRIO após cancelamento confirmado)
+    error_log("🔄 ATUALIZANDO STATUS NO BANCO LOCAL...");
+
+    // Configuração Supabase
+    $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
+    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMzMzk5NzEsImV4cCI6MjA0ODkxNTk3MX0.VmyrqjgFO8nT_Lqzq0_HQmJnKQiIkTtClQUEWdxwP5s';
+
+    // Dados para atualização (usando campos reais da tabela)
+    $updateData = [
+        'status_nfe' => 'cancelada',
+        'cancelada_em' => date('c'), // ISO 8601 format para timestamp
+        'motivo_cancelamento' => $motivo,
+        'updated_at' => date('c') // ISO 8601 format
+    ];
+
+    // Fazer requisição para Supabase
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $supabaseUrl . '/rest/v1/pdv?chave_nfe=eq.' . $chaveNFe);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $supabaseKey,
+        'apikey: ' . $supabaseKey,
+        'Prefer: return=minimal'
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($updateData));
+
+    $updateResponse = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode >= 200 && $httpCode < 300) {
+        error_log("✅ STATUS ATUALIZADO NO BANCO - NFe marcada como cancelada");
+        error_log("📋 Dados atualizados: " . json_encode($updateData));
+    } else {
+        error_log("❌ ERRO ao atualizar status no banco - HTTP {$httpCode}");
+        error_log("📋 Resposta: " . $updateResponse);
+        // Não falhar o cancelamento por erro de banco - NFe já foi cancelada na SEFAZ
+        error_log("⚠️ NFe foi cancelada na SEFAZ, mas erro ao atualizar banco local");
     }
 
-    // 18. Retornar sucesso
+    // 18. SALVAR XML DE CANCELAMENTO (OBRIGATÓRIO PARA CONTABILIDADE)
+    error_log("💾 SALVANDO XML DE CANCELAMENTO para contabilidade...");
+
+    // Diretório para XMLs de cancelamento por empresa - NOVA ESTRUTURA ORGANIZADA
+    $xmlCancelDir = "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/Cancelados/" . date('Y/m');
+    if (!is_dir($xmlCancelDir)) {
+        mkdir($xmlCancelDir, 0755, true);
+        error_log("📁 Diretório de NFes canceladas criado: {$xmlCancelDir}");
+    }
+
+    // Nome do arquivo: chave_nfe + _cancelamento.xml
+    $nomeArquivoCancel = $chaveNFe . '_cancelamento.xml';
+    $caminhoArquivoCancel = $xmlCancelDir . '/' . $nomeArquivoCancel;
+
+    // Salvar XML completo de cancelamento (resposta da SEFAZ)
+    if (file_put_contents($caminhoArquivoCancel, $response)) {
+        error_log("✅ XML de cancelamento salvo: {$caminhoArquivoCancel}");
+
+        // Atualizar banco com caminho do XML de cancelamento
+        $updateXmlData = [
+            'xml_cancelamento_path' => $caminhoArquivoCancel,
+            'xml_cancelamento_nome' => $nomeArquivoCancel
+        ];
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $supabaseUrl . '/rest/v1/pdv?chave_nfe=eq.' . $chaveNFe);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $supabaseKey,
+            'apikey: ' . $supabaseKey,
+            'Prefer: return=minimal'
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($updateXmlData));
+
+        $updateXmlResponse = curl_exec($ch);
+        $httpXmlCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpXmlCode >= 200 && $httpXmlCode < 300) {
+            error_log("✅ Caminho do XML de cancelamento salvo no banco");
+        } else {
+            error_log("⚠️ Erro ao salvar caminho do XML no banco - HTTP {$httpXmlCode}");
+        }
+
+    } else {
+        error_log("❌ ERRO ao salvar XML de cancelamento");
+    }
+
+    // 19. Retornar sucesso
     echo json_encode([
         'success' => true,
         'message' => 'NFe cancelada com sucesso',
@@ -347,7 +432,9 @@ try {
             'data_cancelamento' => date('Y-m-d H:i:s'),
             'codigo_status' => $cStat,
             'descricao_status' => $xMotivo,
-            'ambiente' => $nfeConfig['ambiente']
+            'ambiente' => $nfeConfig['ambiente'],
+            'xml_cancelamento_salvo' => isset($caminhoArquivoCancel) ? true : false,
+            'xml_cancelamento_path' => isset($caminhoArquivoCancel) ? $caminhoArquivoCancel : null
         ],
         'response_sefaz' => $response
     ]);

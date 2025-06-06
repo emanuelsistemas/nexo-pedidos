@@ -1145,10 +1145,11 @@ try {
     // Usar chave real se encontrada, senão manter a original
     $chaveParaSalvar = $chaveReal ?: $chave;
 
-    // Salvar XML em arquivo
-    $xmlDir = "../storage/xml/empresa_{$empresaId}/" . date('Y/m');
+    // Salvar XML em arquivo - NOVA ESTRUTURA ORGANIZADA
+    $xmlDir = "../storage/xml/empresa_{$empresaId}/Autorizados/" . date('Y/m');
     if (!is_dir($xmlDir)) {
         mkdir($xmlDir, 0755, true);
+        error_log("📁 Diretório de NFes autorizadas criado: {$xmlDir}");
     }
 
     // Garantir que o XML tenha declaração XML válida

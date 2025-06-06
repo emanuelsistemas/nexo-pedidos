@@ -1751,14 +1751,16 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         console.log('  - protocolo_nfe:', nfe.protocolo_nfe);
         console.log('  - data_emissao_nfe:', nfe.data_emissao_nfe);
 
-        if (nfe.status_nfe === 'autorizada' && (nfe.chave_nfe || nfe.protocolo_nfe)) {
+        if ((nfe.status_nfe === 'autorizada' || nfe.status_nfe === 'cancelada') && (nfe.chave_nfe || nfe.protocolo_nfe)) {
           console.log('🔐 ✅ CONDIÇÕES ATENDIDAS - Carregando dados de autorização da NFe');
           const dadosAuth = {
             chave: nfe.chave_nfe || '',
             protocolo: nfe.protocolo_nfe || '',
-            status: 'autorizada',
+            status: nfe.status_nfe, // Usar o status real da NFe (autorizada ou cancelada)
             dataAutorizacao: nfe.data_emissao_nfe || nfe.created_at || '',
-            ambiente: 'homologacao' // Pode ser determinado pela chave ou configuração
+            ambiente: 'homologacao', // Pode ser determinado pela chave ou configuração
+            motivo_cancelamento: nfe.motivo_cancelamento || '',
+            data_cancelamento: nfe.cancelada_em || ''
           };
           console.log('🔐 Dados de autorização preparados:', dadosAuth);
 
@@ -1768,7 +1770,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           }, 200);
         } else {
           console.log('❌ CONDIÇÕES NÃO ATENDIDAS para carregar dados de autorização');
-          console.log('  - É autorizada?', nfe.status_nfe === 'autorizada');
+          console.log('  - É autorizada ou cancelada?', nfe.status_nfe === 'autorizada' || nfe.status_nfe === 'cancelada');
           console.log('  - Tem chave ou protocolo?', !!(nfe.chave_nfe || nfe.protocolo_nfe));
         }
       } catch (error) {
@@ -3173,8 +3175,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         data_cancelamento: new Date().toISOString()
       }));
 
-      // Recarregar lista de NFes para atualizar o status
-      // await loadNfes(); // Comentado pois loadNfes não está no escopo desta função
+      // ✅ RECARREGAR GRID DIRETAMENTE após cancelamento bem-sucedido
+      console.log('🔄 Recarregando grid após cancelamento bem-sucedido...');
+
+      // Usar setTimeout para garantir que a atualização do banco foi processada
+      setTimeout(() => {
+        loadNfes();
+      }, 1000);
 
       showMessage('success', 'NFe cancelada com sucesso!');
 
@@ -3272,6 +3279,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             onChange={setDadosAutorizacao}
             isViewMode={isViewMode}
             onCancelarNFe={handleCancelarNFeFromAutorizacao}
+            onUpdateGrid={() => {
+              console.log('🔄 Recarregando grid após cancelamento...');
+              loadNfes();
+            }}
           />
         );
       default:
@@ -5859,7 +5870,8 @@ const AutorizacaoSection: React.FC<{
   onChange: (dados: any) => void;
   isViewMode?: boolean;
   onCancelarNFe?: (motivo: string) => void;
-}> = ({ dados, onChange, isViewMode, onCancelarNFe }) => {
+  onUpdateGrid?: () => void;
+}> = ({ dados, onChange, isViewMode, onCancelarNFe, onUpdateGrid }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -5935,7 +5947,7 @@ const AutorizacaoSection: React.FC<{
     }
   };
 
-  // Atualizar status do cancelamento a cada minuto
+  // Atualizar status do cancelamento a cada minuto (APENAS se não estiver cancelada)
   useEffect(() => {
     if (dados?.dataAutorizacao && dados?.status !== 'cancelada') {
       console.log('🔄 Iniciando cálculo de status de cancelamento');
@@ -5943,10 +5955,15 @@ const AutorizacaoSection: React.FC<{
       const interval = setInterval(calculateCancelStatus, 60000); // Atualizar a cada minuto
       return () => clearInterval(interval);
     } else {
-      console.log('🚫 Não calculando status:', {
+      console.log('🚫 Não calculando status (NFe cancelada ou sem data):', {
         dataAutorizacao: dados?.dataAutorizacao,
         status: dados?.status
       });
+      // Limpar tempo restante se NFe estiver cancelada
+      if (dados?.status === 'cancelada') {
+        setTimeRemaining('');
+        setCancelStatus('normal');
+      }
     }
   }, [dados?.dataAutorizacao, dados?.status]);
 
@@ -5979,6 +5996,12 @@ const AutorizacaoSection: React.FC<{
         await onCancelarNFe(motivo);
         setShowCancelModal(false);
         showMessage('success', 'NFe cancelada com sucesso!');
+
+        // ✅ ATUALIZAR GRID após cancelamento bem-sucedido
+        if (onUpdateGrid) {
+          console.log('🔄 Atualizando grid após cancelamento...');
+          onUpdateGrid();
+        }
       }
     } catch (error: any) {
       showMessage('error', `Erro ao cancelar NFe: ${error.message}`);
@@ -6151,10 +6174,10 @@ const AutorizacaoSection: React.FC<{
                       {cancelStatus === 'expirado' && 'Prazo de Cancelamento Expirado'}
                     </p>
                     <p className="mb-2">
-                      {cancelStatus === 'normal' &&
+                      {cancelStatus === 'normal' && dados?.status !== 'cancelada' &&
                         `Você pode cancelar esta NFe diretamente no sistema. Tempo restante: ${timeRemaining}`
                       }
-                      {cancelStatus === 'extemporaneo' && (
+                      {cancelStatus === 'extemporaneo' && dados?.status !== 'cancelada' && (
                         <span className="flex items-center gap-1">
                           Cancelamento extemporâneo (após 24h). Tempo restante: {timeRemaining}. Pode ser necessária manifestação do destinatário.
                           <button
@@ -6166,7 +6189,7 @@ const AutorizacaoSection: React.FC<{
                           </button>
                         </span>
                       )}
-                      {cancelStatus === 'expirado' &&
+                      {cancelStatus === 'expirado' && dados?.status !== 'cancelada' &&
                         'O prazo de 20 dias para cancelamento expirou. É necessário protocolar pedido específico na SEFAZ.'
                       }
                     </p>
