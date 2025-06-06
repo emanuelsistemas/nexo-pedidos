@@ -1019,12 +1019,27 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
   ]);
   const [logs, setLogs] = useState<string[]>([]);
-  const [dadosAutorizacao, setDadosAutorizacao] = useState({
+  const [dadosAutorizacao, setDadosAutorizacao] = useState<{
+    chave: string;
+    protocolo: string;
+    dataAutorizacao: string;
+    status: string;
+    ambiente: string;
+    sequencia_cce: number;
+    carta_correcao: string;
+    cartas_correcao: any[];
+    motivo_cancelamento?: string;
+    data_cancelamento?: string;
+    [key: string]: any;
+  }>({
     chave: '',
     protocolo: '',
     dataAutorizacao: '',
     status: '',
-    ambiente: 'homologacao'
+    ambiente: 'homologacao',
+    sequencia_cce: 1, // Campo para controlar a sequência da CCe
+    carta_correcao: '', // Campo para o texto da carta de correção
+    cartas_correcao: [] // Array para histórico de CCe enviadas
   });
 
   // Hook para logs da API
@@ -1775,6 +1790,42 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
         if ((nfe.status_nfe === 'autorizada' || nfe.status_nfe === 'cancelada') && (nfe.chave_nfe || nfe.protocolo_nfe)) {
           console.log('🔐 ✅ CONDIÇÕES ATENDIDAS - Carregando dados de autorização da NFe');
+
+          // Calcular próxima sequência baseada nas CCe existentes
+          let proximaSequencia = 1;
+          if (nfe.cartas_correcao) {
+            try {
+              const ccesExistentes = typeof nfe.cartas_correcao === 'string'
+                ? JSON.parse(nfe.cartas_correcao)
+                : nfe.cartas_correcao;
+
+              if (Array.isArray(ccesExistentes) && ccesExistentes.length > 0) {
+                proximaSequencia = ccesExistentes.length + 1;
+              }
+            } catch (error) {
+              console.error('❌ Erro ao calcular próxima sequência CCe:', error);
+            }
+          }
+
+          // Carregar CCe existentes do banco de dados
+          let ccesExistentes = [];
+          if (nfe.cartas_correcao) {
+            try {
+              ccesExistentes = typeof nfe.cartas_correcao === 'string'
+                ? JSON.parse(nfe.cartas_correcao)
+                : nfe.cartas_correcao;
+
+              if (!Array.isArray(ccesExistentes)) {
+                ccesExistentes = [];
+              }
+
+              console.log('📝 CCe carregadas do banco:', ccesExistentes);
+            } catch (error) {
+              console.error('❌ Erro ao carregar CCe do banco:', error);
+              ccesExistentes = [];
+            }
+          }
+
           const dadosAuth = {
             chave: nfe.chave_nfe || '',
             protocolo: nfe.protocolo_nfe || '',
@@ -1782,7 +1833,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             dataAutorizacao: nfe.data_emissao_nfe || nfe.created_at || '',
             ambiente: 'homologacao', // Pode ser determinado pela chave ou configuração
             motivo_cancelamento: nfe.motivo_cancelamento || '',
-            data_cancelamento: nfe.cancelada_em || ''
+            data_cancelamento: nfe.cancelada_em || '',
+            sequencia_cce: proximaSequencia, // Próxima sequência calculada
+            carta_correcao: '', // Campo para o texto da carta de correção
+            cartas_correcao: ccesExistentes // Array com CCe carregadas do banco
           };
           console.log('🔐 Dados de autorização preparados:', dadosAuth);
 
@@ -3298,12 +3352,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         throw new Error('Empresa não encontrada para o usuário');
       }
 
-      // Preparar dados para CCe (sequência será calculada automaticamente)
+      // Preparar dados para CCe usando a sequência do campo editável
       const cceData = {
         empresa_id: usuarioData.empresa_id,
         chave_nfe: dadosAutorizacao.chave,
         correcao: dadosAutorizacao.carta_correcao?.trim() || '',
-        sequencia: 'auto' // Backend calculará automaticamente
+        sequencia: dadosAutorizacao.sequencia_cce || 1 // Usar sequência do campo editável
       };
 
       console.log('📝 Enviando CCe:', cceData);
@@ -6278,6 +6332,25 @@ const AutorizacaoSection: React.FC<{
         {/* ✅ REGRA OFICIAL SEFAZ GA01: NFe cancelada NÃO pode receber Carta de Correção */}
         {dados?.status !== 'cancelada' ? (
           <>
+            {/* Campo para controlar a sequência da CCe */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Sequência da Carta de Correção
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={dados.sequencia_cce || 1}
+                onChange={(e) => onChange({ ...dados, sequencia_cce: parseInt(e.target.value) || 1 })}
+                className="w-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                placeholder="1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Número da sequência (1 a 20). Cada NFe pode ter até 20 cartas de correção.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               {/* Histórico de Cartas de Correção */}
               <div>
@@ -6307,15 +6380,11 @@ const AutorizacaoSection: React.FC<{
                           </div>
                         </div>
                       ))}
-                      <p className="text-xs text-gray-500 mt-2">
-                        Próxima sequência: {(dados.cartas_correcao.length + 1)} (máximo 20)
-                      </p>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-16 text-gray-500">
                       <div className="text-center">
                         <p className="text-sm">Nenhuma Carta de Correção enviada</p>
-                        <p className="text-xs">Próxima sequência será: 1</p>
                       </div>
                     </div>
                   )}

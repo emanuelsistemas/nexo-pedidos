@@ -17,10 +17,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
+require_once __DIR__ . '/../vendor/autoload.php';
+use NFePHP\DA\CCe\Dace;
+
 try {
-    require_once '../vendor/autoload.php';
-    
-    use NFePHP\DA\CCe\Dace;
     
     // 1. Validar método HTTP
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {

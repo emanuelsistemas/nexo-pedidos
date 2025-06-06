@@ -440,8 +440,13 @@ try {
         $ccesExistentes[] = $novaCce;
 
         // Atualizar no banco
-        $updateData = json_encode(['cartas_correcao' => json_encode($ccesExistentes)]);
+        $updateData = json_encode(['cartas_correcao' => $ccesExistentes]);
         $updateQuery = $supabaseUrl . '/rest/v1/pdv?id=eq.' . $pdvId;
+
+        error_log("🔍 DEBUG CCe - PDV ID: {$pdvId}");
+        error_log("🔍 DEBUG CCe - Update Data: " . $updateData);
+        error_log("🔍 DEBUG CCe - Update Query: " . $updateQuery);
+
         $updateContext = stream_context_create([
             'http' => [
                 'method' => 'PATCH',
@@ -456,6 +461,9 @@ try {
         ]);
 
         $updateResponse = file_get_contents($updateQuery, false, $updateContext);
+
+        error_log("🔍 DEBUG CCe - Update Response: " . ($updateResponse === false ? 'FALSE' : $updateResponse));
+        error_log("🔍 DEBUG CCe - HTTP Response Headers: " . print_r($http_response_header ?? [], true));
 
         if ($updateResponse === false) {
             throw new Exception('Erro ao atualizar CCe no banco de dados');
