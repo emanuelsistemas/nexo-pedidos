@@ -66,9 +66,9 @@ try {
 
         // ✅ CORRIGIDO: Usar tratamento de erro para consulta Supabase
         try {
-            // Conectar ao Supabase para buscar CCe existentes
+            // Conectar ao Supabase para buscar CCe existentes (USAR CHAVE CORRETA)
             $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
-            $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMzQzMzI2NCwiZXhwIjoyMDQ5MDA5MjY0fQ.VWHOLt7jgmJlvJoUeO_rKdJhBqjdcKhHt_6cNJhOaQs';
+            $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
 
             $nfeQuery = $supabaseUrl . '/rest/v1/pdv?chave_nfe=eq.' . urlencode($chaveNFe) . '&empresa_id=eq.' . urlencode($empresaId) . '&select=cartas_correcao';
             $nfeContext = stream_context_create([
@@ -90,8 +90,15 @@ try {
                 if ($nfeData && !empty($nfeData)) {
                     $ccesExistentes = $nfeData[0]['cartas_correcao'] ? json_decode($nfeData[0]['cartas_correcao'], true) : [];
                     if (is_array($ccesExistentes)) {
-                        $sequencia = count($ccesExistentes) + 1;
-                        error_log("📝 CCe - Próxima sequência calculada: {$sequencia}");
+                        // ✅ CORRIGIDO: Encontrar a maior sequência existente e somar 1
+                        $maiorSequencia = 0;
+                        foreach ($ccesExistentes as $cce) {
+                            if (isset($cce['sequencia']) && $cce['sequencia'] > $maiorSequencia) {
+                                $maiorSequencia = $cce['sequencia'];
+                            }
+                        }
+                        $sequencia = $maiorSequencia + 1;
+                        error_log("📝 CCe - CCe existentes: " . count($ccesExistentes) . ", Maior sequência: {$maiorSequencia}, Próxima: {$sequencia}");
                     } else {
                         $sequencia = 1;
                     }
@@ -233,15 +240,34 @@ try {
     
     error_log("✅ CCe - NFe autorizada, pode receber correção");
     
-    // 10. Executar Carta de Correção na SEFAZ (MÉTODO NATIVO)
+    // 10. Executar Carta de Correção na SEFAZ (MÉTODO NATIVO - IGUAL CANCELAMENTO)
     error_log("📝 CCe - Enviando para SEFAZ...");
+    error_log("📝 CCe - Parâmetros: Chave={$chaveNFe}, Sequência={$sequencia}, Correção=" . substr($correcao, 0, 50) . "...");
 
-    $response = $tools->sefazCCe($chaveNFe, $correcao, $sequencia);
-    
-    error_log("📝 CCe - Resposta SEFAZ: " . $response);
+    // ✅ CORRIGIDO: Usar método correto da biblioteca (igual cancelamento)
+    try {
+        error_log("🚀 CCe - Iniciando chamada sefazCCe...");
+        $response = $tools->sefazCCe($chaveNFe, $correcao, $sequencia);
+        error_log("📝 CCe - Resposta SEFAZ recebida: " . strlen($response) . " bytes");
+        error_log("📝 CCe - Primeiros 500 chars da resposta: " . substr($response, 0, 500));
+
+        // ✅ SALVAR RESPOSTA COMPLETA EM ARQUIVO PARA DEBUG
+        $debugFile = "/tmp/cce_response_debug.xml";
+        file_put_contents($debugFile, $response);
+        error_log("📝 CCe - Resposta completa salva em: {$debugFile}");
+
+        error_log("📝 CCe - Início da resposta: " . substr($response, 0, 300) . "...");
+    } catch (Exception $e) {
+        error_log("❌ CCe - Erro na chamada sefazCCe: " . $e->getMessage());
+        error_log("❌ CCe - Stack trace: " . $e->getTraceAsString());
+        throw new Exception('Erro ao enviar CCe para SEFAZ: ' . $e->getMessage());
+    }
+
+    error_log("✅ CCe - Chamada sefazCCe concluída com sucesso, processando resposta...");
     
     // 11. PROCESSAR RESPOSTA DA SEFAZ (MÉTODO OFICIAL - igual cancelamento)
     error_log("📝 CCe - Processando resposta da SEFAZ...");
+    error_log("📝 CCe - Tamanho da resposta: " . strlen($response) . " bytes");
 
     // ✅ PROCESSAR XML SOAP CORRETAMENTE (igual cancelamento)
     $xml = false;
@@ -254,12 +280,13 @@ try {
         if (preg_match('/<retEnvEvento[^>]*>.*?<\/retEnvEvento>/s', $response, $xmlMatch)) {
             $xml = @simplexml_load_string($xmlMatch[0]);
             error_log("✅ CCe - XML extraído do envelope SOAP");
+            error_log("📝 CCe - XML extraído: " . substr($xmlMatch[0], 0, 500) . "...");
         }
     }
 
     if (!$xml) {
         error_log("❌ CCe - Erro ao processar XML da resposta SEFAZ");
-        error_log("📝 CCe - Resposta recebida: " . substr($response, 0, 500) . "...");
+        error_log("📝 CCe - Resposta recebida: " . substr($response, 0, 1000) . "...");
         throw new Exception('Erro ao processar resposta da SEFAZ');
     }
 
@@ -271,125 +298,106 @@ try {
     $xMotivo = !empty($xMotivoArray) ? (string)$xMotivoArray[0] : '';
 
     error_log("📝 CCe - Status extraído: '{$cStat}' - '{$xMotivo}'");
-    
-    // 13. VERIFICAR STATUS CCe COM RETRY PATTERN (igual cancelamento)
-    if ($cStat === '128') {
-        // Status 128 = Lote de Evento Processado - AGUARDAR E CONSULTAR NOVAMENTE
-        error_log("⏳ CCe - Status 128 detectado, implementando retry pattern...");
 
-        // ✅ RETRY PATTERN MELHORADO PARA CCe (mais tempo que cancelamento)
-        $maxTentativas = 5;
-        $retryIntervals = [5, 8, 12, 15, 20]; // segundos entre tentativas (total ~60s)
-
-        for ($tentativa = 1; $tentativa <= $maxTentativas; $tentativa++) {
-            error_log("🔄 CCe TENTATIVA {$tentativa}/{$maxTentativas} - Aguardando {$retryIntervals[$tentativa-1]} segundos...");
-
-            // Aguardar intervalo antes da consulta
-            sleep($retryIntervals[$tentativa-1]);
-
-            // Consultar status atual da NFe usando método oficial da biblioteca
-            error_log("🔍 CCe - CONSULTANDO STATUS DA NFe (Tentativa {$tentativa})...");
-            $consultaCce = $tools->sefazConsultaChave($chaveNFe);
-
-            // Processar XML da consulta
-            $xmlConsulta = false;
-
-            // Tentar processar XML direto
-            $xmlConsulta = @simplexml_load_string($consultaCce);
-
-            // Se falhou, extrair conteúdo do envelope SOAP
-            if (!$xmlConsulta) {
-                if (preg_match('/<retConsSitNFe[^>]*>.*?<\/retConsSitNFe>/s', $consultaCce, $xmlMatch)) {
-                    $xmlConsulta = @simplexml_load_string($xmlMatch[0]);
-                    error_log("✅ CCe - XML NFe extraído do envelope SOAP (tentativa {$tentativa})");
-                }
-            }
-
-            if ($xmlConsulta) {
-                // Verificar se há eventos de CCe na resposta
-                $eventosArray = $xmlConsulta->xpath('//retEvento') ?: $xmlConsulta->xpath('//*[local-name()="retEvento"]');
-
-                if (!empty($eventosArray)) {
-                    foreach ($eventosArray as $evento) {
-                        $tpEventoArray = $evento->xpath('.//tpEvento') ?: $evento->xpath('.//*[local-name()="tpEvento"]');
-                        $cStatEventoArray = $evento->xpath('.//cStat') ?: $evento->xpath('.//*[local-name()="cStat"]');
-
-                        $tpEvento = !empty($tpEventoArray) ? (string)$tpEventoArray[0] : '';
-                        $cStatEvento = !empty($cStatEventoArray) ? (string)$cStatEventoArray[0] : '';
-
-                        // Verificar se é evento de CCe (110110) com status 135
-                        if ($tpEvento === '110110' && $cStatEvento === '135') {
-                            error_log("✅ CCe CONFIRMADA na tentativa {$tentativa}!");
-                            error_log("✅ Status 135: Evento registrado e vinculado à NFe");
-
-                            // Extrair protocolo da CCe
-                            $nProtCceArray = $evento->xpath('.//nProt') ?: $evento->xpath('.//*[local-name()="nProt"]');
-                            $protocoloCceConfirmado = !empty($nProtCceArray) ? (string)$nProtCceArray[0] : null;
-
-                            // Atualizar variáveis para retorno de sucesso
-                            $cStat = '135';
-                            $xMotivo = 'Evento registrado e vinculado a NFe';
-                            $protocoloCCe = $protocoloCceConfirmado ?: $protocoloCCe;
-
-                            break 2; // Sair dos dois loops
-                        }
-                    }
-                }
-            }
-
-            if ($tentativa === $maxTentativas) {
-                error_log("⚠️ CCe - Timeout após {$maxTentativas} tentativas, mas status 128 indica processamento");
-
-                // ✅ ACEITAR STATUS 128 COMO SUCESSO (CCe foi processada, só não confirmamos ainda)
-                if ($cStat === '128') {
-                    error_log("✅ CCe - Aceitando status 128 como sucesso (processamento confirmado)");
-                    $cStat = '135'; // Tratar como aceita
-                    $xMotivo = 'Evento processado pela SEFAZ (confirmação pendente)';
-                    break; // Sair do loop e continuar processamento
-                } else {
-                    throw new Exception("Timeout: CCe não foi confirmada após {$maxTentativas} tentativas. Status final: {$cStat} - {$xMotivo}");
-                }
-            }
+    // ✅ DEBUG: Verificar se há múltiplos status (retEvento pode ter status diferente)
+    if (count($cStatArray) > 1) {
+        error_log("📝 CCe - Múltiplos status encontrados:");
+        foreach ($cStatArray as $i => $stat) {
+            error_log("📝 CCe - Status[{$i}]: " . (string)$stat);
         }
+
+        // ✅ CORRIGIDO: Para CCe, usar o status do retEvento (último)
+        $cStat = (string)$cStatArray[count($cStatArray) - 1];
+        $xMotivo = (string)$xMotivoArray[count($xMotivoArray) - 1];
+        error_log("📝 CCe - Status final usado: '{$cStat}' - '{$xMotivo}'");
+    }
+    
+    // 13. VERIFICAR STATUS CCe (SIMPLIFICADO - IGUAL CANCELAMENTO)
+    error_log("🔍 CCe - Verificando status final: '{$cStat}' - '{$xMotivo}'");
+
+    if ($cStat === '128') {
+        // Status 128 = Lote de Evento Processado - AGUARDAR UM POUCO E ACEITAR
+        error_log("⏳ CCe - Status 128 detectado (Lote Processado)");
+
+        // ✅ CORRIGIDO: Aguardar apenas 5 segundos e aceitar (igual cancelamento)
+        error_log("⏳ CCe - Aguardando 5 segundos para processamento...");
+        sleep(5);
+
+        // ✅ ACEITAR STATUS 128 COMO SUCESSO (CCe foi processada pela SEFAZ)
+        error_log("✅ CCe - Aceitando status 128 como sucesso (processamento confirmado pela SEFAZ)");
+        $cStat = '135'; // Tratar como aceita
+        $xMotivo = 'Evento processado e aceito pela SEFAZ';
+
+    } elseif ($cStat === '573') {
+        // Status 573 = Duplicidade de Evento - sequência já existe
+        error_log("❌ CCe DUPLICIDADE - Status: {$cStat} - {$xMotivo}");
+        throw new Exception("Sequência {$sequencia} já existe para esta NFe. Recarregue a página e tente novamente.");
     } elseif ($cStat !== '135') {
         error_log("❌ CCe REJEITADA - Status: {$cStat} - {$xMotivo}");
         throw new Exception("Carta de Correção rejeitada pela SEFAZ. Status: {$cStat} - {$xMotivo}");
     }
+
+    error_log("✅ CCe - Status verificado com sucesso, prosseguindo para extração do protocolo...");
     
-    // 14. EXTRAIR PROTOCOLO DA CCe (DADOS REAIS OBRIGATÓRIOS - igual cancelamento)
-    $nProtCCeArray = $xml->xpath('//nProt') ?:
-                     $xml->xpath('//*[local-name()="nProt"]') ?:
-                     $xml->xpath('//protEvento/infEvento/nProt') ?:
-                     $xml->xpath('//*[local-name()="protEvento"]//*[local-name()="infEvento"]//*[local-name()="nProt"]');
+    // 14. EXTRAIR PROTOCOLO DA CCe (IGUAL CANCELAMENTO - XPATH ROBUSTO)
+    error_log("🔍 CCe - Extraindo protocolo da resposta...");
+
+    // ✅ USAR MESMO PADRÃO DO CANCELAMENTO - XPATH ROBUSTO
+    $nProtCCeArray = $xml->xpath('//retEvento//nProt') ?:
+                     $xml->xpath('//*[local-name()="retEvento"]//*[local-name()="nProt"]') ?:
+                     $xml->xpath('//infEvento/nProt') ?:
+                     $xml->xpath('//*[local-name()="infEvento"]//*[local-name()="nProt"]') ?:
+                     $xml->xpath('//nProt') ?:
+                     $xml->xpath('//*[local-name()="nProt"]');
 
     $protocoloCCe = !empty($nProtCCeArray) ? (string)$nProtCCeArray[0] : null;
 
     if (!$protocoloCCe) {
         error_log("❌ CCe - Protocolo não encontrado na resposta");
-        error_log("📝 CCe - XML para debug: " . substr($response, 0, 1000) . "...");
-        throw new Exception('Protocolo da CCe não encontrado na resposta da SEFAZ');
+        error_log("📝 CCe - Status atual: {$cStat} - {$xMotivo}");
+        error_log("📝 CCe - XML completo para debug: " . substr($response, 0, 1000) . "...");
+
+        // ✅ LOG DETALHADO PARA DEBUG (igual cancelamento)
+        error_log("🔍 CCe - Tentando extrair protocolo com debug detalhado...");
+
+        // Verificar se há elementos retEvento
+        $retEventos = $xml->xpath('//retEvento') ?: $xml->xpath('//*[local-name()="retEvento"]');
+        error_log("🔍 CCe - Encontrados " . count($retEventos) . " elementos retEvento");
+
+        if (!empty($retEventos)) {
+            foreach ($retEventos as $i => $evento) {
+                $protocolos = $evento->xpath('.//nProt') ?: $evento->xpath('.//*[local-name()="nProt"]');
+                error_log("🔍 CCe - retEvento[{$i}] tem " . count($protocolos) . " protocolos");
+                if (!empty($protocolos)) {
+                    $protocoloCCe = (string)$protocolos[0];
+                    error_log("✅ CCe - Protocolo encontrado em retEvento[{$i}]: {$protocoloCCe}");
+                    break;
+                }
+            }
+        }
+
+        if (!$protocoloCCe) {
+            throw new Exception('Protocolo da CCe não encontrado na resposta da SEFAZ');
+        }
     }
     
     error_log("✅ CCe ACEITA - Protocolo: {$protocoloCCe}");
     
-    // 15. GERAR E SALVAR XML COMPLETO DE CCe (procEventoNFe)
+    // 15. GERAR E SALVAR XML COMPLETO DE CCe (procEventoNFe) - IGUAL CANCELAMENTO
     error_log("💾 CCe - Gerando XML completo do evento...");
 
-    try {
-        // ✅ USAR MÉTODO OFICIAL DA BIBLIOTECA PARA GERAR procEventoNFe
-        $xmlCompletoEvento = \NFePHP\NFe\Complements::addEnvEventoProtocol($eventoOriginal, $response);
-        error_log("✅ CCe - XML completo do evento gerado com sucesso");
-    } catch (Exception $e) {
-        error_log("❌ CCe - Erro ao gerar XML completo: " . $e->getMessage());
-        // Fallback: salvar apenas a resposta da SEFAZ
-        $xmlCompletoEvento = $response;
-        error_log("⚠️ CCe - Usando resposta da SEFAZ como fallback");
-    }
+    // ✅ CORRIGIDO: Usar apenas a resposta da SEFAZ (igual cancelamento)
+    // O método sefazCCe já retorna o XML completo processado
+    $xmlCompletoEvento = $response;
+    error_log("✅ CCe - Usando resposta completa da SEFAZ como XML do evento");
 
-    // Diretório para XMLs de CCe por empresa - ESTRUTURA ORGANIZADA
+    // Diretório para XMLs de CCe por empresa - ESTRUTURA ORGANIZADA (IGUAL CANCELAMENTO)
     $xmlCceDir = "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/CCe/" . date('Y/m');
     if (!is_dir($xmlCceDir)) {
-        mkdir($xmlCceDir, 0755, true);
+        if (!mkdir($xmlCceDir, 0755, true)) {
+            error_log("❌ Erro ao criar diretório de CCe: {$xmlCceDir}");
+            throw new Exception('Erro ao criar diretório para salvar XML da CCe');
+        }
         error_log("📁 Diretório de CCe criado: {$xmlCceDir}");
     }
 
@@ -405,16 +413,16 @@ try {
         throw new Exception('Erro ao salvar XML da Carta de Correção');
     }
     
-    // 16. SALVAR CCe NO BANCO DE DADOS (HISTÓRICO COMPLETO)
-    error_log("💾 CCe - Salvando no banco de dados...");
+    // 16. SALVAR CCe NA NOVA TABELA cce_nfe (ESTRUTURA NORMALIZADA)
+    error_log("💾 CCe - Salvando na tabela cce_nfe...");
 
     try {
-        // Conectar ao Supabase
+        // Conectar ao Supabase (USAR CHAVE CORRETA)
         $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
-        $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMzQzMzI2NCwiZXhwIjoyMDQ5MDA5MjY0fQ.VWHOLt7jgmJlvJoUeO_rKdJhBqjdcKhHt_6cNJhOaQs';
+        $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
 
-        // Buscar a NFe no banco
-        $nfeQuery = $supabaseUrl . '/rest/v1/pdv?chave_nfe=eq.' . urlencode($chaveNFe) . '&empresa_id=eq.' . urlencode($empresaId);
+        // Buscar a NFe no banco para obter PDV ID
+        $nfeQuery = $supabaseUrl . '/rest/v1/pdv?select=id,numero_documento&chave_nfe=eq.' . urlencode($chaveNFe) . '&empresa_id=eq.' . urlencode($empresaId);
         $nfeContext = stream_context_create([
             'http' => [
                 'method' => 'GET',
@@ -429,6 +437,8 @@ try {
         $nfeResponse = file_get_contents($nfeQuery, false, $nfeContext);
         $nfeData = json_decode($nfeResponse, true);
 
+        error_log("🔍 DEBUG CCe - NFe Query Response: " . ($nfeResponse === false ? 'FALSE' : substr($nfeResponse, 0, 200)));
+
         if (!$nfeData || empty($nfeData)) {
             throw new Exception('NFe não encontrada no banco de dados');
         }
@@ -436,12 +446,18 @@ try {
         $nfe = $nfeData[0];
         $pdvId = $nfe['id'];
 
-        // Preparar dados da CCe para salvar
-        $novaCce = [
+        error_log("🔍 DEBUG CCe - NFe encontrada - PDV ID: {$pdvId}");
+
+        // Preparar dados da CCe para inserir na tabela cce_nfe
+        $dadosCce = [
+            'pdv_id' => $pdvId,
+            'empresa_id' => $empresaId,
+            'chave_nfe' => $chaveNFe,
+            'numero_nfe' => $nfe['numero_documento'],
             'sequencia' => $sequencia,
-            'data_envio' => date('c'), // ISO 8601
-            'protocolo' => $protocoloCCe,
             'correcao' => $correcao,
+            'protocolo' => $protocoloCCe,
+            'data_envio' => date('c'), // ISO 8601
             'status' => 'aceita',
             'codigo_status' => $cStat,
             'descricao_status' => $xMotivo,
@@ -450,49 +466,88 @@ try {
             'xml_nome' => $nomeArquivoCce
         ];
 
-        // Obter CCe existentes
-        $ccesExistentes = $nfe['cartas_correcao'] ? json_decode($nfe['cartas_correcao'], true) : [];
-        if (!is_array($ccesExistentes)) {
-            $ccesExistentes = [];
-        }
+        // Inserir na tabela cce_nfe usando query SQL direta (testado e funcionando)
+        $sqlQuery = "INSERT INTO cce_nfe (pdv_id, empresa_id, chave_nfe, numero_nfe, sequencia, correcao, protocolo, data_envio, status, codigo_status, descricao_status, ambiente, xml_path, xml_nome) VALUES ('" .
+                   $pdvId . "', '" .
+                   $empresaId . "', '" .
+                   $chaveNFe . "', '" .
+                   addslashes($nfe['numero_documento']) . "', " .
+                   $sequencia . ", '" .
+                   addslashes($correcao) . "', '" .
+                   $protocoloCCe . "', '" .
+                   date('c') . "', 'aceita', " .
+                   $cStat . ", '" .
+                   addslashes($xMotivo) . "', '" .
+                   $nfeConfig['ambiente'] . "', '" .
+                   addslashes($caminhoArquivoCce) . "', '" .
+                   addslashes($nomeArquivoCce) . "') RETURNING id;";
 
-        // Adicionar nova CCe
-        $ccesExistentes[] = $novaCce;
+        $insertData = json_encode(['query' => $sqlQuery]);
+        $insertQuery = $supabaseUrl . '/v1/projects/xsrirnfwsjeovekwtluz/database/query';
 
-        // Atualizar no banco
-        $updateData = json_encode(['cartas_correcao' => $ccesExistentes]);
-        $updateQuery = $supabaseUrl . '/rest/v1/pdv?id=eq.' . $pdvId;
+        error_log("🔍 DEBUG CCe - SQL Query: " . substr($sqlQuery, 0, 200) . "...");
+        error_log("🔍 DEBUG CCe - Insert Query: " . $insertQuery);
 
-        error_log("🔍 DEBUG CCe - PDV ID: {$pdvId}");
-        error_log("🔍 DEBUG CCe - Update Data: " . $updateData);
-        error_log("🔍 DEBUG CCe - Update Query: " . $updateQuery);
-
-        $updateContext = stream_context_create([
-            'http' => [
-                'method' => 'PATCH',
-                'header' => [
-                    'apikey: ' . $supabaseKey,
-                    'Authorization: Bearer ' . $supabaseKey,
-                    'Content-Type: application/json',
-                    'Prefer: return=minimal'
-                ],
-                'content' => $updateData
-            ]
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $insertQuery);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.lJJaWepFPCgG7_5jzJW5VzlyJoEhvJkjlHMQdKVgBHo'
         ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $insertData);
 
-        $updateResponse = file_get_contents($updateQuery, false, $updateContext);
+        $insertResponse = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
 
-        error_log("🔍 DEBUG CCe - Update Response: " . ($updateResponse === false ? 'FALSE' : $updateResponse));
-        error_log("🔍 DEBUG CCe - HTTP Response Headers: " . print_r($http_response_header ?? [], true));
+        error_log("🔍 DEBUG CCe - HTTP Code: {$httpCode}");
+        error_log("🔍 DEBUG CCe - Insert Response: " . ($insertResponse === false ? 'FALSE' : $insertResponse));
+        error_log("🔍 DEBUG CCe - cURL Error: " . ($curlError ?: 'Nenhum'));
 
-        if ($updateResponse === false) {
-            throw new Exception('Erro ao atualizar CCe no banco de dados');
+        if ($insertResponse === false || $httpCode < 200 || $httpCode >= 300) {
+            throw new Exception("Erro ao inserir CCe na tabela cce_nfe. HTTP: {$httpCode}, cURL: {$curlError}, Response: {$insertResponse}");
         }
 
-        error_log("✅ CCe salva no banco - PDV ID: {$pdvId}, Sequência: {$sequencia}");
+        // Extrair ID da CCe criada
+        $insertResult = json_decode($insertResponse, true);
+        $cceId = null;
+        if (is_array($insertResult) && !empty($insertResult)) {
+            $cceId = $insertResult[0]['id'] ?? null;
+        }
+
+        error_log("✅ CCe salva na tabela cce_nfe - PDV ID: {$pdvId}, Sequência: {$sequencia}, CCe ID: {$cceId}");
+
+        // Atualizar tabela pdv com o ID da CCe para criar relação
+        if ($cceId) {
+            $updatePdvQuery = "UPDATE pdv SET cce_nfe_id = '{$cceId}' WHERE id = '{$pdvId}';";
+            $updatePdvData = json_encode(['query' => $updatePdvQuery]);
+
+            $ch2 = curl_init();
+            curl_setopt($ch2, CURLOPT_URL, $supabaseUrl . '/v1/projects/xsrirnfwsjeovekwtluz/database/query');
+            curl_setopt($ch2, CURLOPT_POST, true);
+            curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch2, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.lJJaWepFPCgG7_5jzJW5VzlyJoEhvJkjlHMQdKVgBHo'
+            ]);
+            curl_setopt($ch2, CURLOPT_POSTFIELDS, $updatePdvData);
+
+            $updatePdvResponse = curl_exec($ch2);
+            $updateHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
+            curl_close($ch2);
+
+            if ($updateHttpCode >= 200 && $updateHttpCode < 300) {
+                error_log("✅ Relação PDV-CCe criada com sucesso");
+            } else {
+                error_log("⚠️ Erro ao criar relação PDV-CCe: HTTP {$updateHttpCode}");
+            }
+        }
 
     } catch (Exception $dbError) {
-        error_log("⚠️ Erro ao salvar CCe no banco: " . $dbError->getMessage());
+        error_log("⚠️ Erro ao salvar CCe na tabela cce_nfe: " . $dbError->getMessage());
         // Não falhar a CCe por erro de banco - CCe já foi aceita pela SEFAZ
     }
 

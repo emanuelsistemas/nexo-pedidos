@@ -35,6 +35,33 @@ const NfePage: React.FC = () => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('todos');
 
+  // Função para carregar CCe da nova tabela cce_nfe
+  const carregarCCesDaTabela = async (chaveNfe: string, empresaId: string) => {
+    try {
+      console.log('📋 Carregando CCe da tabela cce_nfe:', { chaveNfe, empresaId });
+
+      const response = await fetch(`/backend/public/listar-cce.php?chave_nfe=${encodeURIComponent(chaveNfe)}&empresa_id=${encodeURIComponent(empresaId)}`);
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        console.warn('⚠️ Erro ao carregar CCe:', result.error);
+        return [];
+      }
+
+      console.log('✅ CCe carregadas da tabela:', result.data);
+      return result.data || [];
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar CCe da tabela:', error);
+      return [];
+    }
+  };
+
   // Função showToast para compatibilidade
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', duration?: number) => {
     showMessage(type, message);
@@ -108,7 +135,20 @@ const NfePage: React.FC = () => {
 
       const { data: nfesData, error } = await supabase
         .from('pdv')
-        .select('*')
+        .select(`
+          *,
+          cce_nfe:cce_nfe_id (
+            id,
+            sequencia,
+            correcao,
+            protocolo,
+            data_envio,
+            status,
+            codigo_status,
+            descricao_status,
+            ambiente
+          )
+        `)
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('modelo_documento', 55) // Apenas NFe (modelo 55)
         .order('created_at', { ascending: false });
@@ -412,6 +452,8 @@ const NfePage: React.FC = () => {
       }
     }
   };
+
+
 
   // Função para visualizar PDF da CCe
   const handleVisualizarPDFCCe = async (chave: string, sequencia: number) => {
@@ -1854,23 +1896,32 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
 
 
-          // Carregar CCe existentes do banco de dados
+          // Carregar CCe existentes da nova tabela cce_nfe
           let ccesExistentes = [];
-          if (nfe.cartas_correcao) {
-            try {
-              ccesExistentes = typeof nfe.cartas_correcao === 'string'
-                ? JSON.parse(nfe.cartas_correcao)
-                : nfe.cartas_correcao;
+          try {
+            // Obter empresa_id do usuário logado
+            const { data: userData } = await supabase.auth.getUser();
+            const { data: usuarioData } = await supabase
+              .from('usuarios')
+              .select('empresa_id')
+              .eq('id', userData.user.id)
+              .single();
 
-              if (!Array.isArray(ccesExistentes)) {
-                ccesExistentes = [];
-              }
-
-              console.log('📝 CCe carregadas do banco:', ccesExistentes);
-            } catch (error) {
-              console.error('❌ Erro ao carregar CCe do banco:', error);
+            // Carregar CCe da relação com a tabela cce_nfe
+            if (nfe.cce_nfe && Array.isArray(nfe.cce_nfe)) {
+              ccesExistentes = nfe.cce_nfe;
+              console.log('📝 CCe carregadas via JOIN:', ccesExistentes);
+            } else if (nfe.cce_nfe) {
+              // Se retornou um objeto único, transformar em array
+              ccesExistentes = [nfe.cce_nfe];
+              console.log('📝 CCe única carregada via JOIN:', ccesExistentes);
+            } else {
+              console.log('📝 Nenhuma CCe encontrada para esta NFe');
               ccesExistentes = [];
             }
+          } catch (error) {
+            console.error('❌ Erro ao carregar CCe da tabela cce_nfe:', error);
+            ccesExistentes = [];
           }
 
           // ✅ CALCULAR PRÓXIMA SEQUÊNCIA BASEADA NAS CCe EXISTENTES
@@ -3494,8 +3545,14 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             codigo_status: result.data.codigo_status,
             ambiente: result.data.ambiente
           }
-        ]
+        ],
+        // Limpar campo de texto da correção
+        carta_correcao: '',
+        // Atualizar próxima sequência
+        sequencia_cce: (prev.cartas_correcao?.length || 0) + 1
       }));
+
+      console.log('✅ CCe adicionada ao histórico local');
 
     } catch (error: any) {
       console.error('❌ Erro ao enviar CCe:', error);

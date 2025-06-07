@@ -52,6 +52,7 @@ function downloadMesCompleto($input) {
         $empresaId = $input['empresa_id'] ?? '';
         $ano = $input['ano'] ?? '';
         $mes = $input['mes'] ?? '';
+        $modelo = $input['modelo'] ?? 'todos';
 
         if (empty($empresaId) || empty($ano) || empty($mes)) {
             throw new Exception('Parâmetros obrigatórios não informados');
@@ -66,7 +67,8 @@ function downloadMesCompleto($input) {
         // Criar nome do arquivo ZIP
         $nomeEmpresa = sanitizeFilename("Empresa_{$empresaId}");
         $nomeMes = getNomeMes($mes);
-        $zipFilename = "{$nomeEmpresa}_{$ano}_{$nomeMes}.zip";
+        $sufixoModelo = $modelo === 'todos' ? '' : "_NFe{$modelo}";
+        $zipFilename = "{$nomeEmpresa}_{$ano}_{$nomeMes}{$sufixoModelo}.zip";
 
         // Criar ZIP temporário
         $tempZipPath = sys_get_temp_dir() . '/' . uniqid('contador_') . '.zip';
@@ -87,6 +89,14 @@ function downloadMesCompleto($input) {
                 $xmlFiles = glob("{$tipoPath}/*.xml");
 
                 foreach ($xmlFiles as $xmlFile) {
+                    // Filtrar por modelo se especificado
+                    if ($modelo !== 'todos') {
+                        $modeloXML = extrairModeloXML($xmlFile);
+                        if ($modeloXML !== $modelo) {
+                            continue; // Pular este arquivo
+                        }
+                    }
+
                     $filename = "{$tipo}/" . basename($xmlFile);
                     $zip->addFile($xmlFile, $filename);
                     $totalArquivos++;
@@ -99,8 +109,9 @@ function downloadMesCompleto($input) {
         }
 
         // Adicionar relatório de resumo
-        $relatorio = gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos);
-        $zip->addFromString('RELATORIO_' . strtoupper($nomeMes) . '_' . $ano . '.txt', $relatorio);
+        $relatorio = gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos, $modelo);
+        $sufixoRelatorio = $modelo === 'todos' ? '' : "_NFe{$modelo}";
+        $zip->addFromString('RELATORIO_' . strtoupper($nomeMes) . '_' . $ano . $sufixoRelatorio . '.txt', $relatorio);
 
         $zip->close();
 
@@ -296,13 +307,17 @@ function downloadAno($input) {
 /**
  * Gera relatório de resumo para um mês completo (todos os tipos)
  */
-function gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos) {
+function gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos, $modelo = 'todos') {
     $nomeMes = getNomeMes($mes);
     $totalGeralArquivos = 0;
     $totalGeralValor = 0;
 
-    $relatorio = "RELATÓRIO COMPLETO DE XMLs\n";
+    $tituloModelo = $modelo === 'todos' ? 'COMPLETO' : "NFe MODELO {$modelo}";
+    $relatorio = "RELATÓRIO {$tituloModelo} DE XMLs\n";
     $relatorio .= "Período: {$nomeMes}/{$ano}\n";
+    if ($modelo !== 'todos') {
+        $relatorio .= "Filtro: NFe Modelo {$modelo}\n";
+    }
     $relatorio .= "Data de geração: " . date('d/m/Y H:i:s') . "\n";
     $relatorio .= str_repeat("=", 80) . "\n\n";
 
@@ -325,6 +340,14 @@ function gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos) {
                 $relatorio .= str_repeat("-", 80) . "\n";
 
                 foreach ($xmlFiles as $xmlFile) {
+                    // Filtrar por modelo se especificado
+                    if ($modelo !== 'todos') {
+                        $modeloXML = extrairModeloXML($xmlFile);
+                        if ($modeloXML !== $modelo) {
+                            continue; // Pular este arquivo
+                        }
+                    }
+
                     $filename = basename($xmlFile);
                     $size = filesize($xmlFile);
                     $date = date('d/m/Y H:i:s', filemtime($xmlFile));
@@ -519,6 +542,29 @@ function extrairDadosXML($xmlFile) {
     } catch (Exception $e) {
         error_log("Erro ao extrair dados do XML {$xmlFile}: " . $e->getMessage());
         return ['numero' => 'ERRO', 'valor' => 0];
+    }
+}
+
+/**
+ * Extrai o modelo da NFe do XML (55 ou 65)
+ */
+function extrairModeloXML($xmlFile) {
+    try {
+        $xmlContent = file_get_contents($xmlFile);
+        if (!$xmlContent) {
+            return '55'; // Default para modelo 55
+        }
+
+        // Buscar por regex o campo <mod>
+        if (preg_match('/<mod>(\d+)<\/mod>/', $xmlContent, $matches)) {
+            return $matches[1];
+        }
+
+        // Se não encontrar, assumir modelo 55 (padrão)
+        return '55';
+
+    } catch (Exception $e) {
+        return '55'; // Default em caso de erro
     }
 }
 

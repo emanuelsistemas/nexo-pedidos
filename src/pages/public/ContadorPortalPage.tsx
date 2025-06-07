@@ -113,19 +113,19 @@ const ContadorPortalPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-background-dark">
       {/* Header */}
-      <header className="bg-background-card border-b border-gray-800 py-6">
+      <header className="bg-background-card border-b border-gray-800 py-2">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Logo size="lg" />
+            <div className="flex items-center gap-2">
+              <Logo size="sm" />
               <div>
-                <h1 className="text-2xl font-bold text-white">Portal do Contador</h1>
-                <p className="text-gray-400">Acesso aos XMLs das Notas Fiscais</p>
+                <h1 className="text-lg font-bold text-white leading-tight">Portal do Contador</h1>
+                <p className="text-xs text-gray-400 leading-tight">Acesso aos XMLs das Notas Fiscais</p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-400">Sistema</p>
-              <p className="text-lg font-semibold text-white">Nexo PDV</p>
+              <p className="text-xs text-gray-400 leading-tight">Sistema</p>
+              <p className="text-sm font-semibold text-white leading-tight">Nexo PDV</p>
             </div>
           </div>
         </div>
@@ -156,18 +156,15 @@ const ContadorPortalPage: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     CNPJ da Empresa
                   </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={cnpj}
-                      onChange={handleCnpjChange}
-                      onKeyPress={handleKeyPress}
-                      placeholder="00.000.000/0000-00"
-                      maxLength={18}
-                      className="w-full bg-background-input border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all duration-300"
-                    />
-                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  </div>
+                  <input
+                    type="text"
+                    value={cnpj}
+                    onChange={handleCnpjChange}
+                    onKeyPress={handleKeyPress}
+                    placeholder="00.000.000/0000-00"
+                    maxLength={18}
+                    className="w-full bg-background-input border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all duration-300"
+                  />
                 </div>
 
                 {error && (
