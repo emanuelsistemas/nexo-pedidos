@@ -30,9 +30,9 @@ try {
 
     error_log("📋 Listando CCe - Chave: {$chaveNfe}, Empresa: {$empresaId}");
 
-    // Conectar ao Supabase
+    // Conectar ao Supabase (USAR SERVICE ROLE KEY)
     $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
-    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
+    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.UC2DvFRcfrNUbRrnQhrpqsX_hJXBLy9g-YVZbpaTcso';
 
     // Buscar CCe na tabela cce_nfe
     $query = $supabaseUrl . '/rest/v1/cce_nfe?chave_nfe=eq.' . urlencode($chaveNfe) . '&empresa_id=eq.' . urlencode($empresaId) . '&order=sequencia.asc';

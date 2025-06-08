@@ -330,4 +330,139 @@ SELECT * FROM cce_nfe ORDER BY created_at DESC LIMIT 5;
 
 ---
 
-**Status:** ⚠️ **Em Debug** - CCe funciona mas não grava no banco. Logs adicionais implementados para identificar causa raiz.
+## 🔧 **9. Arquivos de Código Importantes**
+
+### **9.1. Backend - Estrutura de Logs**
+```php
+// Arquivo: backend/public/carta-correcao.php
+// Logs críticos para debug:
+
+error_log("📝 CCe INICIADA - Empresa: {$empresaId}, Chave: {$chaveNFe}, Sequência: {$sequencia}");
+error_log("🚀 CCe - Iniciando chamada sefazCCe...");
+error_log("📝 CCe - Resposta SEFAZ recebida: " . strlen($response) . " bytes");
+error_log("💾 CCe - Salvando na tabela cce_nfe...");
+error_log("✅ CCe salva na tabela cce_nfe - PDV ID: {$pdvId}, Sequência: {$sequencia}");
+```
+
+### **9.2. Frontend - Query Principal**
+```typescript
+// Arquivo: src/pages/dashboard/NfePage.tsx
+// Query que carrega NFe com CCe:
+
+const { data: nfesData, error } = await supabase
+  .from('pdv')
+  .select(`
+    *,
+    cce_nfe:cce_nfe_id (
+      id,
+      sequencia,
+      correcao,
+      protocolo,
+      data_envio,
+      status,
+      codigo_status,
+      descricao_status,
+      ambiente
+    )
+  `)
+  .eq('empresa_id', usuarioData.empresa_id)
+  .eq('modelo_documento', 55)
+  .order('created_at', { ascending: false });
+```
+
+### **9.3. Chaves de API Utilizadas**
+```php
+// Service Role Key (para database queries):
+$serviceRoleKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.lJJaWepFPCgG7_5jzJW5VzlyJoEhvJkjlHMQdKVgBHo';
+
+// Anon Key (para REST API):
+$anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
+```
+
+---
+
+## 🚨 **10. Leis Importantes do Sistema NFe**
+
+### **10.1. Leis Fundamentais**
+- **LEI DOS DADOS REAIS:** Nunca usar fallbacks para testing, sempre usar dados reais mesmo em homologação
+- **LEI DA BIBLIOTECA SAGRADA:** Nunca modificar a sped-nfe library - é fiscalmente aprovada
+- **LEI DA AUTENTICIDADE:** Nunca fazer simulações - sempre enviar dados reais de homologação/produção
+- **LEI DA EXCELÊNCIA:** Nunca contornar problemas - sempre investigar e corrigir a causa raiz
+
+### **10.2. Padrões de Debug**
+- **Sempre investigar nossa implementação** antes de culpar a biblioteca
+- **Logs detalhados** são essenciais para debug de NFe/CCe
+- **Dados reais** sempre, mesmo em ambiente de teste
+
+---
+
+## 📊 **11. Estrutura de Dados da CCe**
+
+### **11.1. Campos da Tabela `cce_nfe`**
+```sql
+id UUID PRIMARY KEY                    -- ID único da CCe
+pdv_id UUID                           -- Relação com a NFe (tabela pdv)
+empresa_id UUID NOT NULL              -- Multi-tenant por empresa
+chave_nfe VARCHAR(44) NOT NULL        -- Chave da NFe que recebe a correção
+numero_nfe VARCHAR(20)                -- Número da NFe
+sequencia INTEGER NOT NULL            -- Sequência da CCe (1, 2, 3...)
+correcao TEXT NOT NULL                -- Texto da correção
+protocolo VARCHAR(50)                 -- Protocolo retornado pela SEFAZ
+data_envio TIMESTAMP                  -- Data/hora do envio
+status VARCHAR(20) DEFAULT 'aceita'   -- Status da CCe
+codigo_status INTEGER                 -- Código de status da SEFAZ
+descricao_status TEXT                 -- Descrição do status
+ambiente VARCHAR(20)                  -- homologacao/producao
+xml_path TEXT                         -- Caminho do arquivo XML
+xml_nome VARCHAR(255)                 -- Nome do arquivo XML
+pdf_path TEXT                         -- Caminho do PDF (futuro)
+pdf_nome VARCHAR(255)                 -- Nome do PDF (futuro)
+created_at TIMESTAMP                  -- Data de criação
+updated_at TIMESTAMP                  -- Data de atualização
+```
+
+### **11.2. Relação com NFe**
+```sql
+-- Campo adicionado na tabela pdv:
+cce_nfe_id UUID REFERENCES cce_nfe(id)
+
+-- Permite JOIN para carregar CCe junto com NFe:
+SELECT p.*, c.* FROM pdv p
+LEFT JOIN cce_nfe c ON p.cce_nfe_id = c.id
+WHERE p.empresa_id = ? AND p.modelo_documento = 55;
+```
+
+---
+
+## 🎯 **12. Status Final e Próximos Passos**
+
+### **12.1. O Que Está Funcionando ✅**
+- ✅ Tabela `cce_nfe` criada e desprotegida
+- ✅ Campo `cce_nfe_id` adicionado à tabela `pdv`
+- ✅ Frontend sem erros de função indefinida
+- ✅ CCe enviada com sucesso para SEFAZ
+- ✅ XML da CCe salvo no sistema
+- ✅ Logs detalhados implementados
+
+### **12.2. O Que Não Está Funcionando ❌**
+- ❌ CCe não está sendo gravada na tabela `cce_nfe`
+- ❌ Processo falha silenciosamente após envio para SEFAZ
+- ❌ Logs param na linha "Parâmetros: Chave=..."
+
+### **12.3. Debug Necessário 🔍**
+1. **Fazer nova CCe** com logs adicionais implementados
+2. **Verificar se aparecem** os logs:
+   - `🚀 CCe - Iniciando chamada sefazCCe...`
+   - `📝 CCe - Resposta SEFAZ recebida: X bytes`
+   - `✅ CCe - Chamada sefazCCe concluída com sucesso`
+3. **Identificar onde exatamente** o processo está falhando
+
+### **12.4. Possíveis Causas**
+- **Erro na biblioteca sped-nfe** durante `sefazCCe()`
+- **Timeout ou erro de rede** com SEFAZ
+- **Problema de parsing** da resposta XML
+- **Erro de memória** ou recursos do servidor
+
+---
+
+**Status:** ⚠️ **Em Debug Avançado** - Estrutura completa implementada, CCe funciona até SEFAZ, mas falha silenciosamente antes da gravação no banco. Logs detalhados adicionados para identificar causa raiz exata.

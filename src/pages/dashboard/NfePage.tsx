@@ -135,20 +135,7 @@ const NfePage: React.FC = () => {
 
       const { data: nfesData, error } = await supabase
         .from('pdv')
-        .select(`
-          *,
-          cce_nfe:cce_nfe_id (
-            id,
-            sequencia,
-            correcao,
-            protocolo,
-            data_envio,
-            status,
-            codigo_status,
-            descricao_status,
-            ambiente
-          )
-        `)
+        .select('*')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('modelo_documento', 55) // Apenas NFe (modelo 55)
         .order('created_at', { ascending: false });
@@ -1907,16 +1894,27 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
               .eq('id', userData.user.id)
               .single();
 
-            // Carregar CCe da relação com a tabela cce_nfe
-            if (nfe.cce_nfe && Array.isArray(nfe.cce_nfe)) {
-              ccesExistentes = nfe.cce_nfe;
-              console.log('📝 CCe carregadas via JOIN:', ccesExistentes);
-            } else if (nfe.cce_nfe) {
-              // Se retornou um objeto único, transformar em array
-              ccesExistentes = [nfe.cce_nfe];
-              console.log('📝 CCe única carregada via JOIN:', ccesExistentes);
+            // ✅ BUSCAR CCe DIRETAMENTE PELA CHAVE_NFE (SEM JOIN)
+            if (nfe.chave_nfe && usuarioData?.empresa_id) {
+              console.log('📋 Carregando CCe da tabela cce_nfe:', { chaveNfe: nfe.chave_nfe, empresaId: usuarioData.empresa_id });
+
+              const response = await fetch(`/backend/public/listar-cce.php?chave_nfe=${encodeURIComponent(nfe.chave_nfe)}&empresa_id=${encodeURIComponent(usuarioData.empresa_id)}`);
+
+              if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                  ccesExistentes = result.data || [];
+                  console.log('✅ CCe carregadas da tabela:', ccesExistentes);
+                } else {
+                  console.warn('⚠️ Erro ao carregar CCe:', result.error);
+                  ccesExistentes = [];
+                }
+              } else {
+                console.error('❌ Erro na API ao carregar CCe:', response.status);
+                ccesExistentes = [];
+              }
             } else {
-              console.log('📝 Nenhuma CCe encontrada para esta NFe');
+              console.log('📝 Nenhuma chave NFe ou empresa_id encontrada');
               ccesExistentes = [];
             }
           } catch (error) {

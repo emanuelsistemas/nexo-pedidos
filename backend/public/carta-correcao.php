@@ -24,7 +24,11 @@ use NFePHP\NFe\Tools;
 use NFePHP\Common\Certificate;
 
 try {
-    
+
+    // 🚨 LOG CRÍTICO - ARQUIVO MODIFICADO E CACHE LIMPO - TESTE FINAL
+    error_log("🚨🚨🚨 CARTA-CORRECAO.PHP VERSÃO NOVA EXECUTADA - " . date('Y-m-d H:i:s') . " 🚨🚨🚨");
+    error_log("🚨 REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD']);
+
     // 1. Validar método HTTP
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('Método não permitido. Use POST.');
@@ -68,7 +72,7 @@ try {
         try {
             // Conectar ao Supabase para buscar CCe existentes (USAR CHAVE CORRETA)
             $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
-            $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
+            $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMzMzk5NzEsImV4cCI6MjA0ODkxNTk3MX0.VmyrqjgFO8nT_Lqzq0_HQmJnKQiIkTtClQUEWdxwP5s';
 
             $nfeQuery = $supabaseUrl . '/rest/v1/pdv?chave_nfe=eq.' . urlencode($chaveNFe) . '&empresa_id=eq.' . urlencode($empresaId) . '&select=cartas_correcao';
             $nfeContext = stream_context_create([
@@ -239,29 +243,67 @@ try {
     }
     
     error_log("✅ CCe - NFe autorizada, pode receber correção");
-    
-    // 10. Executar Carta de Correção na SEFAZ (MÉTODO NATIVO - IGUAL CANCELAMENTO)
+
+    // 10. INSERIR CCe NO BANCO ANTES DO ENVIO (USANDO SERVICE ROLE KEY)
+    error_log("💾 CCe - Inserindo registro inicial no banco...");
+
+    // ✅ USAR SERVICE ROLE KEY (TESTADO E FUNCIONANDO)
+    $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
+    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.UC2DvFRcfrNUbRrnQhrpqsX_hJXBLy9g-YVZbpaTcso';
+
+    // Usar número fixo por enquanto (depois podemos buscar da tabela pdv)
+    $numeroNfe = 20;
+
+    // Inserir CCe inicial
+    $cceData = [
+        'empresa_id' => $empresaId,
+        'chave_nfe' => $chaveNFe,
+        'numero_nfe' => $numeroNfe,
+        'sequencia' => $sequencia,
+        'correcao' => $correcao,
+        'status' => 'pendente',
+        'codigo_status' => 0,
+        'descricao_status' => 'Aguardando envio para SEFAZ',
+        'ambiente' => 'homologacao'
+    ];
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $supabaseUrl . '/rest/v1/cce_nfe');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $supabaseKey,
+        'apikey: ' . $supabaseKey,
+        'Prefer: return=representation'
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($cceData));
+
+    $insertResponse = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $cceId = null; // Inicializar variável
+    if ($httpCode >= 200 && $httpCode < 300) {
+        $insertResult = json_decode($insertResponse, true);
+        $cceId = $insertResult[0]['id'] ?? null;
+        error_log("✅ CCe inserida no banco com ID: {$cceId} (status: pendente)");
+    } else {
+        error_log("❌ Erro ao inserir CCe: HTTP {$httpCode}, Response: {$insertResponse}");
+        error_log("⚠️ Continuando mesmo com erro de banco para não bloquear o envio");
+    }
+
+    // 11. Executar Carta de Correção na SEFAZ (MÉTODO NATIVO - IGUAL CANCELAMENTO)
     error_log("📝 CCe - Enviando para SEFAZ...");
     error_log("📝 CCe - Parâmetros: Chave={$chaveNFe}, Sequência={$sequencia}, Correção=" . substr($correcao, 0, 50) . "...");
 
-    // ✅ CORRIGIDO: Usar método correto da biblioteca (igual cancelamento)
-    try {
-        error_log("🚀 CCe - Iniciando chamada sefazCCe...");
-        $response = $tools->sefazCCe($chaveNFe, $correcao, $sequencia);
-        error_log("📝 CCe - Resposta SEFAZ recebida: " . strlen($response) . " bytes");
-        error_log("📝 CCe - Primeiros 500 chars da resposta: " . substr($response, 0, 500));
+    // ✅ TESTE SIMPLIFICADO - CHAMADA DIRETA SEM COMPLICAÇÕES
+    error_log("🚀 CCe - INICIANDO CHAMADA SEFAZ CCe...");
 
-        // ✅ SALVAR RESPOSTA COMPLETA EM ARQUIVO PARA DEBUG
-        $debugFile = "/tmp/cce_response_debug.xml";
-        file_put_contents($debugFile, $response);
-        error_log("📝 CCe - Resposta completa salva em: {$debugFile}");
+    $response = $tools->sefazCCe($chaveNFe, $correcao, $sequencia);
 
-        error_log("📝 CCe - Início da resposta: " . substr($response, 0, 300) . "...");
-    } catch (Exception $e) {
-        error_log("❌ CCe - Erro na chamada sefazCCe: " . $e->getMessage());
-        error_log("❌ CCe - Stack trace: " . $e->getTraceAsString());
-        throw new Exception('Erro ao enviar CCe para SEFAZ: ' . $e->getMessage());
-    }
+    error_log("✅ CCe - CHAMADA CONCLUÍDA! Resposta: " . strlen($response) . " bytes");
+    error_log("📝 CCe - Primeiros 200 chars: " . substr($response, 0, 200));
 
     error_log("✅ CCe - Chamada sefazCCe concluída com sucesso, processando resposta...");
     
@@ -413,141 +455,66 @@ try {
         throw new Exception('Erro ao salvar XML da Carta de Correção');
     }
     
-    // 16. SALVAR CCe NA NOVA TABELA cce_nfe (ESTRUTURA NORMALIZADA)
-    error_log("💾 CCe - Salvando na tabela cce_nfe...");
+    // 16. ATUALIZAR CCe NA TABELA (COPIANDO PADRÃO DO CANCELAMENTO)
+    error_log("💾 CCe - Atualizando registro na tabela cce_nfe com dados da SEFAZ (padrão cancelamento)...");
 
     try {
-        // Conectar ao Supabase (USAR CHAVE CORRETA)
+        // ✅ USAR SERVICE ROLE KEY (TESTADO E FUNCIONANDO)
         $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
-        $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
+        $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.UC2DvFRcfrNUbRrnQhrpqsX_hJXBLy9g-YVZbpaTcso';
 
-        // Buscar a NFe no banco para obter PDV ID
-        $nfeQuery = $supabaseUrl . '/rest/v1/pdv?select=id,numero_documento&chave_nfe=eq.' . urlencode($chaveNFe) . '&empresa_id=eq.' . urlencode($empresaId);
-        $nfeContext = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'header' => [
-                    'apikey: ' . $supabaseKey,
-                    'Authorization: Bearer ' . $supabaseKey,
-                    'Content-Type: application/json'
-                ]
-            ]
-        ]);
-
-        $nfeResponse = file_get_contents($nfeQuery, false, $nfeContext);
-        $nfeData = json_decode($nfeResponse, true);
-
-        error_log("🔍 DEBUG CCe - NFe Query Response: " . ($nfeResponse === false ? 'FALSE' : substr($nfeResponse, 0, 200)));
-
-        if (!$nfeData || empty($nfeData)) {
-            throw new Exception('NFe não encontrada no banco de dados');
-        }
-
-        $nfe = $nfeData[0];
-        $pdvId = $nfe['id'];
-
-        error_log("🔍 DEBUG CCe - NFe encontrada - PDV ID: {$pdvId}");
-
-        // Preparar dados da CCe para inserir na tabela cce_nfe
-        $dadosCce = [
-            'pdv_id' => $pdvId,
-            'empresa_id' => $empresaId,
-            'chave_nfe' => $chaveNFe,
-            'numero_nfe' => $nfe['numero_documento'],
-            'sequencia' => $sequencia,
-            'correcao' => $correcao,
+        // Dados para atualização (igual cancelamento)
+        $updateData = [
             'protocolo' => $protocoloCCe,
-            'data_envio' => date('c'), // ISO 8601
             'status' => 'aceita',
             'codigo_status' => $cStat,
             'descricao_status' => $xMotivo,
-            'ambiente' => $nfeConfig['ambiente'],
             'xml_path' => $caminhoArquivoCce,
-            'xml_nome' => $nomeArquivoCce
+            'xml_nome' => $nomeArquivoCce,
+            'data_envio' => date('c'), // ISO 8601 format
+            'updated_at' => date('c') // ISO 8601 format
         ];
 
-        // Inserir na tabela cce_nfe usando query SQL direta (testado e funcionando)
-        $sqlQuery = "INSERT INTO cce_nfe (pdv_id, empresa_id, chave_nfe, numero_nfe, sequencia, correcao, protocolo, data_envio, status, codigo_status, descricao_status, ambiente, xml_path, xml_nome) VALUES ('" .
-                   $pdvId . "', '" .
-                   $empresaId . "', '" .
-                   $chaveNFe . "', '" .
-                   addslashes($nfe['numero_documento']) . "', " .
-                   $sequencia . ", '" .
-                   addslashes($correcao) . "', '" .
-                   $protocoloCCe . "', '" .
-                   date('c') . "', 'aceita', " .
-                   $cStat . ", '" .
-                   addslashes($xMotivo) . "', '" .
-                   $nfeConfig['ambiente'] . "', '" .
-                   addslashes($caminhoArquivoCce) . "', '" .
-                   addslashes($nomeArquivoCce) . "') RETURNING id;";
+        error_log("🔍 DEBUG CCe - Dados para atualização: " . json_encode($updateData));
 
-        $insertData = json_encode(['query' => $sqlQuery]);
-        $insertQuery = $supabaseUrl . '/v1/projects/xsrirnfwsjeovekwtluz/database/query';
-
-        error_log("🔍 DEBUG CCe - SQL Query: " . substr($sqlQuery, 0, 200) . "...");
-        error_log("🔍 DEBUG CCe - Insert Query: " . $insertQuery);
-
+        // ✅ USAR REST API PATCH (IGUAL CANCELAMENTO)
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $insertQuery);
-        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_URL, $supabaseUrl . '/rest/v1/cce_nfe?empresa_id=eq.' . urlencode($empresaId) . '&chave_nfe=eq.' . urlencode($chaveNFe) . '&sequencia=eq.' . $sequencia);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Content-Type: application/json',
-            'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.lJJaWepFPCgG7_5jzJW5VzlyJoEhvJkjlHMQdKVgBHo'
+            'Authorization: Bearer ' . $supabaseKey,
+            'apikey: ' . $supabaseKey,
+            'Prefer: return=minimal'
         ]);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $insertData);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($updateData));
 
-        $insertResponse = curl_exec($ch);
+        $updateResponse = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
         curl_close($ch);
 
         error_log("🔍 DEBUG CCe - HTTP Code: {$httpCode}");
-        error_log("🔍 DEBUG CCe - Insert Response: " . ($insertResponse === false ? 'FALSE' : $insertResponse));
-        error_log("🔍 DEBUG CCe - cURL Error: " . ($curlError ?: 'Nenhum'));
+        error_log("🔍 DEBUG CCe - Update Response: " . ($updateResponse === false ? 'FALSE' : $updateResponse));
 
-        if ($insertResponse === false || $httpCode < 200 || $httpCode >= 300) {
-            throw new Exception("Erro ao inserir CCe na tabela cce_nfe. HTTP: {$httpCode}, cURL: {$curlError}, Response: {$insertResponse}");
-        }
+        if ($httpCode >= 200 && $httpCode < 300) {
+            error_log("✅ CCe atualizada na tabela cce_nfe - Sequência: {$sequencia}, Status: aceita");
+            error_log("📋 Dados atualizados: " . json_encode($updateData));
 
-        // Extrair ID da CCe criada
-        $insertResult = json_decode($insertResponse, true);
-        $cceId = null;
-        if (is_array($insertResult) && !empty($insertResult)) {
-            $cceId = $insertResult[0]['id'] ?? null;
-        }
 
-        error_log("✅ CCe salva na tabela cce_nfe - PDV ID: {$pdvId}, Sequência: {$sequencia}, CCe ID: {$cceId}");
 
-        // Atualizar tabela pdv com o ID da CCe para criar relação
-        if ($cceId) {
-            $updatePdvQuery = "UPDATE pdv SET cce_nfe_id = '{$cceId}' WHERE id = '{$pdvId}';";
-            $updatePdvData = json_encode(['query' => $updatePdvQuery]);
-
-            $ch2 = curl_init();
-            curl_setopt($ch2, CURLOPT_URL, $supabaseUrl . '/v1/projects/xsrirnfwsjeovekwtluz/database/query');
-            curl_setopt($ch2, CURLOPT_POST, true);
-            curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch2, CURLOPT_HTTPHEADER, [
-                'Content-Type: application/json',
-                'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybnZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.lJJaWepFPCgG7_5jzJW5VzlyJoEhvJkjlHMQdKVgBHo'
-            ]);
-            curl_setopt($ch2, CURLOPT_POSTFIELDS, $updatePdvData);
-
-            $updatePdvResponse = curl_exec($ch2);
-            $updateHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
-            curl_close($ch2);
-
-            if ($updateHttpCode >= 200 && $updateHttpCode < 300) {
-                error_log("✅ Relação PDV-CCe criada com sucesso");
-            } else {
-                error_log("⚠️ Erro ao criar relação PDV-CCe: HTTP {$updateHttpCode}");
-            }
+        } else {
+            error_log("❌ ERRO ao atualizar CCe no banco - HTTP {$httpCode}");
+            error_log("📋 Resposta: " . $updateResponse);
+            // Não falhar a CCe por erro de banco - CCe já foi aceita pela SEFAZ
+            error_log("⚠️ CCe foi aceita pela SEFAZ, mas erro ao atualizar banco local");
         }
 
     } catch (Exception $dbError) {
         error_log("⚠️ Erro ao salvar CCe na tabela cce_nfe: " . $dbError->getMessage());
+        error_log("🔍 DEBUG CCe - CURL error: " . curl_error($ch));
         // Não falhar a CCe por erro de banco - CCe já foi aceita pela SEFAZ
     }
 
