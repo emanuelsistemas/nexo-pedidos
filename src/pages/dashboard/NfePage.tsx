@@ -3427,6 +3427,64 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     }
   };
 
+  // Função para visualizar PDF da CCe
+  const handleVisualizarPDFCCe = async (chave: string, sequencia: number) => {
+    console.log('📄 Iniciando visualização do PDF da CCe:', chave, 'sequência:', sequencia);
+
+    try {
+      showMessage('info', 'Gerando PDF da CCe...');
+
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showMessage('error', 'Empresa não identificada');
+        return;
+      }
+
+      // Tentar gerar o PDF da CCe
+      const response = await fetch('/backend/public/gerar-pdf-cce.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chave: chave,
+          empresa_id: usuarioData.empresa_id,
+          sequencia: sequencia
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Erro ao gerar PDF da CCe');
+      }
+
+      // Abrir o PDF gerado em nova aba
+      const pdfUrl = `/backend/public/download-arquivo.php?type=pdf_cce&chave=${chave}&empresa_id=${usuarioData.empresa_id}&sequencia=${sequencia}&action=view`;
+
+      // Aguardar um pouco para o arquivo ser salvo
+      setTimeout(() => {
+        window.open(pdfUrl, '_blank');
+        showMessage('success', 'PDF da CCe aberto em nova aba');
+      }, 1000);
+
+    } catch (error) {
+      console.error('Erro ao visualizar PDF da CCe:', error);
+      showMessage('error', `Erro ao gerar/visualizar PDF da CCe: ${error.message}`);
+    }
+  };
+
   // Função para enviar Carta de Correção (CCe)
   const handleEnviarCCe = async () => {
     try {
@@ -3650,6 +3708,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             isViewMode={isViewMode}
             onCancelarNFe={handleCancelarNFeFromAutorizacao}
             onEnviarCCe={handleEnviarCCe}
+            onVisualizarPDFCCe={handleVisualizarPDFCCe}
           />
         );
       default:
@@ -6309,7 +6368,8 @@ const AutorizacaoSection: React.FC<{
   isViewMode?: boolean;
   onCancelarNFe?: (motivo: string) => void;
   onEnviarCCe?: () => void;
-}> = ({ dados, onChange, isViewMode, onCancelarNFe, onEnviarCCe }) => {
+  onVisualizarPDFCCe?: (chave: string, sequencia: number) => void;
+}> = ({ dados, onChange, isViewMode, onCancelarNFe, onEnviarCCe, onVisualizarPDFCCe }) => {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -6573,7 +6633,7 @@ const AutorizacaoSection: React.FC<{
                               Protocolo: {cce.protocolo}
                             </span>
                             <button
-                              onClick={() => handleVisualizarPDFCCe(dadosAutorizacao.chave, cce.sequencia)}
+                              onClick={() => onVisualizarPDFCCe && onVisualizarPDFCCe(dados.chave, cce.sequencia)}
                               className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
                               title="Visualizar PDF da CCe"
                             >
