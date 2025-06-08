@@ -3655,6 +3655,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             produtos={nfeData.produtos}
             empresaId={nfeData.empresa?.id}
             finalidade={nfeData.identificacao.finalidade}
+            nfeData={nfeData}
             showToast={showToast}
             onChange={(produtos) => {
               const valorProdutos = produtos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
@@ -5009,9 +5010,10 @@ const ProdutosSection: React.FC<{
   produtos: any[];
   empresaId?: string;
   finalidade?: string;
+  nfeData?: any;
   onChange: (produtos: any[]) => void;
   showToast: (message: string, type: 'success' | 'error' | 'info', duration?: number) => void;
-}> = ({ produtos, empresaId, finalidade, onChange, showToast }) => {
+}> = ({ produtos, empresaId, finalidade, nfeData, onChange, showToast }) => {
   const [showProdutoModal, setShowProdutoModal] = useState(false);
   const [showDetalhesFiscaisModal, setShowDetalhesFiscaisModal] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
@@ -5549,7 +5551,7 @@ const ProdutosSection: React.FC<{
             {/* Cabeçalho */}
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-white">
-                Detalhes Fiscais - {produtoDetalhesFiscais.descricao}
+                Detalhes Fiscais - {(produtoDetalhesFiscais as any).descricao}
               </h3>
               <button
                 onClick={() => setShowDetalhesFiscaisModal(false)}
@@ -5566,10 +5568,10 @@ const ProdutosSection: React.FC<{
                 {/* Foto do Produto */}
                 <div className="flex-shrink-0">
                   <div className="w-24 h-24 bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
-                    {produtoDetalhesFiscais.foto_url ? (
+                    {(produtoDetalhesFiscais as any).foto_url ? (
                       <img
-                        src={produtoDetalhesFiscais.foto_url}
-                        alt={produtoDetalhesFiscais.descricao}
+                        src={(produtoDetalhesFiscais as any).foto_url}
+                        alt={(produtoDetalhesFiscais as any).descricao}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -5584,19 +5586,19 @@ const ProdutosSection: React.FC<{
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-400">Código:</span>
-                    <span className="text-white ml-2">{produtoDetalhesFiscais.codigo}</span>
+                    <span className="text-white ml-2">{(produtoDetalhesFiscais as any).codigo}</span>
                   </div>
                   <div>
                     <span className="text-gray-400">EAN:</span>
-                    <span className="text-white ml-2">{produtoDetalhesFiscais.ean || 'SEM EAN'}</span>
+                    <span className="text-white ml-2">{(produtoDetalhesFiscais as any).ean || 'SEM EAN'}</span>
                   </div>
                   <div>
                     <span className="text-gray-400">NCM:</span>
-                    <span className="text-white ml-2">{produtoDetalhesFiscais.ncm}</span>
+                    <span className="text-white ml-2">{(produtoDetalhesFiscais as any).ncm}</span>
                   </div>
                   <div>
                     <span className="text-gray-400">CFOP:</span>
-                    <span className="text-white ml-2">{produtoDetalhesFiscais.cfop}</span>
+                    <span className="text-white ml-2">{(produtoDetalhesFiscais as any).cfop}</span>
                   </div>
                 </div>
               </div>
@@ -5604,6 +5606,44 @@ const ProdutosSection: React.FC<{
 
             {/* Detalhes Fiscais */}
             <div className="space-y-6">
+              {/* Toggle Destaque ICMS para Devoluções */}
+              {(nfeData as any).identificacao?.finalidade === '4' && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="text-lg font-semibold text-yellow-300">Destaque de ICMS em Devolução</h4>
+                      <p className="text-sm text-yellow-200/80">
+                        Configure se esta devolução deve destacar ICMS
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={(produtoDetalhesFiscais as any).destaque_icms_devolucao || false}
+                        onChange={(e) => {
+                          const novosProdutos = produtos.map((p: any) =>
+                            p.id === (produtoDetalhesFiscais as any).id
+                              ? { ...p, destaque_icms_devolucao: e.target.checked }
+                              : p
+                          );
+                          onChange(novosProdutos);
+                          setProdutoDetalhesFiscais((prev: any) => ({
+                            ...prev,
+                            destaque_icms_devolucao: e.target.checked
+                          }));
+                        }}
+                        className="sr-only"
+                      />
+                      <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                    </label>
+                  </div>
+                  <div className="text-xs text-yellow-200/70">
+                    <p>• <strong>Habilitado:</strong> Permite editar alíquota e base de cálculo do ICMS</p>
+                    <p>• <strong>Desabilitado:</strong> Devolução sem destaque de ICMS (CST 40/41)</p>
+                  </div>
+                </div>
+              )}
+
               {/* ICMS */}
               <div className="bg-gray-800/30 rounded-lg p-4">
                 <h4 className="text-lg font-semibold text-white mb-4">ICMS</h4>
@@ -5612,17 +5652,64 @@ const ProdutosSection: React.FC<{
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Alíquota de ICMS (%)
                     </label>
-                    <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
-                      {produtoDetalhesFiscais.aliquota_icms || '0,00'}%
-                    </div>
+                    {(nfeData as any).identificacao?.finalidade === '4' && (produtoDetalhesFiscais as any).destaque_icms_devolucao ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        value={(produtoDetalhesFiscais as any).aliquota_icms || 0}
+                        onChange={(e) => {
+                          const novosProdutos = produtos.map((p: any) =>
+                            p.id === (produtoDetalhesFiscais as any).id
+                              ? { ...p, aliquota_icms: parseFloat(e.target.value) || 0 }
+                              : p
+                          );
+                          onChange(novosProdutos);
+                          setProdutoDetalhesFiscais((prev: any) => ({
+                            ...prev,
+                            aliquota_icms: parseFloat(e.target.value) || 0
+                          }));
+                        }}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                        placeholder="18.00"
+                      />
+                    ) : (
+                      <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                        {(produtoDetalhesFiscais as any).aliquota_icms || '0,00'}%
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       Base de Cálculo de ICMS
                     </label>
-                    <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
-                      R$ {(produtoDetalhesFiscais.base_calculo_icms || 0).toFixed(2)}
-                    </div>
+                    {(nfeData as any).identificacao?.finalidade === '4' && (produtoDetalhesFiscais as any).destaque_icms_devolucao ? (
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={(produtoDetalhesFiscais as any).base_calculo_icms || 0}
+                        onChange={(e) => {
+                          const novosProdutos = produtos.map((p: any) =>
+                            p.id === (produtoDetalhesFiscais as any).id
+                              ? { ...p, base_calculo_icms: parseFloat(e.target.value) || 0 }
+                              : p
+                          );
+                          onChange(novosProdutos);
+                          setProdutoDetalhesFiscais((prev: any) => ({
+                            ...prev,
+                            base_calculo_icms: parseFloat(e.target.value) || 0
+                          }));
+                        }}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                        placeholder="0.00"
+                      />
+                    ) : (
+                      <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                        R$ {((produtoDetalhesFiscais as any).base_calculo_icms || 0).toFixed(2)}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -5636,7 +5723,7 @@ const ProdutosSection: React.FC<{
                       PIS CST
                     </label>
                     <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
-                      {produtoDetalhesFiscais.cst_pis || 'Não informado'}
+                      {(produtoDetalhesFiscais as any).cst_pis || 'Não informado'}
                     </div>
                   </div>
                   <div>
@@ -5644,7 +5731,7 @@ const ProdutosSection: React.FC<{
                       PIS Alíquota (%)
                     </label>
                     <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
-                      {produtoDetalhesFiscais.aliquota_pis || '0,00'}%
+                      {(produtoDetalhesFiscais as any).aliquota_pis || '0,00'}%
                     </div>
                   </div>
                 </div>
@@ -5659,7 +5746,7 @@ const ProdutosSection: React.FC<{
                       COFINS CST
                     </label>
                     <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
-                      {produtoDetalhesFiscais.cst_cofins || 'Não informado'}
+                      {(produtoDetalhesFiscais as any).cst_cofins || 'Não informado'}
                     </div>
                   </div>
                   <div>
@@ -5667,7 +5754,7 @@ const ProdutosSection: React.FC<{
                       COFINS Alíquota (%)
                     </label>
                     <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
-                      {produtoDetalhesFiscais.aliquota_cofins || '0,00'}%
+                      {(produtoDetalhesFiscais as any).aliquota_cofins || '0,00'}%
                     </div>
                   </div>
                 </div>
