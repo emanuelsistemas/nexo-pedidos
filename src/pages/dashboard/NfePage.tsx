@@ -3654,6 +3654,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           <ProdutosSection
             produtos={nfeData.produtos}
             empresaId={nfeData.empresa?.id}
+            finalidade={nfeData.identificacao.finalidade}
             showToast={showToast}
             onChange={(produtos) => {
               const valorProdutos = produtos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
@@ -4460,6 +4461,8 @@ const IdentificacaoSection: React.FC<{
               Tipo Documento
             </label>
             <select
+              value={data.tipo_documento}
+              onChange={(e) => !isViewMode && updateField('tipo_documento', e.target.value)}
               disabled={isViewMode}
               className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
                 isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
@@ -4475,6 +4478,8 @@ const IdentificacaoSection: React.FC<{
               Finalidade Emissão
             </label>
             <select
+              value={data.finalidade}
+              onChange={(e) => !isViewMode && updateField('finalidade', e.target.value)}
               disabled={isViewMode}
               className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
                 isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
@@ -4492,6 +4497,8 @@ const IdentificacaoSection: React.FC<{
               Presença
             </label>
             <select
+              value={data.presenca}
+              onChange={(e) => !isViewMode && updateField('presenca', e.target.value)}
               disabled={isViewMode}
               className={`w-full px-3 py-2 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 ${
                 isViewMode ? 'bg-gray-900 cursor-not-allowed' : 'bg-gray-800'
@@ -5001,17 +5008,31 @@ const DestinatarioSection: React.FC<{
 const ProdutosSection: React.FC<{
   produtos: any[];
   empresaId?: string;
+  finalidade?: string;
   onChange: (produtos: any[]) => void;
   showToast: (message: string, type: 'success' | 'error' | 'info', duration?: number) => void;
-}> = ({ produtos, empresaId, onChange, showToast }) => {
+}> = ({ produtos, empresaId, finalidade, onChange, showToast }) => {
   const [showProdutoModal, setShowProdutoModal] = useState(false);
   const [showDetalhesFiscaisModal, setShowDetalhesFiscaisModal] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [produtoDetalhesFiscais, setProdutoDetalhesFiscais] = useState(null);
+
+  // CFOPs de devolução mais comuns
+  const cfopsDevolucao = [
+    { codigo: '1202', descricao: '1202 - Devolução de venda de mercadoria adquirida ou recebida de terceiros (dentro do estado)' },
+    { codigo: '2202', descricao: '2202 - Devolução de venda de mercadoria adquirida ou recebida de terceiros (fora do estado)' },
+    { codigo: '5202', descricao: '5202 - Devolução de compra para comercialização (dentro do estado)' },
+    { codigo: '6202', descricao: '6202 - Devolução de compra para comercialização (fora do estado)' },
+    { codigo: '1411', descricao: '1411 - Devolução de venda de produção do estabelecimento (dentro do estado)' },
+    { codigo: '2411', descricao: '2411 - Devolução de venda de produção do estabelecimento (fora do estado)' },
+    { codigo: '5411', descricao: '5411 - Devolução de compra para industrialização (dentro do estado)' },
+    { codigo: '6411', descricao: '6411 - Devolução de compra para industrialização (fora do estado)' }
+  ];
   const [produtoForm, setProdutoForm] = useState({
     quantidade: 1,
     valor_unitario: 0,
-    valor_total: 0
+    valor_total: 0,
+    cfop_devolucao: '' // Campo para CFOP de devolução
   });
 
   // Função para selecionar produto do modal
@@ -5035,7 +5056,8 @@ const ProdutosSection: React.FC<{
     setProdutoForm({
       quantidade: 1,
       valor_unitario: precoFinal,
-      valor_total: precoFinal
+      valor_total: precoFinal,
+      cfop_devolucao: ''
     });
     setShowProdutoModal(false);
   };
@@ -5057,7 +5079,7 @@ const ProdutosSection: React.FC<{
 
       // ✅ TODOS OS DADOS FISCAIS DO CADASTRO DO PRODUTO (SEM FALLBACKS):
       ncm: produtoSelecionado.ncm,
-      cfop: produtoSelecionado.cfop,
+      cfop: finalidade === '4' && produtoForm.cfop_devolucao ? produtoForm.cfop_devolucao : produtoSelecionado.cfop,
       unidade: produtoSelecionado.unidade_medida?.sigla,
       ean: produtoSelecionado.codigo_barras, // ✅ EAN vem do codigo_barras
       origem_produto: produtoSelecionado.origem_produto,
@@ -5090,7 +5112,8 @@ const ProdutosSection: React.FC<{
     setProdutoForm({
       quantidade: 1,
       valor_unitario: 0,
-      valor_total: 0
+      valor_total: 0,
+      cfop_devolucao: ''
     });
   };
 
@@ -5277,10 +5300,13 @@ const ProdutosSection: React.FC<{
   };
 
   // Função para atualizar campos e calcular total
-  const updateProdutoForm = (field: string, value: number) => {
+  const updateProdutoForm = (field: string, value: number | string) => {
     setProdutoForm(prev => {
       const newForm = { ...prev, [field]: value };
-      newForm.valor_total = newForm.quantidade * newForm.valor_unitario;
+      // Só recalcula total para campos numéricos
+      if (field === 'quantidade' || field === 'valor_unitario') {
+        newForm.valor_total = newForm.quantidade * newForm.valor_unitario;
+      }
       return newForm;
     });
   };
@@ -5349,6 +5375,30 @@ const ProdutosSection: React.FC<{
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
               />
             </div>
+
+            {/* CFOP de Devolução - Só aparece quando finalidade for 4 */}
+            {finalidade === '4' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  CFOP de Devolução *
+                </label>
+                <select
+                  value={produtoForm.cfop_devolucao || ''}
+                  onChange={(e) => updateProdutoForm('cfop_devolucao', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                >
+                  <option value="">Selecione o CFOP de devolução</option>
+                  {cfopsDevolucao.map((cfop) => (
+                    <option key={cfop.codigo} value={cfop.codigo}>
+                      {cfop.descricao}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  ⚠️ Para devoluções, é obrigatório usar CFOP específico de devolução
+                </p>
+              </div>
+            )}
 
             {/* Total */}
             <div>
