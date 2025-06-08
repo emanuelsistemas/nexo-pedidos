@@ -1462,10 +1462,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     setRascunhoId(null);
   };
 
-  // ✅ FUNÇÃO PARA GERAR ESPELHO DA NFE
+  // ✅ FUNÇÃO PARA GERAR ESPELHO DANFE DA NFE
   const handleGerarEspelho = async () => {
     try {
-      showToast('Gerando espelho da NFe...', 'info');
+      showToast('Gerando espelho DANFE...', 'info');
 
       // Obter empresa_id do usuário logado
       const { data: userData } = await supabase.auth.getUser();
@@ -1480,15 +1480,14 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         return;
       }
 
-      // Preparar dados da NFe para o espelho
+      // Preparar dados da NFe para o espelho DANFE
       const dadosEspelho = {
         empresa_id: usuarioData.empresa_id,
-        dados_nfe: nfeData,
-        tipo: 'espelho' // Identificar que é um espelho, não uma NFe real
+        dados_nfe: nfeData
       };
 
-      // Chamar endpoint para gerar espelho
-      const response = await fetch('/backend/public/gerar-espelho-nfe.php', {
+      // Chamar endpoint que já funciona para gerar espelho DANFE
+      const response = await fetch('/backend/public/gerar-espelho-danfe.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1503,20 +1502,20 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       const result = await response.json();
 
       if (!result.sucesso) {
-        throw new Error(result.erro || 'Erro ao gerar espelho');
+        throw new Error(result.erro || 'Erro ao gerar espelho DANFE');
       }
 
-      // Abrir o PDF do espelho em nova aba
-      const espelhoUrl = `/backend/public/download-arquivo.php?type=espelho&arquivo=${result.arquivo}&empresa_id=${usuarioData.empresa_id}&action=view`;
+      // Abrir o PDF do espelho DANFE em nova aba usando o endpoint que já funciona
+      const espelhoUrl = `/backend/public/download-arquivo.php?type=espelho&empresa_id=${usuarioData.empresa_id}&action=view`;
 
       setTimeout(() => {
         window.open(espelhoUrl, '_blank');
-        showToast('Espelho da NFe gerado e aberto em nova aba', 'success');
+        showToast('Espelho DANFE gerado e aberto em nova aba', 'success');
       }, 500);
 
     } catch (error) {
-      console.error('Erro ao gerar espelho:', error);
-      showToast(`Erro ao gerar espelho: ${error.message}`, 'error');
+      console.error('Erro ao gerar espelho DANFE:', error);
+      showToast(`Erro ao gerar espelho DANFE: ${error.message}`, 'error');
     }
   };
 

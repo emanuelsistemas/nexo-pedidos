@@ -12,11 +12,12 @@ try {
     $sequencia = $_GET['sequencia'] ?? 1; // Para CCe
 
     // Validações
-    if (!$type || !in_array($type, ['xml', 'pdf', 'xml_cce', 'pdf_cce'])) {
-        throw new Exception('Tipo inválido. Use: xml, pdf, xml_cce ou pdf_cce');
+    if (!$type || !in_array($type, ['xml', 'pdf', 'xml_cce', 'pdf_cce', 'espelho'])) {
+        throw new Exception('Tipo inválido. Use: xml, pdf, xml_cce, pdf_cce ou espelho');
     }
     
-    if (!$chave || strlen($chave) !== 44) {
+    // Para espelhos, chave não é obrigatória
+    if ($type !== 'espelho' && (!$chave || strlen($chave) !== 44)) {
         throw new Exception('Chave NFe inválida');
     }
     
@@ -35,6 +36,11 @@ try {
         $baseDir = "../storage/{$baseType}/empresa_{$empresaId}/CCe";
         $extensao = $baseType;
         $sufixoArquivo = '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT);
+    } elseif ($type === 'espelho') {
+        // Para Espelho NFe
+        $baseDir = "../storage/espelhos/{$empresaId}";
+        $extensao = 'pdf';
+        $sufixoArquivo = '';
     } else {
         // Para NFe normal
         $baseDir = "../storage/{$type}/empresa_{$empresaId}/Autorizados";
@@ -64,8 +70,24 @@ try {
         return null;
     }
     
-    $nomeArquivo = "{$chave}{$sufixoArquivo}.{$extensao}";
-    $arquivoEncontrado = buscarArquivo($baseDir, $nomeArquivo);
+    // Para espelhos, buscar por padrão diferente
+    if ($type === 'espelho') {
+        // Buscar arquivo mais recente que contenha a empresa_id
+        $arquivoEncontrado = null;
+        if (is_dir($baseDir)) {
+            $files = glob($baseDir . "/espelho_danfe_{$empresaId}_*.pdf");
+            if (!empty($files)) {
+                // Pegar o arquivo mais recente
+                usort($files, function($a, $b) {
+                    return filemtime($b) - filemtime($a);
+                });
+                $arquivoEncontrado = $files[0];
+            }
+        }
+    } else {
+        $nomeArquivo = "{$chave}{$sufixoArquivo}.{$extensao}";
+        $arquivoEncontrado = buscarArquivo($baseDir, $nomeArquivo);
+    }
     
     if (!$arquivoEncontrado || !file_exists($arquivoEncontrado)) {
         // Tentar buscar diretamente na raiz do tipo
@@ -91,7 +113,13 @@ try {
         $filename = $type === 'xml_cce' ? "CCe_{$chave}_seq{$sequencia}.xml" : "NFe_{$chave}.xml";
     } else {
         $contentType = 'application/pdf';
-        $filename = $type === 'pdf_cce' ? "CCe_{$chave}_seq{$sequencia}.pdf" : "DANFE_{$chave}.pdf";
+        if ($type === 'pdf_cce') {
+            $filename = "CCe_{$chave}_seq{$sequencia}.pdf";
+        } elseif ($type === 'espelho') {
+            $filename = "Espelho_NFe_" . date('YmdHis') . ".pdf";
+        } else {
+            $filename = "DANFE_{$chave}.pdf";
+        }
     }
     
     // Verificar se é para download ou visualização

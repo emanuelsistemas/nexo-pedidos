@@ -1,23 +1,15 @@
 <?php
 /**
- * ✅ GERADOR DE ESPELHO DA NFE
+ * ✅ GERADOR DE ESPELHO SIMPLES DA NFE
  *
- * Este arquivo gera um PDF de visualização (espelho) da NFe
- * baseado nos dados preenchidos no formulário, sem emitir a NFe real.
+ * Este arquivo gera um PDF simples de visualização dos dados
+ * preenchidos no formulário, SEM usar certificados ou bibliotecas NFe.
  *
- * Útil para:
- * - Visualizar como a NFe ficará antes da emissão
- * - Enviar para fornecedores ou contadores para aprovação
- * - Conferir dados antes da emissão oficial
+ * É apenas uma representação visual dos dados para conferência.
+ * NÃO É UMA NFE REAL - apenas um espelho para visualização.
  */
 
-// Incluir dependências primeiro
 require_once __DIR__ . '/../vendor/autoload.php';
-
-use NFePHP\NFe\Make;
-use NFePHP\NFe\Tools;
-use NFePHP\NFe\Common\Standardize;
-use NFePHP\DA\NFe\Danfe;
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -84,7 +76,7 @@ try {
     ];
 
     // Gerar nome do arquivo
-    $nomeArquivo = "espelho_nfe_{$empresaId}_" . date('YmdHis') . '.pdf';
+    $nomeArquivo = "espelho_nfe_{$empresaId}_" . date('YmdHis') . '.html';
     $caminhoArquivo = __DIR__ . "/../storage/espelhos/{$empresaId}/";
 
     // Criar diretório se não existir
@@ -94,8 +86,8 @@ try {
 
     $arquivoCompleto = $caminhoArquivo . $nomeArquivo;
 
-    // Gerar PDF do espelho usando a biblioteca sped-nfe
-    $resultado = gerarPDFEspelho($dadosEspelho, $arquivoCompleto);
+    // Gerar HTML simples do espelho (SEM bibliotecas NFe)
+    $resultado = gerarHTMLEspelhoSimples($dadosEspelho, $arquivoCompleto);
 
     if (!$resultado['sucesso']) {
         throw new Exception($resultado['erro']);
@@ -106,7 +98,8 @@ try {
         'sucesso' => true,
         'arquivo' => $nomeArquivo,
         'caminho' => "storage/espelhos/{$empresaId}/{$nomeArquivo}",
-        'mensagem' => 'Espelho da NFe gerado com sucesso'
+        'mensagem' => 'Espelho da NFe gerado com sucesso',
+        'tipo' => 'html'
     ]);
 
 } catch (Exception $e) {
@@ -119,56 +112,25 @@ try {
 }
 
 /**
- * ✅ FUNÇÃO PARA GERAR PDF DO ESPELHO
+ * ✅ FUNÇÃO PARA GERAR HTML SIMPLES DO ESPELHO
+ *
+ * Gera um arquivo HTML simples com os dados preenchidos no formulário
+ * SEM usar certificados, bibliotecas NFe ou qualquer processo fiscal real.
  */
-function gerarPDFEspelho($dados, $caminhoArquivo) {
+function gerarHTMLEspelhoSimples($dados, $caminhoArquivo) {
     try {
-        // Usar a mesma biblioteca sped-nfe para gerar o PDF
-
         $empresa = $dados['empresa'];
         $nfeData = $dados['nfe_data'];
 
-        // Configurar certificado (mesmo processo da emissão real)
-        $certificadoPath = __DIR__ . "/../storage/certificados/{$empresa['id']}.p12";
+        // Gerar conteúdo HTML completo do espelho
+        $html = gerarHTMLEspelhoCompleto($empresa, $nfeData);
 
-        if (!file_exists($certificadoPath)) {
-            throw new Exception('Certificado digital não encontrado');
+        // Salvar HTML
+        $resultado = file_put_contents($caminhoArquivo, $html);
+
+        if ($resultado === false) {
+            throw new Exception('Falha ao salvar arquivo HTML');
         }
-
-        $certificadoContent = file_get_contents($certificadoPath);
-        $certificadoSenha = $empresa['certificado_senha'] ?? '';
-
-        // Configurar Tools
-        $config = [
-            "atualizacao" => date('Y-m-d H:i:s'),
-            "tpAmb" => 2, // Sempre homologação para espelhos
-            "razaosocial" => $empresa['razao_social'],
-            "cnpj" => preg_replace('/\D/', '', $empresa['documento']),
-            "siglaUF" => $empresa['estado'],
-            "schemes" => "PL_009_V4",
-            "versao" => '4.00',
-            "tokenIBPT" => "",
-            "CSC" => "",
-            "CSCid" => ""
-        ];
-
-        $tools = new Tools(json_encode($config));
-        $tools->loadSigner($certificadoContent, $certificadoSenha);
-
-        // Gerar XML da NFe (mesmo processo da emissão)
-        $xmlEspelho = gerarXMLEspelho($nfeData, $empresa);
-
-        // Gerar DANFE do espelho
-        $danfe = new Danfe($xmlEspelho);
-        $danfe->debugMode(false);
-        $danfe->creditsIntegratorFooter('NEXO SISTEMAS - ESPELHO DE VISUALIZAÇÃO');
-
-        // Adicionar marca d'água de espelho
-        $danfe->watermark('ESPELHO - NÃO VÁLIDO FISCALMENTE');
-
-        // Salvar PDF
-        $pdf = $danfe->render();
-        file_put_contents($caminhoArquivo, $pdf);
 
         return [
             'sucesso' => true,
@@ -178,69 +140,130 @@ function gerarPDFEspelho($dados, $caminhoArquivo) {
     } catch (Exception $e) {
         return [
             'sucesso' => false,
-            'erro' => 'Erro ao gerar PDF do espelho: ' . $e->getMessage()
+            'erro' => 'Erro ao gerar HTML do espelho: ' . $e->getMessage()
         ];
     }
 }
 
 /**
- * ✅ FUNÇÃO PARA GERAR XML DO ESPELHO
+ * ✅ FUNÇÃO PARA GERAR HTML COMPLETO DO ESPELHO
+ *
+ * Gera HTML completo com os dados preenchidos no formulário
  */
-function gerarXMLEspelho($nfeData, $empresa) {
-    // Usar a mesma lógica de geração de XML da emissão real
-    // mas com dados de espelho e ambiente de homologação
+function gerarHTMLEspelhoCompleto($empresa, $nfeData) {
+    $identificacao = $nfeData['identificacao'] ?? [];
+    $destinatario = $nfeData['destinatario'] ?? [];
+    $itens = $nfeData['itens'] ?? [];
 
-    $nfe = new Make();
+    $html = '<!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Espelho NFe - Visualização</title>
+        <style>
+            body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
+            .header { text-align: center; background-color: #f0f0f0; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+            .watermark { color: #ff0000; font-weight: bold; font-size: 18px; margin: 10px 0; }
+            .section { margin-bottom: 15px; border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
+            .section-title { font-weight: bold; background-color: #e0e0e0; padding: 8px; margin: -15px -15px 15px -15px; border-radius: 5px 5px 0 0; }
+            .field { margin-bottom: 8px; }
+            .field-label { font-weight: bold; display: inline-block; width: 180px; }
+            .table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .table th, .table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+            .table th { background-color: #f0f0f0; font-weight: bold; }
+            .print-btn { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; }
+            .print-btn:hover { background-color: #0056b3; }
+            @media print { .print-btn { display: none; } }
+        </style>
+    </head>
+    <body>
 
-    // Dados da empresa (mesmo processo)
-    $std = new \stdClass();
-    $std->versao = '4.00';
-    $std->Id = null;
-    $std->pk_nItem = '';
+    <div class="header">
+        <h2>ESPELHO DE VISUALIZAÇÃO - NFe</h2>
+        <div class="watermark">⚠️ DOCUMENTO NÃO VÁLIDO FISCALMENTE ⚠️</div>
+        <div class="watermark">APENAS PARA CONFERÊNCIA DOS DADOS</div>
+        <p>Gerado em: ' . date('d/m/Y H:i:s') . '</p>
+    </div>
 
-    // Identificação (marcar como espelho)
-    $std = new \stdClass();
-    $std->cUF = obterCodigoUF($empresa['estado']);
-    $std->cNF = '12345678'; // Código fixo para espelho
-    $std->natOp = $nfeData['identificacao']['natureza_operacao'] ?? 'Venda de Mercadoria';
-    $std->mod = 55;
-    $std->serie = $nfeData['identificacao']['serie'] ?? 1;
-    $std->nNF = 999999; // Número fixo para espelho
-    $std->dhEmi = date('Y-m-d\TH:i:sP');
-    $std->tpNF = 1;
-    $std->idDest = 1;
-    $std->cMunFG = $empresa['codigo_municipio'];
-    $std->tpImp = 1;
-    $std->tpEmis = 1;
-    $std->cDV = 0;
-    $std->tpAmb = 2; // Sempre homologação
-    $std->finNFe = $nfeData['identificacao']['finalidade'] ?? '1';
-    $std->indFinal = 1;
-    $std->indPres = 1;
-    $std->procEmi = 0;
-    $std->verProc = '1.0';
+    <div class="section">
+        <div class="section-title">DADOS DO EMITENTE</div>
+        <div class="field"><span class="field-label">Razão Social:</span> ' . htmlspecialchars($empresa['razao_social'] ?? '') . '</div>
+        <div class="field"><span class="field-label">CNPJ:</span> ' . htmlspecialchars($empresa['documento'] ?? '') . '</div>
+        <div class="field"><span class="field-label">Endereço:</span> ' . htmlspecialchars($empresa['endereco'] ?? '') . '</div>
+        <div class="field"><span class="field-label">Cidade/UF:</span> ' . htmlspecialchars($empresa['cidade'] ?? '') . '/' . htmlspecialchars($empresa['estado'] ?? '') . '</div>
+    </div>
 
-    $nfe->taginfNFe($std);
+    <div class="section">
+        <div class="section-title">IDENTIFICAÇÃO DA NFe</div>
+        <div class="field"><span class="field-label">Natureza da Operação:</span> ' . htmlspecialchars($identificacao['natureza_operacao'] ?? '') . '</div>
+        <div class="field"><span class="field-label">Série:</span> ' . htmlspecialchars($identificacao['serie'] ?? '') . '</div>
+        <div class="field"><span class="field-label">Finalidade:</span> ' . htmlspecialchars($identificacao['finalidade'] ?? '') . '</div>
+        <div class="field"><span class="field-label">Número:</span> <strong style="color: red;">SERÁ DEFINIDO NA EMISSÃO</strong></div>
+    </div>';
 
-    // Continuar com o resto da geração...
-    // (Implementar o resto da lógica de geração de XML)
+    if (!empty($destinatario)) {
+        $html .= '
+        <div class="section">
+            <div class="section-title">DADOS DO DESTINATÁRIO</div>
+            <div class="field"><span class="field-label">Nome/Razão Social:</span> ' . htmlspecialchars($destinatario['nome'] ?? '') . '</div>
+            <div class="field"><span class="field-label">CPF/CNPJ:</span> ' . htmlspecialchars($destinatario['documento'] ?? '') . '</div>
+            <div class="field"><span class="field-label">Endereço:</span> ' . htmlspecialchars($destinatario['endereco'] ?? '') . '</div>
+        </div>';
+    }
 
-    return $nfe->getXML();
+    if (!empty($itens)) {
+        $html .= '
+        <div class="section">
+            <div class="section-title">PRODUTOS/SERVIÇOS</div>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th>Qtd</th>
+                        <th>Unidade</th>
+                        <th>Valor Unit.</th>
+                        <th>Valor Total</th>
+                    </tr>
+                </thead>
+                <tbody>';
+
+        foreach ($itens as $item) {
+            $html .= '
+                    <tr>
+                        <td>' . htmlspecialchars($item['codigo'] ?? '') . '</td>
+                        <td>' . htmlspecialchars($item['descricao'] ?? '') . '</td>
+                        <td>' . htmlspecialchars($item['quantidade'] ?? '') . '</td>
+                        <td>' . htmlspecialchars($item['unidade'] ?? '') . '</td>
+                        <td>R$ ' . number_format($item['valor_unitario'] ?? 0, 2, ',', '.') . '</td>
+                        <td>R$ ' . number_format($item['valor_total'] ?? 0, 2, ',', '.') . '</td>
+                    </tr>';
+        }
+
+        $html .= '
+                </tbody>
+            </table>
+        </div>';
+    }
+
+    $html .= '
+    <div class="section">
+        <div class="section-title">OBSERVAÇÕES</div>
+        <p><strong>Este é apenas um espelho de visualização dos dados preenchidos no formulário.</strong></p>
+        <p><strong>Para emitir a NFe oficial, utilize o botão "Emitir NFe" na interface principal.</strong></p>
+        <p><strong>Este documento não possui valor fiscal.</strong></p>
+    </div>
+
+    <div style="text-align: center; margin-top: 30px;">
+        <button class="print-btn" onclick="window.print()">🖨️ Imprimir</button>
+        <button class="print-btn" onclick="window.close()">❌ Fechar</button>
+    </div>
+
+    </body>
+    </html>';
+
+    return $html;
 }
 
-/**
- * ✅ FUNÇÃO AUXILIAR PARA OBTER CÓDIGO DA UF
- */
-function obterCodigoUF($uf) {
-    $codigos = [
-        'AC' => 12, 'AL' => 17, 'AP' => 16, 'AM' => 13, 'BA' => 29,
-        'CE' => 23, 'DF' => 53, 'ES' => 32, 'GO' => 52, 'MA' => 21,
-        'MT' => 51, 'MS' => 50, 'MG' => 31, 'PA' => 15, 'PB' => 25,
-        'PR' => 41, 'PE' => 26, 'PI' => 22, 'RJ' => 33, 'RN' => 24,
-        'RS' => 43, 'RO' => 11, 'RR' => 14, 'SC' => 42, 'SP' => 35,
-        'SE' => 28, 'TO' => 27
-    ];
-
-    return $codigos[$uf] ?? 35; // Default SP
-}
 ?>
