@@ -1462,6 +1462,64 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     setRascunhoId(null);
   };
 
+  // ✅ FUNÇÃO PARA GERAR ESPELHO DA NFE
+  const handleGerarEspelho = async () => {
+    try {
+      showToast('Gerando espelho da NFe...', 'info');
+
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showToast('Empresa não identificada', 'error');
+        return;
+      }
+
+      // Preparar dados da NFe para o espelho
+      const dadosEspelho = {
+        empresa_id: usuarioData.empresa_id,
+        dados_nfe: nfeData,
+        tipo: 'espelho' // Identificar que é um espelho, não uma NFe real
+      };
+
+      // Chamar endpoint para gerar espelho
+      const response = await fetch('/backend/public/gerar-espelho-nfe.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dadosEspelho)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.sucesso) {
+        throw new Error(result.erro || 'Erro ao gerar espelho');
+      }
+
+      // Abrir o PDF do espelho em nova aba
+      const espelhoUrl = `/backend/public/download-arquivo.php?type=espelho&arquivo=${result.arquivo}&empresa_id=${usuarioData.empresa_id}&action=view`;
+
+      setTimeout(() => {
+        window.open(espelhoUrl, '_blank');
+        showToast('Espelho da NFe gerado e aberto em nova aba', 'success');
+      }, 500);
+
+    } catch (error) {
+      console.error('Erro ao gerar espelho:', error);
+      showToast(`Erro ao gerar espelho: ${error.message}`, 'error');
+    }
+  };
+
   // Função para salvar rascunho da NFe
 
   const handleSalvarRascunho = async () => {
@@ -3977,6 +4035,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 <Button
                   variant="secondary"
                   className={`${nfeEmitida ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 text-xs py-1.5`}
+                  onClick={handleGerarEspelho}
                 >
                   <Download size={12} />
                   Espelho
