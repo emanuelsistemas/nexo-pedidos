@@ -58,10 +58,12 @@ try {
     
     error_log("📄 PDF CCe - Chave: {$chave}, Empresa: {$empresaId}, Sequência: {$sequencia}");
     
-    // 5. Buscar XML da CCe na estrutura organizada
+    // 5. Buscar XMLs da CCe (evento original + resposta SEFAZ)
     $xmlCceDir = "../storage/xml/empresa_{$empresaId}/CCe";
-    $nomeArquivoCce = $chave . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '.xml';
-    $xmlEncontrado = null;
+    $nomeArquivoEvento = $chave . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '_evento.xml';
+    $nomeArquivoResposta = $chave . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '_resposta.xml';
+    $xmlEventoEncontrado = null;
+    $xmlRespostaEncontrado = null;
     
     // Função para buscar XML recursivamente
     function buscarXMLCce($dir, $nomeArquivo) {
@@ -82,20 +84,83 @@ try {
         return null;
     }
     
-    $xmlEncontrado = buscarXMLCce($xmlCceDir, $nomeArquivoCce);
-    
-    if (!$xmlEncontrado || !file_exists($xmlEncontrado)) {
-        throw new Exception('XML da Carta de Correção não encontrado');
+    // Buscar XMLs do evento e resposta
+    $xmlEventoEncontrado = buscarXMLCce($xmlCceDir, $nomeArquivoEvento);
+    $xmlRespostaEncontrado = buscarXMLCce($xmlCceDir, $nomeArquivoResposta);
+
+    if (!$xmlEventoEncontrado || !file_exists($xmlEventoEncontrado)) {
+        throw new Exception("XML do evento CCe não encontrado: {$nomeArquivoEvento}");
     }
-    
-    error_log("📄 PDF CCe - XML encontrado: {$xmlEncontrado}");
-    
-    // 6. Ler conteúdo do XML
-    $xmlContent = file_get_contents($xmlEncontrado);
-    
-    if (!$xmlContent) {
-        throw new Exception('Erro ao ler XML da Carta de Correção');
+    if (!$xmlRespostaEncontrado || !file_exists($xmlRespostaEncontrado)) {
+        throw new Exception("XML da resposta CCe não encontrado: {$nomeArquivoResposta}");
     }
+
+    error_log("📄 PDF CCe - XML evento encontrado: {$xmlEventoEncontrado}");
+    error_log("📄 PDF CCe - XML resposta encontrado: {$xmlRespostaEncontrado}");
+
+    // 6. Ler conteúdos dos XMLs
+    $xmlEventoContent = file_get_contents($xmlEventoEncontrado);
+    $xmlRespostaContent = file_get_contents($xmlRespostaEncontrado);
+
+    if (!$xmlEventoContent) {
+        throw new Exception('Erro ao ler XML do evento CCe');
+    }
+    if (!$xmlRespostaContent) {
+        throw new Exception('Erro ao ler XML da resposta CCe');
+    }
+
+    // ✅ CRIAR XML procEventoNFe CONFORME DOCUMENTAÇÃO DA BIBLIOTECA
+    function criarProcEventoNFe($xmlEvento, $xmlResposta) {
+        try {
+            // Carregar XMLs
+            $domEvento = new DOMDocument();
+            $domEvento->loadXML($xmlEvento);
+
+            $domResposta = new DOMDocument();
+            $domResposta->loadXML($xmlResposta);
+
+            // Extrair elementos necessários
+            $evento = $domEvento->getElementsByTagName('evento')->item(0);
+            $retEvento = $domResposta->getElementsByTagName('retEvento')->item(0);
+
+            if (!$evento) {
+                throw new Exception('Elemento evento não encontrado no XML do evento');
+            }
+            if (!$retEvento) {
+                throw new Exception('Elemento retEvento não encontrado no XML da resposta');
+            }
+
+            // Criar XML procEventoNFe conforme biblioteca espera
+            $procEventoNFe = new DOMDocument('1.0', 'UTF-8');
+            $procEventoNFe->formatOutput = true;
+
+            // Elemento raiz procEventoNFe
+            $root = $procEventoNFe->createElement('procEventoNFe');
+            $root->setAttribute('versao', '1.00');
+            $root->setAttribute('xmlns', 'http://www.portalfiscal.inf.br/nfe');
+            $procEventoNFe->appendChild($root);
+
+            // Importar evento
+            $eventoImportado = $procEventoNFe->importNode($evento, true);
+            $root->appendChild($eventoImportado);
+
+            // Importar retEvento
+            $retEventoImportado = $procEventoNFe->importNode($retEvento, true);
+            $root->appendChild($retEventoImportado);
+
+            $xmlFinal = $procEventoNFe->saveXML();
+            error_log("📄 PDF CCe - procEventoNFe criado com sucesso: " . strlen($xmlFinal) . " bytes");
+
+            return $xmlFinal;
+
+        } catch (Exception $e) {
+            error_log("❌ Erro ao criar procEventoNFe: " . $e->getMessage());
+            throw new Exception('Erro ao criar XML procEventoNFe: ' . $e->getMessage());
+        }
+    }
+
+    // Criar XML no formato correto para a biblioteca Daevento
+    $xmlContent = criarProcEventoNFe($xmlEventoContent, $xmlRespostaContent);
     
     // 7. Buscar XML da NFe original (necessário para o DACE)
     $xmlNfeDir = "../storage/xml/empresa_{$empresaId}/Autorizados";
@@ -132,33 +197,80 @@ try {
     }
     
     error_log("📄 PDF CCe - XML NFe original encontrado: {$xmlNfeEncontrado}");
-    
-    // 8. Preparar dados do emitente (necessário para Daevento)
-    $dadosEmitente = [
-        'razao' => 'Empresa Emitente', // Será extraído do XML da NFe
-        'logradouro' => '',
-        'numero' => '',
-        'complemento' => '',
-        'bairro' => '',
-        'CEP' => '',
-        'municipio' => '',
-        'UF' => '',
-        'telefone' => '',
-        'email' => ''
-    ];
 
-    // 9. Gerar PDF da CCe usando método nativo da biblioteca
-    $daevento = new Daevento($xmlContent, $dadosEmitente);
-    $daevento->debugMode(false);
-    $daevento->creditsIntegratorFooter('Sistema Nexo PDV');
+    // 8. Extrair dados REAIS do emitente do XML da NFe (LEI DOS DADOS REAIS)
+    function extrairDadosEmitente($xmlNfeContent) {
+        try {
+            $dom = new DOMDocument();
+            $dom->loadXML($xmlNfeContent);
 
-    // 10. Configurações opcionais do Daevento
-    if (isset($input['logo_path']) && file_exists($input['logo_path'])) {
-        $daevento->logoParameters($input['logo_path'], 'C', true);
+            // Buscar elemento emit (emitente)
+            $emit = $dom->getElementsByTagName('emit')->item(0);
+            if (!$emit) {
+                throw new Exception('Elemento emit não encontrado no XML da NFe');
+            }
+
+            // Extrair dados reais do emitente
+            $dados = [
+                'razao' => $emit->getElementsByTagName('xNome')->item(0)->nodeValue ?? '',
+                'logradouro' => $emit->getElementsByTagName('xLgr')->item(0)->nodeValue ?? '',
+                'numero' => $emit->getElementsByTagName('nro')->item(0)->nodeValue ?? '',
+                'complemento' => $emit->getElementsByTagName('xCpl')->item(0)->nodeValue ?? '',
+                'bairro' => $emit->getElementsByTagName('xBairro')->item(0)->nodeValue ?? '',
+                'CEP' => $emit->getElementsByTagName('CEP')->item(0)->nodeValue ?? '',
+                'municipio' => $emit->getElementsByTagName('xMun')->item(0)->nodeValue ?? '',
+                'UF' => $emit->getElementsByTagName('UF')->item(0)->nodeValue ?? '',
+                'telefone' => $emit->getElementsByTagName('fone')->item(0)->nodeValue ?? '',
+                'email' => $emit->getElementsByTagName('email')->item(0)->nodeValue ?? ''
+            ];
+
+            error_log("📄 PDF CCe - Dados emitente extraídos: " . $dados['razao'] . " - " . $dados['municipio'] . "/" . $dados['UF']);
+            return $dados;
+
+        } catch (Exception $e) {
+            error_log("❌ Erro ao extrair dados do emitente: " . $e->getMessage());
+            throw new Exception('Erro ao extrair dados do emitente do XML da NFe: ' . $e->getMessage());
+        }
     }
 
-    // 11. Gerar PDF
-    $pdfContent = $daevento->render();
+    // Extrair dados reais do emitente
+    $dadosEmitente = extrairDadosEmitente($xmlNfeContent);
+
+    // 9. Gerar PDF da CCe usando método nativo da biblioteca
+    error_log("📄 PDF CCe - Criando instância Daevento...");
+
+    try {
+        $daevento = new Daevento($xmlContent, $dadosEmitente);
+        error_log("📄 PDF CCe - Instância Daevento criada com sucesso");
+
+        $daevento->debugMode(true); // Ativar debug para ver mais detalhes
+        error_log("📄 PDF CCe - Debug mode ativado");
+
+        $daevento->creditsIntegratorFooter('Sistema Nexo PDV');
+        error_log("📄 PDF CCe - Footer configurado");
+
+        // 10. Configurações opcionais do Daevento
+        if (isset($input['logo_path']) && file_exists($input['logo_path'])) {
+            $daevento->logoParameters($input['logo_path'], 'C', true);
+            error_log("📄 PDF CCe - Logo configurado");
+        }
+
+        // 11. Gerar PDF
+        error_log("📄 PDF CCe - Iniciando render...");
+        $pdfContent = $daevento->render();
+        error_log("📄 PDF CCe - Render concluído - " . strlen($pdfContent) . " bytes");
+
+    } catch (Exception $e) {
+        error_log("❌ ERRO Daevento Exception: " . $e->getMessage());
+        error_log("❌ ERRO Daevento File: " . $e->getFile());
+        error_log("❌ ERRO Daevento Line: " . $e->getLine());
+        throw $e;
+    } catch (Error $e) {
+        error_log("❌ ERRO FATAL Daevento: " . $e->getMessage());
+        error_log("❌ ERRO FATAL File: " . $e->getFile());
+        error_log("❌ ERRO FATAL Line: " . $e->getLine());
+        throw new Exception('Erro fatal na biblioteca Daevento: ' . $e->getMessage());
+    }
     
     if (!$pdfContent) {
         throw new Exception('Erro ao gerar PDF da Carta de Correção');

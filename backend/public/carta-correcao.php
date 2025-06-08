@@ -43,7 +43,7 @@ try {
     
     // 3. Validar campos obrigatórios
     $empresaId = $input['empresa_id'] ?? null;
-    $chaveNFe = $input['chave_nfe'] ?? null;
+    $chaveNFe = $input['chave_nfe'] ?? $input['chave'] ?? null; // ✅ ACEITAR AMBOS OS FORMATOS
     $correcao = $input['correcao'] ?? null;
     $sequencia = $input['sequencia'] ?? 1;
     
@@ -425,15 +425,10 @@ try {
     
     error_log("✅ CCe ACEITA - Protocolo: {$protocoloCCe}");
     
-    // 15. GERAR E SALVAR XML COMPLETO DE CCe (procEventoNFe) - IGUAL CANCELAMENTO
-    error_log("💾 CCe - Gerando XML completo do evento...");
+    // 15. SALVAR AMBOS OS XMLs DA CCe (ORIGINAL E RESPOSTA) - SOLUÇÃO CORRETA
+    error_log("💾 CCe - Salvando XMLs original e resposta...");
 
-    // ✅ CORRIGIDO: Usar apenas a resposta da SEFAZ (igual cancelamento)
-    // O método sefazCCe já retorna o XML completo processado
-    $xmlCompletoEvento = $response;
-    error_log("✅ CCe - Usando resposta completa da SEFAZ como XML do evento");
-
-    // Diretório para XMLs de CCe por empresa - ESTRUTURA ORGANIZADA (IGUAL CANCELAMENTO)
+    // Diretório para XMLs de CCe por empresa - ESTRUTURA ORGANIZADA
     $xmlCceDir = "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/CCe/" . date('Y/m');
     if (!is_dir($xmlCceDir)) {
         if (!mkdir($xmlCceDir, 0755, true)) {
@@ -443,17 +438,33 @@ try {
         error_log("📁 Diretório de CCe criado: {$xmlCceDir}");
     }
 
-    // Nome do arquivo: chave_nfe + _cce_ + sequencia.xml
-    $nomeArquivoCce = $chaveNFe . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '.xml';
-    $caminhoArquivoCce = $xmlCceDir . '/' . $nomeArquivoCce;
+    // ✅ SALVAR XML ORIGINAL DO EVENTO (para PDF e contador)
+    $xmlOriginal = $tools->lastRequest;
+    $nomeArquivoOriginal = $chaveNFe . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '_evento.xml';
+    $caminhoArquivoOriginal = $xmlCceDir . '/' . $nomeArquivoOriginal;
 
-    // Salvar XML completo de CCe (procEventoNFe)
-    if (file_put_contents($caminhoArquivoCce, $xmlCompletoEvento)) {
-        error_log("✅ XML completo de CCe salvo: {$caminhoArquivoCce}");
+    if (file_put_contents($caminhoArquivoOriginal, $xmlOriginal)) {
+        error_log("✅ XML original da CCe salvo: {$caminhoArquivoOriginal}");
     } else {
-        error_log("❌ Erro ao salvar XML de CCe");
-        throw new Exception('Erro ao salvar XML da Carta de Correção');
+        error_log("❌ Erro ao salvar XML original da CCe");
+        throw new Exception('Erro ao salvar XML original da Carta de Correção');
     }
+
+    // ✅ SALVAR XML RESPOSTA DA SEFAZ (para consultas e contador)
+    $xmlResposta = $response;
+    $nomeArquivoResposta = $chaveNFe . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '_resposta.xml';
+    $caminhoArquivoResposta = $xmlCceDir . '/' . $nomeArquivoResposta;
+
+    if (file_put_contents($caminhoArquivoResposta, $xmlResposta)) {
+        error_log("✅ XML resposta da CCe salvo: {$caminhoArquivoResposta}");
+    } else {
+        error_log("❌ Erro ao salvar XML resposta da CCe");
+        throw new Exception('Erro ao salvar XML resposta da Carta de Correção');
+    }
+
+    // ✅ USAR CAMINHO DO XML ORIGINAL PARA ATUALIZAÇÃO NO BANCO (para PDF)
+    $caminhoArquivoCce = $caminhoArquivoOriginal;
+    $nomeArquivoCce = $nomeArquivoOriginal;
     
     // 16. ATUALIZAR CCe NA TABELA (COPIANDO PADRÃO DO CANCELAMENTO)
     error_log("💾 CCe - Atualizando registro na tabela cce_nfe com dados da SEFAZ (padrão cancelamento)...");
