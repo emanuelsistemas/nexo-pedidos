@@ -3659,13 +3659,33 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             showToast={showToast}
             onChange={(produtos) => {
               const valorProdutos = produtos.reduce((sum, p) => sum + (p.valor_total || 0), 0);
+
+              // ✅ CALCULAR TOTAIS DE ICMS PARA DEVOLUÇÕES COM DESTAQUE
+              let totalIcmsBC = 0;
+              let totalIcms = 0;
+
+              if (nfeData.identificacao?.finalidade === '4') {
+                produtos.forEach(produto => {
+                  if (produto.destaque_icms_devolucao) {
+                    const baseCalculo = produto.base_calculo_icms || produto.valor_total || 0;
+                    const aliquota = produto.aliquota_icms || 0;
+                    const valorIcms = (baseCalculo * aliquota) / 100;
+
+                    totalIcmsBC += baseCalculo;
+                    totalIcms += valorIcms;
+                  }
+                });
+              }
+
               setNfeData(prev => ({
                 ...prev,
                 produtos,
                 totais: {
                   ...prev.totais,
                   valor_produtos: valorProdutos,
-                  valor_total: valorProdutos - prev.totais.valor_desconto
+                  valor_total: valorProdutos - prev.totais.valor_desconto,
+                  valor_icms_bc: totalIcmsBC,
+                  valor_icms: totalIcms
                 }
               }));
             }}
@@ -5037,6 +5057,31 @@ const ProdutosSection: React.FC<{
     cfop_devolucao: '' // Campo para CFOP de devolução
   });
 
+  // ✅ FUNÇÃO PARA RECALCULAR TOTAIS DE ICMS
+  const recalcularTotaisICMS = (produtosAtualizados: any[]) => {
+    if (nfeData?.identificacao?.finalidade === '4') {
+      let totalIcmsBC = 0;
+      let totalIcms = 0;
+
+      produtosAtualizados.forEach(produto => {
+        if (produto.destaque_icms_devolucao) {
+          const baseCalculo = produto.base_calculo_icms || produto.valor_total || 0;
+          const aliquota = produto.aliquota_icms || 0;
+          const valorIcms = (baseCalculo * aliquota) / 100;
+
+          totalIcmsBC += baseCalculo;
+          totalIcms += valorIcms;
+        }
+      });
+
+      console.log('🧮 Recalculando totais ICMS:', {
+        totalIcmsBC,
+        totalIcms,
+        produtosComDestaque: produtosAtualizados.filter(p => p.destaque_icms_devolucao)
+      });
+    }
+  };
+
   // Função para selecionar produto do modal
   const handleSelecionarProduto = (produto: any) => {
     setProdutoSelecionado(produto);
@@ -5631,10 +5676,23 @@ const ProdutosSection: React.FC<{
                             ...prev,
                             destaque_icms_devolucao: e.target.checked
                           }));
+
+                          // ✅ RECALCULAR TOTAIS DE ICMS AUTOMATICAMENTE
+                          recalcularTotaisICMS(novosProdutos);
                         }}
-                        className="sr-only"
+                        className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                      <div className={`relative w-11 h-6 rounded-full transition-colors duration-200 ease-in-out ${
+                        (produtoDetalhesFiscais as any).destaque_icms_devolucao
+                          ? 'bg-yellow-600'
+                          : 'bg-gray-700'
+                      }`}>
+                        <div className={`absolute top-[2px] left-[2px] bg-white rounded-full h-5 w-5 transition-transform duration-200 ease-in-out ${
+                          (produtoDetalhesFiscais as any).destaque_icms_devolucao
+                            ? 'translate-x-5'
+                            : 'translate-x-0'
+                        }`}></div>
+                      </div>
                     </label>
                   </div>
                   <div className="text-xs text-yellow-200/70">
@@ -5670,6 +5728,9 @@ const ProdutosSection: React.FC<{
                             ...prev,
                             aliquota_icms: parseFloat(e.target.value) || 0
                           }));
+
+                          // ✅ RECALCULAR TOTAIS DE ICMS AUTOMATICAMENTE
+                          recalcularTotaisICMS(novosProdutos);
                         }}
                         className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
                         placeholder="18.00"
@@ -5701,6 +5762,9 @@ const ProdutosSection: React.FC<{
                             ...prev,
                             base_calculo_icms: parseFloat(e.target.value) || 0
                           }));
+
+                          // ✅ RECALCULAR TOTAIS DE ICMS AUTOMATICAMENTE
+                          recalcularTotaisICMS(novosProdutos);
                         }}
                         className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
                         placeholder="0.00"
