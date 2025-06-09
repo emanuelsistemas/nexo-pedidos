@@ -87,8 +87,22 @@ try {
     // Gerar PDF
     $pdfContent = $danfe->render();
     
-    // Salvar PDF - NOVA ESTRUTURA ORGANIZADA (igual aos XMLs)
-    $pdfDir = "../storage/pdf/empresa_{$empresaId}/Autorizados/" . date('Y/m');
+    // Buscar ambiente da empresa para salvar PDF no local correto
+    $ambienteTexto = 'homologacao'; // padrão
+    try {
+        $response = file_get_contents("http://localhost/backend/public/get-empresa-config.php?empresa_id={$empresaId}");
+        $config = json_decode($response, true);
+        if ($config && isset($config['data']['nfe_config']['ambiente'])) {
+            $ambienteTexto = $config['data']['nfe_config']['ambiente'];
+        }
+    } catch (Exception $e) {
+        error_log("Aviso: Não foi possível determinar ambiente, usando homologação");
+    }
+
+    // 🔥 NOVA ESTRUTURA COM MODELO DE DOCUMENTO
+    // Salvar PDF - ESTRUTURA ORGANIZADA COM AMBIENTE E MODELO (55=NFe, 65=NFCe)
+    $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
+    $pdfDir = "../storage/pdf/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Autorizados/" . date('Y/m');
     if (!is_dir($pdfDir)) {
         mkdir($pdfDir, 0755, true);
     }

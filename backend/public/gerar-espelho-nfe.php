@@ -75,9 +75,23 @@ try {
         'data_geracao' => date('Y-m-d H:i:s')
     ];
 
+    // Buscar ambiente da empresa para organizar espelhos
+    $ambienteTexto = 'homologacao'; // padrão
+    try {
+        $response = file_get_contents("http://localhost/backend/public/get-empresa-config.php?empresa_id={$empresaId}");
+        $config = json_decode($response, true);
+        if ($config && isset($config['data']['nfe_config']['ambiente'])) {
+            $ambienteTexto = $config['data']['nfe_config']['ambiente'];
+        }
+    } catch (Exception $e) {
+        error_log("Aviso: Não foi possível determinar ambiente, usando homologação");
+    }
+
+    // 🔥 NOVA ESTRUTURA COM MODELO DE DOCUMENTO
     // Gerar nome do arquivo
+    $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
     $nomeArquivo = "espelho_nfe_{$empresaId}_" . date('YmdHis') . '.html';
-    $caminhoArquivo = __DIR__ . "/../storage/espelhos/{$empresaId}/";
+    $caminhoArquivo = __DIR__ . "/../storage/espelhos/{$empresaId}/{$ambienteTexto}/{$modelo}/";
 
     // Criar diretório se não existir
     if (!is_dir($caminhoArquivo)) {
@@ -97,7 +111,7 @@ try {
     echo json_encode([
         'sucesso' => true,
         'arquivo' => $nomeArquivo,
-        'caminho' => "storage/espelhos/{$empresaId}/{$nomeArquivo}",
+        'caminho' => "storage/espelhos/{$empresaId}/{$ambienteTexto}/{$modelo}/{$nomeArquivo}",
         'mensagem' => 'Espelho da NFe gerado com sucesso',
         'tipo' => 'html'
     ]);

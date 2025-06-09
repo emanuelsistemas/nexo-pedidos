@@ -52,12 +52,12 @@ class ContadorService
                 throw new Exception('Empresa não encontrada');
             }
             
-            // Verificar se existe pasta de XMLs para esta empresa
+            // Verificar se existe pasta de XMLs DE PRODUÇÃO para esta empresa
             $empresaId = $empresa['id'];
-            $xmlPath = "../storage/xml/empresa_{$empresaId}";
-            
+            $xmlPath = "../storage/xml/empresa_{$empresaId}/producao";
+
             if (!is_dir($xmlPath)) {
-                throw new Exception('Nenhum arquivo XML encontrado para esta empresa');
+                throw new Exception('Nenhum arquivo XML de PRODUÇÃO encontrado para esta empresa');
             }
             
             return [
@@ -75,43 +75,46 @@ class ContadorService
     }
     
     /**
-     * Lista a estrutura de pastas (anos/meses) disponíveis
+     * Lista a estrutura de pastas (anos/meses) disponíveis APENAS DE PRODUÇÃO
      */
     public function listarEstrutura($empresaId)
     {
         try {
-            $xmlPath = "../storage/xml/empresa_{$empresaId}";
-            
+            // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+            $xmlPath = "../storage/xml/empresa_{$empresaId}/producao";
+
             if (!is_dir($xmlPath)) {
-                throw new Exception('Pasta de XMLs não encontrada');
+                throw new Exception('Pasta de XMLs de PRODUÇÃO não encontrada');
             }
-            
+
             $estrutura = [];
             $tipos = ['Autorizados', 'Cancelados', 'CCe'];
-            
+
+            // Buscar APENAS em produção
             foreach ($tipos as $tipo) {
                 $tipoPath = "{$xmlPath}/{$tipo}";
-                
+
                 if (is_dir($tipoPath)) {
                     $anos = $this->listarAnosMeses($tipoPath);
-                    
+
                     if (!empty($anos)) {
                         // Ordenar anos (mais recente primeiro)
                         usort($anos, function($a, $b) {
                             return (int)$b['ano'] - (int)$a['ano'];
                         });
-                        
+
                         $estrutura[$tipo] = [
                             'tipo' => $tipo,
+                            'ambiente' => 'producao',
                             'anos' => $anos,
                             'total_arquivos' => array_sum(array_column($anos, 'total_arquivos'))
                         ];
                     }
                 }
             }
-            
+
             return $estrutura;
-            
+
         } catch (Exception $e) {
             throw $e;
         }
@@ -172,25 +175,26 @@ class ContadorService
     }
     
     /**
-     * Lista arquivos de um período específico
+     * Lista arquivos de um período específico APENAS DE PRODUÇÃO
      */
     public function listarArquivos($empresaId, $tipo, $ano, $mes)
     {
         try {
-            $path = "../storage/xml/empresa_{$empresaId}/{$tipo}/{$ano}/{$mes}";
-            
+            // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+            $path = "../storage/xml/empresa_{$empresaId}/producao/{$tipo}/{$ano}/{$mes}";
+
             if (!is_dir($path)) {
-                throw new Exception('Pasta não encontrada');
+                throw new Exception('Pasta de PRODUÇÃO não encontrada');
             }
-            
+
             $arquivos = [];
             $xmlFiles = glob("{$path}/*.xml");
-            
+
             foreach ($xmlFiles as $arquivo) {
                 $nomeArquivo = basename($arquivo);
                 $tamanho = filesize($arquivo);
                 $dataModificacao = filemtime($arquivo);
-                
+
                 $arquivos[] = [
                     'nome' => $nomeArquivo,
                     'tamanho' => $tamanho,
@@ -199,18 +203,18 @@ class ContadorService
                     'path' => $arquivo
                 ];
             }
-            
+
             // Ordenar por data de modificação (mais recente primeiro)
             usort($arquivos, function($a, $b) {
                 return $b['data_modificacao'] <=> $a['data_modificacao'];
             });
-            
+
             return [
                 'arquivos' => $arquivos,
                 'total' => count($arquivos),
                 'path' => $path
             ];
-            
+
         } catch (Exception $e) {
             throw $e;
         }

@@ -58,10 +58,11 @@ function gerarRelatorioMesCompleto($input) {
             throw new Exception('Parâmetros obrigatórios não informados');
         }
 
-        $basePath = "../storage/xml/empresa_{$empresaId}";
+        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+        $basePath = "../storage/xml/empresa_{$empresaId}/producao";
 
         if (!is_dir($basePath)) {
-            throw new Exception('Pasta da empresa não encontrada');
+            throw new Exception('Pasta de PRODUÇÃO da empresa não encontrada');
         }
 
         $tipos = ['Autorizados', 'Cancelados', 'CCe'];
@@ -139,10 +140,11 @@ function gerarRelatorioMes($input) {
             throw new Exception('Parâmetros obrigatórios não informados');
         }
         
-        $sourcePath = "../storage/xml/empresa_{$empresaId}/{$tipo}/{$ano}/{$mes}";
-        
+        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+        $sourcePath = "../storage/xml/empresa_{$empresaId}/producao/{$tipo}/{$ano}/{$mes}";
+
         if (!is_dir($sourcePath)) {
-            throw new Exception('Pasta não encontrada');
+            throw new Exception('Pasta de PRODUÇÃO não encontrada');
         }
         
         // Buscar todos os XMLs do mês

@@ -9,6 +9,17 @@ import { TipoUserConfig } from '../../types';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import { extractCertificateInfo, checkCertificateExpiry, checkCertificateStatus } from '../../api/certificateApi';
 import { useCertificateUpload } from '../../hooks/useCertificateUpload';
+import NFeValidationModal from '../../components/comum/NFeValidationModal';
+import {
+  validarRazaoSocialEmpresa,
+  validarNomeFantasiaEmpresa,
+  validarNomeProprietario,
+  validarEndereco,
+  validarBairro,
+  validarCidade,
+  validarComplemento,
+  ValidationResult
+} from '../../utils/nfeValidation';
 
 // Componente de Skeleton Loading para Configurações
 const ConfigSkeletonLoader = () => (
@@ -286,6 +297,19 @@ const ConfiguracoesPage: React.FC = () => {
   const [cscProducao, setCscProducao] = useState('');
   const [cscIdProducao, setCscIdProducao] = useState('');
   const [isSavingCsc, setIsSavingCsc] = useState(false);
+
+  // Estados para validação NFe
+  const [nfeValidationModal, setNfeValidationModal] = useState<{
+    isOpen: boolean;
+    campo: string;
+    valor: string;
+    validationResult: ValidationResult;
+  }>({
+    isOpen: false,
+    campo: '',
+    valor: '',
+    validationResult: { isValid: true, errors: [] }
+  });
 
   useEffect(() => {
     const loadDataWithLoading = async () => {
@@ -833,6 +857,103 @@ const ConfiguracoesPage: React.FC = () => {
 
   const handleSubmitEmpresa = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 🛡️ VALIDAÇÃO NFe - PREVENÇÃO NA ORIGEM
+    // Validar razão social da empresa (CRÍTICO - aparece como emitente na NFe)
+    if (empresaForm.razao_social && empresaForm.razao_social.trim() !== '') {
+      const razaoValidation = validarRazaoSocialEmpresa(empresaForm.razao_social);
+      if (!razaoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Razão Social da Empresa',
+          valor: empresaForm.razao_social,
+          validationResult: razaoValidation
+        });
+        return;
+      }
+    }
+
+    // Validar nome fantasia da empresa (aparece na NFe se preenchido)
+    if (empresaForm.nome_fantasia && empresaForm.nome_fantasia.trim() !== '') {
+      const fantasiaValidation = validarNomeFantasiaEmpresa(empresaForm.nome_fantasia);
+      if (!fantasiaValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Nome Fantasia da Empresa',
+          valor: empresaForm.nome_fantasia,
+          validationResult: fantasiaValidation
+        });
+        return;
+      }
+    }
+
+    // Validar nome do proprietário (se preenchido)
+    if (empresaForm.nome_proprietario && empresaForm.nome_proprietario.trim() !== '') {
+      const proprietarioValidation = validarNomeProprietario(empresaForm.nome_proprietario);
+      if (!proprietarioValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Nome do Proprietário',
+          valor: empresaForm.nome_proprietario,
+          validationResult: proprietarioValidation
+        });
+        return;
+      }
+    }
+
+    // Validar campos de endereço da empresa (CRÍTICO - aparece na NFe)
+    if (empresaForm.endereco && empresaForm.endereco.trim() !== '') {
+      const enderecoValidation = validarEndereco(empresaForm.endereco, 'Endereço da Empresa');
+      if (!enderecoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Endereço da Empresa',
+          valor: empresaForm.endereco,
+          validationResult: enderecoValidation
+        });
+        return;
+      }
+    }
+
+    if (empresaForm.bairro && empresaForm.bairro.trim() !== '') {
+      const bairroValidation = validarBairro(empresaForm.bairro);
+      if (!bairroValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Bairro da Empresa',
+          valor: empresaForm.bairro,
+          validationResult: bairroValidation
+        });
+        return;
+      }
+    }
+
+    if (empresaForm.cidade && empresaForm.cidade.trim() !== '') {
+      const cidadeValidation = validarCidade(empresaForm.cidade);
+      if (!cidadeValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Cidade da Empresa',
+          valor: empresaForm.cidade,
+          validationResult: cidadeValidation
+        });
+        return;
+      }
+    }
+
+    if (empresaForm.complemento && empresaForm.complemento.trim() !== '') {
+      const complementoValidation = validarComplemento(empresaForm.complemento);
+      if (!complementoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Complemento da Empresa',
+          valor: empresaForm.complemento,
+          validationResult: complementoValidation
+        });
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -5283,6 +5404,34 @@ const ConfiguracoesPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Validação NFe */}
+      <NFeValidationModal
+        isOpen={nfeValidationModal.isOpen}
+        onClose={() => setNfeValidationModal(prev => ({ ...prev, isOpen: false }))}
+        campo={nfeValidationModal.campo}
+        valor={nfeValidationModal.valor}
+        validationResult={nfeValidationModal.validationResult}
+        onCorrect={(newValue) => {
+          // Aplicar correção baseada no campo
+          if (nfeValidationModal.campo === 'Razão Social da Empresa') {
+            setEmpresaForm(prev => ({ ...prev, razao_social: newValue }));
+          } else if (nfeValidationModal.campo === 'Nome Fantasia da Empresa') {
+            setEmpresaForm(prev => ({ ...prev, nome_fantasia: newValue }));
+          } else if (nfeValidationModal.campo === 'Nome do Proprietário') {
+            setEmpresaForm(prev => ({ ...prev, nome_proprietario: newValue }));
+          } else if (nfeValidationModal.campo === 'Endereço da Empresa') {
+            setEmpresaForm(prev => ({ ...prev, endereco: newValue }));
+          } else if (nfeValidationModal.campo === 'Bairro da Empresa') {
+            setEmpresaForm(prev => ({ ...prev, bairro: newValue }));
+          } else if (nfeValidationModal.campo === 'Cidade da Empresa') {
+            setEmpresaForm(prev => ({ ...prev, cidade: newValue }));
+          } else if (nfeValidationModal.campo === 'Complemento da Empresa') {
+            setEmpresaForm(prev => ({ ...prev, complemento: newValue }));
+          }
+          setNfeValidationModal(prev => ({ ...prev, isOpen: false }));
+        }}
+      />
     </div>
   );
 };

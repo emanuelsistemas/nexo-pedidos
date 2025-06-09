@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, Phone, Mail, Building, Save, AlertCircle, X, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
+import NFeValidationModal from '../../components/comum/NFeValidationModal';
+import { validarNomeCliente, validarObservacaoNFe, ValidationResult } from '../../utils/nfeValidation';
 
 
 
@@ -31,6 +33,19 @@ const UserNovoClienteSimples: React.FC = () => {
   // Observações
   const [observacaoNfe, setObservacaoNfe] = useState('');
   const [observacaoInterna, setObservacaoInterna] = useState('');
+
+  // Estados para validação NFe
+  const [nfeValidationModal, setNfeValidationModal] = useState<{
+    isOpen: boolean;
+    campo: string;
+    valor: string;
+    validationResult: ValidationResult;
+  }>({
+    isOpen: false,
+    campo: '',
+    valor: '',
+    validationResult: { isValid: true, errors: [] }
+  });
 
 
 
@@ -174,7 +189,7 @@ const UserNovoClienteSimples: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validações
+    // Validações básicas
     if (!nome.trim()) {
       showMessage('error', 'O nome do cliente é obrigatório');
       return;
@@ -188,6 +203,33 @@ const UserNovoClienteSimples: React.FC = () => {
     if (!validateEmails()) {
       showMessage('error', 'Um ou mais emails são inválidos');
       return;
+    }
+
+    // 🛡️ VALIDAÇÃO NFe - PREVENÇÃO NA ORIGEM
+    // Validar nome do cliente
+    const nomeValidation = validarNomeCliente(nome);
+    if (!nomeValidation.isValid) {
+      setNfeValidationModal({
+        isOpen: true,
+        campo: 'Nome do Cliente',
+        valor: nome,
+        validationResult: nomeValidation
+      });
+      return;
+    }
+
+    // Validar observação NFe (CRÍTICO - vai para informações adicionais da NFe)
+    if (observacaoNfe && observacaoNfe.trim() !== '') {
+      const observacaoValidation = validarObservacaoNFe(observacaoNfe);
+      if (!observacaoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Observação NFe',
+          valor: observacaoNfe,
+          validationResult: observacaoValidation
+        });
+        return;
+      }
     }
 
     try {
@@ -509,6 +551,24 @@ const UserNovoClienteSimples: React.FC = () => {
           )}
         </button>
       </form>
+
+      {/* Modal de Validação NFe */}
+      <NFeValidationModal
+        isOpen={nfeValidationModal.isOpen}
+        onClose={() => setNfeValidationModal(prev => ({ ...prev, isOpen: false }))}
+        campo={nfeValidationModal.campo}
+        valor={nfeValidationModal.valor}
+        validationResult={nfeValidationModal.validationResult}
+        onCorrect={(newValue) => {
+          // Aplicar correção baseada no campo
+          if (nfeValidationModal.campo === 'Nome do Cliente') {
+            setNome(newValue);
+          } else if (nfeValidationModal.campo === 'Observação NFe') {
+            setObservacaoNfe(newValue);
+          }
+          setNfeValidationModal(prev => ({ ...prev, isOpen: false }));
+        }}
+      />
     </div>
   );
 };

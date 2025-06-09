@@ -58,10 +58,11 @@ function downloadMesCompleto($input) {
             throw new Exception('Parâmetros obrigatórios não informados');
         }
 
-        $basePath = "../storage/xml/empresa_{$empresaId}";
+        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+        $basePath = "../storage/xml/empresa_{$empresaId}/producao";
 
         if (!is_dir($basePath)) {
-            throw new Exception('Pasta da empresa não encontrada');
+            throw new Exception('Pasta de PRODUÇÃO da empresa não encontrada');
         }
 
         // Criar nome do arquivo ZIP
@@ -157,10 +158,11 @@ function downloadMes($input) {
             throw new Exception('Parâmetros obrigatórios não informados');
         }
         
-        $sourcePath = "../storage/xml/empresa_{$empresaId}/{$tipo}/{$ano}/{$mes}";
-        
+        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+        $sourcePath = "../storage/xml/empresa_{$empresaId}/producao/{$tipo}/{$ano}/{$mes}";
+
         if (!is_dir($sourcePath)) {
-            throw new Exception('Pasta não encontrada');
+            throw new Exception('Pasta de PRODUÇÃO não encontrada');
         }
         
         // Verificar se existem arquivos XML
@@ -235,10 +237,11 @@ function downloadAno($input) {
             throw new Exception('Parâmetros obrigatórios não informados');
         }
         
-        $sourcePath = "../storage/xml/empresa_{$empresaId}/{$tipo}/{$ano}";
-        
+        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+        $sourcePath = "../storage/xml/empresa_{$empresaId}/producao/{$tipo}/{$ano}";
+
         if (!is_dir($sourcePath)) {
-            throw new Exception('Pasta não encontrada');
+            throw new Exception('Pasta de PRODUÇÃO não encontrada');
         }
         
         // Criar nome do arquivo ZIP

@@ -7,6 +7,8 @@ import { showMessage } from '../../utils/toast';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import Button from '../../components/comum/Button';
 import FotoGaleria from '../../components/comum/FotoGaleria';
+import NFeValidationModal from '../../components/comum/NFeValidationModal';
+import { validarNomeProduto, validarDescricaoProduto, ValidationResult } from '../../utils/nfeValidation';
 
 // Função debounce para otimizar chamadas de API
 const debounce = (func: Function, wait: number) => {
@@ -306,6 +308,19 @@ const ProdutosPage: React.FC = () => {
   // Estado para controlar quando o campo de quantidade de movimento está vazio
   const [quantidadeMovimentoVazia, setQuantidadeMovimentoVazia] = useState(false);
   const [isLoadingEstoque, setIsLoadingEstoque] = useState(false);
+
+  // Estados para validação NFe
+  const [nfeValidationModal, setNfeValidationModal] = useState<{
+    isOpen: boolean;
+    campo: string;
+    valor: string;
+    validationResult: ValidationResult;
+  }>({
+    isOpen: false,
+    campo: '',
+    valor: '',
+    validationResult: { isValid: true, errors: [] }
+  });
 
   useEffect(() => {
     loadGrupos();
@@ -1831,6 +1846,33 @@ const ProdutosPage: React.FC = () => {
       return;
     }
 
+    // 🛡️ VALIDAÇÃO NFe - PREVENÇÃO NA ORIGEM
+    // Validar nome do produto
+    const nomeValidation = validarNomeProduto(novoProduto.nome || '');
+    if (!nomeValidation.isValid) {
+      setNfeValidationModal({
+        isOpen: true,
+        campo: 'Nome do Produto',
+        valor: novoProduto.nome || '',
+        validationResult: nomeValidation
+      });
+      return;
+    }
+
+    // Validar descrição do produto (se preenchida)
+    if (novoProduto.descricao && novoProduto.descricao.trim() !== '') {
+      const descricaoValidation = validarDescricaoProduto(novoProduto.descricao);
+      if (!descricaoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Descrição do Produto',
+          valor: novoProduto.descricao,
+          validationResult: descricaoValidation
+        });
+        return;
+      }
+    }
+
     // Validar se o produto em promoção tem um valor de desconto maior que zero
     if (novoProduto.promocao) {
       if (!novoProduto.valor_desconto || novoProduto.valor_desconto <= 0) {
@@ -3183,15 +3225,33 @@ const ProdutosPage: React.FC = () => {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-2">
-                            Nome do Produto
+                            Nome do Produto <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
                             value={novoProduto.nome}
-                            onChange={(e) => setNovoProduto({ ...novoProduto, nome: e.target.value })}
+                            onChange={(e) => {
+                              const valor = e.target.value;
+                              setNovoProduto({ ...novoProduto, nome: valor });
+
+                              // Validação em tempo real (apenas visual)
+                              if (valor.trim() !== '') {
+                                const validation = validarNomeProduto(valor);
+                                if (!validation.isValid) {
+                                  // Adicionar classe de erro visual
+                                  e.target.classList.add('border-red-500');
+                                } else {
+                                  e.target.classList.remove('border-red-500');
+                                }
+                              }
+                            }}
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                            placeholder="Digite o nome do produto"
+                            placeholder="Digite o nome do produto (sem espaços extras ou caracteres especiais)"
+                            maxLength={120}
                           />
+                          <p className="text-xs text-gray-500 mt-1">
+                            ⚠️ Evite espaços no início/fim, espaços duplicados e caracteres especiais
+                          </p>
                         </div>
 
                         <div>
@@ -3280,11 +3340,29 @@ const ProdutosPage: React.FC = () => {
                           </label>
                           <textarea
                             value={novoProduto.descricao}
-                            onChange={(e) => setNovoProduto({ ...novoProduto, descricao: e.target.value })}
-                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            onChange={(e) => {
+                              const valor = e.target.value;
+                              setNovoProduto({ ...novoProduto, descricao: valor });
+
+                              // Validação em tempo real (apenas visual)
+                              if (valor.trim() !== '') {
+                                const validation = validarDescricaoProduto(valor);
+                                if (!validation.isValid) {
+                                  // Adicionar classe de erro visual
+                                  e.target.classList.add('border-red-500');
+                                } else {
+                                  e.target.classList.remove('border-red-500');
+                                }
+                              }
+                            }}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 resize-none"
                             rows={4}
-                            placeholder="Digite a descrição adicional do produto"
+                            placeholder="Digite a descrição adicional do produto (sem quebras de linha ou caracteres especiais)"
+                            maxLength={500}
                           />
+                          <p className="text-xs text-gray-500 mt-1">
+                            ⚠️ Evite quebras de linha, espaços extras e caracteres especiais
+                          </p>
                         </div>
 
                         {/* Campo de Estoque Inicial - apenas visível para novos produtos */}
@@ -4905,6 +4983,24 @@ const ProdutosPage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Modal de Validação NFe */}
+      <NFeValidationModal
+        isOpen={nfeValidationModal.isOpen}
+        onClose={() => setNfeValidationModal(prev => ({ ...prev, isOpen: false }))}
+        campo={nfeValidationModal.campo}
+        valor={nfeValidationModal.valor}
+        validationResult={nfeValidationModal.validationResult}
+        onCorrect={(newValue) => {
+          // Aplicar correção baseada no campo
+          if (nfeValidationModal.campo === 'Nome do Produto') {
+            setNovoProduto(prev => ({ ...prev, nome: newValue }));
+          } else if (nfeValidationModal.campo === 'Descrição do Produto') {
+            setNovoProduto(prev => ({ ...prev, descricao: newValue }));
+          }
+          setNfeValidationModal(prev => ({ ...prev, isOpen: false }));
+        }}
+      />
 
       <DeleteConfirmation
         isOpen={deleteConfirmation.isOpen}

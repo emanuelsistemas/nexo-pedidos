@@ -5112,7 +5112,8 @@ const ProdutosSection: React.FC<{
     quantidade: 1,
     valor_unitario: 0,
     valor_total: 0,
-    cfop_devolucao: '' // Campo para CFOP de devolução
+    cfop_devolucao: '', // Campo para CFOP de devolução
+    cfop_geral: '' // Campo para CFOP geral (editável)
   });
 
   // ✅ FUNÇÃO PARA RECALCULAR TOTAIS DE ICMS
@@ -5162,7 +5163,8 @@ const ProdutosSection: React.FC<{
       quantidade: 1,
       valor_unitario: precoFinal,
       valor_total: precoFinal,
-      cfop_devolucao: ''
+      cfop_devolucao: '',
+      cfop_geral: produto.cfop || '' // Preencher com CFOP do produto
     });
     setShowProdutoModal(false);
   };
@@ -5184,7 +5186,7 @@ const ProdutosSection: React.FC<{
 
       // ✅ TODOS OS DADOS FISCAIS DO CADASTRO DO PRODUTO (SEM FALLBACKS):
       ncm: produtoSelecionado.ncm,
-      cfop: finalidade === '4' && produtoForm.cfop_devolucao ? produtoForm.cfop_devolucao : produtoSelecionado.cfop,
+      cfop: finalidade === '4' && produtoForm.cfop_devolucao ? produtoForm.cfop_devolucao : (produtoForm.cfop_geral || produtoSelecionado.cfop),
       unidade: produtoSelecionado.unidade_medida?.sigla,
       ean: produtoSelecionado.codigo_barras, // ✅ EAN vem do codigo_barras
       origem_produto: produtoSelecionado.origem_produto,
@@ -5218,7 +5220,8 @@ const ProdutosSection: React.FC<{
       quantidade: 1,
       valor_unitario: 0,
       valor_total: 0,
-      cfop_devolucao: ''
+      cfop_devolucao: '',
+      cfop_geral: ''
     });
   };
 
@@ -5480,6 +5483,25 @@ const ProdutosSection: React.FC<{
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
               />
             </div>
+
+            {/* CFOP Geral - Só aparece quando finalidade NÃO for 4 */}
+            {finalidade !== '4' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  CFOP *
+                </label>
+                <input
+                  type="text"
+                  value={produtoForm.cfop_geral || ''}
+                  onChange={(e) => updateProdutoForm('cfop_geral', e.target.value)}
+                  placeholder="Ex: 5102"
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  💡 Vem do cadastro do produto, mas pode ser editado
+                </p>
+              </div>
+            )}
 
             {/* CFOP de Devolução - Só aparece quando finalidade for 4 */}
             {finalidade === '4' && (

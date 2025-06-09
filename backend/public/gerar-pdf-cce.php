@@ -2,9 +2,9 @@
 /**
  * Endpoint para gerar PDF da Carta de Correção Eletrônica (CCe)
  * 
- * ESTRUTURA ORGANIZADA:
- * - XML: backend/storage/xml/empresa_id/CCe/2025/06/chave_cce_001.xml
- * - PDF: backend/storage/pdf/empresa_id/CCe/2025/06/chave_cce_001.pdf
+ * ESTRUTURA ORGANIZADA COM MODELO:
+ * - XML: backend/storage/xml/empresa_id/{ambiente}/55/CCe/2025/06/chave_cce_001.xml
+ * - PDF: backend/storage/pdf/empresa_id/{ambiente}/55/CCe/2025/06/chave_cce_001.pdf
  */
 
 header('Content-Type: application/json');
@@ -278,8 +278,25 @@ try {
 
     error_log("📄 PDF CCe - PDF gerado com sucesso - " . strlen($pdfContent) . " bytes");
 
-    // 12. Salvar PDF na estrutura organizada
-    $pdfCceDir = "../storage/pdf/empresa_{$empresaId}/CCe/" . date('Y/m');
+    // 12. Salvar PDF na estrutura organizada COM AMBIENTE
+    // Buscar ambiente da empresa
+    $configData = json_decode(file_get_contents("php://input"), true);
+    $ambienteTexto = 'homologacao'; // padrão
+
+    // Buscar configuração real da empresa para determinar ambiente
+    try {
+        $response = file_get_contents("http://localhost/backend/public/get-empresa-config.php?empresa_id={$empresaId}");
+        $config = json_decode($response, true);
+        if ($config && isset($config['data']['nfe_config']['ambiente'])) {
+            $ambienteTexto = $config['data']['nfe_config']['ambiente'];
+        }
+    } catch (Exception $e) {
+        error_log("Aviso: Não foi possível determinar ambiente, usando homologação");
+    }
+
+    // 🔥 NOVA ESTRUTURA COM MODELO DE DOCUMENTO
+    $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
+    $pdfCceDir = "../storage/pdf/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe/" . date('Y/m');
     if (!is_dir($pdfCceDir)) {
         mkdir($pdfCceDir, 0755, true);
         error_log("📁 PDF CCe - Diretório criado: {$pdfCceDir}");

@@ -3,6 +3,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Phone, Mail, MapPin, AlertCircle, X, Building, Plus, Edit, Trash2, Check, User, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
+import NFeValidationModal from '../../components/comum/NFeValidationModal';
+import {
+  validarNomeCliente,
+  validarRazaoSocial,
+  validarNomeFantasia,
+  validarObservacaoNFe,
+  validarEndereco,
+  validarBairro,
+  validarCidade,
+  validarComplemento,
+  ValidationResult
+} from '../../utils/nfeValidation';
 
 interface Telefone {
   numero: string;
@@ -132,6 +144,19 @@ const ClientesPage: React.FC = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [temPedidosVinculados, setTemPedidosVinculados] = useState(false);
+
+  // Estados para validação NFe
+  const [nfeValidationModal, setNfeValidationModal] = useState<{
+    isOpen: boolean;
+    campo: string;
+    valor: string;
+    validationResult: ValidationResult;
+  }>({
+    isOpen: false,
+    campo: '',
+    valor: '',
+    validationResult: { isValid: true, errors: [] }
+  });
 
   useEffect(() => {
     loadClientes();
@@ -751,6 +776,116 @@ const ClientesPage: React.FC = () => {
     e.preventDefault();
 
     if (!validateForm()) return;
+
+    // 🛡️ VALIDAÇÃO NFe - PREVENÇÃO NA ORIGEM
+    // Validar nome do cliente
+    if (formData.nome && formData.nome.trim() !== '') {
+      const nomeValidation = validarNomeCliente(formData.nome);
+      if (!nomeValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Nome do Cliente',
+          valor: formData.nome,
+          validationResult: nomeValidation
+        });
+        return;
+      }
+    }
+
+    // Validar razão social (se CNPJ)
+    if (formData.tipo_documento === 'CNPJ' && formData.razao_social && formData.razao_social.trim() !== '') {
+      const razaoValidation = validarRazaoSocial(formData.razao_social);
+      if (!razaoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Razão Social',
+          valor: formData.razao_social,
+          validationResult: razaoValidation
+        });
+        return;
+      }
+    }
+
+    // Validar nome fantasia (se preenchido)
+    if (formData.nome_fantasia && formData.nome_fantasia.trim() !== '') {
+      const fantasiaValidation = validarNomeFantasia(formData.nome_fantasia);
+      if (!fantasiaValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Nome Fantasia',
+          valor: formData.nome_fantasia,
+          validationResult: fantasiaValidation
+        });
+        return;
+      }
+    }
+
+    // Validar observação NFe (CRÍTICO - vai para informações adicionais da NFe)
+    if (formData.observacao_nfe && formData.observacao_nfe.trim() !== '') {
+      const observacaoValidation = validarObservacaoNFe(formData.observacao_nfe);
+      if (!observacaoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Observação NFe',
+          valor: formData.observacao_nfe,
+          validationResult: observacaoValidation
+        });
+        return;
+      }
+    }
+
+    // Validar campos de endereço
+    if (formData.endereco && formData.endereco.trim() !== '') {
+      const enderecoValidation = validarEndereco(formData.endereco, 'Endereço');
+      if (!enderecoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Endereço',
+          valor: formData.endereco,
+          validationResult: enderecoValidation
+        });
+        return;
+      }
+    }
+
+    if (formData.bairro && formData.bairro.trim() !== '') {
+      const bairroValidation = validarBairro(formData.bairro);
+      if (!bairroValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Bairro',
+          valor: formData.bairro,
+          validationResult: bairroValidation
+        });
+        return;
+      }
+    }
+
+    if (formData.cidade && formData.cidade.trim() !== '') {
+      const cidadeValidation = validarCidade(formData.cidade);
+      if (!cidadeValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Cidade',
+          valor: formData.cidade,
+          validationResult: cidadeValidation
+        });
+        return;
+      }
+    }
+
+    if (formData.complemento && formData.complemento.trim() !== '') {
+      const complementoValidation = validarComplemento(formData.complemento);
+      if (!complementoValidation.isValid) {
+        setNfeValidationModal({
+          isOpen: true,
+          campo: 'Complemento',
+          valor: formData.complemento,
+          validationResult: complementoValidation
+        });
+        return;
+      }
+    }
 
     setIsSubmitting(true);
 
@@ -2606,6 +2741,36 @@ const ClientesPage: React.FC = () => {
           </>
         )}
       </AnimatePresence>
+
+      {/* Modal de Validação NFe */}
+      <NFeValidationModal
+        isOpen={nfeValidationModal.isOpen}
+        onClose={() => setNfeValidationModal(prev => ({ ...prev, isOpen: false }))}
+        campo={nfeValidationModal.campo}
+        valor={nfeValidationModal.valor}
+        validationResult={nfeValidationModal.validationResult}
+        onCorrect={(newValue) => {
+          // Aplicar correção baseada no campo
+          if (nfeValidationModal.campo === 'Nome do Cliente') {
+            setFormData(prev => ({ ...prev, nome: newValue }));
+          } else if (nfeValidationModal.campo === 'Razão Social') {
+            setFormData(prev => ({ ...prev, razao_social: newValue }));
+          } else if (nfeValidationModal.campo === 'Nome Fantasia') {
+            setFormData(prev => ({ ...prev, nome_fantasia: newValue }));
+          } else if (nfeValidationModal.campo === 'Observação NFe') {
+            setFormData(prev => ({ ...prev, observacao_nfe: newValue }));
+          } else if (nfeValidationModal.campo === 'Endereço') {
+            setFormData(prev => ({ ...prev, endereco: newValue }));
+          } else if (nfeValidationModal.campo === 'Bairro') {
+            setFormData(prev => ({ ...prev, bairro: newValue }));
+          } else if (nfeValidationModal.campo === 'Cidade') {
+            setFormData(prev => ({ ...prev, cidade: newValue }));
+          } else if (nfeValidationModal.campo === 'Complemento') {
+            setFormData(prev => ({ ...prev, complemento: newValue }));
+          }
+          setNfeValidationModal(prev => ({ ...prev, isOpen: false }));
+        }}
+      />
 
       {/* Botão Flutuante para Novo Cliente */}
       <button

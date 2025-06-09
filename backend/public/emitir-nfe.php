@@ -1155,8 +1155,11 @@ try {
     // Usar chave real se encontrada, senão manter a original
     $chaveParaSalvar = $chaveReal ?: $chave;
 
-    // Salvar XML em arquivo - NOVA ESTRUTURA ORGANIZADA
-    $xmlDir = "../storage/xml/empresa_{$empresaId}/Autorizados/" . date('Y/m');
+    // 🔥 NOVA ESTRUTURA COM MODELO DE DOCUMENTO
+    // Salvar XML em arquivo - ESTRUTURA ORGANIZADA COM AMBIENTE E MODELO
+    $ambienteTexto = $ambiente == 1 ? 'producao' : 'homologacao';
+    $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
+    $xmlDir = "../storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Autorizados/" . date('Y/m');
     if (!is_dir($xmlDir)) {
         mkdir($xmlDir, 0755, true);
         error_log("📁 Diretório de NFes autorizadas criado: {$xmlDir}");
@@ -1200,8 +1203,8 @@ try {
 
         error_log("PDF: PDF gerado com sucesso - " . strlen($pdfContent) . " bytes");
 
-        // Salvar PDF - NOVA ESTRUTURA ORGANIZADA (igual aos XMLs)
-        $pdfDir = "../storage/pdf/empresa_{$empresaId}/Autorizados/" . date('Y/m');
+        // Salvar PDF - ESTRUTURA ORGANIZADA COM AMBIENTE E MODELO (igual aos XMLs)
+        $pdfDir = "../storage/pdf/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Autorizados/" . date('Y/m');
         if (!is_dir($pdfDir)) {
             mkdir($pdfDir, 0755, true);
             error_log("PDF: Diretório de PDFs autorizados criado: {$pdfDir}");

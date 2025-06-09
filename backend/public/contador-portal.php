@@ -62,12 +62,14 @@ function buscarEmpresa($input) {
 
         $empresa = $empresas[$cnpjLimpo];
 
-        // Verificar se existe pasta de XMLs para esta empresa
+        // 🔥 NOVA ESTRUTURA COM MODELO DE DOCUMENTO
+        // Verificar se existe pasta de XMLs DE PRODUÇÃO para esta empresa
         $empresaId = $empresa['id'];
-        $xmlPath = "../storage/xml/empresa_{$empresaId}";
+        $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
+        $xmlPath = "../storage/xml/empresa_{$empresaId}/producao/{$modelo}";
 
         if (!is_dir($xmlPath)) {
-            throw new Exception('Nenhum arquivo XML encontrado para esta empresa');
+            throw new Exception('Nenhum arquivo XML de PRODUÇÃO encontrado para esta empresa');
         }
 
         echo json_encode([
@@ -101,15 +103,17 @@ function listarEstrutura($input) {
             throw new Exception('ID da empresa não informado');
         }
         
-        $xmlPath = "../storage/xml/empresa_{$empresaId}";
-        
+        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+        $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
+        $xmlPath = "../storage/xml/empresa_{$empresaId}/producao/{$modelo}";
+
         if (!is_dir($xmlPath)) {
-            throw new Exception('Pasta de XMLs não encontrada');
+            throw new Exception('Pasta de XMLs de PRODUÇÃO não encontrada');
         }
-        
+
         $estrutura = [];
         $tipos = ['Autorizados', 'Cancelados', 'CCe'];
-        
+
         foreach ($tipos as $tipo) {
             $tipoPath = "{$xmlPath}/{$tipo}";
             
@@ -202,10 +206,12 @@ function listarArquivos($input) {
             throw new Exception('Parâmetros obrigatórios não informados');
         }
         
-        $path = "../storage/xml/empresa_{$empresaId}/{$tipo}/{$ano}/{$mes}";
-        
+        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
+        $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
+        $path = "../storage/xml/empresa_{$empresaId}/producao/{$modelo}/{$tipo}/{$ano}/{$mes}";
+
         if (!is_dir($path)) {
-            throw new Exception('Pasta não encontrada');
+            throw new Exception('Pasta de PRODUÇÃO não encontrada');
         }
         
         $arquivos = [];

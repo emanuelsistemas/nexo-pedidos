@@ -29,21 +29,37 @@ try {
         throw new Exception('empresa_id inválido');
     }
     
-    // Determinar diretório base e extensão por tipo
+    // Buscar ambiente da empresa para determinar diretório correto
+    $ambienteTexto = 'homologacao'; // padrão
+    try {
+        $response = file_get_contents("http://localhost/backend/public/get-empresa-config.php?empresa_id={$empresaId}");
+        $config = json_decode($response, true);
+        if ($config && isset($config['data']['nfe_config']['ambiente'])) {
+            $ambienteTexto = $config['data']['nfe_config']['ambiente'];
+        }
+    } catch (Exception $e) {
+        error_log("Aviso: Não foi possível determinar ambiente, usando homologação");
+    }
+
+    // 🔥 NOVA ESTRUTURA COM MODELO DE DOCUMENTO
+    // Determinar modelo de documento (55=NFe, 65=NFCe)
+    $modelo = '55'; // Por padrão NFe, futuramente será dinâmico para NFCe
+
+    // Determinar diretório base e extensão por tipo COM AMBIENTE E MODELO
     if (in_array($type, ['xml_cce', 'pdf_cce'])) {
         // Para CCe
         $baseType = str_replace('_cce', '', $type);
-        $baseDir = "../storage/{$baseType}/empresa_{$empresaId}/CCe";
+        $baseDir = "../storage/{$baseType}/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe";
         $extensao = $baseType;
         $sufixoArquivo = '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT);
     } elseif ($type === 'espelho') {
         // Para Espelho NFe
-        $baseDir = "../storage/espelhos/{$empresaId}";
+        $baseDir = "../storage/espelhos/{$empresaId}/{$ambienteTexto}/{$modelo}";
         $extensao = 'pdf';
         $sufixoArquivo = '';
     } else {
         // Para NFe normal
-        $baseDir = "../storage/{$type}/empresa_{$empresaId}/Autorizados";
+        $baseDir = "../storage/{$type}/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Autorizados";
         $extensao = $type;
         $sufixoArquivo = '';
     }

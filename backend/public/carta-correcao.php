@@ -428,8 +428,11 @@ try {
     // 15. SALVAR AMBOS OS XMLs DA CCe (ORIGINAL E RESPOSTA) - SOLUÇÃO CORRETA
     error_log("💾 CCe - Salvando XMLs original e resposta...");
 
-    // Diretório para XMLs de CCe por empresa - ESTRUTURA ORGANIZADA
-    $xmlCceDir = "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/CCe/" . date('Y/m');
+    // 🔥 NOVA ESTRUTURA COM MODELO DE DOCUMENTO
+    // Diretório para XMLs de CCe por empresa - ESTRUTURA ORGANIZADA COM AMBIENTE E MODELO
+    $ambienteTexto = $nfeConfig['ambiente_codigo'] == 1 ? 'producao' : 'homologacao';
+    $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
+    $xmlCceDir = "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe/" . date('Y/m');
     if (!is_dir($xmlCceDir)) {
         if (!mkdir($xmlCceDir, 0755, true)) {
             error_log("❌ Erro ao criar diretório de CCe: {$xmlCceDir}");
