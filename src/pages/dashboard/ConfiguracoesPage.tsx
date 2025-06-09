@@ -280,6 +280,13 @@ const ConfiguracoesPage: React.FC = () => {
   const [showRemoveCertificadoModal, setShowRemoveCertificadoModal] = useState(false);
   const [ambienteNFe, setAmbienteNFe] = useState<'1' | '2'>('2'); // 1=Produção, 2=Homologação
 
+  // Estados para CSC NFCe
+  const [cscHomologacao, setCscHomologacao] = useState('');
+  const [cscIdHomologacao, setCscIdHomologacao] = useState('');
+  const [cscProducao, setCscProducao] = useState('');
+  const [cscIdProducao, setCscIdProducao] = useState('');
+  const [isSavingCsc, setIsSavingCsc] = useState(false);
+
   useEffect(() => {
     const loadDataWithLoading = async () => {
       await loadData();
@@ -750,6 +757,26 @@ const ConfiguracoesPage: React.FC = () => {
           if (!insertError) {
             setAmbienteNFe('2'); // Homologação
           }
+        }
+
+        // Carregar configuração CSC NFCe da tabela empresas
+        const { data: empresaData } = await supabase
+          .from('empresas')
+          .select('csc_homologacao, csc_id_homologacao, csc_producao, csc_id_producao')
+          .eq('id', usuarioData.empresa_id)
+          .single();
+
+        if (empresaData) {
+          setCscHomologacao(empresaData.csc_homologacao || '');
+          setCscIdHomologacao(empresaData.csc_id_homologacao?.toString() || '');
+          setCscProducao(empresaData.csc_producao || '');
+          setCscIdProducao(empresaData.csc_id_producao?.toString() || '');
+        } else {
+          // Limpar estados se não houver dados
+          setCscHomologacao('');
+          setCscIdHomologacao('');
+          setCscProducao('');
+          setCscIdProducao('');
         }
       }
     });
@@ -1949,6 +1976,59 @@ const ConfiguracoesPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao salvar ambiente NFe:', error);
       showMessage('error', 'Erro ao salvar ambiente NFe');
+    }
+  };
+
+  // Função para salvar configuração CSC NFCe
+  const handleSalvarCscNfce = async () => {
+    try {
+      setIsSavingCsc(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Validações
+      if (cscHomologacao && !cscIdHomologacao) {
+        showMessage('error', 'CSC ID de homologação é obrigatório quando CSC de homologação for informado');
+        return;
+      }
+
+      if (cscProducao && !cscIdProducao) {
+        showMessage('error', 'CSC ID de produção é obrigatório quando CSC de produção for informado');
+        return;
+      }
+
+      // Preparar dados para salvar na tabela empresas
+      const cscData = {
+        csc_homologacao: cscHomologacao || null,
+        csc_id_homologacao: cscIdHomologacao ? parseInt(cscIdHomologacao) : null,
+        csc_producao: cscProducao || null,
+        csc_id_producao: cscIdProducao ? parseInt(cscIdProducao) : null
+      };
+
+      // Atualizar dados CSC na tabela empresas
+      const { error } = await supabase
+        .from('empresas')
+        .update(cscData)
+        .eq('id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      showMessage('success', 'Configuração CSC para NFCe salva com sucesso!');
+
+    } catch (error) {
+      console.error('Erro ao salvar CSC NFCe:', error);
+      showMessage('error', 'Erro ao salvar configuração CSC');
+    } finally {
+      setIsSavingCsc(false);
     }
   };
 
@@ -3894,6 +3974,138 @@ const ConfiguracoesPage: React.FC = () => {
                         <li>• O sistema extrairá automaticamente a data de validade</li>
                         <li>• Você será notificado quando o certificado estiver próximo do vencimento</li>
                       </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Configuração CSC para NFCe */}
+                <div className="mt-8">
+                  <h3 className="text-lg font-medium text-white mb-4">CSC para NFCe</h3>
+
+                  <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+                    <div className="space-y-6">
+                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                        <h4 className="text-blue-400 font-medium mb-2">ℹ️ Sobre o CSC (Código de Segurança do Contribuinte)</h4>
+                        <ul className="text-sm text-gray-300 space-y-1">
+                          <li>• O CSC é <strong>obrigatório</strong> para emissão de NFCe (modelo 65)</li>
+                          <li>• Deve ser solicitado na SEFAZ do seu estado</li>
+                          <li>• Códigos diferentes para homologação e produção</li>
+                          <li>• Usado para gerar o QR Code da NFCe automaticamente</li>
+                          <li>• Formato: até 36 caracteres alfanuméricos</li>
+                        </ul>
+                      </div>
+
+                      {/* CSC Homologação */}
+                      <div>
+                        <h4 className="text-orange-400 font-medium mb-3">🧪 CSC para Homologação</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              CSC Homologação
+                            </label>
+                            <input
+                              type="text"
+                              value={cscHomologacao}
+                              onChange={(e) => setCscHomologacao(e.target.value.slice(0, 36))}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="Digite o CSC de homologação"
+                              maxLength={36}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Máximo 36 caracteres ({cscHomologacao.length}/36)
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              CSC ID Homologação
+                            </label>
+                            <input
+                              type="number"
+                              value={cscIdHomologacao}
+                              onChange={(e) => setCscIdHomologacao(e.target.value)}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="Ex: 1"
+                              min="1"
+                              max="999"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Identificador numérico (1-999)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* CSC Produção */}
+                      <div>
+                        <h4 className="text-green-400 font-medium mb-3">🚀 CSC para Produção</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              CSC Produção
+                            </label>
+                            <input
+                              type="text"
+                              value={cscProducao}
+                              onChange={(e) => setCscProducao(e.target.value.slice(0, 36))}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="Digite o CSC de produção"
+                              maxLength={36}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Máximo 36 caracteres ({cscProducao.length}/36)
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              CSC ID Produção
+                            </label>
+                            <input
+                              type="number"
+                              value={cscIdProducao}
+                              onChange={(e) => setCscIdProducao(e.target.value)}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="Ex: 1"
+                              min="1"
+                              max="999"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Identificador numérico (1-999)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botão Salvar */}
+                      <div className="pt-2">
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={handleSalvarCscNfce}
+                          disabled={isSavingCsc}
+                          className="w-full md:w-auto"
+                        >
+                          {isSavingCsc ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                              Salvando...
+                            </>
+                          ) : (
+                            <>
+                              💾 Salvar Configuração CSC
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
+                      <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+                        <h4 className="text-yellow-400 font-medium mb-2">⚠️ Importante</h4>
+                        <ul className="text-sm text-gray-300 space-y-1">
+                          <li>• Configure primeiro o CSC de <strong>homologação</strong> para testes</li>
+                          <li>• Só configure o CSC de <strong>produção</strong> quando estiver pronto para emitir NFCe oficiais</li>
+                          <li>• Mantenha esses códigos em segurança - são únicos da sua empresa</li>
+                          <li>• Em caso de dúvidas, consulte a SEFAZ do seu estado</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>

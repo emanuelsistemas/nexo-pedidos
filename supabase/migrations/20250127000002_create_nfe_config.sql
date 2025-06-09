@@ -3,9 +3,16 @@ CREATE TABLE IF NOT EXISTS nfe_config (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
     ambiente VARCHAR(20) NOT NULL DEFAULT 'homologacao' CHECK (ambiente IN ('homologacao', 'producao')),
+
+    -- Campos CSC para NFCe (Código de Segurança do Contribuinte)
+    csc_homologacao VARCHAR(36) NULL,
+    csc_id_homologacao INTEGER NULL,
+    csc_producao VARCHAR(36) NULL,
+    csc_id_producao INTEGER NULL,
+
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+
     -- Garantir que cada empresa tenha apenas uma configuração
     UNIQUE(empresa_id)
 );
