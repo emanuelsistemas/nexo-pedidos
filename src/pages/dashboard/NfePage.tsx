@@ -278,34 +278,100 @@ const NfePage: React.FC = () => {
 
 
 
-  const handleReenviarEmail = (nfe: NFe) => {
+  const handleReenviarEmail = async (nfe: NFe) => {
     if (nfe.status_nfe !== 'autorizada') {
       showToast('Apenas NFe autorizadas podem ter email reenviado', 'error');
       return;
     }
 
-    const email = prompt(
-      `REENVIAR EMAIL DA NFe\n\n` +
-      `NFe nº ${nfe.numero_documento}\n` +
-      `Cliente: ${nfe.nome_cliente}\n\n` +
-      `Digite o email de destino:`
-    );
+    try {
+      // Obter empresa_id do usuário logado
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user?.id)
+        .single();
 
-    if (email && email.includes('@')) {
+      if (!usuarioData?.empresa_id) {
+        showToast('Empresa não identificada', 'error');
+        return;
+      }
+
+      // Buscar emails do cliente da NFe
+      // Primeiro, buscar dados completos da NFe para obter documento do cliente
+      const { data: nfeCompleta } = await supabase
+        .from('pdv')
+        .select('documento_cliente')
+        .eq('id', nfe.id)
+        .single();
+
+      const documentoCliente = nfeCompleta?.documento_cliente;
+
+      if (!documentoCliente) {
+        showToast('Documento do cliente não encontrado na NFe', 'error');
+        return;
+      }
+
+      const { data: clienteData } = await supabase
+        .from('clientes')
+        .select('emails')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('documento', documentoCliente)
+        .single();
+
+      const emailsCliente = clienteData?.emails || [];
+
+      if (emailsCliente.length === 0) {
+        showToast('Nenhum email cadastrado para este cliente', 'error');
+        return;
+      }
+
       const confirmacao = confirm(
-        `📧 CONFIRMAR REENVIO\n\n` +
-        `NFe: ${nfe.numero_documento}\n` +
-        `Email: ${email}\n\n` +
-        `Deseja reenviar o XML e DANFE por email?`
+        `📧 REENVIAR EMAIL DA NFe\n\n` +
+        `NFe nº ${nfe.numero_documento}\n` +
+        `Cliente: ${nfe.nome_cliente}\n` +
+        `Emails: ${emailsCliente.join(', ')}\n\n` +
+        `Deseja reenviar o XML e DANFE para todos os emails cadastrados?`
       );
 
       if (confirmacao) {
-        // TODO: Implementar chamada para API de reenvio de email
-        showToast(`Funcionalidade de reenvio de email em desenvolvimento`, 'info');
+        showToast('Enviando email...', 'info');
 
+        // Chamar API de reenvio de email
+        const response = await fetch('/backend/public/enviar-nfe-email.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            empresa_id: usuarioData.empresa_id,
+            chave_nfe: nfe.chave_nfe,
+            emails: emailsCliente,
+            nfe_data: {
+              numero: nfe.numero_documento,
+              serie: nfe.serie_documento || 1,
+              valor_total: nfe.valor_total,
+              cliente_nome: nfe.nome_cliente,
+              empresa_nome: 'Sistema Nexo'
+            }
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            showToast(`Email reenviado com sucesso para: ${emailsCliente.join(', ')}`, 'success');
+          } else {
+            showToast(`Erro ao reenviar email: ${result.error}`, 'error');
+          }
+        } else {
+          showToast('Erro na comunicação com o servidor', 'error');
+        }
       }
-    } else if (email !== null) {
-      showToast('Digite um email válido', 'error');
+    } catch (error) {
+      console.error('Erro ao reenviar email:', error);
+      showToast(`Erro ao reenviar email: ${error.message}`, 'error');
     }
   };
 
@@ -1365,6 +1431,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       { id: 'geracao', label: 'Gerando XML da NFe', status: 'pending', message: '' },
       { id: 'sefaz', label: 'Enviando para SEFAZ', status: 'pending', message: '' },
       { id: 'banco', label: 'Salvando no banco de dados', status: 'pending', message: '' },
+      { id: 'email', label: 'Enviando por email', status: 'pending', message: '' },
       { id: 'finalizacao', label: 'Finalizando processo', status: 'pending', message: '' }
     ]);
     setLogs([]);
@@ -3000,6 +3067,57 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       // Marcar NFe como emitida
       setNfeEmitida(true);
 
+      // ETAPA 5: ENVIO POR EMAIL
+      updateStep('email', 'loading');
+      addLog('📧 Iniciando envio por email...');
+
+      const emailsDestinatario = nfeData.destinatario.emails || [];
+      if (emailsDestinatario.length > 0) {
+        addLog(`📧 Emails encontrados: ${emailsDestinatario.join(', ')}`);
+
+        try {
+          // Enviar email com XML e PDF
+          const emailResponse = await fetch('/backend/public/enviar-nfe-email.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              empresa_id: usuarioData.empresa_id,
+              chave_nfe: result.data.chave,
+              emails: emailsDestinatario,
+              nfe_data: {
+                numero: result.data.numero_nfe || nfeData.identificacao.numero,
+                serie: nfeData.identificacao.serie,
+                valor_total: nfeData.totais.valor_total,
+                cliente_nome: nfeData.destinatario.nome,
+                empresa_nome: nfeData.empresa?.name || 'Sistema Nexo'
+              }
+            })
+          });
+
+          if (emailResponse.ok) {
+            const emailResult = await emailResponse.json();
+            if (emailResult.success) {
+              addLog(`✅ Email enviado com sucesso para: ${emailsDestinatario.join(', ')}`);
+              updateStep('email', 'success', `Enviado para ${emailsDestinatario.length} email(s)`);
+            } else {
+              addLog(`⚠️ Falha no envio de email: ${emailResult.error}`);
+              updateStep('email', 'error', 'Falha no envio');
+            }
+          } else {
+            addLog('⚠️ Erro na comunicação com serviço de email');
+            updateStep('email', 'error', 'Erro na comunicação');
+          }
+        } catch (emailError) {
+          addLog(`⚠️ Erro ao enviar email: ${emailError.message}`);
+          updateStep('email', 'error', 'Erro no envio');
+        }
+      } else {
+        addLog('ℹ️ Nenhum email cadastrado para o destinatário');
+        updateStep('email', 'success', 'Nenhum email cadastrado');
+      }
+
       addLog('✅ NFe emitida com sucesso!');
       addLog(`Chave: ${result.data.chave}`);
       addLog(`Protocolo: ${result.data.protocolo || 'N/A'}`);
@@ -4163,6 +4281,27 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 </button>
               </div>
             </div>
+
+            {/* Seção de Emails - Só aparece quando há emails */}
+            {nfeData.destinatario.emails && nfeData.destinatario.emails.length > 0 && (
+              <div className="p-4 border-b border-gray-800 bg-gray-800/30">
+                <h4 className="text-sm font-medium text-white mb-2 flex items-center gap-2">
+                  <Mail size={16} className="text-blue-400" />
+                  Emails para Envio
+                </h4>
+                <div className="space-y-1">
+                  {nfeData.destinatario.emails.map((email, index) => (
+                    <div key={index} className="flex items-center gap-2 text-sm">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0"></div>
+                      <span className="text-gray-300">{email}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  📧 XML e DANFE serão enviados automaticamente para estes emails após a emissão
+                </p>
+              </div>
+            )}
 
             {/* Logs Area - Dividida em duas seções */}
             {showLogs && (

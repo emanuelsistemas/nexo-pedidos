@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFe - {{numero_nfe}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 18px;
+            margin-bottom: 25px;
+            color: #2c3e50;
+        }
+        
+        .nfe-info {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 4px solid #667eea;
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 8px;
+        }
+        
+        .nfe-info h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+        
+        .info-value {
+            font-size: 16px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        
+        .attachments {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            text-align: center;
+        }
+        
+        .attachments h4 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        
+        .attachment-list {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .attachment-item {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px 20px;
+            text-align: center;
+            min-width: 120px;
+            transition: all 0.3s ease;
+        }
+        
+        .attachment-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .attachment-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .attachment-name {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        
+        .attachment-desc {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        
+        .important-note {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .important-note h4 {
+            color: #856404;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .important-note p {
+            color: #856404;
+            margin: 0;
+            font-size: 14px;
+        }
+        
+        .footer {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .footer h4 {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .footer p {
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        
+        .footer .contact-info {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #34495e;
+        }
+        
+        .footer .contact-info p {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .legal-text {
+            font-size: 11px;
+            color: #6c757d;
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                margin: 0;
+                box-shadow: none;
+            }
+            
+            .header, .content, .footer {
+                padding: 20px;
+            }
+            
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .attachment-list {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📄 Nota Fiscal Eletrônica</h1>
+            <div class="subtitle">Documento Fiscal Autorizado pela SEFAZ</div>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <div class="greeting">
+                Olá, <strong>{{cliente_nome}}</strong>!
+            </div>
+            
+            <p>Esperamos que esteja bem! Enviamos em anexo a <strong>Nota Fiscal Eletrônica (NFe)</strong> referente à sua compra realizada em nossa empresa.</p>
+            
+            <!-- NFe Information -->
+            <div class="nfe-info">
+                <h3>📋 Informações da NFe</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Número da NFe</div>
+                        <div class="info-value">{{numero_nfe}}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Série</div>
+                        <div class="info-value">{{serie_nfe}}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Data de Emissão</div>
+                        <div class="info-value">{{data_emissao}}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Valor Total</div>
+                        <div class="info-value">R$ {{valor_total}}</div>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Chave de Acesso</div>
+                    <div class="info-value" style="font-family: monospace; font-size: 14px; word-break: break-all;">{{chave_nfe}}</div>
+                </div>
+            </div>
+            
+            <!-- Attachments -->
+            <div class="attachments">
+                <h4>📎 Arquivos em Anexo</h4>
+                <div class="attachment-list">
+                    <div class="attachment-item">
+                        <div class="attachment-icon">📄</div>
+                        <div class="attachment-name">DANFE</div>
+                        <div class="attachment-desc">Documento Auxiliar (PDF)</div>
+                    </div>
+                    <div class="attachment-item">
+                        <div class="attachment-icon">🔗</div>
+                        <div class="attachment-name">XML</div>
+                        <div class="attachment-desc">Arquivo Fiscal (XML)</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Important Note -->
+            <div class="important-note">
+                <h4>⚠️ Importante</h4>
+                <p><strong>Guarde estes arquivos:</strong> O XML e o PDF são documentos fiscais oficiais. Mantenha-os arquivados para fins contábeis e fiscais. O XML pode ser usado para escrituração fiscal e o PDF serve como comprovante da operação.</p>
+            </div>
+            
+            <p>Em caso de dúvidas sobre esta NFe ou sobre os produtos/serviços adquiridos, entre em contato conosco através dos canais disponíveis abaixo.</p>
+            
+            <p style="margin-top: 25px;">Agradecemos pela sua preferência!</p>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <h4>{{empresa_nome}}</h4>
+            <p>{{empresa_endereco}}</p>
+            <p>CNPJ: {{empresa_cnpj}}</p>
+            
+            <div class="contact-info">
+                <p><strong>📞 Contato:</strong> {{empresa_telefone}}</p>
+                <p><strong>📧 E-mail:</strong> {{empresa_email}}</p>
+                <p><strong>🌐 Website:</strong> {{empresa_website}}</p>
+            </div>
+        </div>
+        
+        <!-- Legal Text -->
+        <div class="legal-text">
+            <p>Esta NFe foi emitida de acordo com a legislação fiscal brasileira e autorizada pela SEFAZ. 
+            Este e-mail foi enviado automaticamente pelo Sistema Nexo NFe. 
+            Para verificar a autenticidade deste documento, consulte a chave de acesso no site da SEFAZ.</p>
+        </div>
+    </div>
+</body>
+</html>

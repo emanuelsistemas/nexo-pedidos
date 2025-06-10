@@ -1,0 +1,62 @@
+================================================================================
+                          NOTA FISCAL ELETRÔNICA (NFe)
+                      Documento Fiscal Autorizado pela SEFAZ
+================================================================================
+
+Olá, {{cliente_nome}}!
+
+Esperamos que esteja bem! Enviamos em anexo a Nota Fiscal Eletrônica (NFe) 
+referente à sua compra realizada em nossa empresa.
+
+================================================================================
+                            INFORMAÇÕES DA NFe
+================================================================================
+
+Número da NFe: {{numero_nfe}}
+Série: {{serie_nfe}}
+Data de Emissão: {{data_emissao}}
+Valor Total: R$ {{valor_total}}
+
+Chave de Acesso: {{chave_nfe}}
+
+================================================================================
+                            ARQUIVOS EM ANEXO
+================================================================================
+
+📄 DANFE (PDF) - Documento Auxiliar da Nota Fiscal Eletrônica
+🔗 XML (XML) - Arquivo Fiscal Eletrônico
+
+================================================================================
+                                IMPORTANTE
+================================================================================
+
+⚠️  GUARDE ESTES ARQUIVOS: O XML e o PDF são documentos fiscais oficiais. 
+    Mantenha-os arquivados para fins contábeis e fiscais. O XML pode ser usado 
+    para escrituração fiscal e o PDF serve como comprovante da operação.
+
+================================================================================
+
+Em caso de dúvidas sobre esta NFe ou sobre os produtos/serviços adquiridos, 
+entre em contato conosco através dos canais disponíveis abaixo.
+
+Agradecemos pela sua preferência!
+
+================================================================================
+                              {{empresa_nome}}
+================================================================================
+
+{{empresa_endereco}}
+CNPJ: {{empresa_cnpj}}
+
+📞 Contato: {{empresa_telefone}}
+📧 E-mail: {{empresa_email}}
+🌐 Website: {{empresa_website}}
+
+================================================================================
+
+Esta NFe foi emitida de acordo com a legislação fiscal brasileira e autorizada 
+pela SEFAZ. Este e-mail foi enviado automaticamente pelo Sistema Nexo NFe. 
+Para verificar a autenticidade deste documento, consulte a chave de acesso no 
+site da SEFAZ.
+
+================================================================================
