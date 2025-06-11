@@ -41,9 +41,14 @@ const NfePage: React.FC = () => {
   const [emailsParaReenvio, setEmailsParaReenvio] = useState<string[]>([]);
   const [isEnviandoEmail, setIsEnviandoEmail] = useState(false);
 
-  // Debug: Monitorar mudanças no estado do modal
+  // Ref para forçar re-renderização
+  const [forceRender, setForceRender] = useState(0);
+
+  // Monitorar mudanças no estado do modal
   useEffect(() => {
-    console.log('🔄 useEffect - showReenvioModal mudou para:', showReenvioModal);
+    if (showReenvioModal) {
+      console.log('📧 Modal de reenvio de email aberto');
+    }
   }, [showReenvioModal]);
 
   // Função para carregar CCe da nova tabela cce_nfe
@@ -366,7 +371,7 @@ const NfePage: React.FC = () => {
 
 
   const handleReenviarEmail = async (nfe: NFe) => {
-    console.log('🚨 FUNÇÃO CHAMADA - handleReenviarEmail');
+    console.log('📧 Iniciando reenvio de email para NFe:', nfe.numero_documento);
 
     if (nfe.status_nfe !== 'autorizada') {
       showToast('Apenas NFe autorizadas podem ter email reenviado', 'error');
@@ -456,18 +461,12 @@ const NfePage: React.FC = () => {
         website: ''
       };
 
-      // ✅ USAR MODAL AO INVÉS DE CONFIRM
-      console.log('🔵 Setando estados do modal...');
-      console.log('🔵 Estado atual showReenvioModal ANTES:', showReenvioModal);
+      // Abrir modal de confirmação
+      console.log('📧 Abrindo modal de reenvio para:', emailsDestinatario.length, 'email(s)');
+
       setNfeParaReenvio(nfe);
       setEmailsParaReenvio(emailsDestinatario);
       setShowReenvioModal(true);
-      console.log('🔵 showReenvioModal setado para:', true);
-
-      // Verificar se o estado mudou após um tempo
-      setTimeout(() => {
-        console.log('🔵 Estado showReenvioModal DEPOIS (timeout):', showReenvioModal);
-      }, 100);
 
     } catch (error) {
       console.error('Erro ao preparar reenvio de email:', error);
@@ -1079,6 +1078,70 @@ const NfePage: React.FC = () => {
 
   return (
     <div className="p-4">
+      {/* 📧 MODAL DE REENVIO DE EMAIL */}
+      {showReenvioModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center"
+          style={{ zIndex: 999999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          <div className="bg-background-card rounded-lg shadow-xl max-w-md w-full mx-4 p-6 border border-gray-800">
+            <div className="text-center">
+              <h2 className="text-xl font-bold text-white mb-4">
+                📧 Reenviar Email da NFe
+              </h2>
+
+              {nfeParaReenvio && (
+                <div className="bg-gray-800/50 rounded-lg p-4 mb-4 text-left border border-gray-700">
+                  <p className="text-sm text-gray-300">
+                    <strong className="text-white">NFe:</strong> {nfeParaReenvio.numero_documento}
+                  </p>
+                  <p className="text-sm text-gray-300">
+                    <strong className="text-white">Cliente:</strong> {nfeParaReenvio.nome_cliente}
+                  </p>
+                  <p className="text-sm text-gray-300">
+                    <strong className="text-white">Valor:</strong> R$ {nfeParaReenvio.valor_total?.toFixed(2) || '0,00'}
+                  </p>
+                  <p className="text-sm text-gray-300">
+                    <strong className="text-white">Emails:</strong> {emailsParaReenvio.join(', ')}
+                  </p>
+                </div>
+              )}
+
+              <p className="text-gray-400 mb-6">
+                Deseja reenviar o XML e DANFE para os emails cadastrados?
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowReenvioModal(false);
+                    setNfeParaReenvio(null);
+                    setEmailsParaReenvio([]);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg border border-gray-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={executarReenvioEmail}
+                  disabled={isEnviandoEmail}
+                  className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  {isEnviandoEmail ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Enviando...
+                    </>
+                  ) : (
+                    'Reenviar'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold text-white mb-2">Notas Fiscais Eletrônicas</h1>
@@ -3409,7 +3472,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 serie: nfeData.identificacao.serie,
                 valor_total: nfeData.totais.valor_total,
                 cliente_nome: nfeData.destinatario.nome,
-                empresa_nome: nfeData.empresa?.name || 'Sistema Nexo'
+                empresa_nome: empresaData?.nome_fantasia || empresaData?.razao_social || 'Sistema Nexo',
+                empresa_endereco: empresaData?.endereco || '',
+                empresa_cnpj: empresaData?.cnpj || '',
+                empresa_telefone: empresaData?.telefone || '',
+                empresa_email: empresaData?.email || '',
+                empresa_website: empresaData?.website || ''
               }
             })
           });
@@ -4789,147 +4857,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         </div>
       )}
 
-      {/* Modal de Reenvio de Email */}
-      {console.log('🔍 A CADA RENDER - showReenvioModal =', showReenvioModal)}
-      {showReenvioModal && (
-        <div className="fixed inset-0 bg-red-500 flex items-center justify-center z-[9999]">
-          <div className="bg-white p-8 rounded">
-            <h1 className="text-black text-2xl">MODAL DE TESTE</h1>
-            <button
-              onClick={() => setShowReenvioModal(false)}
-              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
+      {/* MODAL REMOVIDO - AGORA ESTÁ NO TOPO DO COMPONENTE */}
 
-      {/* Modal Original (comentado temporariamente) */}
-      {false && showReenvioModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70]">
-          <div className="bg-background-card rounded-lg border border-gray-800 w-full max-w-md mx-4">
-            {!nfeParaReenvio ? (
-              <div className="p-6 text-center">
-                <p className="text-red-400">Erro: NFe não encontrada</p>
-                <button
-                  onClick={() => setShowReenvioModal(false)}
-                  className="mt-4 px-4 py-2 bg-gray-700 text-white rounded"
-                >
-                  Fechar
-                </button>
-              </div>
-            ) : (
-            <>
-            {/* Header */}
-            <div className="p-6 border-b border-gray-800">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center">
-                  <Mail className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Reenviar Email da NFe</h3>
-                  <p className="text-sm text-gray-400">Confirme o reenvio</p>
-                </div>
-              </div>
-            </div>
 
-            {/* Content */}
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* Informações da NFe */}
-                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                  <h4 className="text-sm font-medium text-white mb-3">📄 Dados da NFe</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">NFe nº:</span>
-                      <span className="text-white font-medium">{nfeParaReenvio.numero_documento}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Série:</span>
-                      <span className="text-white">{nfeParaReenvio.serie_documento || 1}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Cliente:</span>
-                      <span className="text-white">{nfeParaReenvio.nome_cliente}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Valor:</span>
-                      <span className="text-white font-medium">
-                        R$ {nfeParaReenvio.valor_total?.toFixed(2) || '0,00'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Lista de emails */}
-                <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
-                  <h4 className="text-sm font-medium text-blue-300 mb-3 flex items-center gap-2">
-                    <Mail size={16} />
-                    Emails de Destino ({emailsParaReenvio.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {emailsParaReenvio.map((email, index) => (
-                      <div key={index} className="flex items-center gap-2 text-sm">
-                        <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0"></div>
-                        <span className="text-blue-200">{email}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Aviso */}
-                <div className="bg-orange-500/10 rounded-lg p-4 border border-orange-500/20">
-                  <p className="text-orange-300 text-sm">
-                    📧 <strong>O que será enviado:</strong>
-                  </p>
-                  <ul className="text-orange-300 text-sm mt-2 space-y-1">
-                    <li>• Arquivo XML da NFe</li>
-                    <li>• DANFE em PDF</li>
-                    <li>• Template personalizado com dados da empresa</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-6 border-t border-gray-800">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowReenvioModal(false);
-                    setNfeParaReenvio(null);
-                    setEmailsParaReenvio([]);
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-                  disabled={isEnviandoEmail}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={executarReenvioEmail}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
-                  disabled={isEnviandoEmail}
-                >
-                  {isEnviandoEmail ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Mail size={16} />
-                      Reenviar Email
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-            </>
-            )}
-          </div>
-        </div>
-      )}
 
     </div>
   );

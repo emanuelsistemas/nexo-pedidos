@@ -85,9 +85,10 @@ try {
     $ano = '20' . substr($ano_mes, 0, 2);
     $mes = substr($ano_mes, 2, 2);
 
-    // ✅ USAR FUNÇÕES HELPER PARA CAMINHOS DINÂMICOS
-    $xml_dir = getXmlPath($empresa_id, $ambiente, $modelo, 'Autorizados', $ano, $mes);
-    $pdf_dir = getPdfPath($empresa_id, $ambiente, $modelo, 'Autorizados', $ano, $mes);
+    // ✅ USAR ESTRUTURA REAL DE STORAGE (baseada nos arquivos encontrados)
+    $base_storage = "/root/nexo/nexo-pedidos/backend/storage";
+    $xml_dir = "{$base_storage}/xml/empresa_{$empresa_id}/{$ambiente}/{$modelo}/Autorizados/{$ano}/{$mes}";
+    $pdf_dir = "{$base_storage}/pdf/empresa_{$empresa_id}/{$ambiente}/{$modelo}/Autorizados/{$ano}/{$mes}";
 
     $xml_path = "{$xml_dir}/{$chave_nfe}.xml";
     $pdf_path = "{$pdf_dir}/{$chave_nfe}.pdf";
@@ -138,46 +139,11 @@ try {
         exit;
     }
 
-    // Buscar dados da empresa para o template
-    require_once '../includes/supabase-config.php';
-
-    try {
-        $supabase = createSupabaseClient();
-
-        // Buscar dados da empresa
-        $empresaResponse = $supabase->from('empresas')
-            ->select('razao_social, nome_fantasia, cnpj, endereco, telefone, email, website')
-            ->eq('id', $empresa_id)
-            ->single()
-            ->execute();
-
-        $empresaData = $empresaResponse->data ?? [];
-
-        // Enriquecer dados da NFe com informações da empresa
-        $nfe_data_completo = array_merge($nfe_data, [
-            'empresa_id' => $empresa_id,
-            'chave' => $chave_nfe,
-            'empresa_nome' => $empresaData['nome_fantasia'] ?? $empresaData['razao_social'] ?? 'Sistema Nexo',
-            'empresa_endereco' => $empresaData['endereco'] ?? '',
-            'empresa_cnpj' => $empresaData['cnpj'] ?? '',
-            'empresa_telefone' => $empresaData['telefone'] ?? '',
-            'empresa_email' => $empresaData['email'] ?? '',
-            'empresa_website' => $empresaData['website'] ?? ''
-        ]);
-
-    } catch (Exception $e) {
-        // Se falhar ao buscar dados da empresa, usar dados básicos
-        $nfe_data_completo = array_merge($nfe_data, [
-            'empresa_id' => $empresa_id,
-            'chave' => $chave_nfe,
-            'empresa_nome' => 'Sistema Nexo',
-            'empresa_endereco' => '',
-            'empresa_cnpj' => '',
-            'empresa_telefone' => '',
-            'empresa_email' => '',
-            'empresa_website' => ''
-        ]);
-    }
+    // ✅ USAR DADOS DINÂMICOS DO FRONTEND (SaaS multi-tenant)
+    $nfe_data_completo = array_merge($nfe_data, [
+        'empresa_id' => $empresa_id,
+        'chave' => $chave_nfe
+    ]);
 
     // Criar instância do serviço de email
     $emailService = new \NexoNFe\Services\EmailService();
