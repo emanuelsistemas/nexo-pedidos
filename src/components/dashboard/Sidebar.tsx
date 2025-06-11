@@ -382,36 +382,41 @@ const Sidebar: React.FC = () => {
       initial={{ width: '72px' }}
       animate={{ width: isExpanded ? '240px' : '72px' }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="min-h-screen bg-background-card fixed left-0 top-0 z-50 border-r border-gray-800 flex flex-col"
+      className="h-screen bg-background-card fixed left-0 top-0 z-50 border-r border-gray-800 flex flex-col"
     >
-      <div className="flex-1">
-        <div className="h-16 flex items-center px-4 border-b border-gray-800 relative">
-          <div className="flex-1 overflow-hidden pl-2">
-            {isExpanded ? (
-              <Logo size="md" />
-            ) : (
-              <span className="text-3xl font-logo text-accent-500 font-bold">n</span>
-            )}
-          </div>
-          <button
-            onClick={toggle}
-            className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-background-card border border-gray-700 rounded-full flex items-center justify-center text-white hover:text-accent-500 hover:border-accent-500 transition-all duration-300 shadow-lg"
-          >
-            <motion.div
-              animate={{ rotate: isExpanded ? 180 : 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <ChevronRight size={16} />
-            </motion.div>
-          </button>
+      {/* Header fixo */}
+      <div className="h-16 flex items-center px-4 border-b border-gray-800 relative flex-shrink-0">
+        <div className="flex-1 overflow-hidden pl-2">
+          {isExpanded ? (
+            <Logo size="md" />
+          ) : (
+            <span className="text-3xl font-logo text-accent-500 font-bold">n</span>
+          )}
         </div>
-
-        <nav className="flex-1 py-4 px-2 overflow-y-auto custom-scrollbar">
-          {menuItems.map(renderMenuItem)}
-        </nav>
+        <button
+          onClick={toggle}
+          className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-background-card border border-gray-700 rounded-full flex items-center justify-center text-white hover:text-accent-500 hover:border-accent-500 transition-all duration-300 shadow-lg"
+        >
+          <motion.div
+            animate={{ rotate: isExpanded ? 180 : 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <ChevronRight size={16} />
+          </motion.div>
+        </button>
       </div>
 
-      <UserProfileFooter />
+      {/* Área de navegação com scroll */}
+      <nav className="flex-1 py-4 px-2 overflow-y-auto custom-scrollbar min-h-0">
+        <div className="space-y-1">
+          {menuItems.map(renderMenuItem)}
+        </div>
+      </nav>
+
+      {/* Footer fixo */}
+      <div className="flex-shrink-0">
+        <UserProfileFooter />
+      </div>
     </motion.div>
   );
 };

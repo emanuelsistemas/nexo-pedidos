@@ -163,31 +163,56 @@ select option {
 /* Estilização personalizada da barra de rolagem */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #374151 #1f2937;
+  scrollbar-color: #4b5563 #1f2937;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 8px !important;
-  height: 8px !important;
+  width: 6px !important;
+  height: 6px !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #1f2937 !important;
-  border-radius: 4px !important;
+  background: transparent !important;
+  border-radius: 3px !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #374151 !important;
-  border-radius: 4px !important;
-  border: 1px solid #1f2937 !important;
+  background: #4b5563 !important;
+  border-radius: 3px !important;
+  border: none !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #4b5563 !important;
+  background: #6b7280 !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar-corner {
-  background: #1f2937 !important;
+  background: transparent !important;
+}
+
+/* Barra de rolagem específica para o sidebar */
+nav.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 transparent;
+}
+
+nav.custom-scrollbar::-webkit-scrollbar {
+  width: 4px !important;
+}
+
+nav.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+  margin: 8px 0 !important;
+}
+
+nav.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #4b5563 !important;
+  border-radius: 2px !important;
+  border: none !important;
+}
+
+nav.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280 !important;
 }
 
 /* Aplicar barra personalizada globalmente em elementos com overflow */
