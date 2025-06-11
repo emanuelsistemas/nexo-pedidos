@@ -41,6 +41,11 @@ const NfePage: React.FC = () => {
   const [emailsParaReenvio, setEmailsParaReenvio] = useState<string[]>([]);
   const [isEnviandoEmail, setIsEnviandoEmail] = useState(false);
 
+  // Debug: Monitorar mudanças no estado do modal
+  useEffect(() => {
+    console.log('🔄 useEffect - showReenvioModal mudou para:', showReenvioModal);
+  }, [showReenvioModal]);
+
   // Função para carregar CCe da nova tabela cce_nfe
   const carregarCCesDaTabela = async (chaveNfe: string, empresaId: string) => {
     try {
@@ -361,6 +366,8 @@ const NfePage: React.FC = () => {
 
 
   const handleReenviarEmail = async (nfe: NFe) => {
+    console.log('🚨 FUNÇÃO CHAMADA - handleReenviarEmail');
+
     if (nfe.status_nfe !== 'autorizada') {
       showToast('Apenas NFe autorizadas podem ter email reenviado', 'error');
       return;
@@ -450,9 +457,17 @@ const NfePage: React.FC = () => {
       };
 
       // ✅ USAR MODAL AO INVÉS DE CONFIRM
+      console.log('🔵 Setando estados do modal...');
+      console.log('🔵 Estado atual showReenvioModal ANTES:', showReenvioModal);
       setNfeParaReenvio(nfe);
       setEmailsParaReenvio(emailsDestinatario);
       setShowReenvioModal(true);
+      console.log('🔵 showReenvioModal setado para:', true);
+
+      // Verificar se o estado mudou após um tempo
+      setTimeout(() => {
+        console.log('🔵 Estado showReenvioModal DEPOIS (timeout):', showReenvioModal);
+      }, 100);
 
     } catch (error) {
       console.error('Erro ao preparar reenvio de email:', error);
@@ -4775,9 +4790,37 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       )}
 
       {/* Modal de Reenvio de Email */}
-      {showReenvioModal && nfeParaReenvio && (
+      {console.log('🔍 A CADA RENDER - showReenvioModal =', showReenvioModal)}
+      {showReenvioModal && (
+        <div className="fixed inset-0 bg-red-500 flex items-center justify-center z-[9999]">
+          <div className="bg-white p-8 rounded">
+            <h1 className="text-black text-2xl">MODAL DE TESTE</h1>
+            <button
+              onClick={() => setShowReenvioModal(false)}
+              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Original (comentado temporariamente) */}
+      {false && showReenvioModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70]">
           <div className="bg-background-card rounded-lg border border-gray-800 w-full max-w-md mx-4">
+            {!nfeParaReenvio ? (
+              <div className="p-6 text-center">
+                <p className="text-red-400">Erro: NFe não encontrada</p>
+                <button
+                  onClick={() => setShowReenvioModal(false)}
+                  className="mt-4 px-4 py-2 bg-gray-700 text-white rounded"
+                >
+                  Fechar
+                </button>
+              </div>
+            ) : (
+            <>
             {/* Header */}
             <div className="p-6 border-b border-gray-800">
               <div className="flex items-center gap-3">
@@ -4882,6 +4925,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 </button>
               </div>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
