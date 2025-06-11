@@ -181,8 +181,14 @@ try {
     file_put_contents($xmlPath, $response);
     error_log("💾 XML de inutilização salvo: {$xmlPath}");
 
-    // 16. Atualizar status no banco (SE NFE_ID FOI FORNECIDO)
+    // 16. Atualizar status no banco (MESMO PADRÃO DO CANCELAMENTO)
     if (isset($data['nfe_id']) && !empty($data['nfe_id'])) {
+        error_log("🔄 ATUALIZANDO STATUS NO BANCO LOCAL...");
+
+        // Configuração Supabase (MESMO PADRÃO DO CANCELAMENTO)
+        $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
+        $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMzMzk5NzEsImV4cCI6MjA0ODkxNTk3MX0.VmyrqjgFO8nT_Lqzq0_HQmJnKQiIkTtClQUEWdxwP5s';
+
         $updateData = [
             'status_nfe' => 'inutilizada',
             'inutilizada_em' => date('c'),
@@ -191,6 +197,7 @@ try {
             'updated_at' => date('c')
         ];
 
+        // Fazer requisição para Supabase (MESMO PADRÃO DO CANCELAMENTO)
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $supabaseUrl . '/rest/v1/pdv?id=eq.' . $data['nfe_id']);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -207,8 +214,14 @@ try {
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($httpCode !== 204) {
-            error_log("⚠️ Erro ao atualizar status no banco: " . $updateResponse);
+        if ($httpCode >= 200 && $httpCode < 300) {
+            error_log("✅ STATUS ATUALIZADO NO BANCO - NFe marcada como inutilizada");
+            error_log("📋 Dados atualizados: " . json_encode($updateData));
+        } else {
+            error_log("❌ ERRO ao atualizar status no banco - HTTP {$httpCode}");
+            error_log("📋 Resposta: " . $updateResponse);
+            // Não falhar a inutilização por erro de banco - NFe já foi inutilizada na SEFAZ
+            error_log("⚠️ NFe foi inutilizada na SEFAZ, mas erro ao atualizar banco local");
         }
     }
 
