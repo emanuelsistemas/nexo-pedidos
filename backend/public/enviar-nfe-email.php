@@ -5,6 +5,8 @@
  * Envia XML e PDF da NFe para lista de emails
  */
 
+require_once '../includes/storage-paths.php'; // ✅ INCLUIR funções helper
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -62,15 +64,17 @@ try {
         }
     }
 
+    // ✅ USAR FUNÇÕES HELPER DINÂMICAS PARA MULTI-TENANT E MULTI-AMBIENTE
+
     // Determinar ambiente e modelo baseado na chave NFe
     $ambiente = 'homologacao'; // Padrão
     $modelo = '55'; // Padrão NFe
-    
+
     // A chave NFe tem 44 caracteres, posição 20 indica ambiente (1=produção, 2=homologação)
     if (strlen($chave_nfe) === 44) {
         $ambiente_codigo = substr($chave_nfe, 20, 1);
         $ambiente = ($ambiente_codigo === '1') ? 'producao' : 'homologacao';
-        
+
         // Posição 21-22 indica modelo (55=NFe, 65=NFCe)
         $modelo_codigo = substr($chave_nfe, 20, 2);
         $modelo = (substr($modelo_codigo, 1, 2) === '65') ? '65' : '55';
@@ -81,22 +85,57 @@ try {
     $ano = '20' . substr($ano_mes, 0, 2);
     $mes = substr($ano_mes, 2, 2);
 
-    // Construir caminhos dos arquivos
-    $base_path = "/root/nexo/nexo-pedidos/storage";
-    
-    // Caminho do XML (sempre em Autorizados para NFe emitidas)
-    $xml_path = "{$base_path}/xml/empresa_{$empresa_id}/{$ambiente}/{$modelo}/{$ano}/{$mes}/Autorizados/{$chave_nfe}-nfe.xml";
-    
-    // Caminho do PDF
-    $pdf_path = "{$base_path}/pdf/empresa_{$empresa_id}/{$ambiente}/{$modelo}/{$ano}/{$mes}/Autorizados/{$chave_nfe}-danfe.pdf";
+    // ✅ USAR FUNÇÕES HELPER PARA CAMINHOS DINÂMICOS
+    $xml_dir = getXmlPath($empresa_id, $ambiente, $modelo, 'Autorizados', $ano, $mes);
+    $pdf_dir = getPdfPath($empresa_id, $ambiente, $modelo, 'Autorizados', $ano, $mes);
+
+    $xml_path = "{$xml_dir}/{$chave_nfe}.xml";
+    $pdf_path = "{$pdf_dir}/{$chave_nfe}.pdf";
+
+    // ✅ LOGS DE DEBUG para identificar problemas
+    error_log("EMAIL DEBUG: Procurando arquivos NFe");
+    error_log("EMAIL DEBUG: Chave NFe: {$chave_nfe}");
+    error_log("EMAIL DEBUG: Ambiente: {$ambiente}");
+    error_log("EMAIL DEBUG: Modelo: {$modelo}");
+    error_log("EMAIL DEBUG: Ano/Mês: {$ano}/{$mes}");
+    error_log("EMAIL DEBUG: XML Path: {$xml_path}");
+    error_log("EMAIL DEBUG: PDF Path: {$pdf_path}");
+    error_log("EMAIL DEBUG: XML Dir: {$xml_dir}");
+    error_log("EMAIL DEBUG: PDF Dir: {$pdf_dir}");
+    error_log("EMAIL DEBUG: XML existe: " . (file_exists($xml_path) ? 'SIM' : 'NÃO'));
+    error_log("EMAIL DEBUG: PDF existe: " . (file_exists($pdf_path) ? 'SIM' : 'NÃO'));
 
     // Verificar se arquivos existem
-    if (!file_exists($xml_path)) {
-        throw new Exception("Arquivo XML não encontrado: {$xml_path}");
-    }
+    $xml_existe = file_exists($xml_path);
+    $pdf_existe = file_exists($pdf_path);
 
-    if (!file_exists($pdf_path)) {
-        throw new Exception("Arquivo PDF não encontrado: {$pdf_path}");
+    if (!$xml_existe || !$pdf_existe) {
+        // ✅ Retornar informações detalhadas sobre arquivos não encontrados
+        $erro_detalhado = [
+            'tipo' => 'arquivos_nao_encontrados',
+            'titulo' => 'Arquivos da NFe não encontrados',
+            'descricao' => 'Um ou mais arquivos necessários para envio por email não foram encontrados.',
+            'solucao' => 'Verifique se a NFe foi emitida corretamente e os arquivos foram gerados.',
+            'arquivos' => [
+                'xml_existe' => $xml_existe,
+                'pdf_existe' => $pdf_existe,
+                'xml_path' => $xml_path,
+                'pdf_path' => $pdf_path,
+                'chave_nfe' => $chave_nfe,
+                'ambiente' => $ambiente,
+                'modelo' => $modelo,
+                'ano_mes' => "{$ano}/{$mes}"
+            ]
+        ];
+
+        http_response_code(404);
+        echo json_encode([
+            'success' => false,
+            'error' => json_encode($erro_detalhado),
+            'arquivos' => $erro_detalhado['arquivos'],
+            'timestamp' => date('Y-m-d H:i:s')
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     // Buscar dados da empresa para o template

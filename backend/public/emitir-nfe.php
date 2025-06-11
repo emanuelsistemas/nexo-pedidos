@@ -1067,6 +1067,11 @@ try {
                 'titulo' => 'Lote em Processamento',
                 'descricao' => 'A NFe foi enviada e está sendo processada pela SEFAZ.',
                 'solucao' => 'Aguarde alguns segundos e consulte o status novamente.'
+            ],
+            '539' => [
+                'titulo' => 'NFe Duplicada',
+                'descricao' => 'Já existe uma NFe com este número e série para esta empresa.',
+                'solucao' => 'Verifique se a NFe já foi emitida anteriormente ou use um número diferente.'
             ]
         ];
 

@@ -6,6 +6,9 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
+// ✅ INCLUIR funções helper para caminhos dinâmicos
+require_once __DIR__ . '/../../includes/storage-paths.php';
+
 class EmailService
 {
     private $mailer;
@@ -226,8 +229,12 @@ class EmailService
         // Construir caminhos baseado na estrutura de storage
         $base_path = "/root/nexo/nexo-pedidos/storage";
 
-        $xml_path = "{$base_path}/xml/empresa_{$empresaId}/{$ambiente}/{$modelo}/{$ano}/{$mes}/Autorizados/{$chave}-nfe.xml";
-        $pdf_path = "{$base_path}/pdf/empresa_{$empresaId}/{$ambiente}/{$modelo}/{$ano}/{$mes}/Autorizados/{$chave}-danfe.pdf";
+        // ✅ USAR FUNÇÕES HELPER PARA CAMINHOS DINÂMICOS
+        $xml_dir = getXmlPath($empresaId, $ambiente, $modelo, 'Autorizados', $ano, $mes);
+        $pdf_dir = getPdfPath($empresaId, $ambiente, $modelo, 'Autorizados', $ano, $mes);
+
+        $xml_path = "{$xml_dir}/{$chave}.xml";
+        $pdf_path = "{$pdf_dir}/{$chave}.pdf";
 
         return [
             'xml' => $xml_path,

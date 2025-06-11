@@ -317,20 +317,63 @@ class CertificateManager
     {
         try {
             $result = $this->loadCertificate($cnpj);
-            
+
             if (!$result['success']) {
                 return $result;
             }
-            
+
             // Aqui você pode adicionar validações específicas
             // como verificar se o certificado não expirou
-            
+
             return [
                 'success' => true,
                 'valid' => true,
                 'cnpj' => $cnpj
             ];
-            
+
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Método unificado para obter certificado por empresa_id
+     * Retorna path e password para uso direto na sped-nfe
+     */
+    public function getCertificateByEmpresaId($empresaId)
+    {
+        try {
+            if (empty($empresaId)) {
+                throw new Exception("ID da empresa é obrigatório");
+            }
+
+            $filepath = $this->certificatesPath . '/empresa_' . $empresaId . '.pfx';
+            $metadataFile = $this->certificatesPath . '/empresa_' . $empresaId . '.json';
+
+            if (!file_exists($filepath)) {
+                throw new Exception("Certificado digital não encontrado para esta empresa. Faça o upload do certificado nas configurações da empresa.");
+            }
+
+            if (!file_exists($metadataFile)) {
+                throw new Exception("Metadados do certificado não encontrados. Faça o upload do certificado novamente.");
+            }
+
+            $metadata = json_decode(file_get_contents($metadataFile), true);
+
+            if (!isset($metadata['password'])) {
+                throw new Exception("Senha do certificado não encontrada nos metadados.");
+            }
+
+            return [
+                'success' => true,
+                'path' => $filepath,
+                'password' => $metadata['password'],
+                'metadata' => $metadata
+            ];
+
         } catch (Exception $e) {
             return [
                 'success' => false,

@@ -35,6 +35,12 @@ const NfePage: React.FC = () => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('todos');
 
+  // Estados para modal de reenvio de email
+  const [showReenvioModal, setShowReenvioModal] = useState(false);
+  const [nfeParaReenvio, setNfeParaReenvio] = useState<NFe | null>(null);
+  const [emailsParaReenvio, setEmailsParaReenvio] = useState<string[]>([]);
+  const [isEnviandoEmail, setIsEnviandoEmail] = useState(false);
+
   // Função para carregar CCe da nova tabela cce_nfe
   const carregarCCesDaTabela = async (chaveNfe: string, empresaId: string) => {
     try {
@@ -228,23 +234,99 @@ const NfePage: React.FC = () => {
     }
   };
 
+  // Estados para modal de inutilização
+  const [showInutilizacaoModal, setShowInutilizacaoModal] = useState(false);
+  const [nfeParaInutilizar, setNfeParaInutilizar] = useState<NFe | null>(null);
+  const [motivoInutilizacao, setMotivoInutilizacao] = useState('');
+  const [inutilizandoNFe, setInutilizandoNFe] = useState(false);
+
   // Funções para ações da NFe
   const handleInutilizar = (nfe: NFe) => {
-    const confirmacao = confirm(
-      `⚠️ ATENÇÃO: INUTILIZAÇÃO DE NFe\n\n` +
-      `Você está prestes a INUTILIZAR a NFe nº ${nfe.numero_documento}.\n` +
-      `Esta ação é IRREVERSÍVEL e deve ser usada apenas quando:\n\n` +
-      `• A numeração foi pulada por erro\n` +
-      `• Houve falha na emissão\n` +
-      `• Necessário corrigir sequência numérica\n\n` +
-      `Deseja continuar com a inutilização?`
-    );
+    setNfeParaInutilizar(nfe);
+    setMotivoInutilizacao('');
+    setShowInutilizacaoModal(true);
+  };
 
-    if (confirmacao) {
-      // TODO: Implementar chamada para API de inutilização
-      showToast(`Funcionalidade de inutilização em desenvolvimento`, 'info');
+  // Função para confirmar inutilização
+  const handleConfirmarInutilizacao = async () => {
+    if (!nfeParaInutilizar || !motivoInutilizacao.trim()) {
+      showToast('Motivo da inutilização é obrigatório', 'error');
+      return;
+    }
+
+    if (motivoInutilizacao.trim().length < 15) {
+      showToast('Motivo deve ter pelo menos 15 caracteres', 'error');
+      return;
+    }
+
+    try {
+      setInutilizandoNFe(true);
+
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada para o usuário');
+      }
+
+      // Preparar dados para inutilização
+      const inutilizacaoData = {
+        empresa_id: usuarioData.empresa_id,
+        serie: nfeParaInutilizar.serie_documento || 1,
+        numero_inicial: nfeParaInutilizar.numero_documento,
+        numero_final: nfeParaInutilizar.numero_documento,
+        motivo: motivoInutilizacao.trim(),
+        nfe_id: nfeParaInutilizar.id
+      };
+
+      console.log('📤 Enviando dados para inutilização:', inutilizacaoData);
+
+      // Chamar API de inutilização
+      const response = await fetch('/backend/public/inutilizar-nfe-v2.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(inutilizacaoData)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Erro ao inutilizar NFe');
+      }
+
+      console.log('✅ NFe inutilizada com sucesso:', result);
+
+      showToast('NFe inutilizada com sucesso!', 'success');
+
+      // Fechar modal e recarregar lista
+      setShowInutilizacaoModal(false);
+      setNfeParaInutilizar(null);
+      setMotivoInutilizacao('');
+
+      // Recarregar NFes
+      window.location.reload();
+
+    } catch (error) {
+      console.error('❌ Erro ao inutilizar NFe:', error);
+      showToast(error instanceof Error ? error.message : 'Erro ao inutilizar NFe', 'error');
+    } finally {
+      setInutilizandoNFe(false);
     }
   };
+
+
 
   const handleCancelar = (nfe: NFe) => {
     if (nfe.status_nfe !== 'autorizada') {
@@ -298,80 +380,201 @@ const NfePage: React.FC = () => {
         return;
       }
 
-      // Buscar emails do cliente da NFe
-      // Primeiro, buscar dados completos da NFe para obter documento do cliente
-      const { data: nfeCompleta } = await supabase
-        .from('pdv')
-        .select('documento_cliente')
-        .eq('id', nfe.id)
-        .single();
+      // ✅ MELHORADO: Buscar emails do destinatário usando múltiplas estratégias
+      let emailsDestinatario = [];
+      let dadosNFeCompletos = null;
 
-      const documentoCliente = nfeCompleta?.documento_cliente;
+      // Estratégia 1: Buscar dados completos da NFe se disponível
+      if (nfe.dados_nfe) {
+        try {
+          dadosNFeCompletos = typeof nfe.dados_nfe === 'string'
+            ? JSON.parse(nfe.dados_nfe)
+            : nfe.dados_nfe;
 
-      if (!documentoCliente) {
-        showToast('Documento do cliente não encontrado na NFe', 'error');
-        return;
-      }
-
-      const { data: clienteData } = await supabase
-        .from('clientes')
-        .select('emails')
-        .eq('empresa_id', usuarioData.empresa_id)
-        .eq('documento', documentoCliente)
-        .single();
-
-      const emailsCliente = clienteData?.emails || [];
-
-      if (emailsCliente.length === 0) {
-        showToast('Nenhum email cadastrado para este cliente', 'error');
-        return;
-      }
-
-      const confirmacao = confirm(
-        `📧 REENVIAR EMAIL DA NFe\n\n` +
-        `NFe nº ${nfe.numero_documento}\n` +
-        `Cliente: ${nfe.nome_cliente}\n` +
-        `Emails: ${emailsCliente.join(', ')}\n\n` +
-        `Deseja reenviar o XML e DANFE para todos os emails cadastrados?`
-      );
-
-      if (confirmacao) {
-        showToast('Enviando email...', 'info');
-
-        // Chamar API de reenvio de email
-        const response = await fetch('/backend/public/enviar-nfe-email.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            empresa_id: usuarioData.empresa_id,
-            chave_nfe: nfe.chave_nfe,
-            emails: emailsCliente,
-            nfe_data: {
-              numero: nfe.numero_documento,
-              serie: nfe.serie_documento || 1,
-              valor_total: nfe.valor_total,
-              cliente_nome: nfe.nome_cliente,
-              empresa_nome: 'Sistema Nexo'
-            }
-          })
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            showToast(`Email reenviado com sucesso para: ${emailsCliente.join(', ')}`, 'success');
-          } else {
-            showToast(`Erro ao reenviar email: ${result.error}`, 'error');
-          }
-        } else {
-          showToast('Erro na comunicação com o servidor', 'error');
+          emailsDestinatario = dadosNFeCompletos?.destinatario?.emails || [];
+        } catch (parseError) {
+          console.warn('Erro ao fazer parse dos dados da NFe:', parseError);
         }
       }
+
+      // Estratégia 2: Buscar documento do cliente na tabela pdv
+      if (emailsDestinatario.length === 0) {
+        const { data: nfeCompleta } = await supabase
+          .from('pdv')
+          .select('documento_cliente')
+          .eq('id', nfe.id)
+          .single();
+
+        const documentoCliente = nfeCompleta?.documento_cliente;
+
+        if (documentoCliente) {
+          const { data: clienteData } = await supabase
+            .from('clientes')
+            .select('emails, nome')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .eq('documento', documentoCliente)
+            .single();
+
+          emailsDestinatario = clienteData?.emails || [];
+        }
+      }
+
+      // Estratégia 3: Buscar por nome do cliente se ainda não encontrou
+      if (emailsDestinatario.length === 0 && nfe.nome_cliente) {
+        const { data: clienteData } = await supabase
+          .from('clientes')
+          .select('emails, nome')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .ilike('nome', `%${nfe.nome_cliente}%`)
+          .limit(1)
+          .single();
+
+        emailsDestinatario = clienteData?.emails || [];
+      }
+
+      if (emailsDestinatario.length === 0) {
+        showToast('Nenhum email cadastrado para este destinatário', 'error');
+        return;
+      }
+
+      // ✅ TEMPORÁRIO: Usar dados básicos para evitar erro na consulta
+      // TODO: Investigar estrutura da tabela empresas
+      const empresaData = {
+        nome_fantasia: 'Sistema Nexo',
+        razao_social: 'Sistema Nexo',
+        cnpj: '',
+        endereco: '',
+        telefone: '',
+        email: '',
+        website: ''
+      };
+
+      // ✅ USAR MODAL AO INVÉS DE CONFIRM
+      setNfeParaReenvio(nfe);
+      setEmailsParaReenvio(emailsDestinatario);
+      setShowReenvioModal(true);
+
+    } catch (error) {
+      console.error('Erro ao preparar reenvio de email:', error);
+      showToast(`❌ Erro ao preparar reenvio: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, 'error');
+    }
+  };
+
+  // ✅ NOVA FUNÇÃO: Executar reenvio de email após confirmação no modal
+  const executarReenvioEmail = async () => {
+    if (!nfeParaReenvio || emailsParaReenvio.length === 0) return;
+
+    try {
+      setIsEnviandoEmail(true);
+
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        showToast('Usuário não autenticado', 'error');
+        return;
+      }
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user?.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showToast('Empresa não identificada', 'error');
+        return;
+      }
+
+      // Dados da empresa (usando dados básicos por enquanto)
+      const empresaData = {
+        nome_fantasia: 'Sistema Nexo',
+        razao_social: 'Sistema Nexo',
+        cnpj: '',
+        endereco: '',
+        telefone: '',
+        email: '',
+        website: ''
+      };
+
+      showToast('Enviando email...', 'info');
+      showToast('Enviando email...', 'info');
+
+      // ✅ USAR MESMAS CONFIGURAÇÕES DA EMISSÃO
+      const response = await fetch('/backend/public/enviar-nfe-email.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          empresa_id: usuarioData.empresa_id,
+          chave_nfe: nfeParaReenvio.chave_nfe,
+          emails: emailsParaReenvio,
+          nfe_data: {
+            numero: nfeParaReenvio.numero_documento,
+            serie: nfeParaReenvio.serie_documento || 1,
+            valor_total: nfeParaReenvio.valor_total || 0,
+            cliente_nome: nfeParaReenvio.nome_cliente,
+            empresa_nome: empresaData?.nome_fantasia || empresaData?.razao_social || 'Sistema Nexo',
+            empresa_endereco: empresaData?.endereco || '',
+            empresa_cnpj: empresaData?.cnpj || '',
+            empresa_telefone: empresaData?.telefone || '',
+            empresa_email: empresaData?.email || '',
+            empresa_website: empresaData?.website || ''
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          showToast(`✅ Email reenviado com sucesso para: ${emailsParaReenvio.join(', ')}`, 'success');
+          setShowReenvioModal(false); // Fechar modal após sucesso
+        } else {
+          // ✅ MELHORADO: Mostrar detalhes específicos do erro
+          let errorMessage = result.error || 'Erro desconhecido';
+
+          // Tentar extrair erro específico se for JSON
+          try {
+            const errorData = JSON.parse(result.error);
+            if (errorData.titulo && errorData.descricao) {
+              errorMessage = `${errorData.titulo}: ${errorData.descricao}`;
+            }
+          } catch (parseError) {
+            // Usar erro original se não conseguir fazer parse
+          }
+
+          showToast(`❌ ${errorMessage}`, 'error');
+
+          // Mostrar informações sobre arquivos se disponível
+          if (result.arquivos) {
+            console.log('📁 Informações dos arquivos:', result.arquivos);
+            if (!result.arquivos.xml_existe) {
+              showToast('⚠️ Arquivo XML não encontrado', 'error');
+            }
+            if (!result.arquivos.pdf_existe) {
+              showToast('⚠️ Arquivo PDF não encontrado', 'error');
+            }
+          }
+        }
+      } else {
+        // ✅ MELHORADO: Tentar obter detalhes do erro HTTP
+        const errorText = await response.text();
+        let errorDetails = 'Erro na comunicação com o servidor';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorDetails = errorData.error || errorDetails;
+        } catch (parseError) {
+          errorDetails = errorText || errorDetails;
+        }
+        showToast(`❌ ${errorDetails}`, 'error');
+      }
+
     } catch (error) {
       console.error('Erro ao reenviar email:', error);
-      showToast(`Erro ao reenviar email: ${error.message}`, 'error');
+      showToast(`❌ Erro ao reenviar email: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, 'error');
+    } finally {
+      setIsEnviandoEmail(false);
     }
   };
 
@@ -1146,6 +1349,72 @@ const NfePage: React.FC = () => {
           </div>
         )}
       </div>
+      {/* Modal de Inutilização */}
+      {showInutilizacaoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-orange-400 mb-4">
+              ⚠️ Inutilizar NFe
+            </h3>
+
+            <div className="bg-orange-900/20 border border-orange-500/30 rounded-lg p-4 mb-4">
+              <p className="text-orange-300 text-sm mb-2">
+                <strong>ATENÇÃO:</strong> Esta ação é IRREVERSÍVEL!
+              </p>
+              <p className="text-gray-300 text-sm">
+                NFe nº <strong>{nfeParaInutilizar?.numero_documento}</strong> será inutilizada na SEFAZ.
+                Use apenas quando:
+              </p>
+              <ul className="text-gray-300 text-sm mt-2 ml-4 list-disc">
+                <li>A numeração foi pulada por erro</li>
+                <li>Houve falha na emissão</li>
+                <li>Necessário corrigir sequência numérica</li>
+              </ul>
+            </div>
+
+            <p className="text-gray-300 mb-4">
+              Digite o motivo da inutilização (mínimo 15 caracteres):
+            </p>
+            <textarea
+              value={motivoInutilizacao}
+              onChange={(e) => setMotivoInutilizacao(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-orange-500 resize-none"
+              rows={3}
+              placeholder="Ex: Numeração pulada por erro no sistema - necessário corrigir sequência"
+            />
+            <div className="text-sm text-gray-400 mb-4">
+              {motivoInutilizacao.length}/15 caracteres mínimos
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowInutilizacaoModal(false);
+                  setNfeParaInutilizar(null);
+                  setMotivoInutilizacao('');
+                }}
+                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                disabled={inutilizandoNFe}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarInutilizacao}
+                disabled={motivoInutilizacao.length < 15 || inutilizandoNFe}
+                className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {inutilizandoNFe ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Inutilizando...
+                  </>
+                ) : (
+                  'Confirmar Inutilização'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -2908,10 +3177,44 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       if (!response.ok) {
         const errorText = await response.text();
-        updateStep('geracao', 'error', `Erro HTTP ${response.status}`);
-        addLog(`ERRO: Falha no processamento completo - HTTP ${response.status}`);
-        addLog(`Detalhes: ${errorText}`);
-        throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+
+        // Tentar extrair erro específico da SEFAZ do response
+        let erroEspecifico = null;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error) {
+            // Tentar fazer parse do erro interno (pode ser JSON da SEFAZ)
+            try {
+              const erroSefaz = JSON.parse(errorData.error);
+              if (erroSefaz.tipo === 'erro_sefaz') {
+                erroEspecifico = erroSefaz;
+              }
+            } catch (parseError) {
+              // Se não conseguir fazer parse, usar erro original
+            }
+          }
+        } catch (parseError) {
+          // Response não é JSON válido
+        }
+
+        if (erroEspecifico) {
+          // Mostrar erro específico da SEFAZ
+          updateStep('geracao', 'error', erroEspecifico.titulo);
+          addLog(`❌ ${erroEspecifico.titulo}`);
+          addLog(`📋 ${erroEspecifico.descricao}`);
+          addLog(`💡 ${erroEspecifico.solucao}`);
+          addLog('');
+          addLog('🔧 Detalhes técnicos:');
+          addLog(`   Status SEFAZ: ${erroEspecifico.detalhes_tecnicos?.status || 'N/A'}`);
+          addLog(`   Motivo: ${erroEspecifico.detalhes_tecnicos?.motivo || 'N/A'}`);
+          throw new Error(`${erroEspecifico.titulo}: ${erroEspecifico.descricao}`);
+        } else {
+          // Fallback para erro HTTP genérico
+          updateStep('geracao', 'error', `Erro HTTP ${response.status}`);
+          addLog(`ERRO: Falha no processamento completo - HTTP ${response.status}`);
+          addLog(`Detalhes: ${errorText}`);
+          throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+        }
       }
 
       const result = await response.json();
@@ -3103,10 +3406,31 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
               updateStep('email', 'success', `Enviado para ${emailsDestinatario.length} email(s)`);
             } else {
               addLog(`⚠️ Falha no envio de email: ${emailResult.error}`);
+              // ✅ Mostrar detalhes específicos do erro de email
+              if (emailResult.arquivos) {
+                addLog(`📁 XML existe: ${emailResult.arquivos.xml_existe ? 'SIM' : 'NÃO'}`);
+                addLog(`📁 PDF existe: ${emailResult.arquivos.pdf_existe ? 'SIM' : 'NÃO'}`);
+                if (!emailResult.arquivos.xml_existe) {
+                  addLog(`📁 Caminho XML: ${emailResult.arquivos.xml_path}`);
+                }
+                if (!emailResult.arquivos.pdf_existe) {
+                  addLog(`📁 Caminho PDF: ${emailResult.arquivos.pdf_path}`);
+                }
+              }
               updateStep('email', 'error', 'Falha no envio');
             }
           } else {
-            addLog('⚠️ Erro na comunicação com serviço de email');
+            // ✅ Tentar obter detalhes do erro HTTP
+            const errorText = await emailResponse.text();
+            let errorDetails = 'Erro na comunicação com serviço de email';
+            try {
+              const errorData = JSON.parse(errorText);
+              errorDetails = errorData.error || errorDetails;
+            } catch (parseError) {
+              // Se não conseguir fazer parse, usar texto original
+              errorDetails = errorText || errorDetails;
+            }
+            addLog(`⚠️ ${errorDetails}`);
             updateStep('email', 'error', 'Erro na comunicação');
           }
         } catch (emailError) {
@@ -3158,7 +3482,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       }
 
       // Categorizar o erro para logs mais detalhados
-      if (error.message.includes('Failed to fetch')) {
+      if (error.message.includes('NFe Duplicada') || error.message.includes('Duplicidade')) {
+        addLog('Tipo: ❌ NFe Duplicada (Status SEFAZ 539)');
+        addLog('Solução: Verifique se esta NFe já foi emitida ou use um número diferente');
+      } else if (error.message.includes('Failed to fetch')) {
         addLog('Tipo: Erro de conexão com a API');
         addLog('Solução: Verifique sua conexão e se a API está funcionando');
       } else if (error.message.includes('HTTP 404')) {
@@ -3170,6 +3497,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       } else if (error.message.includes('timeout')) {
         addLog('Tipo: Timeout na requisição');
         addLog('Solução: A operação demorou muito para responder');
+      } else if (error.message.includes('Erro na Validação da NFe')) {
+        addLog('Tipo: ❌ Erro de Validação SEFAZ');
+        addLog('Solução: Verifique os dados da NFe e corrija os problemas indicados');
       } else {
         addLog('Tipo: Erro não categorizado');
       }
@@ -4261,25 +4591,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 ))}
               </div>
 
-              {/* Botão para exibir/ocultar logs */}
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <button
-                  onClick={() => setShowLogs(!showLogs)}
-                  className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
-                >
-                  {showLogs ? (
-                    <>
-                      <Eye size={16} />
-                      Ocultar Logs
-                    </>
-                  ) : (
-                    <>
-                      <Eye size={16} />
-                      Exibir Logs ({logs.length})
-                    </>
-                  )}
-                </button>
-              </div>
+              {/* Área de logs removida - oculta por solicitação do usuário */}
             </div>
 
             {/* Seção de Emails - Só aparece quando há emails */}
@@ -4303,119 +4615,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
               </div>
             )}
 
-            {/* Logs Area - Dividida em duas seções */}
-            {showLogs && (
-              <div className="flex-1 p-4 overflow-hidden flex flex-col min-h-0 border-t border-gray-700">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-lg font-semibold text-white">Logs do Processo</h4>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => fetchApiLogs('error', 10)}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm flex items-center gap-2 transition-colors"
-                      disabled={isLoadingApiLogs}
-                    >
-                      {isLoadingApiLogs ? (
-                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      ) : (
-                        <Eye size={14} />
-                      )}
-                      Buscar Logs API
-                    </button>
-                  </div>
-                </div>
-
-                {/* Área dividida em duas colunas */}
-                <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
-
-                  {/* Coluna 1: Logs do Frontend */}
-                  <div className="flex flex-col min-h-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <h5 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
-                        📱 Frontend Logs
-                        <span className="text-xs text-gray-500">({logs.length})</span>
-                      </h5>
-                      <button
-                        onClick={copyLogsToClipboard}
-                        className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs flex items-center gap-1 transition-colors"
-                      >
-                        <Copy size={12} />
-                        Copiar
-                      </button>
-                    </div>
-                    <div className="flex-1 bg-gray-900 rounded border border-gray-700 p-3 overflow-y-auto">
-                      <div className="space-y-1 font-mono text-xs">
-                        {logs.map((log, index) => (
-                          <div key={index} className={`${
-                            log.includes('ERRO') || log.includes('❌') ? 'text-red-400' :
-                            log.includes('✅') || log.includes('sucesso') ? 'text-green-400' :
-                            log.includes('AVISO') ? 'text-yellow-400' :
-                            'text-gray-300'
-                          }`}>
-                            {log}
-                          </div>
-                        ))}
-                        {logs.length === 0 && (
-                          <div className="text-gray-500 italic">Aguardando início do processo...</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Coluna 2: Logs da API */}
-                  <div className="flex flex-col min-h-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <h5 className="text-sm font-semibold text-orange-400 flex items-center gap-2">
-                        🔧 API Server Logs
-                        <span className="text-xs text-gray-500">({apiLogs.length})</span>
-                      </h5>
-                      <button
-                        onClick={() => copyApiLogsToClipboard().then(() =>
-                          showToast('Logs da API copiados!', 'success')
-                        ).catch(() =>
-                          showToast('Erro ao copiar logs da API', 'error')
-                        )}
-                        className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs flex items-center gap-1 transition-colors"
-                        disabled={apiLogs.length === 0}
-                      >
-                        <Copy size={12} />
-                        Copiar
-                      </button>
-                    </div>
-                    <div className="flex-1 bg-gray-900 rounded border border-gray-700 p-3 overflow-y-auto">
-                      <div className="space-y-1 font-mono text-xs">
-                        {apiLogsError && (
-                          <div className="text-red-400 mb-2 p-2 bg-red-500/10 rounded border border-red-500/20">
-                            ❌ Erro ao buscar logs: {apiLogsError}
-                          </div>
-                        )}
-                        {apiLogs.map((log, index) => (
-                          <div key={index} className={`${
-                            log.level.toLowerCase() === 'error' ? 'text-red-400' :
-                            log.level.toLowerCase() === 'info' ? 'text-blue-400' :
-                            log.level.toLowerCase() === 'debug' ? 'text-purple-400' :
-                            'text-gray-300'
-                          }`}>
-                            {formatApiLog(log)}
-                          </div>
-                        ))}
-                        {apiLogs.length === 0 && !isLoadingApiLogs && !apiLogsError && (
-                          <div className="text-gray-500 italic">
-                            Clique em "Buscar Logs API" para ver logs do servidor...
-                          </div>
-                        )}
-                        {isLoadingApiLogs && (
-                          <div className="text-blue-400 flex items-center gap-2">
-                            <div className="w-3 h-3 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
-                            Carregando logs da API...
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            )}
+            {/* Área de logs removida - oculta por solicitação do usuário */}
 
 
           </div>
@@ -4573,6 +4773,119 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           </div>
         </div>
       )}
+
+      {/* Modal de Reenvio de Email */}
+      {showReenvioModal && nfeParaReenvio && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70]">
+          <div className="bg-background-card rounded-lg border border-gray-800 w-full max-w-md mx-4">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500/15 rounded-full flex items-center justify-center">
+                  <Mail className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Reenviar Email da NFe</h3>
+                  <p className="text-sm text-gray-400">Confirme o reenvio</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="space-y-4">
+                {/* Informações da NFe */}
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                  <h4 className="text-sm font-medium text-white mb-3">📄 Dados da NFe</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">NFe nº:</span>
+                      <span className="text-white font-medium">{nfeParaReenvio.numero_documento}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Série:</span>
+                      <span className="text-white">{nfeParaReenvio.serie_documento || 1}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Cliente:</span>
+                      <span className="text-white">{nfeParaReenvio.nome_cliente}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Valor:</span>
+                      <span className="text-white font-medium">
+                        R$ {nfeParaReenvio.valor_total?.toFixed(2) || '0,00'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lista de emails */}
+                <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/20">
+                  <h4 className="text-sm font-medium text-blue-300 mb-3 flex items-center gap-2">
+                    <Mail size={16} />
+                    Emails de Destino ({emailsParaReenvio.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {emailsParaReenvio.map((email, index) => (
+                      <div key={index} className="flex items-center gap-2 text-sm">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0"></div>
+                        <span className="text-blue-200">{email}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Aviso */}
+                <div className="bg-orange-500/10 rounded-lg p-4 border border-orange-500/20">
+                  <p className="text-orange-300 text-sm">
+                    📧 <strong>O que será enviado:</strong>
+                  </p>
+                  <ul className="text-orange-300 text-sm mt-2 space-y-1">
+                    <li>• Arquivo XML da NFe</li>
+                    <li>• DANFE em PDF</li>
+                    <li>• Template personalizado com dados da empresa</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-800">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowReenvioModal(false);
+                    setNfeParaReenvio(null);
+                    setEmailsParaReenvio([]);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+                  disabled={isEnviandoEmail}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={executarReenvioEmail}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
+                  disabled={isEnviandoEmail}
+                >
+                  {isEnviandoEmail ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Mail size={16} />
+                      Reenviar Email
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

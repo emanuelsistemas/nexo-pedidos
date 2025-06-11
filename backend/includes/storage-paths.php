@@ -24,7 +24,8 @@
 function getXmlPath($empresaId, $ambiente, $modelo, $status, $ano = null, $mes = null) {
     $ano = $ano ?: date('Y');
     $mes = $mes ?: date('m');
-    
+
+    // ✅ CORRIGIDO: Usar caminho correto onde os arquivos são realmente salvos
     return "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambiente}/{$modelo}/{$status}/{$ano}/{$mes}";
 }
 
@@ -42,7 +43,8 @@ function getXmlPath($empresaId, $ambiente, $modelo, $status, $ano = null, $mes =
 function getPdfPath($empresaId, $ambiente, $modelo, $status, $ano = null, $mes = null) {
     $ano = $ano ?: date('Y');
     $mes = $mes ?: date('m');
-    
+
+    // ✅ CORRIGIDO: Usar caminho correto onde os arquivos são realmente salvos
     return "/root/nexo/nexo-pedidos/backend/storage/pdf/empresa_{$empresaId}/{$ambiente}/{$modelo}/{$status}/{$ano}/{$mes}";
 }
 
