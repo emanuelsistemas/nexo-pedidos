@@ -39,6 +39,9 @@ try {
         throw new Exception('Dados JSON inválidos');
     }
 
+    // DEBUG: Log dos dados recebidos
+    error_log("🔍 DADOS RECEBIDOS: " . json_encode($data));
+
     // 3. Validar campos obrigatórios
     $requiredFields = ['empresa_id', 'serie', 'numero_inicial', 'numero_final', 'motivo'];
     foreach ($requiredFields as $field) {
@@ -182,12 +185,18 @@ try {
     error_log("💾 XML de inutilização salvo: {$xmlPath}");
 
     // 16. Atualizar status no banco (MESMO PADRÃO DO CANCELAMENTO)
+    error_log("🔍 DEBUG: Verificando se nfe_id foi fornecido...");
+    error_log("🔍 DEBUG: nfe_id = " . ($data['nfe_id'] ?? 'NÃO DEFINIDO'));
+    error_log("🔍 DEBUG: isset = " . (isset($data['nfe_id']) ? 'SIM' : 'NÃO'));
+    error_log("🔍 DEBUG: !empty = " . (!empty($data['nfe_id']) ? 'SIM' : 'NÃO'));
+
     if (isset($data['nfe_id']) && !empty($data['nfe_id'])) {
         error_log("🔄 ATUALIZANDO STATUS NO BANCO LOCAL...");
+        error_log("🔍 NFE_ID para atualização: " . $data['nfe_id']);
 
-        // Configuração Supabase (MESMO PADRÃO DO CANCELAMENTO)
+        // Configuração Supabase (USAR SERVICE_ROLE PARA PERMISSÕES DE UPDATE)
         $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
-        $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMzMzk5NzEsImV4cCI6MjA0ODkxNTk3MX0.VmyrqjgFO8nT_Lqzq0_HQmJnKQiIkTtClQUEWdxwP5s';
+        $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjY2NDk5NywiZXhwIjoyMDYyMjQwOTk3fQ.UC2DvFRcfrNUbRrnQhrpqsX_hJXBLy9g-YVZbpaTcso';
 
         $updateData = [
             'status_nfe' => 'inutilizada',
@@ -198,8 +207,12 @@ try {
         ];
 
         // Fazer requisição para Supabase (MESMO PADRÃO DO CANCELAMENTO)
+        $url = $supabaseUrl . '/rest/v1/pdv?id=eq.' . $data['nfe_id'];
+        error_log("🔍 URL da requisição: " . $url);
+        error_log("🔍 Dados para atualização: " . json_encode($updateData));
+
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $supabaseUrl . '/rest/v1/pdv?id=eq.' . $data['nfe_id']);
+        curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -213,6 +226,9 @@ try {
         $updateResponse = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        error_log("🔍 HTTP Code da resposta: " . $httpCode);
+        error_log("🔍 Resposta completa: " . $updateResponse);
 
         if ($httpCode >= 200 && $httpCode < 300) {
             error_log("✅ STATUS ATUALIZADO NO BANCO - NFe marcada como inutilizada");
