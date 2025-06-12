@@ -3070,7 +3070,7 @@ const PDVPage: React.FC = () => {
   };
 
   // Função para verificar se a venda foi inserida corretamente no banco
-  const verificarVendaNoBanco = async (vendaId: string, numeroVenda: string, totalItensEsperados: number): Promise<boolean> => {
+  const verificarVendaNoBanco = async (vendaId: string, numeroVenda: string, totalItensEsperados: number, tipoControle: string): Promise<boolean> => {
     try {
       setEtapaProcessamento('Verificando venda no banco de dados...');
 
@@ -3120,14 +3120,6 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) return false;
-
-      const { data: estoqueConfig } = await supabase
-        .from('tipo_controle_estoque_config')
-        .select('tipo_controle')
-        .eq('empresa_id', usuarioData.empresa_id)
-        .single();
-
-      const tipoControle = estoqueConfig?.tipo_controle || 'pedidos';
 
       if (tipoControle === 'pdv') {
         setEtapaProcessamento('Verificando baixa de estoque...');
@@ -3611,6 +3603,16 @@ const PDVPage: React.FC = () => {
         };
       }
 
+      // Buscar configuração de controle de estoque
+      setEtapaProcessamento('Verificando configuração de estoque...');
+      const { data: estoqueConfig } = await supabase
+        .from('tipo_controle_estoque_config')
+        .select('tipo_controle')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      const tipoControle = estoqueConfig?.tipo_controle || 'pedidos';
+
       // Preparar dados da venda principal
       setEtapaProcessamento('Preparando dados da venda...');
       const vendaData = {
@@ -3762,7 +3764,7 @@ const PDVPage: React.FC = () => {
       }
 
       // VERIFICAÇÃO CRÍTICA: Confirmar se tudo foi salvo corretamente
-      const vendaVerificada = await verificarVendaNoBanco(vendaId, numeroVenda, carrinho.length);
+      const vendaVerificada = await verificarVendaNoBanco(vendaId, numeroVenda, carrinho.length, tipoControle);
 
       if (!vendaVerificada) {
         setEtapaProcessamento('ERRO: Venda não foi salva corretamente!');
