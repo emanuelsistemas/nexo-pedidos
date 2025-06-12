@@ -242,6 +242,10 @@ const PDVPage: React.FC = () => {
   const [vendaProcessadaId, setVendaProcessadaId] = useState<string | null>(null);
   const [numeroVendaProcessada, setNumeroVendaProcessada] = useState<string>('');
 
+  // Estados específicos para modal de NFC-e
+  const [statusProcessamento, setStatusProcessamento] = useState<'processando' | 'sucesso' | 'erro'>('processando');
+  const [erroProcessamento, setErroProcessamento] = useState<string>('');
+
   // Estados para tela de finalização final
   const [showFinalizacaoFinal, setShowFinalizacaoFinal] = useState(false);
   const [showFinalizacaoNaAreaPagamento, setShowFinalizacaoNaAreaPagamento] = useState(false);
@@ -3452,6 +3456,53 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Função para gerar próximo número de NFC-e (modelo 65)
+  const gerarProximoNumeroNFCe = async (empresaId: string): Promise<number> => {
+    try {
+      console.log('🔢 FRONTEND: Gerando próximo número NFC-e para empresa:', empresaId);
+
+      // Buscar o último número de NFC-e da empresa (modelo 65)
+      console.log('🔍 FRONTEND: Consultando último número NFC-e no banco...');
+      const { data, error } = await supabase
+        .from('pdv')
+        .select('numero_documento')
+        .eq('empresa_id', empresaId)
+        .eq('modelo_documento', 65) // NFC-e modelo 65
+        .not('numero_documento', 'is', null)
+        .order('numero_documento', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('❌ FRONTEND: Erro ao buscar último número NFC-e:', error);
+        console.error('❌ FRONTEND: Detalhes do erro:', error.message, error.details);
+        console.log('🔄 FRONTEND: Usando fallback - número 1');
+        return 1; // Começar do 1 em caso de erro
+      }
+
+      console.log('📋 FRONTEND: Dados encontrados na tabela PDV para NFC-e:', data);
+      console.log('📊 FRONTEND: Quantidade de registros encontrados:', data?.length || 0);
+
+      // Se não encontrou nenhum registro, começar do 1
+      let proximoNumero = 1;
+      if (data && data.length > 0 && data[0].numero_documento) {
+        proximoNumero = data[0].numero_documento + 1;
+        console.log(`📊 FRONTEND: Último número NFC-e encontrado: ${data[0].numero_documento}`);
+        console.log(`➕ FRONTEND: Incrementando para: ${proximoNumero}`);
+      } else {
+        console.log('📊 FRONTEND: Nenhum registro NFC-e encontrado, iniciando do número 1');
+      }
+
+      console.log(`🎯 FRONTEND: Próximo número NFC-e definido: ${proximoNumero}`);
+      return proximoNumero;
+
+    } catch (error) {
+      console.error('❌ FRONTEND: Erro geral ao buscar próximo número NFC-e:', error);
+      console.error('❌ FRONTEND: Stack trace:', (error as Error).stack);
+      console.log('🔄 FRONTEND: Usando fallback - número 1');
+      return 1; // Fallback para 1
+    }
+  };
+
   // Função principal para finalizar e salvar a venda
   const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_impressao') => {
     if (carrinho.length === 0) {
@@ -3464,6 +3515,8 @@ const PDVPage: React.FC = () => {
     setEtapaProcessamento('Iniciando processamento da venda...');
     setVendaProcessadaId(null);
     setNumeroVendaProcessada('');
+    setStatusProcessamento('processando');
+    setErroProcessamento('');
 
     try {
       // Obter dados do usuário
@@ -3775,15 +3828,150 @@ const PDVPage: React.FC = () => {
         }
       }
 
+      // VERIFICAR SE É EMISSÃO DE NFC-e
+      if (tipoFinalizacao.startsWith('nfce_')) {
+        console.log('🚀 FRONTEND: Iniciando processo de emissão NFC-e');
+        console.log('📋 FRONTEND: Tipo finalização:', tipoFinalizacao);
+        console.log('👤 FRONTEND: Empresa ID:', usuarioData.empresa_id);
+
+        setEtapaProcessamento('Preparando dados para NFC-e...');
+
+        try {
+          // Preparar dados da NFC-e
+          console.log('🔢 FRONTEND: Gerando próximo número NFC-e...');
+          const proximoNumero = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
+          console.log('✅ FRONTEND: Próximo número NFC-e:', proximoNumero);
+
+          const codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
+          console.log('🔢 FRONTEND: Código numérico gerado:', codigoNumerico);
+
+          const nfceData = {
+            identificacao: {
+              numero: proximoNumero,
+              serie: 1, // Série padrão para NFC-e
+              codigo_numerico: codigoNumerico,
+              natureza_operacao: 'Venda de mercadoria'
+            },
+            destinatario: clienteData ? {
+              documento: clienteData.documento_cliente,
+              nome: clienteData.nome_cliente
+            } : {},
+            produtos: carrinho.map(item => ({
+              codigo: item.produto.codigo || `PROD${item.produto.id}`,
+              descricao: item.produto.nome,
+              quantidade: item.quantidade,
+              valor_unitario: item.produto.preco,
+              unidade: 'UN', // Unidade padrão
+              ncm: item.produto.ncm || '00000000', // NCM padrão se não informado
+              cfop: '5102', // CFOP padrão para venda
+              codigo_barras: item.produto.codigo_barras || ''
+            }))
+          };
+
+          console.log('📋 FRONTEND: Dados NFC-e preparados:', nfceData);
+          console.log('📦 FRONTEND: Total de produtos:', nfceData.produtos.length);
+          console.log('👤 FRONTEND: Destinatário:', nfceData.destinatario);
+
+          setEtapaProcessamento('Emitindo NFC-e na SEFAZ...');
+
+          // Chamar endpoint de emissão de NFC-e
+          console.log('📡 FRONTEND: Enviando dados para backend...');
+          const requestData = {
+            empresa_id: usuarioData.empresa_id,
+            nfce_data: nfceData
+          };
+          console.log('📡 FRONTEND: Dados da requisição:', requestData);
+
+          const nfceResponse = await fetch('/backend/public/emitir-nfce.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+          });
+
+          console.log('📡 FRONTEND: Resposta recebida - Status:', nfceResponse.status);
+
+          if (!nfceResponse.ok) {
+            console.error('❌ FRONTEND: Erro HTTP:', nfceResponse.status, nfceResponse.statusText);
+            throw new Error(`Erro HTTP ${nfceResponse.status}: ${nfceResponse.statusText}`);
+          }
+
+          const nfceResult = await nfceResponse.json();
+          console.log('📋 FRONTEND: Resultado da emissão:', nfceResult);
+
+          if (!nfceResult.success) {
+            console.error('❌ FRONTEND: Erro na emissão:', nfceResult.error);
+            throw new Error(`Erro na emissão da NFC-e: ${nfceResult.error}`);
+          }
+
+          console.log('✅ FRONTEND: NFC-e emitida com sucesso!');
+          console.log('🔑 FRONTEND: Chave:', nfceResult.data.chave);
+          console.log('📋 FRONTEND: Protocolo:', nfceResult.data.protocolo);
+
+          setStatusProcessamento('sucesso');
+          setEtapaProcessamento('NFC-e emitida com sucesso!');
+
+          // Atualizar registro da venda com dados da NFC-e
+          console.log('💾 FRONTEND: Atualizando registro da venda...');
+          const updateData = {
+            modelo_documento: 65, // NFC-e
+            numero_documento: nfceResult.data.numero,
+            serie_documento: nfceResult.data.serie,
+            chave_nfe: nfceResult.data.chave,
+            protocolo_nfe: nfceResult.data.protocolo,
+            xml_path: nfceResult.data.xml_path,
+            pdf_path: nfceResult.data.pdf_path,
+            status_fiscal: 'autorizada',
+            data_autorizacao: nfceResult.data.data_autorizacao
+          };
+          console.log('💾 FRONTEND: Dados para atualização:', updateData);
+
+          const { error: updateError } = await supabase
+            .from('pdv')
+            .update(updateData)
+            .eq('id', vendaId);
+
+          if (updateError) {
+            console.error('❌ FRONTEND: Erro ao atualizar venda:', updateError);
+            // Não interrompe o processo, pois a NFC-e já foi emitida
+          } else {
+            console.log('✅ FRONTEND: Venda atualizada com dados da NFC-e');
+          }
+
+          // Para NFC-e, fechar automaticamente após 2 segundos de sucesso
+          console.log('⏱️ FRONTEND: Aguardando 2 segundos antes de fechar...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+        } catch (nfceError) {
+          console.error('❌ FRONTEND: Erro na emissão da NFC-e:', nfceError);
+          console.error('❌ FRONTEND: Stack trace:', (nfceError as Error).stack);
+          setStatusProcessamento('erro');
+          setErroProcessamento((nfceError as Error).message);
+          setEtapaProcessamento(`Erro na NFC-e: ${(nfceError as Error).message}`);
+          console.log('🛑 FRONTEND: Processo interrompido por erro - aguardando ação do usuário');
+          // Não fechar automaticamente em caso de erro - deixar usuário fechar manualmente
+          return;
+        }
+      }
+
       // SUCESSO CONFIRMADO!
-      setEtapaProcessamento('Venda finalizada com sucesso!');
+      const mensagemSucesso = tipoFinalizacao.startsWith('nfce_')
+        ? 'Venda finalizada e NFC-e emitida com sucesso!'
+        : 'Venda finalizada com sucesso!';
+
+      setEtapaProcessamento(mensagemSucesso);
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       // Fechar modal de processamento
       setShowProcessandoVenda(false);
 
       // Mostrar sucesso
-      toast.success(`Venda #${numeroVenda} finalizada com sucesso!`);
+      const toastMessage = tipoFinalizacao.startsWith('nfce_')
+        ? `Venda #${numeroVenda} finalizada e NFC-e emitida com sucesso!`
+        : `Venda #${numeroVenda} finalizada com sucesso!`;
+
+      toast.success(toastMessage);
 
       // Disparar evento customizado para atualizar modal de movimentos
       window.dispatchEvent(new CustomEvent('vendaPdvFinalizada', {
@@ -8631,14 +8819,40 @@ const PDVPage: React.FC = () => {
               className="bg-background-card border border-gray-800 rounded-lg p-8 max-w-md w-full mx-4"
             >
               <div className="text-center">
-                {/* Ícone de loading */}
-                <div className="w-16 h-16 bg-primary-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                {/* Ícone baseado no status */}
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${
+                  statusProcessamento === 'sucesso'
+                    ? 'bg-green-500/20'
+                    : statusProcessamento === 'erro'
+                    ? 'bg-red-500/20'
+                    : 'bg-primary-500/20'
+                }`}>
+                  {statusProcessamento === 'sucesso' ? (
+                    <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : statusProcessamento === 'erro' ? (
+                    <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  ) : (
+                    <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                  )}
                 </div>
 
                 {/* Título */}
-                <h3 className="text-xl font-semibold text-white mb-2">
-                  Processando Venda
+                <h3 className={`text-xl font-semibold mb-2 ${
+                  statusProcessamento === 'sucesso'
+                    ? 'text-green-400'
+                    : statusProcessamento === 'erro'
+                    ? 'text-red-400'
+                    : 'text-white'
+                }`}>
+                  {statusProcessamento === 'sucesso'
+                    ? 'Sucesso!'
+                    : statusProcessamento === 'erro'
+                    ? 'Erro na Emissão'
+                    : 'Processando Venda'}
                 </h3>
 
                 {/* Número da venda se disponível */}
@@ -8655,17 +8869,37 @@ const PDVPage: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Barra de progresso animada */}
-                <div className="w-full bg-gray-700 rounded-full h-2 mb-4">
-                  <div className="bg-primary-500 h-2 rounded-full animate-pulse" style={{ width: '100%' }}></div>
-                </div>
+                {/* Barra de progresso animada - apenas durante processamento */}
+                {statusProcessamento === 'processando' && (
+                  <div className="w-full bg-gray-700 rounded-full h-2 mb-4">
+                    <div className="bg-primary-500 h-2 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+                  </div>
+                )}
 
-                {/* Aviso importante */}
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                  <p className="text-yellow-300 text-xs">
-                    ⚠️ Não feche esta janela durante o processamento
-                  </p>
-                </div>
+                {/* Botão de fechar para erro */}
+                {statusProcessamento === 'erro' && (
+                  <div className="mt-6">
+                    <button
+                      onClick={() => {
+                        setShowProcessandoVenda(false);
+                        setStatusProcessamento('processando');
+                        setErroProcessamento('');
+                      }}
+                      className="w-full bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                )}
+
+                {/* Aviso importante - apenas durante processamento */}
+                {statusProcessamento === 'processando' && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                    <p className="text-yellow-300 text-xs">
+                      ⚠️ Não feche esta janela durante o processamento
+                    </p>
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
