@@ -345,12 +345,23 @@ try {
     logDetalhado('050', 'Iniciando criação da tag IDE');
     $std = new stdClass();
     $std->cUF = (int)$empresa['codigo_uf']; // Código UF da empresa
-    $std->cNF = str_pad($codigoNumerico, 8, '0', STR_PAD_LEFT);
+
+    // ✅ CORRETO: cNF deve ser diferente do nNF (conforme NT2019.001)
+    $numeroNota = (int)($identificacao['numero'] ?? 1);
+    $std->cNF = str_pad($codigoNumerico, 8, '0', STR_PAD_LEFT); // Código numérico aleatório
+    $std->nNF = $numeroNota; // Número sequencial da nota
+
+    // Validar se cNF é diferente de nNF (obrigatório pela NT2019.001)
+    if ($std->cNF == str_pad($numeroNota, 8, '0', STR_PAD_LEFT)) {
+        logDetalhado('050.1', 'ERRO: cNF igual ao nNF, violando NT2019.001', ['cNF' => $std->cNF, 'nNF' => $std->nNF]);
+        throw new Exception('Código numérico (cNF) não pode ser igual ao número da nota (nNF). Configure um código numérico diferente.');
+    }
+
+    logDetalhado('050.2', 'Códigos validados conforme NT2019.001', ['cNF' => $std->cNF, 'nNF' => $std->nNF]);
 
     $std->natOp = $identificacao['natureza_operacao'] ?? 'Venda de mercadoria';
     $std->mod = 65; // NFC-e
     $std->serie = (int)($identificacao['serie'] ?? 1);
-    $std->nNF = (int)($identificacao['numero'] ?? 1);
     $std->dhEmi = date('Y-m-d\TH:i:sP'); // Data/hora emissão com timezone
     $std->tpNF = 1; // Saída
     $std->idDest = 1; // Operação interna
@@ -672,9 +683,24 @@ try {
         // IMPOSTOS OBRIGATÓRIOS PARA NFC-e (SEGUINDO DOCUMENTAÇÃO OFICIAL)
         logDetalhado('126', "Iniciando criação de impostos para produto {$nItem}");
 
-        // ICMS - OBRIGATÓRIO
+        // 1. PRIMEIRO: Container de impostos (OBRIGATÓRIO conforme documentação)
+        logDetalhado('126.1', "Criando container de impostos para produto {$nItem}");
+        $std = new stdClass();
+        $std->nItem = $nItem; // ✅ CORRETO: usar 'nItem', não 'item'
+
+        try {
+            logDetalhado('126.2', "Executando make->tagimposto() para produto {$nItem}");
+            $make->tagimposto($std);
+            logDetalhado('126.3', "Container de impostos criado com sucesso para produto {$nItem}");
+        } catch (Exception $impostoError) {
+            logDetalhado('126.4', "ERRO: Falha ao criar container de impostos para produto {$nItem}", ['error' => $impostoError->getMessage()]);
+            throw new Exception("Erro no container de impostos do produto {$nItem}: " . $impostoError->getMessage());
+        }
+
+        // 2. SEGUNDO: ICMS - OBRIGATÓRIO
         logDetalhado('127', "Criando ICMS para produto {$nItem}");
         $std = new stdClass();
+        $std->nItem = $nItem; // ✅ CORRETO: usar 'nItem'
         $std->orig = 0; // Nacional
         $std->CSOSN = '102'; // Simples Nacional - Sem tributação
 
@@ -687,9 +713,10 @@ try {
             throw new Exception("Erro no ICMS do produto {$nItem}: " . $icmsError->getMessage());
         }
 
-        // PIS - OBRIGATÓRIO
+        // 3. TERCEIRO: PIS - OBRIGATÓRIO
         logDetalhado('131', "Criando PIS para produto {$nItem}");
         $std = new stdClass();
+        $std->nItem = $nItem; // ✅ CORRETO: usar 'nItem'
         $std->CST = '49'; // Outras operações
 
         try {
@@ -701,9 +728,10 @@ try {
             throw new Exception("Erro no PIS do produto {$nItem}: " . $pisError->getMessage());
         }
 
-        // COFINS - OBRIGATÓRIO
+        // 4. QUARTO: COFINS - OBRIGATÓRIO
         logDetalhado('135', "Criando COFINS para produto {$nItem}");
         $std = new stdClass();
+        $std->nItem = $nItem; // ✅ CORRETO: usar 'nItem'
         $std->CST = '49'; // Outras operações
 
         try {
