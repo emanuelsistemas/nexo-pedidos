@@ -63,7 +63,20 @@ try {
     }
     
     $empresa = $empresaData[0];
-    
+
+    // Função para obter código da UF
+    function getCodigoUF($uf) {
+        $codigosUF = [
+            'AC' => 12, 'AL' => 17, 'AP' => 16, 'AM' => 13, 'BA' => 29,
+            'CE' => 23, 'DF' => 53, 'ES' => 32, 'GO' => 52, 'MA' => 21,
+            'MT' => 51, 'MS' => 50, 'MG' => 31, 'PA' => 15, 'PB' => 25,
+            'PR' => 41, 'PE' => 26, 'PI' => 22, 'RJ' => 33, 'RN' => 24,
+            'RS' => 43, 'RO' => 11, 'RR' => 14, 'SC' => 42, 'SP' => 35,
+            'SE' => 28, 'TO' => 27
+        ];
+        return $codigosUF[$uf] ?? null;
+    }
+
     // Buscar configuração NFe da empresa
     $nfeConfigUrl = $supabaseUrl . "/rest/v1/nfe_config?empresa_id=eq.{$empresaId}&select=*";
     $nfeConfigData = supabaseRequest($nfeConfigUrl);
@@ -136,6 +149,11 @@ try {
                 'regime_tributario' => $empresa['regime_tributario'],
                 'uf' => $empresa['estado'],
                 'codigo_municipio' => $empresa['codigo_municipio'],
+                'codigo_uf' => getCodigoUF($empresa['estado']), // Calcular código UF
+                'csc_homologacao' => $empresa['csc_homologacao'], // CSC para NFC-e
+                'csc_id_homologacao' => $empresa['csc_id_homologacao'], // CSC ID para NFC-e
+                'csc_producao' => $empresa['csc_producao'], // CSC para NFC-e
+                'csc_id_producao' => $empresa['csc_id_producao'], // CSC ID para NFC-e
                 'endereco' => [
                     'logradouro' => $empresa['endereco'],
                     'numero' => $empresa['numero'],

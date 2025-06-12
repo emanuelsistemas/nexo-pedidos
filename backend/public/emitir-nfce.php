@@ -1,17 +1,43 @@
 <?php
 /**
  * Endpoint para emissão de NFC-e (Modelo 65)
- * 
+ *
  * SEGUINDO AS 5 LEIS FUNDAMENTAIS:
  * 1. LEI DOS DADOS REAIS - Sempre dados reais, nunca fallbacks
  * 2. LEI DA BIBLIOTECA SAGRADA - sped-nfe é intocável
  * 3. LEI DA AUTENTICIDADE - Nunca simular, sempre processos reais
  * 4. LEI DA EXCELÊNCIA - Solução correta, nunca contornos
  * 5. LEI DA DOCUMENTAÇÃO OFICIAL - Consultar documentação antes de implementar
- * 
+ *
  * Baseado em: https://github.com/nfephp-org/sped-nfe/blob/master/docs/Make.md
  * Manual Fiscal: https://www.mjailton.com.br/manualnfe/
  */
+
+// SISTEMA DE LOGS DETALHADOS
+ini_set('memory_limit', '512M');
+ini_set('max_execution_time', 300);
+ini_set('log_errors', 1);
+ini_set('error_log', '/tmp/nfce_debug.log');
+
+function logDetalhado($step, $message, $data = null) {
+    $timestamp = date('Y-m-d H:i:s.u');
+    $logEntry = "[{$timestamp}] STEP_{$step}: {$message}";
+    if ($data !== null) {
+        $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+    error_log($logEntry);
+
+    // Também salvar em arquivo específico
+    file_put_contents('/tmp/nfce_detailed.log', $logEntry . "\n", FILE_APPEND | LOCK_EX);
+
+    // COMENTADO: Output para debug imediato (estava contaminando resposta JSON)
+    // echo json_encode([
+    //     'debug_step' => $step,
+    //     'debug_message' => $message,
+    //     'debug_timestamp' => $timestamp
+    // ]) . "\n";
+    // flush();
+}
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -22,64 +48,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
+logDetalhado('001', 'Iniciando endpoint NFC-e');
+
 try {
+    logDetalhado('002', 'Carregando dependências');
     require_once '../vendor/autoload.php';
     require_once '../includes/storage-paths.php';
-    
+    logDetalhado('003', 'Dependências carregadas com sucesso');
+
     // Validar método
+    logDetalhado('004', 'Validando método HTTP', ['method' => $_SERVER['REQUEST_METHOD']]);
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('Método não permitido. Use POST.');
     }
-    
+
     // Receber dados
-    $input = json_decode(file_get_contents('php://input'), true);
-    
+    logDetalhado('005', 'Lendo dados de entrada');
+    $rawInput = file_get_contents('php://input');
+    logDetalhado('006', 'Dados brutos recebidos', ['size' => strlen($rawInput), 'preview' => substr($rawInput, 0, 200)]);
+
+    $input = json_decode($rawInput, true);
+
     if (!$input) {
-        throw new Exception('Dados JSON inválidos');
+        logDetalhado('007', 'ERRO: Falha ao decodificar JSON', ['json_error' => json_last_error_msg()]);
+        throw new Exception('Dados JSON inválidos: ' . json_last_error_msg());
     }
-    
+
+    logDetalhado('008', 'JSON decodificado com sucesso', ['keys' => array_keys($input)]);
+
     // Parâmetros obrigatórios para multi-tenant
     $empresaId = $input['empresa_id'] ?? null;
     $nfceData = $input['nfce_data'] ?? null;
+
+    logDetalhado('009', 'Parâmetros extraídos', ['empresa_id' => $empresaId, 'has_nfce_data' => !empty($nfceData)]);
     
     // Validações multi-tenant
+    logDetalhado('010', 'Iniciando validações multi-tenant');
+
     if (!$empresaId) {
+        logDetalhado('011', 'ERRO: empresa_id não fornecido');
         throw new Exception('empresa_id é obrigatório');
     }
-    
+
     if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $empresaId)) {
+        logDetalhado('012', 'ERRO: empresa_id com formato inválido', ['empresa_id' => $empresaId]);
         throw new Exception('empresa_id inválido');
     }
-    
+
     if (!$nfceData) {
+        logDetalhado('013', 'ERRO: nfce_data não fornecido');
         throw new Exception('nfce_data é obrigatório');
     }
-    
-    error_log("🚀 NFCE: Iniciando emissão para empresa: {$empresaId}");
-    error_log("📋 NFCE: Dados recebidos - " . json_encode($nfceData, JSON_UNESCAPED_UNICODE));
+
+    logDetalhado('014', 'Validações básicas concluídas', ['empresa_id' => $empresaId]);
+    logDetalhado('015', 'Dados NFC-e recebidos', $nfceData);
 
     // Buscar configurações da empresa (MÉTODO MULTI-TENANT)
-    error_log("🔍 NFCE: Buscando configurações da empresa...");
+    logDetalhado('016', 'Iniciando busca de configurações da empresa');
     $configUrl = "http://localhost/backend/public/get-empresa-config.php?empresa_id={$empresaId}";
-    $configResponse = file_get_contents($configUrl);
+    logDetalhado('017', 'URL de configuração montada', ['url' => $configUrl]);
+
+    // Usar cURL em vez de file_get_contents para melhor controle
+    logDetalhado('018', 'Iniciando requisição cURL');
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $configUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+    $configResponse = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    logDetalhado('019', 'Resposta cURL recebida', [
+        'http_code' => $httpCode,
+        'curl_error' => $curlError,
+        'response_size' => strlen($configResponse),
+        'response_preview' => substr($configResponse, 0, 100)
+    ]);
+
+    if ($httpCode !== 200) {
+        logDetalhado('020', 'ERRO: HTTP code inválido', ['http_code' => $httpCode]);
+        throw new Exception("Erro HTTP ao buscar configurações: {$httpCode}");
+    }
 
     if (!$configResponse) {
-        error_log("❌ NFCE: Erro ao buscar configurações - resposta vazia");
+        logDetalhado('021', 'ERRO: Resposta vazia do endpoint de configuração');
         throw new Exception('Erro ao buscar configurações da empresa');
     }
 
-    error_log("📡 NFCE: Resposta configurações: " . $configResponse);
+    logDetalhado('022', 'Decodificando JSON de configuração');
     $configData = json_decode($configResponse, true);
 
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        logDetalhado('023', 'ERRO: Falha ao decodificar JSON de configuração', ['json_error' => json_last_error_msg()]);
+        throw new Exception('Erro ao decodificar resposta JSON: ' . json_last_error_msg());
+    }
+
     if (!$configData || !$configData['success']) {
-        error_log("❌ NFCE: Configurações inválidas: " . json_encode($configData));
+        logDetalhado('024', 'ERRO: Configurações inválidas ou não encontradas', $configData);
         throw new Exception('Configurações da empresa não encontradas: ' . ($configData['error'] ?? 'Erro desconhecido'));
     }
 
     $empresa = $configData['data']['empresa'];
     $nfeConfig = $configData['data']['nfe_config'];
 
-    error_log("✅ NFCE: Configurações carregadas - Empresa: {$empresa['razao_social']}, Ambiente: {$nfeConfig['ambiente_codigo']}");
+    logDetalhado('025', 'Configurações carregadas com sucesso', [
+        'empresa_razao' => $empresa['razao_social'],
+        'ambiente' => $nfeConfig['ambiente_codigo'],
+        'has_csc' => !empty($empresa['csc_homologacao'])
+    ]);
     
     // Validar dados obrigatórios da empresa (SEM FALLBACKS)
     error_log("🔍 NFCE: Validando dados obrigatórios da empresa...");
@@ -170,13 +249,15 @@ try {
     error_log("📋 NFCE: Metadata: " . json_encode($metadata, JSON_UNESCAPED_UNICODE));
     
     // Configurar biblioteca sped-nfe (MÉTODO NATIVO)
-    error_log("🔧 NFCE: Configurando biblioteca sped-nfe...");
+    logDetalhado('030', 'Iniciando configuração da biblioteca sped-nfe');
+
     $cnpjLimpo = preg_replace('/[^0-9]/', '', $empresa['cnpj']);
+    logDetalhado('031', 'CNPJ processado', ['original' => $empresa['cnpj'], 'limpo' => $cnpjLimpo, 'tamanho' => strlen($cnpjLimpo)]);
+
     if (strlen($cnpjLimpo) !== 14) {
-        error_log("❌ NFCE: CNPJ inválido - Original: {$empresa['cnpj']}, Limpo: {$cnpjLimpo}, Tamanho: " . strlen($cnpjLimpo));
+        logDetalhado('032', 'ERRO: CNPJ com tamanho inválido', ['cnpj' => $cnpjLimpo, 'tamanho' => strlen($cnpjLimpo)]);
         throw new Exception('CNPJ da empresa deve ter 14 dígitos');
     }
-    error_log("✅ NFCE: CNPJ limpo: {$cnpjLimpo}");
 
     $config = [
         "atualizacao" => date('Y-m-d H:i:s'),
@@ -187,43 +268,44 @@ try {
         "schemes" => "PL_009_V4",
         "versao" => '4.00',
         "CSC" => $empresa[$cscField],
-        "CSCid" => $empresa[$cscIdField]
+        "CSCid" => (string)$empresa[$cscIdField] // Converter para string
     ];
 
-    error_log("📋 NFCE: Configuração sped-nfe: " . json_encode($config, JSON_UNESCAPED_UNICODE));
+    logDetalhado('033', 'Configuração sped-nfe montada', $config);
 
     // Criar objeto Certificate
-    error_log("🔐 NFCE: Criando objeto Certificate...");
+    logDetalhado('034', 'Criando objeto Certificate');
     try {
         $certificate = \NFePHP\Common\Certificate::readPfx($certificado, $metadata['password'] ?? '');
-        error_log("✅ NFCE: Certificate criado com sucesso");
+        logDetalhado('035', 'Certificate criado com sucesso');
     } catch (Exception $certError) {
-        error_log("❌ NFCE: Erro ao criar Certificate: " . $certError->getMessage());
+        logDetalhado('036', 'ERRO: Falha ao criar Certificate', ['error' => $certError->getMessage()]);
         throw new Exception("Erro no certificado: " . $certError->getMessage());
     }
 
     // Inicializar Tools (MÉTODO NATIVO)
-    error_log("🛠️ NFCE: Inicializando Tools...");
+    logDetalhado('037', 'Inicializando Tools');
     try {
         $tools = new \NFePHP\NFe\Tools(json_encode($config), $certificate);
+        logDetalhado('038', 'Tools criado, configurando modelo 65');
         $tools->model('65'); // Modelo NFC-e
-        error_log("✅ NFCE: Tools inicializado - Modelo 65");
+        logDetalhado('039', 'Tools configurado para modelo 65 com sucesso');
     } catch (Exception $toolsError) {
-        error_log("❌ NFCE: Erro ao inicializar Tools: " . $toolsError->getMessage());
+        logDetalhado('040', 'ERRO: Falha ao inicializar Tools', ['error' => $toolsError->getMessage()]);
         throw new Exception("Erro ao inicializar Tools: " . $toolsError->getMessage());
     }
 
     // Inicializar Make (MÉTODO NATIVO)
-    error_log("🏗️ NFCE: Inicializando Make...");
+    logDetalhado('041', 'Inicializando Make');
     try {
         $make = new \NFePHP\NFe\Make();
-        error_log("✅ NFCE: Make inicializado");
+        logDetalhado('042', 'Make inicializado com sucesso');
     } catch (Exception $makeError) {
-        error_log("❌ NFCE: Erro ao inicializar Make: " . $makeError->getMessage());
+        logDetalhado('043', 'ERRO: Falha ao inicializar Make', ['error' => $makeError->getMessage()]);
         throw new Exception("Erro ao inicializar Make: " . $makeError->getMessage());
     }
 
-    error_log("🔧 NFCE: Biblioteca sped-nfe inicializada - Modelo 65");
+    logDetalhado('044', 'Biblioteca sped-nfe completamente inicializada');
     
     // MONTAGEM DA NFC-e USANDO MÉTODOS NATIVOS DA BIBLIOTECA
     error_log("🏗️ NFCE: Iniciando montagem da NFC-e...");
@@ -260,7 +342,7 @@ try {
     error_log("✅ NFCE: Código numérico: {$codigoNumerico}");
     
     // Tag IDE (Identificação) - MÉTODO NATIVO
-    error_log("🏷️ NFCE: Criando tag IDE...");
+    logDetalhado('050', 'Iniciando criação da tag IDE');
     $std = new stdClass();
     $std->cUF = (int)$empresa['codigo_uf']; // Código UF da empresa
     $std->cNF = str_pad($codigoNumerico, 8, '0', STR_PAD_LEFT);
@@ -286,47 +368,76 @@ try {
     $std->procEmi = 0; // Aplicativo do contribuinte
     $std->verProc = '1.0.0';
 
-    error_log("📋 NFCE: Dados tag IDE: " . json_encode($std, JSON_UNESCAPED_UNICODE));
+    logDetalhado('051', 'Dados da tag IDE preparados', (array)$std);
 
     try {
+        logDetalhado('052', 'Executando make->tagide()');
         $make->tagide($std);
-        error_log("✅ NFCE: Tag IDE criada - Número: {$std->nNF}, Série: {$std->serie}, Modelo: {$std->mod}");
+        logDetalhado('053', 'Tag IDE criada com sucesso', ['numero' => $std->nNF, 'serie' => $std->serie, 'modelo' => $std->mod]);
     } catch (Exception $ideError) {
-        error_log("❌ NFCE: Erro ao criar tag IDE: " . $ideError->getMessage());
+        logDetalhado('054', 'ERRO: Falha ao criar tag IDE', ['error' => $ideError->getMessage(), 'trace' => $ideError->getTraceAsString()]);
         throw new Exception("Erro na tag IDE: " . $ideError->getMessage());
     }
 
     // Emitente (MÉTODO NATIVO) - SEM FALLBACKS
+    logDetalhado('055', 'Iniciando criação do emitente');
+
     $std = new stdClass();
     $std->xNome = $empresa['razao_social']; // JÁ VALIDADO ACIMA
     $std->CNPJ = $cnpjLimpo; // JÁ VALIDADO ACIMA
     $std->xFant = $empresa['nome_fantasia'] ?? null; // OPCIONAL
 
+    logDetalhado('056', 'Validando IE obrigatória', ['ie' => $empresa['inscricao_estadual'] ?? 'NULL']);
     // Validar IE obrigatória
     $std->IE = $empresa['inscricao_estadual'];
 
+    logDetalhado('057', 'Validando regime tributário', ['regime' => $empresa['regime_tributario'] ?? 'NULL']);
     // Validar regime tributário obrigatório
     $std->CRT = (int)$empresa['regime_tributario'];
 
-    $make->tagemit($std);
+    logDetalhado('058', 'Dados do emitente preparados', (array)$std);
+
+    try {
+        logDetalhado('059', 'Executando make->tagemit()');
+        $make->tagemit($std);
+        logDetalhado('060', 'Tag emitente criada com sucesso');
+    } catch (Exception $emitError) {
+        logDetalhado('061', 'ERRO: Falha ao criar tag emitente', ['error' => $emitError->getMessage()]);
+        throw new Exception("Erro na tag emitente: " . $emitError->getMessage());
+    }
 
     // Endereço do emitente (MÉTODO NATIVO) - SEM FALLBACKS
+    logDetalhado('062', 'Iniciando criação do endereço do emitente');
+
     $endereco = $empresa['endereco'] ?? [];
+    logDetalhado('063', 'Dados de endereço extraídos', $endereco);
 
     // Validar dados obrigatórios do endereço
+    logDetalhado('064', 'Validando logradouro', ['logradouro' => $endereco['logradouro'] ?? 'NULL']);
     if (empty($endereco['logradouro'])) {
+        logDetalhado('065', 'ERRO: Logradouro vazio');
         throw new Exception('Logradouro da empresa é obrigatório');
     }
+
+    logDetalhado('066', 'Validando número', ['numero' => $endereco['numero'] ?? 'NULL']);
     if (empty($endereco['numero'])) {
+        logDetalhado('067', 'ERRO: Número vazio');
         throw new Exception('Número do endereço da empresa é obrigatório');
     }
+
+    logDetalhado('068', 'Validando bairro', ['bairro' => $endereco['bairro'] ?? 'NULL']);
     if (empty($endereco['bairro'])) {
+        logDetalhado('069', 'ERRO: Bairro vazio');
         throw new Exception('Bairro da empresa é obrigatório');
     }
+
+    logDetalhado('070', 'Validando CEP', ['cep' => $endereco['cep'] ?? 'NULL']);
     if (empty($endereco['cep'])) {
+        logDetalhado('071', 'ERRO: CEP vazio');
         throw new Exception('CEP da empresa é obrigatório');
     }
 
+    logDetalhado('072', 'Montando dados do endereço');
     $std = new stdClass();
     $std->xLgr = $endereco['logradouro'];
     $std->nro = $endereco['numero'];
@@ -334,135 +445,209 @@ try {
     $std->xBairro = $endereco['bairro'];
     $std->cMun = (int)$empresa['codigo_municipio']; // JÁ VALIDADO
     $std->xMun = $endereco['cidade'] ?? $empresa['cidade'] ?? '';
+
+    logDetalhado('073', 'Validando nome da cidade', ['cidade' => $std->xMun]);
     if (empty($std->xMun)) {
+        logDetalhado('074', 'ERRO: Nome da cidade vazio');
         throw new Exception('Nome da cidade da empresa é obrigatório');
     }
+
     $std->UF = $empresa['uf']; // JÁ VALIDADO
     $std->CEP = preg_replace('/[^0-9]/', '', $endereco['cep']);
+
+    logDetalhado('075', 'Validando CEP limpo', ['cep_original' => $endereco['cep'], 'cep_limpo' => $std->CEP, 'tamanho' => strlen($std->CEP)]);
     if (strlen($std->CEP) !== 8) {
+        logDetalhado('076', 'ERRO: CEP com tamanho inválido', ['cep' => $std->CEP, 'tamanho' => strlen($std->CEP)]);
         throw new Exception('CEP deve ter 8 dígitos');
     }
+
     $std->cPais = 1058; // Brasil
     $std->xPais = 'Brasil';
 
-    $make->tagenderEmit($std);
+    logDetalhado('077', 'Dados do endereço preparados', (array)$std);
 
-    error_log("🏢 NFCE: Emitente configurado - {$empresa['razao_social']}");
+    try {
+        logDetalhado('078', 'Executando make->tagenderEmit()');
+        $make->tagenderEmit($std);
+        logDetalhado('079', 'Tag endereço emitente criada com sucesso');
+    } catch (Exception $endError) {
+        logDetalhado('080', 'ERRO: Falha ao criar tag endereço emitente', ['error' => $endError->getMessage()]);
+        throw new Exception("Erro na tag endereço emitente: " . $endError->getMessage());
+    }
+
+    logDetalhado('081', 'Emitente completamente configurado', ['razao_social' => $empresa['razao_social']]);
 
     // Destinatário (OPCIONAL para NFC-e) - MÉTODO NATIVO
+    logDetalhado('082', 'Iniciando processamento do destinatário');
+
     $destinatario = $nfceData['destinatario'] ?? [];
+    logDetalhado('083', 'Dados do destinatário extraídos', $destinatario);
 
     if (!empty($destinatario['documento'])) {
+        logDetalhado('084', 'Destinatário com documento identificado');
+
         $std = new stdClass();
 
         // Limpar documento
         $documento = preg_replace('/[^0-9]/', '', $destinatario['documento']);
+        logDetalhado('085', 'Documento limpo', ['original' => $destinatario['documento'], 'limpo' => $documento, 'tamanho' => strlen($documento)]);
 
         if (strlen($documento) === 11) {
             // CPF
             $std->CPF = $documento;
+            logDetalhado('086', 'Documento identificado como CPF', ['cpf' => $documento]);
         } elseif (strlen($documento) === 14) {
             // CNPJ
             $std->CNPJ = $documento;
+            logDetalhado('087', 'Documento identificado como CNPJ', ['cnpj' => $documento]);
         } else {
+            logDetalhado('088', 'ERRO: Documento com tamanho inválido', ['documento' => $documento, 'tamanho' => strlen($documento)]);
             throw new Exception('Documento do destinatário deve ser CPF (11 dígitos) ou CNPJ (14 dígitos)');
         }
 
         $std->xNome = $destinatario['nome'] ?? 'CONSUMIDOR';
         $std->indIEDest = 9; // Não contribuinte
 
-        $make->tagdest($std);
+        logDetalhado('089', 'Dados do destinatário preparados', (array)$std);
 
-        error_log("👤 NFCE: Destinatário configurado - {$std->xNome}");
+        try {
+            logDetalhado('090', 'Executando make->tagdest()');
+            $make->tagdest($std);
+            logDetalhado('091', 'Tag destinatário criada com sucesso', ['nome' => $std->xNome]);
+        } catch (Exception $destError) {
+            logDetalhado('092', 'ERRO: Falha ao criar tag destinatário', ['error' => $destError->getMessage()]);
+            throw new Exception("Erro na tag destinatário: " . $destError->getMessage());
+        }
     } else {
-        error_log("👤 NFCE: Sem destinatário (consumidor não identificado)");
+        logDetalhado('093', 'Sem destinatário - consumidor não identificado');
     }
 
     // Produtos (MÉTODO NATIVO) - SEM FALLBACKS
-    error_log("📦 NFCE: Processando produtos...");
+    logDetalhado('094', 'Iniciando processamento dos produtos');
+
     $produtos = $nfceData['produtos'] ?? [];
+    logDetalhado('095', 'Produtos extraídos dos dados', $produtos);
 
     if (empty($produtos)) {
-        error_log("❌ NFCE: Nenhum produto informado");
+        logDetalhado('096', 'ERRO: Nenhum produto informado');
         throw new Exception('Pelo menos um produto é obrigatório');
     }
 
-    error_log("📋 NFCE: Total de produtos: " . count($produtos));
-    error_log("📋 NFCE: Produtos recebidos: " . json_encode($produtos, JSON_UNESCAPED_UNICODE));
+    logDetalhado('097', 'Validação de produtos concluída', ['total_produtos' => count($produtos)]);
 
     $totalProdutos = 0;
     $totalICMS = 0;
     $totalPIS = 0;
     $totalCOFINS = 0;
 
+    logDetalhado('098', 'Iniciando loop de processamento dos produtos');
+
     foreach ($produtos as $index => $produto) {
         $nItem = $index + 1;
-        error_log("📦 NFCE: Processando produto {$nItem}: " . json_encode($produto, JSON_UNESCAPED_UNICODE));
+        logDetalhado('099', "Iniciando processamento do produto {$nItem}", $produto);
 
         // Validar dados obrigatórios do produto (SEM FALLBACKS)
-        error_log("🔍 NFCE: Validando produto {$nItem}...");
+        logDetalhado('100', "Iniciando validações do produto {$nItem}");
 
         if (empty($produto['codigo'])) {
-            error_log("❌ NFCE: Código do produto {$nItem} vazio");
+            logDetalhado('101', "ERRO: Código do produto {$nItem} vazio", ['codigo' => $produto['codigo'] ?? 'NULL']);
             throw new Exception("Código do produto {$nItem} é obrigatório");
         }
-        error_log("✅ NFCE: Produto {$nItem} - Código: {$produto['codigo']}");
+        logDetalhado('102', "Produto {$nItem} - Código validado", ['codigo' => $produto['codigo']]);
 
+        logDetalhado('102.1', "Validando se código não é fallback", ['codigo' => $produto['codigo']]);
+        if (strpos($produto['codigo'], 'PROD') === 0) {
+            logDetalhado('102.2', "ERRO: Código do produto {$nItem} é fallback", ['codigo' => $produto['codigo']]);
+            throw new Exception("Código 'PROD{id}' é fallback inválido. Configure um código real no cadastro do produto {$nItem}.");
+        }
+
+        logDetalhado('103', "Validando descrição do produto {$nItem}", ['descricao' => $produto['descricao'] ?? 'NULL']);
         if (empty($produto['descricao'])) {
-            error_log("❌ NFCE: Descrição do produto {$nItem} vazia");
+            logDetalhado('104', "ERRO: Descrição do produto {$nItem} vazia");
             throw new Exception("Descrição do produto {$nItem} é obrigatória");
         }
-        error_log("✅ NFCE: Produto {$nItem} - Descrição: {$produto['descricao']}");
 
+        logDetalhado('105', "Validando quantidade do produto {$nItem}", ['quantidade' => $produto['quantidade'] ?? 'NULL']);
         if (!isset($produto['quantidade']) || $produto['quantidade'] <= 0) {
-            error_log("❌ NFCE: Quantidade do produto {$nItem} inválida: " . ($produto['quantidade'] ?? 'null'));
+            logDetalhado('106', "ERRO: Quantidade do produto {$nItem} inválida", ['quantidade' => $produto['quantidade'] ?? 'NULL']);
             throw new Exception("Quantidade do produto {$nItem} deve ser maior que zero");
         }
-        error_log("✅ NFCE: Produto {$nItem} - Quantidade: {$produto['quantidade']}");
 
+        logDetalhado('107', "Validando valor unitário do produto {$nItem}", ['valor_unitario' => $produto['valor_unitario'] ?? 'NULL']);
         if (!isset($produto['valor_unitario']) || $produto['valor_unitario'] <= 0) {
-            error_log("❌ NFCE: Valor unitário do produto {$nItem} inválido: " . ($produto['valor_unitario'] ?? 'null'));
+            logDetalhado('108', "ERRO: Valor unitário do produto {$nItem} inválido", ['valor_unitario' => $produto['valor_unitario'] ?? 'NULL']);
             throw new Exception("Valor unitário do produto {$nItem} deve ser maior que zero");
         }
-        error_log("✅ NFCE: Produto {$nItem} - Valor unitário: {$produto['valor_unitario']}");
 
+        logDetalhado('109', "Validando unidade do produto {$nItem}", ['unidade' => $produto['unidade'] ?? 'NULL']);
         if (empty($produto['unidade'])) {
-            error_log("❌ NFCE: Unidade do produto {$nItem} vazia");
-            throw new Exception("Unidade do produto {$nItem} é obrigatória");
+            logDetalhado('110', "ERRO: Unidade do produto {$nItem} vazia");
+            throw new Exception("Unidade do produto {$nItem} é obrigatória para NFC-e. Configure a unidade de medida no cadastro do produto.");
         }
-        error_log("✅ NFCE: Produto {$nItem} - Unidade: {$produto['unidade']}");
 
+        // Validar se unidade não é fallback
+        if ($produto['unidade'] === 'UN' && empty($produto['unidade_original'])) {
+            logDetalhado('110.1', "AVISO: Unidade 'UN' pode ser fallback para produto {$nItem}", ['unidade' => $produto['unidade']]);
+            // Não bloquear pois 'UN' pode ser uma unidade válida
+        }
+
+        logDetalhado('111', "Validando NCM do produto {$nItem}", ['ncm' => $produto['ncm'] ?? 'NULL']);
         if (empty($produto['ncm'])) {
-            error_log("❌ NFCE: NCM do produto {$nItem} vazio");
-            throw new Exception("NCM do produto {$nItem} é obrigatório");
+            logDetalhado('112', "ERRO: NCM do produto {$nItem} vazio");
+            throw new Exception("NCM do produto {$nItem} é obrigatório para NFC-e. Configure o NCM no cadastro do produto.");
         }
-        error_log("✅ NFCE: Produto {$nItem} - NCM: {$produto['ncm']}");
 
-        if (empty($produto['cfop'])) {
-            error_log("❌ NFCE: CFOP do produto {$nItem} vazio");
-            throw new Exception("CFOP do produto {$nItem} é obrigatório");
+        // Validar se NCM não é o fallback inválido
+        if ($produto['ncm'] === '00000000') {
+            logDetalhado('112.1', "ERRO: NCM do produto {$nItem} é fallback inválido", ['ncm' => $produto['ncm']]);
+            throw new Exception("NCM '00000000' é inválido para NFC-e. Configure um NCM válido no cadastro do produto {$nItem}.");
         }
-        error_log("✅ NFCE: Produto {$nItem} - CFOP: {$produto['cfop']}");
+
+        logDetalhado('113', "Validando CFOP do produto {$nItem}", ['cfop' => $produto['cfop'] ?? 'NULL']);
+        if (empty($produto['cfop'])) {
+            logDetalhado('114', "ERRO: CFOP do produto {$nItem} vazio");
+            throw new Exception("CFOP do produto {$nItem} é obrigatório para NFC-e. Configure o CFOP no cadastro do produto.");
+        }
+
+        // Validar se CFOP não é fallback comum
+        if ($produto['cfop'] === '5102') {
+            logDetalhado('114.1', "AVISO: CFOP '5102' pode ser fallback para produto {$nItem}", ['cfop' => $produto['cfop']]);
+            // Não bloquear pois '5102' é um CFOP válido para venda
+        }
 
         // Calcular valores
+        logDetalhado('115', "Calculando valores do produto {$nItem}");
         $quantidade = (float)$produto['quantidade'];
         $valorUnitario = (float)$produto['valor_unitario'];
         $valorTotal = $quantidade * $valorUnitario;
         $totalProdutos += $valorTotal;
+        logDetalhado('116', "Valores calculados do produto {$nItem}", [
+            'quantidade' => $quantidade,
+            'valor_unitario' => $valorUnitario,
+            'valor_total' => $valorTotal
+        ]);
 
         // Tag PROD (Produto) - MÉTODO NATIVO
+        logDetalhado('117', "Criando tag produto {$nItem}");
         $std = new stdClass();
         $std->cProd = $produto['codigo'];
         $std->cEAN = $produto['codigo_barras'] ?? 'SEM GTIN'; // EAN13 ou SEM GTIN
         $std->xProd = $produto['descricao'];
         $std->NCM = preg_replace('/[^0-9]/', '', $produto['ncm']);
+
+        logDetalhado('118', "Validando NCM limpo do produto {$nItem}", ['ncm_original' => $produto['ncm'], 'ncm_limpo' => $std->NCM, 'tamanho' => strlen($std->NCM)]);
         if (strlen($std->NCM) !== 8) {
+            logDetalhado('119', "ERRO: NCM do produto {$nItem} com tamanho inválido", ['ncm' => $std->NCM, 'tamanho' => strlen($std->NCM)]);
             throw new Exception("NCM do produto {$nItem} deve ter 8 dígitos");
         }
+
         $std->CFOP = preg_replace('/[^0-9]/', '', $produto['cfop']);
+        logDetalhado('120', "Validando CFOP limpo do produto {$nItem}", ['cfop_original' => $produto['cfop'], 'cfop_limpo' => $std->CFOP, 'tamanho' => strlen($std->CFOP)]);
         if (strlen($std->CFOP) !== 4) {
+            logDetalhado('121', "ERRO: CFOP do produto {$nItem} com tamanho inválido", ['cfop' => $std->CFOP, 'tamanho' => strlen($std->CFOP)]);
             throw new Exception("CFOP do produto {$nItem} deve ter 4 dígitos");
         }
+
         $std->uCom = $produto['unidade'];
         $std->qCom = $quantidade;
         $std->vUnCom = $valorUnitario;
@@ -473,40 +658,73 @@ try {
         $std->vUnTrib = $std->vUnCom; // Mesmo valor unitário para tributação
         $std->indTot = 1; // Compõe total da NFC-e
 
-        $make->tagprod($std);
+        logDetalhado('122', "Dados da tag produto {$nItem} preparados", (array)$std);
 
-        error_log("📦 NFCE: Produto {$nItem} - {$produto['descricao']} - R$ {$valorTotal}");
-    }
+        try {
+            logDetalhado('123', "Executando make->tagprod() para produto {$nItem}");
+            $make->tagprod($std);
+            logDetalhado('124', "Tag produto {$nItem} criada com sucesso");
+        } catch (Exception $prodError) {
+            logDetalhado('125', "ERRO: Falha ao criar tag produto {$nItem}", ['error' => $prodError->getMessage()]);
+            throw new Exception("Erro na tag produto {$nItem}: " . $prodError->getMessage());
+        }
 
-    error_log("💰 NFCE: Total produtos: R$ {$totalProdutos}");
+        // IMPOSTOS OBRIGATÓRIOS PARA NFC-e (SEGUINDO DOCUMENTAÇÃO OFICIAL)
+        logDetalhado('126', "Iniciando criação de impostos para produto {$nItem}");
 
-    // Impostos simplificados para NFC-e (MÉTODO NATIVO)
-    foreach ($produtos as $index => $produto) {
-        $nItem = $index + 1;
-
-        // ICMS Simples Nacional (CST 102 - Sem tributação)
+        // ICMS - OBRIGATÓRIO
+        logDetalhado('127', "Criando ICMS para produto {$nItem}");
         $std = new stdClass();
         $std->orig = 0; // Nacional
         $std->CSOSN = '102'; // Simples Nacional - Sem tributação
 
-        $make->tagICMSSN($std);
+        try {
+            logDetalhado('128', "Executando make->tagICMSSN() para produto {$nItem}");
+            $make->tagICMSSN($std);
+            logDetalhado('129', "ICMS criado com sucesso para produto {$nItem}");
+        } catch (Exception $icmsError) {
+            logDetalhado('130', "ERRO: Falha ao criar ICMS para produto {$nItem}", ['error' => $icmsError->getMessage()]);
+            throw new Exception("Erro no ICMS do produto {$nItem}: " . $icmsError->getMessage());
+        }
 
-        // PIS (CST 49 - Outras operações)
+        // PIS - OBRIGATÓRIO
+        logDetalhado('131', "Criando PIS para produto {$nItem}");
         $std = new stdClass();
         $std->CST = '49'; // Outras operações
 
-        $make->tagPIS($std);
+        try {
+            logDetalhado('132', "Executando make->tagPIS() para produto {$nItem}");
+            $make->tagPIS($std);
+            logDetalhado('133', "PIS criado com sucesso para produto {$nItem}");
+        } catch (Exception $pisError) {
+            logDetalhado('134', "ERRO: Falha ao criar PIS para produto {$nItem}", ['error' => $pisError->getMessage()]);
+            throw new Exception("Erro no PIS do produto {$nItem}: " . $pisError->getMessage());
+        }
 
-        // COFINS (CST 49 - Outras operações)
+        // COFINS - OBRIGATÓRIO
+        logDetalhado('135', "Criando COFINS para produto {$nItem}");
         $std = new stdClass();
         $std->CST = '49'; // Outras operações
 
-        $make->tagCOFINS($std);
+        try {
+            logDetalhado('136', "Executando make->tagCOFINS() para produto {$nItem}");
+            $make->tagCOFINS($std);
+            logDetalhado('137', "COFINS criado com sucesso para produto {$nItem}");
+        } catch (Exception $cofinsError) {
+            logDetalhado('138', "ERRO: Falha ao criar COFINS para produto {$nItem}", ['error' => $cofinsError->getMessage()]);
+            throw new Exception("Erro no COFINS do produto {$nItem}: " . $cofinsError->getMessage());
+        }
 
-        error_log("💸 NFCE: Impostos produto {$nItem} - ICMS: Simples Nacional");
+        logDetalhado('139', "Produto {$nItem} processado completamente", [
+            'descricao' => $produto['descricao'],
+            'valor_total' => $valorTotal
+        ]);
     }
 
+    logDetalhado('140', 'Loop de produtos concluído', ['total_produtos_valor' => $totalProdutos]);
+
     // Totais da NFC-e (MÉTODO NATIVO)
+    logDetalhado('141', 'Iniciando criação dos totais da NFC-e');
     $std = new stdClass();
     $std->vBC = 0.00; // Base de cálculo ICMS
     $std->vICMS = $totalICMS; // Valor ICMS
@@ -529,53 +747,103 @@ try {
     $std->vNF = $totalProdutos; // Valor total da NFC-e
     $std->vTotTrib = 0.00; // Total tributos aproximados
 
-    $make->tagICMSTot($std);
+    logDetalhado('142', 'Dados dos totais preparados', (array)$std);
 
-    error_log("💰 NFCE: Totais - Produtos: R$ {$totalProdutos}, Total NFC-e: R$ {$std->vNF}");
+    try {
+        logDetalhado('143', 'Executando make->tagICMSTot()');
+        $make->tagICMSTot($std);
+        logDetalhado('144', 'Totais criados com sucesso');
+    } catch (Exception $totError) {
+        logDetalhado('145', 'ERRO: Falha ao criar totais', ['error' => $totError->getMessage()]);
+        throw new Exception("Erro nos totais: " . $totError->getMessage());
+    }
 
     // Transporte (MÉTODO NATIVO) - OBRIGATÓRIO
+    logDetalhado('146', 'Iniciando criação do transporte');
     $std = new stdClass();
     $std->modFrete = 9; // 9=Sem Ocorrência de Transporte
 
-    $make->tagtransp($std);
+    try {
+        logDetalhado('147', 'Executando make->tagtransp()');
+        $make->tagtransp($std);
+        logDetalhado('148', 'Transporte criado com sucesso');
+    } catch (Exception $transpError) {
+        logDetalhado('149', 'ERRO: Falha ao criar transporte', ['error' => $transpError->getMessage()]);
+        throw new Exception("Erro no transporte: " . $transpError->getMessage());
+    }
 
-    // Pagamento (MÉTODO NATIVO) - Específico para NFC-e
-    // 1. PRIMEIRO: Criar grupo PAG (container)
+    // Pagamento (MÉTODO NATIVO) - OBRIGATÓRIO para NFC-e
+    // CORREÇÃO: Ordem correta baseada na documentação oficial
+    logDetalhado('150', 'Iniciando criação do pagamento');
+
+    // 1. PRIMEIRO: Criar grupo PAG (container) com troco
+    logDetalhado('151', 'Criando grupo PAG (container)');
     $std = new stdClass();
     $std->vTroco = 0.00; // Troco (obrigatório para NFC-e)
-    $make->tagpag($std);
 
-    // 2. SEGUNDO: Adicionar forma de pagamento
+    try {
+        logDetalhado('152', 'Executando make->tagpag()');
+        $make->tagpag($std);
+        logDetalhado('153', 'Grupo pagamento criado com sucesso');
+    } catch (Exception $pagError) {
+        logDetalhado('154', 'ERRO: Falha ao criar grupo pagamento', ['error' => $pagError->getMessage()]);
+        throw new Exception("Erro no grupo pagamento: " . $pagError->getMessage());
+    }
+
+    // 2. SEGUNDO: Adicionar forma de pagamento (detPag)
+    logDetalhado('155', 'Criando detalhes do pagamento');
     $std = new stdClass();
     $std->indPag = 0; // Pagamento à vista
     $std->tPag = '01'; // Dinheiro (padrão para NFC-e)
     $std->vPag = $totalProdutos; // Valor pago
 
-    $make->tagdetPag($std);
-
-    error_log("💳 NFCE: Pagamento configurado - Dinheiro: R$ {$totalProdutos}");
+    try {
+        logDetalhado('156', 'Executando make->tagdetPag()', ['valor_pago' => $totalProdutos]);
+        $make->tagdetPag($std);
+        logDetalhado('157', 'Detalhes do pagamento criados com sucesso');
+    } catch (Exception $detPagError) {
+        logDetalhado('158', 'ERRO: Falha ao criar detalhes do pagamento', ['error' => $detPagError->getMessage()]);
+        throw new Exception("Erro nos detalhes do pagamento: " . $detPagError->getMessage());
+    }
 
     // Informações adicionais (MÉTODO NATIVO)
+    logDetalhado('159', 'Criando informações adicionais');
     $std = new stdClass();
     $std->infCpl = 'NFC-e emitida pelo Sistema Nexo PDV';
 
-    $make->taginfAdic($std);
+    try {
+        logDetalhado('160', 'Executando make->taginfAdic()');
+        $make->taginfAdic($std);
+        logDetalhado('161', 'Informações adicionais criadas com sucesso');
+    } catch (Exception $infError) {
+        logDetalhado('162', 'ERRO: Falha ao criar informações adicionais', ['error' => $infError->getMessage()]);
+        throw new Exception("Erro nas informações adicionais: " . $infError->getMessage());
+    }
 
     // Gerar XML (MÉTODO NATIVO)
-    error_log("📄 NFCE: Gerando XML...");
+    logDetalhado('163', 'Iniciando geração do XML');
     try {
+        logDetalhado('164', 'Executando make->getXML()');
+
+        // Definir timeout para evitar travamento
+        set_time_limit(60); // 60 segundos para geração do XML
+
         $xml = $make->getXML();
 
+        logDetalhado('164.1', 'getXML() executado, verificando resultado');
+
         if (empty($xml)) {
-            error_log("❌ NFCE: XML gerado está vazio");
+            logDetalhado('165', 'ERRO: XML gerado está vazio');
             throw new Exception('Erro ao gerar XML da NFC-e');
         }
 
-        error_log("✅ NFCE: XML gerado - Tamanho: " . strlen($xml) . " bytes");
-        error_log("📄 NFCE: XML (primeiros 500 chars): " . substr($xml, 0, 500) . "...");
+        logDetalhado('166', 'XML gerado com sucesso', [
+            'tamanho' => strlen($xml),
+            'preview' => substr($xml, 0, 200)
+        ]);
 
     } catch (Exception $xmlError) {
-        error_log("❌ NFCE: Erro ao gerar XML: " . $xmlError->getMessage());
+        logDetalhado('167', 'ERRO: Falha ao gerar XML', ['error' => $xmlError->getMessage()]);
         throw new Exception("Erro ao gerar XML: " . $xmlError->getMessage());
     }
 
@@ -820,10 +1088,33 @@ try {
     echo json_encode($responseData);
 
 } catch (Exception $e) {
+    logDetalhado('999', 'ERRO FATAL CAPTURADO', [
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString()
+    ]);
+
+    // Salvar erro em arquivo específico para análise
+    $errorDetails = [
+        'timestamp' => date('Y-m-d H:i:s.u'),
+        'message' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'trace' => $e->getTraceAsString(),
+        'input_data' => $input ?? null,
+        'empresa_id' => $empresaId ?? null
+    ];
+
+    file_put_contents('/tmp/nfce_error.log', json_encode($errorDetails, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
+
     http_response_code(500);
     echo json_encode([
         'success' => false,
         'error' => $e->getMessage(),
+        'file' => $e->getFile(),
+        'line' => $e->getLine(),
+        'debug_step' => 'FATAL_ERROR',
         'timestamp' => date('Y-m-d H:i:s')
     ]);
 }

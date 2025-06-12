@@ -1533,6 +1533,11 @@ const PDVPage: React.FC = () => {
         unidade_medida_id,
         grupo_id,
         estoque_inicial,
+        ncm,
+        cfop,
+        cst_icms,
+        cst_pis,
+        cst_cofins,
         grupo:grupos(nome),
         unidade_medida:unidade_medida_id (
           id,
@@ -1761,6 +1766,11 @@ const PDVPage: React.FC = () => {
               valor_desconto,
               unidade_medida_id,
               grupo_id,
+              ncm,
+              cfop,
+              cst_icms,
+              cst_pis,
+              cst_cofins,
               produto_fotos(url, principal)
             )
           )
@@ -3140,13 +3150,35 @@ const PDVPage: React.FC = () => {
         // Verificar cada produto único
         for (const [produtoId, dadosProduto] of Object.entries(produtosAgrupados)) {
           // Verificar se existe movimentação de estoque para este produto desta venda
+          console.log(`🔍 FRONTEND: Verificando movimentações de estoque para produto ${produtoId}, venda ${numeroVenda}`);
+
+          // Filtrar movimentações dos últimos 5 minutos para evitar dados históricos corrompidos
+          const cincoMinutosAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+          console.log(`⏰ FRONTEND: Filtrando movimentações após: ${cincoMinutosAtras}`);
+
           const { data: movimentacaoEstoque, error: estoqueError } = await supabase
             .from('produto_estoque')
             .select('id, tipo_movimento, quantidade, observacao, data_hora_movimento')
             .eq('produto_id', produtoId)
             .eq('tipo_movimento', 'saida')
             .ilike('observacao', `%Venda PDV #${numeroVenda}%`)
+            .gte('data_hora_movimento', cincoMinutosAtras)
             .order('data_hora_movimento', { ascending: false });
+
+          console.log(`📊 FRONTEND: Query executada - Produto: ${produtoId}, Venda: ${numeroVenda}`);
+          console.log(`📊 FRONTEND: Movimentações encontradas (${movimentacaoEstoque?.length || 0}):`, movimentacaoEstoque);
+
+          // Log detalhado de cada movimentação
+          if (movimentacaoEstoque && movimentacaoEstoque.length > 0) {
+            movimentacaoEstoque.forEach((mov, index) => {
+              console.log(`📋 FRONTEND: Movimentação ${index + 1}:`, {
+                id: mov.id,
+                quantidade: mov.quantidade,
+                observacao: mov.observacao,
+                data_hora: mov.data_hora_movimento
+              });
+            });
+          }
 
           if (estoqueError) {
             console.error('Erro ao verificar movimentação de estoque:', estoqueError);
@@ -3418,33 +3450,49 @@ const PDVPage: React.FC = () => {
   // Função para gerar número sequencial da venda
   const gerarNumeroVenda = async (empresaId: string): Promise<string> => {
     try {
-      // Buscar o último número de venda da empresa
+      console.log('🔢 FRONTEND: Gerando número de venda para empresa:', empresaId);
+
+      // Buscar o maior número de venda da empresa (não o mais recente por data)
       const { data, error } = await supabase
         .from('pdv')
         .select('numero_venda')
         .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false })
+        .not('numero_venda', 'is', null)
+        .order('numero_venda', { ascending: false })
         .limit(1);
 
       if (error && error.code !== 'PGRST116') {
-        console.error('Erro ao buscar último número de venda:', error);
+        console.error('❌ FRONTEND: Erro ao buscar último número de venda:', error);
         // Em caso de erro, usar timestamp como fallback
-        return `PDV-${Date.now()}`;
+        const fallbackNumero = `PDV-${Date.now()}`;
+        console.log('🔄 FRONTEND: Usando fallback:', fallbackNumero);
+        return fallbackNumero;
       }
+
+      console.log('📊 FRONTEND: Dados encontrados:', data);
+      console.log('📊 FRONTEND: Quantidade de registros:', data?.length || 0);
 
       let proximoNumero = 1;
       if (data && data.length > 0 && data[0].numero_venda) {
         // Extrair número da string (formato: PDV-000001)
         const ultimoNumero = data[0].numero_venda.replace('PDV-', '');
         proximoNumero = parseInt(ultimoNumero) + 1;
+        console.log(`📊 FRONTEND: Último número encontrado: ${data[0].numero_venda}`);
+        console.log(`➕ FRONTEND: Incrementando para: ${proximoNumero}`);
+      } else {
+        console.log('📊 FRONTEND: Nenhum registro encontrado, iniciando do número 1');
       }
 
       // Formatar com zeros à esquerda (6 dígitos)
-      return `PDV-${proximoNumero.toString().padStart(6, '0')}`;
+      const novoNumero = `PDV-${proximoNumero.toString().padStart(6, '0')}`;
+      console.log(`🎯 FRONTEND: Novo número de venda gerado: ${novoNumero}`);
+      return novoNumero;
     } catch (error) {
-      console.error('Erro ao gerar número de venda:', error);
+      console.error('❌ FRONTEND: Erro ao gerar número de venda:', error);
       // Fallback para timestamp
-      return `PDV-${Date.now()}`;
+      const fallbackNumero = `PDV-${Date.now()}`;
+      console.log('🔄 FRONTEND: Usando fallback por erro:', fallbackNumero);
+      return fallbackNumero;
     }
   };
 
@@ -3497,12 +3545,18 @@ const PDVPage: React.FC = () => {
 
   // Função principal para finalizar e salvar a venda
   const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_impressao') => {
+    const executionId = Date.now(); // ID único para esta execução
+    console.log(`🚀 FRONTEND: INICIANDO finalizarVendaCompleta - ID: ${executionId}, Tipo: ${tipoFinalizacao}`);
+    console.log(`🚀 FRONTEND: showProcessandoVenda atual: ${showProcessandoVenda}`);
+
     if (carrinho.length === 0) {
+      console.log(`❌ FRONTEND: Carrinho vazio - ID: ${executionId}`);
       toast.error('Carrinho vazio! Adicione itens antes de finalizar.');
       return;
     }
 
     // Abrir modal de processamento
+    console.log(`📋 FRONTEND: Abrindo modal de processamento - ID: ${executionId}`);
     setShowProcessandoVenda(true);
     setEtapaProcessamento('Iniciando processamento da venda...');
     setVendaProcessadaId(null);
@@ -3741,7 +3795,13 @@ const PDVPage: React.FC = () => {
       // Atualizar estoque se configurado para PDV
       if (tipoControle === 'pdv') {
         setEtapaProcessamento('Atualizando estoque...');
+        console.log('🔄 FRONTEND: Iniciando baixa de estoque para venda:', numeroVenda);
+        console.log('🔄 FRONTEND: Tipo de controle:', tipoControle);
+        console.log('🔄 FRONTEND: Itens do carrinho:', carrinho.length);
+
         for (const item of carrinho) {
+          console.log(`🔄 FRONTEND: Baixando estoque - Produto: ${item.produto.nome}, Quantidade: ${item.quantidade}`);
+
           const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
             p_produto_id: item.produto.id,
             p_quantidade: -item.quantidade, // Quantidade negativa para baixa
@@ -3750,14 +3810,17 @@ const PDVPage: React.FC = () => {
           });
 
           if (estoqueError) {
-            console.error('Erro ao atualizar estoque:', estoqueError);
+            console.error('❌ FRONTEND: Erro ao atualizar estoque:', estoqueError);
             setEtapaProcessamento('ERRO: Falha na baixa de estoque: ' + estoqueError.message);
             await new Promise(resolve => setTimeout(resolve, 3000));
             setShowProcessandoVenda(false);
             toast.error('ERRO: Falha na baixa de estoque: ' + estoqueError.message);
             return;
+          } else {
+            console.log(`✅ FRONTEND: Estoque baixado com sucesso - Produto: ${item.produto.nome}`);
           }
         }
+        console.log('✅ FRONTEND: Baixa de estoque concluída para todos os itens');
 
         // Aguardar um pouco para garantir que todas as movimentações foram processadas
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -3859,14 +3922,14 @@ const PDVPage: React.FC = () => {
               nome: clienteData.nome_cliente
             } : {},
             produtos: carrinho.map(item => ({
-              codigo: item.produto.codigo || `PROD${item.produto.id}`,
+              codigo: item.produto.codigo, // Código real do produto (SEM FALLBACK)
               descricao: item.produto.nome,
               quantidade: item.quantidade,
               valor_unitario: item.produto.preco,
-              unidade: 'UN', // Unidade padrão
-              ncm: item.produto.ncm || '00000000', // NCM padrão se não informado
-              cfop: '5102', // CFOP padrão para venda
-              codigo_barras: item.produto.codigo_barras || ''
+              unidade: item.produto.unidade_medida?.sigla, // Unidade real do produto (SEM FALLBACK)
+              ncm: item.produto.ncm, // NCM real do produto (SEM FALLBACK)
+              cfop: item.produto.cfop, // CFOP real do produto (SEM FALLBACK)
+              codigo_barras: item.produto.codigo_barras // Código de barras real (SEM FALLBACK)
             }))
           };
 
@@ -3896,7 +3959,25 @@ const PDVPage: React.FC = () => {
 
           if (!nfceResponse.ok) {
             console.error('❌ FRONTEND: Erro HTTP:', nfceResponse.status, nfceResponse.statusText);
-            throw new Error(`Erro HTTP ${nfceResponse.status}: ${nfceResponse.statusText}`);
+
+            // Tentar capturar a resposta de erro do backend
+            try {
+              const errorResponse = await nfceResponse.text();
+              console.error('📋 FRONTEND: Resposta de erro do backend:', errorResponse);
+
+              // Tentar fazer parse JSON da resposta de erro
+              try {
+                const errorJson = JSON.parse(errorResponse);
+                console.error('📋 FRONTEND: Erro JSON do backend:', errorJson);
+                throw new Error(`Erro do backend: ${errorJson.error || errorJson.message || 'Erro desconhecido'}`);
+              } catch (jsonError) {
+                console.error('❌ FRONTEND: Erro ao fazer parse do JSON de erro:', jsonError);
+                throw new Error(`Erro HTTP ${nfceResponse.status}: ${errorResponse.substring(0, 200)}`);
+              }
+            } catch (textError) {
+              console.error('❌ FRONTEND: Erro ao capturar resposta de erro:', textError);
+              throw new Error(`Erro HTTP ${nfceResponse.status}: ${nfceResponse.statusText}`);
+            }
           }
 
           const nfceResult = await nfceResponse.json();
@@ -5866,8 +5947,20 @@ const PDVPage: React.FC = () => {
                     {/* Finalizar com Impressão */}
                     {!pdvConfig?.ocultar_finalizar_com_impressao && (
                       <button
-                        onClick={() => finalizarVendaCompleta('finalizar_com_impressao')}
-                        className="w-full bg-green-900/20 hover:bg-green-800/30 text-green-300 py-2.5 px-3 rounded transition-colors border border-green-800/30 text-sm font-medium"
+                        onClick={() => {
+                          // Proteção contra duplo clique
+                          if (showProcessandoVenda) {
+                            console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
+                            return;
+                          }
+                          finalizarVendaCompleta('finalizar_com_impressao');
+                        }}
+                        disabled={showProcessandoVenda}
+                        className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
+                          showProcessandoVenda
+                            ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
+                            : 'bg-green-900/20 hover:bg-green-800/30 text-green-300 border-green-800/30'
+                        }`}
                       >
                         Finalizar com Impressão
                       </button>
@@ -5876,8 +5969,20 @@ const PDVPage: React.FC = () => {
                     {/* Finalizar sem Impressão */}
                     {!pdvConfig?.ocultar_finalizar_sem_impressao && (
                       <button
-                        onClick={() => finalizarVendaCompleta('finalizar_sem_impressao')}
-                        className="w-full bg-green-800/20 hover:bg-green-700/30 text-green-400 py-2.5 px-3 rounded transition-colors border border-green-700/30 text-sm font-medium"
+                        onClick={() => {
+                          // Proteção contra duplo clique
+                          if (showProcessandoVenda) {
+                            console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
+                            return;
+                          }
+                          finalizarVendaCompleta('finalizar_sem_impressao');
+                        }}
+                        disabled={showProcessandoVenda}
+                        className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
+                          showProcessandoVenda
+                            ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
+                            : 'bg-green-800/20 hover:bg-green-700/30 text-green-400 border-green-700/30'
+                        }`}
                       >
                         Finalizar sem Impressão
                       </button>
@@ -5895,11 +6000,16 @@ const PDVPage: React.FC = () => {
                           toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
                           return;
                         }
+                        // Proteção contra duplo clique
+                        if (showProcessandoVenda) {
+                          console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
+                          return;
+                        }
                         finalizarVendaCompleta('nfce_com_impressao');
                       }}
-                      disabled={isDocumentoInvalido()}
+                      disabled={isDocumentoInvalido() || showProcessandoVenda}
                       className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
-                        isDocumentoInvalido()
+                        isDocumentoInvalido() || showProcessandoVenda
                           ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
                           : 'bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 border-blue-800/30'
                       }`}
@@ -5921,11 +6031,16 @@ const PDVPage: React.FC = () => {
                           toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
                           return;
                         }
+                        // Proteção contra duplo clique
+                        if (showProcessandoVenda) {
+                          console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
+                          return;
+                        }
                         finalizarVendaCompleta('nfce_sem_impressao');
                       }}
-                      disabled={isDocumentoInvalido()}
+                      disabled={isDocumentoInvalido() || showProcessandoVenda}
                       className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
-                        isDocumentoInvalido()
+                        isDocumentoInvalido() || showProcessandoVenda
                           ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
                           : 'bg-blue-800/20 hover:bg-blue-700/30 text-blue-400 border-blue-700/30'
                       }`}
@@ -5947,11 +6062,16 @@ const PDVPage: React.FC = () => {
                           toast.error('CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.');
                           return;
                         }
+                        // Proteção contra duplo clique
+                        if (showProcessandoVenda) {
+                          console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
+                          return;
+                        }
                         finalizarVendaCompleta('nfce_producao');
                       }}
-                      disabled={isDocumentoInvalido()}
+                      disabled={isDocumentoInvalido() || showProcessandoVenda}
                       className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
-                        isDocumentoInvalido()
+                        isDocumentoInvalido() || showProcessandoVenda
                           ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
                           : 'bg-blue-700/20 hover:bg-blue-600/30 text-blue-500 border-blue-600/30'
                       }`}
@@ -5972,8 +6092,20 @@ const PDVPage: React.FC = () => {
                     {/* Produção */}
                     {!pdvConfig?.ocultar_producao && (
                       <button
-                        onClick={() => finalizarVendaCompleta('producao')}
-                        className="w-full bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 py-2.5 px-3 rounded transition-colors border border-orange-800/30 text-sm font-medium"
+                        onClick={() => {
+                          // Proteção contra duplo clique
+                          if (showProcessandoVenda) {
+                            console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
+                            return;
+                          }
+                          finalizarVendaCompleta('producao');
+                        }}
+                        disabled={showProcessandoVenda}
+                        className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
+                          showProcessandoVenda
+                            ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
+                            : 'bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 border-orange-800/30'
+                        }`}
                       >
                         Produção
                       </button>
@@ -6155,10 +6287,20 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
+                    // Proteção contra duplo clique
+                    if (showProcessandoVenda) {
+                      console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
+                      return;
+                    }
                     setShowPagamentoModal(false);
                     finalizarVendaCompleta('finalizar_sem_impressao');
                   }}
-                  className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-3 px-4 rounded-lg transition-colors"
+                  disabled={showProcessandoVenda}
+                  className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
+                    showProcessandoVenda
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-primary-500 hover:bg-primary-600 text-white'
+                  }`}
                 >
                   Confirmar Venda
                 </button>
