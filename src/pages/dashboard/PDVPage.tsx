@@ -204,6 +204,7 @@ const PDVPage: React.FC = () => {
   const [searchPedidos, setSearchPedidos] = useState('');
   const [pedidosFiltrados, setPedidosFiltrados] = useState<any[]>([]);
   const [contadorPedidosPendentes, setContadorPedidosPendentes] = useState<number>(0);
+  const [contadorNfcePendentes, setContadorNfcePendentes] = useState<number>(0);
   const [statusFilterPedidos, setStatusFilterPedidos] = useState<string>('pendente');
   const [showFiltersPedidos, setShowFiltersPedidos] = useState(false);
 
@@ -709,6 +710,7 @@ const PDVPage: React.FC = () => {
     loadData();
     loadPDVState(); // Carrega o estado salvo do PDV
     loadContadorPedidos(); // Carrega contador inicial
+    loadContadorNfcePendentes(); // Carrega contador de NFC-e pendentes
     loadUserData(); // Carrega dados do usuário
 
     // Adiciona listener para salvar antes de fechar a página
@@ -1041,6 +1043,8 @@ const PDVPage: React.FC = () => {
         setShowMovimentosModal(true);
         // Carregar vendas apenas uma vez quando abrir o modal
         loadVendas();
+        // Atualizar contador de NFC-e pendentes
+        loadContadorNfcePendentes();
       }
     }
   ];
@@ -1374,6 +1378,41 @@ const PDVPage: React.FC = () => {
     });
   };
 
+  // Função para carregar contador de NFC-e pendentes
+  const loadContadorNfcePendentes = async () => {
+    await withSessionCheck(async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        // Contar vendas com status_fiscal = 'pendente' e tentativa_nfce = true
+        const { count, error } = await supabase
+          .from('pdv')
+          .select('*', { count: 'exact', head: true })
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('status_fiscal', 'pendente')
+          .eq('tentativa_nfce', true);
+
+        if (error) {
+          console.error('Erro ao contar NFC-e pendentes:', error);
+          return;
+        }
+
+        setContadorNfcePendentes(count || 0);
+      } catch (error) {
+        console.error('Erro ao carregar contador de NFC-e pendentes:', error);
+      }
+    });
+  };
+
   // Subscription em tempo real para pedidos + Polling como fallback
   useEffect(() => {
     let subscription: any = null;
@@ -1446,6 +1485,7 @@ const PDVPage: React.FC = () => {
     const setupPolling = () => {
       pollingInterval = setInterval(() => {
         loadContadorPedidos();
+        loadContadorNfcePendentes();
       }, 8000); // A cada 8 segundos - totalmente automático
     };
 
@@ -2220,7 +2260,7 @@ const PDVPage: React.FC = () => {
     try {
       setLoadingItensNfce(true);
 
-      // Carregar itens da venda com dados fiscais dos produtos
+      // Carregar itens da venda com dados básicos dos produtos
       const { data: itensData, error: itensError } = await supabase
         .from('pdv_itens')
         .select(`
@@ -2236,18 +2276,14 @@ const PDVPage: React.FC = () => {
             codigo,
             codigo_barras,
             nome,
-            unidade_medida_id,
-            cfop,
-            cst_icms,
-            csosn,
-            regime_tributario,
-            unidade_medida:unidades_medida(sigla)
+            unidade_medida_id
           )
         `)
         .eq('pdv_id', vendaId)
         .order('created_at', { ascending: true });
 
       if (itensError) {
+        console.error('Erro na query Supabase:', itensError);
         throw itensError;
       }
 
@@ -2255,20 +2291,21 @@ const PDVPage: React.FC = () => {
       const itensProcessados = (itensData || []).map((item, index) => ({
         ...item,
         sequencia: index + 1,
-        cfop_editavel: item.produto?.cfop || '',
-        cst_editavel: item.produto?.cst_icms || '',
-        csosn_editavel: item.produto?.csosn || '',
-        regime_tributario: item.produto?.regime_tributario || 1,
+        cfop_editavel: '5102', // CFOP padrão para venda
+        cst_editavel: '00', // CST padrão
+        csosn_editavel: '102', // CSOSN padrão para Simples Nacional
+        regime_tributario: 1, // 1 = Simples Nacional
         editando_cfop: false,
         editando_cst: false,
         editando_csosn: false
       }));
 
+      console.log('✅ Itens carregados para edição NFC-e:', itensProcessados);
       setItensNfceEdicao(itensProcessados);
 
     } catch (error: any) {
       console.error('Erro ao carregar itens para edição NFC-e:', error);
-      toast.error(`Erro ao carregar itens: ${error.message}`);
+      toast.error(`Erro ao carregar itens: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setLoadingItensNfce(false);
     }
@@ -2440,6 +2477,7 @@ const PDVPage: React.FC = () => {
       toast.success('NFC-e reprocessada e autorizada com sucesso!');
       setShowEditarNfceModal(false);
       loadVendas(); // Recarregar lista de vendas
+      loadContadorNfcePendentes(); // Atualizar contador
 
     } catch (error: any) {
       console.error('Erro no reprocessamento:', error);
@@ -3940,6 +3978,9 @@ const PDVPage: React.FC = () => {
         desconto_prazo_id: descontoPrazoSelecionado,
         pedidos_importados: pedidosImportados.length > 0 ? pedidosImportados.map(p => p.id) : null,
         finalizada_em: new Date().toISOString(),
+        // ✅ NOVO: Marcar tentativa de NFC-e quando tipo de finalização for NFC-e
+        tentativa_nfce: tipoFinalizacao.startsWith('nfce_'),
+        status_fiscal: tipoFinalizacao.startsWith('nfce_') ? 'processando' : 'nao_fiscal',
         ...clienteData,
         ...pagamentoData
       };
@@ -4346,7 +4387,8 @@ const PDVPage: React.FC = () => {
             protocolo_nfe: nfceResult.data.protocolo,
             xml_path: nfceResult.data.xml_path,
             pdf_path: nfceResult.data.pdf_path,
-            status_fiscal: 'autorizada',
+            status_fiscal: 'autorizada', // ✅ NFC-e autorizada com sucesso
+            erro_fiscal: null, // ✅ Limpar qualquer erro anterior
             data_autorizacao: nfceResult.data.data_autorizacao
           };
           console.log('💾 FRONTEND: Dados para atualização:', updateData);
@@ -4376,11 +4418,34 @@ const PDVPage: React.FC = () => {
           const mensagemErroEspecifica = (nfceError as Error).message;
           console.log('🔍 FRONTEND: Mensagem de erro capturada:', mensagemErroEspecifica);
 
+          // ✅ NOVO: Atualizar venda com status pendente quando há erro na NFC-e
+          try {
+            const { error: updateError } = await supabase
+              .from('pdv')
+              .update({
+                status_fiscal: 'pendente', // ✅ Marcar como pendente para correção
+                erro_fiscal: mensagemErroEspecifica // ✅ Salvar erro para análise
+              })
+              .eq('id', vendaId);
+
+            if (updateError) {
+              console.error('❌ FRONTEND: Erro ao atualizar status da venda:', updateError);
+            } else {
+              console.log('✅ FRONTEND: Venda marcada como pendente devido ao erro na NFC-e');
+            }
+          } catch (updateError) {
+            console.error('❌ FRONTEND: Erro ao atualizar venda com erro:', updateError);
+          }
+
+          // ✅ NOVO: Mostrar modal de erro mas continuar o fluxo
           setErroProcessamento(mensagemErroEspecifica);
           setEtapaProcessamento(`Erro na NFC-e: ${mensagemErroEspecifica}`);
-          console.log('🛑 FRONTEND: Processo interrompido por erro - aguardando ação do usuário');
-          // Não fechar automaticamente em caso de erro - deixar usuário fechar manualmente
-          return;
+          setStatusProcessamento('erro');
+          console.log('🛑 FRONTEND: Erro na NFC-e, modal será exibido mas venda será concluída');
+
+          // ✅ NOVO: NÃO usar return aqui - continuar o fluxo normal
+          // O modal de erro ficará aberto para fechamento manual
+          // mas a venda será concluída normalmente (carrinho limpo, etc.)
         }
       }
 
@@ -4427,6 +4492,11 @@ const PDVPage: React.FC = () => {
       // Recarregar estoque se necessário
       if (pdvConfig?.baixa_estoque_pdv) {
         loadEstoque();
+      }
+
+      // Atualizar contador de NFC-e pendentes se foi uma venda com NFC-e
+      if (tipoFinalizacao.startsWith('nfce_')) {
+        loadContadorNfcePendentes();
       }
 
     } catch (error) {
@@ -5319,6 +5389,12 @@ const PDVPage: React.FC = () => {
                             {item.id === 'pedidos' && contadorPedidosPendentes > 0 && (
                               <div className="absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
                                 {contadorPedidosPendentes > 99 ? '99+' : contadorPedidosPendentes}
+                              </div>
+                            )}
+                            {/* Contador de NFC-e pendentes - só aparece no botão Movimentos */}
+                            {item.id === 'movimentos' && contadorNfcePendentes > 0 && (
+                              <div className="absolute -top-3 -right-10 bg-yellow-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
+                                {contadorNfcePendentes > 99 ? '99+' : contadorNfcePendentes}
                               </div>
                             )}
                           </div>
@@ -8085,12 +8161,21 @@ const PDVPage: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* ✅ NOVO: Tags de Tipo Fiscal */}
+                          {/* Tags de Origem e Status Fiscal */}
                           <div className="flex flex-wrap gap-1">
-                            {/* Tag Venda Direta (sempre presente) */}
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-medium rounded-full border border-blue-500/30">
-                              Venda Direta
-                            </span>
+                            {/* Tag de Origem */}
+                            {venda.pedidos_origem && venda.pedidos_origem.length > 0 ? (
+                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-medium rounded-full border border-blue-500/30">
+                                {venda.pedidos_origem.length === 1
+                                  ? `Pedido #${venda.pedidos_origem[0]}`
+                                  : `${venda.pedidos_origem.length} Pedidos`
+                                }
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full border border-green-500/30">
+                                Venda Direta
+                              </span>
+                            )}
 
                             {/* ✅ Tag NFC-e - Quando tentou emitir NFC-e */}
                             {venda.tentativa_nfce && (
@@ -8110,22 +8195,6 @@ const PDVPage: React.FC = () => {
                             {venda.status_fiscal === 'autorizada' && (
                               <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full border border-green-500/30">
                                 Autorizada
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Tags de Origem */}
-                          <div className="flex flex-wrap gap-1">
-                            {venda.pedidos_origem && venda.pedidos_origem.length > 0 ? (
-                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
-                                {venda.pedidos_origem.length === 1
-                                  ? `Pedido #${venda.pedidos_origem[0]}`
-                                  : `${venda.pedidos_origem.length} Pedidos`
-                                }
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
-                                Venda Direta
                               </span>
                             )}
                           </div>
@@ -9423,57 +9492,9 @@ const PDVPage: React.FC = () => {
                 {/* Botões para erro */}
                 {statusProcessamento === 'erro' && (
                   <div className="mt-6 space-y-3">
-                    {/* Botão Salvar - Para salvar venda mesmo com erro fiscal */}
-                    <button
-                      onClick={async () => {
-                        try {
-                          // Salvar venda com status fiscal pendente
-                          if (vendaProcessadaId) {
-                            const { error: updateError } = await supabase
-                              .from('pdv')
-                              .update({
-                                modelo_documento: 65, // NFC-e
-                                status_fiscal: 'pendente', // ✅ Status pendente para reprocessamento
-                                erro_fiscal: erroProcessamento, // Salvar erro para análise
-                                tentativa_nfce: true // ✅ Marcar que tentou emitir NFC-e
-                              })
-                              .eq('id', vendaProcessadaId);
 
-                            if (updateError) {
-                              toast.error('Erro ao salvar venda: ' + updateError.message);
-                              return;
-                            }
 
-                            toast.success(`Venda #${numeroVendaProcessada} salva com status pendente`);
-
-                            // Fechar modal e limpar carrinho
-                            setShowProcessandoVenda(false);
-                            setStatusProcessamento('processando');
-                            setErroProcessamento('');
-
-                            // Limpar carrinho após salvar
-                            setCarrinho([]);
-                            setClienteSelecionado(null);
-                            setShowFinalizacaoFinal(false);
-                            limparPagamentosParciaisSilencioso();
-                            setCpfCnpjNota('');
-                            setClienteEncontrado(null);
-                            setTipoDocumento('cpf');
-                            setPedidosImportados([]);
-                            setDescontoPrazoSelecionado(null);
-                            clearPDVState();
-                          }
-                        } catch (error) {
-                          console.error('Erro ao salvar venda pendente:', error);
-                          toast.error('Erro ao salvar venda');
-                        }
-                      }}
-                      className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
-                    >
-                      Salvar Venda (Fiscal Pendente)
-                    </button>
-
-                    {/* Botão Fechar - Apenas fecha sem salvar */}
+                    {/* Botão Fechar */}
                     <button
                       onClick={() => {
                         setShowProcessandoVenda(false);
@@ -9482,7 +9503,7 @@ const PDVPage: React.FC = () => {
                       }}
                       className="w-full bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
                     >
-                      Fechar sem Salvar
+                      Fechar
                     </button>
                   </div>
                 )}
