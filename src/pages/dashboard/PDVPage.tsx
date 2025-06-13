@@ -4437,15 +4437,29 @@ const PDVPage: React.FC = () => {
             console.error('❌ FRONTEND: Erro ao atualizar venda com erro:', updateError);
           }
 
-          // ✅ NOVO: Mostrar modal de erro mas continuar o fluxo
+          // ✅ NOVO: Mostrar modal de erro e parar aqui
           setErroProcessamento(mensagemErroEspecifica);
           setEtapaProcessamento(`Erro na NFC-e: ${mensagemErroEspecifica}`);
           setStatusProcessamento('erro');
-          console.log('🛑 FRONTEND: Erro na NFC-e, modal será exibido mas venda será concluída');
+          console.log('🛑 FRONTEND: Erro na NFC-e - mostrando modal de erro e limpando carrinho silenciosamente');
 
-          // ✅ NOVO: NÃO usar return aqui - continuar o fluxo normal
-          // O modal de erro ficará aberto para fechamento manual
-          // mas a venda será concluída normalmente (carrinho limpo, etc.)
+          // ✅ NOVO: Limpar carrinho silenciosamente (sem toast de sucesso)
+          setCarrinho([]);
+          setClienteSelecionado(null);
+          setShowFinalizacaoFinal(false);
+          limparPagamentosParciaisSilencioso();
+          setCpfCnpjNota('');
+          setClienteEncontrado(null);
+          setTipoDocumento('cpf');
+          setPedidosImportados([]);
+          setDescontoPrazoSelecionado(null);
+          clearPDVState();
+
+          // ✅ NOVO: Atualizar contador de NFC-e pendentes
+          loadContadorNfcePendentes();
+
+          // ✅ NOVO: Parar aqui - não mostrar mensagem de sucesso
+          return;
         }
       }
 
@@ -9481,6 +9495,33 @@ const PDVPage: React.FC = () => {
                     {etapaProcessamento}
                   </p>
                 </div>
+
+                {/* ✅ NOVO: Instrução específica para erro na NFC-e */}
+                {statusProcessamento === 'erro' && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-left">
+                        <h4 className="text-blue-400 font-medium text-sm mb-2">Situação da Venda:</h4>
+                        <div className="space-y-2 text-xs text-blue-300">
+                          <p>✅ <strong>Venda local finalizada com sucesso</strong></p>
+                          <p>❌ <strong>Emissão fiscal (NFC-e) falhou</strong></p>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-blue-500/20">
+                          <p className="text-xs text-blue-300 leading-relaxed">
+                            <strong>Próximos passos:</strong> Acesse a listagem de <strong>Movimentos</strong>,
+                            localize esta venda (marcada como "Pendente"), clique em <strong>"Editar NFC-e"</strong>
+                            para analisar e corrigir o problema fiscal, depois retransmita para o SEFAZ.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Barra de progresso animada - apenas durante processamento */}
                 {statusProcessamento === 'processando' && (
