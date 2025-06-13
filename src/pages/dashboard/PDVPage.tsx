@@ -175,6 +175,8 @@ const PDVPage: React.FC = () => {
   const [itensNfceEdicao, setItensNfceEdicao] = useState<any[]>([]);
   const [loadingItensNfce, setLoadingItensNfce] = useState(false);
   const [reprocessandoNfce, setReprocessandoNfce] = useState(false);
+  const [editandoNumeroNfce, setEditandoNumeroNfce] = useState(false);
+  const [numeroNfceEditavel, setNumeroNfceEditavel] = useState<string>('');
 
   // Estados para filtros avançados
   const [showFiltrosVendas, setShowFiltrosVendas] = useState(false);
@@ -253,6 +255,7 @@ const PDVPage: React.FC = () => {
   // Estados específicos para modal de NFC-e
   const [statusProcessamento, setStatusProcessamento] = useState<'processando' | 'sucesso' | 'erro'>('processando');
   const [erroProcessamento, setErroProcessamento] = useState<string>('');
+  const [numeroDocumentoReservado, setNumeroDocumentoReservado] = useState<number | null>(null);
 
   // Estados para tela de finalização final
   const [showFinalizacaoFinal, setShowFinalizacaoFinal] = useState(false);
@@ -2347,6 +2350,51 @@ const PDVPage: React.FC = () => {
     try {
       setReprocessandoNfce(true);
 
+      // ✅ NOVO: Salvar modificações nos itens antes de retransmitir
+      console.log('💾 FRONTEND: Salvando modificações dos itens...');
+      console.log('📋 FRONTEND: Itens para salvar:', itensNfceEdicao.map(item => ({
+        id: item.id,
+        produto: item.nome_produto,
+        cfop: item.cfop_editavel,
+        cst: item.cst_editavel,
+        csosn: item.csosn_editavel
+      })));
+
+      for (const item of itensNfceEdicao) {
+        const { error: updateError } = await supabase
+          .from('pdv_itens')
+          .update({
+            cfop: item.cfop_editavel,
+            cst_icms: item.regime_tributario === 1 ? item.cst_editavel : null,
+            csosn: item.regime_tributario === 1 ? null : item.csosn_editavel
+          })
+          .eq('id', item.id);
+
+        if (updateError) {
+          console.error('Erro ao atualizar item:', updateError);
+          throw new Error(`Erro ao salvar modificações do item ${item.nome_produto}`);
+        }
+      }
+
+      // ✅ NOVO: Salvar número da NFC-e se foi editado
+      if (vendaParaEditarNfce.numero_documento) {
+        console.log('💾 FRONTEND: Salvando número da NFC-e editado...');
+        const { error: updateNumeroError } = await supabase
+          .from('pdv')
+          .update({
+            numero_documento: vendaParaEditarNfce.numero_documento
+          })
+          .eq('id', vendaParaEditarNfce.id);
+
+        if (updateNumeroError) {
+          console.error('Erro ao atualizar número da NFC-e:', updateNumeroError);
+          throw new Error('Erro ao salvar número da NFC-e editado');
+        }
+      }
+
+      console.log('✅ FRONTEND: Modificações salvas, iniciando retransmissão...');
+      toast.success('Modificações salvas! Iniciando retransmissão...');
+
       // Preparar dados atualizados dos itens
       const itensAtualizados = itensNfceEdicao.map(item => ({
         codigo: item.produto?.codigo || item.codigo_produto,
@@ -2413,7 +2461,7 @@ const PDVPage: React.FC = () => {
         },
         ambiente: nfeConfigData.ambiente,
         identificacao: {
-          numero: vendaParaEditarNfce.numero_documento || await gerarProximoNumeroNFCe(usuarioData.empresa_id),
+          numero: vendaParaEditarNfce.numero_documento || await gerarProximoNumeroNFCe(usuarioData.empresa_id), // ✅ Usa número editado
           serie: 1,
           codigo_numerico: Math.floor(Math.random() * 99999999).toString().padStart(8, '0'),
           natureza_operacao: 'Venda de mercadoria'
@@ -2453,12 +2501,14 @@ const PDVPage: React.FC = () => {
         throw new Error(result.error || 'Erro no reprocessamento');
       }
 
+      // ✅ Número já foi salvo no início da função
+
       // Atualizar venda com sucesso
       const { error: updateError } = await supabase
         .from('pdv')
         .update({
           modelo_documento: 65,
-          numero_documento: result.data.numero,
+          numero_documento: result.data.numero, // ✅ Confirmar número retornado pelo SEFAZ
           serie_documento: result.data.serie,
           chave_nfe: result.data.chave,
           protocolo_nfe: result.data.protocolo,
@@ -3860,6 +3910,7 @@ const PDVPage: React.FC = () => {
     setNumeroVendaProcessada('');
     setStatusProcessamento('processando');
     setErroProcessamento('');
+    setNumeroDocumentoReservado(null); // ✅ Limpar número reservado
 
     try {
       // Obter dados do usuário
@@ -3966,6 +4017,16 @@ const PDVPage: React.FC = () => {
 
       // Preparar dados da venda principal
       setEtapaProcessamento('Preparando dados da venda...');
+
+      // ✅ NOVO: Gerar número da NFC-e ANTES de salvar (se for NFC-e)
+      let numeroDocumentoNfce = null;
+      if (tipoFinalizacao.startsWith('nfce_')) {
+        setEtapaProcessamento('Reservando número da NFC-e...');
+        numeroDocumentoNfce = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
+        console.log('🔢 FRONTEND: Número NFC-e reservado:', numeroDocumentoNfce);
+        setNumeroDocumentoReservado(numeroDocumentoNfce); // ✅ Salvar no estado para mostrar no modal
+      }
+
       const vendaData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
@@ -3978,9 +4039,13 @@ const PDVPage: React.FC = () => {
         desconto_prazo_id: descontoPrazoSelecionado,
         pedidos_importados: pedidosImportados.length > 0 ? pedidosImportados.map(p => p.id) : null,
         finalizada_em: new Date().toISOString(),
-        // ✅ NOVO: Marcar tentativa de NFC-e quando tipo de finalização for NFC-e
+        // ✅ NOVO: Marcar tentativa de NFC-e e salvar número reservado
         tentativa_nfce: tipoFinalizacao.startsWith('nfce_'),
         status_fiscal: tipoFinalizacao.startsWith('nfce_') ? 'processando' : 'nao_fiscal',
+        // ✅ NOVO: Salvar dados fiscais já no início
+        modelo_documento: tipoFinalizacao.startsWith('nfce_') ? 65 : null,
+        numero_documento: numeroDocumentoNfce,
+        serie_documento: tipoFinalizacao.startsWith('nfce_') ? 1 : null,
         ...clienteData,
         ...pagamentoData
       };
@@ -4235,10 +4300,26 @@ const PDVPage: React.FC = () => {
         setEtapaProcessamento('Preparando dados para NFC-e...');
 
         try {
-          // Preparar dados da NFC-e
-          console.log('🔢 FRONTEND: Gerando próximo número NFC-e...');
-          const proximoNumero = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
-          console.log('✅ FRONTEND: Próximo número NFC-e:', proximoNumero);
+          // ✅ NOVO: Validar se número foi salvo corretamente
+          setEtapaProcessamento('Validando numeração da NFC-e...');
+          console.log('🔍 FRONTEND: Validando número NFC-e salvo para venda:', vendaId);
+
+          const { data: vendaSalva, error: validacaoError } = await supabase
+            .from('pdv')
+            .select('numero_documento, modelo_documento')
+            .eq('id', vendaId)
+            .single();
+
+          if (validacaoError || !vendaSalva) {
+            throw new Error('Erro ao validar venda salva');
+          }
+
+          if (!vendaSalva.numero_documento) {
+            throw new Error('Número da NFC-e não foi reservado corretamente');
+          }
+
+          console.log('✅ FRONTEND: Número NFC-e validado:', vendaSalva.numero_documento);
+          const proximoNumero = vendaSalva.numero_documento;
 
           const codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
           console.log('🔢 FRONTEND: Código numérico gerado:', codigoNumerico);
@@ -4380,9 +4461,7 @@ const PDVPage: React.FC = () => {
           // Atualizar registro da venda com dados da NFC-e
           console.log('💾 FRONTEND: Atualizando registro da venda...');
           const updateData = {
-            modelo_documento: 65, // NFC-e
-            numero_documento: nfceResult.data.numero,
-            serie_documento: nfceResult.data.serie,
+            // ✅ NOVO: Não atualizar numero_documento - já foi salvo no início
             chave_nfe: nfceResult.data.chave,
             protocolo_nfe: nfceResult.data.protocolo,
             xml_path: nfceResult.data.xml_path,
@@ -8194,7 +8273,7 @@ const PDVPage: React.FC = () => {
                             {/* ✅ Tag NFC-e - Quando tentou emitir NFC-e */}
                             {venda.tentativa_nfce && (
                               <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs font-medium rounded-full border border-purple-500/30">
-                                NFC-e
+                                {venda.numero_documento ? `NFC-e #${venda.numero_documento}` : 'NFC-e'}
                               </span>
                             )}
 
@@ -9489,6 +9568,15 @@ const PDVPage: React.FC = () => {
                   </p>
                 )}
 
+                {/* ✅ NOVO: Mostrar número da NFC-e quando disponível */}
+                {statusProcessamento === 'processando' && vendaProcessadaId && (
+                  <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-4">
+                    <p className="text-purple-400 text-sm font-medium">
+                      🧾 Número NFC-e reservado: #{numeroDocumentoReservado || 'Carregando...'}
+                    </p>
+                  </div>
+                )}
+
                 {/* Etapa atual */}
                 <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
                   <p className="text-gray-300 text-sm leading-relaxed">
@@ -9698,7 +9786,74 @@ const PDVPage: React.FC = () => {
                     <h3 className="text-xl font-semibold text-white">
                       Editar NFC-e - Venda #{vendaParaEditarNfce.numero_venda}
                     </h3>
-                    <div className="mt-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+
+                    {/* ✅ NOVO: Campo para editar número da NFC-e */}
+                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <p className="text-blue-400 text-sm font-medium mb-2">Número da NFC-e:</p>
+                      <div className="flex items-center gap-2">
+                        {editandoNumeroNfce ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              value={numeroNfceEditavel}
+                              onChange={(e) => setNumeroNfceEditavel(e.target.value)}
+                              className="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1 text-white text-sm"
+                              placeholder="Número"
+                              min="1"
+                            />
+                            <button
+                              onClick={() => {
+                                // Salvar o número editado
+                                setVendaParaEditarNfce(prev => ({
+                                  ...prev,
+                                  numero_documento: parseInt(numeroNfceEditavel) || prev.numero_documento
+                                }));
+                                setEditandoNumeroNfce(false);
+                              }}
+                              className="text-green-400 hover:text-green-300 p-1"
+                              title="Salvar"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditandoNumeroNfce(false);
+                                setNumeroNfceEditavel(vendaParaEditarNfce.numero_documento?.toString() || '');
+                              }}
+                              className="text-red-400 hover:text-red-300 p-1"
+                              title="Cancelar"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-blue-300 font-medium">
+                              #{vendaParaEditarNfce.numero_documento || 'Não definido'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setEditandoNumeroNfce(true);
+                                setNumeroNfceEditavel(vendaParaEditarNfce.numero_documento?.toString() || '');
+                              }}
+                              className="text-gray-400 hover:text-white p-1"
+                              title="Editar número"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-blue-300 text-xs mt-1">
+                        ⚠️ Altere apenas em caso de duplicação ou conflito de numeração
+                      </p>
+                    </div>
+
+                    <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
                       <p className="text-red-400 text-sm font-medium">Erro Fiscal:</p>
                       <p className="text-red-300 text-sm mt-1">{vendaParaEditarNfce.erro_fiscal}</p>
                     </div>
