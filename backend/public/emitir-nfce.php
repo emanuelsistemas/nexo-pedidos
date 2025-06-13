@@ -25,10 +25,26 @@ function logDetalhado($step, $message, $data = null) {
     if ($data !== null) {
         $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE);
     }
+
+    // Log no error_log do PHP
     error_log($logEntry);
 
-    // Também salvar em arquivo específico
-    file_put_contents('/tmp/nfce_detailed.log', $logEntry . "\n", FILE_APPEND | LOCK_EX);
+    // Também salvar em arquivo específico com tratamento de erro
+    try {
+        // Garantir que o diretório existe
+        $logDir = dirname('/tmp/nfce_detailed.log');
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+
+        // Escrever no arquivo
+        $result = file_put_contents('/tmp/nfce_detailed.log', $logEntry . "\n", FILE_APPEND | LOCK_EX);
+        if ($result === false) {
+            error_log("ERRO: Falha ao escrever no arquivo de log detalhado");
+        }
+    } catch (Exception $logError) {
+        error_log("ERRO: Exceção ao escrever log detalhado: " . $logError->getMessage());
+    }
 
     // COMENTADO: Output para debug imediato (estava contaminando resposta JSON)
     // echo json_encode([
@@ -37,6 +53,48 @@ function logDetalhado($step, $message, $data = null) {
     //     'debug_timestamp' => $timestamp
     // ]) . "\n";
     // flush();
+}
+
+// Função para buscar dados fiscais REAIS do produto (LEI DOS DADOS REAIS)
+function buscarDadosFiscaisProduto($codigoProduto, $empresaId) {
+    $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
+    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
+
+    $url = $supabaseUrl . "/rest/v1/produtos?empresa_id=eq.{$empresaId}&codigo=eq.{$codigoProduto}&select=codigo,cst_pis,aliquota_pis,cst_cofins,aliquota_cofins,cst_icms";
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . $supabaseKey,
+        'Authorization: Bearer ' . $supabaseKey,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5); // ✅ CORREÇÃO: Timeout menor
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3); // ✅ CORREÇÃO: Timeout de conexão
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        logDetalhado('FISCAL_ERROR', "Erro ao buscar dados fiscais do produto {$codigoProduto}", [
+            'http_code' => $httpCode,
+            'response' => $response
+        ]);
+        return null;
+    }
+
+    $data = json_decode($response, true);
+    if (empty($data)) {
+        logDetalhado('FISCAL_ERROR', "Produto {$codigoProduto} não encontrado");
+        return null;
+    }
+
+    $produto = $data[0];
+    logDetalhado('FISCAL_SUCCESS', "Dados fiscais carregados para produto {$codigoProduto}", $produto);
+
+    return $produto;
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -103,61 +161,36 @@ try {
     logDetalhado('014', 'Validações básicas concluídas', ['empresa_id' => $empresaId]);
     logDetalhado('015', 'Dados NFC-e recebidos', $nfceData);
 
-    // Buscar configurações da empresa (MÉTODO MULTI-TENANT)
-    logDetalhado('016', 'Iniciando busca de configurações da empresa');
-    $configUrl = "http://localhost/backend/public/get-empresa-config.php?empresa_id={$empresaId}";
-    logDetalhado('017', 'URL de configuração montada', ['url' => $configUrl]);
+    // ✅ CORREÇÃO: Usar dados da empresa do payload (igual à NFe que funciona)
+    logDetalhado('016', 'Extraindo dados da empresa do payload (seguindo padrão NFe)');
 
-    // Usar cURL em vez de file_get_contents para melhor controle
-    logDetalhado('018', 'Iniciando requisição cURL');
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $configUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    // Verificar se dados da empresa estão no payload
+    if (!isset($nfceData['empresa'])) {
+        logDetalhado('017.ERROR', 'Dados da empresa não encontrados no payload');
+        throw new Exception('Dados da empresa são obrigatórios no payload');
+    }
 
-    $configResponse = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-
-    logDetalhado('019', 'Resposta cURL recebida', [
-        'http_code' => $httpCode,
-        'curl_error' => $curlError,
-        'response_size' => strlen($configResponse),
-        'response_preview' => substr($configResponse, 0, 100)
+    $empresa = $nfceData['empresa'];
+    logDetalhado('018', 'Dados da empresa extraídos do payload', [
+        'razao_social' => $empresa['razao_social'] ?? 'NULL',
+        'cnpj' => $empresa['cnpj'] ?? 'NULL',
+        'uf' => $empresa['uf'] ?? 'NULL',
+        'total_campos' => count($empresa),
+        'campos_disponiveis' => array_keys($empresa)
     ]);
 
-    if ($httpCode !== 200) {
-        logDetalhado('020', 'ERRO: HTTP code inválido', ['http_code' => $httpCode]);
-        throw new Exception("Erro HTTP ao buscar configurações: {$httpCode}");
+    // Verificar se ambiente está no payload
+    if (!isset($nfceData['ambiente'])) {
+        logDetalhado('019.ERROR', 'Ambiente não encontrado no payload');
+        throw new Exception('Ambiente é obrigatório no payload');
     }
 
-    if (!$configResponse) {
-        logDetalhado('021', 'ERRO: Resposta vazia do endpoint de configuração');
-        throw new Exception('Erro ao buscar configurações da empresa');
-    }
+    $ambiente = $nfceData['ambiente'] === 'producao' ? 1 : 2;
+    logDetalhado('020', 'Ambiente extraído do payload', ['ambiente' => $ambiente]);
 
-    logDetalhado('022', 'Decodificando JSON de configuração');
-    $configData = json_decode($configResponse, true);
-
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        logDetalhado('023', 'ERRO: Falha ao decodificar JSON de configuração', ['json_error' => json_last_error_msg()]);
-        throw new Exception('Erro ao decodificar resposta JSON: ' . json_last_error_msg());
-    }
-
-    if (!$configData || !$configData['success']) {
-        logDetalhado('024', 'ERRO: Configurações inválidas ou não encontradas', $configData);
-        throw new Exception('Configurações da empresa não encontradas: ' . ($configData['error'] ?? 'Erro desconhecido'));
-    }
-
-    $empresa = $configData['data']['empresa'];
-    $nfeConfig = $configData['data']['nfe_config'];
-
-    logDetalhado('025', 'Configurações carregadas com sucesso', [
-        'empresa_razao' => $empresa['razao_social'],
-        'ambiente' => $nfeConfig['ambiente_codigo'],
-        'has_csc' => !empty($empresa['csc_homologacao'])
+    logDetalhado('021', 'Configurações extraídas do payload com sucesso', [
+        'empresa_razao' => $empresa['razao_social'] ?? 'NULL',
+        'ambiente' => $ambiente
     ]);
     
     // Validar dados obrigatórios da empresa (SEM FALLBACKS)
@@ -341,6 +374,17 @@ try {
     }
     error_log("✅ NFCE: Código numérico: {$codigoNumerico}");
     
+    // ✅ CORREÇÃO CRÍTICA: Tag infNFe OBRIGATÓRIA (igual à NFe que funciona)
+    logDetalhado('049', 'Criando tag infNFe obrigatória (seguindo NFe funcionando)');
+    $std = new stdClass();
+    $std->versao = '4.00';
+    $std->Id = null; // Será gerado automaticamente
+    $std->pk_nItem = null;
+
+    // USAR MÉTODO NATIVO PARA ADICIONAR IDENTIFICAÇÃO (igual à NFe)
+    $make->taginfNFe($std);
+    logDetalhado('049.1', 'Tag infNFe criada com sucesso (seguindo padrão NFe)');
+
     // Tag IDE (Identificação) - MÉTODO NATIVO
     logDetalhado('050', 'Iniciando criação da tag IDE');
     $std = new stdClass();
@@ -641,6 +685,7 @@ try {
         // Tag PROD (Produto) - MÉTODO NATIVO
         logDetalhado('117', "Criando tag produto {$nItem}");
         $std = new stdClass();
+        $std->item = $nItem; // ✅ CORREÇÃO CRÍTICA: Definir nItem para a tag <det>
         $std->cProd = $produto['codigo'];
         $std->cEAN = $produto['codigo_barras'] ?? 'SEM GTIN'; // EAN13 ou SEM GTIN
         $std->xProd = $produto['descricao'];
@@ -686,7 +731,7 @@ try {
         // 1. PRIMEIRO: Container de impostos (OBRIGATÓRIO conforme documentação)
         logDetalhado('126.1', "Criando container de impostos para produto {$nItem}");
         $std = new stdClass();
-        $std->nItem = $nItem; // ✅ CORRETO: usar 'nItem', não 'item'
+        $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
 
         try {
             logDetalhado('126.2', "Executando make->tagimposto() para produto {$nItem}");
@@ -700,7 +745,7 @@ try {
         // 2. SEGUNDO: ICMS - OBRIGATÓRIO
         logDetalhado('127', "Criando ICMS para produto {$nItem}");
         $std = new stdClass();
-        $std->nItem = $nItem; // ✅ CORRETO: usar 'nItem'
+        $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
         $std->orig = 0; // Nacional
         $std->CSOSN = '102'; // Simples Nacional - Sem tributação
 
@@ -713,11 +758,38 @@ try {
             throw new Exception("Erro no ICMS do produto {$nItem}: " . $icmsError->getMessage());
         }
 
-        // 3. TERCEIRO: PIS - OBRIGATÓRIO
+        // 3. TERCEIRO: PIS - OBRIGATÓRIO (USANDO DADOS REAIS DO PRODUTO)
         logDetalhado('131', "Criando PIS para produto {$nItem}");
+
+        // ✅ BUSCAR DADOS FISCAIS REAIS DO PRODUTO (LEI DOS DADOS REAIS)
+        $produtoFiscal = buscarDadosFiscaisProduto($produto['codigo'], $empresaId);
+        if (!$produtoFiscal) {
+            throw new Exception("Dados fiscais não encontrados para produto {$produto['codigo']}");
+        }
+
         $std = new stdClass();
-        $std->nItem = $nItem; // ✅ CORRETO: usar 'nItem'
-        $std->CST = '49'; // Outras operações
+        $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
+        $std->CST = $produtoFiscal['cst_pis']; // ✅ DADO REAL do produto
+
+        // Calcular valores baseados no CST real
+        if ($produtoFiscal['cst_pis'] === '01' || $produtoFiscal['cst_pis'] === '02') {
+            // Operação tributável - calcular valores reais
+            $std->vBC = $valorTotal; // Base de cálculo = valor do produto
+            $std->pPIS = (float)$produtoFiscal['aliquota_pis']; // ✅ ALÍQUOTA REAL
+            $std->vPIS = round(($valorTotal * $std->pPIS) / 100, 2); // ✅ VALOR CALCULADO
+            $totalPIS += $std->vPIS;
+        } else {
+            // Outras operações conforme CST
+            $std->vBC = null;
+            $std->pPIS = null;
+            $std->vPIS = null;
+        }
+
+        logDetalhado('131.1', "PIS configurado com dados reais", [
+            'cst' => $std->CST,
+            'aliquota' => $std->pPIS,
+            'valor' => $std->vPIS
+        ]);
 
         try {
             logDetalhado('132', "Executando make->tagPIS() para produto {$nItem}");
@@ -728,11 +800,32 @@ try {
             throw new Exception("Erro no PIS do produto {$nItem}: " . $pisError->getMessage());
         }
 
-        // 4. QUARTO: COFINS - OBRIGATÓRIO
+        // 4. QUARTO: COFINS - OBRIGATÓRIO (USANDO DADOS REAIS DO PRODUTO)
         logDetalhado('135', "Criando COFINS para produto {$nItem}");
+
         $std = new stdClass();
-        $std->nItem = $nItem; // ✅ CORRETO: usar 'nItem'
-        $std->CST = '49'; // Outras operações
+        $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
+        $std->CST = $produtoFiscal['cst_cofins']; // ✅ DADO REAL do produto
+
+        // Calcular valores baseados no CST real
+        if ($produtoFiscal['cst_cofins'] === '01' || $produtoFiscal['cst_cofins'] === '02') {
+            // Operação tributável - calcular valores reais
+            $std->vBC = $valorTotal; // Base de cálculo = valor do produto
+            $std->pCOFINS = (float)$produtoFiscal['aliquota_cofins']; // ✅ ALÍQUOTA REAL
+            $std->vCOFINS = round(($valorTotal * $std->pCOFINS) / 100, 2); // ✅ VALOR CALCULADO
+            $totalCOFINS += $std->vCOFINS;
+        } else {
+            // Outras operações conforme CST
+            $std->vBC = null;
+            $std->pCOFINS = null;
+            $std->vCOFINS = null;
+        }
+
+        logDetalhado('135.1', "COFINS configurado com dados reais", [
+            'cst' => $std->CST,
+            'aliquota' => $std->pCOFINS,
+            'valor' => $std->vCOFINS
+        ]);
 
         try {
             logDetalhado('136', "Executando make->tagCOFINS() para produto {$nItem}");
@@ -851,14 +944,112 @@ try {
     // Gerar XML (MÉTODO NATIVO)
     logDetalhado('163', 'Iniciando geração do XML');
     try {
-        logDetalhado('164', 'Executando make->getXML()');
+        // PRIMEIRO: Verificar se há erros na biblioteca (conforme documentação oficial)
+        logDetalhado('163.1', 'Verificando erros da biblioteca antes da geração');
+        $errors = $make->getErrors();
+        if (!empty($errors)) {
+            logDetalhado('163.2', 'ERRO: Biblioteca contém erros', ['errors' => $errors]);
+            throw new Exception('Erros na montagem da NFC-e: ' . implode(', ', $errors));
+        }
+        logDetalhado('163.3', 'Biblioteca sem erros, prosseguindo');
+
+        // SEGUNDO: Verificar se todas as tags foram criadas corretamente
+        logDetalhado('163.9', 'Verificando integridade das tags antes da geração');
+
+        // Verificar se há tags null que podem causar erro DOMElement
+        $errors = $make->getErrors();
+        if (!empty($errors)) {
+            logDetalhado('163.10', 'ERRO: Tags com problemas detectadas', ['errors' => $errors]);
+            throw new Exception('Problemas na criação das tags: ' . implode(', ', $errors));
+        }
+
+        // TERCEIRO: Usar monta() conforme documentação oficial (LEI DA DOCUMENTAÇÃO OFICIAL)
+        logDetalhado('164', 'Executando make->monta() conforme documentação oficial');
 
         // Definir timeout para evitar travamento
         set_time_limit(60); // 60 segundos para geração do XML
 
-        $xml = $make->getXML();
+        // INVESTIGAR: Verificar se há problema específico nos dados antes do monta()
+        logDetalhado('164.0', 'Verificando dados antes do monta()');
 
-        logDetalhado('164.1', 'getXML() executado, verificando resultado');
+        // Verificar se há erros acumulados
+        $errorsBeforeMonta = $make->getErrors();
+        if (!empty($errorsBeforeMonta)) {
+            logDetalhado('164.0.1', 'ERRO: Erros encontrados antes do monta()', ['errors' => $errorsBeforeMonta]);
+            throw new Exception('Erros nos dados antes da montagem: ' . implode(', ', $errorsBeforeMonta));
+        }
+
+        logDetalhado('164.0.2', 'Dados validados, iniciando monta() com timeout de 60s');
+
+        try {
+            // INVESTIGAÇÃO ESPECÍFICA: Capturar erro do DOMElement null
+            logDetalhado('164.0.3', 'Iniciando monta() com captura específica de erro DOMElement');
+
+            // Configurar error handler personalizado para capturar erros fatais
+            set_error_handler(function($severity, $message, $file, $line) {
+                logDetalhado('164.ERROR.HANDLER', 'Erro capturado durante monta()', [
+                    'severity' => $severity,
+                    'message' => $message,
+                    'file' => $file,
+                    'line' => $line
+                ]);
+
+                // Se for o erro específico do DOMElement, logar detalhes
+                if (strpos($message, 'DOMElement') !== false || strpos($message, 'appChild') !== false) {
+                    logDetalhado('164.ERROR.DOMELEMENT', 'ERRO ESPECÍFICO DOMElement detectado', [
+                        'message' => $message,
+                        'file' => $file,
+                        'line' => $line
+                    ]);
+                }
+
+                // Restaurar error handler padrão e lançar exceção
+                restore_error_handler();
+                throw new Exception("Erro fatal durante monta(): {$message} em {$file}:{$line}");
+            });
+
+            $xml = $make->monta(); // ✅ Método CORRETO conforme documentação oficial
+
+            // Restaurar error handler
+            restore_error_handler();
+
+            logDetalhado('164.1', 'monta() executado com sucesso', ['tamanho_xml' => strlen($xml)]);
+        } catch (TypeError $e) {
+            // Capturar especificamente TypeError (DOMElement null)
+            logDetalhado('164.1.TYPEERROR', 'ERRO TYPEERROR ESPECÍFICO no monta()', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace_preview' => substr($e->getTraceAsString(), 0, 1000)
+            ]);
+
+            // Verificar se é o erro específico do DOMElement
+            if (strpos($e->getMessage(), 'DOMElement') !== false && strpos($e->getMessage(), 'appChild') !== false) {
+                logDetalhado('164.1.DOMELEMENT_CONFIRMED', 'CONFIRMADO: Erro DOMElement null no appChild()', [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]);
+
+                throw new Exception("ERRO IDENTIFICADO: Elemento DOM null sendo passado para appChild(). " .
+                                  "Problema na estrutura de tags da NFC-e. Detalhes: " . $e->getMessage());
+            }
+
+            throw new Exception("Erro de tipo durante monta(): " . $e->getMessage());
+        } catch (Exception $e) {
+            logDetalhado('164.1.ERROR', 'ERRO GERAL no monta()', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace_preview' => substr($e->getTraceAsString(), 0, 500)
+            ]);
+            throw $e;
+        } finally {
+            // Garantir que o error handler seja restaurado
+            restore_error_handler();
+        }
+
+        logDetalhado('164.4', 'XML gerado, verificando resultado');
 
         if (empty($xml)) {
             logDetalhado('165', 'ERRO: XML gerado está vazio');
@@ -885,11 +1076,12 @@ try {
         throw new Exception("Erro ao assinar XML: " . $signError->getMessage());
     }
 
-    // ENVIAR PARA SEFAZ (MÉTODO NATIVO)
-    error_log("📡 NFCE: Enviando para SEFAZ...");
+    // ENVIAR PARA SEFAZ (MÉTODO ESPECÍFICO PARA NFC-e)
+    error_log("📡 NFCE: Enviando para SEFAZ com modo síncrono...");
     try {
-        $response = $tools->sefazEnviaLote([$xmlAssinado], 1);
-        error_log("✅ NFCE: Resposta recebida da SEFAZ");
+        // ✅ CORREÇÃO: Para NFC-e usar envio síncrono (indSinc=1)
+        $response = $tools->sefazEnviaLote([$xmlAssinado], 1, 1); // Terceiro parâmetro = indSinc=1 (síncrono)
+        error_log("✅ NFCE: Resposta recebida da SEFAZ (modo síncrono)");
     } catch (Exception $sefazError) {
         error_log("❌ NFCE: Erro ao enviar para SEFAZ: " . $sefazError->getMessage());
         throw new Exception("Erro ao enviar para SEFAZ: " . $sefazError->getMessage());
@@ -911,21 +1103,49 @@ try {
     // Extrair dados da resposta
     error_log("🔍 NFCE: Extraindo dados da resposta...");
 
-    $reciboNode = $dom->getElementsByTagName('nRec')->item(0);
-    $recibo = $reciboNode ? $reciboNode->nodeValue : 'RECIBO_NAO_ENCONTRADO';
-    error_log("📋 NFCE: Recibo: {$recibo}");
+    // Status do lote (104 = Lote processado é OK)
+    $statusLoteNode = $dom->getElementsByTagName('cStat')->item(0);
+    $statusLote = $statusLoteNode ? $statusLoteNode->nodeValue : 'STATUS_NAO_ENCONTRADO';
+    error_log("📋 NFCE: Status do Lote: {$statusLote}");
 
-    $statusNode = $dom->getElementsByTagName('cStat')->item(0);
-    $status = $statusNode ? $statusNode->nodeValue : 'STATUS_NAO_ENCONTRADO';
-    error_log("📋 NFCE: Status: {$status}");
+    $motivoLoteNode = $dom->getElementsByTagName('xMotivo')->item(0);
+    $motivoLote = $motivoLoteNode ? $motivoLoteNode->nodeValue : 'MOTIVO_NAO_ENCONTRADO';
+    error_log("📋 NFCE: Motivo do Lote: {$motivoLote}");
 
-    $motivoNode = $dom->getElementsByTagName('xMotivo')->item(0);
-    $motivo = $motivoNode ? $motivoNode->nodeValue : 'MOTIVO_NAO_ENCONTRADO';
-    error_log("📋 NFCE: Motivo: {$motivo}");
+    // ✅ CORREÇÃO: Para modo síncrono, verificar status individual da NFC-e
+    error_log("🔍 NFCE: Buscando status individual da NFC-e...");
 
-    error_log("📋 NFCE: Status SEFAZ - {$status}: {$motivo}");
+    // Buscar status da NFC-e individual (dentro de protNFe)
+    $protNFeNodes = $dom->getElementsByTagName('protNFe');
+    if ($protNFeNodes->length > 0) {
+        $protNFe = $protNFeNodes->item(0);
+        $infProtNodes = $protNFe->getElementsByTagName('infProt');
 
-    // Verificar se foi autorizada
+        if ($infProtNodes->length > 0) {
+            $infProt = $infProtNodes->item(0);
+
+            $statusNFeNode = $infProt->getElementsByTagName('cStat')->item(0);
+            $status = $statusNFeNode ? $statusNFeNode->nodeValue : 'STATUS_NFE_NAO_ENCONTRADO';
+
+            $motivoNFeNode = $infProt->getElementsByTagName('xMotivo')->item(0);
+            $motivo = $motivoNFeNode ? $motivoNFeNode->nodeValue : 'MOTIVO_NFE_NAO_ENCONTRADO';
+
+            error_log("📋 NFCE: Status da NFC-e: {$status}");
+            error_log("📋 NFCE: Motivo da NFC-e: {$motivo}");
+        } else {
+            error_log("❌ NFCE: infProt não encontrado");
+            $status = 'INFPROT_NAO_ENCONTRADO';
+            $motivo = 'Estrutura de protocolo inválida';
+        }
+    } else {
+        error_log("❌ NFCE: protNFe não encontrado");
+        $status = 'PROTNFE_NAO_ENCONTRADO';
+        $motivo = 'Protocolo da NFC-e não encontrado na resposta';
+    }
+
+    error_log("📋 NFCE: Status final da NFC-e - {$status}: {$motivo}");
+
+    // Verificar se foi autorizada (100 = Autorizado)
     if ($status !== '100') {
         error_log("❌ NFCE: NFC-e rejeitada - Status {$status}: {$motivo}");
         throw new Exception("NFC-e rejeitada pela SEFAZ - Status {$status}: {$motivo}");
@@ -933,31 +1153,50 @@ try {
 
     error_log("✅ NFCE: NFC-e autorizada pela SEFAZ!");
 
-    // Consultar protocolo de autorização
-    error_log("🔍 NFCE: Consultando protocolo de autorização...");
+    // ✅ CORREÇÃO: No modo síncrono, extrair protocolo e recibo da resposta
+    error_log("🔍 NFCE: Extraindo protocolo e recibo da resposta síncrona...");
     $protocolo = null;
+    $recibo = null;
+
     try {
-        $consultaResponse = $tools->sefazConsultaRecibo($recibo);
-        error_log("✅ NFCE: Consulta protocolo realizada");
-        error_log("📡 NFCE: Resposta consulta protocolo: " . $consultaResponse);
+        // Buscar protocolo na resposta síncrona (dentro de infProt)
+        if ($protNFeNodes->length > 0) {
+            $protNFe = $protNFeNodes->item(0);
+            $infProtNodes = $protNFe->getElementsByTagName('infProt');
 
-        $consultaDom = new DOMDocument();
-        $consultaDom->loadXML($consultaResponse);
+            if ($infProtNodes->length > 0) {
+                $infProt = $infProtNodes->item(0);
 
-        $protocoloNode = $consultaDom->getElementsByTagName('nProt')->item(0);
-        $protocolo = $protocoloNode ? $protocoloNode->nodeValue : 'PROTOCOLO_NAO_ENCONTRADO';
-        error_log("📋 NFCE: Protocolo extraído: {$protocolo}");
+                $protocoloNode = $infProt->getElementsByTagName('nProt')->item(0);
+                $protocolo = $protocoloNode ? $protocoloNode->nodeValue : null;
 
-        // Adicionar protocolo ao XML
-        error_log("🔗 NFCE: Adicionando protocolo ao XML...");
-        $xmlComProtocolo = $tools->addProtocol($xmlAssinado, $consultaResponse);
-        error_log("✅ NFCE: Protocolo adicionado ao XML");
+                // Para modo síncrono, o recibo pode estar no cabeçalho
+                $reciboNode = $dom->getElementsByTagName('nRec')->item(0);
+                $recibo = $reciboNode ? $reciboNode->nodeValue : 'SINCRONO';
+            }
+        }
+
+        if ($protocolo) {
+            error_log("✅ NFCE: Protocolo extraído da resposta síncrona: {$protocolo}");
+            error_log("✅ NFCE: Recibo: {$recibo}");
+
+            // Adicionar protocolo ao XML
+            error_log("🔗 NFCE: Adicionando protocolo ao XML...");
+            $xmlComProtocolo = $tools->addProtocol($xmlAssinado, $response);
+            error_log("✅ NFCE: Protocolo adicionado ao XML");
+        } else {
+            error_log("⚠️ NFCE: Protocolo não encontrado na resposta síncrona");
+            $xmlComProtocolo = $xmlAssinado;
+            $protocolo = 'PROTOCOLO_NAO_ENCONTRADO';
+            $recibo = 'RECIBO_NAO_ENCONTRADO';
+        }
 
     } catch (Exception $e) {
-        error_log("⚠️ NFCE: Erro ao consultar protocolo: " . $e->getMessage());
+        error_log("⚠️ NFCE: Erro ao extrair protocolo: " . $e->getMessage());
         error_log("⚠️ NFCE: Usando XML sem protocolo");
         $xmlComProtocolo = $xmlAssinado;
-        $protocolo = 'ERRO_CONSULTA_PROTOCOLO';
+        $protocolo = 'ERRO_PROTOCOLO';
+        $recibo = 'ERRO_RECIBO';
     }
 
     // Extrair chave de acesso do XML

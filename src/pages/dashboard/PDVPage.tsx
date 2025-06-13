@@ -169,6 +169,13 @@ const PDVPage: React.FC = () => {
   const [vendas, setVendas] = useState<any[]>([]);
   const [loadingVendas, setLoadingVendas] = useState(false);
 
+  // ✅ NOVO: Estados para modal de edição NFC-e
+  const [showEditarNfceModal, setShowEditarNfceModal] = useState(false);
+  const [vendaParaEditarNfce, setVendaParaEditarNfce] = useState<any>(null);
+  const [itensNfceEdicao, setItensNfceEdicao] = useState<any[]>([]);
+  const [loadingItensNfce, setLoadingItensNfce] = useState(false);
+  const [reprocessandoNfce, setReprocessandoNfce] = useState(false);
+
   // Estados para filtros avançados
   const [showFiltrosVendas, setShowFiltrosVendas] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState<'todas' | 'canceladas' | 'finalizadas' | 'pedidos'>('todas');
@@ -1940,7 +1947,14 @@ const PDVPage: React.FC = () => {
           motivo_cancelamento,
           cancelada_por_usuario_id,
           empresa_id,
-          usuario_id
+          usuario_id,
+          tentativa_nfce,
+          status_fiscal,
+          erro_fiscal,
+          modelo_documento,
+          numero_documento,
+          chave_nfe,
+          protocolo_nfe
         `)
         .eq('empresa_id', usuarioData.empresa_id);
 
@@ -2199,6 +2213,251 @@ const PDVPage: React.FC = () => {
     } finally {
       setLoadingItensVenda(false);
     }
+  };
+
+  // ✅ NOVA: Função para carregar itens para edição da NFC-e
+  const carregarItensParaEdicaoNfce = async (vendaId: string) => {
+    try {
+      setLoadingItensNfce(true);
+
+      // Carregar itens da venda com dados fiscais dos produtos
+      const { data: itensData, error: itensError } = await supabase
+        .from('pdv_itens')
+        .select(`
+          id,
+          produto_id,
+          codigo_produto,
+          nome_produto,
+          quantidade,
+          valor_unitario,
+          valor_total_item,
+          produto:produtos(
+            id,
+            codigo,
+            codigo_barras,
+            nome,
+            unidade_medida_id,
+            cfop,
+            cst_icms,
+            csosn,
+            regime_tributario,
+            unidade_medida:unidades_medida(sigla)
+          )
+        `)
+        .eq('pdv_id', vendaId)
+        .order('created_at', { ascending: true });
+
+      if (itensError) {
+        throw itensError;
+      }
+
+      // Processar itens para edição com campos editáveis
+      const itensProcessados = (itensData || []).map((item, index) => ({
+        ...item,
+        sequencia: index + 1,
+        cfop_editavel: item.produto?.cfop || '',
+        cst_editavel: item.produto?.cst_icms || '',
+        csosn_editavel: item.produto?.csosn || '',
+        regime_tributario: item.produto?.regime_tributario || 1,
+        editando_cfop: false,
+        editando_cst: false,
+        editando_csosn: false
+      }));
+
+      setItensNfceEdicao(itensProcessados);
+
+    } catch (error: any) {
+      console.error('Erro ao carregar itens para edição NFC-e:', error);
+      toast.error(`Erro ao carregar itens: ${error.message}`);
+    } finally {
+      setLoadingItensNfce(false);
+    }
+  };
+
+  // ✅ NOVAS: Funções para editar campos fiscais
+  const habilitarEdicaoCampo = (itemIndex: number, campo: 'cfop' | 'cst' | 'csosn') => {
+    setItensNfceEdicao(prev => prev.map((item, index) =>
+      index === itemIndex
+        ? { ...item, [`editando_${campo}`]: true }
+        : item
+    ));
+  };
+
+  const salvarEdicaoCampo = (itemIndex: number, campo: 'cfop' | 'cst' | 'csosn', novoValor: string) => {
+    setItensNfceEdicao(prev => prev.map((item, index) =>
+      index === itemIndex
+        ? {
+            ...item,
+            [`${campo}_editavel`]: novoValor,
+            [`editando_${campo}`]: false
+          }
+        : item
+    ));
+  };
+
+  const cancelarEdicaoCampo = (itemIndex: number, campo: 'cfop' | 'cst' | 'csosn') => {
+    setItensNfceEdicao(prev => prev.map((item, index) =>
+      index === itemIndex
+        ? { ...item, [`editando_${campo}`]: false }
+        : item
+    ));
+  };
+
+  // ✅ NOVA: Função para reprocessar NFC-e
+  const reprocessarNfce = async () => {
+    if (!vendaParaEditarNfce) return;
+
+    try {
+      setReprocessandoNfce(true);
+
+      // Preparar dados atualizados dos itens
+      const itensAtualizados = itensNfceEdicao.map(item => ({
+        codigo: item.produto?.codigo || item.codigo_produto,
+        descricao: item.nome_produto,
+        quantidade: item.quantidade,
+        valor_unitario: item.valor_unitario,
+        unidade: item.produto?.unidade_medida?.sigla || 'UN',
+        cfop: item.cfop_editavel,
+        cst_icms: item.regime_tributario === 1 ? item.cst_editavel : undefined,
+        csosn: item.regime_tributario === 1 ? undefined : item.csosn_editavel,
+        codigo_barras: item.produto?.codigo_barras
+      }));
+
+      // Buscar dados da empresa e ambiente
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      const { data: nfeConfigData } = await supabase
+        .from('nfe_config')
+        .select('ambiente')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (!empresaData || !nfeConfigData) {
+        throw new Error('Dados da empresa ou configuração NFe não encontrados');
+      }
+
+      // Preparar payload para reprocessamento
+      const nfceData = {
+        empresa: {
+          razao_social: empresaData.razao_social,
+          cnpj: empresaData.documento,
+          nome_fantasia: empresaData.nome_fantasia,
+          inscricao_estadual: empresaData.inscricao_estadual,
+          regime_tributario: empresaData.regime_tributario || 1,
+          uf: empresaData.estado,
+          codigo_municipio: parseInt(empresaData.codigo_municipio) || 3524402,
+          codigo_uf: getCodigoUF(empresaData.estado),
+          endereco: {
+            logradouro: empresaData.endereco,
+            numero: empresaData.numero,
+            bairro: empresaData.bairro,
+            cidade: empresaData.cidade,
+            cep: empresaData.cep
+          },
+          csc_homologacao: empresaData.csc_homologacao,
+          csc_id_homologacao: empresaData.csc_id_homologacao,
+          csc_producao: empresaData.csc_producao,
+          csc_id_producao: empresaData.csc_id_producao
+        },
+        ambiente: nfeConfigData.ambiente,
+        identificacao: {
+          numero: vendaParaEditarNfce.numero_documento || await gerarProximoNumeroNFCe(usuarioData.empresa_id),
+          serie: 1,
+          codigo_numerico: Math.floor(Math.random() * 99999999).toString().padStart(8, '0'),
+          natureza_operacao: 'Venda de mercadoria'
+        },
+        destinatario: vendaParaEditarNfce.nome_cliente ? {
+          documento: vendaParaEditarNfce.documento_cliente,
+          nome: vendaParaEditarNfce.nome_cliente
+        } : {},
+        produtos: itensAtualizados
+      };
+
+      // Enviar para reprocessamento
+      const response = await fetch('/backend/public/emitir-nfce.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          empresa_id: usuarioData.empresa_id,
+          nfce_data: nfceData
+        })
+      });
+
+      if (!response.ok) {
+        const errorResponse = await response.text();
+        try {
+          const errorJson = JSON.parse(errorResponse);
+          throw new Error(errorJson.error || 'Erro no reprocessamento');
+        } catch {
+          throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+        }
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Erro no reprocessamento');
+      }
+
+      // Atualizar venda com sucesso
+      const { error: updateError } = await supabase
+        .from('pdv')
+        .update({
+          modelo_documento: 65,
+          numero_documento: result.data.numero,
+          serie_documento: result.data.serie,
+          chave_nfe: result.data.chave,
+          protocolo_nfe: result.data.protocolo,
+          xml_path: result.data.xml_path,
+          pdf_path: result.data.pdf_path,
+          status_fiscal: 'autorizada',
+          erro_fiscal: null,
+          data_autorizacao: result.data.data_autorizacao
+        })
+        .eq('id', vendaParaEditarNfce.id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar venda:', updateError);
+      }
+
+      toast.success('NFC-e reprocessada e autorizada com sucesso!');
+      setShowEditarNfceModal(false);
+      loadVendas(); // Recarregar lista de vendas
+
+    } catch (error: any) {
+      console.error('Erro no reprocessamento:', error);
+      toast.error(`Erro no reprocessamento: ${error.message}`);
+    } finally {
+      setReprocessandoNfce(false);
+    }
+  };
+
+  // Função auxiliar para calcular código UF
+  const getCodigoUF = (estado: string): number => {
+    const codigosUF: { [key: string]: number } = {
+      'AC': 12, 'AL': 17, 'AP': 16, 'AM': 13, 'BA': 29, 'CE': 23, 'DF': 53,
+      'ES': 32, 'GO': 52, 'MA': 21, 'MT': 51, 'MS': 50, 'MG': 31, 'PA': 15,
+      'PB': 25, 'PR': 41, 'PE': 26, 'PI': 22, 'RJ': 33, 'RN': 24, 'RS': 43,
+      'RO': 11, 'RR': 14, 'SC': 42, 'SP': 35, 'SE': 28, 'TO': 27
+    };
+    return codigosUF[estado] || 35;
   };
 
   // Função para gerar o link público do pedido
@@ -3899,6 +4158,39 @@ const PDVPage: React.FC = () => {
         console.log('📋 FRONTEND: Tipo finalização:', tipoFinalizacao);
         console.log('👤 FRONTEND: Empresa ID:', usuarioData.empresa_id);
 
+        setEtapaProcessamento('Carregando dados da empresa...');
+
+        // ✅ CORREÇÃO: Buscar dados da empresa (igual à NFe que funciona)
+        console.log('🏢 FRONTEND: Buscando dados da empresa...');
+        const { data: empresaData } = await supabase
+          .from('empresas')
+          .select('*')
+          .eq('id', usuarioData.empresa_id)
+          .single();
+
+        if (!empresaData) {
+          throw new Error('Dados da empresa não encontrados');
+        }
+        console.log('✅ FRONTEND: Dados da empresa carregados:', empresaData.razao_social);
+
+        // Buscar configuração NFe
+        console.log('⚙️ FRONTEND: Buscando configuração NFe...');
+        const { data: nfeConfigData, error: nfeConfigError } = await supabase
+          .from('nfe_config')
+          .select('ambiente')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        if (nfeConfigError) {
+          console.error('❌ FRONTEND: Erro na consulta nfe_config:', nfeConfigError);
+          throw new Error(`Erro ao buscar configuração NFe: ${nfeConfigError.message}`);
+        }
+
+        if (!nfeConfigData) {
+          throw new Error('Configuração NFe não encontrada');
+        }
+        console.log('✅ FRONTEND: Configuração NFe carregada:', nfeConfigData.ambiente);
+
         setEtapaProcessamento('Preparando dados para NFC-e...');
 
         try {
@@ -3910,7 +4202,43 @@ const PDVPage: React.FC = () => {
           const codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
           console.log('🔢 FRONTEND: Código numérico gerado:', codigoNumerico);
 
+          // ✅ CORREÇÃO: Calcular codigo_uf a partir do estado
+          const getCodigoUF = (estado: string): number => {
+            const codigosUF: { [key: string]: number } = {
+              'AC': 12, 'AL': 17, 'AP': 16, 'AM': 13, 'BA': 29, 'CE': 23, 'DF': 53,
+              'ES': 32, 'GO': 52, 'MA': 21, 'MT': 51, 'MS': 50, 'MG': 31, 'PA': 15,
+              'PB': 25, 'PR': 41, 'PE': 26, 'PI': 22, 'RJ': 33, 'RN': 24, 'RS': 43,
+              'RO': 11, 'RR': 14, 'SC': 42, 'SP': 35, 'SE': 28, 'TO': 27
+            };
+            return codigosUF[estado] || 35; // Default SP se não encontrar
+          };
+
           const nfceData = {
+            // ✅ CORREÇÃO: Adicionar dados da empresa (igual à NFe que funciona)
+            empresa: {
+              razao_social: empresaData.razao_social,
+              cnpj: empresaData.documento, // Campo correto é 'documento'
+              nome_fantasia: empresaData.nome_fantasia,
+              inscricao_estadual: empresaData.inscricao_estadual,
+              regime_tributario: empresaData.regime_tributario || 1,
+              uf: empresaData.estado, // Campo correto é 'estado'
+              codigo_municipio: parseInt(empresaData.codigo_municipio) || 3524402, // Converter para int
+              codigo_uf: getCodigoUF(empresaData.estado), // ✅ CORREÇÃO: Calcular a partir do estado
+              endereco: {
+                logradouro: empresaData.endereco,
+                numero: empresaData.numero,
+                bairro: empresaData.bairro,
+                cidade: empresaData.cidade,
+                cep: empresaData.cep
+              },
+              // Campos CSC para NFC-e
+              csc_homologacao: empresaData.csc_homologacao,
+              csc_id_homologacao: empresaData.csc_id_homologacao,
+              csc_producao: empresaData.csc_producao,
+              csc_id_producao: empresaData.csc_id_producao
+            },
+            // ✅ CORREÇÃO: Adicionar ambiente (igual à NFe que funciona)
+            ambiente: nfeConfigData.ambiente, // 'producao' ou 'homologacao'
             identificacao: {
               numero: proximoNumero,
               serie: 1, // Série padrão para NFC-e
@@ -3960,23 +4288,35 @@ const PDVPage: React.FC = () => {
           if (!nfceResponse.ok) {
             console.error('❌ FRONTEND: Erro HTTP:', nfceResponse.status, nfceResponse.statusText);
 
-            // Tentar capturar a resposta de erro do backend
+            // ✅ CORREÇÃO: Capturar e mostrar erro específico do backend
+            let errorResponse;
             try {
-              const errorResponse = await nfceResponse.text();
+              errorResponse = await nfceResponse.text();
               console.error('📋 FRONTEND: Resposta de erro do backend:', errorResponse);
-
-              // Tentar fazer parse JSON da resposta de erro
-              try {
-                const errorJson = JSON.parse(errorResponse);
-                console.error('📋 FRONTEND: Erro JSON do backend:', errorJson);
-                throw new Error(`Erro do backend: ${errorJson.error || errorJson.message || 'Erro desconhecido'}`);
-              } catch (jsonError) {
-                console.error('❌ FRONTEND: Erro ao fazer parse do JSON de erro:', jsonError);
-                throw new Error(`Erro HTTP ${nfceResponse.status}: ${errorResponse.substring(0, 200)}`);
-              }
             } catch (textError) {
               console.error('❌ FRONTEND: Erro ao capturar resposta de erro:', textError);
               throw new Error(`Erro HTTP ${nfceResponse.status}: ${nfceResponse.statusText}`);
+            }
+
+            // Tentar fazer parse JSON da resposta de erro
+            try {
+              const errorJson = JSON.parse(errorResponse);
+              console.error('📋 FRONTEND: Erro JSON do backend:', errorJson);
+
+              // ✅ CORREÇÃO: Mostrar mensagem específica do backend
+              const mensagemErro = errorJson.error || errorJson.message || 'Erro desconhecido do backend';
+              throw new Error(mensagemErro);
+            } catch (jsonError) {
+              console.error('❌ FRONTEND: Erro ao fazer parse do JSON de erro:', jsonError);
+              // ✅ CORREÇÃO: Se jsonError for a mensagem específica, usar ela
+              if (jsonError instanceof Error && jsonError.message.includes('Status')) {
+                throw jsonError; // Re-lançar o erro específico
+              }
+              // Se não conseguir fazer parse, mostrar resposta bruta (limitada)
+              const mensagemErro = errorResponse.length > 200
+                ? errorResponse.substring(0, 200) + '...'
+                : errorResponse;
+              throw new Error(`Erro de comunicação: ${mensagemErro}`);
             }
           }
 
@@ -3985,7 +4325,8 @@ const PDVPage: React.FC = () => {
 
           if (!nfceResult.success) {
             console.error('❌ FRONTEND: Erro na emissão:', nfceResult.error);
-            throw new Error(`Erro na emissão da NFC-e: ${nfceResult.error}`);
+            // ✅ CORREÇÃO: Mostrar mensagem específica do backend sem prefixo genérico
+            throw new Error(nfceResult.error || 'Erro desconhecido na emissão da NFC-e');
           }
 
           console.log('✅ FRONTEND: NFC-e emitida com sucesso!');
@@ -4030,8 +4371,13 @@ const PDVPage: React.FC = () => {
           console.error('❌ FRONTEND: Erro na emissão da NFC-e:', nfceError);
           console.error('❌ FRONTEND: Stack trace:', (nfceError as Error).stack);
           setStatusProcessamento('erro');
-          setErroProcessamento((nfceError as Error).message);
-          setEtapaProcessamento(`Erro na NFC-e: ${(nfceError as Error).message}`);
+
+          // ✅ CORREÇÃO: Usar mensagem específica do erro
+          const mensagemErroEspecifica = (nfceError as Error).message;
+          console.log('🔍 FRONTEND: Mensagem de erro capturada:', mensagemErroEspecifica);
+
+          setErroProcessamento(mensagemErroEspecifica);
+          setEtapaProcessamento(`Erro na NFC-e: ${mensagemErroEspecifica}`);
           console.log('🛑 FRONTEND: Processo interrompido por erro - aguardando ação do usuário');
           // Não fechar automaticamente em caso de erro - deixar usuário fechar manualmente
           return;
@@ -4085,7 +4431,18 @@ const PDVPage: React.FC = () => {
 
     } catch (error) {
       console.error('Erro ao finalizar venda:', error);
-      setEtapaProcessamento('ERRO INESPERADO: ' + (error as Error).message);
+
+      // ✅ CORREÇÃO: Não sobrescrever erros específicos da NFC-e
+      const mensagemErro = (error as Error).message;
+      console.log('🔍 FRONTEND: Erro capturado no catch externo:', mensagemErro);
+
+      // Se o erro já foi tratado pela NFC-e, não sobrescrever
+      if (statusProcessamento === 'erro') {
+        console.log('🔍 FRONTEND: Erro já tratado pela NFC-e, não sobrescrevendo');
+        return;
+      }
+
+      setEtapaProcessamento('ERRO INESPERADO: ' + mensagemErro);
       await new Promise(resolve => setTimeout(resolve, 3000));
       setShowProcessandoVenda(false);
       toast.error('Erro inesperado ao finalizar venda');
@@ -7728,6 +8085,35 @@ const PDVPage: React.FC = () => {
                             </div>
                           </div>
 
+                          {/* ✅ NOVO: Tags de Tipo Fiscal */}
+                          <div className="flex flex-wrap gap-1">
+                            {/* Tag Venda Direta (sempre presente) */}
+                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-medium rounded-full border border-blue-500/30">
+                              Venda Direta
+                            </span>
+
+                            {/* ✅ Tag NFC-e - Quando tentou emitir NFC-e */}
+                            {venda.tentativa_nfce && (
+                              <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs font-medium rounded-full border border-purple-500/30">
+                                NFC-e
+                              </span>
+                            )}
+
+                            {/* ✅ Tag Pendente - Quando há erro fiscal */}
+                            {venda.status_fiscal === 'pendente' && (
+                              <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs font-medium rounded-full border border-yellow-500/30 animate-pulse">
+                                Pendente
+                              </span>
+                            )}
+
+                            {/* ✅ Tag Autorizada - Quando NFC-e foi autorizada */}
+                            {venda.status_fiscal === 'autorizada' && (
+                              <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full border border-green-500/30">
+                                Autorizada
+                              </span>
+                            )}
+                          </div>
+
                           {/* Tags de Origem */}
                           <div className="flex flex-wrap gap-1">
                             {venda.pedidos_origem && venda.pedidos_origem.length > 0 ? (
@@ -7881,6 +8267,20 @@ const PDVPage: React.FC = () => {
                           >
                             Exibir Itens
                           </button>
+
+                          {/* ✅ NOVO: Botão Editar NFC-e para vendas pendentes */}
+                          {venda.status_fiscal === 'pendente' && venda.tentativa_nfce && (
+                            <button
+                              onClick={() => {
+                                setVendaParaEditarNfce(venda);
+                                setShowEditarNfceModal(true);
+                                carregarItensParaEdicaoNfce(venda.id);
+                              }}
+                              className="w-full px-3 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 rounded text-xs transition-colors font-medium border border-yellow-600/30 hover:border-yellow-600/50"
+                            >
+                              Editar NFC-e
+                            </button>
+                          )}
 
                           {venda.status_venda === 'finalizada' && (
                             <button
@@ -9020,9 +9420,60 @@ const PDVPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Botão de fechar para erro */}
+                {/* Botões para erro */}
                 {statusProcessamento === 'erro' && (
-                  <div className="mt-6">
+                  <div className="mt-6 space-y-3">
+                    {/* Botão Salvar - Para salvar venda mesmo com erro fiscal */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          // Salvar venda com status fiscal pendente
+                          if (vendaProcessadaId) {
+                            const { error: updateError } = await supabase
+                              .from('pdv')
+                              .update({
+                                modelo_documento: 65, // NFC-e
+                                status_fiscal: 'pendente', // ✅ Status pendente para reprocessamento
+                                erro_fiscal: erroProcessamento, // Salvar erro para análise
+                                tentativa_nfce: true // ✅ Marcar que tentou emitir NFC-e
+                              })
+                              .eq('id', vendaProcessadaId);
+
+                            if (updateError) {
+                              toast.error('Erro ao salvar venda: ' + updateError.message);
+                              return;
+                            }
+
+                            toast.success(`Venda #${numeroVendaProcessada} salva com status pendente`);
+
+                            // Fechar modal e limpar carrinho
+                            setShowProcessandoVenda(false);
+                            setStatusProcessamento('processando');
+                            setErroProcessamento('');
+
+                            // Limpar carrinho após salvar
+                            setCarrinho([]);
+                            setClienteSelecionado(null);
+                            setShowFinalizacaoFinal(false);
+                            limparPagamentosParciaisSilencioso();
+                            setCpfCnpjNota('');
+                            setClienteEncontrado(null);
+                            setTipoDocumento('cpf');
+                            setPedidosImportados([]);
+                            setDescontoPrazoSelecionado(null);
+                            clearPDVState();
+                          }
+                        } catch (error) {
+                          console.error('Erro ao salvar venda pendente:', error);
+                          toast.error('Erro ao salvar venda');
+                        }
+                      }}
+                      className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                    >
+                      Salvar Venda (Fiscal Pendente)
+                    </button>
+
+                    {/* Botão Fechar - Apenas fecha sem salvar */}
                     <button
                       onClick={() => {
                         setShowProcessandoVenda(false);
@@ -9031,7 +9482,7 @@ const PDVPage: React.FC = () => {
                       }}
                       className="w-full bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
                     >
-                      Fechar
+                      Fechar sem Salvar
                     </button>
                   </div>
                 )}
@@ -9160,6 +9611,274 @@ const PDVPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ✅ NOVO: Modal de Edição da NFC-e */}
+      <AnimatePresence>
+        {showEditarNfceModal && vendaParaEditarNfce && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowEditarNfceModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-6xl mx-4 max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Cabeçalho */}
+              <div className="flex-shrink-0 p-6 border-b border-gray-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white">
+                      Editar NFC-e - Venda #{vendaParaEditarNfce.numero_venda}
+                    </h3>
+                    <div className="mt-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                      <p className="text-red-400 text-sm font-medium">Erro Fiscal:</p>
+                      <p className="text-red-300 text-sm mt-1">{vendaParaEditarNfce.erro_fiscal}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowEditarNfceModal(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                {loadingItensNfce ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-gray-400">Carregando itens...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-gray-800/30 rounded-lg p-4">
+                      <h4 className="text-lg font-medium text-white mb-4">Itens da Venda</h4>
+                      <p className="text-gray-400 text-sm mb-4">
+                        Revise e corrija os dados fiscais dos produtos. Clique no ícone de lápis para editar os campos CFOP, CST ou CSOSN.
+                      </p>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-700">
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Item</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Código</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Cód. Barras</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Nome</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Unidade</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Preço</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CFOP</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">
+                                {itensNfceEdicao[0]?.regime_tributario === 1 ? 'CST' : 'CSOSN'}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {itensNfceEdicao.map((item, index) => (
+                              <tr key={item.id} className="border-b border-gray-800/50">
+                                <td className="py-3 px-2 text-white font-medium">{item.sequencia}</td>
+                                <td className="py-3 px-2 text-gray-300">{item.produto?.codigo || item.codigo_produto}</td>
+                                <td className="py-3 px-2 text-gray-300">{item.produto?.codigo_barras || '-'}</td>
+                                <td className="py-3 px-2 text-white">{item.nome_produto}</td>
+                                <td className="py-3 px-2 text-gray-300">{item.produto?.unidade_medida?.sigla || 'UN'}</td>
+                                <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
+
+                                {/* CFOP */}
+                                <td className="py-3 px-2">
+                                  <div className="flex items-center gap-2">
+                                    {item.editando_cfop ? (
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="text"
+                                          value={item.cfop_editavel}
+                                          onChange={(e) => {
+                                            const novoValor = e.target.value;
+                                            setItensNfceEdicao(prev => prev.map((it, idx) =>
+                                              idx === index ? { ...it, cfop_editavel: novoValor } : it
+                                            ));
+                                          }}
+                                          className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                          maxLength={4}
+                                        />
+                                        <button
+                                          onClick={() => salvarEdicaoCampo(index, 'cfop', item.cfop_editavel)}
+                                          className="text-green-400 hover:text-green-300"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                          </svg>
+                                        </button>
+                                        <button
+                                          onClick={() => cancelarEdicaoCampo(index, 'cfop')}
+                                          className="text-red-400 hover:text-red-300"
+                                        >
+                                          <X size={16} />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-white">{item.cfop_editavel || '-'}</span>
+                                        <button
+                                          onClick={() => habilitarEdicaoCampo(index, 'cfop')}
+                                          className="text-gray-400 hover:text-white"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* CST/CSOSN */}
+                                <td className="py-3 px-2">
+                                  <div className="flex items-center gap-2">
+                                    {item.regime_tributario === 1 ? (
+                                      // CST para Lucro Real/Presumido
+                                      item.editando_cst ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="text"
+                                            value={item.cst_editavel}
+                                            onChange={(e) => {
+                                              const novoValor = e.target.value;
+                                              setItensNfceEdicao(prev => prev.map((it, idx) =>
+                                                idx === index ? { ...it, cst_editavel: novoValor } : it
+                                              ));
+                                            }}
+                                            className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                            maxLength={3}
+                                          />
+                                          <button
+                                            onClick={() => salvarEdicaoCampo(index, 'cst', item.cst_editavel)}
+                                            className="text-green-400 hover:text-green-300"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => cancelarEdicaoCampo(index, 'cst')}
+                                            className="text-red-400 hover:text-red-300"
+                                          >
+                                            <X size={16} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-white">{item.cst_editavel || '-'}</span>
+                                          <button
+                                            onClick={() => habilitarEdicaoCampo(index, 'cst')}
+                                            className="text-gray-400 hover:text-white"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )
+                                    ) : (
+                                      // CSOSN para Simples Nacional
+                                      item.editando_csosn ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="text"
+                                            value={item.csosn_editavel}
+                                            onChange={(e) => {
+                                              const novoValor = e.target.value;
+                                              setItensNfceEdicao(prev => prev.map((it, idx) =>
+                                                idx === index ? { ...it, csosn_editavel: novoValor } : it
+                                              ));
+                                            }}
+                                            className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                            maxLength={3}
+                                          />
+                                          <button
+                                            onClick={() => salvarEdicaoCampo(index, 'csosn', item.csosn_editavel)}
+                                            className="text-green-400 hover:text-green-300"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => cancelarEdicaoCampo(index, 'csosn')}
+                                            className="text-red-400 hover:text-red-300"
+                                          >
+                                            <X size={16} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-white">{item.csosn_editavel || '-'}</span>
+                                          <button
+                                            onClick={() => habilitarEdicaoCampo(index, 'csosn')}
+                                            className="text-gray-400 hover:text-white"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex-shrink-0 p-6 border-t border-gray-800">
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setShowEditarNfceModal(false)}
+                    className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={reprocessarNfce}
+                    disabled={reprocessandoNfce || loadingItensNfce}
+                    className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    {reprocessandoNfce ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Reprocessando...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Reprocessar Envio
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
