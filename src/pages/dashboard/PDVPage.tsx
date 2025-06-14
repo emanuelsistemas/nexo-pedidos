@@ -257,6 +257,7 @@ const PDVPage: React.FC = () => {
   const [statusProcessamento, setStatusProcessamento] = useState<'processando' | 'sucesso' | 'erro'>('processando');
   const [erroProcessamento, setErroProcessamento] = useState<string>('');
   const [numeroDocumentoReservado, setNumeroDocumentoReservado] = useState<number | null>(null);
+  const [serieDocumentoReservado, setSerieDocumentoReservado] = useState<number | null>(null); // ✅ NOVO: Série reservada
 
   // Estados para tela de finalização final
   const [showFinalizacaoFinal, setShowFinalizacaoFinal] = useState(false);
@@ -2266,6 +2267,26 @@ const PDVPage: React.FC = () => {
     try {
       setLoadingItensNfce(true);
 
+      // ✅ NOVO: Buscar regime tributário da empresa
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('regime_tributario')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      const regimeTributario = empresaData?.regime_tributario || 3; // Default: Simples Nacional
+
       // Carregar itens da venda com dados básicos dos produtos
       const { data: itensData, error: itensError } = await supabase
         .from('pdv_itens')
@@ -2277,6 +2298,9 @@ const PDVPage: React.FC = () => {
           quantidade,
           valor_unitario,
           valor_total_item,
+          cfop,
+          cst_icms,
+          csosn_icms,
           produto:produtos(
             id,
             codigo,
@@ -2297,16 +2321,17 @@ const PDVPage: React.FC = () => {
       const itensProcessados = (itensData || []).map((item, index) => ({
         ...item,
         sequencia: index + 1,
-        cfop_editavel: '5102', // CFOP padrão para venda
-        cst_editavel: '00', // CST padrão
-        csosn_editavel: '102', // CSOSN padrão para Simples Nacional
-        regime_tributario: 1, // 1 = Simples Nacional
+        cfop_editavel: item.cfop || '5102', // CFOP da venda ou padrão
+        cst_editavel: item.cst_icms || '00', // CST da venda ou padrão
+        csosn_editavel: item.csosn_icms || '102', // CSOSN da venda ou padrão
+        regime_tributario: regimeTributario, // ✅ NOVO: Regime real da empresa
         editando_cfop: false,
         editando_cst: false,
         editando_csosn: false
       }));
 
       console.log('✅ Itens carregados para edição NFC-e:', itensProcessados);
+      console.log('✅ Regime tributário da empresa:', regimeTributario);
       setItensNfceEdicao(itensProcessados);
 
     } catch (error: any) {
@@ -2369,7 +2394,7 @@ const PDVPage: React.FC = () => {
           .update({
             cfop: item.cfop_editavel,
             cst_icms: item.regime_tributario === 1 ? item.cst_editavel : null,
-            csosn: item.regime_tributario === 1 ? null : item.csosn_editavel
+            csosn_icms: item.regime_tributario === 1 ? null : item.csosn_editavel
           })
           .eq('id', item.id);
 
@@ -2407,7 +2432,7 @@ const PDVPage: React.FC = () => {
         unidade: item.produto?.unidade_medida?.sigla || 'UN',
         cfop: item.cfop_editavel,
         cst_icms: item.regime_tributario === 1 ? item.cst_editavel : undefined,
-        csosn: item.regime_tributario === 1 ? undefined : item.csosn_editavel,
+        csosn_icms: item.regime_tributario === 1 ? undefined : item.csosn_editavel,
         codigo_barras: item.produto?.codigo_barras
       }));
 
@@ -2417,11 +2442,14 @@ const PDVPage: React.FC = () => {
 
       const { data: usuarioData } = await supabase
         .from('usuarios')
-        .select('empresa_id')
+        .select('empresa_id, serie_nfce')
         .eq('id', userData.user.id)
         .single();
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // ✅ NOVO: Obter série do usuário logado
+      const serieUsuario = usuarioData.serie_nfce || 1;
 
       const { data: empresaData } = await supabase
         .from('empresas')
@@ -2465,7 +2493,7 @@ const PDVPage: React.FC = () => {
         ambiente: nfeConfigData.ambiente,
         identificacao: {
           numero: vendaParaEditarNfce.numero_documento || await gerarProximoNumeroNFCe(usuarioData.empresa_id), // ✅ Usa número editado
-          serie: 1,
+          serie: serieUsuario, // ✅ NOVO: Série individual do usuário logado
           codigo_numerico: Math.floor(Math.random() * 99999999).toString().padStart(8, '0'),
           natureza_operacao: 'Venda de mercadoria'
         },
@@ -3914,6 +3942,7 @@ const PDVPage: React.FC = () => {
     setStatusProcessamento('processando');
     setErroProcessamento('');
     setNumeroDocumentoReservado(null); // ✅ Limpar número reservado
+    setSerieDocumentoReservado(null); // ✅ NOVO: Limpar série reservada
 
     try {
       // Obter dados do usuário
@@ -4028,6 +4057,17 @@ const PDVPage: React.FC = () => {
         numeroDocumentoNfce = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
         console.log('🔢 FRONTEND: Número NFC-e reservado:', numeroDocumentoNfce);
         setNumeroDocumentoReservado(numeroDocumentoNfce); // ✅ Salvar no estado para mostrar no modal
+
+        // ✅ NOVO: Buscar série do usuário para mostrar no modal
+        const { data: usuarioSerieData } = await supabase
+          .from('usuarios')
+          .select('serie_nfce')
+          .eq('id', userData.user.id)
+          .single();
+
+        const serieUsuario = usuarioSerieData?.serie_nfce || 1;
+        setSerieDocumentoReservado(serieUsuario); // ✅ Salvar série no estado para mostrar no modal
+        console.log('🔢 FRONTEND: Série NFC-e do usuário:', serieUsuario);
       }
 
       const vendaData = {
@@ -4282,6 +4322,17 @@ const PDVPage: React.FC = () => {
         }
         console.log('✅ FRONTEND: Dados da empresa carregados:', empresaData.razao_social);
 
+        // ✅ NOVO: Buscar série da NFC-e do usuário logado
+        console.log('🔢 FRONTEND: Buscando série da NFC-e do usuário...');
+        const { data: usuarioSerieData } = await supabase
+          .from('usuarios')
+          .select('serie_nfce')
+          .eq('id', userData.user.id)
+          .single();
+
+        const serieUsuario = usuarioSerieData?.serie_nfce || 1; // Fallback para série 1
+        console.log('✅ FRONTEND: Série da NFC-e do usuário:', serieUsuario);
+
         // Buscar configuração NFe
         console.log('⚙️ FRONTEND: Buscando configuração NFe...');
         const { data: nfeConfigData, error: nfeConfigError } = await supabase
@@ -4366,7 +4417,7 @@ const PDVPage: React.FC = () => {
             ambiente: nfeConfigData.ambiente, // 'producao' ou 'homologacao'
             identificacao: {
               numero: proximoNumero,
-              serie: 1, // Série padrão para NFC-e
+              serie: serieUsuario, // ✅ NOVO: Série individual do usuário logado
               codigo_numerico: codigoNumerico,
               natureza_operacao: 'Venda de mercadoria'
             },
@@ -9592,12 +9643,22 @@ const PDVPage: React.FC = () => {
                   </p>
                 )}
 
-                {/* ✅ NOVO: Mostrar número da NFC-e quando disponível */}
-                {statusProcessamento === 'processando' && vendaProcessadaId && (
+                {/* ✅ NOVO: Mostrar número e série da NFC-e quando disponível */}
+                {statusProcessamento === 'processando' && (numeroDocumentoReservado || serieDocumentoReservado) && (
                   <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-4">
-                    <p className="text-purple-400 text-sm font-medium">
-                      🧾 Número NFC-e reservado: #{numeroDocumentoReservado || 'Carregando...'}
+                    <p className="text-purple-400 text-sm font-medium mb-1">
+                      🧾 NFC-e reservada:
                     </p>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-purple-300">Número:</span>
+                        <span className="text-white font-medium ml-2">#{numeroDocumentoReservado || 'Carregando...'}</span>
+                      </div>
+                      <div>
+                        <span className="text-purple-300">Série:</span>
+                        <span className="text-white font-medium ml-2">#{serieDocumentoReservado || 'Carregando...'}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
 
