@@ -2543,11 +2543,9 @@ const PDVPage: React.FC = () => {
           serie_documento: result.data.serie,
           chave_nfe: result.data.chave,
           protocolo_nfe: result.data.protocolo,
-          xml_path: result.data.xml_path,
-          pdf_path: result.data.pdf_path,
           status_fiscal: 'autorizada',
           erro_fiscal: null,
-          data_autorizacao: result.data.data_autorizacao
+          data_emissao_nfe: result.data.data_autorizacao
         })
         .eq('id', vendaParaEditarNfce.id);
 
@@ -4469,6 +4467,8 @@ const PDVPage: React.FC = () => {
             try {
               errorResponse = await nfceResponse.text();
               console.error('📋 FRONTEND: Resposta de erro do backend:', errorResponse);
+              console.error('🔍 FRONTEND: Status HTTP recebido:', nfceResponse.status);
+              console.error('🔍 FRONTEND: Headers da resposta:', Object.fromEntries(nfceResponse.headers.entries()));
             } catch (textError) {
               console.error('❌ FRONTEND: Erro ao capturar resposta de erro:', textError);
               throw new Error(`Erro HTTP ${nfceResponse.status}: ${nfceResponse.statusText}`);
@@ -4478,16 +4478,29 @@ const PDVPage: React.FC = () => {
             try {
               const errorJson = JSON.parse(errorResponse);
               console.error('📋 FRONTEND: Erro JSON do backend:', errorJson);
+              console.error('🔍 FRONTEND: Campos do erro JSON:', Object.keys(errorJson));
 
               // ✅ CORREÇÃO: Mostrar mensagem específica do backend
               const mensagemErro = errorJson.error || errorJson.message || 'Erro desconhecido do backend';
+              console.error('🔍 FRONTEND: Mensagem de erro extraída:', mensagemErro);
               throw new Error(mensagemErro);
             } catch (jsonError) {
               console.error('❌ FRONTEND: Erro ao fazer parse do JSON de erro:', jsonError);
+              console.error('🔍 FRONTEND: Tipo do erro JSON:', typeof jsonError);
+              console.error('🔍 FRONTEND: Conteúdo do jsonError:', jsonError);
+
               // ✅ CORREÇÃO: Se jsonError for a mensagem específica, usar ela
               if (jsonError instanceof Error && jsonError.message.includes('Status')) {
+                console.error('🔍 FRONTEND: Re-lançando erro específico da SEFAZ');
                 throw jsonError; // Re-lançar o erro específico
               }
+
+              // ✅ CORREÇÃO: Verificar se errorResponse contém mensagem específica
+              if (errorResponse.includes('ERRO:') || errorResponse.includes('Status')) {
+                console.error('🔍 FRONTEND: Resposta contém erro específico, usando resposta bruta');
+                throw new Error(errorResponse);
+              }
+
               // Se não conseguir fazer parse, mostrar resposta bruta (limitada)
               const mensagemErro = errorResponse.length > 200
                 ? errorResponse.substring(0, 200) + '...'
@@ -4518,11 +4531,10 @@ const PDVPage: React.FC = () => {
             // ✅ NOVO: Não atualizar numero_documento - já foi salvo no início
             chave_nfe: nfceResult.data.chave,
             protocolo_nfe: nfceResult.data.protocolo,
-            xml_path: nfceResult.data.xml_path,
-            pdf_path: nfceResult.data.pdf_path,
             status_fiscal: 'autorizada', // ✅ NFC-e autorizada com sucesso
             erro_fiscal: null, // ✅ Limpar qualquer erro anterior
-            data_autorizacao: nfceResult.data.data_autorizacao
+            data_emissao_nfe: nfceResult.data.data_autorizacao
+            // ✅ CORREÇÃO: xml_path e pdf_path removidos - arquivos salvos localmente em /root/nexo-pedidos/backend/storage
           };
           console.log('💾 FRONTEND: Dados para atualização:', updateData);
 

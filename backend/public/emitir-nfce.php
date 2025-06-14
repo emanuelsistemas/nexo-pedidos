@@ -234,7 +234,8 @@ try {
     
     // Validar CSC obrigatório para NFC-e (SEM FALLBACKS)
     error_log("🔍 NFCE: Validando CSC obrigatório...");
-    $ambiente = $nfeConfig['ambiente_codigo'] ?? 2;
+    // ✅ CORREÇÃO: Usar ambiente do payload, não de variável indefinida
+    $ambiente = $nfceData['ambiente'] === 'producao' ? 1 : 2;
     $cscField = $ambiente == 1 ? 'csc_producao' : 'csc_homologacao';
     $cscIdField = $ambiente == 1 ? 'csc_id_producao' : 'csc_id_homologacao';
     $ambienteTexto = $ambiente == 1 ? 'produção' : 'homologação';
@@ -362,6 +363,13 @@ try {
     }
     error_log("✅ NFCE: Série: {$identificacao['serie']}");
 
+    // ✅ LOG ESPECÍFICO: Capturar série para análise
+    logDetalhado('SERIE_ANALYSIS', 'Série da NFC-e sendo transmitida', [
+        'serie_recebida' => $identificacao['serie'],
+        'numero_recebido' => $identificacao['numero'],
+        'dados_identificacao_completos' => $identificacao
+    ]);
+
     if (empty($identificacao['codigo_numerico'])) {
         error_log("❌ NFCE: Código numérico vazio");
         throw new Exception('Código numérico da NFC-e é obrigatório');
@@ -407,6 +415,14 @@ try {
     $std->mod = 65; // NFC-e
     $std->serie = (int)($identificacao['serie'] ?? 1);
     $std->dhEmi = date('Y-m-d\TH:i:sP'); // Data/hora emissão com timezone
+
+    // ✅ LOG ESPECÍFICO: Série sendo enviada para SEFAZ
+    logDetalhado('SEFAZ_SERIE', 'Série configurada na tag IDE para envio à SEFAZ', [
+        'serie_final' => $std->serie,
+        'numero_final' => $std->nNF,
+        'modelo' => $std->mod,
+        'natureza_operacao' => $std->natOp
+    ]);
     $std->tpNF = 1; // Saída
     $std->idDest = 1; // Operação interna
 
@@ -1148,7 +1164,42 @@ try {
     // Verificar se foi autorizada (100 = Autorizado)
     if ($status !== '100') {
         error_log("❌ NFCE: NFC-e rejeitada - Status {$status}: {$motivo}");
-        throw new Exception("NFC-e rejeitada pela SEFAZ - Status {$status}: {$motivo}");
+
+        // ✅ CORREÇÃO: Criar mensagem específica baseada no status
+        $mensagemEspecifica = "NFC-e rejeitada pela SEFAZ";
+
+        // Tratar erros específicos mais comuns
+        switch ($status) {
+            case '539':
+                $mensagemEspecifica = "ERRO: Número da NFC-e já foi utilizado. Configure o próximo número disponível no sistema.";
+                break;
+            case '204':
+                $mensagemEspecifica = "ERRO: Duplicidade de NFC-e. Verifique a numeração sequencial.";
+                break;
+            case '225':
+                $mensagemEspecifica = "ERRO: Falha no Schema XML. Verifique os dados obrigatórios.";
+                break;
+            case '402':
+                $mensagemEspecifica = "ERRO: XML mal formado. Problema na estrutura dos dados.";
+                break;
+            case '503':
+                $mensagemEspecifica = "ERRO: Serviço da SEFAZ temporariamente indisponível. Tente novamente em alguns minutos.";
+                break;
+            case '656':
+                $mensagemEspecifica = "ERRO: Consumo indevido. Verifique se o ambiente (homologação/produção) está correto.";
+                break;
+            default:
+                $mensagemEspecifica = "NFC-e rejeitada pela SEFAZ - Status {$status}: {$motivo}";
+                break;
+        }
+
+        logDetalhado('SEFAZ_REJECTION', 'NFC-e rejeitada com status específico', [
+            'status' => $status,
+            'motivo' => $motivo,
+            'mensagem_especifica' => $mensagemEspecifica
+        ]);
+
+        throw new Exception($mensagemEspecifica);
     }
 
     error_log("✅ NFCE: NFC-e autorizada pela SEFAZ!");
@@ -1180,10 +1231,17 @@ try {
             error_log("✅ NFCE: Protocolo extraído da resposta síncrona: {$protocolo}");
             error_log("✅ NFCE: Recibo: {$recibo}");
 
-            // Adicionar protocolo ao XML
-            error_log("🔗 NFCE: Adicionando protocolo ao XML...");
-            $xmlComProtocolo = $tools->addProtocol($xmlAssinado, $response);
-            error_log("✅ NFCE: Protocolo adicionado ao XML");
+            // ✅ CORREÇÃO: Usar método oficial da biblioteca sped-nfe
+            error_log("🔗 NFCE: Adicionando protocolo ao XML usando Complements::toAuthorize...");
+            try {
+                // Usar a classe Complements da biblioteca sped-nfe (OFICIAL)
+                $xmlComProtocolo = \NFePHP\NFe\Complements::toAuthorize($xmlAssinado, $response);
+                error_log("✅ NFCE: Protocolo adicionado ao XML usando Complements::toAuthorize");
+            } catch (Exception $protocolError) {
+                error_log("⚠️ NFCE: Erro ao adicionar protocolo: " . $protocolError->getMessage());
+                error_log("⚠️ NFCE: Usando XML assinado sem protocolo adicional");
+                $xmlComProtocolo = $xmlAssinado;
+            }
         } else {
             error_log("⚠️ NFCE: Protocolo não encontrado na resposta síncrona");
             $xmlComProtocolo = $xmlAssinado;
@@ -1226,6 +1284,19 @@ try {
         }
 
         error_log("✅ NFCE: Chave extraída: {$chaveParaSalvar}");
+
+        // ✅ LOG ESPECÍFICO: Analisar série na chave de acesso
+        // Formato da chave: CCAAMMDDEMITENTEMODELOSSERIEEEEEEEEENNNNNNNNNNDV
+        // Posições 22-24 = série (3 dígitos)
+        $serieNaChave = substr($chaveParaSalvar, 22, 3);
+        $numeroNaChave = substr($chaveParaSalvar, 25, 9);
+        logDetalhado('CHAVE_ANALYSIS', 'Análise da chave de acesso gerada', [
+            'chave_completa' => $chaveParaSalvar,
+            'serie_na_chave' => $serieNaChave,
+            'numero_na_chave' => $numeroNaChave,
+            'posicao_serie' => '22-24',
+            'posicao_numero' => '25-33'
+        ]);
 
     } catch (Exception $chaveError) {
         error_log("❌ NFCE: Erro ao extrair chave: " . $chaveError->getMessage());
@@ -1342,8 +1413,8 @@ try {
             'recibo' => $recibo,
             'status' => $status,
             'motivo' => $motivo,
-            'xml_path' => $xmlPath,
-            'pdf_path' => $pdfPath,
+            'xml_path' => $xmlPath, // ✅ INFORMATIVO: Caminho local do arquivo (não salvo no banco)
+            'pdf_path' => $pdfPath, // ✅ INFORMATIVO: Caminho local do arquivo (não salvo no banco)
             'numero' => $identificacao['numero'],
             'serie' => $identificacao['serie'],
             'data_autorizacao' => date('Y-m-d H:i:s'),
@@ -1375,14 +1446,52 @@ try {
 
     file_put_contents('/tmp/nfce_error.log', json_encode($errorDetails, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
 
-    http_response_code(500);
-    echo json_encode([
+    // ✅ CORREÇÃO: Determinar se é erro de usuário ou erro técnico
+    $isUserError = false;
+    $userMessage = $e->getMessage();
+
+    // Verificar se é um erro que o usuário pode resolver
+    if (strpos($e->getMessage(), 'Número da NFC-e já foi utilizado') !== false ||
+        strpos($e->getMessage(), 'Duplicidade de NFC-e') !== false ||
+        strpos($e->getMessage(), 'rejeitada pela SEFAZ') !== false ||
+        strpos($e->getMessage(), 'obrigatório') !== false ||
+        strpos($e->getMessage(), 'inválido') !== false) {
+        $isUserError = true;
+    }
+
+    // ✅ CORREÇÃO: Para erros de usuário, usar status 400 (Bad Request)
+    // Para erros técnicos, usar status 500 (Internal Server Error)
+    if ($isUserError) {
+        http_response_code(400); // Bad Request - erro do usuário
+        logDetalhado('USER_ERROR', 'Erro de usuário identificado', ['message' => $userMessage]);
+    } else {
+        http_response_code(500); // Internal Server Error - erro técnico
+        logDetalhado('TECHNICAL_ERROR', 'Erro técnico identificado', ['message' => $userMessage]);
+    }
+
+    // ✅ CORREÇÃO: Resposta JSON estruturada para o frontend
+    $response = [
         'success' => false,
-        'error' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine(),
-        'debug_step' => 'FATAL_ERROR',
-        'timestamp' => date('Y-m-d H:i:s')
-    ]);
+        'error' => $userMessage,
+        'error_type' => $isUserError ? 'user_error' : 'technical_error',
+        'timestamp' => date('Y-m-d H:i:s'),
+        'debug_info' => [
+            'file' => basename($e->getFile()), // Apenas nome do arquivo por segurança
+            'line' => $e->getLine(),
+            'step' => 'FATAL_ERROR'
+        ]
+    ];
+
+    // Log da resposta que será enviada
+    logDetalhado('RESPONSE_SENT', 'Resposta de erro enviada ao frontend', $response);
+
+    // ✅ CORREÇÃO: Log adicional para debug
+    error_log("🔍 NFCE: Enviando resposta de erro para frontend:");
+    error_log("🔍 NFCE: HTTP Status: " . http_response_code());
+    error_log("🔍 NFCE: Mensagem: " . $userMessage);
+    error_log("🔍 NFCE: Tipo: " . ($isUserError ? 'user_error' : 'technical_error'));
+    error_log("🔍 NFCE: JSON completo: " . json_encode($response, JSON_UNESCAPED_UNICODE));
+
+    echo json_encode($response, JSON_UNESCAPED_UNICODE);
 }
 ?>
