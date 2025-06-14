@@ -87,10 +87,27 @@ try {
     $timestamp = date('YmdHis');
     $nomeArquivo = "espelho_danfe_{$empresaId}_{$timestamp}.pdf";
 
+    // ✅ USAR ESTRUTURA ORGANIZADA COM AMBIENTE E MODELO
+    $ambienteTexto = 'homologacao'; // padrão para espelhos
+    $modelo = '55'; // NFe por padrão
+
+    // Buscar configuração real da empresa para determinar ambiente
+    try {
+        $response = file_get_contents("http://localhost/backend/public/get-empresa-config.php?empresa_id={$empresaId}");
+        $config = json_decode($response, true);
+        if ($config && isset($config['data']['nfe_config']['ambiente'])) {
+            $ambienteTexto = $config['data']['nfe_config']['ambiente'];
+        }
+        error_log("📄 ESPELHO - Ambiente determinado: {$ambienteTexto}");
+    } catch (Exception $e) {
+        error_log("⚠️ ESPELHO - Não foi possível determinar ambiente, usando homologação");
+    }
+
     // Criar diretório se não existir
-    $diretorio = "../storage/espelhos/{$empresaId}";
+    $diretorio = "/root/nexo-pedidos/backend/storage/espelhos/{$empresaId}/{$ambienteTexto}/{$modelo}";
     if (!is_dir($diretorio)) {
         mkdir($diretorio, 0755, true);
+        error_log("📁 ESPELHO - Diretório criado: {$diretorio}");
     }
 
     $caminhoArquivo = "{$diretorio}/{$nomeArquivo}";

@@ -49,17 +49,17 @@ try {
     if (in_array($type, ['xml_cce', 'pdf_cce'])) {
         // Para CCe
         $baseType = str_replace('_cce', '', $type);
-        $baseDir = "../storage/{$baseType}/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe";
+        $baseDir = "/root/nexo-pedidos/backend/storage/{$baseType}/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe";
         $extensao = $baseType;
         $sufixoArquivo = '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT);
     } elseif ($type === 'espelho') {
         // Para Espelho NFe
-        $baseDir = "../storage/espelhos/{$empresaId}/{$ambienteTexto}/{$modelo}";
+        $baseDir = "/root/nexo-pedidos/backend/storage/espelhos/{$empresaId}/{$ambienteTexto}/{$modelo}";
         $extensao = 'pdf';
         $sufixoArquivo = '';
     } else {
         // Para NFe normal
-        $baseDir = "../storage/{$type}/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Autorizados";
+        $baseDir = "/root/nexo-pedidos/backend/storage/{$type}/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Autorizados";
         $extensao = $type;
         $sufixoArquivo = '';
     }
@@ -106,17 +106,23 @@ try {
     }
     
     if (!$arquivoEncontrado || !file_exists($arquivoEncontrado)) {
-        // Tentar buscar diretamente na raiz do tipo
-        $arquivoDireto = "{$baseDir}/{$nomeArquivo}";
-        if (file_exists($arquivoDireto)) {
-            $arquivoEncontrado = $arquivoDireto;
-        } else {
+        // Para espelhos, não tentar busca direta pois usa padrão diferente
+        if ($type !== 'espelho') {
+            // Tentar buscar diretamente na raiz do tipo
+            $arquivoDireto = "{$baseDir}/{$nomeArquivo}";
+            if (file_exists($arquivoDireto)) {
+                $arquivoEncontrado = $arquivoDireto;
+            }
+        }
+
+        // Se ainda não encontrou, retornar erro
+        if (!$arquivoEncontrado || !file_exists($arquivoEncontrado)) {
             http_response_code(404);
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => false,
                 'error' => ucfirst($type) . ' não encontrado',
-                'chave' => $chave,
+                'chave' => $chave ?? 'N/A',
                 'empresa_id' => $empresaId
             ]);
             exit;
