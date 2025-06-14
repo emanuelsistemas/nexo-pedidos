@@ -24,7 +24,7 @@ print_info() { echo -e "${BLUE}ℹ️ $1${NC}"; }
 print_header() { echo -e "${BLUE}=== $1 ===${NC}"; }
 
 # Variáveis
-PROJECT_ROOT="/root/nexo/nexo-pedidos"
+PROJECT_ROOT="/root/nexo-pedidos"
 BACKEND_ROOT="$PROJECT_ROOT/backend"
 STORAGE_ROOT="$PROJECT_ROOT/storage"
 LOG_FILE="/tmp/diagnostico-email-$(date +%Y%m%d-%H%M%S).log"

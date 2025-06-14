@@ -86,7 +86,7 @@ try {
     $mes = substr($ano_mes, 2, 2);
 
     // ✅ USAR ESTRUTURA REAL DE STORAGE (baseada nos arquivos encontrados)
-    $base_storage = "/root/nexo/nexo-pedidos/backend/storage";
+    $base_storage = "/root/nexo-pedidos/backend/storage";
     $xml_dir = "{$base_storage}/xml/empresa_{$empresa_id}/{$ambiente}/{$modelo}/Autorizados/{$ano}/{$mes}";
     $pdf_dir = "{$base_storage}/pdf/empresa_{$empresa_id}/{$ambiente}/{$modelo}/Autorizados/{$ano}/{$mes}";
 

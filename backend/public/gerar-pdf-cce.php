@@ -57,9 +57,24 @@ try {
     }
     
     error_log("📄 PDF CCe - Chave: {$chave}, Empresa: {$empresaId}, Sequência: {$sequencia}");
-    
+
+    // 4.5. Determinar ambiente real da empresa
+    $ambienteTexto = 'homologacao'; // padrão
+    try {
+        $response = file_get_contents("http://localhost/backend/public/get-empresa-config.php?empresa_id={$empresaId}");
+        $config = json_decode($response, true);
+        if ($config && isset($config['data']['nfe_config']['ambiente'])) {
+            $ambienteTexto = $config['data']['nfe_config']['ambiente'];
+        }
+        error_log("📄 PDF CCe - Ambiente determinado: {$ambienteTexto}");
+    } catch (Exception $e) {
+        error_log("⚠️ PDF CCe - Não foi possível determinar ambiente, usando homologação");
+    }
+
     // 5. Buscar XMLs da CCe (evento original + resposta SEFAZ)
-    $xmlCceDir = "../storage/xml/empresa_{$empresaId}/CCe";
+    // ✅ USAR ESTRUTURA ORGANIZADA COM AMBIENTE E MODELO
+    $modelo = '55'; // NFe por padrão
+    $xmlCceDir = "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe";
     $nomeArquivoEvento = $chave . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '_evento.xml';
     $nomeArquivoResposta = $chave . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '_resposta.xml';
     $xmlEventoEncontrado = null;
@@ -85,14 +100,37 @@ try {
     }
     
     // Buscar XMLs do evento e resposta
+    error_log("📄 PDF CCe - Buscando em diretório: {$xmlCceDir}");
+    error_log("📄 PDF CCe - Arquivo evento: {$nomeArquivoEvento}");
+    error_log("📄 PDF CCe - Arquivo resposta: {$nomeArquivoResposta}");
+
     $xmlEventoEncontrado = buscarXMLCce($xmlCceDir, $nomeArquivoEvento);
     $xmlRespostaEncontrado = buscarXMLCce($xmlCceDir, $nomeArquivoResposta);
 
+    error_log("📄 PDF CCe - Evento encontrado: " . ($xmlEventoEncontrado ?: 'NÃO'));
+    error_log("📄 PDF CCe - Resposta encontrada: " . ($xmlRespostaEncontrado ?: 'NÃO'));
+
     if (!$xmlEventoEncontrado || !file_exists($xmlEventoEncontrado)) {
-        throw new Exception("XML do evento CCe não encontrado: {$nomeArquivoEvento}");
+        // ✅ Tentar busca direta no caminho conhecido
+        $caminhoEventoDireto = "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe/2025/06/{$nomeArquivoEvento}";
+        error_log("📄 PDF CCe - Tentando caminho direto evento: {$caminhoEventoDireto}");
+        if (file_exists($caminhoEventoDireto)) {
+            $xmlEventoEncontrado = $caminhoEventoDireto;
+            error_log("📄 PDF CCe - ✅ Evento encontrado no caminho direto!");
+        } else {
+            throw new Exception("XML do evento CCe não encontrado: {$nomeArquivoEvento}");
+        }
     }
     if (!$xmlRespostaEncontrado || !file_exists($xmlRespostaEncontrado)) {
-        throw new Exception("XML da resposta CCe não encontrado: {$nomeArquivoResposta}");
+        // ✅ Tentar busca direta no caminho conhecido
+        $caminhoRespostaDireto = "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe/2025/06/{$nomeArquivoResposta}";
+        error_log("📄 PDF CCe - Tentando caminho direto resposta: {$caminhoRespostaDireto}");
+        if (file_exists($caminhoRespostaDireto)) {
+            $xmlRespostaEncontrado = $caminhoRespostaDireto;
+            error_log("📄 PDF CCe - ✅ Resposta encontrada no caminho direto!");
+        } else {
+            throw new Exception("XML da resposta CCe não encontrado: {$nomeArquivoResposta}");
+        }
     }
 
     error_log("📄 PDF CCe - XML evento encontrado: {$xmlEventoEncontrado}");
@@ -163,7 +201,7 @@ try {
     $xmlContent = criarProcEventoNFe($xmlEventoContent, $xmlRespostaContent);
     
     // 7. Buscar XML da NFe original (necessário para o DACE)
-    $xmlNfeDir = "../storage/xml/empresa_{$empresaId}/Autorizados";
+    $xmlNfeDir = "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Autorizados";
     $nomeArquivoNfe = $chave . '.xml';
     
     function buscarXMLNfe($dir, $nomeArquivo) {
@@ -296,7 +334,7 @@ try {
 
     // 🔥 NOVA ESTRUTURA COM MODELO DE DOCUMENTO
     $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
-    $pdfCceDir = "../storage/pdf/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe/" . date('Y/m');
+    $pdfCceDir = "/root/nexo-pedidos/backend/storage/pdf/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe/" . date('Y/m');
     if (!is_dir($pdfCceDir)) {
         mkdir($pdfCceDir, 0755, true);
         error_log("📁 PDF CCe - Diretório criado: {$pdfCceDir}");

@@ -3516,12 +3516,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 serie: nfeData.identificacao.serie,
                 valor_total: nfeData.totais.valor_total,
                 cliente_nome: nfeData.destinatario.nome,
-                empresa_nome: empresaData?.nome_fantasia || empresaData?.razao_social || 'Sistema Nexo',
-                empresa_endereco: empresaData?.endereco || '',
-                empresa_cnpj: empresaData?.cnpj || '',
-                empresa_telefone: empresaData?.telefone || '',
-                empresa_email: empresaData?.email || '',
-                empresa_website: empresaData?.website || ''
+                empresa_nome: nfeData.empresa?.nome_fantasia || nfeData.empresa?.name || 'Sistema Nexo',
+                empresa_endereco: nfeData.empresa?.address || '',
+                empresa_cnpj: nfeData.empresa?.cnpj || '',
+                empresa_telefone: nfeData.empresa?.phone || '',
+                empresa_email: nfeData.empresa?.email || '',
+                empresa_website: nfeData.empresa?.website || ''
               }
             })
           });

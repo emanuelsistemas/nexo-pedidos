@@ -426,7 +426,7 @@ try {
     // Diretório para XMLs de cancelamento por empresa - ESTRUTURA ORGANIZADA COM AMBIENTE E MODELO
     $ambienteTexto = $nfeConfig['ambiente_codigo'] == 1 ? 'producao' : 'homologacao';
     $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
-    $xmlCancelDir = "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Cancelados/" . date('Y/m');
+    $xmlCancelDir = "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Cancelados/" . date('Y/m');
     if (!is_dir($xmlCancelDir)) {
         mkdir($xmlCancelDir, 0755, true);
         error_log("📁 Diretório de NFes canceladas criado: {$xmlCancelDir}");

@@ -305,6 +305,15 @@ try {
     error_log("✅ CCe - CHAMADA CONCLUÍDA! Resposta: " . strlen($response) . " bytes");
     error_log("📝 CCe - Primeiros 200 chars: " . substr($response, 0, 200));
 
+    // ✅ DEBUG: Verificar lastRequest
+    $lastRequestLength = strlen($tools->lastRequest ?? '');
+    error_log("🔍 DEBUG - lastRequest length: {$lastRequestLength}");
+    if ($lastRequestLength > 0) {
+        error_log("🔍 DEBUG - lastRequest primeiros 100 chars: " . substr($tools->lastRequest, 0, 100));
+    } else {
+        error_log("⚠️ DEBUG - lastRequest está vazio!");
+    }
+
     error_log("✅ CCe - Chamada sefazCCe concluída com sucesso, processando resposta...");
     
     // 11. PROCESSAR RESPOSTA DA SEFAZ (MÉTODO OFICIAL - igual cancelamento)
@@ -432,7 +441,7 @@ try {
     // Diretório para XMLs de CCe por empresa - ESTRUTURA ORGANIZADA COM AMBIENTE E MODELO
     $ambienteTexto = $nfeConfig['ambiente_codigo'] == 1 ? 'producao' : 'homologacao';
     $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
-    $xmlCceDir = "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe/" . date('Y/m');
+    $xmlCceDir = "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/CCe/" . date('Y/m');
     if (!is_dir($xmlCceDir)) {
         if (!mkdir($xmlCceDir, 0755, true)) {
             error_log("❌ Erro ao criar diretório de CCe: {$xmlCceDir}");
@@ -446,10 +455,19 @@ try {
     $nomeArquivoOriginal = $chaveNFe . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '_evento.xml';
     $caminhoArquivoOriginal = $xmlCceDir . '/' . $nomeArquivoOriginal;
 
-    if (file_put_contents($caminhoArquivoOriginal, $xmlOriginal)) {
+    // ✅ Verificar se o XML original não está vazio
+    if (empty($xmlOriginal)) {
+        error_log("⚠️ XML original da CCe está vazio, tentando usar resposta da SEFAZ");
+        $xmlOriginal = $response; // Usar resposta como fallback
+    }
+
+    if (!empty($xmlOriginal) && file_put_contents($caminhoArquivoOriginal, $xmlOriginal)) {
         error_log("✅ XML original da CCe salvo: {$caminhoArquivoOriginal}");
     } else {
         error_log("❌ Erro ao salvar XML original da CCe");
+        error_log("🔍 DEBUG - XML Original length: " . strlen($xmlOriginal));
+        error_log("🔍 DEBUG - Diretório: {$xmlCceDir}");
+        error_log("🔍 DEBUG - Arquivo: {$nomeArquivoOriginal}");
         throw new Exception('Erro ao salvar XML original da Carta de Correção');
     }
 
@@ -458,10 +476,13 @@ try {
     $nomeArquivoResposta = $chaveNFe . '_cce_' . str_pad($sequencia, 3, '0', STR_PAD_LEFT) . '_resposta.xml';
     $caminhoArquivoResposta = $xmlCceDir . '/' . $nomeArquivoResposta;
 
-    if (file_put_contents($caminhoArquivoResposta, $xmlResposta)) {
+    if (!empty($xmlResposta) && file_put_contents($caminhoArquivoResposta, $xmlResposta)) {
         error_log("✅ XML resposta da CCe salvo: {$caminhoArquivoResposta}");
     } else {
         error_log("❌ Erro ao salvar XML resposta da CCe");
+        error_log("🔍 DEBUG - XML Resposta length: " . strlen($xmlResposta));
+        error_log("🔍 DEBUG - Diretório: {$xmlCceDir}");
+        error_log("🔍 DEBUG - Arquivo: {$nomeArquivoResposta}");
         throw new Exception('Erro ao salvar XML resposta da Carta de Correção');
     }
 

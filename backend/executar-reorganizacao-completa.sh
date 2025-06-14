@@ -8,7 +8,7 @@ echo "📋 Incluindo separação por modelo de documento (55=NFe, 65=NFCe)"
 echo ""
 
 # Definir diretório base
-BACKEND_DIR="/root/nexo/nexo-pedidos/backend"
+BACKEND_DIR="/root/nexo-pedidos/backend"
 cd "$BACKEND_DIR" || exit 1
 
 # Função para verificar se comando foi executado com sucesso

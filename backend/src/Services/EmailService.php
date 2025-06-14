@@ -227,7 +227,7 @@ class EmailService
         $mes = substr($ano_mes, 2, 2);
 
         // Construir caminhos baseado na estrutura de storage
-        $base_path = "/root/nexo/nexo-pedidos/storage";
+        $base_path = "/root/nexo-pedidos/backend/storage";
 
         // ✅ USAR FUNÇÕES HELPER PARA CAMINHOS DINÂMICOS
         $xml_dir = getXmlPath($empresaId, $ambiente, $modelo, 'Autorizados', $ano, $mes);

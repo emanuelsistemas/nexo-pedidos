@@ -43,7 +43,7 @@ try {
     $mes = substr($ano_mes, 2, 2);
 
     // Base path - CORRIGIDO para usar caminho real
-    $base_path = "/root/nexo/nexo-pedidos/backend/storage";
+    $base_path = "/root/nexo-pedidos/backend/storage";
 
     // Estruturas possíveis para verificar
     $estruturas = [

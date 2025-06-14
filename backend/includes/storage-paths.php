@@ -26,7 +26,7 @@ function getXmlPath($empresaId, $ambiente, $modelo, $status, $ano = null, $mes =
     $mes = $mes ?: date('m');
 
     // ✅ CORRIGIDO: Usar caminho correto onde os arquivos são realmente salvos
-    return "/root/nexo/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambiente}/{$modelo}/{$status}/{$ano}/{$mes}";
+    return "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambiente}/{$modelo}/{$status}/{$ano}/{$mes}";
 }
 
 /**
@@ -45,7 +45,7 @@ function getPdfPath($empresaId, $ambiente, $modelo, $status, $ano = null, $mes =
     $mes = $mes ?: date('m');
 
     // ✅ CORRIGIDO: Usar caminho correto onde os arquivos são realmente salvos
-    return "/root/nexo/nexo-pedidos/backend/storage/pdf/empresa_{$empresaId}/{$ambiente}/{$modelo}/{$status}/{$ano}/{$mes}";
+    return "/root/nexo-pedidos/backend/storage/pdf/empresa_{$empresaId}/{$ambiente}/{$modelo}/{$status}/{$ano}/{$mes}";
 }
 
 /**
@@ -57,7 +57,7 @@ function getPdfPath($empresaId, $ambiente, $modelo, $status, $ano = null, $mes =
  * @return string Caminho completo para Espelhos
  */
 function getEspelhoPath($empresaId, $ambiente, $modelo) {
-    return "/root/nexo/nexo-pedidos/backend/storage/espelhos/{$empresaId}/{$ambiente}/{$modelo}";
+    return "/root/nexo-pedidos/backend/storage/espelhos/{$empresaId}/{$ambiente}/{$modelo}";
 }
 
 /**
