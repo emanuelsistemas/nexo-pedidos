@@ -138,7 +138,7 @@ try {
     logDetalhado('EMPRESA_ID', 'Empresa ID obtido da venda', ['empresa_id' => $empresaId]);
 
     // ✅ CORREÇÃO: Buscar dados da empresa usando o empresa_id da venda
-    $empresaQuery = $supabaseUrl . '/rest/v1/empresas?id=eq.' . $empresaId;
+    $empresaQuery = $supabaseUrl . '/rest/v1/empresas?id=eq.' . $empresaId . '&select=*';
     $empresaContext = stream_context_create([
         'http' => [
             'method' => 'GET',
@@ -157,26 +157,61 @@ try {
     }
 
     $empresa = $empresaData[0];
-    logDetalhado('EMPRESA', 'Empresa carregada', ['razao_social' => $empresa['razao_social']]);
+    logDetalhado('EMPRESA', 'Empresa carregada', [
+        'razao_social' => $empresa['razao_social'] ?? 'NULL',
+        'documento' => $empresa['documento'] ?? 'NULL',
+        'estado' => $empresa['estado'] ?? 'NULL',
+        'campos_disponiveis' => array_keys($empresa),
+        'total_campos' => count($empresa)
+    ]);
 
-    // Carregar configuração NFe da empresa
-    $nfeConfig = json_decode($empresa['config_nfe'] ?? '{}', true);
-    if (empty($nfeConfig)) {
-        throw new Exception('Configuração NFe não encontrada para a empresa');
+    // ✅ CORREÇÃO: Usar dados diretos da empresa (igual à emissão)
+    // Determinar ambiente (assumir homologação por padrão para cancelamento)
+    $ambiente = 2; // Homologação por padrão
+    $cscField = $ambiente == 1 ? 'csc_producao' : 'csc_homologacao';
+    $cscIdField = $ambiente == 1 ? 'csc_id_producao' : 'csc_id_homologacao';
+
+    logDetalhado('AMBIENTE', 'Ambiente determinado para cancelamento', [
+        'ambiente' => $ambiente,
+        'csc_field' => $cscField,
+        'csc_id_field' => $cscIdField
+    ]);
+
+    // ✅ CORREÇÃO: Usar nomes corretos dos campos da tabela empresas
+    // Validar dados obrigatórios da empresa
+    if (empty($empresa['razao_social'])) {
+        throw new Exception('Razão social da empresa não encontrada');
     }
 
-    // Preparar configuração para Tools
+    if (empty($empresa['documento'])) {
+        throw new Exception('CNPJ da empresa não encontrado');
+    }
+
+    if (empty($empresa['estado'])) {
+        throw new Exception('UF da empresa não encontrada');
+    }
+
+    // Validar CSC para NFC-e
+    if (empty($empresa[$cscField])) {
+        throw new Exception("CSC de homologação não configurado para a empresa");
+    }
+
+    if (empty($empresa[$cscIdField])) {
+        throw new Exception("CSC ID de homologação não configurado para a empresa");
+    }
+
+    // Preparar configuração para Tools (igual à emissão)
+    $cnpjLimpo = preg_replace('/[^0-9]/', '', $empresa['documento']);
     $config = [
         'atualizacao' => date('Y-m-d H:i:s'),
-        'tpAmb' => $nfeConfig['ambiente_codigo'] ?? 2,
+        'tpAmb' => $ambiente,
         'razaosocial' => $empresa['razao_social'],
-        'cnpj' => preg_replace('/\D/', '', $empresa['cnpj']),
-        'siglaUF' => $empresa['uf'],
+        'cnpj' => $cnpjLimpo,
+        'siglaUF' => $empresa['estado'],
         'schemes' => 'PL_009_V4',
         'versao' => '4.00',
-        'tokenIBPT' => '',
-        'CSC' => $nfeConfig['csc'] ?? '',
-        'CSCid' => $nfeConfig['csc_id'] ?? '1'
+        'CSC' => $empresa[$cscField],
+        'CSCid' => (string)$empresa[$cscIdField]
     ];
 
     logDetalhado('CONFIG', 'Configuração preparada', [
@@ -184,22 +219,34 @@ try {
         'uf' => $config['siglaUF']
     ]);
 
-    // Carregar certificado
-    $certificadoPath = "/root/nexo-pedidos/backend/storage/certificados/empresa_{$empresaId}/certificado.pfx";
-    
+    // ✅ CORREÇÃO: Usar mesmo caminho da emissão
+    $certificadoPath = "../storage/certificados/empresa_{$empresaId}.pfx";
+    $metadataPath = "../storage/certificados/empresa_{$empresaId}.json";
+
+    logDetalhado('CERTIFICADO_PATHS', 'Caminhos do certificado', [
+        'certificado_path' => $certificadoPath,
+        'metadata_path' => $metadataPath,
+        'certificado_exists' => file_exists($certificadoPath),
+        'metadata_exists' => file_exists($metadataPath)
+    ]);
+
     if (!file_exists($certificadoPath)) {
         throw new Exception('Certificado digital não encontrado');
     }
 
     $certificadoContent = file_get_contents($certificadoPath);
-    $metadataPath = "/root/nexo-pedidos/backend/storage/certificados/empresa_{$empresaId}/metadata.json";
-    
+
     if (!file_exists($metadataPath)) {
         throw new Exception('Metadados do certificado não encontrados');
     }
 
     $metadata = json_decode(file_get_contents($metadataPath), true);
     $senha = $metadata['password'] ?? '';
+
+    logDetalhado('CERTIFICADO_LOADED', 'Certificado carregado', [
+        'certificado_size' => strlen($certificadoContent),
+        'metadata_keys' => array_keys($metadata)
+    ]);
 
     // Criar objeto Certificate
     $certificate = Certificate::readPfx($certificadoContent, $senha);
@@ -262,17 +309,28 @@ try {
     
     logDetalhado('PROTOCOLO', 'XML protocolado com sucesso');
 
-    // Salvar XML de cancelamento
-    $storageDir = "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/" . date('Y/m');
-    if (!is_dir($storageDir)) {
-        mkdir($storageDir, 0755, true);
+    // ✅ CORREÇÃO: Usar estrutura correta igual à NFe
+    // Estrutura: storage/xml/empresa_{id}/{ambiente}/{modelo}/Cancelados/{ano}/{mes}/
+    $ambienteTexto = $ambiente == 1 ? 'producao' : 'homologacao';
+    $modelo = '65'; // NFC-e
+    $xmlCancelDir = "/root/nexo-pedidos/backend/storage/xml/empresa_{$empresaId}/{$ambienteTexto}/{$modelo}/Cancelados/" . date('Y/m');
+
+    if (!is_dir($xmlCancelDir)) {
+        mkdir($xmlCancelDir, 0755, true);
+        logDetalhado('DIRETORIO', 'Diretório de NFC-e canceladas criado', ['path' => $xmlCancelDir]);
     }
 
-    $xmlCancelamentoPath = $storageDir . "/{$chaveNFCe}_cancelamento.xml";
+    // Nome do arquivo: chave_nfce + _cancelamento.xml
+    $nomeArquivoCancel = $chaveNFCe . '_cancelamento.xml';
+    $xmlCancelamentoPath = $xmlCancelDir . '/' . $nomeArquivoCancel;
+
     file_put_contents($xmlCancelamentoPath, $xmlProtocolado);
 
-    logDetalhado('ARQUIVO', 'XML de cancelamento salvo', [
-        'path' => $xmlCancelamentoPath
+    logDetalhado('ARQUIVO', 'XML de cancelamento salvo na estrutura correta', [
+        'path' => $xmlCancelamentoPath,
+        'ambiente' => $ambienteTexto,
+        'modelo' => $modelo,
+        'estrutura' => 'empresa_id/ambiente/modelo/Cancelados/ano/mes/'
     ]);
 
     // Atualizar status no banco
