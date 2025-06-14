@@ -1971,6 +1971,7 @@ const PDVPage: React.FC = () => {
       }
 
       // Carregar vendas da tabela PDV da empresa
+      // ✅ FILTRO: Não mostrar NFe (modelo 55) - apenas vendas do PDV e NFC-e
       let query = supabase
         .from('pdv')
         .select(`
@@ -1999,7 +2000,8 @@ const PDVPage: React.FC = () => {
           chave_nfe,
           protocolo_nfe
         `)
-        .eq('empresa_id', usuarioData.empresa_id);
+        .eq('empresa_id', usuarioData.empresa_id)
+        .neq('modelo_documento', 55); // ✅ Excluir NFe (modelo 55) - mostrar apenas vendas PDV e NFC-e
 
       // Aplicar filtros
       // Filtro por status
