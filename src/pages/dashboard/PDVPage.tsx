@@ -2151,10 +2151,22 @@ const PDVPage: React.FC = () => {
 
   // Função para cancelar uma venda
   const cancelarVenda = async () => {
-    if (!vendaParaCancelar || !motivoCancelamento.trim()) {
-      toast.error('Motivo do cancelamento é obrigatório');
+    if (!vendaParaCancelar) {
+      toast.error('Venda não selecionada');
       return;
     }
+
+    // ✅ VALIDAÇÃO: Motivo obrigatório com mínimo de 15 caracteres
+    if (motivoCancelamento.trim().length < 15) {
+      toast.error('Motivo do cancelamento deve ter pelo menos 15 caracteres');
+      return;
+    }
+
+    // ✅ NOVO: Verificar se é NFC-e autorizada para cancelamento fiscal
+    const isNFCeAutorizada = vendaParaCancelar.modelo_documento === 65 &&
+                             vendaParaCancelar.status_fiscal === 'autorizada' &&
+                             vendaParaCancelar.chave_nfe &&
+                             vendaParaCancelar.protocolo_nfe;
 
     try {
       // Obter dados do usuário atual
@@ -2183,24 +2195,11 @@ const PDVPage: React.FC = () => {
           return;
         }
 
-        // Obter dados do usuário para empresa_id
-        const { data: usuarioData } = await supabase
-          .from('usuarios')
-          .select('empresa_id')
-          .eq('id', userData.user.id)
-          .single();
-
-        if (!usuarioData?.empresa_id) {
-          toast.error('Empresa do usuário não encontrada');
-          return;
-        }
-
-        // Cancelar fiscalmente na SEFAZ
+        // ✅ CORREÇÃO: Backend busca empresa pela chave da NFC-e
         const cancelamentoData = {
           chave_nfe: vendaParaCancelar.chave_nfe,
           motivo: motivoCancelamento.trim(),
-          protocolo_nfe: vendaParaCancelar.protocolo_nfe,
-          empresa_id: usuarioData.empresa_id
+          protocolo_nfe: vendaParaCancelar.protocolo_nfe
         };
 
         console.log('📡 FRONTEND: Enviando cancelamento fiscal:', cancelamentoData);
@@ -8711,13 +8710,51 @@ const PDVPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   Motivo do Cancelamento *
                 </label>
-                <textarea
-                  value={motivoCancelamento}
-                  onChange={(e) => setMotivoCancelamento(e.target.value)}
-                  placeholder="Informe o motivo do cancelamento..."
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500/20 resize-none"
-                  rows={3}
-                />
+                <div className="relative">
+                  <textarea
+                    value={motivoCancelamento}
+                    onChange={(e) => setMotivoCancelamento(e.target.value)}
+                    placeholder="Informe o motivo do cancelamento (mínimo 15 caracteres)..."
+                    className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 resize-none pr-16 ${
+                      motivoCancelamento.length >= 15
+                        ? 'border-green-500 focus:border-green-500 focus:ring-green-500/20'
+                        : 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                    }`}
+                    rows={3}
+                    maxLength={255}
+                  />
+
+                  {/* Contador de caracteres */}
+                  <div className="absolute bottom-2 right-2 text-xs font-medium pointer-events-none">
+                    <span className={`${
+                      motivoCancelamento.length >= 15
+                        ? 'text-green-400'
+                        : 'text-red-400'
+                    }`}>
+                      {motivoCancelamento.length}
+                    </span>
+                    <span className="text-gray-500">/15</span>
+                  </div>
+                </div>
+
+                {/* Indicador visual do status */}
+                <div className="mt-2 flex items-center text-xs">
+                  {motivoCancelamento.length >= 15 ? (
+                    <div className="flex items-center text-green-400">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Motivo válido para cancelamento
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-red-400">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      Mínimo de 15 caracteres obrigatório (faltam {15 - motivoCancelamento.length})
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-3">
@@ -8733,10 +8770,14 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={cancelarVenda}
-                  disabled={!motivoCancelamento.trim()}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 px-4 rounded-lg transition-colors"
+                  disabled={motivoCancelamento.length < 15}
+                  className={`flex-1 py-3 px-4 rounded-lg transition-colors font-medium ${
+                    motivoCancelamento.length >= 15
+                      ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                      : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  }`}
                 >
-                  Confirmar Cancelamento
+                  {motivoCancelamento.length >= 15 ? 'Confirmar Cancelamento' : `Faltam ${15 - motivoCancelamento.length} caracteres`}
                 </button>
               </div>
             </motion.div>

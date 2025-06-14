@@ -71,7 +71,11 @@ try {
     $chaveNFCe = $data['chave_nfe'];
     $motivo = trim($data['motivo']);
     $protocoloNFCe = $data['protocolo_nfe'];
-    $empresaId = $data['empresa_id'] ?? null;
+
+    // ✅ CORREÇÃO: Buscar dados da empresa pela chave da NFC-e (igual à emissão)
+    logDetalhado('BUSCA_EMPRESA', 'Buscando dados da empresa pela chave da NFC-e', [
+        'chave' => $chaveNFCe
+    ]);
 
     // Validar chave da NFC-e (44 dígitos)
     if (!preg_match('/^\d{44}$/', $chaveNFCe)) {
@@ -98,13 +102,42 @@ try {
 
     // Configuração Supabase
     $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
-    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMzMzk5NzEsImV4cCI6MjA0ODkxNTk3MX0.VmyrqjgFO8nT_Lqzq0_HQmJnKQiIkTtClQUEWdxwP5s';
+    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
 
-    // Buscar configuração da empresa
-    if (!$empresaId) {
-        throw new Exception('ID da empresa não fornecido');
+    // ✅ CORREÇÃO: Buscar dados da venda pela chave para obter empresa_id
+    $vendaQuery = $supabaseUrl . '/rest/v1/pdv?chave_nfe=eq.' . $chaveNFCe . '&select=empresa_id,usuario_id';
+    $vendaContext = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'header' => [
+                'apikey: ' . $supabaseKey,
+                'Authorization: Bearer ' . $supabaseKey
+            ]
+        ]
+    ]);
+
+    $vendaResponse = file_get_contents($vendaQuery, false, $vendaContext);
+    $vendaData = json_decode($vendaResponse, true);
+
+    logDetalhado('VENDA_RESPONSE', 'Resposta da consulta venda', [
+        'query' => $vendaQuery,
+        'response_raw' => $vendaResponse,
+        'response_length' => strlen($vendaResponse),
+        'data_count' => is_array($vendaData) ? count($vendaData) : 'NOT_ARRAY',
+        'json_error' => json_last_error_msg(),
+        'vendaData_type' => gettype($vendaData)
+    ]);
+
+    if (empty($vendaData)) {
+        throw new Exception('NFC-e não encontrada no sistema');
     }
 
+    $venda = $vendaData[0];
+    $empresaId = $venda['empresa_id'];
+
+    logDetalhado('EMPRESA_ID', 'Empresa ID obtido da venda', ['empresa_id' => $empresaId]);
+
+    // ✅ CORREÇÃO: Buscar dados da empresa usando o empresa_id da venda
     $empresaQuery = $supabaseUrl . '/rest/v1/empresas?id=eq.' . $empresaId;
     $empresaContext = stream_context_create([
         'http' => [
@@ -124,7 +157,7 @@ try {
     }
 
     $empresa = $empresaData[0];
-    logDetalhado('EMPRESA', 'Empresa carregada', ['empresa_id' => $empresaId]);
+    logDetalhado('EMPRESA', 'Empresa carregada', ['razao_social' => $empresa['razao_social']]);
 
     // Carregar configuração NFe da empresa
     $nfeConfig = json_decode($empresa['config_nfe'] ?? '{}', true);

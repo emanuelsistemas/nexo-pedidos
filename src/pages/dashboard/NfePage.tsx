@@ -7453,28 +7453,56 @@ const AutorizacaoSection: React.FC<{
 
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Carta de Correção
+                Carta de Correção *
               </label>
-              <textarea
-                rows={3}
-                value={dados.carta_correcao || ''}
-                onChange={(e) => onChange({ ...dados, carta_correcao: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500 resize-none"
-                placeholder="Digite a correção que deseja fazer na NFe (mínimo 15 caracteres)..."
-                maxLength={1000}
-              />
-              <div className="flex justify-between items-center mt-1">
+              <div className="relative">
+                <textarea
+                  rows={3}
+                  value={dados.carta_correcao || ''}
+                  onChange={(e) => onChange({ ...dados, carta_correcao: e.target.value })}
+                  className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white focus:outline-none focus:ring-1 resize-none pr-16 ${
+                    (dados.carta_correcao || '').length >= 15
+                      ? 'border-green-500 focus:border-green-500 focus:ring-green-500/20'
+                      : 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                  }`}
+                  placeholder="Digite a correção que deseja fazer na NFe (mínimo 15 caracteres)..."
+                  maxLength={1000}
+                />
+
+                {/* Contador de caracteres */}
+                <div className="absolute bottom-2 right-2 text-xs font-medium pointer-events-none">
+                  <span className={`${
+                    (dados.carta_correcao || '').length >= 15
+                      ? 'text-green-400'
+                      : 'text-red-400'
+                  }`}>
+                    {(dados.carta_correcao || '').length}
+                  </span>
+                  <span className="text-gray-500">/15</span>
+                </div>
+              </div>
+
+              {/* Indicador visual do status */}
+              <div className="mt-2 flex items-center justify-between">
+                <div className="flex items-center text-xs">
+                  {(dados.carta_correcao || '').length >= 15 ? (
+                    <div className="flex items-center text-green-400">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Texto válido para CCe
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-red-400">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      Mínimo de 15 caracteres obrigatório (faltam {15 - (dados.carta_correcao || '').length})
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500">
                   Use para corrigir dados que não alterem o valor do documento
-                </p>
-                <p className={`text-xs font-medium ${
-                  (dados.carta_correcao || '').length >= 15
-                    ? 'text-green-400'
-                    : (dados.carta_correcao || '').length > 0
-                    ? 'text-yellow-400'
-                    : 'text-gray-500'
-                }`}>
-                  {(dados.carta_correcao || '').length}/15
                 </p>
               </div>
             </div>
@@ -7576,41 +7604,74 @@ const AutorizacaoSection: React.FC<{
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Motivo do Cancelamento
+                  Motivo do Cancelamento *
                 </label>
-                <textarea
-                  rows={3}
-                  value={dados.motivo_cancelamento || ''}
-                  onChange={(e) => onChange({ ...dados, motivo_cancelamento: e.target.value })}
-                  className={`w-full px-3 py-2 border rounded-lg text-white focus:outline-none resize-none ${
-                    cancelStatus === 'expirado' || dados?.status === 'cancelada'
-                      ? 'bg-gray-900 border-gray-600 cursor-not-allowed'
-                      : 'bg-gray-800 border-gray-700 focus:border-primary-500'
-                  }`}
-                  placeholder={
-                    cancelStatus === 'expirado'
-                      ? 'Prazo de cancelamento expirado - Entre em contato com a SEFAZ'
-                      : 'Digite o motivo do cancelamento (mínimo 15 caracteres)...'
-                  }
-                  disabled={cancelStatus === 'expirado' || dados?.status === 'cancelada'}
-                />
-                <div className="flex justify-between items-center mt-1">
-                  <p className="text-xs text-gray-500">
-                    {cancelStatus === 'expirado'
-                      ? 'Cancelamento não disponível - Prazo de 20 dias expirado'
-                      : 'Motivo deve ter no mínimo 15 caracteres'
+                <div className="relative">
+                  <textarea
+                    rows={3}
+                    value={dados.motivo_cancelamento || ''}
+                    onChange={(e) => onChange({ ...dados, motivo_cancelamento: e.target.value })}
+                    className={`w-full px-3 py-2 border rounded-lg text-white focus:outline-none focus:ring-1 resize-none pr-16 ${
+                      cancelStatus === 'expirado' || dados?.status === 'cancelada'
+                        ? 'bg-gray-900 border-gray-600 cursor-not-allowed'
+                        : (dados.motivo_cancelamento || '').length >= 15
+                        ? 'bg-gray-800 border-green-500 focus:border-green-500 focus:ring-green-500/20'
+                        : 'bg-gray-800 border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                    }`}
+                    placeholder={
+                      cancelStatus === 'expirado'
+                        ? 'Prazo de cancelamento expirado - Entre em contato com a SEFAZ'
+                        : 'Digite o motivo do cancelamento (mínimo 15 caracteres)...'
                     }
-                  </p>
-                  {cancelStatus !== 'expirado' && (
-                    <p className={`text-xs font-medium ${
-                      (dados.motivo_cancelamento || '').length >= 15
-                        ? 'text-green-400'
-                        : (dados.motivo_cancelamento || '').length > 0
-                        ? 'text-yellow-400'
-                        : 'text-gray-500'
-                    }`}>
-                      {(dados.motivo_cancelamento || '').length}/15
-                    </p>
+                    disabled={cancelStatus === 'expirado' || dados?.status === 'cancelada'}
+                    maxLength={255}
+                  />
+
+                  {/* Contador de caracteres */}
+                  {cancelStatus !== 'expirado' && dados?.status !== 'cancelada' && (
+                    <div className="absolute bottom-2 right-2 text-xs font-medium pointer-events-none">
+                      <span className={`${
+                        (dados.motivo_cancelamento || '').length >= 15
+                          ? 'text-green-400'
+                          : 'text-red-400'
+                      }`}>
+                        {(dados.motivo_cancelamento || '').length}
+                      </span>
+                      <span className="text-gray-500">/15</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Indicador visual do status */}
+                <div className="mt-2 flex items-center text-xs">
+                  {cancelStatus === 'expirado' ? (
+                    <div className="flex items-center text-red-400">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      Cancelamento não disponível - Prazo de 20 dias expirado
+                    </div>
+                  ) : dados?.status === 'cancelada' ? (
+                    <div className="flex items-center text-gray-400">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      NFe já cancelada
+                    </div>
+                  ) : (dados.motivo_cancelamento || '').length >= 15 ? (
+                    <div className="flex items-center text-green-400">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      Motivo válido para cancelamento
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-red-400">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      Mínimo de 15 caracteres obrigatório (faltam {15 - (dados.motivo_cancelamento || '').length})
+                    </div>
                   )}
                 </div>
               </div>
@@ -7640,23 +7701,21 @@ const AutorizacaoSection: React.FC<{
                 !dados?.carta_correcao ||
                 dados.carta_correcao.length < 15
               }
-              className={`px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 flex items-center gap-2 transition-colors ${
+              className={`px-4 py-2 rounded-lg focus:outline-none focus:ring-2 flex items-center gap-2 transition-colors font-medium ${
                 !dados?.chave ||
                 !dados?.carta_correcao ||
                 dados.carta_correcao.length < 15
-                  ? 'bg-gray-600 cursor-not-allowed'
-                  : 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500'
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-yellow-500'
               }`}
-              title={
-                !dados?.chave
-                  ? 'Chave da NFe não encontrada'
-                  : dados.carta_correcao?.length < 15
-                  ? 'Digite pelo menos 15 caracteres na correção'
-                  : 'Enviar Carta de Correção'
-              }
             >
               <Send size={16} />
-              Enviar CCe
+              {!dados?.chave
+                ? 'Chave NFe não encontrada'
+                : dados.carta_correcao?.length < 15
+                ? `Faltam ${15 - (dados.carta_correcao?.length || 0)} caracteres`
+                : 'Enviar CCe'
+              }
             </button>
           )}
           {dados?.status !== 'cancelada' && (
@@ -7667,27 +7726,27 @@ const AutorizacaoSection: React.FC<{
                 !dados?.chave ||
                 (dados.motivo_cancelamento || '').length < 15
               }
-              className={`px-4 py-2 text-white rounded-lg focus:outline-none focus:ring-2 flex items-center gap-2 transition-colors ${
+              className={`px-4 py-2 rounded-lg focus:outline-none focus:ring-2 flex items-center gap-2 transition-colors font-medium ${
                 cancelStatus === 'expirado' ||
                 !dados?.chave ||
                 (dados.motivo_cancelamento || '').length < 15
-                  ? 'bg-gray-600 cursor-not-allowed'
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   : cancelStatus === 'extemporaneo'
-                  ? 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500'
-                  : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+                  ? 'bg-yellow-600 hover:bg-yellow-700 text-white focus:ring-yellow-500'
+                  : 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500'
               }`}
-              title={
-                cancelStatus === 'expirado'
-                  ? 'Prazo de cancelamento expirado (20 dias)'
-                  : (dados.motivo_cancelamento || '').length < 15
-                  ? 'Digite pelo menos 15 caracteres no motivo'
-                  : cancelStatus === 'extemporaneo'
-                  ? 'Cancelamento extemporâneo - Pode necessitar manifestação do destinatário'
-                  : 'Cancelamento normal'
-              }
             >
               <X size={16} />
-              {cancelStatus === 'extemporaneo' ? 'Cancelar NFe (Extemporâneo)' : 'Cancelar NFe'}
+              {cancelStatus === 'expirado'
+                ? 'Prazo expirado (20 dias)'
+                : !dados?.chave
+                ? 'Chave NFe não encontrada'
+                : (dados.motivo_cancelamento || '').length < 15
+                ? `Faltam ${15 - (dados.motivo_cancelamento || '').length} caracteres`
+                : cancelStatus === 'extemporaneo'
+                ? 'Cancelar NFe (Extemporâneo)'
+                : 'Cancelar NFe'
+              }
             </button>
           )}
 
