@@ -109,10 +109,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 logDetalhado('001', 'Iniciando endpoint NFC-e');
 
 try {
+    // ✅ CORREÇÃO: Definir timezone brasileiro no início
+    date_default_timezone_set('America/Sao_Paulo');
+
     logDetalhado('002', 'Carregando dependências');
     require_once '../vendor/autoload.php';
     require_once '../includes/storage-paths.php';
-    logDetalhado('003', 'Dependências carregadas com sucesso');
+    logDetalhado('003', 'Dependências carregadas com sucesso', [
+        'timezone' => date_default_timezone_get()
+    ]);
 
     // Validar método
     logDetalhado('004', 'Validando método HTTP', ['method' => $_SERVER['REQUEST_METHOD']]);
@@ -414,7 +419,15 @@ try {
     $std->natOp = $identificacao['natureza_operacao'] ?? 'Venda de mercadoria';
     $std->mod = 65; // NFC-e
     $std->serie = (int)($identificacao['serie'] ?? 1);
-    $std->dhEmi = date('Y-m-d\TH:i:sP'); // Data/hora emissão com timezone
+    $std->dhEmi = date('Y-m-d\TH:i:sP'); // Data/hora emissão com timezone brasileiro (já definido no início)
+
+    // ✅ LOG ESPECÍFICO: Horário de emissão para verificação
+    logDetalhado('HORARIO_EMISSAO', 'Data/hora de emissão configurada', [
+        'dhEmi' => $std->dhEmi,
+        'timezone' => date_default_timezone_get(),
+        'timestamp_local' => date('Y-m-d H:i:s'),
+        'timestamp_utc' => gmdate('Y-m-d H:i:s')
+    ]);
 
     // ✅ LOG ESPECÍFICO: Série sendo enviada para SEFAZ
     logDetalhado('SEFAZ_SERIE', 'Série configurada na tag IDE para envio à SEFAZ', [
@@ -553,6 +566,14 @@ try {
 
     $destinatario = $nfceData['destinatario'] ?? [];
     logDetalhado('083', 'Dados do destinatário extraídos', $destinatario);
+
+    // ✅ LOG ESPECÍFICO: Verificar se documento está sendo recebido
+    logDetalhado('DOCUMENTO_DESTINATARIO', 'Verificação do documento do destinatário', [
+        'tem_destinatario' => !empty($destinatario),
+        'tem_documento' => !empty($destinatario['documento']),
+        'documento_original' => $destinatario['documento'] ?? 'VAZIO',
+        'nome' => $destinatario['nome'] ?? 'VAZIO'
+    ]);
 
     if (!empty($destinatario['documento'])) {
         logDetalhado('084', 'Destinatário com documento identificado');

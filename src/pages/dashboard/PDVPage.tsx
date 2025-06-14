@@ -2164,22 +2164,89 @@ const PDVPage: React.FC = () => {
         return;
       }
 
-      // Atualizar a venda no banco de dados
-      const { error } = await supabase
-        .from('pdv')
-        .update({
-          status_venda: 'cancelada',
-          cancelada_em: new Date().toISOString(),
-          motivo_cancelamento: motivoCancelamento.trim(),
-          cancelada_por_usuario_id: userData.user.id
-        })
-        .eq('id', vendaParaCancelar.id);
+      // ✅ NOVO: Verificar se é NFC-e autorizada para cancelamento fiscal
+      const isNFCeAutorizada = vendaParaCancelar.modelo_documento === 65 &&
+                               vendaParaCancelar.status_fiscal === 'autorizada' &&
+                               vendaParaCancelar.chave_nfe &&
+                               vendaParaCancelar.protocolo_nfe;
 
-      if (error) {
-        throw error;
+      if (isNFCeAutorizada) {
+        console.log('🚫 FRONTEND: Iniciando cancelamento fiscal da NFC-e');
+
+        // Validar prazo de 15 minutos para NFC-e
+        const dataEmissao = new Date(vendaParaCancelar.data_emissao_nfe || vendaParaCancelar.finalizada_em);
+        const agora = new Date();
+        const diferencaMinutos = (agora.getTime() - dataEmissao.getTime()) / (1000 * 60);
+
+        if (diferencaMinutos > 15) {
+          toast.error('NFC-e não pode ser cancelada fiscalmente. Prazo de 15 minutos expirado.');
+          return;
+        }
+
+        // Obter dados do usuário para empresa_id
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) {
+          toast.error('Empresa do usuário não encontrada');
+          return;
+        }
+
+        // Cancelar fiscalmente na SEFAZ
+        const cancelamentoData = {
+          chave_nfe: vendaParaCancelar.chave_nfe,
+          motivo: motivoCancelamento.trim(),
+          protocolo_nfe: vendaParaCancelar.protocolo_nfe,
+          empresa_id: usuarioData.empresa_id
+        };
+
+        console.log('📡 FRONTEND: Enviando cancelamento fiscal:', cancelamentoData);
+
+        const cancelamentoResponse = await fetch('http://31.97.166.71/backend/public/cancelar-nfce.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(cancelamentoData)
+        });
+
+        if (!cancelamentoResponse.ok) {
+          const errorText = await cancelamentoResponse.text();
+          console.error('❌ FRONTEND: Erro no cancelamento fiscal:', errorText);
+          throw new Error('Erro no cancelamento fiscal da NFC-e');
+        }
+
+        const cancelamentoResult = await cancelamentoResponse.json();
+
+        if (!cancelamentoResult.success) {
+          throw new Error(cancelamentoResult.error || 'Erro no cancelamento fiscal');
+        }
+
+        console.log('✅ FRONTEND: NFC-e cancelada fiscalmente com sucesso');
+        toast.success('NFC-e cancelada fiscalmente com sucesso!');
+      } else {
+        // Cancelamento apenas no sistema (sem fiscal)
+        console.log('📋 FRONTEND: Cancelamento apenas no sistema (não fiscal)');
+
+        const { error } = await supabase
+          .from('pdv')
+          .update({
+            status_venda: 'cancelada',
+            cancelada_em: new Date().toISOString(),
+            motivo_cancelamento: motivoCancelamento.trim(),
+            cancelada_por_usuario_id: userData.user.id
+          })
+          .eq('id', vendaParaCancelar.id);
+
+        if (error) {
+          throw error;
+        }
+
+        toast.success(`Venda #${vendaParaCancelar.numero_venda} cancelada com sucesso`);
       }
-
-      toast.success(`Venda #${vendaParaCancelar.numero_venda} cancelada com sucesso`);
 
       // Buscar nome do usuário que cancelou
       const { data: usuarioCancelamento } = await supabase
@@ -2208,7 +2275,7 @@ const PDVPage: React.FC = () => {
 
     } catch (error) {
       console.error('Erro ao cancelar venda:', error);
-      toast.error('Erro ao cancelar venda');
+      toast.error(`Erro ao cancelar venda: ${error.message}`);
     }
   };
 
@@ -2497,10 +2564,22 @@ const PDVPage: React.FC = () => {
           codigo_numerico: Math.floor(Math.random() * 99999999).toString().padStart(8, '0'),
           natureza_operacao: 'Venda de mercadoria'
         },
-        destinatario: vendaParaEditarNfce.nome_cliente ? {
-          documento: vendaParaEditarNfce.documento_cliente,
-          nome: vendaParaEditarNfce.nome_cliente
-        } : {},
+        // ✅ CORREÇÃO: Incluir documento mesmo se nome não estiver preenchido
+        destinatario: (() => {
+          if (vendaParaEditarNfce.documento_cliente && vendaParaEditarNfce.nome_cliente) {
+            return {
+              documento: vendaParaEditarNfce.documento_cliente,
+              nome: vendaParaEditarNfce.nome_cliente
+            };
+          }
+          if (vendaParaEditarNfce.documento_cliente) {
+            return {
+              documento: vendaParaEditarNfce.documento_cliente,
+              nome: 'CONSUMIDOR'
+            };
+          }
+          return {};
+        })(),
         produtos: itensAtualizados
       };
 
@@ -4419,10 +4498,25 @@ const PDVPage: React.FC = () => {
               codigo_numerico: codigoNumerico,
               natureza_operacao: 'Venda de mercadoria'
             },
-            destinatario: clienteData ? {
-              documento: clienteData.documento_cliente,
-              nome: clienteData.nome_cliente
-            } : {},
+            // ✅ CORREÇÃO: Usar CPF/CNPJ digitado mesmo se cliente não foi encontrado
+            destinatario: (() => {
+              // Se tem cliente encontrado, usar dados do cliente
+              if (clienteData) {
+                return {
+                  documento: clienteData.documento_cliente,
+                  nome: clienteData.nome_cliente
+                };
+              }
+              // Se tem CPF/CNPJ digitado mas cliente não encontrado, usar o digitado
+              if (cpfCnpjNota && cpfCnpjNota.trim()) {
+                return {
+                  documento: cpfCnpjNota.replace(/\D/g, ''), // Apenas números
+                  nome: 'CONSUMIDOR'
+                };
+              }
+              // Sem documento = consumidor não identificado
+              return {};
+            })(),
             produtos: carrinho.map(item => ({
               codigo: item.produto.codigo, // Código real do produto (SEM FALLBACK)
               descricao: item.produto.nome,
@@ -8588,6 +8682,27 @@ const PDVPage: React.FC = () => {
                 {vendaParaCancelar.nome_cliente && (
                   <div className="text-sm text-gray-400">
                     Cliente: {vendaParaCancelar.nome_cliente}
+                  </div>
+                )}
+
+                {/* ✅ NOVO: Informações específicas para NFC-e */}
+                {vendaParaCancelar.modelo_documento === 65 && vendaParaCancelar.status_fiscal === 'autorizada' && (
+                  <div className="mt-3 p-2 bg-yellow-900/30 border border-yellow-600/30 rounded">
+                    <div className="text-yellow-400 text-xs font-medium mb-1">⚠️ CANCELAMENTO FISCAL NFC-e</div>
+                    <div className="text-xs text-yellow-300">
+                      • Prazo: 15 minutos da emissão<br/>
+                      • Será cancelada na SEFAZ<br/>
+                      • Chave: {vendaParaCancelar.chave_nfe?.substring(0, 20)}...
+                    </div>
+                  </div>
+                )}
+
+                {vendaParaCancelar.modelo_documento === 65 && vendaParaCancelar.status_fiscal !== 'autorizada' && (
+                  <div className="mt-3 p-2 bg-blue-900/30 border border-blue-600/30 rounded">
+                    <div className="text-blue-400 text-xs font-medium mb-1">ℹ️ CANCELAMENTO APENAS NO SISTEMA</div>
+                    <div className="text-xs text-blue-300">
+                      NFC-e não autorizada - cancelamento apenas local
+                    </div>
                   </div>
                 )}
               </div>
