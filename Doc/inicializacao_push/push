@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Caminho fixo para o repositório do projeto
+PROJECT_DIR="/root/nexo/nexo-pedidos"
+
+# Mudar para o diretório raiz do projeto
+cd "$PROJECT_DIR"
+
+# Verificar se o diretório atual é um repositório git
+if [ ! -d .git ]; then
+  echo "Erro: Este diretório não é um repositório git."
+  exit 1
+fi
+
+# Obter a data e hora atual no fuso horário de São Paulo (GMT-3)
+DATA_HORA=$(TZ="America/Sao_Paulo" date "+%d/%m/%Y %H:%M:%S")
+
+# Adicionar todos os arquivos modificados
+echo "Adicionando arquivos modificados..."
+git add .
+
+# Realizar o commit com mensagem automática contendo data e hora
+echo "Realizando commit com data/hora: $DATA_HORA"
+git commit -m "Atualização automática em $DATA_HORA"
+
+# Realizar o push para o repositório remoto
+echo "Enviando para o repositório remoto..."
+git push
+
+echo "Processo de push concluído com sucesso!"

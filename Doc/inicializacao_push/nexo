@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Caminho fixo para o repositório do projeto
+PROJECT_DIR="/root/nexo/nexo-pedidos"
+
+# Mudar para o diretório raiz do projeto
+cd "$PROJECT_DIR"
+
+# Verificar se o diretório atual é um repositório git
+if [ ! -d .git ]; then
+  echo "Erro: O diretório do projeto não é um repositório git."
+  exit 1
+fi
+
+# Executar o script start.sh
+bash start.sh
