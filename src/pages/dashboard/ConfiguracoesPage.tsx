@@ -290,6 +290,7 @@ const ConfiguracoesPage: React.FC = () => {
   const [isUploadingCertificado, setIsUploadingCertificado] = useState(false);
   const [showRemoveCertificadoModal, setShowRemoveCertificadoModal] = useState(false);
   const [ambienteNFe, setAmbienteNFe] = useState<'1' | '2'>('2'); // 1=Produção, 2=Homologação
+  const [mostrarSenhaCertificado, setMostrarSenhaCertificado] = useState(false);
 
   // Estados para CSC NFCe
   const [cscHomologacao, setCscHomologacao] = useState('');
@@ -1992,7 +1993,7 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
-  // Função para remover certificado digital
+  // Função para remover certificado digital (NOVO - Storage Local)
   const handleRemoverCertificado = async () => {
     if (!certificadoInfo?.certificado_digital_path) return;
 
@@ -2008,40 +2009,20 @@ const ConfiguracoesPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
-      // Remover arquivo do storage
-      const { error: deleteError } = await supabase.storage
-        .from('certificadodigital')
-        .remove([certificadoInfo.certificado_digital_path]);
+      // Usar a função do hook para remover do storage local
+      const success = await removeCertificateLocal(usuarioData.empresa_id);
 
-      if (deleteError) {
-        console.warn('Erro ao remover arquivo do storage:', deleteError);
+      if (success) {
+        // Limpar todos os campos do formulário de certificado
+        limparCamposCertificado();
+        setShowRemoveCertificadoModal(false);
+
+        // Recarregar dados
+        loadData();
       }
 
-      // Limpar dados na tabela empresas
-      const { error: updateError } = await supabase
-        .from('empresas')
-        .update({
-          certificado_digital_path: null,
-          certificado_digital_senha: null,
-          certificado_digital_validade: null,
-          certificado_digital_status: 'nao_configurado',
-          certificado_digital_nome: null,
-          certificado_digital_uploaded_at: null
-        })
-        .eq('id', usuarioData.empresa_id);
-
-      if (updateError) throw updateError;
-
-      // Limpar todos os campos do formulário de certificado
-      limparCamposCertificado();
-
-      showMessage('success', 'Certificado digital removido com sucesso!');
-      setShowRemoveCertificadoModal(false);
-
-      // Recarregar dados
-      loadData();
-
     } catch (error: any) {
+      console.error('❌ Erro ao remover certificado:', error);
       showMessage('error', 'Erro ao remover certificado: ' + error.message);
       setShowRemoveCertificadoModal(false);
     }
@@ -4053,13 +4034,22 @@ const ConfiguracoesPage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-400 mb-2">
                         Senha do Certificado
                       </label>
-                      <input
-                        type="password"
-                        value={certificadoSenha}
-                        onChange={(e) => setCertificadoSenha(e.target.value)}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="Digite a senha do certificado"
-                      />
+                      <div className="relative">
+                        <input
+                          type={mostrarSenhaCertificado ? "text" : "password"}
+                          value={certificadoSenha}
+                          onChange={(e) => setCertificadoSenha(e.target.value)}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-3 pr-10 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          placeholder="Digite a senha do certificado"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMostrarSenhaCertificado(!mostrarSenhaCertificado)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                        >
+                          {mostrarSenhaCertificado ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500 mt-1">
                         Senha utilizada para proteger o certificado digital
                       </p>

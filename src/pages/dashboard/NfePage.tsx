@@ -1506,6 +1506,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null); // Estado para erro de email
+  const [showCloseButton, setShowCloseButton] = useState(false); // Estado para mostrar botão fechar
+  const [emailProcessCompleted, setEmailProcessCompleted] = useState(false); // Flag para indicar que processo de email terminou
   const [naturezasOperacao, setNaturezasOperacao] = useState<Array<{id: number, descricao: string}>>([]);
   const [apiStatus, setApiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [sefazStatus, setSefazStatus] = useState<'online' | 'offline' | 'checking'>('checking');
@@ -1561,6 +1564,40 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     setLogs([]); // Limpar logs do frontend
     clearApiLogs(); // Limpar logs da API
   };
+
+  // ✅ Função para fechar modal manualmente (quando há erro de email)
+  const handleCloseModal = () => {
+    setShowProgressModal(false);
+    setEmailError(null);
+    setShowCloseButton(false);
+    setEmailProcessCompleted(false);
+    clearAllLogs();
+    onSave(); // Recarregar a lista de NFe
+    onBack(); // Voltar para a grid de NFe
+  };
+
+  // ✅ useEffect para verificar se deve fechar automaticamente após processo de email
+  useEffect(() => {
+    if (emailProcessCompleted && showProgressModal) {
+      // Aguardar um pouco para garantir que todos os estados foram atualizados
+      setTimeout(() => {
+        if (emailError) {
+          addLog('⚠️ NFe emitida com sucesso, mas houve erro no envio de email');
+          addLog('📧 Clique em "Fechar" para continuar');
+          // Não fechar automaticamente - aguardar usuário clicar em "Fechar"
+        } else {
+          // Fechar automaticamente apenas se não houver erro de email
+          setTimeout(() => {
+            setShowProgressModal(false);
+            setEmailProcessCompleted(false);
+            clearAllLogs();
+            onSave();
+            onBack();
+          }, 2000); // Aguardar 2 segundos para mostrar sucesso
+        }
+      }, 500); // Pequeno delay para garantir que estados foram atualizados
+    }
+  }, [emailProcessCompleted, emailError, showProgressModal]);
   const [isEditingRascunho, setIsEditingRascunho] = useState(false);
   const [rascunhoId, setRascunhoId] = useState<string | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
@@ -1753,6 +1790,13 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
     // Adicionar ao modal
     setLogs(prev => [...prev, logMessage]);
+
+    // ✅ Verificar se é erro de email e parar o modal
+    if (message.includes('⚠️') && message.includes('Erro ao enviar email')) {
+      const errorMessage = message.replace(/^\[.*?\]\s*⚠️\s*/, ''); // Remove timestamp e emoji
+      setEmailError(errorMessage);
+      setShowCloseButton(true);
+    }
 
     // Adicionar ao console também
     if (message.includes('❌') || message.includes('ERRO')) {
@@ -3489,6 +3533,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
               updateStep('email', 'success', `Enviado para ${emailsDestinatario.length} email(s)`);
             } else {
               addLog(`⚠️ Falha no envio de email: ${emailResult.error}`);
+              // ✅ Armazenar erro para parar o modal
+              setEmailError(`Erro ao enviar email: ${emailResult.error}`);
+              setShowCloseButton(true);
               // ✅ Mostrar detalhes específicos do erro de email
               if (emailResult.arquivos) {
                 addLog(`📁 XML existe: ${emailResult.arquivos.xml_existe ? 'SIM' : 'NÃO'}`);
@@ -3514,15 +3561,25 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
               errorDetails = errorText || errorDetails;
             }
             addLog(`⚠️ ${errorDetails}`);
+            // ✅ Armazenar erro para parar o modal
+            setEmailError(errorDetails);
+            setShowCloseButton(true);
             updateStep('email', 'error', 'Erro na comunicação');
           }
         } catch (emailError) {
           addLog(`⚠️ Erro ao enviar email: ${emailError.message}`);
+          // ✅ Armazenar erro para parar o modal
+          setEmailError(`Erro ao enviar email: ${emailError.message}`);
+          setShowCloseButton(true);
           updateStep('email', 'error', 'Erro no envio');
         }
+        // ✅ Marcar que processo de email terminou
+        setEmailProcessCompleted(true);
       } else {
         addLog('ℹ️ Nenhum email cadastrado para o destinatário');
         updateStep('email', 'success', 'Nenhum email cadastrado');
+        // ✅ Marcar que processo de email terminou
+        setEmailProcessCompleted(true);
       }
 
       addLog('✅ NFe emitida com sucesso!');
@@ -3532,13 +3589,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       addLog(`Valor: R$ ${nfeData.totais.valor_total.toFixed(2)}`);
       updateStep('finalizacao', 'success', 'Processo concluído');
 
-      // Aguardar 2 segundos para mostrar o sucesso
-      setTimeout(() => {
-        setShowProgressModal(false);
-        clearAllLogs(); // ✅ Limpar logs ao fechar modal após sucesso
-        onSave(); // ✅ Recarregar a lista de NFe
-        onBack(); // ✅ Voltar para a grid de NFe
-      }, 2000);
+      // ✅ A verificação de erro de email será feita via useEffect quando emailProcessCompleted for true
     } catch (error) {
       // ✅ REMOVIDO: Não precisamos mais liberar código reservado
       if (typeof codigoNumerico !== 'undefined') {
@@ -4620,13 +4671,26 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                   </div>
                   <button
                     onClick={() => {
-                      setShowProgressModal(false);
-                      clearAllLogs(); // ✅ Limpar logs ao fechar modal
+                      if (emailError || showCloseButton) {
+                        // Se há erro de email, usar função específica
+                        handleCloseModal();
+                      } else {
+                        // Comportamento normal
+                        setShowProgressModal(false);
+                        clearAllLogs();
+                      }
                     }}
-                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors text-sm"
-                    disabled={isLoading && !progressSteps.some(s => s.status === 'error')}
+                    className={`px-3 py-1 text-white rounded transition-colors text-sm ${
+                      emailError || showCloseButton
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
+                    disabled={isLoading && !progressSteps.some(s => s.status === 'error') && !emailError && !showCloseButton}
                   >
-                    {isLoading && !progressSteps.some(s => s.status === 'error') ? 'Processando...' : 'Fechar'}
+                    {emailError || showCloseButton
+                      ? 'Fechar'
+                      : (isLoading && !progressSteps.some(s => s.status === 'error') ? 'Processando...' : 'Fechar')
+                    }
                   </button>
                 </div>
               </div>
@@ -4695,6 +4759,31 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 <p className="text-xs text-gray-500 mt-2">
                   📧 XML e DANFE serão enviados automaticamente para estes emails após a emissão
                 </p>
+              </div>
+            )}
+
+            {/* ✅ Seção de Erro de Email */}
+            {emailError && (
+              <div className="p-4 border-b border-gray-800 bg-red-900/20">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-red-400 mb-1">
+                      ⚠️ Erro no Envio de Email
+                    </h4>
+                    <p className="text-sm text-red-300 mb-2">
+                      {emailError}
+                    </p>
+                    <div className="bg-red-800/30 border border-red-700/50 rounded-lg p-3">
+                      <p className="text-xs text-red-200">
+                        <strong>NFe foi emitida com sucesso!</strong> Apenas o envio de email falhou.
+                        Você pode reenviar o email posteriormente através da grid de NFes.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Caminho fixo para o repositório do projeto
-PROJECT_DIR="/root/nexo/nexo-pedidos"
+PROJECT_DIR="/root/nexo-pedidos"
 
 # Mudar para o diretório raiz do projeto
 cd "$PROJECT_DIR"

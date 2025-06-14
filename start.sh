@@ -170,14 +170,14 @@ fi
 log "🧪 Testando endpoints..."
 
 # Teste frontend
-if curl -s -o /dev/null -w "%{http_code}" http://localhost/ | grep -q "200"; then
-    log "✅ Frontend acessível em http://localhost/"
+if curl -s -o /dev/null -w "%{http_code}" http://31.97.166.71/ | grep -q "200"; then
+    log "✅ Frontend acessível em http://31.97.166.71/"
 else
     warn "Frontend não acessível - verifique configuração Nginx"
 fi
 
 # Teste backend
-if curl -s -o /dev/null -w "%{http_code}" http://localhost/backend/public/status-nfe.php | grep -q "200"; then
+if curl -s -o /dev/null -w "%{http_code}" http://31.97.166.71/backend/public/status-nfe.php | grep -q "200"; then
     log "✅ Backend acessível"
 else
     warn "Backend não acessível - verifique PHP-FPM"
@@ -190,7 +190,7 @@ echo -e "${GREEN}╚════════════════════
 
 echo -e "\n${BLUE}🎯 PRÓXIMOS PASSOS:${NC}"
 echo -e "   1. Configure o arquivo .env com suas credenciais Supabase"
-echo -e "   2. Acesse: ${GREEN}http://localhost/${NC}"
+echo -e "   2. Acesse: ${GREEN}http://31.97.166.71/${NC}"
 echo -e "   3. Faça upload do certificado digital na seção NFe"
 
 echo -e "\n${BLUE}🔧 COMANDOS ÚTEIS:${NC}"
@@ -199,8 +199,8 @@ echo -e "   • Logs: ${YELLOW}sudo tail -f /var/log/nginx/nexo-error.log${NC}"
 echo -e "   • Status: ${YELLOW}sudo systemctl status nginx php7.4-fpm${NC}"
 
 echo -e "\n${BLUE}📊 ENDPOINTS:${NC}"
-echo -e "   • Frontend: ${GREEN}http://localhost/${NC}"
-echo -e "   • API Status: ${GREEN}http://localhost/backend/public/status-nfe.php${NC}"
-echo -e "   • Logs API: ${GREEN}http://localhost/backend/public/logs.php${NC}"
+echo -e "   • Frontend: ${GREEN}http://31.97.166.71/${NC}"
+echo -e "   • API Status: ${GREEN}http://31.97.166.71/backend/public/status-nfe.php${NC}"
+echo -e "   • Logs API: ${GREEN}http://31.97.166.71/backend/public/logs.php${NC}"
 
 echo -e "\n${GREEN}🚀 Sistema pronto para uso!${NC}"

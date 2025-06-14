@@ -1,5 +1,8 @@
 <?php
 header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -53,11 +56,54 @@ try {
     try {
         $tempFile = tempnam(sys_get_temp_dir(), 'cert_validation_');
         file_put_contents($tempFile, $certificateContent);
-        
+
+        // Limpar erros anteriores do OpenSSL
+        while (openssl_error_string() !== false) {
+            // Limpa a pilha de erros
+        }
+
         // Tentar validar o certificado com OpenSSL
         $pkcs12 = [];
-        if (!openssl_pkcs12_read($certificateContent, $pkcs12, $senha)) {
-            throw new Exception('Senha do certificado incorreta ou arquivo inválido');
+        $validationSuccess = false;
+
+        // Tentativa 1: Padrão
+        if (openssl_pkcs12_read($certificateContent, $pkcs12, $senha)) {
+            $validationSuccess = true;
+        } else {
+            // Tentativa 2: Com configuração legacy para OpenSSL 3.0
+            $originalEnv = getenv('OPENSSL_CONF');
+            putenv('OPENSSL_CONF=/dev/null'); // Desabilita configuração restritiva
+
+            // Limpar erros da tentativa anterior
+            while (openssl_error_string() !== false) {
+                // Limpa a pilha de erros
+            }
+
+            if (openssl_pkcs12_read($certificateContent, $pkcs12, $senha)) {
+                $validationSuccess = true;
+            }
+
+            // Restaurar configuração original
+            if ($originalEnv !== false) {
+                putenv("OPENSSL_CONF=$originalEnv");
+            } else {
+                putenv('OPENSSL_CONF');
+            }
+        }
+
+        if (!$validationSuccess) {
+            // Capturar erros específicos do OpenSSL
+            $opensslErrors = [];
+            while (($error = openssl_error_string()) !== false) {
+                $opensslErrors[] = $error;
+            }
+
+            $errorMsg = 'Senha do certificado incorreta ou arquivo inválido';
+            if (!empty($opensslErrors)) {
+                $errorMsg .= '. Detalhes OpenSSL: ' . implode(', ', $opensslErrors);
+            }
+
+            throw new Exception($errorMsg);
         }
         
         // Extrair informações do certificado
