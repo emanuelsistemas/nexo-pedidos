@@ -102,6 +102,7 @@ export interface Usuario {
   tipo_user_config_id?: string;
   tipo_user_config?: TipoUserConfig;
   ativo?: boolean;
+  serie_nfce?: number; // ✅ NOVO: Série individual da NFC-e para este usuário
   created_at?: string;
 }
 

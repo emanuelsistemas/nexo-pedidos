@@ -177,6 +177,7 @@ const PDVPage: React.FC = () => {
   const [reprocessandoNfce, setReprocessandoNfce] = useState(false);
   const [editandoNumeroNfce, setEditandoNumeroNfce] = useState(false);
   const [numeroNfceEditavel, setNumeroNfceEditavel] = useState<string>('');
+  const [serieNfce, setSerieNfce] = useState<number>(1); // ✅ NOVO: Estado para série da NFC-e
 
   // Estados para filtros avançados
   const [showFiltrosVendas, setShowFiltrosVendas] = useState(false);
@@ -8435,10 +8436,31 @@ const PDVPage: React.FC = () => {
                           {/* ✅ NOVO: Botão Editar NFC-e para vendas pendentes */}
                           {venda.status_fiscal === 'pendente' && venda.tentativa_nfce && (
                             <button
-                              onClick={() => {
+                              onClick={async () => {
                                 setVendaParaEditarNfce(venda);
                                 setShowEditarNfceModal(true);
                                 carregarItensParaEdicaoNfce(venda.id);
+
+                                // ✅ NOVO: Carregar série da NFC-e do usuário logado
+                                try {
+                                  const { data: userData } = await supabase.auth.getUser();
+                                  if (userData.user) {
+                                    const { data: usuarioData } = await supabase
+                                      .from('usuarios')
+                                      .select('serie_nfce')
+                                      .eq('id', userData.user.id)
+                                      .single();
+
+                                    if (usuarioData?.serie_nfce) {
+                                      setSerieNfce(usuarioData.serie_nfce);
+                                    } else {
+                                      setSerieNfce(1); // Fallback para série 1
+                                    }
+                                  }
+                                } catch (error) {
+                                  console.error('Erro ao carregar série NFC-e do usuário:', error);
+                                  setSerieNfce(1); // Fallback para série 1
+                                }
                               }}
                               className="w-full px-3 py-2 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 rounded text-xs transition-colors font-medium border border-yellow-600/30 hover:border-yellow-600/50"
                             >
@@ -9789,69 +9811,86 @@ const PDVPage: React.FC = () => {
                       Editar NFC-e - Venda #{vendaParaEditarNfce.numero_venda}
                     </h3>
 
-                    {/* ✅ NOVO: Campo para editar número da NFC-e */}
+                    {/* ✅ NOVO: Campos para editar número e série da NFC-e */}
                     <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                      <p className="text-blue-400 text-sm font-medium mb-2">Número da NFC-e:</p>
-                      <div className="flex items-center gap-2">
-                        {editandoNumeroNfce ? (
+                      <p className="text-blue-400 text-sm font-medium mb-2">Dados da NFC-e:</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Campo Número */}
+                        <div>
+                          <label className="block text-blue-300 text-xs font-medium mb-1">Número:</label>
                           <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              value={numeroNfceEditavel}
-                              onChange={(e) => setNumeroNfceEditavel(e.target.value)}
-                              className="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1 text-white text-sm"
-                              placeholder="Número"
-                              min="1"
-                            />
-                            <button
-                              onClick={() => {
-                                // Salvar o número editado
-                                setVendaParaEditarNfce(prev => ({
-                                  ...prev,
-                                  numero_documento: parseInt(numeroNfceEditavel) || prev.numero_documento
-                                }));
-                                setEditandoNumeroNfce(false);
-                              }}
-                              className="text-green-400 hover:text-green-300 p-1"
-                              title="Salvar"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditandoNumeroNfce(false);
-                                setNumeroNfceEditavel(vendaParaEditarNfce.numero_documento?.toString() || '');
-                              }}
-                              className="text-red-400 hover:text-red-300 p-1"
-                              title="Cancelar"
-                            >
-                              <X size={16} />
-                            </button>
+                            {editandoNumeroNfce ? (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={numeroNfceEditavel}
+                                  onChange={(e) => setNumeroNfceEditavel(e.target.value)}
+                                  className="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1 text-white text-sm"
+                                  placeholder="Número"
+                                  min="1"
+                                />
+                                <button
+                                  onClick={() => {
+                                    // Salvar o número editado
+                                    setVendaParaEditarNfce(prev => ({
+                                      ...prev,
+                                      numero_documento: parseInt(numeroNfceEditavel) || prev.numero_documento
+                                    }));
+                                    setEditandoNumeroNfce(false);
+                                  }}
+                                  className="text-green-400 hover:text-green-300 p-1"
+                                  title="Salvar"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditandoNumeroNfce(false);
+                                    setNumeroNfceEditavel(vendaParaEditarNfce.numero_documento?.toString() || '');
+                                  }}
+                                  className="text-red-400 hover:text-red-300 p-1"
+                                  title="Cancelar"
+                                >
+                                  <X size={16} />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="text-blue-300 font-medium">
+                                  #{vendaParaEditarNfce.numero_documento || 'Não definido'}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    setEditandoNumeroNfce(true);
+                                    setNumeroNfceEditavel(vendaParaEditarNfce.numero_documento?.toString() || '');
+                                  }}
+                                  className="text-gray-400 hover:text-white p-1"
+                                  title="Editar número"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        ) : (
+                        </div>
+
+                        {/* Campo Série */}
+                        <div>
+                          <label className="block text-blue-300 text-xs font-medium mb-1">Série:</label>
                           <div className="flex items-center gap-2">
                             <span className="text-blue-300 font-medium">
-                              #{vendaParaEditarNfce.numero_documento || 'Não definido'}
+                              #{serieNfce}
                             </span>
-                            <button
-                              onClick={() => {
-                                setEditandoNumeroNfce(true);
-                                setNumeroNfceEditavel(vendaParaEditarNfce.numero_documento?.toString() || '');
-                              }}
-                              className="text-gray-400 hover:text-white p-1"
-                              title="Editar número"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
+                            <span className="text-gray-400 text-xs">(série do usuário)</span>
                           </div>
-                        )}
+                        </div>
                       </div>
-                      <p className="text-blue-300 text-xs mt-1">
-                        ⚠️ Altere apenas em caso de duplicação ou conflito de numeração
+                      <p className="text-blue-300 text-xs mt-2">
+                        ⚠️ Altere o número apenas em caso de duplicação ou conflito de numeração
                       </p>
                     </div>
 
@@ -9860,12 +9899,6 @@ const PDVPage: React.FC = () => {
                       <p className="text-red-300 text-sm mt-1">{vendaParaEditarNfce.erro_fiscal}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setShowEditarNfceModal(false)}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    <X size={24} />
-                  </button>
                 </div>
               </div>
 
@@ -10071,7 +10104,7 @@ const PDVPage: React.FC = () => {
                     onClick={() => setShowEditarNfceModal(false)}
                     className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
                   >
-                    Cancelar
+                    Fechar
                   </button>
                   <button
                     onClick={reprocessarNfce}

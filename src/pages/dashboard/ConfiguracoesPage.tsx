@@ -178,7 +178,8 @@ const ConfiguracoesPage: React.FC = () => {
     email: '',
     senha: '',
     confirmarSenha: '',
-    tipo_user_config_id: ''
+    tipo_user_config_id: '',
+    serie_nfce: 1 // ✅ NOVO: Série da NFC-e para o usuário
   });
 
   // Estado para tipos de usuário
@@ -191,7 +192,8 @@ const ConfiguracoesPage: React.FC = () => {
   // Estado para erros de validação
   const [formErrors, setFormErrors] = useState({
     senha: '',
-    email: ''
+    email: '',
+    serie_nfce: '' // ✅ NOVO: Erro para série da NFC-e
   });
 
   // Estado para controlar o modo de edição
@@ -1180,7 +1182,8 @@ const ConfiguracoesPage: React.FC = () => {
     // Limpar erros anteriores
     setFormErrors({
       senha: '',
-      email: ''
+      email: '',
+      serie_nfce: ''
     });
 
     // Carregar os dados do usuário no formulário
@@ -1190,7 +1193,8 @@ const ConfiguracoesPage: React.FC = () => {
       email: usuario.email,
       senha: '', // Campos de senha vazios na edição
       confirmarSenha: '',
-      tipo_user_config_id: usuario.tipo_user_config_id || ''
+      tipo_user_config_id: usuario.tipo_user_config_id || '',
+      serie_nfce: usuario.serie_nfce || 1 // ✅ NOVO: Carregar série da NFC-e
     });
 
     // Ativar o modo de edição
@@ -1707,14 +1711,30 @@ const ConfiguracoesPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
+      // ✅ VALIDAÇÃO: Verificar se a série já existe na empresa
+      const { data: serieExistente } = await supabase
+        .from('usuarios')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('serie_nfce', usuarioForm.serie_nfce)
+        .neq('id', usuarioForm.id || '') // Excluir o próprio usuário na edição
+        .maybeSingle();
+
+      if (serieExistente) {
+        setFormErrors(prev => ({ ...prev, serie_nfce: `A série ${usuarioForm.serie_nfce} já está sendo usada por outro usuário desta empresa` }));
+        setIsLoading(false);
+        return;
+      }
+
       // Modo de edição
       if (isEditingUsuario) {
-        // 1. Atualizar o nome e tipo do usuário na tabela usuarios
+        // 1. Atualizar o nome, tipo e série do usuário na tabela usuarios
         const { error: updateError } = await supabase
           .from('usuarios')
           .update({
             nome: usuarioForm.nome,
-            tipo_user_config_id: usuarioForm.tipo_user_config_id
+            tipo_user_config_id: usuarioForm.tipo_user_config_id,
+            serie_nfce: usuarioForm.serie_nfce // ✅ NOVO: Atualizar série da NFC-e
           })
           .eq('id', usuarioForm.id);
 
@@ -1794,6 +1814,7 @@ const ConfiguracoesPage: React.FC = () => {
             email: usuarioForm.email,
             empresa_id: usuarioData.empresa_id,
             tipo_user_config_id: usuarioForm.tipo_user_config_id,
+            serie_nfce: usuarioForm.serie_nfce, // ✅ NOVO: Incluir série da NFC-e
             status: true // Definir o status como ativo por padrão
           }]);
 
@@ -1809,7 +1830,8 @@ const ConfiguracoesPage: React.FC = () => {
         email: '',
         senha: '',
         confirmarSenha: '',
-        tipo_user_config_id: ''
+        tipo_user_config_id: '',
+        serie_nfce: 1
       });
       setIsEditingUsuario(false);
 
@@ -2683,6 +2705,10 @@ const ConfiguracoesPage: React.FC = () => {
                           )}
                         </div>
                         <p className="text-gray-400 text-sm">{usuario.email}</p>
+                        {/* ✅ NOVO: Exibir série da NFC-e */}
+                        <p className="text-blue-400 text-sm">
+                          <span className="font-medium">Série NFC-e:</span> #{usuario.serie_nfce || 1}
+                        </p>
                         <div className="flex flex-wrap gap-2 mt-2">
                           {usuario.tipo_user_config && (
                             <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
@@ -4569,14 +4595,17 @@ const ConfiguracoesPage: React.FC = () => {
                       if (activeSection === 'usuarios') {
                         setFormErrors({
                           senha: '',
-                          email: ''
+                          email: '',
+                          serie_nfce: ''
                         });
                         setUsuarioForm({
                           id: '',
                           nome: '',
                           email: '',
                           senha: '',
-                          confirmarSenha: ''
+                          confirmarSenha: '',
+                          tipo_user_config_id: '',
+                          serie_nfce: 1
                         });
                         setIsEditingUsuario(false); // Resetar o modo de edição
                       }
@@ -4686,6 +4715,36 @@ const ConfiguracoesPage: React.FC = () => {
                       )}
                     </div>
 
+                    {/* ✅ NOVO: Campo Série NFC-e */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Série NFC-e
+                      </label>
+                      <input
+                        type="number"
+                        value={usuarioForm.serie_nfce}
+                        onChange={(e) => {
+                          const valor = parseInt(e.target.value) || 1;
+                          setUsuarioForm(prev => ({ ...prev, serie_nfce: valor }));
+                          // Limpar erro de série quando o usuário digita
+                          if (formErrors.serie_nfce) {
+                            setFormErrors(prev => ({ ...prev, serie_nfce: '' }));
+                          }
+                        }}
+                        className={`w-full bg-gray-800/50 border ${formErrors.serie_nfce ? 'border-red-500' : 'border-gray-700'} rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20`}
+                        placeholder="Digite a série da NFC-e"
+                        min="1"
+                        max="999"
+                        required
+                      />
+                      {formErrors.serie_nfce && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.serie_nfce}</p>
+                      )}
+                      <p className="text-blue-400 text-xs mt-1">
+                        Cada usuário deve ter uma série única para evitar conflitos na numeração das NFC-e
+                      </p>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-medium text-gray-400 mb-2">
                         Senha {isEditingUsuario && <span className="text-gray-500 text-xs">(opcional)</span>}
@@ -4761,7 +4820,8 @@ const ConfiguracoesPage: React.FC = () => {
                           // Limpar erros e formulário
                           setFormErrors({
                             senha: '',
-                            email: ''
+                            email: '',
+                            serie_nfce: ''
                           });
                           setUsuarioForm({
                             id: '',
@@ -4769,7 +4829,8 @@ const ConfiguracoesPage: React.FC = () => {
                             email: '',
                             senha: '',
                             confirmarSenha: '',
-                            tipo_user_config_id: ''
+                            tipo_user_config_id: '',
+                            serie_nfce: 1
                           });
                           setIsEditingUsuario(false); // Resetar o modo de edição
                         }}
