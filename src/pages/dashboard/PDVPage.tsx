@@ -179,6 +179,12 @@ const PDVPage: React.FC = () => {
   const [numeroNfceEditavel, setNumeroNfceEditavel] = useState<string>('');
   const [serieNfce, setSerieNfce] = useState<number>(1); // ✅ NOVO: Estado para série da NFC-e
 
+  // ✅ NOVO: Estados para emissão de NFC-e no modal de itens
+  const [cpfCnpjModalItens, setCpfCnpjModalItens] = useState('');
+  const [tipoDocumentoModalItens, setTipoDocumentoModalItens] = useState<'cpf' | 'cnpj'>('cpf');
+  const [erroValidacaoModalItens, setErroValidacaoModalItens] = useState('');
+  const [emitindoNfceModalItens, setEmitindoNfceModalItens] = useState(false);
+
   // Estados para filtros avançados
   const [showFiltrosVendas, setShowFiltrosVendas] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState<'todas' | 'canceladas' | 'finalizadas' | 'pedidos'>('todas');
@@ -2006,7 +2012,7 @@ const PDVPage: React.FC = () => {
           protocolo_nfe
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .neq('modelo_documento', 55); // ✅ Excluir NFe (modelo 55) - mostrar apenas vendas PDV e NFC-e
+        .or('modelo_documento.is.null,modelo_documento.eq.65'); // ✅ Mostrar apenas vendas PDV (null) e NFC-e (65) - excluir NFe (55)
 
       // Aplicar filtros
       // Filtro por status
@@ -2297,7 +2303,27 @@ const PDVPage: React.FC = () => {
     try {
       setLoadingItensVenda(true);
 
-      // Carregar itens da venda com suas opções adicionais
+      // ✅ NOVO: Buscar regime tributário da empresa para exibição correta dos campos
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('regime_tributario')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      const regimeTributario = empresaData?.regime_tributario || 1;
+
+      // Carregar itens da venda com dados fiscais completos
       const { data: itensData, error: itensError } = await supabase
         .from('pdv_itens')
         .select(`
@@ -2317,6 +2343,22 @@ const PDVPage: React.FC = () => {
           origem_item,
           pedido_origem_numero,
           observacao_item,
+          cfop,
+          cst_icms,
+          csosn_icms,
+          produto:produtos(
+            id,
+            codigo,
+            codigo_barras,
+            nome,
+            ncm,
+            unidade_medida_id,
+            unidade_medida:unidade_medida(
+              id,
+              nome,
+              sigla
+            )
+          ),
           pdv_itens_adicionais (
             id,
             nome_adicional,
@@ -2332,7 +2374,22 @@ const PDVPage: React.FC = () => {
         throw itensError;
       }
 
-      setItensVenda(itensData || []);
+      // ✅ NOVO: Processar itens com campos editáveis para NFC-e
+      const itensProcessados = (itensData || []).map((item, index) => ({
+        ...item,
+        sequencia: index + 1,
+        cfop_editavel: item.cfop || '5102',
+        cst_editavel: item.cst_icms || '00',
+        csosn_editavel: item.csosn_icms || '102',
+        ncm_editavel: item.produto?.ncm || '00000000',
+        regime_tributario: regimeTributario,
+        editando_cfop: false,
+        editando_cst: false,
+        editando_csosn: false,
+        editando_ncm: false
+      }));
+
+      setItensVenda(itensProcessados);
 
     } catch (error) {
       console.error('Erro ao carregar itens da venda:', error);
@@ -2425,7 +2482,7 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  // ✅ NOVAS: Funções para editar campos fiscais
+  // ✅ NOVAS: Funções para editar campos fiscais (NFC-e)
   const habilitarEdicaoCampo = (itemIndex: number, campo: 'cfop' | 'cst' | 'csosn' | 'ncm') => {
     setItensNfceEdicao(prev => prev.map((item, index) =>
       index === itemIndex
@@ -2448,6 +2505,35 @@ const PDVPage: React.FC = () => {
 
   const cancelarEdicaoCampo = (itemIndex: number, campo: 'cfop' | 'cst' | 'csosn' | 'ncm') => {
     setItensNfceEdicao(prev => prev.map((item, index) =>
+      index === itemIndex
+        ? { ...item, [`editando_${campo}`]: false }
+        : item
+    ));
+  };
+
+  // ✅ NOVO: Funções para editar campos fiscais no modal de itens
+  const habilitarEdicaoCampoModalItens = (itemIndex: number, campo: 'cfop' | 'cst' | 'csosn' | 'ncm') => {
+    setItensVenda(prev => prev.map((item, index) =>
+      index === itemIndex
+        ? { ...item, [`editando_${campo}`]: true }
+        : item
+    ));
+  };
+
+  const salvarEdicaoCampoModalItens = (itemIndex: number, campo: 'cfop' | 'cst' | 'csosn' | 'ncm', novoValor: string) => {
+    setItensVenda(prev => prev.map((item, index) =>
+      index === itemIndex
+        ? {
+            ...item,
+            [`${campo}_editavel`]: novoValor,
+            [`editando_${campo}`]: false
+          }
+        : item
+    ));
+  };
+
+  const cancelarEdicaoCampoModalItens = (itemIndex: number, campo: 'cfop' | 'cst' | 'csosn' | 'ncm') => {
+    setItensVenda(prev => prev.map((item, index) =>
       index === itemIndex
         ? { ...item, [`editando_${campo}`]: false }
         : item
@@ -3888,6 +3974,254 @@ const PDVPage: React.FC = () => {
     // Se tem o tamanho correto, valida o documento
     const isValid = tipoDocumento === 'cpf' ? validarCpf(cpfCnpjNota) : validarCnpj(cpfCnpjNota);
     return !isValid;
+  };
+
+  // ✅ NOVO: Funções para o modal de itens
+  const handleCpfCnpjModalItensChange = (value: string) => {
+    const formatted = formatDocumento(value);
+    setCpfCnpjModalItens(formatted);
+
+    const numbers = value.replace(/\D/g, '');
+    const expectedLength = tipoDocumentoModalItens === 'cpf' ? 11 : 14;
+
+    if (numbers.length === expectedLength) {
+      const isValid = tipoDocumentoModalItens === 'cpf' ? validarCpf(formatted) : validarCnpj(formatted);
+      if (!isValid) {
+        setErroValidacaoModalItens(`${tipoDocumentoModalItens.toUpperCase()} inválido`);
+      } else {
+        setErroValidacaoModalItens('');
+      }
+    } else {
+      setErroValidacaoModalItens('');
+    }
+  };
+
+  const validarDocumentoModalItensOnBlur = () => {
+    if (!cpfCnpjModalItens.trim()) {
+      setErroValidacaoModalItens('');
+      return;
+    }
+
+    const numbers = cpfCnpjModalItens.replace(/\D/g, '');
+    const expectedLength = tipoDocumentoModalItens === 'cpf' ? 11 : 14;
+
+    if (numbers.length !== expectedLength) {
+      setErroValidacaoModalItens(`${tipoDocumentoModalItens.toUpperCase()} deve ter ${expectedLength} dígitos`);
+      return;
+    }
+
+    const isValid = tipoDocumentoModalItens === 'cpf' ? validarCpf(cpfCnpjModalItens) : validarCnpj(cpfCnpjModalItens);
+
+    if (!isValid) {
+      setErroValidacaoModalItens(`${tipoDocumentoModalItens.toUpperCase()} inválido`);
+    } else {
+      setErroValidacaoModalItens('');
+    }
+  };
+
+  const isDocumentoModalItensInvalido = (): boolean => {
+    if (!cpfCnpjModalItens.trim()) return false;
+
+    const numbers = cpfCnpjModalItens.replace(/\D/g, '');
+    const expectedLength = tipoDocumentoModalItens === 'cpf' ? 11 : 14;
+
+    if (numbers.length !== expectedLength) return true;
+
+    const isValid = tipoDocumentoModalItens === 'cpf' ? validarCpf(cpfCnpjModalItens) : validarCnpj(cpfCnpjModalItens);
+    return !isValid;
+  };
+
+  // ✅ NOVO: Função para emitir NFC-e a partir do modal de itens
+  const emitirNfceModalItens = async () => {
+    if (!vendaParaExibirItens) return;
+
+    // Validar documento se informado
+    if (cpfCnpjModalItens.trim() && isDocumentoModalItensInvalido()) {
+      toast.error('CPF/CNPJ inválido');
+      return;
+    }
+
+    try {
+      setEmitindoNfceModalItens(true);
+
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id, serie_nfce')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Empresa não encontrada');
+        return;
+      }
+
+      // Buscar dados da empresa
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      if (!empresaData) {
+        toast.error('Dados da empresa não encontrados');
+        return;
+      }
+
+      // Buscar configuração NFe
+      const { data: nfeConfigData } = await supabase
+        .from('nfe_config')
+        .select('ambiente')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (!nfeConfigData) {
+        toast.error('Configuração NFe não encontrada');
+        return;
+      }
+
+      // ✅ Verificar se os itens já foram carregados com dados fiscais
+      if (!itensVenda || itensVenda.length === 0) {
+        throw new Error('Nenhum item encontrado na venda. Reabra o modal.');
+      }
+
+      console.log('✅ Usando itens já carregados com dados fiscais:', itensVenda);
+
+      // Gerar próximo número da NFC-e
+      const proximoNumero = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
+      const serieUsuario = usuarioData.serie_nfce || 1;
+
+      // Preparar dados da NFC-e
+      const getCodigoUF = (estado: string): number => {
+        const codigosUF: { [key: string]: number } = {
+          'AC': 12, 'AL': 17, 'AP': 16, 'AM': 13, 'BA': 29, 'CE': 23, 'DF': 53,
+          'ES': 32, 'GO': 52, 'MA': 21, 'MT': 51, 'MS': 50, 'MG': 31, 'PA': 15,
+          'PB': 25, 'PR': 41, 'PE': 26, 'PI': 22, 'RJ': 33, 'RN': 24, 'RS': 43,
+          'RO': 11, 'RR': 14, 'SC': 42, 'SP': 35, 'SE': 28, 'TO': 27
+        };
+        return codigosUF[estado] || 35;
+      };
+
+      const nfceData = {
+        empresa: {
+          razao_social: empresaData.razao_social,
+          cnpj: empresaData.documento,
+          nome_fantasia: empresaData.nome_fantasia,
+          inscricao_estadual: empresaData.inscricao_estadual,
+          regime_tributario: empresaData.regime_tributario || 1,
+          uf: empresaData.estado,
+          codigo_municipio: parseInt(empresaData.codigo_municipio) || 3524402,
+          codigo_uf: getCodigoUF(empresaData.estado),
+          endereco: {
+            logradouro: empresaData.endereco,
+            numero: empresaData.numero,
+            bairro: empresaData.bairro,
+            cidade: empresaData.cidade,
+            cep: empresaData.cep
+          },
+          csc_homologacao: empresaData.csc_homologacao,
+          csc_id_homologacao: empresaData.csc_id_homologacao,
+          csc_producao: empresaData.csc_producao,
+          csc_id_producao: empresaData.csc_id_producao
+        },
+        ambiente: nfeConfigData.ambiente,
+        identificacao: {
+          numero: proximoNumero,
+          serie: serieUsuario,
+          codigo_numerico: Math.floor(10000000 + Math.random() * 90000000).toString(),
+          natureza_operacao: 'Venda de mercadoria'
+        },
+        destinatario: cpfCnpjModalItens.trim() ? {
+          documento: cpfCnpjModalItens.replace(/\D/g, ''),
+          nome: 'CONSUMIDOR'
+        } : {},
+        produtos: itensVenda.map(item => ({
+          codigo: item.produto?.codigo || item.codigo_produto,
+          descricao: item.nome_produto,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          unidade: item.produto?.unidade_medida?.sigla || 'UN',
+          ncm: item.ncm_editavel || item.produto?.ncm || '00000000',
+          cfop: item.cfop_editavel || item.cfop || '5102',
+          cst_icms: empresaData.regime_tributario === 1 ? undefined : (item.cst_editavel || item.cst_icms || '00'),
+          csosn_icms: empresaData.regime_tributario === 1 ? (item.csosn_editavel || item.csosn_icms || '102') : undefined,
+          codigo_barras: item.produto?.codigo_barras
+        }))
+      };
+
+      // Emitir NFC-e
+      const response = await fetch('/backend/public/emitir-nfce.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          empresa_id: usuarioData.empresa_id,
+          nfce_data: nfceData
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Erro na emissão da NFC-e');
+      }
+
+      // Atualizar venda no banco
+      const updateData: any = {
+        modelo_documento: 65,
+        numero_documento: proximoNumero,
+        serie_documento: serieUsuario,
+        chave_nfe: result.data.chave,
+        protocolo_nfe: result.data.protocolo,
+        status_fiscal: 'autorizada',
+        erro_fiscal: null,
+        data_emissao_nfe: result.data.data_autorizacao,
+        tentativa_nfce: true
+      };
+
+      // Incluir documento do cliente se informado
+      if (cpfCnpjModalItens.trim()) {
+        updateData.documento_cliente = cpfCnpjModalItens.replace(/\D/g, '');
+        updateData.tipo_documento_cliente = tipoDocumentoModalItens;
+      }
+
+      const { error: updateError } = await supabase
+        .from('pdv')
+        .update(updateData)
+        .eq('id', vendaParaExibirItens.id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar venda:', updateError);
+      }
+
+      toast.success('NFC-e emitida com sucesso!');
+
+      // Limpar campos
+      setCpfCnpjModalItens('');
+      setErroValidacaoModalItens('');
+
+      // Fechar modal e recarregar vendas
+      setShowItensVendaModal(false);
+      loadVendas();
+
+    } catch (error: any) {
+      console.error('Erro ao emitir NFC-e:', error);
+      toast.error(`Erro ao emitir NFC-e: ${error.message}`);
+    } finally {
+      setEmitindoNfceModalItens(false);
+    }
   };
 
   // Função para verificar se pelo menos um botão de NFC-e está ativo
@@ -8919,6 +9253,116 @@ const PDVPage: React.FC = () => {
                     <X size={20} />
                   </button>
                 </div>
+
+                {/* ✅ NOVO: Seção para emitir NFC-e (apenas para vendas que não são NFC-e) */}
+                {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && (
+                  <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <h4 className="text-green-400 font-medium">Emitir NFC-e</h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                      {/* Tipo de Documento */}
+                      <div>
+                        <label className="block text-green-300 text-xs font-medium mb-2">
+                          Tipo de Documento (Opcional)
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setTipoDocumentoModalItens('cpf');
+                              setCpfCnpjModalItens('');
+                              setErroValidacaoModalItens('');
+                            }}
+                            className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${
+                              tipoDocumentoModalItens === 'cpf'
+                                ? 'bg-green-500 text-white'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            CPF
+                          </button>
+                          <button
+                            onClick={() => {
+                              setTipoDocumentoModalItens('cnpj');
+                              setCpfCnpjModalItens('');
+                              setErroValidacaoModalItens('');
+                            }}
+                            className={`flex-1 py-1.5 px-3 rounded text-xs font-medium transition-colors ${
+                              tipoDocumentoModalItens === 'cnpj'
+                                ? 'bg-green-500 text-white'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            CNPJ
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Campo CPF/CNPJ */}
+                      <div>
+                        <label className="block text-green-300 text-xs font-medium mb-2">
+                          {tipoDocumentoModalItens === 'cpf' ? 'CPF' : 'CNPJ'} (Opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={cpfCnpjModalItens}
+                          onChange={(e) => {
+                            handleCpfCnpjModalItensChange(e.target.value);
+                            if (erroValidacaoModalItens) {
+                              setErroValidacaoModalItens('');
+                            }
+                          }}
+                          onBlur={validarDocumentoModalItensOnBlur}
+                          placeholder={tipoDocumentoModalItens === 'cpf' ? '000.000.000-00' : '00.000.000/0000-00'}
+                          className={`w-full bg-gray-800/50 border rounded py-1.5 px-2 text-sm text-white focus:outline-none focus:ring-1 transition-colors ${
+                            erroValidacaoModalItens
+                              ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                              : 'border-gray-700 focus:border-green-500 focus:ring-green-500/20'
+                          }`}
+                        />
+                        {erroValidacaoModalItens && (
+                          <div className="mt-1 text-xs text-red-400 flex items-center gap-1">
+                            <span>⚠️</span>
+                            <span>{erroValidacaoModalItens}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Botão Emitir */}
+                      <div>
+                        <button
+                          onClick={emitirNfceModalItens}
+                          disabled={emitindoNfceModalItens || isDocumentoModalItensInvalido()}
+                          className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                            emitindoNfceModalItens || isDocumentoModalItensInvalido()
+                              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                              : 'bg-green-600 hover:bg-green-700 text-white'
+                          }`}
+                        >
+                          {emitindoNfceModalItens ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              Emitindo...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Emitir NFC-e
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Conteúdo */}
@@ -8937,7 +9381,249 @@ const PDVPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {itensVenda.map((item, index) => (
+                    {/* ✅ NOVO: Tabela de itens com dados fiscais editáveis (apenas para vendas sem NFC-e) */}
+                    {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && (
+                      <div className="bg-gray-800/30 rounded-lg p-4 mb-4">
+                        <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Dados Fiscais (Editáveis para NFC-e)
+                        </h4>
+                        <p className="text-gray-400 text-sm mb-4">
+                          Revise e corrija os dados fiscais dos produtos. Clique no ícone de lápis para editar os campos CFOP, NCM, CST ou CSOSN.
+                        </p>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-gray-700">
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Item</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Código</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Nome</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Qtd</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Preço</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">NCM</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CFOP</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">
+                                  {itensVenda[0]?.regime_tributario === 1 ? 'CSOSN' : 'CST'}
+                                </th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Unidade</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {itensVenda.map((item, index) => (
+                                <tr key={item.id} className="border-b border-gray-800/50">
+                                  <td className="py-3 px-2 text-white font-medium">{index + 1}</td>
+                                  <td className="py-3 px-2 text-gray-300">{item.produto?.codigo || item.codigo_produto}</td>
+                                  <td className="py-3 px-2 text-white">{item.nome_produto}</td>
+                                  <td className="py-3 px-2 text-gray-300">{item.quantidade}</td>
+                                  <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
+
+                                  {/* NCM */}
+                                  <td className="py-3 px-2">
+                                    <div className="flex items-center gap-2">
+                                      {item.editando_ncm ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="text"
+                                            value={item.ncm_editavel}
+                                            onChange={(e) => {
+                                              const novoValor = e.target.value.replace(/\D/g, ''); // Só números
+                                              setItensVenda(prev => prev.map((it, idx) =>
+                                                idx === index ? { ...it, ncm_editavel: novoValor } : it
+                                              ));
+                                            }}
+                                            className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                            maxLength={8}
+                                            placeholder="00000000"
+                                          />
+                                          <button
+                                            onClick={() => salvarEdicaoCampoModalItens(index, 'ncm', item.ncm_editavel)}
+                                            className="text-green-400 hover:text-green-300"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => cancelarEdicaoCampoModalItens(index, 'ncm')}
+                                            className="text-red-400 hover:text-red-300"
+                                          >
+                                            <X size={16} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-white font-mono text-sm">{item.ncm_editavel || '00000000'}</span>
+                                          <button
+                                            onClick={() => habilitarEdicaoCampoModalItens(index, 'ncm')}
+                                            className="text-gray-400 hover:text-white"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* CFOP */}
+                                  <td className="py-3 px-2">
+                                    <div className="flex items-center gap-2">
+                                      {item.editando_cfop ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="text"
+                                            value={item.cfop_editavel}
+                                            onChange={(e) => {
+                                              const novoValor = e.target.value;
+                                              setItensVenda(prev => prev.map((it, idx) =>
+                                                idx === index ? { ...it, cfop_editavel: novoValor } : it
+                                              ));
+                                            }}
+                                            className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                            maxLength={4}
+                                          />
+                                          <button
+                                            onClick={() => salvarEdicaoCampoModalItens(index, 'cfop', item.cfop_editavel)}
+                                            className="text-green-400 hover:text-green-300"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => cancelarEdicaoCampoModalItens(index, 'cfop')}
+                                            className="text-red-400 hover:text-red-300"
+                                          >
+                                            <X size={16} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-white">{item.cfop_editavel || '-'}</span>
+                                          <button
+                                            onClick={() => habilitarEdicaoCampoModalItens(index, 'cfop')}
+                                            className="text-gray-400 hover:text-white"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* CST/CSOSN */}
+                                  <td className="py-3 px-2">
+                                    <div className="flex items-center gap-2">
+                                      {item.regime_tributario === 1 ? (
+                                        // CSOSN para Simples Nacional
+                                        item.editando_csosn ? (
+                                          <div className="flex items-center gap-1">
+                                            <input
+                                              type="text"
+                                              value={item.csosn_editavel}
+                                              onChange={(e) => {
+                                                const novoValor = e.target.value;
+                                                setItensVenda(prev => prev.map((it, idx) =>
+                                                  idx === index ? { ...it, csosn_editavel: novoValor } : it
+                                                ));
+                                              }}
+                                              className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                              maxLength={3}
+                                            />
+                                            <button
+                                              onClick={() => salvarEdicaoCampoModalItens(index, 'csosn', item.csosn_editavel)}
+                                              className="text-green-400 hover:text-green-300"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            </button>
+                                            <button
+                                              onClick={() => cancelarEdicaoCampoModalItens(index, 'csosn')}
+                                              className="text-red-400 hover:text-red-300"
+                                            >
+                                              <X size={16} />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-white">{item.csosn_editavel || '-'}</span>
+                                            <button
+                                              onClick={() => habilitarEdicaoCampoModalItens(index, 'csosn')}
+                                              className="text-gray-400 hover:text-white"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                              </svg>
+                                            </button>
+                                          </div>
+                                        )
+                                      ) : (
+                                        // CST para Lucro Real/Presumido
+                                        item.editando_cst ? (
+                                          <div className="flex items-center gap-1">
+                                            <input
+                                              type="text"
+                                              value={item.cst_editavel}
+                                              onChange={(e) => {
+                                                const novoValor = e.target.value;
+                                                setItensVenda(prev => prev.map((it, idx) =>
+                                                  idx === index ? { ...it, cst_editavel: novoValor } : it
+                                                ));
+                                              }}
+                                              className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                              maxLength={3}
+                                            />
+                                            <button
+                                              onClick={() => salvarEdicaoCampoModalItens(index, 'cst', item.cst_editavel)}
+                                              className="text-green-400 hover:text-green-300"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            </button>
+                                            <button
+                                              onClick={() => cancelarEdicaoCampoModalItens(index, 'cst')}
+                                              className="text-red-400 hover:text-red-300"
+                                            >
+                                              <X size={16} />
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-white">{item.cst_editavel || '-'}</span>
+                                            <button
+                                              onClick={() => habilitarEdicaoCampoModalItens(index, 'cst')}
+                                              className="text-gray-400 hover:text-white"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                              </svg>
+                                            </button>
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* Unidade */}
+                                  <td className="py-3 px-2 text-gray-300">{item.produto?.unidade_medida?.sigla || 'UN'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ✅ Listagem tradicional para vendas que já têm NFC-e ou não são finalizadas */}
+                    {(vendaParaExibirItens.tentativa_nfce || vendaParaExibirItens.status_venda !== 'finalizada') && itensVenda.map((item, index) => (
                       <div
                         key={item.id}
                         className="bg-gray-800/50 rounded-lg border border-gray-700 p-4"
@@ -8984,6 +9670,8 @@ const PDVPage: React.FC = () => {
                             <p className="text-primary-400 font-bold">{formatCurrency(item.valor_total_item)}</p>
                           </div>
                         </div>
+
+
 
                         {/* Desconto no Item */}
                         {item.tem_desconto && (
