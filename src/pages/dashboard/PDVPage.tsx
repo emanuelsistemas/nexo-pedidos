@@ -5290,34 +5290,89 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  // Função para reimprimir PDF da NFC-e
+  // Função para reimprimir NFC-e (como cupom fiscal)
   const reimprimirNfcePdf = async (venda: any, usuarioData: any) => {
     try {
-      console.log('📄 FRONTEND: Buscando PDF da NFC-e:', venda.chave_nfe);
+      console.log('📄 FRONTEND: Gerando cupom NFC-e para venda:', venda.numero_venda);
 
-      toast.info('Abrindo PDF da NFC-e para impressão...');
+      toast.info('Preparando NFC-e para impressão...');
 
-      // Construir URL do endpoint para servir o PDF
-      const urlPdf = `http://localhost:8000/servir-pdf-nfce.php?chave=${venda.chave_nfe}&empresa_id=${usuarioData.empresa_id}`;
+      // Buscar dados da empresa
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('id', usuarioData.empresa_id)
+        .single();
 
-      console.log('📁 FRONTEND: URL do PDF:', urlPdf);
-
-      // Abrir PDF em nova janela para impressão
-      const janelaPdf = window.open(urlPdf, '_blank', 'width=800,height=600');
-
-      if (janelaPdf) {
-        console.log('📄 FRONTEND: PDF da NFC-e aberto para impressão');
-        toast.success('PDF da NFC-e aberto para impressão!');
-
-        // Opcional: Focar na janela do PDF
-        janelaPdf.focus();
-      } else {
-        throw new Error('Não foi possível abrir janela do PDF. Verifique se pop-ups estão bloqueados.');
+      if (!empresaData) {
+        throw new Error('Dados da empresa não encontrados');
       }
 
+      // Buscar itens da venda
+      const { data: itensData, error: itensError } = await supabase
+        .from('pdv_itens')
+        .select('*')
+        .eq('pdv_id', venda.id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (itensError) {
+        throw new Error('Erro ao carregar itens da venda');
+      }
+
+      if (!itensData || itensData.length === 0) {
+        throw new Error('Nenhum item encontrado para esta venda');
+      }
+
+      console.log('📦 FRONTEND: Itens carregados:', itensData.length);
+
+      // Preparar dados para impressão da NFC-e
+      const dadosImpressaoNfce = {
+        venda: {
+          id: venda.id,
+          numero: venda.numero_venda,
+          data: venda.data_venda ? new Date(venda.data_venda).toLocaleString('pt-BR') :
+                venda.created_at ? new Date(venda.created_at).toLocaleString('pt-BR') :
+                new Date().toLocaleString('pt-BR'),
+          valor_total: venda.valor_total,
+          valor_subtotal: venda.valor_subtotal || venda.valor_total,
+          valor_desconto: venda.valor_desconto || 0,
+          chave_nfe: venda.chave_nfe
+        },
+        empresa: {
+          razao_social: empresaData.razao_social,
+          nome_fantasia: empresaData.nome_fantasia,
+          cnpj: empresaData.documento,
+          inscricao_estadual: empresaData.inscricao_estadual,
+          endereco: `${empresaData.endereco}, ${empresaData.numero}`,
+          bairro: empresaData.bairro,
+          cidade: empresaData.cidade,
+          uf: empresaData.estado,
+          cep: empresaData.cep,
+          telefone: empresaData.telefone
+        },
+        cliente: {
+          nome_cliente: venda.nome_cliente,
+          documento_cliente: venda.documento_cliente
+        },
+        itens: itensData.map(item => ({
+          codigo: item.codigo_produto || 'N/A',
+          nome: item.nome_produto,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario)
+        })),
+        timestamp: new Date().toISOString(),
+        tipo: 'nfce' // Identificar que é NFC-e
+      };
+
+      console.log('🖨️ FRONTEND: Dados preparados para reimpressão da NFC-e');
+
+      // Gerar e imprimir cupom da NFC-e
+      await gerarEImprimirCupomNfce(dadosImpressaoNfce);
+
     } catch (error) {
-      console.error('❌ FRONTEND: Erro ao buscar PDF da NFC-e:', error);
-      throw new Error('Não foi possível localizar o PDF da NFC-e: ' + error.message);
+      console.error('❌ FRONTEND: Erro ao gerar cupom da NFC-e:', error);
+      throw error;
     }
   };
 
@@ -5359,7 +5414,9 @@ const PDVPage: React.FC = () => {
         venda: {
           id: venda.id,
           numero: venda.numero_venda,
-          data: new Date(venda.created_at).toLocaleString('pt-BR'),
+          data: venda.data_venda ? new Date(venda.data_venda).toLocaleString('pt-BR') :
+                venda.created_at ? new Date(venda.created_at).toLocaleString('pt-BR') :
+                new Date().toLocaleString('pt-BR'),
           valor_total: venda.valor_total,
           valor_subtotal: venda.valor_subtotal || venda.valor_total,
           valor_desconto: venda.valor_desconto || 0
@@ -5397,6 +5454,169 @@ const PDVPage: React.FC = () => {
 
     } catch (error) {
       console.error('❌ FRONTEND: Erro ao gerar cupom não fiscal:', error);
+      throw error;
+    }
+  };
+
+  // Função auxiliar para gerar e imprimir cupom da NFC-e
+  const gerarEImprimirCupomNfce = async (dadosImpressao: any) => {
+    try {
+      // Função para formatar moeda
+      const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL'
+        }).format(value);
+      };
+
+      // Função para formatar chave NFe
+      const formatarChaveNfe = (chave: string) => {
+        if (!chave || chave.length !== 44) return chave;
+        return chave.replace(/(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})(\d{4})/,
+          '$1 $2 $3 $4 $5 $6 $7 $8 $9 $10 $11');
+      };
+
+      // Criar HTML formatado para impressão da NFC-e
+      const htmlCupomNfce = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>NFC-e - ${dadosImpressao.venda.numero}</title>
+          <style>
+            @media print {
+              @page { margin: 0; }
+              body { margin: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              line-height: 1.2;
+              margin: 10px;
+              color: black;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .linha { border-top: 1px dashed #000; margin: 5px 0; }
+            .item { margin: 2px 0; }
+            .item-linha { display: flex; justify-content: space-between; }
+            .chave { font-size: 10px; word-break: break-all; }
+          </style>
+        </head>
+        <body>
+          <div class="center">
+            <div class="bold">${dadosImpressao.empresa.razao_social}</div>
+            ${dadosImpressao.empresa.nome_fantasia ? `<div>${dadosImpressao.empresa.nome_fantasia}</div>` : ''}
+            <div>CNPJ: ${dadosImpressao.empresa.cnpj}</div>
+            ${dadosImpressao.empresa.inscricao_estadual ? `<div>IE: ${dadosImpressao.empresa.inscricao_estadual}</div>` : ''}
+            <div>${dadosImpressao.empresa.endereco}</div>
+            <div>${dadosImpressao.empresa.bairro} - ${dadosImpressao.empresa.cidade}/${dadosImpressao.empresa.uf}</div>
+            <div>CEP: ${dadosImpressao.empresa.cep}</div>
+            ${dadosImpressao.empresa.telefone ? `<div>Tel: ${dadosImpressao.empresa.telefone}</div>` : ''}
+          </div>
+
+          <div class="linha"></div>
+
+          <div class="center bold">NOTA FISCAL DE CONSUMIDOR ELETRÔNICA</div>
+          <div class="center bold">NFC-e</div>
+          <div class="center">Venda: ${dadosImpressao.venda.numero}</div>
+          <div class="center">${dadosImpressao.venda.data}</div>
+
+          <div class="linha"></div>
+
+          ${dadosImpressao.itens.map(item => `
+            <div class="item">
+              <div>${item.nome}</div>
+              <div class="item-linha">
+                <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
+                <span>${formatCurrency(item.valor_total)}</span>
+              </div>
+            </div>
+          `).join('')}
+
+          <div class="linha"></div>
+
+          ${dadosImpressao.venda.valor_desconto > 0 ? `
+            <div class="item-linha">
+              <span>Subtotal:</span>
+              <span>${formatCurrency(dadosImpressao.venda.valor_subtotal)}</span>
+            </div>
+            <div class="item-linha">
+              <span>Desconto:</span>
+              <span>-${formatCurrency(dadosImpressao.venda.valor_desconto)}</span>
+            </div>
+          ` : ''}
+
+          <div class="item-linha bold">
+            <span>TOTAL:</span>
+            <span>${formatCurrency(dadosImpressao.venda.valor_total)}</span>
+          </div>
+
+          <div class="linha"></div>
+
+          ${dadosImpressao.cliente?.nome_cliente ? `
+            <div>Cliente: ${dadosImpressao.cliente.nome_cliente}</div>
+            ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
+          ` : ''}
+
+          <div class="linha"></div>
+
+          <div class="center">
+            <div class="bold">INFORMAÇÕES FISCAIS</div>
+            <div>Documento autorizado pela SEFAZ</div>
+            ${dadosImpressao.venda.chave_nfe ? `
+              <div class="chave">
+                <div>Chave de Acesso:</div>
+                <div>${formatarChaveNfe(dadosImpressao.venda.chave_nfe)}</div>
+              </div>
+            ` : ''}
+
+            ${dadosImpressao.venda.chave_nfe ? `
+              <div style="margin: 10px 0;">
+                <div>Consulte pela chave de acesso em:</div>
+                <div style="font-size: 10px;">www.nfce.fazenda.gov.br</div>
+                <div style="margin: 5px 0;">
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(dadosImpressao.venda.chave_nfe)}"
+                       alt="QR Code NFC-e"
+                       style="width: 120px; height: 120px; margin: 5px auto; display: block;">
+                </div>
+                <div style="font-size: 10px;">Escaneie o QR Code para consultar a NFC-e</div>
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="linha"></div>
+
+          <div class="center">
+            <div>Obrigado pela preferência!</div>
+            <div>Volte sempre!</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            };
+          </script>
+        </body>
+        </html>
+      `;
+
+      // Abrir janela de impressão
+      const janelaImpressao = window.open('', '_blank', 'width=400,height=600');
+      if (janelaImpressao) {
+        janelaImpressao.document.write(htmlCupomNfce);
+        janelaImpressao.document.close();
+        console.log('✅ FRONTEND: Janela de impressão da NFC-e aberta');
+        toast.success('NFC-e enviada para impressão!');
+      } else {
+        throw new Error('Não foi possível abrir janela de impressão. Verifique se pop-ups estão bloqueados.');
+      }
+
+    } catch (error) {
+      console.error('❌ FRONTEND: Erro ao gerar cupom da NFC-e:', error);
       throw error;
     }
   };
