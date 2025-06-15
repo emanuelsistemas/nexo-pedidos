@@ -191,7 +191,8 @@ const Sidebar: React.FC = () => {
         label: 'Notas Fiscais',
         tooltip: 'Notas Fiscais',
         submenu: [
-          { icon: FileText, label: 'NFe', path: '/dashboard/nfe', tooltip: 'Nota Fiscal Eletrônica' }
+          { icon: FileText, label: 'NFe', path: '/dashboard/nfe', tooltip: 'Nota Fiscal Eletrônica' },
+          { icon: FileText, label: 'Inutilização', path: '/dashboard/inutilizacao', tooltip: 'Inutilização de Numeração' }
         ]
       },
     ];
