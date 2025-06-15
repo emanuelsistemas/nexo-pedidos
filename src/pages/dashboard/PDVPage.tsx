@@ -5116,7 +5116,8 @@ const PDVPage: React.FC = () => {
               valor_total: item.subtotal
             })),
             pagamento: pagamentoData,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            tipo: 'cupom_nao_fiscal' // Identificar tipo
           };
 
           // Salvar dados de impressão no estado
@@ -5137,9 +5138,92 @@ const PDVPage: React.FC = () => {
         }
       }
 
+      // ✅ NOVO: VERIFICAR SE É NFC-e COM IMPRESSÃO
+      if (tipoFinalizacao === 'nfce_com_impressao') {
+        console.log('🖨️ FRONTEND: NFC-e emitida com sucesso, preparando dados para impressão');
+        setEtapaProcessamento('Carregando dados da empresa para impressão...');
+
+        try {
+          // Buscar dados da empresa para impressão
+          const { data: empresaData } = await supabase
+            .from('empresas')
+            .select('*')
+            .eq('id', usuarioData.empresa_id)
+            .single();
+
+          if (!empresaData) {
+            throw new Error('Dados da empresa não encontrados para impressão');
+          }
+
+          console.log('🏢 FRONTEND: Dados da empresa carregados para impressão da NFC-e:', empresaData.razao_social);
+          setEtapaProcessamento('Preparando cupom da NFC-e para impressão...');
+
+          // Buscar dados atualizados da venda (com chave da NFC-e)
+          const { data: vendaAtualizada } = await supabase
+            .from('pdv')
+            .select('*')
+            .eq('id', vendaId)
+            .single();
+
+          // Preparar dados completos para impressão da NFC-e
+          const dadosImpressaoNfce = {
+            venda: {
+              id: vendaId,
+              numero: numeroVenda,
+              data: new Date().toLocaleString('pt-BR'),
+              valor_total: valorTotal,
+              valor_subtotal: valorSubtotal,
+              valor_desconto: valorDesconto,
+              chave_nfe: vendaAtualizada?.chave_nfe || null
+            },
+            empresa: {
+              razao_social: empresaData.razao_social,
+              nome_fantasia: empresaData.nome_fantasia,
+              cnpj: empresaData.documento,
+              inscricao_estadual: empresaData.inscricao_estadual,
+              endereco: `${empresaData.endereco}, ${empresaData.numero}`,
+              bairro: empresaData.bairro,
+              cidade: empresaData.cidade,
+              uf: empresaData.estado,
+              cep: empresaData.cep,
+              telefone: empresaData.telefone
+            },
+            cliente: clienteData || {},
+            itens: carrinho.map(item => ({
+              codigo: item.produto.codigo,
+              nome: item.produto.nome,
+              quantidade: item.quantidade,
+              valor_unitario: item.produto.preco,
+              valor_total: item.subtotal
+            })),
+            pagamento: pagamentoData,
+            timestamp: new Date().toISOString(),
+            tipo: 'nfce' // Identificar que é NFC-e
+          };
+
+          // Salvar dados de impressão no estado
+          setDadosImpressao(dadosImpressaoNfce);
+
+          console.log('🖨️ FRONTEND: Dados da NFC-e preparados, aguardando ação do usuário');
+          setEtapaProcessamento('NFC-e emitida com sucesso! Deseja imprimir o cupom fiscal?');
+          setStatusProcessamento('aguardando_impressao');
+
+          // NÃO continuar automaticamente - aguardar ação do usuário no modal
+          return;
+
+        } catch (impressaoError) {
+          console.error('❌ FRONTEND: Erro na preparação da impressão da NFC-e:', impressaoError);
+          // Continuar sem impressão
+          setEtapaProcessamento('NFC-e emitida com sucesso, mas erro na preparação da impressão');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+
       // SUCESSO CONFIRMADO!
       const mensagemSucesso = (() => {
-        if (tipoFinalizacao.startsWith('nfce_')) {
+        if (tipoFinalizacao === 'nfce_com_impressao') {
+          return 'Venda finalizada e NFC-e emitida com sucesso!';
+        } else if (tipoFinalizacao.startsWith('nfce_')) {
           return 'Venda finalizada e NFC-e emitida com sucesso!';
         } else if (tipoFinalizacao === 'finalizar_com_impressao') {
           return 'Venda finalizada e impressa com sucesso!';
@@ -5156,7 +5240,9 @@ const PDVPage: React.FC = () => {
 
       // Mostrar sucesso
       const toastMessage = (() => {
-        if (tipoFinalizacao.startsWith('nfce_')) {
+        if (tipoFinalizacao === 'nfce_com_impressao') {
+          return `Venda #${numeroVenda} finalizada e NFC-e emitida com sucesso!`;
+        } else if (tipoFinalizacao.startsWith('nfce_')) {
           return `Venda #${numeroVenda} finalizada e NFC-e emitida com sucesso!`;
         } else if (tipoFinalizacao === 'finalizar_com_impressao') {
           return `Venda #${numeroVenda} finalizada e impressa com sucesso!`;
@@ -5228,11 +5314,18 @@ const PDVPage: React.FC = () => {
 
     try {
       console.log('🖨️ FRONTEND: Iniciando impressão...');
+      console.log('🖨️ FRONTEND: Tipo de impressão:', dadosImpressao.tipo);
       setEtapaProcessamento('Enviando para impressão...');
       setStatusProcessamento('processando');
 
-      // Usar função reutilizável para gerar e imprimir cupom
-      await gerarEImprimirCupom(dadosImpressao);
+      // Verificar tipo de impressão e usar função apropriada
+      if (dadosImpressao.tipo === 'nfce') {
+        console.log('📄 FRONTEND: Imprimindo cupom da NFC-e');
+        await gerarEImprimirCupomNfce(dadosImpressao);
+      } else {
+        console.log('🧾 FRONTEND: Imprimindo cupom não fiscal');
+        await gerarEImprimirCupom(dadosImpressao);
+      }
 
       // Aguardar um pouco para a impressão ser processada
       await new Promise(resolve => setTimeout(resolve, 2000));
