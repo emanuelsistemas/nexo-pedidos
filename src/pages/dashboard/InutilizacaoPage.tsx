@@ -260,18 +260,18 @@ const InutilizacaoPage: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             onClick={() => !processando && resetModal()}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-md mx-4"
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-md max-h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-800">
+              <div className="flex items-center justify-between p-6 border-b border-gray-800 flex-shrink-0">
                 <h3 className="text-xl font-semibold text-white">Nova Inutilização</h3>
                 <button
                   onClick={() => !processando && resetModal()}
@@ -283,7 +283,7 @@ const InutilizacaoPage: React.FC = () => {
               </div>
 
               {/* Conteúdo */}
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-6 flex-1 overflow-y-auto">
                 {/* Modelo do Documento */}
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2">
@@ -432,7 +432,7 @@ const InutilizacaoPage: React.FC = () => {
               </div>
 
               {/* Footer */}
-              <div className="flex gap-3 p-6 border-t border-gray-800">
+              <div className="flex gap-3 p-6 border-t border-gray-800 flex-shrink-0">
                 <button
                   onClick={() => !processando && resetModal()}
                   disabled={processando}
