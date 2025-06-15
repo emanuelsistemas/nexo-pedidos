@@ -261,7 +261,11 @@ const PDVPage: React.FC = () => {
   const [numeroVendaProcessada, setNumeroVendaProcessada] = useState<string>('');
 
   // Estados específicos para modal de NFC-e
-  const [statusProcessamento, setStatusProcessamento] = useState<'processando' | 'sucesso' | 'erro'>('processando');
+  const [statusProcessamento, setStatusProcessamento] = useState<'processando' | 'sucesso' | 'erro' | 'aguardando_impressao'>('processando');
+
+  // Estados específicos para impressão
+  const [dadosImpressao, setDadosImpressao] = useState<any>(null);
+  const [tipoFinalizacaoAtual, setTipoFinalizacaoAtual] = useState<string>('');
   const [erroProcessamento, setErroProcessamento] = useState<string>('');
   const [numeroDocumentoReservado, setNumeroDocumentoReservado] = useState<number | null>(null);
   const [serieDocumentoReservado, setSerieDocumentoReservado] = useState<number | null>(null); // ✅ NOVO: Série reservada
@@ -4371,6 +4375,8 @@ const PDVPage: React.FC = () => {
     setErroProcessamento('');
     setNumeroDocumentoReservado(null); // ✅ Limpar número reservado
     setSerieDocumentoReservado(null); // ✅ NOVO: Limpar série reservada
+    setTipoFinalizacaoAtual(tipoFinalizacao); // ✅ Salvar tipo de finalização
+    setDadosImpressao(null); // ✅ Limpar dados de impressão
 
     try {
       // Obter dados do usuário
@@ -5059,10 +5065,88 @@ const PDVPage: React.FC = () => {
         }
       }
 
+      // VERIFICAR SE É FINALIZAÇÃO COM IMPRESSÃO
+      if (tipoFinalizacao === 'finalizar_com_impressao') {
+        console.log('🖨️ FRONTEND: Preparando dados para impressão');
+        setEtapaProcessamento('Carregando dados da empresa...');
+
+        try {
+          // Buscar dados da empresa para impressão
+          const { data: empresaData } = await supabase
+            .from('empresas')
+            .select('*')
+            .eq('id', usuarioData.empresa_id)
+            .single();
+
+          if (!empresaData) {
+            throw new Error('Dados da empresa não encontrados para impressão');
+          }
+
+          console.log('🏢 FRONTEND: Dados da empresa carregados para impressão:', empresaData.razao_social);
+          setEtapaProcessamento('Preparando cupom para impressão...');
+
+          // Preparar dados completos para impressão
+          const dadosImpressaoCompletos = {
+            venda: {
+              id: vendaId,
+              numero: numeroVenda,
+              data: new Date().toLocaleString('pt-BR'),
+              valor_total: valorTotal,
+              valor_subtotal: valorSubtotal,
+              valor_desconto: valorDesconto
+            },
+            empresa: {
+              razao_social: empresaData.razao_social,
+              nome_fantasia: empresaData.nome_fantasia,
+              cnpj: empresaData.documento,
+              inscricao_estadual: empresaData.inscricao_estadual,
+              endereco: `${empresaData.endereco}, ${empresaData.numero}`,
+              bairro: empresaData.bairro,
+              cidade: empresaData.cidade,
+              uf: empresaData.estado,
+              cep: empresaData.cep,
+              telefone: empresaData.telefone
+            },
+            cliente: clienteData || {},
+            itens: carrinho.map(item => ({
+              codigo: item.produto.codigo,
+              nome: item.produto.nome,
+              quantidade: item.quantidade,
+              valor_unitario: item.produto.preco,
+              valor_total: item.subtotal
+            })),
+            pagamento: pagamentoData,
+            timestamp: new Date().toISOString()
+          };
+
+          // Salvar dados de impressão no estado
+          setDadosImpressao(dadosImpressaoCompletos);
+
+          console.log('🖨️ FRONTEND: Dados preparados, aguardando ação do usuário');
+          setEtapaProcessamento('Venda finalizada com sucesso! Deseja imprimir o cupom?');
+          setStatusProcessamento('aguardando_impressao');
+
+          // NÃO continuar automaticamente - aguardar ação do usuário no modal
+          return;
+
+        } catch (impressaoError) {
+          console.error('❌ FRONTEND: Erro na preparação da impressão:', impressaoError);
+          // Continuar sem impressão
+          setEtapaProcessamento('Erro na preparação da impressão, mas venda foi salva com sucesso');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+
       // SUCESSO CONFIRMADO!
-      const mensagemSucesso = tipoFinalizacao.startsWith('nfce_')
-        ? 'Venda finalizada e NFC-e emitida com sucesso!'
-        : 'Venda finalizada com sucesso!';
+      const mensagemSucesso = (() => {
+        if (tipoFinalizacao.startsWith('nfce_')) {
+          return 'Venda finalizada e NFC-e emitida com sucesso!';
+        } else if (tipoFinalizacao === 'finalizar_com_impressao') {
+          return 'Venda finalizada e impressa com sucesso!';
+        } else {
+          return 'Venda finalizada com sucesso!';
+        }
+      })();
 
       setEtapaProcessamento(mensagemSucesso);
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -5071,9 +5155,15 @@ const PDVPage: React.FC = () => {
       setShowProcessandoVenda(false);
 
       // Mostrar sucesso
-      const toastMessage = tipoFinalizacao.startsWith('nfce_')
-        ? `Venda #${numeroVenda} finalizada e NFC-e emitida com sucesso!`
-        : `Venda #${numeroVenda} finalizada com sucesso!`;
+      const toastMessage = (() => {
+        if (tipoFinalizacao.startsWith('nfce_')) {
+          return `Venda #${numeroVenda} finalizada e NFC-e emitida com sucesso!`;
+        } else if (tipoFinalizacao === 'finalizar_com_impressao') {
+          return `Venda #${numeroVenda} finalizada e impressa com sucesso!`;
+        } else {
+          return `Venda #${numeroVenda} finalizada com sucesso!`;
+        }
+      })();
 
       toast.success(toastMessage);
 
@@ -5127,6 +5217,358 @@ const PDVPage: React.FC = () => {
       setShowProcessandoVenda(false);
       toast.error('Erro inesperado ao finalizar venda');
     }
+  };
+
+  // Função para executar impressão
+  const executarImpressao = async () => {
+    if (!dadosImpressao) {
+      console.error('❌ FRONTEND: Dados de impressão não encontrados');
+      return;
+    }
+
+    try {
+      console.log('🖨️ FRONTEND: Iniciando impressão...');
+      setEtapaProcessamento('Enviando para impressão...');
+      setStatusProcessamento('processando');
+
+      // Usar função reutilizável para gerar e imprimir cupom
+      await gerarEImprimirCupom(dadosImpressao);
+
+      // Aguardar um pouco para a impressão ser processada
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      console.log('✅ FRONTEND: Impressão concluída com sucesso');
+      finalizarProcessamento();
+
+    } catch (impressaoError) {
+      console.error('❌ FRONTEND: Erro na impressão:', impressaoError);
+      setEtapaProcessamento('Erro na impressão: ' + impressaoError.message);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      finalizarProcessamento();
+    }
+  };
+
+  // Função para finalizar sem impressão
+  const finalizarSemImpressao = () => {
+    console.log('✅ FRONTEND: Finalizando sem impressão');
+    finalizarProcessamento();
+  };
+
+  // ✅ NOVA: Função para reimprimir cupom
+  const reimprimirCupom = async (venda: any) => {
+    try {
+      console.log('🖨️ FRONTEND: Iniciando reimpressão de cupom para venda:', venda.numero_venda);
+
+      // Buscar dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData) {
+        throw new Error('Dados do usuário não encontrados');
+      }
+
+      // Verificar se é uma venda com NFC-e autorizada
+      if (venda.tentativa_nfce && venda.status_fiscal === 'autorizada' && venda.chave_nfe) {
+        console.log('📄 FRONTEND: Venda com NFC-e autorizada - buscando PDF');
+        await reimprimirNfcePdf(venda, usuarioData);
+      } else {
+        console.log('🧾 FRONTEND: Venda sem NFC-e - gerando cupom não fiscal');
+        await reimprimirCupomNaoFiscal(venda, usuarioData);
+      }
+
+    } catch (error) {
+      console.error('❌ FRONTEND: Erro na reimpressão:', error);
+      toast.error('Erro ao reimprimir cupom: ' + error.message);
+    }
+  };
+
+  // Função para reimprimir PDF da NFC-e
+  const reimprimirNfcePdf = async (venda: any, usuarioData: any) => {
+    try {
+      console.log('📄 FRONTEND: Buscando PDF da NFC-e:', venda.chave_nfe);
+
+      toast.info('Abrindo PDF da NFC-e para impressão...');
+
+      // Construir URL do endpoint para servir o PDF
+      const urlPdf = `http://localhost:8000/servir-pdf-nfce.php?chave=${venda.chave_nfe}&empresa_id=${usuarioData.empresa_id}`;
+
+      console.log('📁 FRONTEND: URL do PDF:', urlPdf);
+
+      // Abrir PDF em nova janela para impressão
+      const janelaPdf = window.open(urlPdf, '_blank', 'width=800,height=600');
+
+      if (janelaPdf) {
+        console.log('📄 FRONTEND: PDF da NFC-e aberto para impressão');
+        toast.success('PDF da NFC-e aberto para impressão!');
+
+        // Opcional: Focar na janela do PDF
+        janelaPdf.focus();
+      } else {
+        throw new Error('Não foi possível abrir janela do PDF. Verifique se pop-ups estão bloqueados.');
+      }
+
+    } catch (error) {
+      console.error('❌ FRONTEND: Erro ao buscar PDF da NFC-e:', error);
+      throw new Error('Não foi possível localizar o PDF da NFC-e: ' + error.message);
+    }
+  };
+
+  // Função para reimprimir cupom não fiscal
+  const reimprimirCupomNaoFiscal = async (venda: any, usuarioData: any) => {
+    try {
+      console.log('🧾 FRONTEND: Gerando cupom não fiscal para venda:', venda.numero_venda);
+
+      // Buscar dados da empresa
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      if (!empresaData) {
+        throw new Error('Dados da empresa não encontrados');
+      }
+
+      // Buscar itens da venda
+      const { data: itensData, error: itensError } = await supabase
+        .from('pdv_itens')
+        .select('*')
+        .eq('pdv_id', venda.id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (itensError) {
+        throw new Error('Erro ao carregar itens da venda');
+      }
+
+      if (!itensData || itensData.length === 0) {
+        throw new Error('Nenhum item encontrado para esta venda');
+      }
+
+      console.log('📦 FRONTEND: Itens carregados:', itensData.length);
+
+      // Preparar dados para impressão
+      const dadosImpressao = {
+        venda: {
+          id: venda.id,
+          numero: venda.numero_venda,
+          data: new Date(venda.created_at).toLocaleString('pt-BR'),
+          valor_total: venda.valor_total,
+          valor_subtotal: venda.valor_subtotal || venda.valor_total,
+          valor_desconto: venda.valor_desconto || 0
+        },
+        empresa: {
+          razao_social: empresaData.razao_social,
+          nome_fantasia: empresaData.nome_fantasia,
+          cnpj: empresaData.documento,
+          inscricao_estadual: empresaData.inscricao_estadual,
+          endereco: `${empresaData.endereco}, ${empresaData.numero}`,
+          bairro: empresaData.bairro,
+          cidade: empresaData.cidade,
+          uf: empresaData.estado,
+          cep: empresaData.cep,
+          telefone: empresaData.telefone
+        },
+        cliente: {
+          nome_cliente: venda.nome_cliente,
+          documento_cliente: venda.documento_cliente
+        },
+        itens: itensData.map(item => ({
+          codigo: item.codigo_produto || 'N/A',
+          nome: item.nome_produto,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario)
+        })),
+        timestamp: new Date().toISOString()
+      };
+
+      console.log('🖨️ FRONTEND: Dados preparados para reimpressão');
+
+      // Gerar e imprimir cupom
+      await gerarEImprimirCupom(dadosImpressao);
+
+    } catch (error) {
+      console.error('❌ FRONTEND: Erro ao gerar cupom não fiscal:', error);
+      throw error;
+    }
+  };
+
+  // Função auxiliar para gerar e imprimir cupom (reutilizada)
+  const gerarEImprimirCupom = async (dadosImpressao: any) => {
+    try {
+      // Função para formatar moeda
+      const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL'
+        }).format(value);
+      };
+
+      // Criar HTML formatado para impressão
+      const htmlCupom = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Cupom - Venda ${dadosImpressao.venda.numero}</title>
+          <style>
+            @media print {
+              @page { margin: 0; }
+              body { margin: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              line-height: 1.2;
+              margin: 10px;
+              color: black;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .linha { border-top: 1px dashed #000; margin: 5px 0; }
+            .item { margin: 2px 0; }
+            .item-linha { display: flex; justify-content: space-between; }
+          </style>
+        </head>
+        <body>
+          <div class="center">
+            <div class="bold">${dadosImpressao.empresa.razao_social}</div>
+            ${dadosImpressao.empresa.nome_fantasia ? `<div>${dadosImpressao.empresa.nome_fantasia}</div>` : ''}
+            <div>CNPJ: ${dadosImpressao.empresa.cnpj}</div>
+            ${dadosImpressao.empresa.inscricao_estadual ? `<div>IE: ${dadosImpressao.empresa.inscricao_estadual}</div>` : ''}
+            <div>${dadosImpressao.empresa.endereco}</div>
+            <div>${dadosImpressao.empresa.bairro} - ${dadosImpressao.empresa.cidade}/${dadosImpressao.empresa.uf}</div>
+            <div>CEP: ${dadosImpressao.empresa.cep}</div>
+            ${dadosImpressao.empresa.telefone ? `<div>Tel: ${dadosImpressao.empresa.telefone}</div>` : ''}
+          </div>
+
+          <div class="linha"></div>
+
+          <div class="center bold">CUPOM NÃO FISCAL</div>
+          <div class="center">Venda: ${dadosImpressao.venda.numero}</div>
+          <div class="center">${dadosImpressao.venda.data}</div>
+
+          <div class="linha"></div>
+
+          ${dadosImpressao.itens.map(item => `
+            <div class="item">
+              <div>${item.nome}</div>
+              <div class="item-linha">
+                <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
+                <span>${formatCurrency(item.valor_total)}</span>
+              </div>
+            </div>
+          `).join('')}
+
+          <div class="linha"></div>
+
+          ${dadosImpressao.venda.valor_desconto > 0 ? `
+            <div class="item-linha">
+              <span>Subtotal:</span>
+              <span>${formatCurrency(dadosImpressao.venda.valor_subtotal)}</span>
+            </div>
+            <div class="item-linha">
+              <span>Desconto:</span>
+              <span>-${formatCurrency(dadosImpressao.venda.valor_desconto)}</span>
+            </div>
+          ` : ''}
+
+          <div class="item-linha bold">
+            <span>TOTAL:</span>
+            <span>${formatCurrency(dadosImpressao.venda.valor_total)}</span>
+          </div>
+
+          <div class="linha"></div>
+
+          ${dadosImpressao.cliente?.nome_cliente ? `
+            <div>Cliente: ${dadosImpressao.cliente.nome_cliente}</div>
+            ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
+          ` : ''}
+
+          <div class="center">
+            <div>Obrigado pela preferência!</div>
+            <div>Volte sempre!</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            };
+          </script>
+        </body>
+        </html>
+      `;
+
+      // Abrir janela de impressão
+      const janelaImpressao = window.open('', '_blank', 'width=400,height=600');
+      if (janelaImpressao) {
+        janelaImpressao.document.write(htmlCupom);
+        janelaImpressao.document.close();
+        console.log('✅ FRONTEND: Janela de impressão aberta');
+        toast.success('Cupom enviado para impressão!');
+      } else {
+        throw new Error('Não foi possível abrir janela de impressão. Verifique se pop-ups estão bloqueados.');
+      }
+
+    } catch (error) {
+      console.error('❌ FRONTEND: Erro ao gerar cupom:', error);
+      throw error;
+    }
+  };
+
+  // Função para finalizar o processamento
+  const finalizarProcessamento = () => {
+    const mensagemSucesso = tipoFinalizacaoAtual === 'finalizar_com_impressao'
+      ? 'Venda finalizada e impressa com sucesso!'
+      : 'Venda finalizada com sucesso!';
+
+    setEtapaProcessamento(mensagemSucesso);
+    setStatusProcessamento('sucesso');
+
+    setTimeout(() => {
+      // Fechar modal de processamento
+      setShowProcessandoVenda(false);
+
+      // Mostrar toast de sucesso
+      const toastMessage = tipoFinalizacaoAtual === 'finalizar_com_impressao'
+        ? `Venda #${numeroVendaProcessada} finalizada e impressa com sucesso!`
+        : `Venda #${numeroVendaProcessada} finalizada com sucesso!`;
+
+      toast.success(toastMessage);
+
+      // ✅ CORREÇÃO: Limpar TODOS os estados (igual ao "Finalizar sem Impressão")
+      setCarrinho([]);
+      setClienteSelecionado(null);
+      setShowFinalizacaoFinal(false); // ✅ IMPORTANTE: Fechar modal de finalização
+      limparPagamentosParciaisSilencioso(); // ✅ IMPORTANTE: Limpar pagamentos
+      setCpfCnpjNota('');
+      setClienteEncontrado(null);
+      setTipoDocumento('cpf');
+      setPedidosImportados([]);
+      setDescontoPrazoSelecionado(null);
+      clearPDVState(); // ✅ IMPORTANTE: Limpar localStorage
+
+      // Reset estados específicos da impressão
+      setStatusProcessamento('processando');
+      setDadosImpressao(null);
+      setTipoFinalizacaoAtual('');
+
+      // Recarregar estoque se necessário
+      if (pdvConfig?.baixa_estoque_pdv) {
+        loadEstoque();
+      }
+    }, 1500);
   };
 
   const limparCarrinhoCompleto = () => {
@@ -9068,6 +9510,19 @@ const PDVPage: React.FC = () => {
                               Cancelar Venda
                             </button>
                           )}
+
+                          {/* ✅ NOVO: Botão Reimprimir Cupom */}
+                          {venda.status_venda === 'finalizada' && (
+                            <button
+                              onClick={() => reimprimirCupom(venda)}
+                              className="w-full px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded text-xs transition-colors font-medium border border-purple-600/30 hover:border-purple-600/50 flex items-center justify-center gap-1"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                              </svg>
+                              Reimprimir Cupom
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -10561,6 +11016,8 @@ const PDVPage: React.FC = () => {
                     ? 'bg-green-500/20'
                     : statusProcessamento === 'erro'
                     ? 'bg-red-500/20'
+                    : statusProcessamento === 'aguardando_impressao'
+                    ? 'bg-blue-500/20'
                     : 'bg-primary-500/20'
                 }`}>
                   {statusProcessamento === 'sucesso' ? (
@@ -10570,6 +11027,10 @@ const PDVPage: React.FC = () => {
                   ) : statusProcessamento === 'erro' ? (
                     <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  ) : statusProcessamento === 'aguardando_impressao' ? (
+                    <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                     </svg>
                   ) : (
                     <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
@@ -10582,12 +11043,16 @@ const PDVPage: React.FC = () => {
                     ? 'text-green-400'
                     : statusProcessamento === 'erro'
                     ? 'text-red-400'
+                    : statusProcessamento === 'aguardando_impressao'
+                    ? 'text-blue-400'
                     : 'text-white'
                 }`}>
                   {statusProcessamento === 'sucesso'
                     ? 'Sucesso!'
                     : statusProcessamento === 'erro'
                     ? 'Erro na Emissão'
+                    : statusProcessamento === 'aguardando_impressao'
+                    ? 'Venda Finalizada!'
                     : 'Processando Venda'}
                 </h3>
 
@@ -10658,6 +11123,30 @@ const PDVPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Botões para impressão */}
+                {statusProcessamento === 'aguardando_impressao' && (
+                  <div className="mt-6 space-y-3">
+                    {/* Botão Imprimir */}
+                    <button
+                      onClick={executarImpressao}
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                      Imprimir Cupom
+                    </button>
+
+                    {/* Botão Finalizar sem Impressão */}
+                    <button
+                      onClick={finalizarSemImpressao}
+                      className="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                    >
+                      Finalizar sem Impressão
+                    </button>
+                  </div>
+                )}
+
                 {/* Botões para erro */}
                 {statusProcessamento === 'erro' && (
                   <div className="mt-6 space-y-3">
@@ -10682,6 +11171,15 @@ const PDVPage: React.FC = () => {
                   <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
                     <p className="text-yellow-300 text-xs">
                       ⚠️ Não feche esta janela durante o processamento
+                    </p>
+                  </div>
+                )}
+
+                {/* Aviso para impressão */}
+                {statusProcessamento === 'aguardando_impressao' && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                    <p className="text-blue-300 text-xs">
+                      🖨️ Escolha se deseja imprimir o cupom ou finalizar sem impressão
                     </p>
                   </div>
                 )}
