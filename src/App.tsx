@@ -12,6 +12,7 @@ import ProdutosPage from './pages/dashboard/ProdutosPage';
 import AdicionaisPage from './pages/dashboard/AdicionaisPage';
 import UnidadeMedidaPage from './pages/dashboard/UnidadeMedidaPage';
 import ClientesPage from './pages/dashboard/ClientesPage';
+import VendedoresPage from './pages/dashboard/VendedoresPage';
 import FaturamentoPage from './pages/dashboard/FaturamentoPage';
 import EditarPedidoPage from './pages/dashboard/EditarPedidoPage';
 import GestorPage from './pages/dashboard/GestorPage';
@@ -56,6 +57,7 @@ function App() {
           <Route path="produtos/adicionais" element={<AdicionaisPage />} />
           <Route path="unidade-medida" element={<UnidadeMedidaPage />} />
           <Route path="clientes" element={<ClientesPage />} />
+          <Route path="vendedores" element={<VendedoresPage />} />
           <Route path="pedidos" element={<UserPedidosPage />} />
           <Route path="pedidos/novo" element={<UserNovoPedidoPage />} />
           <Route path="pedidos/editar/:id" element={<UserNovoPedidoPage />} />

@@ -2307,6 +2307,9 @@ video {
 .h-6 {
   height: 1.5rem;
 }
+.h-64 {
+  height: 16rem;
+}
 .h-8 {
   height: 2rem;
 }
@@ -4529,6 +4532,10 @@ div.custom-scrollbar::-webkit-scrollbar-thumb:hover,
   --tw-border-opacity: 1;
   border-color: rgb(75 85 99 / var(--tw-border-opacity, 1));
 }
+.hover\:border-gray-700:hover {
+  --tw-border-opacity: 1;
+  border-color: rgb(55 65 81 / var(--tw-border-opacity, 1));
+}
 .hover\:border-primary-500:hover {
   --tw-border-opacity: 1;
   border-color: rgb(28 103 255 / var(--tw-border-opacity, 1));
@@ -5010,6 +5017,12 @@ div.custom-scrollbar::-webkit-scrollbar-thumb:hover,
   .sm\:flex-row {
     flex-direction: row;
   }
+  .sm\:items-center {
+    align-items: center;
+  }
+  .sm\:justify-between {
+    justify-content: space-between;
+  }
 }
 @media (min-width: 768px) {
   .md\:mt-0 {
@@ -5097,6 +5110,9 @@ div.custom-scrollbar::-webkit-scrollbar-thumb:hover,
   }
   .lg\:grid-cols-\[1fr_auto_auto\] {
     grid-template-columns: 1fr auto auto;
+  }
+  .lg\:flex-row {
+    flex-direction: row;
   }
   .lg\:items-center {
     align-items: center;

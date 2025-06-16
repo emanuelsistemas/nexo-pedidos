@@ -9108,6 +9108,16 @@ const BookOpen = createLucideIcon("BookOpen", [
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
+const Briefcase = createLucideIcon("Briefcase", [
+  ["rect", { width: "20", height: "14", x: "2", y: "7", rx: "2", ry: "2", key: "eto64e" }],
+  ["path", { d: "M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16", key: "zwj3tp" }]
+]);
+/**
+ * @license lucide-react v0.331.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
 const Bug = createLucideIcon("Bug", [
   ["path", { d: "m8 2 1.88 1.88", key: "fmnt4t" }],
   ["path", { d: "M14.12 3.88 16 2", key: "qol33r" }],
@@ -25375,7 +25385,8 @@ const Sidebar = () => {
         label: "Parceiros",
         tooltip: "Parceiros",
         submenu: [
-          { icon: Users, label: "Clientes", path: "/dashboard/clientes", tooltip: "Clientes" }
+          { icon: UserCheck, label: "Clientes", path: "/dashboard/clientes", tooltip: "Clientes" },
+          { icon: Briefcase, label: "Vendedores", path: "/dashboard/vendedores", tooltip: "Vendedores" }
         ]
       },
       { icon: ShoppingBag, label: "Pedidos", path: "/dashboard/pedidos", tooltip: "Pedidos" },
@@ -25386,8 +25397,8 @@ const Sidebar = () => {
         label: "Notas Fiscais",
         tooltip: "Notas Fiscais",
         submenu: [
-          { icon: FileText, label: "NFe", path: "/dashboard/nfe", tooltip: "Nota Fiscal Eletrônica" },
-          { icon: FileText, label: "Inutilização", path: "/dashboard/inutilizacao", tooltip: "Inutilização de Numeração" }
+          { icon: Receipt, label: "NFe", path: "/dashboard/nfe", tooltip: "Nota Fiscal Eletrônica" },
+          { icon: FileX, label: "Inutilização", path: "/dashboard/inutilizacao", tooltip: "Inutilização de Numeração" }
         ]
       }
     ];
@@ -25495,7 +25506,7 @@ const Sidebar = () => {
             animate: { opacity: 1, height: "auto" },
             exit: { opacity: 0, height: 0 },
             transition: { duration: 0.2 },
-            className: `ml-${isExpanded ? "6" : "1"} mr-1 bg-black/40 rounded-lg py-1 min-w-0`,
+            className: `ml-${isExpanded ? "6" : "1"} mr-1 bg-black/40 rounded-lg py-1 min-w-0 w-full`,
             children: item.submenu.map((subItem) => /* @__PURE__ */ jsxRuntimeExports.jsx(
               NavLink,
               {
@@ -47511,6 +47522,384 @@ const ClientesPage = () => {
         children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 24 })
       }
     )
+  ] });
+};
+const VendedoresPage = () => {
+  const [isLoading, setIsLoading] = reactExports.useState(true);
+  const [vendedores, setVendedores] = reactExports.useState([]);
+  const [filteredVendedores, setFilteredVendedores] = reactExports.useState([]);
+  const [searchTerm, setSearchTerm] = reactExports.useState("");
+  const [showFilters, setShowFilters] = reactExports.useState(false);
+  const [empresaFilter, setEmpresaFilter] = reactExports.useState("todas");
+  const [statusFilter, setStatusFilter] = reactExports.useState("todos");
+  const [empresas, setEmpresas] = reactExports.useState([]);
+  const [showSidebar, setShowSidebar] = reactExports.useState(false);
+  const [editingVendedor, setEditingVendedor] = reactExports.useState(null);
+  const [formData, setFormData] = reactExports.useState({
+    tipo_documento: "CPF",
+    documento: "",
+    razao_social: "",
+    nome_fantasia: "",
+    nome: "",
+    telefones: [],
+    emails: [],
+    cep: "",
+    endereco: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cidade: "",
+    estado: "",
+    empresa_id: "",
+    comissao_percentual: 0,
+    meta_mensal: 0,
+    ativo: true,
+    // Tipos de pessoa
+    is_cliente: false,
+    is_funcionario: false,
+    is_vendedor: true,
+    is_fornecedor: false,
+    is_transportadora: false,
+    // Observações
+    observacao_nfe: "",
+    observacao_interna: ""
+  });
+  const [novoTelefone, setNovoTelefone] = reactExports.useState({
+    numero: "",
+    tipo: "Celular",
+    whatsapp: false
+  });
+  const [novoEmail, setNovoEmail] = reactExports.useState("");
+  const [isSubmitting, setIsSubmitting] = reactExports.useState(false);
+  reactExports.useEffect(() => {
+    loadVendedores();
+    loadEmpresas();
+  }, []);
+  reactExports.useEffect(() => {
+    if (empresas.length > 0 && !formData.empresa_id) {
+      setFormData((prev) => ({
+        ...prev,
+        empresa_id: empresas[0].id
+      }));
+    }
+  }, [empresas]);
+  reactExports.useEffect(() => {
+    applyFilters();
+  }, [vendedores, searchTerm, empresaFilter, statusFilter]);
+  const loadEmpresas = async () => {
+    try {
+      const { data: empresasData } = await supabase.from("empresas").select("id, nome").order("nome");
+      if (empresasData) {
+        setEmpresas(empresasData);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar empresas:", error);
+    }
+  };
+  const loadVendedores = async () => {
+    try {
+      setIsLoading(true);
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+      const { data: usuarioData } = await supabase.from("usuarios").select("empresa_id").eq("id", userData.user.id).single();
+      if (!(usuarioData == null ? void 0 : usuarioData.empresa_id)) return;
+      const { data: vendedoresData, error } = await supabase.from("clientes").select("*").eq("empresa_id", usuarioData.empresa_id).eq("is_vendedor", true).or("deletado.is.null,deletado.eq.false").order("nome");
+      console.log("Vendedores encontrados:", vendedoresData == null ? void 0 : vendedoresData.length);
+      if (error) throw error;
+      if (vendedoresData && vendedoresData.length > 0) {
+        const { data: empresasData } = await supabase.from("empresas").select("id, nome");
+        const empresasMap = /* @__PURE__ */ new Map();
+        if (empresasData) {
+          empresasData.forEach((empresa) => {
+            empresasMap.set(empresa.id, empresa.nome);
+          });
+        }
+        const formattedVendedores = vendedoresData.map((vendedor) => ({
+          ...vendedor,
+          empresa_nome: empresasMap.get(vendedor.empresa_id) || "Empresa não encontrada"
+        }));
+        setVendedores(formattedVendedores);
+        setFilteredVendedores(formattedVendedores);
+      } else {
+        setVendedores([]);
+        setFilteredVendedores([]);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar vendedores:", error);
+      B.error("Erro ao carregar vendedores");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const applyFilters = () => {
+    let filtered = [...vendedores];
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (vendedor) => {
+          var _a2, _b2, _c;
+          return ((_a2 = vendedor.nome) == null ? void 0 : _a2.toLowerCase().includes(searchLower)) || ((_b2 = vendedor.telefone) == null ? void 0 : _b2.toLowerCase().includes(searchLower)) || vendedor.emails && vendedor.emails.some((email) => email.toLowerCase().includes(searchLower)) || ((_c = vendedor.endereco) == null ? void 0 : _c.toLowerCase().includes(searchLower));
+        }
+      );
+    }
+    if (empresaFilter !== "todas") {
+      filtered = filtered.filter((vendedor) => vendedor.empresa_id === empresaFilter);
+    }
+    if (statusFilter !== "todos") {
+      filtered = filtered.filter((vendedor) => {
+        if (statusFilter === "ativo") {
+          return vendedor.ativo !== false;
+        } else if (statusFilter === "inativo") {
+          return vendedor.ativo === false;
+        }
+        return true;
+      });
+    }
+    setFilteredVendedores(filtered);
+  };
+  const resetForm = () => {
+    setFormData({
+      tipo_documento: "CPF",
+      documento: "",
+      razao_social: "",
+      nome_fantasia: "",
+      nome: "",
+      telefones: [],
+      emails: [],
+      cep: "",
+      endereco: "",
+      numero: "",
+      complemento: "",
+      bairro: "",
+      cidade: "",
+      estado: "",
+      empresa_id: empresas.length > 0 ? empresas[0].id : "",
+      comissao_percentual: 0,
+      meta_mensal: 0,
+      ativo: true,
+      is_cliente: false,
+      is_funcionario: false,
+      is_vendedor: true,
+      is_fornecedor: false,
+      is_transportadora: false,
+      observacao_nfe: "",
+      observacao_interna: ""
+    });
+    setEditingVendedor(null);
+  };
+  const handleEdit = (vendedor) => {
+    setEditingVendedor(vendedor);
+    setFormData({
+      tipo_documento: vendedor.tipo_documento || "CPF",
+      documento: vendedor.documento || "",
+      razao_social: vendedor.razao_social || "",
+      nome_fantasia: vendedor.nome_fantasia || "",
+      nome: vendedor.nome,
+      telefones: vendedor.telefones || [],
+      emails: vendedor.emails || [],
+      cep: vendedor.cep || "",
+      endereco: vendedor.endereco || "",
+      numero: vendedor.numero || "",
+      complemento: vendedor.complemento || "",
+      bairro: vendedor.bairro || "",
+      cidade: vendedor.cidade || "",
+      estado: vendedor.estado || "",
+      empresa_id: vendedor.empresa_id,
+      comissao_percentual: vendedor.comissao_percentual || 0,
+      meta_mensal: vendedor.meta_mensal || 0,
+      ativo: vendedor.ativo !== false,
+      is_cliente: false,
+      is_funcionario: false,
+      is_vendedor: true,
+      is_fornecedor: false,
+      is_transportadora: false,
+      observacao_nfe: "",
+      observacao_interna: ""
+    });
+    setShowSidebar(true);
+  };
+  const handleDelete = async (vendedor) => {
+    if (!confirm(`Tem certeza que deseja excluir o vendedor ${vendedor.nome}?`)) {
+      return;
+    }
+    try {
+      const { error } = await supabase.from("clientes").update({ deletado: true }).eq("id", vendedor.id);
+      if (error) throw error;
+      B.success("Vendedor excluído com sucesso!");
+      loadVendedores();
+    } catch (error) {
+      console.error("Erro ao excluir vendedor:", error);
+      B.error("Erro ao excluir vendedor");
+    }
+  };
+  if (isLoading) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-center h-64", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" }) });
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-6", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-2xl font-bold text-white", children: "Vendedores" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400", children: "Gerencie os vendedores da empresa" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          onClick: () => {
+            resetForm();
+            setShowSidebar(true);
+          },
+          className: "flex items-center gap-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 20 }),
+            "Novo Vendedor"
+          ]
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-background-card rounded-lg p-4 border border-gray-800", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col lg:flex-row gap-4", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { className: "absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400", size: 20 }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              type: "text",
+              placeholder: "Buscar vendedores...",
+              value: searchTerm,
+              onChange: (e) => setSearchTerm(e.target.value),
+              className: "w-full pl-10 pr-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+            }
+          )
+        ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            onClick: () => setShowFilters(!showFilters),
+            className: "flex items-center gap-2 px-4 py-2 bg-background-secondary border border-gray-700 rounded-lg text-gray-300 hover:text-white transition-colors",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Filter, { size: 20 }),
+              "Filtros"
+            ]
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatePresence, { children: showFilters && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        motion.div,
+        {
+          initial: { opacity: 0, height: 0 },
+          animate: { opacity: 1, height: "auto" },
+          exit: { opacity: 0, height: 0 },
+          className: "mt-4 pt-4 border-t border-gray-700",
+          children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-300 mb-2", children: "Empresa" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "select",
+                {
+                  value: empresaFilter,
+                  onChange: (e) => setEmpresaFilter(e.target.value),
+                  className: "w-full px-3 py-2 bg-background-secondary border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500",
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "todas", children: "Todas as empresas" }),
+                    empresas.map((empresa) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: empresa.id, children: empresa.nome }, empresa.id))
+                  ]
+                }
+              )
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-300 mb-2", children: "Status" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "select",
+                {
+                  value: statusFilter,
+                  onChange: (e) => setStatusFilter(e.target.value),
+                  className: "w-full px-3 py-2 bg-background-secondary border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500",
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "todos", children: "Todos" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "ativo", children: "Ativos" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "inativo", children: "Inativos" })
+                  ]
+                }
+              )
+            ] })
+          ] })
+        }
+      ) })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6", children: filteredVendedores.map((vendedor) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      motion.div,
+      {
+        initial: { opacity: 0, y: 20 },
+        animate: { opacity: 1, y: 0 },
+        className: "bg-background-card rounded-lg p-6 border border-gray-800 hover:border-gray-700 transition-colors",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between mb-4", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-12 h-12 bg-primary-500/20 rounded-lg flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(User, { className: "text-primary-400", size: 24 }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "font-semibold text-white", children: vendedor.nome }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-gray-400", children: vendedor.empresa_nome })
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  onClick: () => handleEdit(vendedor),
+                  className: "p-2 text-gray-400 hover:text-primary-400 transition-colors",
+                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(SquarePen, { size: 16 })
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  onClick: () => handleDelete(vendedor),
+                  className: "p-2 text-gray-400 hover:text-red-400 transition-colors",
+                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { size: 16 })
+                }
+              )
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
+            vendedor.telefone && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-gray-300", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Phone, { size: 16, className: "text-gray-400" }),
+              vendedor.telefone
+            ] }),
+            vendedor.emails && vendedor.emails.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-gray-300", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Mail, { size: 16, className: "text-gray-400" }),
+              vendedor.emails[0]
+            ] }),
+            vendedor.endereco && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-sm text-gray-300", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(MapPin, { size: 16, className: "text-gray-400" }),
+              vendedor.endereco
+            ] }),
+            vendedor.comissao_percentual && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-2 text-sm text-gray-300", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-green-400", children: [
+              "Comissão: ",
+              vendedor.comissao_percentual,
+              "%"
+            ] }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-between pt-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `px-2 py-1 rounded-full text-xs ${vendedor.ativo !== false ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`, children: vendedor.ativo !== false ? "Ativo" : "Inativo" }) })
+          ] })
+        ]
+      },
+      vendedor.id
+    )) }),
+    filteredVendedores.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-12", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(User, { className: "mx-auto h-12 w-12 text-gray-400 mb-4" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-lg font-medium text-white mb-2", children: "Nenhum vendedor encontrado" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 mb-4", children: searchTerm || empresaFilter !== "todas" || statusFilter !== "todos" ? "Tente ajustar os filtros de busca" : "Comece adicionando seu primeiro vendedor" }),
+      !searchTerm && empresaFilter === "todas" && statusFilter === "todos" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          onClick: () => {
+            resetForm();
+            setShowSidebar(true);
+          },
+          className: "bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors",
+          children: "Adicionar Vendedor"
+        }
+      )
+    ] })
   ] });
 };
 const atualizarEstoqueProduto = async (supabase2, empresaId, usuarioId, produtoId, quantidade, tipoMovimento, observacao) => {
@@ -77808,6 +78197,7 @@ function App() {
         /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "produtos/adicionais", element: /* @__PURE__ */ jsxRuntimeExports.jsx(AdicionaisPage, {}) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "unidade-medida", element: /* @__PURE__ */ jsxRuntimeExports.jsx(UnidadeMedidaPage, {}) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "clientes", element: /* @__PURE__ */ jsxRuntimeExports.jsx(ClientesPage, {}) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "vendedores", element: /* @__PURE__ */ jsxRuntimeExports.jsx(VendedoresPage, {}) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "pedidos", element: /* @__PURE__ */ jsxRuntimeExports.jsx(UserPedidosPage, {}) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "pedidos/novo", element: /* @__PURE__ */ jsxRuntimeExports.jsx(UserNovoPedidoPage, {}) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "pedidos/editar/:id", element: /* @__PURE__ */ jsxRuntimeExports.jsx(UserNovoPedidoPage, {}) }),

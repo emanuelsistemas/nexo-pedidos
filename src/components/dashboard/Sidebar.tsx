@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart, Truck, FileText } from 'lucide-react';
+import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart, Truck, FileText, UserCheck, Briefcase, Receipt, FileX } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
@@ -187,8 +187,8 @@ const Sidebar: React.FC = () => {
         label: 'Parceiros',
         tooltip: 'Parceiros',
         submenu: [
-          { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
-          { icon: Users, label: 'Vendedores', path: '/dashboard/vendedores', tooltip: 'Vendedores' }
+          { icon: UserCheck, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
+          { icon: Briefcase, label: 'Vendedores', path: '/dashboard/vendedores', tooltip: 'Vendedores' }
         ]
       },
       { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },
@@ -199,8 +199,8 @@ const Sidebar: React.FC = () => {
         label: 'Notas Fiscais',
         tooltip: 'Notas Fiscais',
         submenu: [
-          { icon: FileText, label: 'NFe', path: '/dashboard/nfe', tooltip: 'Nota Fiscal Eletrônica' },
-          { icon: FileText, label: 'Inutilização', path: '/dashboard/inutilizacao', tooltip: 'Inutilização de Numeração' }
+          { icon: Receipt, label: 'NFe', path: '/dashboard/nfe', tooltip: 'Nota Fiscal Eletrônica' },
+          { icon: FileX, label: 'Inutilização', path: '/dashboard/inutilizacao', tooltip: 'Inutilização de Numeração' }
         ]
       },
     ];
