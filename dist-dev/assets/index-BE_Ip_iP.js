@@ -60828,7 +60828,7 @@ const PDVPage = () => {
                               ] })
                             ] }),
                             ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || pedidosImportados.length > 0) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 space-y-2", children: [
-                              (pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) ? clienteSelecionado && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
+                              (pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) ? clienteSelecionado ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
                                 /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14, className: "text-blue-400 mt-0.5" }),
                                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex items-start justify-between gap-3", children: [
                                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
@@ -60839,8 +60839,33 @@ const PDVPage = () => {
                                     clienteSelecionado.telefone && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: clienteSelecionado.telefone }),
                                     clienteSelecionado.email && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 truncate max-w-[120px]", children: clienteSelecionado.email })
                                   ] })
-                                ] })
-                              ] }) }) : pedidosImportados.length > 0 && ((_a2 = pedidosImportados[0]) == null ? void 0 : _a2.cliente) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
+                                ] }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => setShowClienteModal(true),
+                                    className: "text-blue-400 hover:text-blue-300 transition-colors ml-2",
+                                    title: "Trocar cliente",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14 })
+                                  }
+                                )
+                              ] }) }) : (
+                                /* Botão para selecionar cliente quando não há cliente selecionado */
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => setShowClienteModal(true),
+                                    className: "w-full bg-blue-500/10 border border-blue-500/30 rounded p-2.5 hover:bg-blue-500/20 transition-colors",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14, className: "text-blue-400" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-left", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-blue-400 font-medium", children: "Selecionar Cliente" }),
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-sm", children: "Clique para escolher um cliente" })
+                                      ] })
+                                    ] })
+                                  }
+                                )
+                              ) : pedidosImportados.length > 0 && ((_a2 = pedidosImportados[0]) == null ? void 0 : _a2.cliente) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
                                 /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14, className: "text-blue-400 mt-0.5" }),
                                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex items-start justify-between gap-3", children: [
                                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
@@ -61480,6 +61505,7 @@ const PDVPage = () => {
                           onClick: () => {
                             setClienteSelecionado(cliente);
                             setShowClienteModal(false);
+                            carregarDescontosCliente(cliente.id);
                           },
                           className: "w-full text-left p-2.5 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors",
                           children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start justify-between gap-3", children: [

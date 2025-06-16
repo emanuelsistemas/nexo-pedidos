@@ -6810,6 +6810,301 @@ const PDVPage: React.FC = () => {
               style={{ maxHeight: 'calc(100vh - 200px)' }}
             >
 
+              {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados - Compacto */}
+              {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
+                <div className="mb-3 space-y-2">
+                  {/* Informações do Cliente - Compacto */}
+                  {pdvConfig?.seleciona_clientes ? (
+                    clienteSelecionado ? (
+                      <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
+                        {/* Layout em duas colunas */}
+                        <div className="flex items-start gap-2">
+                          <User size={14} className="text-blue-400 mt-0.5" />
+                          <div className="flex-1 flex items-start justify-between gap-3">
+                            {/* Coluna Esquerda - Nome e Label */}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-blue-400 font-medium">Cliente</div>
+                              <div className="text-white font-medium text-sm truncate">{clienteSelecionado.nome}</div>
+                            </div>
+
+                            {/* Coluna Direita - Contato */}
+                            <div className="text-right flex-shrink-0">
+                              {clienteSelecionado.telefone && (
+                                <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
+                              )}
+                              {clienteSelecionado.email && (
+                                <div className="text-xs text-gray-500 truncate max-w-[120px]">{clienteSelecionado.email}</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Botão para trocar cliente */}
+                          <button
+                            onClick={() => setShowClienteModal(true)}
+                            className="text-blue-400 hover:text-blue-300 transition-colors ml-2"
+                            title="Trocar cliente"
+                          >
+                            <User size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Botão para selecionar cliente quando não há cliente selecionado */
+                      <button
+                        onClick={() => setShowClienteModal(true)}
+                        className="w-full bg-blue-500/10 border border-blue-500/30 rounded p-2.5 hover:bg-blue-500/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <User size={14} className="text-blue-400" />
+                          <div className="text-left">
+                            <div className="text-xs text-blue-400 font-medium">Selecionar Cliente</div>
+                            <div className="text-white text-sm">Clique para escolher um cliente</div>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  ) : pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
+                      {/* Layout em duas colunas */}
+                      <div className="flex items-start gap-2">
+                        <User size={14} className="text-blue-400 mt-0.5" />
+                        <div className="flex-1 flex items-start justify-between gap-3">
+                          {/* Coluna Esquerda - Nome e Label */}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-blue-400 font-medium">Cliente dos Pedidos</div>
+                            <div className="text-white font-medium text-sm truncate">{pedidosImportados[0].cliente.nome}</div>
+                          </div>
+
+                          {/* Coluna Direita - Contato */}
+                          <div className="text-right flex-shrink-0">
+                            {pedidosImportados[0].cliente.telefone && (
+                              <div className="text-xs text-gray-400">{pedidosImportados[0].cliente.telefone}</div>
+                            )}
+                            {pedidosImportados[0].cliente.email && (
+                              <div className="text-xs text-gray-500 truncate max-w-[120px]">{pedidosImportados[0].cliente.email}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Informações dos Pedidos Importados - Compacto */}
+                  {pedidosImportados.map((pedido, index) => (
+                    <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded p-2.5 relative">
+                      {/* Botão X para remover pedido */}
+                      <button
+                        onClick={() => {
+                          setPedidoParaRemover(pedido);
+                          setShowConfirmRemovePedidoImportado(true);
+                        }}
+                        className="absolute top-1.5 right-1.5 text-red-400 hover:text-red-300 transition-colors"
+                        title="Remover pedido importado"
+                      >
+                        <X size={14} />
+                      </button>
+
+                      {/* Layout em duas colunas */}
+                      <div className="flex items-start gap-3 mb-2 pr-6">
+                        {/* Coluna Esquerda */}
+                        <div className="flex items-start gap-2 flex-1">
+                          <ShoppingBag size={14} className="text-green-400 mt-0.5" />
+                          <div className="flex-1">
+                            <div className="text-xs text-green-400 font-medium">Pedido Importado</div>
+                            <div className="text-white font-medium text-sm">#{pedido.numero}</div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(pedido.created_at).toLocaleDateString('pt-BR')}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Coluna Direita */}
+                        <div className="text-right">
+                          <div className="text-xs text-gray-400">
+                            {new Date(pedido.created_at).toLocaleTimeString('pt-BR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                          {/* Informações do Vendedor */}
+                          {pedido.usuario && (
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              {pedido.usuario.nome}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Opções de Faturamento do Pedido Importado - Compacto */}
+                      {(pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && (
+                        <div className="border-t border-green-500/20 pt-2">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="w-2.5 h-2.5 bg-green-500 rounded flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">%</span>
+                            </div>
+                            <div className="text-xs text-green-400 font-medium">Opções de Faturamento</div>
+                          </div>
+
+                          {/* Descontos por Prazo - Compacto */}
+                          {descontosCliente.prazo.length > 0 && (
+                            <div className="space-y-1.5">
+                              <div className="text-xs text-gray-400 mb-1">Prazo de Faturamento</div>
+                              <div className="grid grid-cols-2 gap-1">
+                                {descontosCliente.prazo.map((desconto, idx) => {
+                                  const isSelected = descontoPrazoSelecionado === desconto.id;
+                                  const wasOriginallySelected = pedido.desconto_prazo_id === desconto.id;
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={`p-1 rounded border cursor-pointer transition-colors text-xs ${
+                                        isSelected
+                                          ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
+                                          : wasOriginallySelected
+                                            ? 'bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30'
+                                            : desconto.tipo === 'desconto'
+                                              ? 'bg-green-500/5 border-green-500/20 hover:bg-green-500/10'
+                                              : 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10'
+                                      }`}
+                                      onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
+                                    >
+                                      <div className="relative flex items-center justify-center">
+                                        <div className="flex items-center gap-0.5">
+                                          <span className="text-white font-medium text-xs">
+                                            {desconto.prazo_dias}d
+                                          </span>
+                                          <span className={`text-xs ${
+                                            isSelected
+                                              ? 'text-blue-400'
+                                              : wasOriginallySelected
+                                                ? 'text-green-400'
+                                                : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                          }`}>
+                                            {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
+                                          </span>
+                                        </div>
+                                        {isSelected && (
+                                          <span className="absolute right-0.5 text-xs text-blue-400">✓</span>
+                                        )}
+                                        {!isSelected && wasOriginallySelected && (
+                                          <span className="absolute right-0.5 text-xs text-green-400">Orig</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Desconto por Valor (se aplicável) - Compacto */}
+                          {(() => {
+                            const descontoValor = calcularDescontoPorValor(calcularTotal());
+                            return descontoValor && (
+                              <div className="mt-1.5 pt-1.5 border-t border-green-500/20">
+                                <div className="text-xs text-gray-400 mb-1">Desconto por Valor</div>
+                                <div className={`p-1 rounded border text-center text-xs ${
+                                  descontoValor.tipo === 'desconto'
+                                    ? 'bg-green-500/10 border-green-500/30'
+                                    : 'bg-red-500/10 border-red-500/30'
+                                }`}>
+                                  <div className="text-white font-medium text-xs">
+                                    A partir de {formatCurrency(descontoValor.valorMinimo)}
+                                  </div>
+                                  <div className={`text-xs ${
+                                    descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                  }`}>
+                                    {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Opções de Faturamento - Descontos do Cliente (apenas quando não há pedidos importados) */}
+                  {pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-4 h-4 bg-blue-500 rounded flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">%</span>
+                        </div>
+                        <div className="text-sm text-blue-400 font-medium">Opções de Faturamento</div>
+                      </div>
+
+                      {/* Descontos por Prazo */}
+                      {descontosCliente.prazo.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="text-xs text-gray-400 mb-2">Prazo de Faturamento</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {getDescontosPrazoDisponiveis().map((desconto, idx) => {
+                              const isSelected = descontoPrazoSelecionado === desconto.id;
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`p-2 rounded-lg border cursor-pointer transition-colors ${
+                                    isSelected
+                                      ? 'bg-blue-500/20 border-blue-500 ring-2 ring-blue-500/50'
+                                      : desconto.tipo === 'desconto'
+                                        ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
+                                        : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
+                                  }`}
+                                  onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
+                                >
+                                  <div className="relative flex items-center justify-center">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-xs text-white font-medium">
+                                        {desconto.prazo_dias}d
+                                      </span>
+                                      <span className={`text-xs ${
+                                        isSelected
+                                          ? 'text-blue-400'
+                                          : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
+                                      </span>
+                                    </div>
+                                    {isSelected && (
+                                      <span className="absolute right-0 text-xs text-blue-400">✓</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Desconto por Valor (se aplicável) */}
+                      {(() => {
+                        const descontoValor = calcularDescontoPorValor(calcularTotal());
+                        return descontoValor && (
+                          <div className="mt-3 pt-3 border-t border-gray-700">
+                            <div className="text-xs text-gray-400 mb-2">Desconto por Valor</div>
+                            <div className={`p-2 rounded-lg border text-center ${
+                              descontoValor.tipo === 'desconto'
+                                ? 'bg-green-500/10 border-green-500/30'
+                                : 'bg-red-500/10 border-red-500/30'
+                            }`}>
+                              <div className="text-xs text-white font-medium">
+                                A partir de {formatCurrency(descontoValor.valorMinimo)}
+                              </div>
+                              <div className={`text-xs ${
+                                descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                              }`}>
+                                {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Seção de Pagamento quando NÃO há pedidos importados */}
               {pedidosImportados.length === 0 && (
                 <div className="space-y-3">
@@ -6974,7 +7269,7 @@ const PDVPage: React.FC = () => {
                 <div className="mb-3 space-y-2">
                   {/* Informações do Cliente - Compacto */}
                   {pdvConfig?.seleciona_clientes ? (
-                    clienteSelecionado && (
+                    clienteSelecionado ? (
                       <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
                         {/* Layout em duas colunas */}
                         <div className="flex items-start gap-2">
@@ -6996,8 +7291,31 @@ const PDVPage: React.FC = () => {
                               )}
                             </div>
                           </div>
+
+                          {/* Botão para trocar cliente */}
+                          <button
+                            onClick={() => setShowClienteModal(true)}
+                            className="text-blue-400 hover:text-blue-300 transition-colors ml-2"
+                            title="Trocar cliente"
+                          >
+                            <User size={14} />
+                          </button>
                         </div>
                       </div>
+                    ) : (
+                      /* Botão para selecionar cliente quando não há cliente selecionado */
+                      <button
+                        onClick={() => setShowClienteModal(true)}
+                        className="w-full bg-blue-500/10 border border-blue-500/30 rounded p-2.5 hover:bg-blue-500/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <User size={14} className="text-blue-400" />
+                          <div className="text-left">
+                            <div className="text-xs text-blue-400 font-medium">Selecionar Cliente</div>
+                            <div className="text-white text-sm">Clique para escolher um cliente</div>
+                          </div>
+                        </div>
+                      </button>
                     )
                   ) : pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
                     <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
@@ -7971,6 +8289,8 @@ const PDVPage: React.FC = () => {
                     onClick={() => {
                       setClienteSelecionado(cliente);
                       setShowClienteModal(false);
+                      // Carregar descontos do cliente selecionado
+                      carregarDescontosCliente(cliente.id);
                     }}
                     className="w-full text-left p-2.5 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
                   >
