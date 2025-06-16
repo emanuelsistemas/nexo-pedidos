@@ -60309,7 +60309,10 @@ const PDVPage = () => {
               className: "flex overflow-hidden relative",
               style: { height: "calc(100vh - 56px)" },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `${carrinho.length > 0 ? "w-2/3" : "w-full"} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`, children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `${carrinho.length > 0 ? (
+                  // Se há área lateral visível, usar menos espaço
+                  pedidosImportados.length > 0 || (pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || (pdvConfig == null ? void 0 : pdvConfig.vendedor) || (pdvConfig == null ? void 0 : pdvConfig.comandas) || (pdvConfig == null ? void 0 : pdvConfig.mesas) || (pdvConfig == null ? void 0 : pdvConfig.exibe_foto_item) ? "w-1/2" : "w-2/3"
+                ) : "w-full"} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`, children: [
                   showFinalizacaoFinal && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 bg-black/20 z-20 cursor-not-allowed" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-full flex flex-col", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
@@ -60744,7 +60747,9 @@ const PDVPage = () => {
                     ] }) })
                   ] })
                 ] }),
-                !showFinalizacaoFinal && carrinho.length > 0 && ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || (pdvConfig == null ? void 0 : pdvConfig.vendedor) || (pdvConfig == null ? void 0 : pdvConfig.comandas) || (pdvConfig == null ? void 0 : pdvConfig.mesas) || (pdvConfig == null ? void 0 : pdvConfig.exibe_foto_item)) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                carrinho.length > 0 && // SEMPRE aparece quando há pedidos importados (mesmo sem configurações)
+                (pedidosImportados.length > 0 || // SEMPRE aparece quando pelo menos uma configuração PDV está habilitada
+                ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || (pdvConfig == null ? void 0 : pdvConfig.vendedor) || (pdvConfig == null ? void 0 : pdvConfig.comandas) || (pdvConfig == null ? void 0 : pdvConfig.mesas) || (pdvConfig == null ? void 0 : pdvConfig.exibe_foto_item))) && /* @__PURE__ */ jsxRuntimeExports.jsx(
                   motion.div,
                   {
                     initial: { x: "100%", opacity: 0 },
@@ -60754,7 +60759,7 @@ const PDVPage = () => {
                       duration: 0.3,
                       ease: [0.25, 0.46, 0.45, 0.94]
                     },
-                    className: "w-48 bg-background-card border-l border-gray-800 flex flex-col h-full",
+                    className: `w-48 bg-background-card border-l border-gray-800 flex flex-col h-full ${showFinalizacaoFinal ? "z-20" : ""}`,
                     children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2", children: [
                       ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || pedidosImportados.length > 0) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2", children: (pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) ? clienteSelecionado ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
@@ -61354,7 +61359,7 @@ const PDVPage = () => {
                     ]
                   }
                 ),
-                showFinalizacaoFinal && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                showFinalizacaoFinal && carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   motion.div,
                   {
                     initial: { x: "100%", opacity: 0 },
@@ -61364,7 +61369,7 @@ const PDVPage = () => {
                       duration: 0.5,
                       ease: [0.25, 0.46, 0.45, 0.94]
                     },
-                    className: "absolute top-0 right-0 w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full z-10",
+                    className: "w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full",
                     children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-base font-semibold text-white", children: "Finalizar Venda" }),

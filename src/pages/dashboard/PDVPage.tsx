@@ -6250,8 +6250,22 @@ const PDVPage: React.FC = () => {
         style={{ height: 'calc(100vh - 56px)' }}
       >
 
-        {/* Área dos Itens do Carrinho - mantém largura fixa quando há itens */}
-        <div className={`${carrinho.length > 0 ? 'w-2/3' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
+        {/* Área dos Itens do Carrinho - ajusta largura baseado na presença da área lateral */}
+        <div className={`${
+          carrinho.length > 0
+            ? (
+                // Se há área lateral visível, usar menos espaço
+                (pedidosImportados.length > 0 ||
+                 pdvConfig?.seleciona_clientes ||
+                 pdvConfig?.vendedor ||
+                 pdvConfig?.comandas ||
+                 pdvConfig?.mesas ||
+                 pdvConfig?.exibe_foto_item)
+                  ? 'w-1/2' // 50% quando área lateral está visível
+                  : 'w-2/3' // 66% quando área lateral não está visível
+              )
+            : 'w-full' // 100% quando carrinho vazio
+        } p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
           {/* Overlay para desativar interação quando finalização está aberta */}
           {showFinalizacaoFinal && (
             <div className="absolute inset-0 bg-black/20 z-20 cursor-not-allowed" />
@@ -6840,13 +6854,16 @@ const PDVPage: React.FC = () => {
             </div>
           </div>
 
-        {/* Área Lateral de Informações - Só aparece quando há itens e configuração habilitada */}
-        {!showFinalizacaoFinal && carrinho.length > 0 && (
-          pdvConfig?.seleciona_clientes ||
-          pdvConfig?.vendedor ||
-          pdvConfig?.comandas ||
-          pdvConfig?.mesas ||
-          pdvConfig?.exibe_foto_item
+        {/* Área Lateral de Informações - Aparece quando há configurações habilitadas OU pedidos importados */}
+        {carrinho.length > 0 && (
+          // SEMPRE aparece quando há pedidos importados (mesmo sem configurações)
+          pedidosImportados.length > 0 ||
+          // SEMPRE aparece quando pelo menos uma configuração PDV está habilitada
+          (pdvConfig?.seleciona_clientes ||
+           pdvConfig?.vendedor ||
+           pdvConfig?.comandas ||
+           pdvConfig?.mesas ||
+           pdvConfig?.exibe_foto_item)
         ) && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
@@ -6856,7 +6873,9 @@ const PDVPage: React.FC = () => {
               duration: 0.3,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="w-48 bg-background-card border-l border-gray-800 flex flex-col h-full"
+            className={`w-48 bg-background-card border-l border-gray-800 flex flex-col h-full ${
+              showFinalizacaoFinal ? 'z-20' : ''
+            }`}
           >
             {/* Conteúdo scrollável da área lateral */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
@@ -7220,7 +7239,7 @@ const PDVPage: React.FC = () => {
 
 
 
-        {/* Área de Finalização de Venda - Só aparece quando há itens */}
+        {/* Área de Finalização de Venda - Só aparece quando há itens E não está na finalização final */}
         {!showFinalizacaoFinal && carrinho.length > 0 && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
@@ -7713,8 +7732,8 @@ const PDVPage: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Área de Finalização Final - Sobrepõe a área de pagamento */}
-        {showFinalizacaoFinal && (
+        {/* Área de Finalização Final - Substitui a primeira tela quando ativa */}
+        {showFinalizacaoFinal && carrinho.length > 0 && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
@@ -7723,7 +7742,7 @@ const PDVPage: React.FC = () => {
               duration: 0.5,
               ease: [0.25, 0.46, 0.45, 0.94]
             }}
-            className="absolute top-0 right-0 w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full z-10"
+            className="w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full"
           >
             {/* Header fixo compacto */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
