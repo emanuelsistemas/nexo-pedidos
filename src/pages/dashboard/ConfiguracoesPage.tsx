@@ -3750,40 +3750,42 @@ const ConfiguracoesPage: React.FC = () => {
                     </label>
                   </div>
 
-                  {/* NFC-e + Produção e Produção */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={pdvConfig.ocultar_nfce_producao}
-                        onChange={(e) => handlePdvConfigChange('ocultar_nfce_producao', e.target.checked)}
-                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                        style={{ borderRadius: '50%' }}
-                      />
-                      <div>
-                        <h4 className="text-white font-medium">Ocultar "NFC-e + Produção"</h4>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Remove o botão de emissão de NFC-e com envio para produção da tela de finalização.
-                        </p>
-                      </div>
-                    </label>
+                  {/* NFC-e + Produção e Produção - OCULTO DAS CONFIGURAÇÕES */}
+                  {false && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.ocultar_nfce_producao}
+                          onChange={(e) => handlePdvConfigChange('ocultar_nfce_producao', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Ocultar "NFC-e + Produção"</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Remove o botão de emissão de NFC-e com envio para produção da tela de finalização.
+                          </p>
+                        </div>
+                      </label>
 
-                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={pdvConfig.ocultar_producao}
-                        onChange={(e) => handlePdvConfigChange('ocultar_producao', e.target.checked)}
-                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                        style={{ borderRadius: '50%' }}
-                      />
-                      <div>
-                        <h4 className="text-white font-medium">Ocultar "Produção"</h4>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Remove o botão de envio direto para produção da tela de finalização.
-                        </p>
-                      </div>
-                    </label>
-                  </div>
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.ocultar_producao}
+                          onChange={(e) => handlePdvConfigChange('ocultar_producao', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Ocultar "Produção"</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Remove o botão de envio direto para produção da tela de finalização.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

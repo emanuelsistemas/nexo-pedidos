@@ -7852,8 +7852,8 @@ const PDVPage: React.FC = () => {
                     </button>
                   )}
 
-                  {/* NFC-e + Produção */}
-                  {!pdvConfig?.ocultar_nfce_producao && (
+                  {/* NFC-e + Produção - OCULTO POR PADRÃO */}
+                  {false && !pdvConfig?.ocultar_nfce_producao && (
                     <button
                       onClick={() => {
                         if (isDocumentoInvalido()) {
@@ -7887,8 +7887,8 @@ const PDVPage: React.FC = () => {
                 {/* Grupo: Produção - Oculto quando CPF/CNPJ preenchido OU quando força venda fiscal com cartão */}
                 {!cpfCnpjNota && !deveOcultarFinalizacaoSimples() && (
                   <div className="space-y-2">
-                    {/* Produção */}
-                    {!pdvConfig?.ocultar_producao && (
+                    {/* Produção - OCULTO POR PADRÃO */}
+                    {false && !pdvConfig?.ocultar_producao && (
                       <button
                         onClick={() => {
                           // Proteção contra duplo clique

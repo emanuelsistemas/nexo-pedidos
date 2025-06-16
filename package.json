@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:prod": "tsc && vite build --mode production",
+    "build:dev": "tsc && vite build --outDir dist-dev --mode development",
+    "build:prod": "tsc && vite build --outDir dist --mode production",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "preview:prod": "vite preview --port 4173 --host",
