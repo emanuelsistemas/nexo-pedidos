@@ -182,7 +182,15 @@ const Sidebar: React.FC = () => {
         tooltip: 'Produtos',
         submenu: produtosSubmenu
       },
-      { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
+      {
+        icon: Users,
+        label: 'Parceiros',
+        tooltip: 'Parceiros',
+        submenu: [
+          { icon: Users, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
+          { icon: Users, label: 'Vendedores', path: '/dashboard/vendedores', tooltip: 'Vendedores' }
+        ]
+      },
       { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },
       // { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
       { icon: ShoppingCart, label: 'PDV', path: '/dashboard/pdv', tooltip: 'Ponto de Venda', isPDV: true },
@@ -319,7 +327,7 @@ const Sidebar: React.FC = () => {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2 }}
-              className={`ml-${isExpanded ? '6' : '2'} mr-2 bg-black/40 rounded-lg py-1`}
+              className={`ml-${isExpanded ? '6' : '1'} mr-1 bg-black/40 rounded-lg py-1 min-w-0 w-full`}
             >
               {item.submenu.map((subItem: any) => (
                 <NavLink
@@ -338,7 +346,7 @@ const Sidebar: React.FC = () => {
                     <subItem.icon size={20} />
                   ) : (
                     <span className="flex items-center gap-3">
-                      <subItem.icon size={20} />
+                      <subItem.icon size={16} />
                       {subItem.label}
                     </span>
                   )}

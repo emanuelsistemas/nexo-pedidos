@@ -25370,7 +25370,14 @@ const Sidebar = () => {
         tooltip: "Produtos",
         submenu: produtosSubmenu
       },
-      { icon: Users, label: "Clientes", path: "/dashboard/clientes", tooltip: "Clientes" },
+      {
+        icon: Users,
+        label: "Parceiros",
+        tooltip: "Parceiros",
+        submenu: [
+          { icon: Users, label: "Clientes", path: "/dashboard/clientes", tooltip: "Clientes" }
+        ]
+      },
       { icon: ShoppingBag, label: "Pedidos", path: "/dashboard/pedidos", tooltip: "Pedidos" },
       // { icon: DollarSign, label: 'Faturamento', path: '/dashboard/faturamento', tooltip: 'Faturamento' },
       { icon: ShoppingCart, label: "PDV", path: "/dashboard/pdv", tooltip: "Ponto de Venda", isPDV: true },
@@ -25488,7 +25495,7 @@ const Sidebar = () => {
             animate: { opacity: 1, height: "auto" },
             exit: { opacity: 0, height: 0 },
             transition: { duration: 0.2 },
-            className: `ml-${isExpanded ? "6" : "2"} mr-2 bg-black/40 rounded-lg py-1`,
+            className: `ml-${isExpanded ? "6" : "1"} mr-1 bg-black/40 rounded-lg py-1 min-w-0`,
             children: item.submenu.map((subItem) => /* @__PURE__ */ jsxRuntimeExports.jsx(
               NavLink,
               {
@@ -25496,7 +25503,7 @@ const Sidebar = () => {
                 className: ({ isActive }) => `flex items-center px-3 py-2 my-1 rounded-lg transition-colors ${isActive && location.pathname === subItem.path ? "bg-primary-500/10 text-primary-400" : "text-gray-400 hover:bg-gray-800/50 hover:text-white"}`,
                 title: !isExpanded ? subItem.tooltip : void 0,
                 children: !isExpanded ? /* @__PURE__ */ jsxRuntimeExports.jsx(subItem.icon, { size: 20 }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center gap-3", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(subItem.icon, { size: 20 }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(subItem.icon, { size: 16 }),
                   subItem.label
                 ] })
               },
