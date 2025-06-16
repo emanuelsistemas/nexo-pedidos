@@ -60309,447 +60309,439 @@ const PDVPage = () => {
               className: "flex overflow-hidden relative",
               style: { height: "calc(100vh - 56px)" },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `${carrinho.length > 0 ? (
-                  // Se há área lateral visível, usar menos espaço
-                  pedidosImportados.length > 0 || (pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || (pdvConfig == null ? void 0 : pdvConfig.vendedor) || (pdvConfig == null ? void 0 : pdvConfig.comandas) || (pdvConfig == null ? void 0 : pdvConfig.mesas) || (pdvConfig == null ? void 0 : pdvConfig.exibe_foto_item) ? "w-1/2" : "w-2/3"
-                ) : "w-full"} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`, children: [
-                  showFinalizacaoFinal && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 bg-black/20 z-20 cursor-not-allowed" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-full flex flex-col", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "input",
-                          {
-                            type: "text",
-                            placeholder: "Produto",
-                            value: searchTerm,
-                            onChange: (e) => setSearchTerm(e.target.value),
-                            onKeyDown: handleSearchKeyPress,
-                            autoFocus: true,
-                            className: "w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-9 pr-12 text-white placeholder-gray-300 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(QrCode, { size: 18, className: "absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                          "button",
-                          {
-                            onClick: abrirModalProdutos,
-                            className: "absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 hover:bg-gray-700/50 rounded px-1 py-0.5 transition-colors",
-                            title: "Abrir lista de produtos (F1)",
-                            children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { size: 14, className: "text-gray-300 hover:text-gray-200" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-gray-300 bg-gray-700 px-1 py-0.5 rounded", children: "F1" })
-                            ]
-                          }
-                        ),
-                        searchTerm.includes("*") && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute right-3 top-1/2 -translate-y-1/2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-primary-500 text-white text-xs px-2 py-1 rounded-full", children: [
-                          "Qtd: ",
-                          searchTerm.split("*")[0]
-                        ] }) }),
-                        (pdvConfig == null ? void 0 : pdvConfig.venda_codigo_barras) && codigoBarrasBuffer && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute right-3 top-1/2 -translate-y-1/2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-green-500 text-white text-xs px-2 py-1 rounded-full animate-pulse", children: [
-                          "Código: ",
-                          codigoBarrasBuffer
-                        ] }) })
-                      ] }),
-                      (pdvConfig == null ? void 0 : pdvConfig.venda_codigo_barras) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 flex items-center gap-2 text-xs text-green-400", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-2 h-2 bg-green-400 rounded-full animate-pulse" }),
-                        "Captura automática de código de barras ativa - Digite números para adicionar produtos"
-                      ] })
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `${carrinho.length > 0 ? "w-1/2" : "w-full"} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-full flex flex-col", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "input",
+                        {
+                          type: "text",
+                          placeholder: "Produto",
+                          value: searchTerm,
+                          onChange: (e) => setSearchTerm(e.target.value),
+                          onKeyDown: handleSearchKeyPress,
+                          autoFocus: true,
+                          className: "w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-9 pr-12 text-white placeholder-gray-300 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(QrCode, { size: 18, className: "absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "button",
+                        {
+                          onClick: abrirModalProdutos,
+                          className: "absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 hover:bg-gray-700/50 rounded px-1 py-0.5 transition-colors",
+                          title: "Abrir lista de produtos (F1)",
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { size: 14, className: "text-gray-300 hover:text-gray-200" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-gray-300 bg-gray-700 px-1 py-0.5 rounded", children: "F1" })
+                          ]
+                        }
+                      ),
+                      searchTerm.includes("*") && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute right-3 top-1/2 -translate-y-1/2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-primary-500 text-white text-xs px-2 py-1 rounded-full", children: [
+                        "Qtd: ",
+                        searchTerm.split("*")[0]
+                      ] }) }),
+                      (pdvConfig == null ? void 0 : pdvConfig.venda_codigo_barras) && codigoBarrasBuffer && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute right-3 top-1/2 -translate-y-1/2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-green-500 text-white text-xs px-2 py-1 rounded-full animate-pulse", children: [
+                        "Código: ",
+                        codigoBarrasBuffer
+                      ] }) })
                     ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        className: "flex-1 overflow-y-auto custom-scrollbar",
-                        style: { paddingBottom: "50px" },
-                        children: carrinho.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-center h-full", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center text-gray-500", children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsx(ShoppingCart, { size: 56, className: "mx-auto mb-3 opacity-50" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-base font-medium mb-2", children: "Carrinho vazio" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm", children: 'Use o botão "Produtos" para adicionar itens' })
-                        ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-2", children: carrinho.map((item, index2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          motion.div,
-                          {
-                            initial: { opacity: 0, y: 20 },
-                            animate: { opacity: 1, y: 0 },
-                            exit: { opacity: 0, y: -20 },
-                            className: "bg-gray-800/50 rounded p-2.5",
-                            children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2.5", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-5 h-5 bg-background-card border border-gray-700 rounded-full flex items-center justify-center flex-shrink-0 self-center shadow-lg", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-100", children: index2 + 1 }) }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                "div",
-                                {
-                                  className: "w-12 h-12 lg:w-10 lg:h-10 bg-gray-900 rounded overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative self-start",
-                                  onClick: (e) => abrirGaleria(item.produto, e),
-                                  children: [
-                                    getFotoPrincipal(item.produto) ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "img",
-                                      {
-                                        src: getFotoPrincipal(item.produto).url,
-                                        alt: item.produto.nome,
-                                        className: "w-full h-full object-cover"
-                                      }
-                                    ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-full flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Package, { size: 14, className: "text-gray-700" }) }),
-                                    item.produto.produto_fotos && item.produto.produto_fotos.length > 1 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute top-0.5 left-0.5 bg-black/60 text-white text-xs px-1 py-0.5 rounded", children: item.produto.produto_fotos.length })
-                                  ]
-                                }
-                              ),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 min-w-0", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lg:grid lg:grid-cols-[1fr_auto_auto] lg:items-center lg:gap-4", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-start mb-2 lg:mb-0", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-1", children: itemEditandoNome === item.id ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "input",
-                                        {
-                                          type: "text",
-                                          value: nomeEditando,
-                                          onChange: (e) => setNomeEditando(e.target.value),
-                                          onKeyDown: (e) => {
-                                            if (e.key === "Enter") {
-                                              finalizarEdicaoNome(item.id);
-                                            } else if (e.key === "Escape") {
-                                              cancelarEdicaoNome();
-                                            }
-                                          },
-                                          onBlur: () => finalizarEdicaoNome(item.id),
-                                          onFocus: (e) => {
-                                            const input = e.target;
-                                            setTimeout(() => {
-                                              input.setSelectionRange(input.value.length, input.value.length);
-                                            }, 0);
-                                          },
-                                          className: "flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-primary-500",
-                                          autoFocus: true,
-                                          style: { minWidth: "0" }
-                                        }
-                                      ),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "button",
-                                        {
-                                          onClick: () => finalizarEdicaoNome(item.id),
-                                          className: "text-green-400 hover:text-green-300 transition-colors flex-shrink-0",
-                                          title: "Confirmar edição",
-                                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { size: 14 })
-                                        }
-                                      )
-                                    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "text-white font-medium text-sm line-clamp-1", children: item.produto.nome }),
-                                      (pdvConfig == null ? void 0 : pdvConfig.editar_nome_produto) && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "button",
-                                        {
-                                          onClick: () => iniciarEdicaoNome(item.id, item.produto.nome),
-                                          className: "text-gray-500 hover:text-gray-300 transition-colors opacity-60 hover:opacity-100 flex-shrink-0",
-                                          title: "Editar nome do produto",
-                                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(Pencil, { size: 12 })
-                                        }
-                                      )
-                                    ] }) }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-gray-400", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                                        "Código ",
-                                        item.produto.codigo
-                                      ] }),
-                                      item.produto.codigo_barras && item.produto.codigo_barras.trim() !== "" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx(QrCode, { size: 10, className: "text-gray-500" }),
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.produto.codigo_barras })
-                                      ] }),
-                                      item.quantidade > 1 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-gray-700 px-1.5 py-0.5 rounded text-white font-medium", children: item.quantidade })
-                                    ] }),
-                                    item.pedido_origem_numero && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-green-400 mt-1 lg:mt-0", children: [
-                                      "📦 Pedido #",
-                                      item.pedido_origem_numero
-                                    ] }),
-                                    item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-blue-400 mt-1 lg:mt-0", children: [
-                                      "💰 ",
-                                      item.desconto.tipo === "percentual" && item.desconto.percentualDesconto ? `${Math.round(item.desconto.percentualDesconto)}% OFF` : `${formatCurrency(item.desconto.valorDesconto)} OFF`,
-                                      item.desconto.origemPedido && " (do pedido)"
-                                    ] })
-                                  ] }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
+                    (pdvConfig == null ? void 0 : pdvConfig.venda_codigo_barras) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-2 flex items-center gap-2 text-xs text-green-400", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-2 h-2 bg-green-400 rounded-full animate-pulse" }),
+                      "Captura automática de código de barras ativa - Digite números para adicionar produtos"
+                    ] })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "div",
+                    {
+                      className: "flex-1 overflow-y-auto custom-scrollbar",
+                      style: { paddingBottom: "50px" },
+                      children: carrinho.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-center h-full", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center text-gray-500", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(ShoppingCart, { size: 56, className: "mx-auto mb-3 opacity-50" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-base font-medium mb-2", children: "Carrinho vazio" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm", children: 'Use o botão "Produtos" para adicionar itens' })
+                      ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-2", children: carrinho.map((item, index2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        motion.div,
+                        {
+                          initial: { opacity: 0, y: 20 },
+                          animate: { opacity: 1, y: 0 },
+                          exit: { opacity: 0, y: -20 },
+                          className: "bg-gray-800/50 rounded p-2.5",
+                          children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2.5", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-5 h-5 bg-background-card border border-gray-700 rounded-full flex items-center justify-center flex-shrink-0 self-center shadow-lg", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-100", children: index2 + 1 }) }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "div",
+                              {
+                                className: "w-12 h-12 lg:w-10 lg:h-10 bg-gray-900 rounded overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative self-start",
+                                onClick: (e) => abrirGaleria(item.produto, e),
+                                children: [
+                                  getFotoPrincipal(item.produto) ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "img",
                                     {
-                                      onClick: () => confirmarRemocao(item.id),
-                                      className: "text-red-400 hover:text-red-300 transition-colors ml-2 lg:hidden",
-                                      title: "Remover item",
-                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { size: 14 })
+                                      src: getFotoPrincipal(item.produto).url,
+                                      alt: item.produto.nome,
+                                      className: "w-full h-full object-cover"
                                     }
-                                  )
-                                ] }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "hidden lg:flex items-center gap-1.5", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => alterarQuantidade(item.id, item.quantidade - 1),
-                                      className: "w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors",
-                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Minus, { size: 10 })
-                                    }
-                                  ),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium min-w-[1.2rem] text-center text-xs", children: item.quantidade }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => alterarQuantidade(item.id, item.quantidade + 1),
-                                      className: "w-6 h-6 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors",
-                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 10 })
-                                    }
-                                  ),
-                                  (pdvConfig == null ? void 0 : pdvConfig.desconto_no_item) && !item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => abrirModalDesconto(item.id),
-                                      className: "w-6 h-6 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors",
-                                      title: "Aplicar desconto",
-                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Percent, { size: 10 })
-                                    }
-                                  ),
-                                  (pdvConfig == null ? void 0 : pdvConfig.desconto_no_item) && item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => removerDesconto(item.id),
-                                      className: "w-6 h-6 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors",
-                                      title: "Remover desconto",
-                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 10 })
-                                    }
-                                  ),
-                                  item.temOpcoesAdicionais && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => abrirOpcoesAdicionais(item),
-                                      className: "w-6 h-6 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors",
-                                      title: "Opções adicionais",
-                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 10 })
-                                    }
-                                  ),
-                                  (pdvConfig == null ? void 0 : pdvConfig.observacao_no_item) && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => abrirModalObservacao(item.id),
-                                      className: "w-6 h-6 bg-blue-600/20 hover:bg-blue-600/40 rounded-full flex items-center justify-center text-blue-200 transition-colors",
-                                      title: "Adicionar observação",
-                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(MessageSquare, { size: 10 })
-                                    }
-                                  )
-                                ] }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "hidden lg:flex items-center gap-3", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right", children: item.desconto ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 justify-end mb-1", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 line-through text-xs", children: formatCurrency(item.desconto.precoOriginal) }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 font-bold text-sm", children: formatCurrency(item.desconto.precoComDesconto) })
-                                    ] }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white font-bold", children: formatCurrency(item.subtotal) })
-                                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white font-bold", children: formatCurrency(item.subtotal) }) }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => confirmarRemocao(item.id),
-                                      className: "text-red-400 hover:text-red-300 transition-colors",
-                                      title: "Remover item",
-                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { size: 14 })
-                                    }
-                                  )
-                                ] }),
-                                item.adicionais && item.adicionais.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-3 pt-3 border-t border-gray-700/50", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-between mb-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded-full text-sm text-purple-300 font-medium", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Adicionais" }) }) }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-2", children: item.adicionais.map((adicional, index22) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between bg-gray-800/30 rounded-lg p-2", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-2 flex-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300 text-sm font-medium", children: adicional.nome }) }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                          "button",
-                                          {
-                                            onClick: () => alterarQuantidadeAdicional(item.id, index22, adicional.quantidade - 1),
-                                            className: "w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors",
-                                            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Minus, { size: 10 })
-                                          }
-                                        ),
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium min-w-[1.5rem] text-center text-sm", children: adicional.quantidade }),
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                          "button",
-                                          {
-                                            onClick: () => alterarQuantidadeAdicional(item.id, index22, adicional.quantidade + 1),
-                                            className: "w-6 h-6 bg-purple-500/30 hover:bg-purple-500/50 rounded-full flex items-center justify-center text-white transition-colors",
-                                            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 10 })
-                                          }
-                                        )
-                                      ] }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-purple-300 text-sm font-medium min-w-[4rem] text-right", children: adicional.preco > 0 ? `+${formatCurrency(adicional.preco * adicional.quantidade)}` : "Grátis" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "button",
-                                        {
-                                          onClick: () => removerAdicional(item.id, index22),
-                                          className: "w-6 h-6 bg-red-600/20 hover:bg-red-600/40 rounded-full flex items-center justify-center text-red-400 hover:text-red-300 transition-colors",
-                                          title: "Remover adicional",
-                                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 10 })
-                                        }
-                                      )
-                                    ] })
-                                  ] }, index22)) })
-                                ] }),
-                                item.observacao && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `${item.adicionais && item.adicionais.length > 0 ? "mt-3" : "mt-3 pt-3 border-t border-gray-700/50"}`, children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-between mb-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex items-center gap-1 px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-sm text-blue-300 font-medium", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Observação" }) }) }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-800/30 rounded-lg p-2", children: itemEditandoObservacao === item.id ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                                  ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-full flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Package, { size: 14, className: "text-gray-700" }) }),
+                                  item.produto.produto_fotos && item.produto.produto_fotos.length > 1 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute top-0.5 left-0.5 bg-black/60 text-white text-xs px-1 py-0.5 rounded", children: item.produto.produto_fotos.length })
+                                ]
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 min-w-0", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lg:grid lg:grid-cols-[1fr_auto_auto] lg:items-center lg:gap-4", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-start mb-2 lg:mb-0", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-1", children: itemEditandoNome === item.id ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
                                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                                       "input",
                                       {
                                         type: "text",
-                                        value: observacaoEditando,
-                                        onChange: (e) => setObservacaoEditando(e.target.value),
+                                        value: nomeEditando,
+                                        onChange: (e) => setNomeEditando(e.target.value),
                                         onKeyDown: (e) => {
                                           if (e.key === "Enter") {
-                                            finalizarEdicaoObservacao(item.id);
+                                            finalizarEdicaoNome(item.id);
                                           } else if (e.key === "Escape") {
-                                            cancelarEdicaoObservacao();
+                                            cancelarEdicaoNome();
                                           }
                                         },
-                                        onBlur: () => finalizarEdicaoObservacao(item.id),
+                                        onBlur: () => finalizarEdicaoNome(item.id),
                                         onFocus: (e) => {
                                           const input = e.target;
                                           setTimeout(() => {
                                             input.setSelectionRange(input.value.length, input.value.length);
                                           }, 0);
                                         },
-                                        className: "flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500",
+                                        className: "flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-primary-500",
                                         autoFocus: true,
-                                        placeholder: "Digite a observação..."
+                                        style: { minWidth: "0" }
                                       }
                                     ),
                                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                                       "button",
                                       {
-                                        onClick: () => finalizarEdicaoObservacao(item.id),
+                                        onClick: () => finalizarEdicaoNome(item.id),
                                         className: "text-green-400 hover:text-green-300 transition-colors flex-shrink-0",
                                         title: "Confirmar edição",
                                         children: /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { size: 14 })
                                       }
                                     )
-                                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300 text-sm italic flex-1", children: item.observacao }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "text-white font-medium text-sm line-clamp-1", children: item.produto.nome }),
+                                    (pdvConfig == null ? void 0 : pdvConfig.editar_nome_produto) && /* @__PURE__ */ jsxRuntimeExports.jsx(
                                       "button",
                                       {
-                                        onClick: () => iniciarEdicaoObservacao(item.id, item.observacao),
-                                        className: "text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0 ml-2",
-                                        title: "Editar observação",
+                                        onClick: () => iniciarEdicaoNome(item.id, item.produto.nome),
+                                        className: "text-gray-500 hover:text-gray-300 transition-colors opacity-60 hover:opacity-100 flex-shrink-0",
+                                        title: "Editar nome do produto",
                                         children: /* @__PURE__ */ jsxRuntimeExports.jsx(Pencil, { size: 12 })
                                       }
                                     )
-                                  ] }) })
+                                  ] }) }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 text-xs text-gray-400", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                                      "Código ",
+                                      item.produto.codigo
+                                    ] }),
+                                    item.produto.codigo_barras && item.produto.codigo_barras.trim() !== "" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx(QrCode, { size: 10, className: "text-gray-500" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.produto.codigo_barras })
+                                    ] }),
+                                    item.quantidade > 1 && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "bg-gray-700 px-1.5 py-0.5 rounded text-white font-medium", children: item.quantidade })
+                                  ] }),
+                                  item.pedido_origem_numero && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-green-400 mt-1 lg:mt-0", children: [
+                                    "📦 Pedido #",
+                                    item.pedido_origem_numero
+                                  ] }),
+                                  item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-blue-400 mt-1 lg:mt-0", children: [
+                                    "💰 ",
+                                    item.desconto.tipo === "percentual" && item.desconto.percentualDesconto ? `${Math.round(item.desconto.percentualDesconto)}% OFF` : `${formatCurrency(item.desconto.valorDesconto)} OFF`,
+                                    item.desconto.origemPedido && " (do pedido)"
+                                  ] })
                                 ] }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm lg:hidden mt-2", children: item.desconto ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 line-through text-xs", children: formatCurrency(item.desconto.precoOriginal) }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 font-bold", children: formatCurrency(item.desconto.precoComDesconto) })
-                                ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 font-bold", children: formatCurrency(item.subtotal / item.quantidade) }) }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center mt-2 lg:hidden", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: () => alterarQuantidade(item.id, item.quantidade - 1),
-                                        className: "w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors",
-                                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(Minus, { size: 14 })
-                                      }
-                                    ),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium min-w-[2rem] text-center", children: item.quantidade }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: () => alterarQuantidade(item.id, item.quantidade + 1),
-                                        className: "w-8 h-8 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors",
-                                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 14 })
-                                      }
-                                    ),
-                                    (pdvConfig == null ? void 0 : pdvConfig.desconto_no_item) && !item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: () => abrirModalDesconto(item.id),
-                                        className: "w-8 h-8 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors",
-                                        title: "Aplicar desconto",
-                                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(Percent, { size: 14 })
-                                      }
-                                    ),
-                                    (pdvConfig == null ? void 0 : pdvConfig.desconto_no_item) && item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: () => removerDesconto(item.id),
-                                        className: "w-8 h-8 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors",
-                                        title: "Remover desconto",
-                                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
-                                      }
-                                    ),
-                                    item.temOpcoesAdicionais && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: () => abrirOpcoesAdicionais(item),
-                                        className: "w-8 h-8 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors",
-                                        title: "Opções adicionais",
-                                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 14 })
-                                      }
-                                    ),
-                                    (pdvConfig == null ? void 0 : pdvConfig.observacao_no_item) && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: () => abrirModalObservacao(item.id),
-                                        className: "w-8 h-8 bg-blue-600/20 hover:bg-blue-600/40 rounded-full flex items-center justify-center text-blue-200 transition-colors",
-                                        title: "Adicionar observação",
-                                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(MessageSquare, { size: 14 })
-                                      }
-                                    )
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => confirmarRemocao(item.id),
+                                    className: "text-red-400 hover:text-red-300 transition-colors ml-2 lg:hidden",
+                                    title: "Remover item",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { size: 14 })
+                                  }
+                                )
+                              ] }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "hidden lg:flex items-center gap-1.5", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => alterarQuantidade(item.id, item.quantidade - 1),
+                                    className: "w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Minus, { size: 10 })
+                                  }
+                                ),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium min-w-[1.2rem] text-center text-xs", children: item.quantidade }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => alterarQuantidade(item.id, item.quantidade + 1),
+                                    className: "w-6 h-6 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 10 })
+                                  }
+                                ),
+                                (pdvConfig == null ? void 0 : pdvConfig.desconto_no_item) && !item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => abrirModalDesconto(item.id),
+                                    className: "w-6 h-6 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors",
+                                    title: "Aplicar desconto",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Percent, { size: 10 })
+                                  }
+                                ),
+                                (pdvConfig == null ? void 0 : pdvConfig.desconto_no_item) && item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => removerDesconto(item.id),
+                                    className: "w-6 h-6 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors",
+                                    title: "Remover desconto",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 10 })
+                                  }
+                                ),
+                                item.temOpcoesAdicionais && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => abrirOpcoesAdicionais(item),
+                                    className: "w-6 h-6 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors",
+                                    title: "Opções adicionais",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 10 })
+                                  }
+                                ),
+                                (pdvConfig == null ? void 0 : pdvConfig.observacao_no_item) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => abrirModalObservacao(item.id),
+                                    className: "w-6 h-6 bg-blue-600/20 hover:bg-blue-600/40 rounded-full flex items-center justify-center text-blue-200 transition-colors",
+                                    title: "Adicionar observação",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(MessageSquare, { size: 10 })
+                                  }
+                                )
+                              ] }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "hidden lg:flex items-center gap-3", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-right", children: item.desconto ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 justify-end mb-1", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 line-through text-xs", children: formatCurrency(item.desconto.precoOriginal) }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 font-bold text-sm", children: formatCurrency(item.desconto.precoComDesconto) })
                                   ] }),
                                   /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white font-bold", children: formatCurrency(item.subtotal) })
-                                ] })
-                              ] }) })
-                            ] })
-                          },
-                          item.id
-                        )) })
+                                ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white font-bold", children: formatCurrency(item.subtotal) }) }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                  "button",
+                                  {
+                                    onClick: () => confirmarRemocao(item.id),
+                                    className: "text-red-400 hover:text-red-300 transition-colors",
+                                    title: "Remover item",
+                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { size: 14 })
+                                  }
+                                )
+                              ] }),
+                              item.adicionais && item.adicionais.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-3 pt-3 border-t border-gray-700/50", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-between mb-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded-full text-sm text-purple-300 font-medium", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Adicionais" }) }) }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-2", children: item.adicionais.map((adicional, index22) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between bg-gray-800/30 rounded-lg p-2", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-2 flex-1", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300 text-sm font-medium", children: adicional.nome }) }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                        "button",
+                                        {
+                                          onClick: () => alterarQuantidadeAdicional(item.id, index22, adicional.quantidade - 1),
+                                          className: "w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors",
+                                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(Minus, { size: 10 })
+                                        }
+                                      ),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium min-w-[1.5rem] text-center text-sm", children: adicional.quantidade }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                        "button",
+                                        {
+                                          onClick: () => alterarQuantidadeAdicional(item.id, index22, adicional.quantidade + 1),
+                                          className: "w-6 h-6 bg-purple-500/30 hover:bg-purple-500/50 rounded-full flex items-center justify-center text-white transition-colors",
+                                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 10 })
+                                        }
+                                      )
+                                    ] }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-purple-300 text-sm font-medium min-w-[4rem] text-right", children: adicional.preco > 0 ? `+${formatCurrency(adicional.preco * adicional.quantidade)}` : "Grátis" }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                      "button",
+                                      {
+                                        onClick: () => removerAdicional(item.id, index22),
+                                        className: "w-6 h-6 bg-red-600/20 hover:bg-red-600/40 rounded-full flex items-center justify-center text-red-400 hover:text-red-300 transition-colors",
+                                        title: "Remover adicional",
+                                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 10 })
+                                      }
+                                    )
+                                  ] })
+                                ] }, index22)) })
+                              ] }),
+                              item.observacao && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `${item.adicionais && item.adicionais.length > 0 ? "mt-3" : "mt-3 pt-3 border-t border-gray-700/50"}`, children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center justify-between mb-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "inline-flex items-center gap-1 px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded-full text-sm text-blue-300 font-medium", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Observação" }) }) }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-800/30 rounded-lg p-2", children: itemEditandoObservacao === item.id ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "input",
+                                    {
+                                      type: "text",
+                                      value: observacaoEditando,
+                                      onChange: (e) => setObservacaoEditando(e.target.value),
+                                      onKeyDown: (e) => {
+                                        if (e.key === "Enter") {
+                                          finalizarEdicaoObservacao(item.id);
+                                        } else if (e.key === "Escape") {
+                                          cancelarEdicaoObservacao();
+                                        }
+                                      },
+                                      onBlur: () => finalizarEdicaoObservacao(item.id),
+                                      onFocus: (e) => {
+                                        const input = e.target;
+                                        setTimeout(() => {
+                                          input.setSelectionRange(input.value.length, input.value.length);
+                                        }, 0);
+                                      },
+                                      className: "flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500",
+                                      autoFocus: true,
+                                      placeholder: "Digite a observação..."
+                                    }
+                                  ),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => finalizarEdicaoObservacao(item.id),
+                                      className: "text-green-400 hover:text-green-300 transition-colors flex-shrink-0",
+                                      title: "Confirmar edição",
+                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { size: 14 })
+                                    }
+                                  )
+                                ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300 text-sm italic flex-1", children: item.observacao }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => iniciarEdicaoObservacao(item.id, item.observacao),
+                                      className: "text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0 ml-2",
+                                      title: "Editar observação",
+                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Pencil, { size: 12 })
+                                    }
+                                  )
+                                ] }) })
+                              ] }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm lg:hidden mt-2", children: item.desconto ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 line-through text-xs", children: formatCurrency(item.desconto.precoOriginal) }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 font-bold", children: formatCurrency(item.desconto.precoComDesconto) })
+                              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 font-bold", children: formatCurrency(item.subtotal / item.quantidade) }) }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center mt-2 lg:hidden", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => alterarQuantidade(item.id, item.quantidade - 1),
+                                      className: "w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors",
+                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Minus, { size: 14 })
+                                    }
+                                  ),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium min-w-[2rem] text-center", children: item.quantidade }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => alterarQuantidade(item.id, item.quantidade + 1),
+                                      className: "w-8 h-8 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors",
+                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 14 })
+                                    }
+                                  ),
+                                  (pdvConfig == null ? void 0 : pdvConfig.desconto_no_item) && !item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => abrirModalDesconto(item.id),
+                                      className: "w-8 h-8 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors",
+                                      title: "Aplicar desconto",
+                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Percent, { size: 14 })
+                                    }
+                                  ),
+                                  (pdvConfig == null ? void 0 : pdvConfig.desconto_no_item) && item.desconto && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => removerDesconto(item.id),
+                                      className: "w-8 h-8 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors",
+                                      title: "Remover desconto",
+                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
+                                    }
+                                  ),
+                                  item.temOpcoesAdicionais && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => abrirOpcoesAdicionais(item),
+                                      className: "w-8 h-8 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors",
+                                      title: "Opções adicionais",
+                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(Plus, { size: 14 })
+                                    }
+                                  ),
+                                  (pdvConfig == null ? void 0 : pdvConfig.observacao_no_item) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => abrirModalObservacao(item.id),
+                                      className: "w-8 h-8 bg-blue-600/20 hover:bg-blue-600/40 rounded-full flex items-center justify-center text-blue-200 transition-colors",
+                                      title: "Adicionar observação",
+                                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(MessageSquare, { size: 14 })
+                                    }
+                                  )
+                                ] }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white font-bold", children: formatCurrency(item.subtotal) })
+                              ] })
+                            ] }) })
+                          ] })
+                        },
+                        item.id
+                      )) })
+                    }
+                  ),
+                  !showFinalizacaoFinal && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-12 flex items-center", children: [
+                    menuStartIndex > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        onClick: navegarMenuAnterior,
+                        className: "w-9 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-r border-gray-800",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronLeft, { size: 18 })
                       }
                     ),
-                    !showFinalizacaoFinal && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute bottom-0 left-0 right-0 bg-background-card border-t border-gray-800 z-40", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-12 flex items-center", children: [
-                      menuStartIndex > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center h-full flex-1", children: menuPDVItems.slice(menuStartIndex, menuStartIndex + visibleMenuItems).map((item, index2) => {
+                      const IconComponent = item.icon;
+                      const originalIndex = menuStartIndex + index2;
+                      const teclaAtalho = `F${originalIndex + 1}`;
+                      return /* @__PURE__ */ jsxRuntimeExports.jsxs(
                         "button",
                         {
-                          onClick: navegarMenuAnterior,
-                          className: "w-9 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-r border-gray-800",
-                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronLeft, { size: 18 })
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center h-full flex-1", children: menuPDVItems.slice(menuStartIndex, menuStartIndex + visibleMenuItems).map((item, index2) => {
-                        const IconComponent = item.icon;
-                        const originalIndex = menuStartIndex + index2;
-                        const teclaAtalho = `F${originalIndex + 1}`;
-                        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                          "button",
-                          {
-                            onClick: (e) => item.onClick(e),
-                            className: `flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative`,
-                            style: { flex: "1 1 100px", minWidth: "100px" },
-                            children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(IconComponent, { size: 18 }),
-                                item.id === "pedidos" && contadorPedidosPendentes > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]", children: contadorPedidosPendentes > 99 ? "99+" : contadorPedidosPendentes }),
-                                item.id === "movimentos" && contadorNfcePendentes > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute -top-3 -right-10 bg-yellow-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]", children: contadorNfcePendentes > 99 ? "99+" : contadorNfcePendentes })
-                              ] }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1 mt-0.5", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs whitespace-nowrap", children: item.label }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs bg-gray-700 px-1 py-0.5 rounded text-gray-300 font-mono", children: teclaAtalho })
-                              ] })
-                            ]
-                          },
-                          item.id
-                        );
-                      }) }),
-                      menuStartIndex + visibleMenuItems < menuPDVItems.length && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "button",
-                        {
-                          onClick: navegarMenuProximo,
-                          className: "w-9 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-l border-gray-800",
-                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { size: 18 })
-                        }
-                      )
-                    ] }) })
-                  ] })
-                ] }),
-                carrinho.length > 0 && // SEMPRE aparece quando há pedidos importados (mesmo sem configurações)
-                (pedidosImportados.length > 0 || // SEMPRE aparece quando pelo menos uma configuração PDV está habilitada
-                ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || (pdvConfig == null ? void 0 : pdvConfig.vendedor) || (pdvConfig == null ? void 0 : pdvConfig.comandas) || (pdvConfig == null ? void 0 : pdvConfig.mesas) || (pdvConfig == null ? void 0 : pdvConfig.exibe_foto_item))) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          onClick: (e) => item.onClick(e),
+                          className: `flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative`,
+                          style: { flex: "1 1 100px", minWidth: "100px" },
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(IconComponent, { size: 18 }),
+                              item.id === "pedidos" && contadorPedidosPendentes > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]", children: contadorPedidosPendentes > 99 ? "99+" : contadorPedidosPendentes }),
+                              item.id === "movimentos" && contadorNfcePendentes > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute -top-3 -right-10 bg-yellow-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]", children: contadorNfcePendentes > 99 ? "99+" : contadorNfcePendentes })
+                            ] }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1 mt-0.5", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs whitespace-nowrap", children: item.label }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs bg-gray-700 px-1 py-0.5 rounded text-gray-300 font-mono", children: teclaAtalho })
+                            ] })
+                          ]
+                        },
+                        item.id
+                      );
+                    }) }),
+                    menuStartIndex + visibleMenuItems < menuPDVItems.length && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        onClick: navegarMenuProximo,
+                        className: "w-9 h-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors border-l border-gray-800",
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsx(ChevronRight, { size: 18 })
+                      }
+                    )
+                  ] }) })
+                ] }) }),
+                carrinho.length > 0 && (pedidosImportados.length > 0 || ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || (pdvConfig == null ? void 0 : pdvConfig.vendedor) || (pdvConfig == null ? void 0 : pdvConfig.comandas) || (pdvConfig == null ? void 0 : pdvConfig.mesas) || (pdvConfig == null ? void 0 : pdvConfig.exibe_foto_item))) && /* @__PURE__ */ jsxRuntimeExports.jsx(
                   motion.div,
                   {
                     initial: { x: "100%", opacity: 0 },
@@ -61000,575 +60992,589 @@ const PDVPage = () => {
                     ] })
                   }
                 ),
-                !showFinalizacaoFinal && carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  motion.div,
+                carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
                   {
-                    initial: { x: "100%", opacity: 0 },
-                    animate: { x: 0, opacity: 1 },
-                    transition: {
-                      type: "tween",
-                      duration: 0.5,
-                      ease: [0.25, 0.46, 0.45, 0.94]
+                    className: `flex-1 transition-all duration-300`,
+                    style: {
+                      display: "flex",
+                      position: "relative",
+                      height: "100%",
+                      flexShrink: 0
                     },
-                    className: "w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full",
                     children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "div",
+                      !showFinalizacaoFinal && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        motion.div,
                         {
-                          className: "flex-1 overflow-y-auto custom-scrollbar p-3",
-                          style: { maxHeight: "calc(100vh - 200px)" },
+                          initial: { opacity: 0 },
+                          animate: { opacity: 1 },
+                          transition: { duration: 0.3 },
+                          className: "w-full bg-background-card border-l border-gray-800 flex flex-col h-full transition-all duration-300",
+                          style: {
+                            position: "relative",
+                            flexShrink: 0
+                          },
                           children: [
-                            pedidosImportados.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Tipo de Pagamento" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => {
-                                        setTipoPagamento("vista");
-                                        limparPagamentosParciais();
-                                      },
-                                      className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "vista" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
-                                      children: "À Vista"
-                                    }
-                                  ),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => {
-                                        setTipoPagamento("parcial");
-                                        setFormaPagamentoSelecionada(null);
-                                      },
-                                      className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "parcial" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
-                                      children: "Parciais"
-                                    }
-                                  )
-                                ] })
-                              ] }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: tipoPagamento === "vista" ? "Forma de Pagamento" : "Formas de Pagamento" }),
-                                tipoPagamento === "vista" ? (
-                                  // Pagamento à vista - interface compacta
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => setFormaPagamentoSelecionada(forma.id),
-                                      className: `p-2 rounded border transition-colors text-sm ${formaPagamentoSelecionada === forma.id ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750"}`,
-                                      children: forma.nome
-                                    },
-                                    forma.id
-                                  )) })
-                                ) : (
-                                  // Pagamentos parciais - interface compacta
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "div",
+                              {
+                                className: "flex-1 overflow-y-auto custom-scrollbar p-3",
+                                style: { maxHeight: "calc(100vh - 200px)" },
+                                children: [
+                                  pedidosImportados.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
                                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Valor do Pagamento" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "input",
-                                        {
-                                          type: "text",
-                                          value: valorParcial,
-                                          onChange: (e) => setValorParcial(formatCurrencyInput(e.target.value)),
-                                          placeholder: `R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`,
-                                          className: "w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                        }
-                                      ),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 mt-1", children: "💡 Deixe vazio para usar o valor restante automaticamente" })
-                                    ] }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: () => adicionarPagamentoParcial(
-                                          forma.id,
-                                          forma.nome,
-                                          // Usar o nome da forma para exibição
-                                          forma.nome.toLowerCase() === "dinheiro" ? "dinheiro" : "eletronico"
-                                        ),
-                                        className: "p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm",
-                                        children: forma.nome
-                                      },
-                                      forma.id
-                                    )) }),
-                                    pagamentosParciais.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1.5", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center", children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-400", children: "Pagamentos Adicionados:" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Tipo de Pagamento" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
                                         /* @__PURE__ */ jsxRuntimeExports.jsx(
                                           "button",
                                           {
-                                            onClick: confirmarLimparTodos,
-                                            className: "text-xs text-red-400 hover:text-red-300",
-                                            children: "Limpar Todos"
+                                            onClick: () => {
+                                              setTipoPagamento("vista");
+                                              limparPagamentosParciais();
+                                            },
+                                            className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "vista" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
+                                            children: "À Vista"
                                           }
-                                        )
-                                      ] }),
-                                      pagamentosParciais.map((pagamento) => {
-                                        const forma = formasPagamento.find((f2) => f2.id === pagamento.forma);
-                                        return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-gray-800/30 rounded p-1.5", children: [
-                                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-xs", children: (forma == null ? void 0 : forma.nome) || pagamento.forma }),
-                                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 text-xs ml-2", children: formatCurrency(pagamento.valor) })
-                                          ] }),
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                            "button",
-                                            {
-                                              onClick: () => confirmarRemocaoItem(pagamento.id),
-                                              className: "text-red-400 hover:text-red-300",
-                                              children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
-                                            }
-                                          )
-                                        ] }, pagamento.id);
-                                      }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-gray-800/50 rounded p-2 space-y-1", children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs", children: [
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Total da Venda:" }),
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
-                                        ] }),
-                                        tipoPagamento === "parcial" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs font-bold", children: [
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Restante:" }),
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: calcularRestante() > 0 ? "text-yellow-400" : "text-green-400", children: formatCurrency(calcularRestante()) })
-                                        ] }),
-                                        trocoCalculado > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1", children: [
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 text-xs", children: "Troco:" }),
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-400 text-sm font-extrabold", children: formatCurrency(trocoCalculado) })
-                                        ] })
-                                      ] })
-                                    ] })
-                                  ] })
-                                )
-                              ] })
-                            ] }),
-                            pedidosImportados.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Tipo de Pagamento" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => {
-                                        setTipoPagamento("vista");
-                                        limparPagamentosParciais();
-                                      },
-                                      className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "vista" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
-                                      children: "À Vista"
-                                    }
-                                  ),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => {
-                                        setTipoPagamento("parcial");
-                                        setFormaPagamentoSelecionada(null);
-                                      },
-                                      className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "parcial" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
-                                      children: "Parciais"
-                                    }
-                                  )
-                                ] })
-                              ] }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: tipoPagamento === "vista" ? "Forma de Pagamento" : "Formas de Pagamento" }),
-                                tipoPagamento === "vista" ? (
-                                  // Pagamento à vista - interface compacta
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => setFormaPagamentoSelecionada(forma.id),
-                                      className: `p-2 rounded border transition-colors text-sm ${formaPagamentoSelecionada === forma.id ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750"}`,
-                                      children: forma.nome
-                                    },
-                                    forma.id
-                                  )) })
-                                ) : (
-                                  // Pagamentos parciais - interface compacta
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Valor do Pagamento" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "input",
-                                        {
-                                          type: "text",
-                                          value: valorParcial,
-                                          onChange: (e) => setValorParcial(formatCurrencyInput(e.target.value)),
-                                          placeholder: `R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`,
-                                          className: "w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                        }
-                                      ),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 mt-1", children: "💡 Deixe vazio para usar o valor restante automaticamente" })
-                                    ] }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: () => adicionarPagamentoParcial(
-                                          forma.id,
-                                          forma.nome,
-                                          // Usar o nome da forma para exibição
-                                          forma.nome.toLowerCase() === "dinheiro" ? "dinheiro" : "eletronico"
                                         ),
-                                        className: "p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm",
-                                        children: forma.nome
-                                      },
-                                      forma.id
-                                    )) }),
-                                    pagamentosParciais.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1.5", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center", children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-400", children: "Pagamentos Adicionados:" }),
                                         /* @__PURE__ */ jsxRuntimeExports.jsx(
                                           "button",
                                           {
-                                            onClick: confirmarLimparTodos,
-                                            className: "text-xs text-red-400 hover:text-red-300",
-                                            children: "Limpar Todos"
+                                            onClick: () => {
+                                              setTipoPagamento("parcial");
+                                              setFormaPagamentoSelecionada(null);
+                                            },
+                                            className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "parcial" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
+                                            children: "Parciais"
                                           }
                                         )
-                                      ] }),
-                                      pagamentosParciais.map((pagamento) => {
-                                        const forma = formasPagamento.find((f2) => f2.id === pagamento.forma);
-                                        return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-gray-800/30 rounded p-1.5", children: [
+                                      ] })
+                                    ] }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: tipoPagamento === "vista" ? "Forma de Pagamento" : "Formas de Pagamento" }),
+                                      tipoPagamento === "vista" ? (
+                                        // Pagamento à vista - interface compacta
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          "button",
+                                          {
+                                            onClick: () => setFormaPagamentoSelecionada(forma.id),
+                                            className: `p-2 rounded border transition-colors text-sm ${formaPagamentoSelecionada === forma.id ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750"}`,
+                                            children: forma.nome
+                                          },
+                                          forma.id
+                                        )) })
+                                      ) : (
+                                        // Pagamentos parciais - interface compacta
+                                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
                                           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-xs", children: (forma == null ? void 0 : forma.nome) || pagamento.forma }),
-                                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 text-xs ml-2", children: formatCurrency(pagamento.valor) })
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Valor do Pagamento" }),
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                              "input",
+                                              {
+                                                type: "text",
+                                                value: valorParcial,
+                                                onChange: (e) => setValorParcial(formatCurrencyInput(e.target.value)),
+                                                placeholder: `R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`,
+                                                className: "w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                              }
+                                            ),
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 mt-1", children: "💡 Deixe vazio para usar o valor restante automaticamente" })
                                           ] }),
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                                             "button",
                                             {
-                                              onClick: () => confirmarRemocaoItem(pagamento.id),
-                                              className: "text-red-400 hover:text-red-300",
-                                              children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
-                                            }
-                                          )
-                                        ] }, pagamento.id);
-                                      }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-gray-800/50 rounded p-2 space-y-1", children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs", children: [
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Total da Venda:" }),
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
-                                        ] }),
-                                        tipoPagamento === "parcial" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs font-bold", children: [
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Restante:" }),
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: calcularRestante() > 0 ? "text-yellow-400" : "text-green-400", children: formatCurrency(calcularRestante()) })
-                                        ] }),
-                                        trocoCalculado > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1", children: [
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 text-xs", children: "Troco:" }),
-                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-400 text-sm font-extrabold", children: formatCurrency(trocoCalculado) })
+                                              onClick: () => adicionarPagamentoParcial(
+                                                forma.id,
+                                                forma.nome,
+                                                // Usar o nome da forma para exibição
+                                                forma.nome.toLowerCase() === "dinheiro" ? "dinheiro" : "eletronico"
+                                              ),
+                                              className: "p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm",
+                                              children: forma.nome
+                                            },
+                                            forma.id
+                                          )) }),
+                                          pagamentosParciais.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1.5", children: [
+                                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center", children: [
+                                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-400", children: "Pagamentos Adicionados:" }),
+                                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                                "button",
+                                                {
+                                                  onClick: confirmarLimparTodos,
+                                                  className: "text-xs text-red-400 hover:text-red-300",
+                                                  children: "Limpar Todos"
+                                                }
+                                              )
+                                            ] }),
+                                            pagamentosParciais.map((pagamento) => {
+                                              const forma = formasPagamento.find((f2) => f2.id === pagamento.forma);
+                                              return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-gray-800/30 rounded p-1.5", children: [
+                                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-xs", children: (forma == null ? void 0 : forma.nome) || pagamento.forma }),
+                                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 text-xs ml-2", children: formatCurrency(pagamento.valor) })
+                                                ] }),
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                                  "button",
+                                                  {
+                                                    onClick: () => confirmarRemocaoItem(pagamento.id),
+                                                    className: "text-red-400 hover:text-red-300",
+                                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
+                                                  }
+                                                )
+                                              ] }, pagamento.id);
+                                            }),
+                                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-gray-800/50 rounded p-2 space-y-1", children: [
+                                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs", children: [
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Total da Venda:" }),
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
+                                              ] }),
+                                              tipoPagamento === "parcial" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs font-bold", children: [
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Restante:" }),
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: calcularRestante() > 0 ? "text-yellow-400" : "text-green-400", children: formatCurrency(calcularRestante()) })
+                                              ] }),
+                                              trocoCalculado > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1", children: [
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 text-xs", children: "Troco:" }),
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-400 text-sm font-extrabold", children: formatCurrency(trocoCalculado) })
+                                              ] })
+                                            ] })
+                                          ] })
                                         ] })
+                                      )
+                                    ] })
+                                  ] }),
+                                  pedidosImportados.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Tipo de Pagamento" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          "button",
+                                          {
+                                            onClick: () => {
+                                              setTipoPagamento("vista");
+                                              limparPagamentosParciais();
+                                            },
+                                            className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "vista" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
+                                            children: "À Vista"
+                                          }
+                                        ),
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          "button",
+                                          {
+                                            onClick: () => {
+                                              setTipoPagamento("parcial");
+                                              setFormaPagamentoSelecionada(null);
+                                            },
+                                            className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "parcial" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
+                                            children: "Parciais"
+                                          }
+                                        )
                                       ] })
+                                    ] }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: tipoPagamento === "vista" ? "Forma de Pagamento" : "Formas de Pagamento" }),
+                                      tipoPagamento === "vista" ? (
+                                        // Pagamento à vista - interface compacta
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          "button",
+                                          {
+                                            onClick: () => setFormaPagamentoSelecionada(forma.id),
+                                            className: `p-2 rounded border transition-colors text-sm ${formaPagamentoSelecionada === forma.id ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750"}`,
+                                            children: forma.nome
+                                          },
+                                          forma.id
+                                        )) })
+                                      ) : (
+                                        // Pagamentos parciais - interface compacta
+                                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
+                                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Valor do Pagamento" }),
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                              "input",
+                                              {
+                                                type: "text",
+                                                value: valorParcial,
+                                                onChange: (e) => setValorParcial(formatCurrencyInput(e.target.value)),
+                                                placeholder: `R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`,
+                                                className: "w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                              }
+                                            ),
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 mt-1", children: "💡 Deixe vazio para usar o valor restante automaticamente" })
+                                          ] }),
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                            "button",
+                                            {
+                                              onClick: () => adicionarPagamentoParcial(
+                                                forma.id,
+                                                forma.nome,
+                                                // Usar o nome da forma para exibição
+                                                forma.nome.toLowerCase() === "dinheiro" ? "dinheiro" : "eletronico"
+                                              ),
+                                              className: "p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm",
+                                              children: forma.nome
+                                            },
+                                            forma.id
+                                          )) }),
+                                          pagamentosParciais.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1.5", children: [
+                                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center", children: [
+                                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-400", children: "Pagamentos Adicionados:" }),
+                                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                                "button",
+                                                {
+                                                  onClick: confirmarLimparTodos,
+                                                  className: "text-xs text-red-400 hover:text-red-300",
+                                                  children: "Limpar Todos"
+                                                }
+                                              )
+                                            ] }),
+                                            pagamentosParciais.map((pagamento) => {
+                                              const forma = formasPagamento.find((f2) => f2.id === pagamento.forma);
+                                              return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-gray-800/30 rounded p-1.5", children: [
+                                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-xs", children: (forma == null ? void 0 : forma.nome) || pagamento.forma }),
+                                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 text-xs ml-2", children: formatCurrency(pagamento.valor) })
+                                                ] }),
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                                  "button",
+                                                  {
+                                                    onClick: () => confirmarRemocaoItem(pagamento.id),
+                                                    className: "text-red-400 hover:text-red-300",
+                                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
+                                                  }
+                                                )
+                                              ] }, pagamento.id);
+                                            }),
+                                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-gray-800/50 rounded p-2 space-y-1", children: [
+                                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs", children: [
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Total da Venda:" }),
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
+                                              ] }),
+                                              tipoPagamento === "parcial" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs font-bold", children: [
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Restante:" }),
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: calcularRestante() > 0 ? "text-yellow-400" : "text-green-400", children: formatCurrency(calcularRestante()) })
+                                              ] }),
+                                              trocoCalculado > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1", children: [
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 text-xs", children: "Troco:" }),
+                                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-400 text-sm font-extrabold", children: formatCurrency(trocoCalculado) })
+                                              ] })
+                                            ] })
+                                          ] })
+                                        ] })
+                                      )
                                     ] })
                                   ] })
-                                )
-                              ] })
-                            ] })
-                          ]
-                        }
-                      ),
-                      carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-3 bg-background-card flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-800/50 rounded p-2.5 mb-1", children: (() => {
-                        const subtotal = calcularTotal();
-                        const totalFinal = calcularTotalComDesconto();
-                        let descontoPrazo = null;
-                        if (descontoPrazoSelecionado) {
-                          const desconto = descontosCliente.prazo.find((d2) => d2.id === descontoPrazoSelecionado);
-                          if (desconto) {
-                            const valorDesconto2 = subtotal * desconto.percentual / 100;
-                            descontoPrazo = {
-                              tipo: desconto.tipo,
-                              percentual: desconto.percentual,
-                              valor: valorDesconto2,
-                              prazo_dias: desconto.prazo_dias
-                            };
-                          }
-                        }
-                        const subtotalComDescontoPrazo = descontoPrazo ? descontoPrazo.tipo === "desconto" ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor : subtotal;
-                        const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
-                        return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: "Subtotal:" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: formatCurrency(subtotal) })
-                          ] }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: "Itens:" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: carrinho.reduce((total, item) => total + item.quantidade, 0) })
-                          ] }),
-                          descontoPrazo && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoPrazo.tipo === "desconto" ? "text-blue-400" : "text-orange-400"}`, children: [
-                              descontoPrazo.tipo === "desconto" ? "Desconto" : "Acréscimo",
-                              " Prazo (",
-                              descontoPrazo.prazo_dias,
-                              "d):"
-                            ] }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoPrazo.tipo === "desconto" ? "text-blue-400" : "text-orange-400"}`, children: [
-                              descontoPrazo.tipo === "desconto" ? "-" : "+",
-                              formatCurrency(descontoPrazo.valor)
-                            ] })
-                          ] }),
-                          descontoValor && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
-                              descontoValor.tipo === "desconto" ? "Desconto" : "Acréscimo",
-                              " (",
-                              descontoValor.percentual,
-                              "%):"
-                            ] }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
-                              descontoValor.tipo === "desconto" ? "-" : "+",
-                              formatCurrency(descontoValor.valor)
-                            ] })
-                          ] }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center mb-0 pt-1.5 border-t border-gray-700", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-sm", children: "Total da Venda:" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg font-bold text-primary-400", children: formatCurrency(totalFinal) })
-                          ] })
-                        ] });
-                      })() }) }),
-                      carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-3 pt-1 pb-2 flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "button",
-                          {
-                            onClick: () => setShowConfirmLimparTudoPDV(true),
-                            className: "flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white py-2 px-3 rounded transition-colors text-sm",
-                            children: "Cancelar"
-                          }
-                        ),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "button",
-                          {
-                            onClick: () => {
-                              if (tipoPagamento === "vista") {
-                                if (!formaPagamentoSelecionada) {
-                                  B.error("Selecione uma forma de pagamento");
-                                  return;
-                                }
-                                setShowFinalizacaoFinal(true);
-                              } else {
-                                if (pagamentosParciais.length === 0) {
-                                  B.error("Adicione pelo menos uma forma de pagamento");
-                                  return;
-                                }
-                                const restante = calcularRestante();
-                                if (restante > 0) {
-                                  B.error(`Ainda falta pagar ${formatCurrency(restante)}`);
-                                  return;
-                                }
-                                setShowFinalizacaoFinal(true);
+                                ]
                               }
-                            },
-                            disabled: tipoPagamento === "parcial" && calcularRestante() > 0,
-                            className: `flex-1 py-2 px-3 rounded border transition-colors text-sm ${tipoPagamento === "parcial" && calcularRestante() > 0 ? "bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed" : "bg-gray-700 hover:bg-gray-600 border-gray-600 text-white"}`,
-                            children: tipoPagamento === "parcial" && calcularRestante() > 0 ? `Falta ${formatCurrency(calcularRestante())}` : "Confirmar"
-                          }
-                        )
-                      ] }) })
-                    ]
-                  }
-                ),
-                showFinalizacaoFinal && carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  motion.div,
-                  {
-                    initial: { x: "100%", opacity: 0 },
-                    animate: { x: 0, opacity: 1 },
-                    transition: {
-                      type: "tween",
-                      duration: 0.5,
-                      ease: [0.25, 0.46, 0.45, 0.94]
-                    },
-                    className: "w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full",
-                    children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-base font-semibold text-white", children: "Finalizar Venda" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(
-                          "button",
-                          {
-                            onClick: () => setShowFinalizacaoFinal(false),
-                            className: "text-gray-400 hover:text-white transition-colors",
-                            children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 16 })
-                          }
-                        )
-                      ] }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                        "div",
-                        {
-                          className: "flex-1 overflow-y-auto custom-scrollbar px-4 py-3",
-                          style: { maxHeight: "calc(100vh - 120px)" },
-                          children: [
-                            tipoPagamento === "vista" && formaPagamentoSelecionada || tipoPagamento === "parcial" && pagamentosParciais.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-gray-800/50 rounded-lg p-3 mb-3", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-medium text-white mb-2", children: "Pagamentos:" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-1", children: tipoPagamento === "vista" && formaPagamentoSelecionada ? (() => {
-                                const forma = formasPagamento.find((f2) => f2.id === formaPagamentoSelecionada);
-                                if (!forma) return null;
-                                return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between py-1.5 px-2 bg-gray-700/30 rounded text-sm", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-white", children: forma.nome }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
-                                ] });
-                              })() : pagamentosParciais.map((pagamento, index2) => {
-                                const forma = formasPagamento.find((f2) => f2.id === pagamento.forma);
-                                if (!forma) return null;
-                                return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between py-1.5 px-2 bg-gray-700/30 rounded text-sm", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-white", children: forma.nome }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(pagamento.valor) })
-                                ] }, index2);
-                              }) })
-                            ] }) : null,
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-800/50 rounded-lg p-3 mb-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1 text-sm", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Total:" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
-                              ] }),
-                              tipoPagamento === "parcial" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Restante:" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: calcularRestante() > 0 ? "text-yellow-400" : "text-green-400", children: formatCurrency(calcularRestante()) })
-                              ] }),
-                              trocoCalculado > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center font-bold border-t border-gray-700 pt-1.5 mt-1.5", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Troco:" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-400 text-lg font-bold", children: formatCurrency(trocoCalculado) })
-                              ] })
-                            ] }) }),
-                            temBotaoNfceAtivo() && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-2", children: "Nota Fiscal Paulista" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => handleTipoDocumentoChange("cpf"),
-                                      className: `flex-1 py-2 px-3 rounded border transition-colors text-sm font-medium ${tipoDocumento === "cpf" ? "bg-primary-500 border-primary-500 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-700"}`,
-                                      children: "CPF"
-                                    }
-                                  ),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "button",
-                                    {
-                                      onClick: () => handleTipoDocumentoChange("cnpj"),
-                                      className: `flex-1 py-2 px-3 rounded border transition-colors text-sm font-medium ${tipoDocumento === "cnpj" ? "bg-primary-500 border-primary-500 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-700"}`,
-                                      children: "CNPJ"
-                                    }
-                                  )
-                                ] })
-                              ] }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                  "input",
-                                  {
-                                    type: "text",
-                                    value: cpfCnpjNota,
-                                    onChange: (e) => {
-                                      handleCpfCnpjChange(e.target.value);
-                                      if (erroValidacao) {
-                                        setErroValidacao("");
-                                      }
-                                    },
-                                    onBlur: validarDocumentoOnBlur,
-                                    placeholder: tipoDocumento === "cpf" ? "000.000.000-00" : "00.000.000/0000-00",
-                                    className: `w-full bg-gray-800/50 border rounded py-1.5 px-2 text-sm text-white focus:outline-none focus:ring-1 transition-colors ${erroValidacao ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : "border-gray-700 focus:border-primary-500 focus:ring-primary-500/20"}`
-                                  }
-                                ),
-                                erroValidacao && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-1 text-xs text-red-400 flex items-center gap-1", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "⚠️" }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: erroValidacao })
-                                ] })
-                              ] }),
-                              clienteEncontrado ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-green-500/20 border border-green-500/30 rounded p-2", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1 mb-1", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(UserCheck, { size: 14, className: "text-green-400" }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-green-400 text-xs font-medium", children: "Cliente Encontrado" })
+                            ),
+                            carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-3 bg-background-card flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-800/50 rounded p-2.5 mb-1", children: (() => {
+                              const subtotal = calcularTotal();
+                              const totalFinal = calcularTotalComDesconto();
+                              let descontoPrazo = null;
+                              if (descontoPrazoSelecionado) {
+                                const desconto = descontosCliente.prazo.find((d2) => d2.id === descontoPrazoSelecionado);
+                                if (desconto) {
+                                  const valorDesconto2 = subtotal * desconto.percentual / 100;
+                                  descontoPrazo = {
+                                    tipo: desconto.tipo,
+                                    percentual: desconto.percentual,
+                                    valor: valorDesconto2,
+                                    prazo_dias: desconto.prazo_dias
+                                  };
+                                }
+                              }
+                              const subtotalComDescontoPrazo = descontoPrazo ? descontoPrazo.tipo === "desconto" ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor : subtotal;
+                              const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
+                              return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: "Subtotal:" }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: formatCurrency(subtotal) })
                                 ] }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-sm", children: clienteEncontrado.nome }),
-                                clienteEncontrado.telefone && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-gray-300 text-xs", children: clienteEncontrado.telefone })
-                              ] }) : cpfCnpjNota && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-600/20 border border-gray-600/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14, className: "text-gray-400" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 text-xs", children: "Consumidor Final" })
-                              ] }) })
-                            ] }) }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2 pb-3", children: [
-                              !cpfCnpjNota && !deveOcultarFinalizacaoSimples() && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
-                                !(pdvConfig == null ? void 0 : pdvConfig.ocultar_finalizar_com_impressao) && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                  "button",
-                                  {
-                                    onClick: () => {
-                                      if (showProcessandoVenda) {
-                                        console.log("🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada");
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: "Itens:" }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: carrinho.reduce((total, item) => total + item.quantidade, 0) })
+                                ] }),
+                                descontoPrazo && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoPrazo.tipo === "desconto" ? "text-blue-400" : "text-orange-400"}`, children: [
+                                    descontoPrazo.tipo === "desconto" ? "Desconto" : "Acréscimo",
+                                    " Prazo (",
+                                    descontoPrazo.prazo_dias,
+                                    "d):"
+                                  ] }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoPrazo.tipo === "desconto" ? "text-blue-400" : "text-orange-400"}`, children: [
+                                    descontoPrazo.tipo === "desconto" ? "-" : "+",
+                                    formatCurrency(descontoPrazo.valor)
+                                  ] })
+                                ] }),
+                                descontoValor && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
+                                    descontoValor.tipo === "desconto" ? "Desconto" : "Acréscimo",
+                                    " (",
+                                    descontoValor.percentual,
+                                    "%):"
+                                  ] }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
+                                    descontoValor.tipo === "desconto" ? "-" : "+",
+                                    formatCurrency(descontoValor.valor)
+                                  ] })
+                                ] }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center mb-0 pt-1.5 border-t border-gray-700", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-sm", children: "Total da Venda:" }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg font-bold text-primary-400", children: formatCurrency(totalFinal) })
+                                ] })
+                              ] });
+                            })() }) }),
+                            carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-3 pt-1 pb-2 flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "button",
+                                {
+                                  onClick: () => setShowConfirmLimparTudoPDV(true),
+                                  className: "flex-1 bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white py-2 px-3 rounded transition-colors text-sm",
+                                  children: "Cancelar"
+                                }
+                              ),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "button",
+                                {
+                                  onClick: () => {
+                                    if (tipoPagamento === "vista") {
+                                      if (!formaPagamentoSelecionada) {
+                                        B.error("Selecione uma forma de pagamento");
                                         return;
                                       }
-                                      finalizarVendaCompleta("finalizar_com_impressao");
-                                    },
-                                    disabled: showProcessandoVenda,
-                                    className: `w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${showProcessandoVenda ? "bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed" : "bg-green-900/20 hover:bg-green-800/30 text-green-300 border-green-800/30"}`,
-                                    children: "Finalizar com Impressão"
-                                  }
-                                ),
-                                !(pdvConfig == null ? void 0 : pdvConfig.ocultar_finalizar_sem_impressao) && /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                  "button",
-                                  {
-                                    onClick: () => {
-                                      if (showProcessandoVenda) {
-                                        console.log("🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada");
+                                      setShowFinalizacaoFinal(true);
+                                    } else {
+                                      if (pagamentosParciais.length === 0) {
+                                        B.error("Adicione pelo menos uma forma de pagamento");
                                         return;
                                       }
-                                      finalizarVendaCompleta("finalizar_sem_impressao");
-                                    },
-                                    disabled: showProcessandoVenda,
-                                    className: `w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${showProcessandoVenda ? "bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed" : "bg-green-800/20 hover:bg-green-700/30 text-green-400 border-green-700/30"}`,
-                                    children: "Finalizar sem Impressão"
-                                  }
-                                )
-                              ] }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
-                                !(pdvConfig == null ? void 0 : pdvConfig.ocultar_nfce_com_impressao) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                  "button",
-                                  {
-                                    onClick: () => {
-                                      if (isDocumentoInvalido()) {
-                                        B.error("CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.");
+                                      const restante = calcularRestante();
+                                      if (restante > 0) {
+                                        B.error(`Ainda falta pagar ${formatCurrency(restante)}`);
                                         return;
                                       }
-                                      if (showProcessandoVenda) {
-                                        console.log("🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada");
-                                        return;
-                                      }
-                                      finalizarVendaCompleta("nfce_com_impressao");
-                                    },
-                                    disabled: isDocumentoInvalido() || showProcessandoVenda,
-                                    className: `w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${isDocumentoInvalido() || showProcessandoVenda ? "bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed" : "bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 border-blue-800/30"}`,
-                                    children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "NFC-e com Impressão" }),
-                                      isDocumentoInvalido() && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mt-0.5", children: "CPF/CNPJ inválido" })
-                                    ]
-                                  }
-                                ),
-                                !(pdvConfig == null ? void 0 : pdvConfig.ocultar_nfce_sem_impressao) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                  "button",
-                                  {
-                                    onClick: () => {
-                                      if (isDocumentoInvalido()) {
-                                        B.error("CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.");
-                                        return;
-                                      }
-                                      if (showProcessandoVenda) {
-                                        console.log("🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada");
-                                        return;
-                                      }
-                                      finalizarVendaCompleta("nfce_sem_impressao");
-                                    },
-                                    disabled: isDocumentoInvalido() || showProcessandoVenda,
-                                    className: `w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${isDocumentoInvalido() || showProcessandoVenda ? "bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed" : "bg-blue-800/20 hover:bg-blue-700/30 text-blue-400 border-blue-700/30"}`,
-                                    children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "NFC-e sem Impressão" }),
-                                      isDocumentoInvalido() && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mt-0.5", children: "CPF/CNPJ inválido" })
-                                    ]
-                                  }
-                                ),
-                                false
-                              ] }),
-                              !cpfCnpjNota && !deveOcultarFinalizacaoSimples() && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-2", children: false })
-                            ] })
+                                      setShowFinalizacaoFinal(true);
+                                    }
+                                  },
+                                  disabled: tipoPagamento === "parcial" && calcularRestante() > 0,
+                                  className: `flex-1 py-2 px-3 rounded border transition-colors text-sm ${tipoPagamento === "parcial" && calcularRestante() > 0 ? "bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed" : "bg-gray-700 hover:bg-gray-600 border-gray-600 text-white"}`,
+                                  children: tipoPagamento === "parcial" && calcularRestante() > 0 ? `Falta ${formatCurrency(calcularRestante())}` : "Confirmar"
+                                }
+                              )
+                            ] }) })
                           ]
                         }
                       ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "border-t border-gray-800 px-4 py-3 flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "button",
+                      showFinalizacaoFinal && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        motion.div,
                         {
-                          onClick: () => setShowFinalizacaoFinal(false),
-                          className: "w-full bg-gray-800/30 hover:bg-gray-700/50 text-gray-300 py-2.5 px-3 rounded transition-colors border border-gray-700/50 text-sm font-medium",
-                          children: "← Voltar para Pagamento"
+                          initial: { opacity: 0, scale: 0.95 },
+                          animate: { opacity: 1, scale: 1 },
+                          transition: { duration: 0.3 },
+                          className: "w-full bg-background-card border-l border-gray-800 flex flex-col h-full",
+                          style: {
+                            position: "relative",
+                            flexShrink: 0
+                          },
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-base font-semibold text-white", children: "Finalizar Venda" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "button",
+                                {
+                                  onClick: () => setShowFinalizacaoFinal(false),
+                                  className: "text-gray-400 hover:text-white transition-colors",
+                                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 16 })
+                                }
+                              )
+                            ] }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "div",
+                              {
+                                className: "flex-1 overflow-y-auto custom-scrollbar px-4 py-3",
+                                style: { maxHeight: "calc(100vh - 120px)" },
+                                children: [
+                                  tipoPagamento === "vista" && formaPagamentoSelecionada || tipoPagamento === "parcial" && pagamentosParciais.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-gray-800/50 rounded-lg p-3 mb-3", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-medium text-white mb-2", children: "Pagamentos:" }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-1", children: tipoPagamento === "vista" && formaPagamentoSelecionada ? (() => {
+                                      const forma = formasPagamento.find((f2) => f2.id === formaPagamentoSelecionada);
+                                      if (!forma) return null;
+                                      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between py-1.5 px-2 bg-gray-700/30 rounded text-sm", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-white", children: forma.nome }),
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
+                                      ] });
+                                    })() : pagamentosParciais.map((pagamento, index2) => {
+                                      const forma = formasPagamento.find((f2) => f2.id === pagamento.forma);
+                                      if (!forma) return null;
+                                      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between py-1.5 px-2 bg-gray-700/30 rounded text-sm", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-white", children: forma.nome }),
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(pagamento.valor) })
+                                      ] }, index2);
+                                    }) })
+                                  ] }) : null,
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-800/50 rounded-lg p-3 mb-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1 text-sm", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Total:" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
+                                    ] }),
+                                    tipoPagamento === "parcial" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Restante:" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: calcularRestante() > 0 ? "text-yellow-400" : "text-green-400", children: formatCurrency(calcularRestante()) })
+                                    ] }),
+                                    trocoCalculado > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center font-bold border-t border-gray-700 pt-1.5 mt-1.5", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Troco:" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-400 text-lg font-bold", children: formatCurrency(trocoCalculado) })
+                                    ] })
+                                  ] }) }),
+                                  temBotaoNfceAtivo() && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mb-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-2", children: "Nota Fiscal Paulista" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          "button",
+                                          {
+                                            onClick: () => handleTipoDocumentoChange("cpf"),
+                                            className: `flex-1 py-2 px-3 rounded border transition-colors text-sm font-medium ${tipoDocumento === "cpf" ? "bg-primary-500 border-primary-500 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-700"}`,
+                                            children: "CPF"
+                                          }
+                                        ),
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          "button",
+                                          {
+                                            onClick: () => handleTipoDocumentoChange("cnpj"),
+                                            className: `flex-1 py-2 px-3 rounded border transition-colors text-sm font-medium ${tipoDocumento === "cnpj" ? "bg-primary-500 border-primary-500 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-700"}`,
+                                            children: "CNPJ"
+                                          }
+                                        )
+                                      ] })
+                                    ] }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                        "input",
+                                        {
+                                          type: "text",
+                                          value: cpfCnpjNota,
+                                          onChange: (e) => {
+                                            handleCpfCnpjChange(e.target.value);
+                                            if (erroValidacao) {
+                                              setErroValidacao("");
+                                            }
+                                          },
+                                          onBlur: validarDocumentoOnBlur,
+                                          placeholder: tipoDocumento === "cpf" ? "000.000.000-00" : "00.000.000/0000-00",
+                                          className: `w-full bg-gray-800/50 border rounded py-1.5 px-2 text-sm text-white focus:outline-none focus:ring-1 transition-colors ${erroValidacao ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : "border-gray-700 focus:border-primary-500 focus:ring-primary-500/20"}`
+                                        }
+                                      ),
+                                      erroValidacao && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-1 text-xs text-red-400 flex items-center gap-1", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "⚠️" }),
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: erroValidacao })
+                                      ] })
+                                    ] }),
+                                    clienteEncontrado ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-green-500/20 border border-green-500/30 rounded p-2", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1 mb-1", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx(UserCheck, { size: 14, className: "text-green-400" }),
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-green-400 text-xs font-medium", children: "Cliente Encontrado" })
+                                      ] }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-sm", children: clienteEncontrado.nome }),
+                                      clienteEncontrado.telefone && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-gray-300 text-xs", children: clienteEncontrado.telefone })
+                                    ] }) : cpfCnpjNota && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-600/20 border border-gray-600/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14, className: "text-gray-400" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 text-xs", children: "Consumidor Final" })
+                                    ] }) })
+                                  ] }) }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2 pb-3", children: [
+                                    !cpfCnpjNota && !deveOcultarFinalizacaoSimples() && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
+                                      !(pdvConfig == null ? void 0 : pdvConfig.ocultar_finalizar_com_impressao) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                        "button",
+                                        {
+                                          onClick: () => {
+                                            if (showProcessandoVenda) {
+                                              console.log("🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada");
+                                              return;
+                                            }
+                                            finalizarVendaCompleta("finalizar_com_impressao");
+                                          },
+                                          disabled: showProcessandoVenda,
+                                          className: `w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${showProcessandoVenda ? "bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed" : "bg-green-900/20 hover:bg-green-800/30 text-green-300 border-green-800/30"}`,
+                                          children: "Finalizar com Impressão"
+                                        }
+                                      ),
+                                      !(pdvConfig == null ? void 0 : pdvConfig.ocultar_finalizar_sem_impressao) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                        "button",
+                                        {
+                                          onClick: () => {
+                                            if (showProcessandoVenda) {
+                                              console.log("🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada");
+                                              return;
+                                            }
+                                            finalizarVendaCompleta("finalizar_sem_impressao");
+                                          },
+                                          disabled: showProcessandoVenda,
+                                          className: `w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${showProcessandoVenda ? "bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed" : "bg-green-800/20 hover:bg-green-700/30 text-green-400 border-green-700/30"}`,
+                                          children: "Finalizar sem Impressão"
+                                        }
+                                      )
+                                    ] }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
+                                      !(pdvConfig == null ? void 0 : pdvConfig.ocultar_nfce_com_impressao) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                        "button",
+                                        {
+                                          onClick: () => {
+                                            if (isDocumentoInvalido()) {
+                                              B.error("CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.");
+                                              return;
+                                            }
+                                            if (showProcessandoVenda) {
+                                              console.log("🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada");
+                                              return;
+                                            }
+                                            finalizarVendaCompleta("nfce_com_impressao");
+                                          },
+                                          disabled: isDocumentoInvalido() || showProcessandoVenda,
+                                          className: `w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${isDocumentoInvalido() || showProcessandoVenda ? "bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed" : "bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 border-blue-800/30"}`,
+                                          children: [
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "NFC-e com Impressão" }),
+                                            isDocumentoInvalido() && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mt-0.5", children: "CPF/CNPJ inválido" })
+                                          ]
+                                        }
+                                      ),
+                                      !(pdvConfig == null ? void 0 : pdvConfig.ocultar_nfce_sem_impressao) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                                        "button",
+                                        {
+                                          onClick: () => {
+                                            if (isDocumentoInvalido()) {
+                                              B.error("CPF/CNPJ inválido. Corrija o documento para emitir NFC-e.");
+                                              return;
+                                            }
+                                            if (showProcessandoVenda) {
+                                              console.log("🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada");
+                                              return;
+                                            }
+                                            finalizarVendaCompleta("nfce_sem_impressao");
+                                          },
+                                          disabled: isDocumentoInvalido() || showProcessandoVenda,
+                                          className: `w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${isDocumentoInvalido() || showProcessandoVenda ? "bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed" : "bg-blue-800/20 hover:bg-blue-700/30 text-blue-400 border-blue-700/30"}`,
+                                          children: [
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: "NFC-e sem Impressão" }),
+                                            isDocumentoInvalido() && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mt-0.5", children: "CPF/CNPJ inválido" })
+                                          ]
+                                        }
+                                      ),
+                                      false
+                                    ] }),
+                                    !cpfCnpjNota && !deveOcultarFinalizacaoSimples() && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-2", children: false })
+                                  ] })
+                                ]
+                              }
+                            ),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "border-t border-gray-800 px-4 py-3 flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "button",
+                              {
+                                onClick: () => setShowFinalizacaoFinal(false),
+                                className: "w-full bg-gray-800/30 hover:bg-gray-700/50 text-gray-300 py-2.5 px-3 rounded transition-colors border border-gray-700/50 text-sm font-medium",
+                                children: "← Voltar para Pagamento"
+                              }
+                            ) })
+                          ]
                         }
-                      ) })
+                      )
                     ]
                   }
                 )

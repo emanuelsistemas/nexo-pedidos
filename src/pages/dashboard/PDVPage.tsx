@@ -6250,26 +6250,9 @@ const PDVPage: React.FC = () => {
         style={{ height: 'calc(100vh - 56px)' }}
       >
 
-        {/* Área dos Itens do Carrinho - ajusta largura baseado na presença da área lateral */}
-        <div className={`${
-          carrinho.length > 0
-            ? (
-                // Se há área lateral visível, usar menos espaço
-                (pedidosImportados.length > 0 ||
-                 pdvConfig?.seleciona_clientes ||
-                 pdvConfig?.vendedor ||
-                 pdvConfig?.comandas ||
-                 pdvConfig?.mesas ||
-                 pdvConfig?.exibe_foto_item)
-                  ? 'w-1/2' // 50% quando área lateral está visível
-                  : 'w-2/3' // 66% quando área lateral não está visível
-              )
-            : 'w-full' // 100% quando carrinho vazio
-        } p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
-          {/* Overlay para desativar interação quando finalização está aberta */}
-          {showFinalizacaoFinal && (
-            <div className="absolute inset-0 bg-black/20 z-20 cursor-not-allowed" />
-          )}
+        {/* Área dos Itens do Carrinho - ocupa toda largura quando vazio, 50% quando há itens */}
+        <div className={`${carrinho.length > 0 ? 'w-1/2' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
+          {/* Overlay removido - estava causando problemas no layout lado a lado */}
             <div className="h-full flex flex-col">
 
 
@@ -6856,9 +6839,7 @@ const PDVPage: React.FC = () => {
 
         {/* Área Lateral de Informações - Aparece quando há configurações habilitadas OU pedidos importados */}
         {carrinho.length > 0 && (
-          // SEMPRE aparece quando há pedidos importados (mesmo sem configurações)
           pedidosImportados.length > 0 ||
-          // SEMPRE aparece quando pelo menos uma configuração PDV está habilitada
           (pdvConfig?.seleciona_clientes ||
            pdvConfig?.vendedor ||
            pdvConfig?.comandas ||
@@ -7239,18 +7220,30 @@ const PDVPage: React.FC = () => {
 
 
 
-        {/* Área de Finalização de Venda - Só aparece quando há itens E não está na finalização final */}
-        {!showFinalizacaoFinal && carrinho.length > 0 && (
-          <motion.div
-            initial={{ x: '100%', opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{
-              type: "tween",
-              duration: 0.5,
-              ease: [0.25, 0.46, 0.45, 0.94]
+        {/* Container das Áreas de Finalização - Agrupa primeira e segunda tela */}
+        {carrinho.length > 0 && (
+          <div
+            className={`flex-1 transition-all duration-300`}
+            style={{
+              display: 'flex',
+              position: 'relative',
+              height: '100%',
+              flexShrink: 0
             }}
-            className="w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full"
           >
+
+            {/* Área de Finalização de Venda - Primeira tela - Oculta quando segunda tela está ativa */}
+            {!showFinalizacaoFinal && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+                className="w-full bg-background-card border-l border-gray-800 flex flex-col h-full transition-all duration-300"
+                style={{
+                  position: 'relative',
+                  flexShrink: 0
+                }}
+              >
 
 
 
@@ -7732,17 +7725,17 @@ const PDVPage: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Área de Finalização Final - Substitui a primeira tela quando ativa */}
-        {showFinalizacaoFinal && carrinho.length > 0 && (
-          <motion.div
-            initial={{ x: '100%', opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{
-              type: "tween",
-              duration: 0.5,
-              ease: [0.25, 0.46, 0.45, 0.94]
-            }}
-            className="w-1/3 bg-background-card border-l border-gray-800 flex flex-col h-full"
+            {/* Área de Finalização Final - Segunda tela ocupa todo o espaço */}
+            {showFinalizacaoFinal && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+                className="w-full bg-background-card border-l border-gray-800 flex flex-col h-full"
+                style={{
+                  position: 'relative',
+                  flexShrink: 0
+                }}
           >
             {/* Header fixo compacto */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
@@ -8104,6 +8097,8 @@ const PDVPage: React.FC = () => {
               </button>
             </div>
           </motion.div>
+            )}
+          </div>
         )}
       </div>
 
