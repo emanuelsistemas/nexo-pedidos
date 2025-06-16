@@ -37,7 +37,8 @@ import {
   Check,
   MessageSquare,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Camera
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -432,11 +433,15 @@ const PDVPage: React.FC = () => {
     // Remover pedido da lista de importados
     setPedidosImportados(prev => prev.filter(p => p.id !== pedidoParaRemover.id));
 
-    // Se não há mais pedidos importados e configuração desabilitada, remover cliente e desconto
+    // Se não há mais pedidos importados, sempre limpar cliente e descontos
     const pedidosRestantes = pedidosImportados.filter(p => p.id !== pedidoParaRemover.id);
-    if (pedidosRestantes.length === 0 && !pdvConfig?.seleciona_clientes) {
+    if (pedidosRestantes.length === 0) {
       setClienteSelecionado(null);
       setDescontoPrazoSelecionado(null);
+      setDescontosCliente({ prazo: [], valor: [] });
+      // Limpar também dados da nota fiscal
+      setCpfCnpjNota('');
+      setClienteEncontrado(null);
     }
 
     setShowConfirmRemovePedidoImportado(false);
@@ -3039,7 +3044,26 @@ const PDVPage: React.FC = () => {
     // Encontrar o item antes de remover para mostrar no toast
     const itemRemovido = carrinho.find(item => item.id === itemId);
 
-    setCarrinho(prev => prev.filter(item => item.id !== itemId));
+    // Atualizar carrinho removendo o item
+    const novoCarrinho = carrinho.filter(item => item.id !== itemId);
+    setCarrinho(novoCarrinho);
+
+    // Se o carrinho ficou vazio, limpar área lateral
+    if (novoCarrinho.length === 0) {
+      // Limpar área lateral
+      setClienteSelecionado(null);
+      setPedidosImportados([]);
+      setDescontoPrazoSelecionado(null);
+      setDescontosCliente({ prazo: [], valor: [] });
+
+      // Limpar dados de finalização
+      setCpfCnpjNota('');
+      setClienteEncontrado(null);
+      setTipoDocumento('cpf');
+      setErroValidacao('');
+      limparPagamentosParciaisSilencioso();
+    }
+
     setShowConfirmModal(false);
     setItemParaRemover(null);
 
@@ -3498,10 +3522,23 @@ const PDVPage: React.FC = () => {
     const totalProdutos = carrinho.length;
     const primeiroProduto = carrinho[0]?.produto.nome; // Salvar antes de limpar
 
+    // Limpar carrinho
     setCarrinho([]);
+
+    // Limpar área lateral
     setClienteSelecionado(null);
     setPedidosImportados([]);
     setDescontoPrazoSelecionado(null);
+    setDescontosCliente({ prazo: [], valor: [] });
+
+    // Limpar dados de finalização
+    setCpfCnpjNota('');
+    setClienteEncontrado(null);
+    setTipoDocumento('cpf');
+    setErroValidacao('');
+    limparPagamentosParciaisSilencioso();
+
+    // Fechar modal
     setShowLimparCarrinhoModal(false);
 
     // Exibir toast de confirmação
@@ -5885,13 +5922,26 @@ const PDVPage: React.FC = () => {
   };
 
   const limparCarrinhoCompleto = () => {
+    // Limpar carrinho
     setCarrinho([]);
+
+    // Limpar área lateral
     setClienteSelecionado(null);
-    setPedidosImportados([]); // Limpar pedidos importados
-    setDescontoPrazoSelecionado(null); // Limpar desconto selecionado
-    limparPagamentosParciaisSilencioso(); // Versão silenciosa
+    setPedidosImportados([]);
+    setDescontoPrazoSelecionado(null);
+    setDescontosCliente({ prazo: [], valor: [] });
+
+    // Limpar dados de finalização
+    setCpfCnpjNota('');
+    setClienteEncontrado(null);
+    setTipoDocumento('cpf');
+    setErroValidacao('');
+    limparPagamentosParciaisSilencioso();
+
+    // Limpar localStorage e fechar modal
     clearPDVState();
     setShowConfirmLimparCarrinho(false);
+
     toast.success('PDV limpo com sucesso!');
   };
 
@@ -6199,6 +6249,7 @@ const PDVPage: React.FC = () => {
         className="flex overflow-hidden relative"
         style={{ height: 'calc(100vh - 56px)' }}
       >
+
         {/* Área dos Itens do Carrinho - mantém largura fixa quando há itens */}
         <div className={`${carrinho.length > 0 ? 'w-2/3' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
           {/* Overlay para desativar interação quando finalização está aberta */}
@@ -6789,6 +6840,386 @@ const PDVPage: React.FC = () => {
             </div>
           </div>
 
+        {/* Área Lateral de Informações - Só aparece quando há itens e configuração habilitada */}
+        {!showFinalizacaoFinal && carrinho.length > 0 && (
+          pdvConfig?.seleciona_clientes ||
+          pdvConfig?.vendedor ||
+          pdvConfig?.comandas ||
+          pdvConfig?.mesas ||
+          pdvConfig?.exibe_foto_item
+        ) && (
+          <motion.div
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{
+              type: "tween",
+              duration: 0.3,
+              ease: [0.25, 0.46, 0.45, 0.94]
+            }}
+            className="w-48 bg-background-card border-l border-gray-800 flex flex-col h-full"
+          >
+            {/* Conteúdo scrollável da área lateral */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+
+              {/* Cliente - Aparece se configuração habilitada OU se há pedidos importados */}
+              {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
+                  {/* Cliente selecionado manualmente */}
+                  {pdvConfig?.seleciona_clientes ? (
+                    clienteSelecionado ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <User size={12} className="text-blue-400" />
+                          <div className="text-xs text-blue-400 font-medium">Cliente</div>
+                        </div>
+                        <div className="text-white text-xs font-medium truncate">{clienteSelecionado.nome}</div>
+                        {clienteSelecionado.telefone && (
+                          <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
+                        )}
+                        {/* Botões só aparecem quando NÃO há pedidos importados */}
+                        {pedidosImportados.length === 0 && (
+                          <div className="flex gap-2 mt-1">
+                            <button
+                              onClick={() => setShowClienteModal(true)}
+                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                            >
+                              Trocar
+                            </button>
+                            <button
+                              onClick={() => {
+                                setClienteSelecionado(null);
+                                // Limpar também o CPF/CNPJ se estiver preenchido
+                                setCpfCnpjNota('');
+                                setClienteEncontrado(null);
+                                // Limpar opções de faturamento do cliente removido
+                                setDescontosCliente({ prazo: [], valor: [] });
+                                setDescontoPrazoSelecionado(null);
+                              }}
+                              className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowClienteModal(true)}
+                        className="w-full text-left space-y-1 hover:bg-blue-500/20 transition-colors rounded p-1"
+                      >
+                        <div className="flex items-center gap-1">
+                          <User size={12} className="text-blue-400" />
+                          <div className="text-xs text-blue-400 font-medium">Cliente</div>
+                        </div>
+                        <div className="text-white text-xs">Selecionar</div>
+                      </button>
+                    )
+                  ) : (
+                    /* Cliente dos pedidos importados */
+                    pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <User size={12} className="text-blue-400" />
+                          <div className="text-xs text-blue-400 font-medium">Cliente dos Pedidos</div>
+                        </div>
+                        <div className="text-white text-xs font-medium truncate">{pedidosImportados[0].cliente.nome}</div>
+                        {pedidosImportados[0].cliente.telefone && (
+                          <div className="text-xs text-gray-400">{pedidosImportados[0].cliente.telefone}</div>
+                        )}
+                        {pedidosImportados[0].cliente.email && (
+                          <div className="text-xs text-gray-500 truncate">{pedidosImportados[0].cliente.email}</div>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+
+              {/* Vendedor - Aparece se configuração habilitada */}
+              {pdvConfig?.vendedor && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded p-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <UserCheck size={12} className="text-green-400" />
+                      <div className="text-xs text-green-400 font-medium">Vendedor</div>
+                    </div>
+                    <div className="text-white text-xs font-medium">Em desenvolvimento</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Comanda - Aparece se configuração habilitada */}
+              {pdvConfig?.comandas && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <FileText size={12} className="text-yellow-400" />
+                      <div className="text-xs text-yellow-400 font-medium">Comanda</div>
+                    </div>
+                    <div className="text-white text-xs font-medium">Em desenvolvimento</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Mesa - Aparece se configuração habilitada */}
+              {pdvConfig?.mesas && (
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded p-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <Grid3X3 size={12} className="text-purple-400" />
+                      <div className="text-xs text-purple-400 font-medium">Mesa</div>
+                    </div>
+                    <div className="text-white text-xs font-medium">Em desenvolvimento</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Foto do Item - Aparece se configuração habilitada */}
+              {pdvConfig?.exibe_foto_item && carrinho.length > 0 && (
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded p-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <Camera size={12} className="text-orange-400" />
+                      <div className="text-xs text-orange-400 font-medium">Foto do Item</div>
+                    </div>
+                    {/* Foto do último item adicionado */}
+                    {(() => {
+                      const ultimoItem = carrinho[carrinho.length - 1];
+                      const fotoItem = getFotoPrincipal(ultimoItem?.produto);
+                      return (
+                        <div className="space-y-1">
+                          <div className="text-white text-xs font-medium truncate">
+                            {ultimoItem?.produto.nome}
+                          </div>
+                          <div className="w-full h-20 bg-gray-900 rounded overflow-hidden">
+                            {fotoItem ? (
+                              <img
+                                src={fotoItem.url}
+                                alt={ultimoItem?.produto.nome}
+                                className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={(e) => abrirGaleria(ultimoItem?.produto, e)}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={16} className="text-gray-700" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* Opções de Faturamento - Descontos do Cliente */}
+              {pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <Percent size={12} className="text-blue-400" />
+                      <div className="text-xs text-blue-400 font-medium">Opções de Faturamento</div>
+                    </div>
+
+                    {/* Descontos por Prazo */}
+                    {descontosCliente.prazo.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-xs text-gray-400">Prazo de Faturamento</div>
+                        <div className="grid grid-cols-2 gap-1">
+                          {getDescontosPrazoDisponiveis().map((desconto, idx) => {
+                            const isSelected = descontoPrazoSelecionado === desconto.id;
+                            return (
+                              <div
+                                key={idx}
+                                className={`p-1 rounded border cursor-pointer transition-colors text-xs ${
+                                  isSelected
+                                    ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
+                                    : desconto.tipo === 'desconto'
+                                      ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
+                                      : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
+                                }`}
+                                onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
+                              >
+                                <div className="relative flex items-center justify-center">
+                                  <div className="flex items-center gap-0.5">
+                                    <span className="text-white font-medium text-xs">
+                                      {desconto.prazo_dias}d
+                                    </span>
+                                    <span className={`text-xs ${
+                                      isSelected
+                                        ? 'text-blue-400'
+                                        : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                    }`}>
+                                      {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
+                                    </span>
+                                  </div>
+                                  {isSelected && (
+                                    <span className="absolute right-0.5 text-xs text-blue-400">✓</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Desconto por Valor (se aplicável) */}
+                    {(() => {
+                      const descontoValor = calcularDescontoPorValor(calcularTotal());
+                      return descontoValor && (
+                        <div className="mt-1 pt-1 border-t border-blue-500/20">
+                          <div className="text-xs text-gray-400 mb-1">Desconto por Valor</div>
+                          <div className={`p-1 rounded border text-center text-xs ${
+                            descontoValor.tipo === 'desconto'
+                              ? 'bg-green-500/10 border-green-500/30'
+                              : 'bg-red-500/10 border-red-500/30'
+                          }`}>
+                            <div className="text-white font-medium text-xs">
+                              A partir de {formatCurrency(descontoValor.valorMinimo)}
+                            </div>
+                            <div className={`text-xs ${
+                              descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                              {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* Pedidos Importados - Aparece quando há pedidos importados */}
+              {pedidosImportados.length > 0 && (
+                <div className="space-y-2">
+                  {pedidosImportados.map((pedido, index) => (
+                    <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded p-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1">
+                            <ShoppingBag size={12} className="text-green-400" />
+                            <div className="text-xs text-green-400 font-medium">Pedido Importado</div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setPedidoParaRemover(pedido);
+                              setShowConfirmRemovePedidoImportado(true);
+                            }}
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                            title="Remover pedido importado"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                        <div className="text-white text-xs font-medium">#{pedido.numero}</div>
+                        <div className="text-xs text-gray-400">
+                          {new Date(pedido.created_at).toLocaleDateString('pt-BR')} - {new Date(pedido.created_at).toLocaleTimeString('pt-BR', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                        {pedido.usuario && (
+                          <div className="text-xs text-gray-500">{pedido.usuario.nome}</div>
+                        )}
+
+                        {/* Opções de Faturamento do Pedido Importado */}
+                        {(pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && (
+                          <div className="border-t border-green-500/20 pt-1 mt-1">
+                            <div className="flex items-center gap-1 mb-1">
+                              <Percent size={10} className="text-green-400" />
+                              <div className="text-xs text-green-400 font-medium">Opções de Faturamento</div>
+                            </div>
+
+                            {/* Descontos por Prazo */}
+                            {descontosCliente.prazo.length > 0 && (
+                              <div className="space-y-1">
+                                <div className="text-xs text-gray-400">Prazo de Faturamento</div>
+                                <div className="grid grid-cols-2 gap-1">
+                                  {descontosCliente.prazo.map((desconto, idx) => {
+                                    const isSelected = descontoPrazoSelecionado === desconto.id;
+                                    const wasOriginallySelected = pedido.desconto_prazo_id === desconto.id;
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className={`p-1 rounded border cursor-pointer transition-colors text-xs ${
+                                          isSelected
+                                            ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
+                                            : wasOriginallySelected
+                                              ? 'bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30'
+                                              : desconto.tipo === 'desconto'
+                                                ? 'bg-green-500/5 border-green-500/20 hover:bg-green-500/10'
+                                                : 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10'
+                                        }`}
+                                        onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
+                                      >
+                                        <div className="relative flex items-center justify-center">
+                                          <div className="flex items-center gap-0.5">
+                                            <span className="text-white font-medium text-xs">
+                                              {desconto.prazo_dias}d
+                                            </span>
+                                            <span className={`text-xs ${
+                                              isSelected
+                                                ? 'text-blue-400'
+                                                : wasOriginallySelected
+                                                  ? 'text-green-400'
+                                                  : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                            }`}>
+                                              {desconto.tipo === 'desconto' ? '-' : '+'}%{desconto.percentual}
+                                            </span>
+                                          </div>
+                                          {isSelected && (
+                                            <span className="absolute right-0.5 text-xs text-blue-400">✓</span>
+                                          )}
+                                          {!isSelected && wasOriginallySelected && (
+                                            <span className="absolute right-0.5 text-xs text-green-400">Orig</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Desconto por Valor (se aplicável) */}
+                            {(() => {
+                              const descontoValor = calcularDescontoPorValor(calcularTotal());
+                              return descontoValor && (
+                                <div className="mt-1 pt-1 border-t border-green-500/20">
+                                  <div className="text-xs text-gray-400 mb-1">Desconto por Valor</div>
+                                  <div className={`p-1 rounded border text-center text-xs ${
+                                    descontoValor.tipo === 'desconto'
+                                      ? 'bg-green-500/10 border-green-500/30'
+                                      : 'bg-red-500/10 border-red-500/30'
+                                  }`}>
+                                    <div className="text-white font-medium text-xs">
+                                      A partir de {formatCurrency(descontoValor.valorMinimo)}
+                                    </div>
+                                    <div className={`text-xs ${
+                                      descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
+                                    }`}>
+                                      {descontoValor.tipo === 'desconto' ? '-' : '+'}%{descontoValor.percentual}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </div>
+          </motion.div>
+        )}
+
+
+
         {/* Área de Finalização de Venda - Só aparece quando há itens */}
         {!showFinalizacaoFinal && carrinho.length > 0 && (
           <motion.div
@@ -6809,301 +7240,6 @@ const PDVPage: React.FC = () => {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-3"
               style={{ maxHeight: 'calc(100vh - 200px)' }}
             >
-
-              {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados - Compacto */}
-              {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
-                <div className="mb-3 space-y-2">
-                  {/* Informações do Cliente - Compacto */}
-                  {pdvConfig?.seleciona_clientes ? (
-                    clienteSelecionado ? (
-                      <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
-                        {/* Layout em duas colunas */}
-                        <div className="flex items-start gap-2">
-                          <User size={14} className="text-blue-400 mt-0.5" />
-                          <div className="flex-1 flex items-start justify-between gap-3">
-                            {/* Coluna Esquerda - Nome e Label */}
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs text-blue-400 font-medium">Cliente</div>
-                              <div className="text-white font-medium text-sm truncate">{clienteSelecionado.nome}</div>
-                            </div>
-
-                            {/* Coluna Direita - Contato */}
-                            <div className="text-right flex-shrink-0">
-                              {clienteSelecionado.telefone && (
-                                <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
-                              )}
-                              {clienteSelecionado.email && (
-                                <div className="text-xs text-gray-500 truncate max-w-[120px]">{clienteSelecionado.email}</div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Botão para trocar cliente */}
-                          <button
-                            onClick={() => setShowClienteModal(true)}
-                            className="text-blue-400 hover:text-blue-300 transition-colors ml-2"
-                            title="Trocar cliente"
-                          >
-                            <User size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Botão para selecionar cliente quando não há cliente selecionado */
-                      <button
-                        onClick={() => setShowClienteModal(true)}
-                        className="w-full bg-blue-500/10 border border-blue-500/30 rounded p-2.5 hover:bg-blue-500/20 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <User size={14} className="text-blue-400" />
-                          <div className="text-left">
-                            <div className="text-xs text-blue-400 font-medium">Selecionar Cliente</div>
-                            <div className="text-white text-sm">Clique para escolher um cliente</div>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  ) : pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
-                      {/* Layout em duas colunas */}
-                      <div className="flex items-start gap-2">
-                        <User size={14} className="text-blue-400 mt-0.5" />
-                        <div className="flex-1 flex items-start justify-between gap-3">
-                          {/* Coluna Esquerda - Nome e Label */}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs text-blue-400 font-medium">Cliente dos Pedidos</div>
-                            <div className="text-white font-medium text-sm truncate">{pedidosImportados[0].cliente.nome}</div>
-                          </div>
-
-                          {/* Coluna Direita - Contato */}
-                          <div className="text-right flex-shrink-0">
-                            {pedidosImportados[0].cliente.telefone && (
-                              <div className="text-xs text-gray-400">{pedidosImportados[0].cliente.telefone}</div>
-                            )}
-                            {pedidosImportados[0].cliente.email && (
-                              <div className="text-xs text-gray-500 truncate max-w-[120px]">{pedidosImportados[0].cliente.email}</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Informações dos Pedidos Importados - Compacto */}
-                  {pedidosImportados.map((pedido, index) => (
-                    <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded p-2.5 relative">
-                      {/* Botão X para remover pedido */}
-                      <button
-                        onClick={() => {
-                          setPedidoParaRemover(pedido);
-                          setShowConfirmRemovePedidoImportado(true);
-                        }}
-                        className="absolute top-1.5 right-1.5 text-red-400 hover:text-red-300 transition-colors"
-                        title="Remover pedido importado"
-                      >
-                        <X size={14} />
-                      </button>
-
-                      {/* Layout em duas colunas */}
-                      <div className="flex items-start gap-3 mb-2 pr-6">
-                        {/* Coluna Esquerda */}
-                        <div className="flex items-start gap-2 flex-1">
-                          <ShoppingBag size={14} className="text-green-400 mt-0.5" />
-                          <div className="flex-1">
-                            <div className="text-xs text-green-400 font-medium">Pedido Importado</div>
-                            <div className="text-white font-medium text-sm">#{pedido.numero}</div>
-                            <div className="text-xs text-gray-400">
-                              {new Date(pedido.created_at).toLocaleDateString('pt-BR')}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Coluna Direita */}
-                        <div className="text-right">
-                          <div className="text-xs text-gray-400">
-                            {new Date(pedido.created_at).toLocaleTimeString('pt-BR', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                          {/* Informações do Vendedor */}
-                          {pedido.usuario && (
-                            <div className="text-xs text-gray-400 mt-0.5">
-                              {pedido.usuario.nome}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Opções de Faturamento do Pedido Importado - Compacto */}
-                      {(pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && (
-                        <div className="border-t border-green-500/20 pt-2">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <div className="w-2.5 h-2.5 bg-green-500 rounded flex items-center justify-center">
-                              <span className="text-white text-xs font-bold">%</span>
-                            </div>
-                            <div className="text-xs text-green-400 font-medium">Opções de Faturamento</div>
-                          </div>
-
-                          {/* Descontos por Prazo - Compacto */}
-                          {descontosCliente.prazo.length > 0 && (
-                            <div className="space-y-1.5">
-                              <div className="text-xs text-gray-400 mb-1">Prazo de Faturamento</div>
-                              <div className="grid grid-cols-2 gap-1">
-                                {descontosCliente.prazo.map((desconto, idx) => {
-                                  const isSelected = descontoPrazoSelecionado === desconto.id;
-                                  const wasOriginallySelected = pedido.desconto_prazo_id === desconto.id;
-                                  return (
-                                    <div
-                                      key={idx}
-                                      className={`p-1 rounded border cursor-pointer transition-colors text-xs ${
-                                        isSelected
-                                          ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
-                                          : wasOriginallySelected
-                                            ? 'bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30'
-                                            : desconto.tipo === 'desconto'
-                                              ? 'bg-green-500/5 border-green-500/20 hover:bg-green-500/10'
-                                              : 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10'
-                                      }`}
-                                      onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
-                                    >
-                                      <div className="relative flex items-center justify-center">
-                                        <div className="flex items-center gap-0.5">
-                                          <span className="text-white font-medium text-xs">
-                                            {desconto.prazo_dias}d
-                                          </span>
-                                          <span className={`text-xs ${
-                                            isSelected
-                                              ? 'text-blue-400'
-                                              : wasOriginallySelected
-                                                ? 'text-green-400'
-                                                : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                          }`}>
-                                            {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                                          </span>
-                                        </div>
-                                        {isSelected && (
-                                          <span className="absolute right-0.5 text-xs text-blue-400">✓</span>
-                                        )}
-                                        {!isSelected && wasOriginallySelected && (
-                                          <span className="absolute right-0.5 text-xs text-green-400">Orig</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Desconto por Valor (se aplicável) - Compacto */}
-                          {(() => {
-                            const descontoValor = calcularDescontoPorValor(calcularTotal());
-                            return descontoValor && (
-                              <div className="mt-1.5 pt-1.5 border-t border-green-500/20">
-                                <div className="text-xs text-gray-400 mb-1">Desconto por Valor</div>
-                                <div className={`p-1 rounded border text-center text-xs ${
-                                  descontoValor.tipo === 'desconto'
-                                    ? 'bg-green-500/10 border-green-500/30'
-                                    : 'bg-red-500/10 border-red-500/30'
-                                }`}>
-                                  <div className="text-white font-medium text-xs">
-                                    A partir de {formatCurrency(descontoValor.valorMinimo)}
-                                  </div>
-                                  <div className={`text-xs ${
-                                    descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                  }`}>
-                                    {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Opções de Faturamento - Descontos do Cliente (apenas quando não há pedidos importados) */}
-                  {pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-4 h-4 bg-blue-500 rounded flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">%</span>
-                        </div>
-                        <div className="text-sm text-blue-400 font-medium">Opções de Faturamento</div>
-                      </div>
-
-                      {/* Descontos por Prazo */}
-                      {descontosCliente.prazo.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="text-xs text-gray-400 mb-2">Prazo de Faturamento</div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {getDescontosPrazoDisponiveis().map((desconto, idx) => {
-                              const isSelected = descontoPrazoSelecionado === desconto.id;
-                              return (
-                                <div
-                                  key={idx}
-                                  className={`p-2 rounded-lg border cursor-pointer transition-colors ${
-                                    isSelected
-                                      ? 'bg-blue-500/20 border-blue-500 ring-2 ring-blue-500/50'
-                                      : desconto.tipo === 'desconto'
-                                        ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
-                                        : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
-                                  }`}
-                                  onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
-                                >
-                                  <div className="relative flex items-center justify-center">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-xs text-white font-medium">
-                                        {desconto.prazo_dias}d
-                                      </span>
-                                      <span className={`text-xs ${
-                                        isSelected
-                                          ? 'text-blue-400'
-                                          : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                      }`}>
-                                        {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                                      </span>
-                                    </div>
-                                    {isSelected && (
-                                      <span className="absolute right-0 text-xs text-blue-400">✓</span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Desconto por Valor (se aplicável) */}
-                      {(() => {
-                        const descontoValor = calcularDescontoPorValor(calcularTotal());
-                        return descontoValor && (
-                          <div className="mt-3 pt-3 border-t border-gray-700">
-                            <div className="text-xs text-gray-400 mb-2">Desconto por Valor</div>
-                            <div className={`p-2 rounded-lg border text-center ${
-                              descontoValor.tipo === 'desconto'
-                                ? 'bg-green-500/10 border-green-500/30'
-                                : 'bg-red-500/10 border-red-500/30'
-                            }`}>
-                              <div className="text-xs text-white font-medium">
-                                A partir de {formatCurrency(descontoValor.valorMinimo)}
-                              </div>
-                              <div className={`text-xs ${
-                                descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                              }`}>
-                                {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Seção de Pagamento quando NÃO há pedidos importados */}
               {pedidosImportados.length === 0 && (
@@ -7263,301 +7399,166 @@ const PDVPage: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              {/* Cliente Selecionado - Aparece se configuração habilitada OU se há pedidos importados - Compacto */}
-              {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
-                <div className="mb-3 space-y-2">
-                  {/* Informações do Cliente - Compacto */}
-                  {pdvConfig?.seleciona_clientes ? (
-                    clienteSelecionado ? (
-                      <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
-                        {/* Layout em duas colunas */}
-                        <div className="flex items-start gap-2">
-                          <User size={14} className="text-blue-400 mt-0.5" />
-                          <div className="flex-1 flex items-start justify-between gap-3">
-                            {/* Coluna Esquerda - Nome e Label */}
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs text-blue-400 font-medium">Cliente</div>
-                              <div className="text-white font-medium text-sm truncate">{clienteSelecionado.nome}</div>
-                            </div>
-
-                            {/* Coluna Direita - Contato */}
-                            <div className="text-right flex-shrink-0">
-                              {clienteSelecionado.telefone && (
-                                <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
-                              )}
-                              {clienteSelecionado.email && (
-                                <div className="text-xs text-gray-500 truncate max-w-[120px]">{clienteSelecionado.email}</div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Botão para trocar cliente */}
-                          <button
-                            onClick={() => setShowClienteModal(true)}
-                            className="text-blue-400 hover:text-blue-300 transition-colors ml-2"
-                            title="Trocar cliente"
-                          >
-                            <User size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Botão para selecionar cliente quando não há cliente selecionado */
-                      <button
-                        onClick={() => setShowClienteModal(true)}
-                        className="w-full bg-blue-500/10 border border-blue-500/30 rounded p-2.5 hover:bg-blue-500/20 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <User size={14} className="text-blue-400" />
-                          <div className="text-left">
-                            <div className="text-xs text-blue-400 font-medium">Selecionar Cliente</div>
-                            <div className="text-white text-sm">Clique para escolher um cliente</div>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  ) : pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
-                      {/* Layout em duas colunas */}
-                      <div className="flex items-start gap-2">
-                        <User size={14} className="text-blue-400 mt-0.5" />
-                        <div className="flex-1 flex items-start justify-between gap-3">
-                          {/* Coluna Esquerda - Nome e Label */}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs text-blue-400 font-medium">Cliente dos Pedidos</div>
-                            <div className="text-white font-medium text-sm truncate">{pedidosImportados[0].cliente.nome}</div>
-                          </div>
-
-                          {/* Coluna Direita - Contato */}
-                          <div className="text-right flex-shrink-0">
-                            {pedidosImportados[0].cliente.telefone && (
-                              <div className="text-xs text-gray-400">{pedidosImportados[0].cliente.telefone}</div>
-                            )}
-                            {pedidosImportados[0].cliente.email && (
-                              <div className="text-xs text-gray-500 truncate max-w-[120px]">{pedidosImportados[0].cliente.email}</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Informações dos Pedidos Importados - Compacto */}
-                  {pedidosImportados.map((pedido, index) => (
-                    <div key={pedido.id} className="bg-green-500/10 border border-green-500/30 rounded p-2.5 relative">
-                      {/* Botão X para remover pedido */}
+              {/* Seção de Pagamento quando HÁ pedidos importados */}
+              {pedidosImportados.length > 0 && (
+                <div className="space-y-3">
+                  {/* Tipo de Pagamento - Compacto */}
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-1.5">
+                      Tipo de Pagamento
+                    </label>
+                    <div className="flex gap-1.5">
                       <button
                         onClick={() => {
-                          setPedidoParaRemover(pedido);
-                          setShowConfirmRemovePedidoImportado(true);
+                          setTipoPagamento('vista');
+                          limparPagamentosParciais();
                         }}
-                        className="absolute top-1.5 right-1.5 text-red-400 hover:text-red-300 transition-colors"
-                        title="Remover pedido importado"
+                        className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
+                          tipoPagamento === 'vista'
+                            ? 'bg-gray-700 border-gray-600 text-white'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
+                        }`}
                       >
-                        <X size={14} />
+                        À Vista
                       </button>
-
-                      {/* Layout em duas colunas */}
-                      <div className="flex items-start gap-3 mb-2 pr-6">
-                        {/* Coluna Esquerda */}
-                        <div className="flex items-start gap-2 flex-1">
-                          <ShoppingBag size={14} className="text-green-400 mt-0.5" />
-                          <div className="flex-1">
-                            <div className="text-xs text-green-400 font-medium">Pedido Importado</div>
-                            <div className="text-white font-medium text-sm">#{pedido.numero}</div>
-                            <div className="text-xs text-gray-400">
-                              {new Date(pedido.created_at).toLocaleDateString('pt-BR')}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Coluna Direita */}
-                        <div className="text-right">
-                          <div className="text-xs text-gray-400">
-                            {new Date(pedido.created_at).toLocaleTimeString('pt-BR', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                          {/* Informações do Vendedor */}
-                          {pedido.usuario && (
-                            <div className="text-xs text-gray-400 mt-0.5">
-                              {pedido.usuario.nome}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Opções de Faturamento do Pedido Importado - Compacto */}
-                      {(pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && (
-                        <div className="border-t border-green-500/20 pt-2">
-                          <div className="flex items-center gap-1.5 mb-1.5">
-                            <div className="w-2.5 h-2.5 bg-green-500 rounded flex items-center justify-center">
-                              <span className="text-white text-xs font-bold">%</span>
-                            </div>
-                            <div className="text-xs text-green-400 font-medium">Opções de Faturamento</div>
-                          </div>
-
-                          {/* Descontos por Prazo - Compacto */}
-                          {descontosCliente.prazo.length > 0 && (
-                            <div className="space-y-1.5">
-                              <div className="text-xs text-gray-400 mb-1">Prazo de Faturamento</div>
-                              <div className="grid grid-cols-2 gap-1">
-                                {descontosCliente.prazo.map((desconto, idx) => {
-                                  const isSelected = descontoPrazoSelecionado === desconto.id;
-                                  const wasOriginallySelected = pedido.desconto_prazo_id === desconto.id;
-                                  return (
-                                    <div
-                                      key={idx}
-                                      className={`p-1 rounded border cursor-pointer transition-colors text-xs ${
-                                        isSelected
-                                          ? 'bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50'
-                                          : wasOriginallySelected
-                                            ? 'bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30'
-                                            : desconto.tipo === 'desconto'
-                                              ? 'bg-green-500/5 border-green-500/20 hover:bg-green-500/10'
-                                              : 'bg-red-500/5 border-red-500/20 hover:bg-red-500/10'
-                                      }`}
-                                      onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
-                                    >
-                                      <div className="relative flex items-center justify-center">
-                                        <div className="flex items-center gap-0.5">
-                                          <span className="text-white font-medium text-xs">
-                                            {desconto.prazo_dias}d
-                                          </span>
-                                          <span className={`text-xs ${
-                                            isSelected
-                                              ? 'text-blue-400'
-                                              : wasOriginallySelected
-                                                ? 'text-green-400'
-                                                : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                          }`}>
-                                            {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                                          </span>
-                                        </div>
-                                        {isSelected && (
-                                          <span className="absolute right-0.5 text-xs text-blue-400">✓</span>
-                                        )}
-                                        {!isSelected && wasOriginallySelected && (
-                                          <span className="absolute right-0.5 text-xs text-green-400">Orig</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Desconto por Valor (se aplicável) - Compacto */}
-                          {(() => {
-                            const descontoValor = calcularDescontoPorValor(calcularTotal());
-                            return descontoValor && (
-                              <div className="mt-1.5 pt-1.5 border-t border-green-500/20">
-                                <div className="text-xs text-gray-400 mb-1">Desconto por Valor</div>
-                                <div className={`p-1 rounded border text-center text-xs ${
-                                  descontoValor.tipo === 'desconto'
-                                    ? 'bg-green-500/10 border-green-500/30'
-                                    : 'bg-red-500/10 border-red-500/30'
-                                }`}>
-                                  <div className="text-white font-medium text-xs">
-                                    A partir de {formatCurrency(descontoValor.valorMinimo)}
-                                  </div>
-                                  <div className={`text-xs ${
-                                    descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                  }`}>
-                                    {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
+                      <button
+                        onClick={() => {
+                          setTipoPagamento('parcial');
+                          setFormaPagamentoSelecionada(null);
+                        }}
+                        className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
+                          tipoPagamento === 'parcial'
+                            ? 'bg-gray-700 border-gray-600 text-white'
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
+                        }`}
+                      >
+                        Parciais
+                      </button>
                     </div>
-                  ))}
+                  </div>
 
-                  {/* Opções de Faturamento - Descontos do Cliente (apenas quando não há pedidos importados) */}
-                  {pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-4 h-4 bg-blue-500 rounded flex items-center justify-center">
-                          <span className="text-white text-xs font-bold">%</span>
-                        </div>
-                        <div className="text-sm text-blue-400 font-medium">Opções de Faturamento</div>
+                  {/* Formas de Pagamento - Compacto */}
+                  <div>
+                    <label className="block text-sm font-medium text-white mb-1.5">
+                      {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
+                    </label>
+
+                    {tipoPagamento === 'vista' ? (
+                      // Pagamento à vista - interface compacta
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {formasPagamento.map((forma) => (
+                          <button
+                            key={forma.id}
+                            onClick={() => setFormaPagamentoSelecionada(forma.id)}
+                            className={`p-2 rounded border transition-colors text-sm ${
+                              formaPagamentoSelecionada === forma.id
+                                ? 'bg-gray-700 border-gray-600 text-white'
+                                : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
+                            }`}
+                          >
+                            {forma.nome}
+                          </button>
+                        ))}
                       </div>
+                    ) : (
+                      // Pagamentos parciais - interface compacta
+                      <div className="space-y-3">
+                        {/* Campo de valor - Compacto */}
+                        <div>
+                          <label className="block text-sm font-medium text-white mb-1.5">
+                            Valor do Pagamento
+                          </label>
+                          <input
+                            type="text"
+                            value={valorParcial}
+                            onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
+                            placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          />
+                          <div className="text-xs text-gray-500 mt-1">
+                            💡 Deixe vazio para usar o valor restante automaticamente
+                          </div>
+                        </div>
 
-                      {/* Descontos por Prazo */}
-                      {descontosCliente.prazo.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="text-xs text-gray-400 mb-2">Prazo de Faturamento</div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {getDescontosPrazoDisponiveis().map((desconto, idx) => {
-                              const isSelected = descontoPrazoSelecionado === desconto.id;
+                        {/* Botões das formas de pagamento - Compacto */}
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {formasPagamento.map((forma) => (
+                            <button
+                              key={forma.id}
+                              onClick={() => adicionarPagamentoParcial(
+                                forma.id,
+                                forma.nome, // Usar o nome da forma para exibição
+                                forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
+                              )}
+                              className="p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
+                            >
+                              {forma.nome}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Lista de pagamentos adicionados - Compacta */}
+                        {pagamentosParciais.length > 0 && (
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs font-medium text-gray-400">Pagamentos Adicionados:</span>
+                              <button
+                                onClick={confirmarLimparTodos}
+                                className="text-xs text-red-400 hover:text-red-300"
+                              >
+                                Limpar Todos
+                              </button>
+                            </div>
+
+                            {pagamentosParciais.map((pagamento) => {
+                              const forma = formasPagamento.find(f => f.id === pagamento.forma);
                               return (
-                                <div
-                                  key={idx}
-                                  className={`p-2 rounded-lg border cursor-pointer transition-colors ${
-                                    isSelected
-                                      ? 'bg-blue-500/20 border-blue-500 ring-2 ring-blue-500/50'
-                                      : desconto.tipo === 'desconto'
-                                        ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
-                                        : 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20'
-                                  }`}
-                                  onClick={() => setDescontoPrazoSelecionado(isSelected ? null : desconto.id)}
-                                >
-                                  <div className="relative flex items-center justify-center">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-xs text-white font-medium">
-                                        {desconto.prazo_dias}d
-                                      </span>
-                                      <span className={`text-xs ${
-                                        isSelected
-                                          ? 'text-blue-400'
-                                          : desconto.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                                      }`}>
-                                        {desconto.tipo === 'desconto' ? '+' : '-'}{desconto.percentual}%
-                                      </span>
-                                    </div>
-                                    {isSelected && (
-                                      <span className="absolute right-0 text-xs text-blue-400">✓</span>
-                                    )}
+                                <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded p-1.5">
+                                  <div>
+                                    <span className="text-white text-xs">{forma?.nome || pagamento.forma}</span>
+                                    <span className="text-primary-400 text-xs ml-2">{formatCurrency(pagamento.valor)}</span>
                                   </div>
+                                  <button
+                                    onClick={() => confirmarRemocaoItem(pagamento.id)}
+                                    className="text-red-400 hover:text-red-300"
+                                  >
+                                    <X size={14} />
+                                  </button>
                                 </div>
                               );
                             })}
-                          </div>
-                        </div>
-                      )}
 
-                      {/* Desconto por Valor (se aplicável) */}
-                      {(() => {
-                        const descontoValor = calcularDescontoPorValor(calcularTotal());
-                        return descontoValor && (
-                          <div className="mt-3 pt-3 border-t border-gray-700">
-                            <div className="text-xs text-gray-400 mb-2">Desconto por Valor</div>
-                            <div className={`p-2 rounded-lg border text-center ${
-                              descontoValor.tipo === 'desconto'
-                                ? 'bg-green-500/10 border-green-500/30'
-                                : 'bg-red-500/10 border-red-500/30'
-                            }`}>
-                              <div className="text-xs text-white font-medium">
-                                A partir de {formatCurrency(descontoValor.valorMinimo)}
+                            {/* Resumo dos valores - Compacto */}
+                            <div className="bg-gray-800/50 rounded p-2 space-y-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-gray-400">Total da Venda:</span>
+                                <span className="text-white font-medium">{formatCurrency(calcularTotalComDesconto())}</span>
                               </div>
-                              <div className={`text-xs ${
-                                descontoValor.tipo === 'desconto' ? 'text-green-400' : 'text-red-400'
-                              }`}>
-                                {descontoValor.tipo === 'desconto' ? '+' : '-'}{descontoValor.percentual}%
-                              </div>
+                              {/* Restante só aparece para pagamentos parciais */}
+                              {tipoPagamento === 'parcial' && (
+                                <div className="flex justify-between text-xs font-bold">
+                                  <span className="text-gray-400">Restante:</span>
+                                  <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
+                                    {formatCurrency(calcularRestante())}
+                                  </span>
+                                </div>
+                              )}
+                              {trocoCalculado > 0 && (
+                                <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1">
+                                  <span className="text-gray-400 text-xs">Troco:</span>
+                                  <span className="text-blue-400 text-sm font-extrabold">{formatCurrency(trocoCalculado)}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
-                        );
-                      })()}
-                    </div>
-                  )}
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
+
+
 
 
 
@@ -7568,164 +7569,7 @@ const PDVPage: React.FC = () => {
             {/* Área fixa de pagamento - sempre visível quando há itens - Compacta */}
             {carrinho.length > 0 && (
               <div className="p-3 bg-background-card flex-shrink-0">
-                {/* Seções de pagamento quando HÁ pedidos importados */}
-                {pedidosImportados.length > 0 && (
-                  <>
-                    {/* Tipo de Pagamento - Compacto */}
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-white mb-1.5">
-                        Tipo de Pagamento
-                      </label>
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => {
-                            setTipoPagamento('vista');
-                            limparPagamentosParciais();
-                          }}
-                          className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
-                            tipoPagamento === 'vista'
-                              ? 'bg-gray-700 border-gray-600 text-white'
-                              : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
-                          }`}
-                        >
-                          À Vista
-                        </button>
-                        <button
-                          onClick={() => {
-                            setTipoPagamento('parcial');
-                            setFormaPagamentoSelecionada(null);
-                          }}
-                          className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
-                            tipoPagamento === 'parcial'
-                              ? 'bg-gray-700 border-gray-600 text-white'
-                              : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750'
-                          }`}
-                        >
-                          Parciais
-                        </button>
-                      </div>
-                    </div>
 
-                    {/* Formas de Pagamento - Compacto */}
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-white mb-1.5">
-                        {tipoPagamento === 'vista' ? 'Forma de Pagamento' : 'Formas de Pagamento'}
-                      </label>
-
-                      {tipoPagamento === 'vista' ? (
-                        // Pagamento à vista - interface compacta
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {formasPagamento.map((forma) => (
-                            <button
-                              key={forma.id}
-                              onClick={() => setFormaPagamentoSelecionada(forma.id)}
-                              className={`p-2 rounded border transition-colors text-sm ${
-                                formaPagamentoSelecionada === forma.id
-                                  ? 'bg-gray-700 border-gray-600 text-white'
-                                  : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
-                              }`}
-                            >
-                              {forma.nome}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        // Pagamentos parciais - interface compacta
-                        <div className="space-y-3">
-                          {/* Campo de valor - Compacto */}
-                          <div>
-                            <label className="block text-sm font-medium text-white mb-1.5">
-                              Valor do Pagamento
-                            </label>
-                            <input
-                              type="text"
-                              value={valorParcial}
-                              onChange={(e) => setValorParcial(formatCurrencyInput(e.target.value))}
-                              placeholder={`R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`}
-                              className="w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                            />
-                            <div className="text-xs text-gray-500 mt-1">
-                              💡 Deixe vazio para usar o valor restante automaticamente
-                            </div>
-                          </div>
-
-                          {/* Botões das formas de pagamento - Compacto */}
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {formasPagamento.map((forma) => (
-                              <button
-                                key={forma.id}
-                                onClick={() => adicionarPagamentoParcial(
-                                  forma.id,
-                                  forma.nome, // Usar o nome da forma para exibição
-                                  forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
-                                )}
-                                className="p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
-                              >
-                                {forma.nome}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Lista de pagamentos adicionados - Compacta */}
-                          {pagamentosParciais.length > 0 && (
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs font-medium text-gray-400">Pagamentos Adicionados:</span>
-                                <button
-                                  onClick={confirmarLimparTodos}
-                                  className="text-xs text-red-400 hover:text-red-300"
-                                >
-                                  Limpar Todos
-                                </button>
-                              </div>
-
-                              {pagamentosParciais.map((pagamento) => {
-                                const forma = formasPagamento.find(f => f.id === pagamento.forma);
-                                return (
-                                  <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded p-1.5">
-                                    <div>
-                                      <span className="text-white text-xs">{forma?.nome || pagamento.forma}</span>
-                                      <span className="text-primary-400 text-xs ml-2">{formatCurrency(pagamento.valor)}</span>
-                                    </div>
-                                    <button
-                                      onClick={() => confirmarRemocaoItem(pagamento.id)}
-                                      className="text-red-400 hover:text-red-300"
-                                    >
-                                      <X size={14} />
-                                    </button>
-                                  </div>
-                                );
-                              })}
-
-                              {/* Resumo dos valores - Compacto */}
-                              <div className="bg-gray-800/50 rounded p-2 space-y-1">
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-gray-400">Total da Venda:</span>
-                                  <span className="text-white font-medium">{formatCurrency(calcularTotalComDesconto())}</span>
-                                </div>
-                                {/* Restante só aparece para pagamentos parciais */}
-                                {tipoPagamento === 'parcial' && (
-                                  <div className="flex justify-between text-xs font-bold">
-                                    <span className="text-gray-400">Restante:</span>
-                                    <span className={calcularRestante() > 0 ? 'text-yellow-400' : 'text-green-400'}>
-                                      {formatCurrency(calcularRestante())}
-                                    </span>
-                                  </div>
-                                )}
-                                {trocoCalculado > 0 && (
-                                  <div className="flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1">
-                                    <span className="text-gray-400 text-xs">Troco:</span>
-                                    <span className="text-blue-400 text-sm font-extrabold">{formatCurrency(trocoCalculado)}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
 
                 {/* Resumo da Venda - sempre presente - Compacto */}
                 <div className="bg-gray-800/50 rounded p-2.5 mb-1">

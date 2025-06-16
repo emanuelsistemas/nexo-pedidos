@@ -9182,6 +9182,22 @@ const Calendar = createLucideIcon("Calendar", [
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
+const Camera = createLucideIcon("Camera", [
+  [
+    "path",
+    {
+      d: "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z",
+      key: "1tc9qg"
+    }
+  ],
+  ["circle", { cx: "12", cy: "13", r: "3", key: "1vg3eu" }]
+]);
+/**
+ * @license lucide-react v0.331.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
 const CheckCircle = createLucideIcon("CheckCircle", [
   ["path", { d: "M22 11.08V12a10 10 0 1 1-5.93-9.14", key: "g774vq" }],
   ["path", { d: "m9 11 3 3L22 4", key: "1pflzl" }]
@@ -9368,6 +9384,19 @@ const FolderOpen = createLucideIcon("FolderOpen", [
       key: "usdka0"
     }
   ]
+]);
+/**
+ * @license lucide-react v0.331.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+const Grid3x3 = createLucideIcon("Grid3x3", [
+  ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" }],
+  ["path", { d: "M3 9h18", key: "1pudct" }],
+  ["path", { d: "M3 15h18", key: "5xshup" }],
+  ["path", { d: "M9 3v18", key: "fh3hqa" }],
+  ["path", { d: "M15 3v18", key: "14nvp0" }]
 ]);
 /**
  * @license lucide-react v0.331.0 - ISC
@@ -56017,9 +56046,12 @@ const PDVPage = () => {
     setCarrinho(itensRestantes);
     setPedidosImportados((prev) => prev.filter((p2) => p2.id !== pedidoParaRemover.id));
     const pedidosRestantes = pedidosImportados.filter((p2) => p2.id !== pedidoParaRemover.id);
-    if (pedidosRestantes.length === 0 && !(pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes)) {
+    if (pedidosRestantes.length === 0) {
       setClienteSelecionado(null);
       setDescontoPrazoSelecionado(null);
+      setDescontosCliente({ prazo: [], valor: [] });
+      setCpfCnpjNota("");
+      setClienteEncontrado(null);
     }
     setShowConfirmRemovePedidoImportado(false);
     setPedidoParaRemover(null);
@@ -57862,7 +57894,19 @@ const PDVPage = () => {
   };
   const removerDoCarrinho = (itemId) => {
     const itemRemovido = carrinho.find((item) => item.id === itemId);
-    setCarrinho((prev) => prev.filter((item) => item.id !== itemId));
+    const novoCarrinho = carrinho.filter((item) => item.id !== itemId);
+    setCarrinho(novoCarrinho);
+    if (novoCarrinho.length === 0) {
+      setClienteSelecionado(null);
+      setPedidosImportados([]);
+      setDescontoPrazoSelecionado(null);
+      setDescontosCliente({ prazo: [], valor: [] });
+      setCpfCnpjNota("");
+      setClienteEncontrado(null);
+      setTipoDocumento("cpf");
+      setErroValidacao("");
+      limparPagamentosParciaisSilencioso();
+    }
     setShowConfirmModal(false);
     setItemParaRemover(null);
     if (itemRemovido) {
@@ -58209,6 +58253,12 @@ const PDVPage = () => {
     setClienteSelecionado(null);
     setPedidosImportados([]);
     setDescontoPrazoSelecionado(null);
+    setDescontosCliente({ prazo: [], valor: [] });
+    setCpfCnpjNota("");
+    setClienteEncontrado(null);
+    setTipoDocumento("cpf");
+    setErroValidacao("");
+    limparPagamentosParciaisSilencioso();
     setShowLimparCarrinhoModal(false);
     if (totalProdutos > 0) {
       if (totalProdutos === 1) {
@@ -60032,6 +60082,11 @@ const PDVPage = () => {
     setClienteSelecionado(null);
     setPedidosImportados([]);
     setDescontoPrazoSelecionado(null);
+    setDescontosCliente({ prazo: [], valor: [] });
+    setCpfCnpjNota("");
+    setClienteEncontrado(null);
+    setTipoDocumento("cpf");
+    setErroValidacao("");
     limparPagamentosParciaisSilencioso();
     clearPDVState();
     setShowConfirmLimparCarrinho(false);
@@ -60689,6 +60744,257 @@ const PDVPage = () => {
                     ] }) })
                   ] })
                 ] }),
+                !showFinalizacaoFinal && carrinho.length > 0 && ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || (pdvConfig == null ? void 0 : pdvConfig.vendedor) || (pdvConfig == null ? void 0 : pdvConfig.comandas) || (pdvConfig == null ? void 0 : pdvConfig.mesas) || (pdvConfig == null ? void 0 : pdvConfig.exibe_foto_item)) && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  motion.div,
+                  {
+                    initial: { x: "100%", opacity: 0 },
+                    animate: { x: 0, opacity: 1 },
+                    transition: {
+                      type: "tween",
+                      duration: 0.3,
+                      ease: [0.25, 0.46, 0.45, 0.94]
+                    },
+                    className: "w-48 bg-background-card border-l border-gray-800 flex flex-col h-full",
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2", children: [
+                      ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || pedidosImportados.length > 0) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2", children: (pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) ? clienteSelecionado ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 12, className: "text-blue-400" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-blue-400 font-medium", children: "Cliente" })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs font-medium truncate", children: clienteSelecionado.nome }),
+                        clienteSelecionado.telefone && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: clienteSelecionado.telefone }),
+                        pedidosImportados.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2 mt-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "button",
+                            {
+                              onClick: () => setShowClienteModal(true),
+                              className: "text-xs text-blue-400 hover:text-blue-300 transition-colors",
+                              children: "Trocar"
+                            }
+                          ),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "button",
+                            {
+                              onClick: () => {
+                                setClienteSelecionado(null);
+                                setCpfCnpjNota("");
+                                setClienteEncontrado(null);
+                                setDescontosCliente({ prazo: [], valor: [] });
+                                setDescontoPrazoSelecionado(null);
+                              },
+                              className: "text-xs text-red-400 hover:text-red-300 transition-colors",
+                              children: "Remover"
+                            }
+                          )
+                        ] })
+                      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "button",
+                        {
+                          onClick: () => setShowClienteModal(true),
+                          className: "w-full text-left space-y-1 hover:bg-blue-500/20 transition-colors rounded p-1",
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 12, className: "text-blue-400" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-blue-400 font-medium", children: "Cliente" })
+                            ] }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs", children: "Selecionar" })
+                          ]
+                        }
+                      ) : (
+                        /* Cliente dos pedidos importados */
+                        pedidosImportados.length > 0 && ((_a2 = pedidosImportados[0]) == null ? void 0 : _a2.cliente) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 12, className: "text-blue-400" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-blue-400 font-medium", children: "Cliente dos Pedidos" })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs font-medium truncate", children: pedidosImportados[0].cliente.nome }),
+                          pedidosImportados[0].cliente.telefone && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: pedidosImportados[0].cliente.telefone }),
+                          pedidosImportados[0].cliente.email && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 truncate", children: pedidosImportados[0].cliente.email })
+                        ] })
+                      ) }),
+                      (pdvConfig == null ? void 0 : pdvConfig.vendedor) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-green-500/10 border border-green-500/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(UserCheck, { size: 12, className: "text-green-400" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-green-400 font-medium", children: "Vendedor" })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs font-medium", children: "Em desenvolvimento" })
+                      ] }) }),
+                      (pdvConfig == null ? void 0 : pdvConfig.comandas) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-yellow-500/10 border border-yellow-500/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(FileText, { size: 12, className: "text-yellow-400" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-yellow-400 font-medium", children: "Comanda" })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs font-medium", children: "Em desenvolvimento" })
+                      ] }) }),
+                      (pdvConfig == null ? void 0 : pdvConfig.mesas) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-purple-500/10 border border-purple-500/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Grid3x3, { size: 12, className: "text-purple-400" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-purple-400 font-medium", children: "Mesa" })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs font-medium", children: "Em desenvolvimento" })
+                      ] }) }),
+                      (pdvConfig == null ? void 0 : pdvConfig.exibe_foto_item) && carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-orange-500/10 border border-orange-500/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Camera, { size: 12, className: "text-orange-400" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-orange-400 font-medium", children: "Foto do Item" })
+                        ] }),
+                        (() => {
+                          const ultimoItem = carrinho[carrinho.length - 1];
+                          const fotoItem = getFotoPrincipal(ultimoItem == null ? void 0 : ultimoItem.produto);
+                          return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs font-medium truncate", children: ultimoItem == null ? void 0 : ultimoItem.produto.nome }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-20 bg-gray-900 rounded overflow-hidden", children: fotoItem ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "img",
+                              {
+                                src: fotoItem.url,
+                                alt: ultimoItem == null ? void 0 : ultimoItem.produto.nome,
+                                className: "w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity",
+                                onClick: (e) => abrirGaleria(ultimoItem == null ? void 0 : ultimoItem.produto, e)
+                              }
+                            ) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-full flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Package, { size: 16, className: "text-gray-700" }) }) })
+                          ] });
+                        })()
+                      ] }) }),
+                      pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(Percent, { size: 12, className: "text-blue-400" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-blue-400 font-medium", children: "Opções de Faturamento" })
+                        ] }),
+                        descontosCliente.prazo.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: "Prazo de Faturamento" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1", children: getDescontosPrazoDisponiveis().map((desconto, idx) => {
+                            const isSelected = descontoPrazoSelecionado === desconto.id;
+                            return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "div",
+                              {
+                                className: `p-1 rounded border cursor-pointer transition-colors text-xs ${isSelected ? "bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50" : desconto.tipo === "desconto" ? "bg-green-500/10 border-green-500/30 hover:bg-green-500/20" : "bg-red-500/10 border-red-500/30 hover:bg-red-500/20"}`,
+                                onClick: () => setDescontoPrazoSelecionado(isSelected ? null : desconto.id),
+                                children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex items-center justify-center", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-0.5", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-white font-medium text-xs", children: [
+                                      desconto.prazo_dias,
+                                      "d"
+                                    ] }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `text-xs ${isSelected ? "text-blue-400" : desconto.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
+                                      desconto.tipo === "desconto" ? "+" : "-",
+                                      desconto.percentual,
+                                      "%"
+                                    ] })
+                                  ] }),
+                                  isSelected && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute right-0.5 text-xs text-blue-400", children: "✓" })
+                                ] })
+                              },
+                              idx
+                            );
+                          }) })
+                        ] }),
+                        (() => {
+                          const descontoValor = calcularDescontoPorValor(calcularTotal());
+                          return descontoValor && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-1 pt-1 border-t border-blue-500/20", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mb-1", children: "Desconto por Valor" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `p-1 rounded border text-center text-xs ${descontoValor.tipo === "desconto" ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"}`, children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-white font-medium text-xs", children: [
+                                "A partir de ",
+                                formatCurrency(descontoValor.valorMinimo)
+                              ] }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `text-xs ${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
+                                descontoValor.tipo === "desconto" ? "+" : "-",
+                                descontoValor.percentual,
+                                "%"
+                              ] })
+                            ] })
+                          ] });
+                        })()
+                      ] }) }),
+                      pedidosImportados.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-2", children: pedidosImportados.map((pedido, index2) => /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-green-500/10 border border-green-500/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(ShoppingBag, { size: 12, className: "text-green-400" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-green-400 font-medium", children: "Pedido Importado" })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "button",
+                            {
+                              onClick: () => {
+                                setPedidoParaRemover(pedido);
+                                setShowConfirmRemovePedidoImportado(true);
+                              },
+                              className: "text-red-400 hover:text-red-300 transition-colors",
+                              title: "Remover pedido importado",
+                              children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 12 })
+                            }
+                          )
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-white text-xs font-medium", children: [
+                          "#",
+                          pedido.numero
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-gray-400", children: [
+                          new Date(pedido.created_at).toLocaleDateString("pt-BR"),
+                          " - ",
+                          new Date(pedido.created_at).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })
+                        ] }),
+                        pedido.usuario && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500", children: pedido.usuario.nome }),
+                        (pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-t border-green-500/20 pt-1 mt-1", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1 mb-1", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(Percent, { size: 10, className: "text-green-400" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-green-400 font-medium", children: "Opções de Faturamento" })
+                          ] }),
+                          descontosCliente.prazo.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: "Prazo de Faturamento" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1", children: descontosCliente.prazo.map((desconto, idx) => {
+                              const isSelected = descontoPrazoSelecionado === desconto.id;
+                              const wasOriginallySelected = pedido.desconto_prazo_id === desconto.id;
+                              return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "div",
+                                {
+                                  className: `p-1 rounded border cursor-pointer transition-colors text-xs ${isSelected ? "bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50" : wasOriginallySelected ? "bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30" : desconto.tipo === "desconto" ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10" : "bg-red-500/5 border-red-500/20 hover:bg-red-500/10"}`,
+                                  onClick: () => setDescontoPrazoSelecionado(isSelected ? null : desconto.id),
+                                  children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex items-center justify-center", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-0.5", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-white font-medium text-xs", children: [
+                                        desconto.prazo_dias,
+                                        "d"
+                                      ] }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `text-xs ${isSelected ? "text-blue-400" : wasOriginallySelected ? "text-green-400" : desconto.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
+                                        desconto.tipo === "desconto" ? "-" : "+",
+                                        "%",
+                                        desconto.percentual
+                                      ] })
+                                    ] }),
+                                    isSelected && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute right-0.5 text-xs text-blue-400", children: "✓" }),
+                                    !isSelected && wasOriginallySelected && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute right-0.5 text-xs text-green-400", children: "Orig" })
+                                  ] })
+                                },
+                                idx
+                              );
+                            }) })
+                          ] }),
+                          (() => {
+                            const descontoValor = calcularDescontoPorValor(calcularTotal());
+                            return descontoValor && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-1 pt-1 border-t border-green-500/20", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mb-1", children: "Desconto por Valor" }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `p-1 rounded border text-center text-xs ${descontoValor.tipo === "desconto" ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"}`, children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-white font-medium text-xs", children: [
+                                  "A partir de ",
+                                  formatCurrency(descontoValor.valorMinimo)
+                                ] }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `text-xs ${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
+                                  descontoValor.tipo === "desconto" ? "-" : "+",
+                                  "%",
+                                  descontoValor.percentual
+                                ] })
+                              ] })
+                            ] });
+                          })()
+                        ] })
+                      ] }) }, pedido.id)) })
+                    ] })
+                  }
+                ),
                 !showFinalizacaoFinal && carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   motion.div,
                   {
@@ -60827,378 +61133,186 @@ const PDVPage = () => {
                                 )
                               ] })
                             ] }),
-                            ((pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) || pedidosImportados.length > 0) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3 space-y-2", children: [
-                              (pdvConfig == null ? void 0 : pdvConfig.seleciona_clientes) ? clienteSelecionado ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14, className: "text-blue-400 mt-0.5" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex items-start justify-between gap-3", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-blue-400 font-medium", children: "Cliente" }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white font-medium text-sm truncate", children: clienteSelecionado.nome })
-                                  ] }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-right flex-shrink-0", children: [
-                                    clienteSelecionado.telefone && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: clienteSelecionado.telefone }),
-                                    clienteSelecionado.email && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 truncate max-w-[120px]", children: clienteSelecionado.email })
-                                  ] })
-                                ] }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                  "button",
-                                  {
-                                    onClick: () => setShowClienteModal(true),
-                                    className: "text-blue-400 hover:text-blue-300 transition-colors ml-2",
-                                    title: "Trocar cliente",
-                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14 })
-                                  }
-                                )
-                              ] }) }) : (
-                                /* Botão para selecionar cliente quando não há cliente selecionado */
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                  "button",
-                                  {
-                                    onClick: () => setShowClienteModal(true),
-                                    className: "w-full bg-blue-500/10 border border-blue-500/30 rounded p-2.5 hover:bg-blue-500/20 transition-colors",
-                                    children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14, className: "text-blue-400" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-left", children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-blue-400 font-medium", children: "Selecionar Cliente" }),
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-sm", children: "Clique para escolher um cliente" })
-                                      ] })
-                                    ] })
-                                  }
-                                )
-                              ) : pedidosImportados.length > 0 && ((_a2 = pedidosImportados[0]) == null ? void 0 : _a2.cliente) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded p-2.5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(User, { size: 14, className: "text-blue-400 mt-0.5" }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex items-start justify-between gap-3", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-blue-400 font-medium", children: "Cliente dos Pedidos" }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white font-medium text-sm truncate", children: pedidosImportados[0].cliente.nome })
-                                  ] }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-right flex-shrink-0", children: [
-                                    pedidosImportados[0].cliente.telefone && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: pedidosImportados[0].cliente.telefone }),
-                                    pedidosImportados[0].cliente.email && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 truncate max-w-[120px]", children: pedidosImportados[0].cliente.email })
-                                  ] })
-                                ] })
-                              ] }) }),
-                              pedidosImportados.map((pedido, index2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-green-500/10 border border-green-500/30 rounded p-2.5 relative", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                  "button",
-                                  {
-                                    onClick: () => {
-                                      setPedidoParaRemover(pedido);
-                                      setShowConfirmRemovePedidoImportado(true);
-                                    },
-                                    className: "absolute top-1.5 right-1.5 text-red-400 hover:text-red-300 transition-colors",
-                                    title: "Remover pedido importado",
-                                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
-                                  }
-                                ),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-3 mb-2 pr-6", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2 flex-1", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx(ShoppingBag, { size: 14, className: "text-green-400 mt-0.5" }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-green-400 font-medium", children: "Pedido Importado" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-white font-medium text-sm", children: [
-                                        "#",
-                                        pedido.numero
-                                      ] }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: new Date(pedido.created_at).toLocaleDateString("pt-BR") })
-                                    ] })
-                                  ] }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-right", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400", children: new Date(pedido.created_at).toLocaleTimeString("pt-BR", {
-                                      hour: "2-digit",
-                                      minute: "2-digit"
-                                    }) }),
-                                    pedido.usuario && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mt-0.5", children: pedido.usuario.nome })
-                                  ] })
-                                ] }),
-                                (pedido.desconto_prazo_id || (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0)) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border-t border-green-500/20 pt-2", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5 mb-1.5", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-2.5 h-2.5 bg-green-500 rounded flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-xs font-bold", children: "%" }) }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-green-400 font-medium", children: "Opções de Faturamento" })
-                                  ] }),
-                                  descontosCliente.prazo.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1.5", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mb-1", children: "Prazo de Faturamento" }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1", children: descontosCliente.prazo.map((desconto, idx) => {
-                                      const isSelected = descontoPrazoSelecionado === desconto.id;
-                                      const wasOriginallySelected = pedido.desconto_prazo_id === desconto.id;
-                                      return /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "div",
-                                        {
-                                          className: `p-1 rounded border cursor-pointer transition-colors text-xs ${isSelected ? "bg-blue-500/20 border-blue-500 ring-1 ring-blue-500/50" : wasOriginallySelected ? "bg-green-500/20 border-green-500/50 ring-1 ring-green-500/30" : desconto.tipo === "desconto" ? "bg-green-500/5 border-green-500/20 hover:bg-green-500/10" : "bg-red-500/5 border-red-500/20 hover:bg-red-500/10"}`,
-                                          onClick: () => setDescontoPrazoSelecionado(isSelected ? null : desconto.id),
-                                          children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex items-center justify-center", children: [
-                                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-0.5", children: [
-                                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-white font-medium text-xs", children: [
-                                                desconto.prazo_dias,
-                                                "d"
-                                              ] }),
-                                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `text-xs ${isSelected ? "text-blue-400" : wasOriginallySelected ? "text-green-400" : desconto.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
-                                                desconto.tipo === "desconto" ? "+" : "-",
-                                                desconto.percentual,
-                                                "%"
-                                              ] })
-                                            ] }),
-                                            isSelected && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute right-0.5 text-xs text-blue-400", children: "✓" }),
-                                            !isSelected && wasOriginallySelected && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute right-0.5 text-xs text-green-400", children: "Orig" })
-                                          ] })
-                                        },
-                                        idx
-                                      );
-                                    }) })
-                                  ] }),
-                                  (() => {
-                                    const descontoValor = calcularDescontoPorValor(calcularTotal());
-                                    return descontoValor && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-1.5 pt-1.5 border-t border-green-500/20", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mb-1", children: "Desconto por Valor" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `p-1 rounded border text-center text-xs ${descontoValor.tipo === "desconto" ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"}`, children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-white font-medium text-xs", children: [
-                                          "A partir de ",
-                                          formatCurrency(descontoValor.valorMinimo)
-                                        ] }),
-                                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `text-xs ${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
-                                          descontoValor.tipo === "desconto" ? "+" : "-",
-                                          descontoValor.percentual,
-                                          "%"
-                                        ] })
-                                      ] })
-                                    ] });
-                                  })()
-                                ] })
-                              ] }, pedido.id)),
-                              pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-blue-500/10 border border-blue-500/30 rounded-lg p-3", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 mb-3", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-4 h-4 bg-blue-500 rounded flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-xs font-bold", children: "%" }) }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm text-blue-400 font-medium", children: "Opções de Faturamento" })
-                                ] }),
-                                descontosCliente.prazo.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mb-2", children: "Prazo de Faturamento" }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-2", children: getDescontosPrazoDisponiveis().map((desconto, idx) => {
-                                    const isSelected = descontoPrazoSelecionado === desconto.id;
-                                    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "div",
-                                      {
-                                        className: `p-2 rounded-lg border cursor-pointer transition-colors ${isSelected ? "bg-blue-500/20 border-blue-500 ring-2 ring-blue-500/50" : desconto.tipo === "desconto" ? "bg-green-500/10 border-green-500/30 hover:bg-green-500/20" : "bg-red-500/10 border-red-500/30 hover:bg-red-500/20"}`,
-                                        onClick: () => setDescontoPrazoSelecionado(isSelected ? null : desconto.id),
-                                        children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative flex items-center justify-center", children: [
-                                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
-                                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-white font-medium", children: [
-                                              desconto.prazo_dias,
-                                              "d"
-                                            ] }),
-                                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `text-xs ${isSelected ? "text-blue-400" : desconto.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
-                                              desconto.tipo === "desconto" ? "+" : "-",
-                                              desconto.percentual,
-                                              "%"
-                                            ] })
-                                          ] }),
-                                          isSelected && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute right-0 text-xs text-blue-400", children: "✓" })
-                                        ] })
+                            pedidosImportados.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Tipo de Pagamento" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => {
+                                        setTipoPagamento("vista");
+                                        limparPagamentosParciais();
                                       },
-                                      idx
-                                    );
-                                  }) })
-                                ] }),
-                                (() => {
-                                  const descontoValor = calcularDescontoPorValor(calcularTotal());
-                                  return descontoValor && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-3 pt-3 border-t border-gray-700", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-400 mb-2", children: "Desconto por Valor" }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `p-2 rounded-lg border text-center ${descontoValor.tipo === "desconto" ? "bg-green-500/10 border-green-500/30" : "bg-red-500/10 border-red-500/30"}`, children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-white font-medium", children: [
-                                        "A partir de ",
-                                        formatCurrency(descontoValor.valorMinimo)
+                                      className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "vista" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
+                                      children: "À Vista"
+                                    }
+                                  ),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => {
+                                        setTipoPagamento("parcial");
+                                        setFormaPagamentoSelecionada(null);
+                                      },
+                                      className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "parcial" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
+                                      children: "Parciais"
+                                    }
+                                  )
+                                ] })
+                              ] }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: tipoPagamento === "vista" ? "Forma de Pagamento" : "Formas de Pagamento" }),
+                                tipoPagamento === "vista" ? (
+                                  // Pagamento à vista - interface compacta
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                    "button",
+                                    {
+                                      onClick: () => setFormaPagamentoSelecionada(forma.id),
+                                      className: `p-2 rounded border transition-colors text-sm ${formaPagamentoSelecionada === forma.id ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750"}`,
+                                      children: forma.nome
+                                    },
+                                    forma.id
+                                  )) })
+                                ) : (
+                                  // Pagamentos parciais - interface compacta
+                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
+                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Valor do Pagamento" }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                        "input",
+                                        {
+                                          type: "text",
+                                          value: valorParcial,
+                                          onChange: (e) => setValorParcial(formatCurrencyInput(e.target.value)),
+                                          placeholder: `R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`,
+                                          className: "w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                        }
+                                      ),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 mt-1", children: "💡 Deixe vazio para usar o valor restante automaticamente" })
+                                    ] }),
+                                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                      "button",
+                                      {
+                                        onClick: () => adicionarPagamentoParcial(
+                                          forma.id,
+                                          forma.nome,
+                                          // Usar o nome da forma para exibição
+                                          forma.nome.toLowerCase() === "dinheiro" ? "dinheiro" : "eletronico"
+                                        ),
+                                        className: "p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm",
+                                        children: forma.nome
+                                      },
+                                      forma.id
+                                    )) }),
+                                    pagamentosParciais.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1.5", children: [
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-400", children: "Pagamentos Adicionados:" }),
+                                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                          "button",
+                                          {
+                                            onClick: confirmarLimparTodos,
+                                            className: "text-xs text-red-400 hover:text-red-300",
+                                            children: "Limpar Todos"
+                                          }
+                                        )
                                       ] }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `text-xs ${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
-                                        descontoValor.tipo === "desconto" ? "+" : "-",
-                                        descontoValor.percentual,
-                                        "%"
+                                      pagamentosParciais.map((pagamento) => {
+                                        const forma = formasPagamento.find((f2) => f2.id === pagamento.forma);
+                                        return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-gray-800/30 rounded p-1.5", children: [
+                                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-xs", children: (forma == null ? void 0 : forma.nome) || pagamento.forma }),
+                                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 text-xs ml-2", children: formatCurrency(pagamento.valor) })
+                                          ] }),
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                            "button",
+                                            {
+                                              onClick: () => confirmarRemocaoItem(pagamento.id),
+                                              className: "text-red-400 hover:text-red-300",
+                                              children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
+                                            }
+                                          )
+                                        ] }, pagamento.id);
+                                      }),
+                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-gray-800/50 rounded p-2 space-y-1", children: [
+                                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs", children: [
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Total da Venda:" }),
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
+                                        ] }),
+                                        tipoPagamento === "parcial" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs font-bold", children: [
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Restante:" }),
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: calcularRestante() > 0 ? "text-yellow-400" : "text-green-400", children: formatCurrency(calcularRestante()) })
+                                        ] }),
+                                        trocoCalculado > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1", children: [
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 text-xs", children: "Troco:" }),
+                                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-400 text-sm font-extrabold", children: formatCurrency(trocoCalculado) })
+                                        ] })
                                       ] })
                                     ] })
-                                  ] });
-                                })()
+                                  ] })
+                                )
                               ] })
                             ] })
                           ]
                         }
                       ),
-                      carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-3 bg-background-card flex-shrink-0", children: [
-                        pedidosImportados.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Tipo de Pagamento" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                "button",
-                                {
-                                  onClick: () => {
-                                    setTipoPagamento("vista");
-                                    limparPagamentosParciais();
-                                  },
-                                  className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "vista" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
-                                  children: "À Vista"
-                                }
-                              ),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                "button",
-                                {
-                                  onClick: () => {
-                                    setTipoPagamento("parcial");
-                                    setFormaPagamentoSelecionada(null);
-                                  },
-                                  className: `flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${tipoPagamento === "parcial" ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600 hover:bg-gray-750"}`,
-                                  children: "Parciais"
-                                }
-                              )
+                      carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-3 bg-background-card flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-800/50 rounded p-2.5 mb-1", children: (() => {
+                        const subtotal = calcularTotal();
+                        const totalFinal = calcularTotalComDesconto();
+                        let descontoPrazo = null;
+                        if (descontoPrazoSelecionado) {
+                          const desconto = descontosCliente.prazo.find((d2) => d2.id === descontoPrazoSelecionado);
+                          if (desconto) {
+                            const valorDesconto2 = subtotal * desconto.percentual / 100;
+                            descontoPrazo = {
+                              tipo: desconto.tipo,
+                              percentual: desconto.percentual,
+                              valor: valorDesconto2,
+                              prazo_dias: desconto.prazo_dias
+                            };
+                          }
+                        }
+                        const subtotalComDescontoPrazo = descontoPrazo ? descontoPrazo.tipo === "desconto" ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor : subtotal;
+                        const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
+                        return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: "Subtotal:" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: formatCurrency(subtotal) })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: "Itens:" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: carrinho.reduce((total, item) => total + item.quantidade, 0) })
+                          ] }),
+                          descontoPrazo && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoPrazo.tipo === "desconto" ? "text-blue-400" : "text-orange-400"}`, children: [
+                              descontoPrazo.tipo === "desconto" ? "Desconto" : "Acréscimo",
+                              " Prazo (",
+                              descontoPrazo.prazo_dias,
+                              "d):"
+                            ] }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoPrazo.tipo === "desconto" ? "text-blue-400" : "text-orange-400"}`, children: [
+                              descontoPrazo.tipo === "desconto" ? "-" : "+",
+                              formatCurrency(descontoPrazo.valor)
                             ] })
                           ] }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: tipoPagamento === "vista" ? "Forma de Pagamento" : "Formas de Pagamento" }),
-                            tipoPagamento === "vista" ? (
-                              // Pagamento à vista - interface compacta
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                "button",
-                                {
-                                  onClick: () => setFormaPagamentoSelecionada(forma.id),
-                                  className: `p-2 rounded border transition-colors text-sm ${formaPagamentoSelecionada === forma.id ? "bg-gray-700 border-gray-600 text-white" : "bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750"}`,
-                                  children: forma.nome
-                                },
-                                forma.id
-                              )) })
-                            ) : (
-                              // Pagamentos parciais - interface compacta
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-white mb-1.5", children: "Valor do Pagamento" }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "input",
-                                    {
-                                      type: "text",
-                                      value: valorParcial,
-                                      onChange: (e) => setValorParcial(formatCurrencyInput(e.target.value)),
-                                      placeholder: `R$ 0,00 (vazio = ${formatCurrency(calcularTotalComDesconto() - calcularTotalPago() > 0 ? calcularTotalComDesconto() - calcularTotalPago() : 0)})`,
-                                      className: "w-full bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2.5 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                    }
-                                  ),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-gray-500 mt-1", children: "💡 Deixe vazio para usar o valor restante automaticamente" })
-                                ] }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-1.5", children: formasPagamento.map((forma) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                  "button",
-                                  {
-                                    onClick: () => adicionarPagamentoParcial(
-                                      forma.id,
-                                      forma.nome,
-                                      // Usar o nome da forma para exibição
-                                      forma.nome.toLowerCase() === "dinheiro" ? "dinheiro" : "eletronico"
-                                    ),
-                                    className: "p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm",
-                                    children: forma.nome
-                                  },
-                                  forma.id
-                                )) }),
-                                pagamentosParciais.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1.5", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-400", children: "Pagamentos Adicionados:" }),
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                      "button",
-                                      {
-                                        onClick: confirmarLimparTodos,
-                                        className: "text-xs text-red-400 hover:text-red-300",
-                                        children: "Limpar Todos"
-                                      }
-                                    )
-                                  ] }),
-                                  pagamentosParciais.map((pagamento) => {
-                                    const forma = formasPagamento.find((f2) => f2.id === pagamento.forma);
-                                    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center bg-gray-800/30 rounded p-1.5", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-xs", children: (forma == null ? void 0 : forma.nome) || pagamento.forma }),
-                                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-primary-400 text-xs ml-2", children: formatCurrency(pagamento.valor) })
-                                      ] }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                        "button",
-                                        {
-                                          onClick: () => confirmarRemocaoItem(pagamento.id),
-                                          className: "text-red-400 hover:text-red-300",
-                                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 14 })
-                                        }
-                                      )
-                                    ] }, pagamento.id);
-                                  }),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-gray-800/50 rounded p-2 space-y-1", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Total da Venda:" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white font-medium", children: formatCurrency(calcularTotalComDesconto()) })
-                                    ] }),
-                                    tipoPagamento === "parcial" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-xs font-bold", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: "Restante:" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: calcularRestante() > 0 ? "text-yellow-400" : "text-green-400", children: formatCurrency(calcularRestante()) })
-                                    ] }),
-                                    trocoCalculado > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center font-bold border-t border-gray-700 pt-1 mt-1", children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400 text-xs", children: "Troco:" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-blue-400 text-sm font-extrabold", children: formatCurrency(trocoCalculado) })
-                                    ] })
-                                  ] })
-                                ] })
-                              ] })
-                            )
-                          ] })
-                        ] }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-gray-800/50 rounded p-2.5 mb-1", children: (() => {
-                          const subtotal = calcularTotal();
-                          const totalFinal = calcularTotalComDesconto();
-                          let descontoPrazo = null;
-                          if (descontoPrazoSelecionado) {
-                            const desconto = descontosCliente.prazo.find((d2) => d2.id === descontoPrazoSelecionado);
-                            if (desconto) {
-                              const valorDesconto2 = subtotal * desconto.percentual / 100;
-                              descontoPrazo = {
-                                tipo: desconto.tipo,
-                                percentual: desconto.percentual,
-                                valor: valorDesconto2,
-                                prazo_dias: desconto.prazo_dias
-                              };
-                            }
-                          }
-                          const subtotalComDescontoPrazo = descontoPrazo ? descontoPrazo.tipo === "desconto" ? subtotal - descontoPrazo.valor : subtotal + descontoPrazo.valor : subtotal;
-                          const descontoValor = calcularDescontoPorValor(subtotalComDescontoPrazo);
-                          return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: "Subtotal:" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: formatCurrency(subtotal) })
+                          descontoValor && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
+                              descontoValor.tipo === "desconto" ? "Desconto" : "Acréscimo",
+                              " (",
+                              descontoValor.percentual,
+                              "%):"
                             ] }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: "Itens:" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white", children: carrinho.reduce((total, item) => total + item.quantidade, 0) })
-                            ] }),
-                            descontoPrazo && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoPrazo.tipo === "desconto" ? "text-blue-400" : "text-orange-400"}`, children: [
-                                descontoPrazo.tipo === "desconto" ? "Desconto" : "Acréscimo",
-                                " Prazo (",
-                                descontoPrazo.prazo_dias,
-                                "d):"
-                              ] }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoPrazo.tipo === "desconto" ? "text-blue-400" : "text-orange-400"}`, children: [
-                                descontoPrazo.tipo === "desconto" ? "-" : "+",
-                                formatCurrency(descontoPrazo.valor)
-                              ] })
-                            ] }),
-                            descontoValor && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center text-xs mb-1.5", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
-                                descontoValor.tipo === "desconto" ? "Desconto" : "Acréscimo",
-                                " (",
-                                descontoValor.percentual,
-                                "%):"
-                              ] }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
-                                descontoValor.tipo === "desconto" ? "-" : "+",
-                                formatCurrency(descontoValor.valor)
-                              ] })
-                            ] }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center mb-0 pt-1.5 border-t border-gray-700", children: [
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-sm", children: "Total da Venda:" }),
-                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg font-bold text-primary-400", children: formatCurrency(totalFinal) })
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: `${descontoValor.tipo === "desconto" ? "text-green-400" : "text-red-400"}`, children: [
+                              descontoValor.tipo === "desconto" ? "-" : "+",
+                              formatCurrency(descontoValor.valor)
                             ] })
-                          ] });
-                        })() })
-                      ] }),
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center mb-0 pt-1.5 border-t border-gray-700", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-white text-sm", children: "Total da Venda:" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-lg font-bold text-primary-400", children: formatCurrency(totalFinal) })
+                          ] })
+                        ] });
+                      })() }) }),
                       carrinho.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-3 pt-1 pb-2 flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx(
                           "button",
