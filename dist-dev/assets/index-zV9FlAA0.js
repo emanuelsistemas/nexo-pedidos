@@ -60309,7 +60309,7 @@ const PDVPage = () => {
               className: "flex overflow-hidden relative",
               style: { height: "calc(100vh - 56px)" },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `${carrinho.length > 0 ? "w-1/2" : "w-full"} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-full flex flex-col", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `${carrinho.length > 0 ? "w-[65%]" : "w-full"} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "h-full flex flex-col", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-3", children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx(

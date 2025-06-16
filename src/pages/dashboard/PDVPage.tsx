@@ -6250,8 +6250,8 @@ const PDVPage: React.FC = () => {
         style={{ height: 'calc(100vh - 56px)' }}
       >
 
-        {/* Área dos Itens do Carrinho - ocupa toda largura quando vazio, 50% quando há itens */}
-        <div className={`${carrinho.length > 0 ? 'w-1/2' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
+        {/* Área dos Itens do Carrinho - ocupa toda largura quando vazio, 65% quando há itens */}
+        <div className={`${carrinho.length > 0 ? 'w-[65%]' : 'w-full'} p-4 flex flex-col h-full relative overflow-hidden transition-all duration-500`}>
           {/* Overlay removido - estava causando problemas no layout lado a lado */}
             <div className="h-full flex flex-col">
 
