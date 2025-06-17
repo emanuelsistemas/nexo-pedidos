@@ -175,22 +175,24 @@ server {
 
 ```bash
 # 1. Desenvolvimento (Programador)
-nexo-dev
+branch dev             # Mudar para branch de desenvolvimento
+nexo-dev              # Iniciar servidor de desenvolvimento
+# - Desenvolver funcionalidades
 # - Hot reload ativo
-# - Mudanças em tempo real
-# - Debug facilitado
-# - Acesso: http://31.97.166.71:5173
+push                  # Commit automático: "🔥 DEV: Atualização em..."
 
 # 2. Funcionalidade Pronta → Beta (Tester)
-nexo-beta
-# - Build otimizado mas rápido
-# - Ambiente isolado para testes
+branch beta           # Mudar para branch de teste
+branch merge dev beta # Fazer merge dev → beta
+nexo-beta            # Deploy para ambiente beta
+# - Tester analisa funcionalidades
 # - Acesso: https://nexobeta.emasoftware.app
 
 # 3. Tester Aprovou → Produção (Usuários)
-nexo
-# - Build totalmente otimizado
-# - Ambiente final
+branch main          # Mudar para branch principal
+branch merge beta main # Fazer merge beta → main
+nexo                 # Deploy para produção
+# - Usuários finais acessam
 # - Acesso: https://nexo.emasoftware.app
 ```
 
@@ -307,21 +309,43 @@ nexo
 - [ ] Certificado SSL para beta
 - [ ] Teste completo dos 3 ambientes
 
-## 🚀 **PRÓXIMAS MELHORIAS SUGERIDAS**
+## 🌿 **SISTEMA DE BRANCHES IMPLEMENTADO**
 
-### **1. Sistema de Branches**
+### **Estrutura de Branches:**
 ```bash
-main (produção)     ← nexo
-├── beta (staging)  ← nexo-beta  
-└── dev (desenvolvimento) ← nexo-dev
+main (produção)     ← nexo (https://nexo.emasoftware.app)
+├── beta (staging)  ← nexo-beta (https://nexobeta.emasoftware.app)
+└── dev (desenvolvimento) ← nexo-dev (http://31.97.166.71:5173)
 ```
 
-### **2. CI/CD Automatizado**
+### **Comandos de Branch:**
+```bash
+# Gerenciamento de branches
+branch status          # Ver status de todas as branches
+branch dev             # Mudar para desenvolvimento
+branch beta            # Mudar para staging/teste
+branch main            # Mudar para produção
+branch merge dev beta  # Merge dev → beta
+```
+
+### **Push Inteligente:**
+```bash
+push  # Detecta a branch e faz commit/push automático
+```
+
+**Mensagens automáticas por branch:**
+- **dev**: `🔥 DEV: Atualização em DD/MM/YYYY HH:MM:SS`
+- **beta**: `🧪 BETA: Deploy para testes em DD/MM/YYYY HH:MM:SS`
+- **main**: `🛡️ PROD: Release em DD/MM/YYYY HH:MM:SS`
+
+## 🚀 **PRÓXIMAS MELHORIAS SUGERIDAS**
+
+### **1. CI/CD Automatizado**
 - Deploy automático por branch
 - Testes automatizados
 - Notificações de deploy
 
-### **3. Monitoramento**
+### **2. Monitoramento**
 - Health checks automáticos
 - Alertas de erro
 - Métricas de performance
