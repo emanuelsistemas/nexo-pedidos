@@ -5303,6 +5303,7 @@ const PDVPage: React.FC = () => {
               telefone: empresaData.telefone
             },
             cliente: clienteData || {},
+            vendedor: vendedorSelecionado || null, // Incluir dados do vendedor
             itens: carrinho.map(item => ({
               codigo: item.produto.codigo,
               nome: item.produto.nome,
@@ -5384,6 +5385,7 @@ const PDVPage: React.FC = () => {
               telefone: empresaData.telefone
             },
             cliente: clienteData || {},
+            vendedor: vendedorSelecionado || null, // Incluir dados do vendedor
             itens: carrinho.map(item => ({
               codigo: item.produto.codigo,
               nome: item.produto.nome,
@@ -5461,6 +5463,7 @@ const PDVPage: React.FC = () => {
       // Limpar todos os estados
       setCarrinho([]);
       setClienteSelecionado(null);
+      setVendedorSelecionado(null); // ✅ IMPORTANTE: Limpar vendedor selecionado
       setShowFinalizacaoFinal(false);
       limparPagamentosParciaisSilencioso(); // Versão silenciosa para não mostrar toast duplicado
       setCpfCnpjNota('');
@@ -5613,6 +5616,23 @@ const PDVPage: React.FC = () => {
 
       console.log('📦 FRONTEND: Itens carregados:', itensData.length);
 
+      // Buscar dados do vendedor se existir
+      let vendedorData = null;
+      if (venda.usuario_id) {
+        const { data: vendedorInfo } = await supabase
+          .from('usuarios')
+          .select('id, nome')
+          .eq('id', venda.usuario_id)
+          .single();
+
+        if (vendedorInfo) {
+          vendedorData = {
+            id: vendedorInfo.id,
+            nome: vendedorInfo.nome
+          };
+        }
+      }
+
       // Preparar dados para impressão da NFC-e
       const dadosImpressaoNfce = {
         venda: {
@@ -5642,6 +5662,7 @@ const PDVPage: React.FC = () => {
           nome_cliente: venda.nome_cliente,
           documento_cliente: venda.documento_cliente
         },
+        vendedor: vendedorData, // Incluir dados do vendedor
         itens: itensData.map(item => ({
           codigo: item.codigo_produto || 'N/A',
           nome: item.nome_produto,
@@ -5697,6 +5718,23 @@ const PDVPage: React.FC = () => {
 
       console.log('📦 FRONTEND: Itens carregados:', itensData.length);
 
+      // Buscar dados do vendedor se existir
+      let vendedorData = null;
+      if (venda.usuario_id) {
+        const { data: vendedorInfo } = await supabase
+          .from('usuarios')
+          .select('id, nome')
+          .eq('id', venda.usuario_id)
+          .single();
+
+        if (vendedorInfo) {
+          vendedorData = {
+            id: vendedorInfo.id,
+            nome: vendedorInfo.nome
+          };
+        }
+      }
+
       // Preparar dados para impressão
       const dadosImpressao = {
         venda: {
@@ -5725,6 +5763,7 @@ const PDVPage: React.FC = () => {
           nome_cliente: venda.nome_cliente,
           documento_cliente: venda.documento_cliente
         },
+        vendedor: vendedorData, // Incluir dados do vendedor
         itens: itensData.map(item => ({
           codigo: item.codigo_produto || 'N/A',
           nome: item.nome_produto,
@@ -5810,6 +5849,21 @@ const PDVPage: React.FC = () => {
           <div class="center">Venda: ${dadosImpressao.venda.numero}</div>
           <div class="center">${dadosImpressao.venda.data}</div>
 
+          ${dadosImpressao.cliente?.nome_cliente || dadosImpressao.vendedor?.nome ? `
+            <div class="linha"></div>
+            ${dadosImpressao.cliente?.nome_cliente ? `
+              <div class="center">
+                <div class="bold">CLIENTE: ${dadosImpressao.cliente.nome_cliente}</div>
+                ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
+              </div>
+            ` : ''}
+            ${dadosImpressao.vendedor?.nome ? `
+              <div class="center">
+                <div class="bold">VENDEDOR: ${dadosImpressao.vendedor.nome}</div>
+              </div>
+            ` : ''}
+          ` : ''}
+
           <div class="linha"></div>
 
           ${dadosImpressao.itens.map(item => `
@@ -5839,13 +5893,6 @@ const PDVPage: React.FC = () => {
             <span>TOTAL:</span>
             <span>${formatCurrency(dadosImpressao.venda.valor_total)}</span>
           </div>
-
-          <div class="linha"></div>
-
-          ${dadosImpressao.cliente?.nome_cliente ? `
-            <div>Cliente: ${dadosImpressao.cliente.nome_cliente}</div>
-            ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
-          ` : ''}
 
           <div class="linha"></div>
 
@@ -5964,6 +6011,21 @@ const PDVPage: React.FC = () => {
           <div class="center">Venda: ${dadosImpressao.venda.numero}</div>
           <div class="center">${dadosImpressao.venda.data}</div>
 
+          ${dadosImpressao.cliente?.nome_cliente || dadosImpressao.vendedor?.nome ? `
+            <div class="linha"></div>
+            ${dadosImpressao.cliente?.nome_cliente ? `
+              <div class="center">
+                <div class="bold">CLIENTE: ${dadosImpressao.cliente.nome_cliente}</div>
+                ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
+              </div>
+            ` : ''}
+            ${dadosImpressao.vendedor?.nome ? `
+              <div class="center">
+                <div class="bold">VENDEDOR: ${dadosImpressao.vendedor.nome}</div>
+              </div>
+            ` : ''}
+          ` : ''}
+
           <div class="linha"></div>
 
           ${dadosImpressao.itens.map(item => `
@@ -5995,11 +6057,6 @@ const PDVPage: React.FC = () => {
           </div>
 
           <div class="linha"></div>
-
-          ${dadosImpressao.cliente?.nome_cliente ? `
-            <div>Cliente: ${dadosImpressao.cliente.nome_cliente}</div>
-            ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
-          ` : ''}
 
           <div class="center">
             <div>Obrigado pela preferência!</div>
@@ -6058,6 +6115,7 @@ const PDVPage: React.FC = () => {
       // ✅ CORREÇÃO: Limpar TODOS os estados (igual ao "Finalizar sem Impressão")
       setCarrinho([]);
       setClienteSelecionado(null);
+      setVendedorSelecionado(null); // ✅ IMPORTANTE: Limpar vendedor selecionado
       setShowFinalizacaoFinal(false); // ✅ IMPORTANTE: Fechar modal de finalização
       limparPagamentosParciaisSilencioso(); // ✅ IMPORTANTE: Limpar pagamentos
       setCpfCnpjNota('');
@@ -6085,6 +6143,7 @@ const PDVPage: React.FC = () => {
 
     // Limpar área lateral
     setClienteSelecionado(null);
+    setVendedorSelecionado(null); // ✅ IMPORTANTE: Limpar vendedor selecionado
     setPedidosImportados([]);
     setDescontoPrazoSelecionado(null);
     setDescontosCliente({ prazo: [], valor: [] });
