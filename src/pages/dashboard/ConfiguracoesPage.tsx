@@ -4,6 +4,7 @@ import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, 
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
+import MultiSelect from '../../components/comum/MultiSelect';
 import { showMessage, translateErrorMessage } from '../../utils/toast';
 import { TipoUserConfig } from '../../types';
 import { useAuthSession } from '../../hooks/useAuthSession';
@@ -178,7 +179,7 @@ const ConfiguracoesPage: React.FC = () => {
     email: '',
     senha: '',
     confirmarSenha: '',
-    tipo_user_config_id: '',
+    tipo_user_config_id: [] as string[], // Agora é um array
     serie_nfce: 1, // ✅ NOVO: Série da NFC-e para o usuário
     // Campos de comissão para vendedores
     tipo_comissao: 'total_venda', // 'total_venda' ou 'grupos'
@@ -346,17 +347,34 @@ const ConfiguracoesPage: React.FC = () => {
         .select(`
           id,
           empresa_id,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `)
         .eq('id', userData.user.id)
         .single();
 
       if (!usuarioData?.empresa_id) return;
 
+      // Buscar tipos do usuário logado
+      let tipoUsuarioLogado = 'user'; // Valor padrão
+      if (usuarioData.tipo_user_config_id && Array.isArray(usuarioData.tipo_user_config_id) && usuarioData.tipo_user_config_id.length > 0) {
+        // Buscar os tipos de usuário
+        const { data: tiposData } = await supabase
+          .from('tipo_user_config')
+          .select('tipo')
+          .in('id', usuarioData.tipo_user_config_id);
+
+        // Se tem tipo admin, usar admin como principal
+        if (tiposData?.some(t => t.tipo === 'admin')) {
+          tipoUsuarioLogado = 'admin';
+        } else if (tiposData?.length > 0) {
+          tipoUsuarioLogado = tiposData[0].tipo;
+        }
+      }
+
       // Armazenar o tipo do usuário logado
       setUsuarioLogado({
         id: usuarioData.id,
-        tipo: usuarioData.tipo_user_config?.tipo || 'user' // Valor padrão 'user' caso não tenha tipo definido
+        tipo: tipoUsuarioLogado
       });
 
       if (activeSection === 'usuarios') {
@@ -394,14 +412,13 @@ const ConfiguracoesPage: React.FC = () => {
           .from('usuarios')
           .select(`
             *,
-            perfil:perfis_acesso(nome),
-            tipo_user_config:tipo_user_config_id(id, tipo, descricao)
+            perfil:perfis_acesso(nome)
           `)
           .eq('empresa_id', usuarioData.empresa_id)
           .order('nome'); // Ordenar por nome para melhor visualização
 
         // Filtrar apenas o próprio usuário se for do tipo 'user'
-        if (usuarioData.tipo_user_config?.tipo === 'user') {
+        if (tipoUsuarioLogado === 'user') {
           query = query.eq('id', usuarioData.id);
         }
 
@@ -413,7 +430,7 @@ const ConfiguracoesPage: React.FC = () => {
           return;
         }
 
-        console.log(`Carregados ${usuariosData?.length || 0} usuários. Usuário logado é ${usuarioData.tipo_user_config?.tipo}`);
+        console.log(`Carregados ${usuariosData?.length || 0} usuários. Usuário logado é ${tipoUsuarioLogado}`);
         setUsuarios(usuariosData || []);
       }
 
@@ -1208,14 +1225,22 @@ const ConfiguracoesPage: React.FC = () => {
     });
 
     // Carregar configurações de comissão se for vendedor
-    const tipoSelecionado = tiposUsuario.find(tipo => tipo.id === usuario.tipo_user_config_id);
+    const tiposUsuarioIds = Array.isArray(usuario.tipo_user_config_id)
+      ? usuario.tipo_user_config_id
+      : [usuario.tipo_user_config_id];
+
+    const temTipoVendedor = tiposUsuarioIds.some(tipoId => {
+      const tipo = tiposUsuario.find(t => t.id === tipoId);
+      return tipo?.tipo === 'vendedor';
+    });
+
     let comissaoData = {
       tipo_comissao: 'total_venda',
       percentual_comissao: 0,
       grupos_comissao: []
     };
 
-    if (tipoSelecionado?.tipo === 'vendedor') {
+    if (temTipoVendedor) {
       comissaoData = await carregarComissaoVendedor(usuario.id);
     }
 
@@ -1226,7 +1251,9 @@ const ConfiguracoesPage: React.FC = () => {
       email: usuario.email,
       senha: '', // Campos de senha vazios na edição
       confirmarSenha: '',
-      tipo_user_config_id: usuario.tipo_user_config_id || '',
+      tipo_user_config_id: Array.isArray(usuario.tipo_user_config_id)
+        ? usuario.tipo_user_config_id
+        : usuario.tipo_user_config_id ? [usuario.tipo_user_config_id] : [],
       serie_nfce: usuario.serie_nfce || 1, // ✅ NOVO: Carregar série da NFC-e
       // Campos de comissão para vendedores
       tipo_comissao: comissaoData.tipo_comissao,
@@ -1892,8 +1919,12 @@ const ConfiguracoesPage: React.FC = () => {
         }
 
         // 3. Se for vendedor, salvar/atualizar configurações de comissão
-        const tipoSelecionado = tiposUsuario.find(tipo => tipo.id === usuarioForm.tipo_user_config_id);
-        if (tipoSelecionado?.tipo === 'vendedor') {
+        const temTipoVendedor = usuarioForm.tipo_user_config_id.some(tipoId => {
+          const tipo = tiposUsuario.find(t => t.id === tipoId);
+          return tipo?.tipo === 'vendedor';
+        });
+
+        if (temTipoVendedor) {
           await salvarComissaoVendedor(usuarioForm.id, usuarioData.empresa_id);
         } else {
           // Se não for mais vendedor, desativar configurações de comissão existentes
@@ -1972,8 +2003,12 @@ const ConfiguracoesPage: React.FC = () => {
         if (insertError) throw insertError;
 
         // 5. Se for vendedor, salvar configurações de comissão
-        const tipoSelecionado = tiposUsuario.find(tipo => tipo.id === usuarioForm.tipo_user_config_id);
-        if (tipoSelecionado?.tipo === 'vendedor') {
+        const temTipoVendedor = usuarioForm.tipo_user_config_id.some(tipoId => {
+          const tipo = tiposUsuario.find(t => t.id === tipoId);
+          return tipo?.tipo === 'vendedor';
+        });
+
+        if (temTipoVendedor) {
           await salvarComissaoVendedor(authData.user.id, usuarioData.empresa_id);
         }
 
@@ -1987,7 +2022,7 @@ const ConfiguracoesPage: React.FC = () => {
         email: '',
         senha: '',
         confirmarSenha: '',
-        tipo_user_config_id: '',
+        tipo_user_config_id: [],
         serie_nfce: 1,
         tipo_comissao: 'total_venda',
         percentual_comissao: 0,
@@ -2870,11 +2905,20 @@ const ConfiguracoesPage: React.FC = () => {
                           <span className="font-medium">Série NFC-e:</span> #{usuario.serie_nfce || 1}
                         </p>
                         <div className="flex flex-wrap gap-2 mt-2">
-                          {usuario.tipo_user_config && (
+                          {Array.isArray(usuario.tipo_user_config_id) && usuario.tipo_user_config_id.length > 0 ? (
+                            usuario.tipo_user_config_id.map((tipoId: string) => {
+                              const tipo = tiposUsuario.find(t => t.id === tipoId);
+                              return tipo ? (
+                                <span key={tipoId} className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
+                                  {tipo.tipo.charAt(0).toUpperCase() + tipo.tipo.slice(1)}
+                                </span>
+                              ) : null;
+                            })
+                          ) : usuario.tipo_user_config ? (
                             <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
                               {usuario.tipo_user_config.tipo.charAt(0).toUpperCase() + usuario.tipo_user_config.tipo.slice(1)}
                             </span>
-                          )}
+                          ) : null}
                           {usuario.perfil && (
                             <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-500/10 text-primary-400">
                               {usuario.perfil.nome}
@@ -2895,7 +2939,10 @@ const ConfiguracoesPage: React.FC = () => {
                         )}
 
                         {/* Botão de bloquear/desbloquear - visível apenas para admin e apenas para usuários não-admin */}
-                        {usuarioLogado?.tipo === 'admin' && usuario.tipo_user_config?.tipo !== 'admin' && (
+                        {usuarioLogado?.tipo === 'admin' && !Array.isArray(usuario.tipo_user_config_id) ? false : !usuario.tipo_user_config_id?.some((tipoId: string) => {
+                          const tipo = tiposUsuario.find(t => t.id === tipoId);
+                          return tipo?.tipo === 'admin';
+                        }) && usuarioLogado?.tipo === 'admin' && (
                           <button
                             onClick={() => handleToggleUserStatus(usuario.id, usuario.nome, usuario.status)}
                             className={`p-2 ${usuario.status ? 'text-green-400 hover:text-green-300' : 'text-red-400 hover:text-red-300'} transition-colors`}
@@ -4836,23 +4883,25 @@ const ConfiguracoesPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <SearchableSelect
-                        label="Tipo de Usuário"
+                      <MultiSelect
+                        label="Tipos de Usuário"
                         options={tiposUsuario.map(tipo => ({
                           value: tipo.id,
                           label: `${tipo.tipo.charAt(0).toUpperCase() + tipo.tipo.slice(1)} - ${tipo.descricao || ''}`
                         }))}
                         value={usuarioForm.tipo_user_config_id}
                         onChange={(value) => setUsuarioForm(prev => ({ ...prev, tipo_user_config_id: value }))}
-                        placeholder="Selecione o tipo de usuário"
+                        placeholder="Selecione os tipos de usuário"
                         required
                       />
                     </div>
 
                     {/* Campos de comissão para vendedores */}
                     {(() => {
-                      const tipoSelecionado = tiposUsuario.find(tipo => tipo.id === usuarioForm.tipo_user_config_id);
-                      return tipoSelecionado?.tipo === 'vendedor';
+                      return usuarioForm.tipo_user_config_id.some(tipoId => {
+                        const tipo = tiposUsuario.find(t => t.id === tipoId);
+                        return tipo?.tipo === 'vendedor';
+                      });
                     })() && (
                       <div className="space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
                         <h4 className="text-sm font-medium text-gray-300">Configurações de Comissão</h4>

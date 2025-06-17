@@ -25,8 +25,10 @@ export default defineConfig(({ mode }) => {
       watch: {
         usePolling: false, // Reduz uso de CPU
       },
-      host: 'localhost',
+      host: '0.0.0.0', // Permite acesso externo na VPS
       port: 5173,
+      strictPort: true, // Falha se a porta estiver ocupada
+      cors: true, // Habilita CORS para desenvolvimento
     },
     build: {
       outDir: isDev ? 'dist-dev' : 'dist',

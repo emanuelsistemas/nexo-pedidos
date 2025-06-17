@@ -17287,13 +17287,18 @@ const FormEntrar = () => {
       if (signInError) throw signInError;
       const { data: userData } = await supabase.from("usuarios").select(`
           status,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("id", (_a2 = (await supabase.auth.getUser()).data.user) == null ? void 0 : _a2.id).single();
       if ((userData == null ? void 0 : userData.status) === false) {
         await supabase.auth.signOut();
         throw new Error("Sua conta está bloqueada. Entre em contato com o administrador do sistema.");
       }
-      if ((userData == null ? void 0 : userData.tipo) === "user") {
+      let isUserOnly = false;
+      if ((userData == null ? void 0 : userData.tipo_user_config_id) && Array.isArray(userData.tipo_user_config_id) && userData.tipo_user_config_id.length > 0) {
+        const { data: tiposData } = await supabase.from("tipo_user_config").select("tipo").in("id", userData.tipo_user_config_id);
+        isUserOnly = (tiposData == null ? void 0 : tiposData.length) === 1 && tiposData[0].tipo === "user";
+      }
+      if (isUserOnly) {
         navigate("/user/dashboard", { replace: true });
       } else {
         navigate("/dashboard", { replace: true });
@@ -25018,16 +25023,20 @@ const UserProfileFooter = () => {
   const [empresaNomeFantasia, setEmpresaNomeFantasia] = reactExports.useState("");
   reactExports.useEffect(() => {
     const getUser = async () => {
-      var _a2;
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           setUserEmail(user.email || "");
           const { data: userData } = await supabase.from("usuarios").select(`
               empresa_id,
-              tipo_user_config:tipo_user_config_id(tipo)
+              tipo_user_config_id
             `).eq("id", user.id).single();
-          setIsAdmin(((_a2 = userData == null ? void 0 : userData.tipo_user_config) == null ? void 0 : _a2.tipo) === "admin");
+          let isAdmin2 = false;
+          if ((userData == null ? void 0 : userData.tipo_user_config_id) && Array.isArray(userData.tipo_user_config_id) && userData.tipo_user_config_id.length > 0) {
+            const { data: tiposData } = await supabase.from("tipo_user_config").select("tipo").in("id", userData.tipo_user_config_id);
+            isAdmin2 = (tiposData == null ? void 0 : tiposData.some((t2) => t2.tipo === "admin")) || false;
+          }
+          setIsAdmin(isAdmin2);
           if (userData == null ? void 0 : userData.empresa_id) {
             const { data: empresaData } = await supabase.from("empresas").select("nome_fantasia").eq("id", userData.empresa_id).single();
             if (empresaData && empresaData.nome_fantasia) {
@@ -37598,30 +37607,36 @@ const DashboardPage = () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const { data: usuarioData } = await supabase.from("usuarios").select(`
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("id", userData.user.id).single();
-      if (usuarioData == null ? void 0 : usuarioData.tipo_user_config) {
-        setIsAdmin(usuarioData.tipo_user_config.tipo === "admin");
+      if ((usuarioData == null ? void 0 : usuarioData.tipo_user_config_id) && Array.isArray(usuarioData.tipo_user_config_id) && usuarioData.tipo_user_config_id.length > 0) {
+        const { data: tiposData } = await supabase.from("tipo_user_config").select("tipo").in("id", usuarioData.tipo_user_config_id);
+        setIsAdmin((tiposData == null ? void 0 : tiposData.some((t2) => t2.tipo === "admin")) || false);
       }
     } catch (error) {
       console.error("Erro ao verificar tipo de usuário:", error);
     }
   };
   const loadUsuarios = async () => {
-    var _a3;
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const { data: usuarioData } = await supabase.from("usuarios").select(`
           empresa_id,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("id", userData.user.id).single();
-      if (!(usuarioData == null ? void 0 : usuarioData.empresa_id) || ((_a3 = usuarioData.tipo_user_config) == null ? void 0 : _a3.tipo) !== "admin") return;
+      if (!(usuarioData == null ? void 0 : usuarioData.empresa_id)) return;
+      let isAdmin2 = false;
+      if (usuarioData.tipo_user_config_id && Array.isArray(usuarioData.tipo_user_config_id) && usuarioData.tipo_user_config_id.length > 0) {
+        const { data: tiposData } = await supabase.from("tipo_user_config").select("tipo").in("id", usuarioData.tipo_user_config_id);
+        isAdmin2 = (tiposData == null ? void 0 : tiposData.some((t2) => t2.tipo === "admin")) || false;
+      }
+      if (!isAdmin2) return;
       const { data: usuariosData } = await supabase.from("usuarios").select(`
           id,
           nome,
           email,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("empresa_id", usuarioData.empresa_id).order("nome");
       if (usuariosData) {
         setUsuarios(usuariosData);
@@ -37738,7 +37753,7 @@ const DashboardPage = () => {
       if (!userData.user) return;
       const { data: usuarioData } = await supabase.from("usuarios").select(`
           empresa_id,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("id", userData.user.id).single();
       if (!(usuarioData == null ? void 0 : usuarioData.empresa_id)) return;
       let query = supabase.from("pedidos").select("*").eq("empresa_id", usuarioData.empresa_id);
@@ -48121,7 +48136,7 @@ const FaturamentoPage = () => {
       const { data, error } = await supabase.from("usuarios").select(`
           id,
           nome,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("empresa_id", usuarioData.empresa_id).order("nome");
       if (error) throw error;
       setVendedores(data || []);
@@ -51588,6 +51603,152 @@ const SearchableSelect = ({
     ] })
   ] });
 };
+const MultiSelect = ({
+  options,
+  value,
+  onChange,
+  placeholder = "Selecione opções",
+  label,
+  required = false,
+  className = ""
+}) => {
+  const [isOpen, setIsOpen] = reactExports.useState(false);
+  const [searchTerm, setSearchTerm] = reactExports.useState("");
+  const [filteredOptions, setFilteredOptions] = reactExports.useState(options);
+  const dropdownRef = reactExports.useRef(null);
+  const searchInputRef = reactExports.useRef(null);
+  const selectedOptions = options.filter((option) => value.includes(option.value));
+  reactExports.useEffect(() => {
+    const filtered = options.filter(
+      (option) => option.label.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredOptions(filtered);
+  }, [searchTerm, options]);
+  reactExports.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+  reactExports.useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isOpen]);
+  const handleSelect = (option) => {
+    const newValue = value.includes(option.value) ? value.filter((v2) => v2 !== option.value) : [...value, option.value];
+    onChange(newValue);
+  };
+  const handleRemove = (optionValue, event) => {
+    event.stopPropagation();
+    const newValue = value.filter((v2) => v2 !== optionValue);
+    onChange(newValue);
+  };
+  const handleClearAll = (event) => {
+    event.stopPropagation();
+    onChange([]);
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `relative ${className}`, children: [
+    label && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: [
+      label,
+      required && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-400 ml-1", children: "*" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ref: dropdownRef, className: "relative", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          onClick: () => setIsOpen(!isOpen),
+          className: "w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white cursor-pointer min-h-[40px] flex items-center justify-between",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 flex flex-wrap gap-1", children: selectedOptions.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-400", children: placeholder }) : selectedOptions.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "span",
+              {
+                className: "inline-flex items-center gap-1 bg-primary-500/20 text-primary-400 px-2 py-1 rounded text-xs",
+                children: [
+                  option.label,
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: (e) => handleRemove(option.value, e),
+                      className: "hover:text-primary-300",
+                      children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 12 })
+                    }
+                  )
+                ]
+              },
+              option.value
+            )) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center ml-2", children: [
+              selectedOptions.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  onClick: handleClearAll,
+                  className: "mr-1 text-gray-400 hover:text-white",
+                  title: "Limpar tudo",
+                  children: /* @__PURE__ */ jsxRuntimeExports.jsx(X, { size: 16 })
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                ChevronDown,
+                {
+                  size: 18,
+                  className: `text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`
+                }
+              )
+            ] })
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatePresence, { children: isOpen && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        motion.div,
+        {
+          initial: { opacity: 0, y: -10 },
+          animate: { opacity: 1, y: 0 },
+          exit: { opacity: 0, y: -10 },
+          transition: { duration: 0.2 },
+          className: "absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-3 border-b border-gray-700", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Search, { size: 16, className: "absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  ref: searchInputRef,
+                  type: "text",
+                  value: searchTerm,
+                  onChange: (e) => setSearchTerm(e.target.value),
+                  className: "w-full bg-gray-700/50 border border-gray-600 rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20",
+                  placeholder: "Buscar..."
+                }
+              )
+            ] }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-60 overflow-y-auto", children: filteredOptions.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-4 text-center text-gray-400", children: "Nenhuma opção encontrada" }) : filteredOptions.map((option) => {
+              const isSelected = value.includes(option.value);
+              return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: `px-3 py-2 cursor-pointer transition-colors flex items-center justify-between ${isSelected ? "bg-primary-500/20 text-primary-400" : "text-white hover:bg-gray-700"}`,
+                  onClick: () => handleSelect(option),
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: option.label }),
+                    isSelected && /* @__PURE__ */ jsxRuntimeExports.jsx(Check, { size: 16, className: "text-primary-400" })
+                  ]
+                },
+                option.value
+              );
+            }) })
+          ]
+        }
+      ) })
+    ] })
+  ] });
+};
 const checkCertificateExpiry = (validityDate) => {
   if (!validityDate) return {
     status: "unknown",
@@ -51902,7 +52063,8 @@ const ConfiguracoesPage = () => {
     email: "",
     senha: "",
     confirmarSenha: "",
-    tipo_user_config_id: "",
+    tipo_user_config_id: [],
+    // Agora é um array
     serie_nfce: 1,
     // ✅ NOVO: Série da NFC-e para o usuário
     // Campos de comissão para vendedores
@@ -52027,19 +52189,27 @@ const ConfiguracoesPage = () => {
   }, [activeSection]);
   const loadData = async () => {
     await withSessionCheck(async () => {
-      var _a2, _b2, _c, _d, _e;
+      var _a2, _b2;
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const { data: usuarioData } = await supabase.from("usuarios").select(`
           id,
           empresa_id,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("id", userData.user.id).single();
       if (!(usuarioData == null ? void 0 : usuarioData.empresa_id)) return;
+      let tipoUsuarioLogado = "user";
+      if (usuarioData.tipo_user_config_id && Array.isArray(usuarioData.tipo_user_config_id) && usuarioData.tipo_user_config_id.length > 0) {
+        const { data: tiposData } = await supabase.from("tipo_user_config").select("tipo").in("id", usuarioData.tipo_user_config_id);
+        if (tiposData == null ? void 0 : tiposData.some((t2) => t2.tipo === "admin")) {
+          tipoUsuarioLogado = "admin";
+        } else if ((tiposData == null ? void 0 : tiposData.length) > 0) {
+          tipoUsuarioLogado = tiposData[0].tipo;
+        }
+      }
       setUsuarioLogado({
         id: usuarioData.id,
-        tipo: ((_a2 = usuarioData.tipo_user_config) == null ? void 0 : _a2.tipo) || "user"
-        // Valor padrão 'user' caso não tenha tipo definido
+        tipo: tipoUsuarioLogado
       });
       if (activeSection === "usuarios") {
         const { data: tiposData, error: tiposError } = await supabase.from("tipo_user_config").select("*").eq("ativo", true).order("tipo");
@@ -52057,10 +52227,9 @@ const ConfiguracoesPage = () => {
         }
         let query = supabase.from("usuarios").select(`
             *,
-            perfil:perfis_acesso(nome),
-            tipo_user_config:tipo_user_config_id(id, tipo, descricao)
+            perfil:perfis_acesso(nome)
           `).eq("empresa_id", usuarioData.empresa_id).order("nome");
-        if (((_b2 = usuarioData.tipo_user_config) == null ? void 0 : _b2.tipo) === "user") {
+        if (tipoUsuarioLogado === "user") {
           query = query.eq("id", usuarioData.id);
         }
         const { data: usuariosData, error: usuariosError } = await query;
@@ -52069,7 +52238,7 @@ const ConfiguracoesPage = () => {
           showMessage("error", "Erro ao carregar lista de usuários");
           return;
         }
-        console.log(`Carregados ${(usuariosData == null ? void 0 : usuariosData.length) || 0} usuários. Usuário logado é ${(_c = usuarioData.tipo_user_config) == null ? void 0 : _c.tipo}`);
+        console.log(`Carregados ${(usuariosData == null ? void 0 : usuariosData.length) || 0} usuários. Usuário logado é ${tipoUsuarioLogado}`);
         setUsuarios(usuariosData || []);
       }
       if (activeSection === "perfis") {
@@ -52309,9 +52478,9 @@ const ConfiguracoesPage = () => {
         const { data: empresaData } = await supabase.from("empresas").select("csc_homologacao, csc_id_homologacao, csc_producao, csc_id_producao").eq("id", usuarioData.empresa_id).single();
         if (empresaData) {
           setCscHomologacao(empresaData.csc_homologacao || "");
-          setCscIdHomologacao(((_d = empresaData.csc_id_homologacao) == null ? void 0 : _d.toString()) || "");
+          setCscIdHomologacao(((_a2 = empresaData.csc_id_homologacao) == null ? void 0 : _a2.toString()) || "");
           setCscProducao(empresaData.csc_producao || "");
-          setCscIdProducao(((_e = empresaData.csc_id_producao) == null ? void 0 : _e.toString()) || "");
+          setCscIdProducao(((_b2 = empresaData.csc_id_producao) == null ? void 0 : _b2.toString()) || "");
         } else {
           setCscHomologacao("");
           setCscIdHomologacao("");
@@ -52559,13 +52728,17 @@ const ConfiguracoesPage = () => {
       email: "",
       serie_nfce: ""
     });
-    const tipoSelecionado = tiposUsuario.find((tipo) => tipo.id === usuario.tipo_user_config_id);
+    const tiposUsuarioIds = Array.isArray(usuario.tipo_user_config_id) ? usuario.tipo_user_config_id : [usuario.tipo_user_config_id];
+    const temTipoVendedor = tiposUsuarioIds.some((tipoId) => {
+      const tipo = tiposUsuario.find((t2) => t2.id === tipoId);
+      return (tipo == null ? void 0 : tipo.tipo) === "vendedor";
+    });
     let comissaoData = {
       tipo_comissao: "total_venda",
       percentual_comissao: 0,
       grupos_comissao: []
     };
-    if ((tipoSelecionado == null ? void 0 : tipoSelecionado.tipo) === "vendedor") {
+    if (temTipoVendedor) {
       comissaoData = await carregarComissaoVendedor(usuario.id);
     }
     setUsuarioForm({
@@ -52575,7 +52748,7 @@ const ConfiguracoesPage = () => {
       senha: "",
       // Campos de senha vazios na edição
       confirmarSenha: "",
-      tipo_user_config_id: usuario.tipo_user_config_id || "",
+      tipo_user_config_id: Array.isArray(usuario.tipo_user_config_id) ? usuario.tipo_user_config_id : usuario.tipo_user_config_id ? [usuario.tipo_user_config_id] : [],
       serie_nfce: usuario.serie_nfce || 1,
       // ✅ NOVO: Carregar série da NFC-e
       // Campos de comissão para vendedores
@@ -52959,8 +53132,11 @@ const ConfiguracoesPage = () => {
           });
           if (passwordError) throw passwordError;
         }
-        const tipoSelecionado = tiposUsuario.find((tipo) => tipo.id === usuarioForm.tipo_user_config_id);
-        if ((tipoSelecionado == null ? void 0 : tipoSelecionado.tipo) === "vendedor") {
+        const temTipoVendedor = usuarioForm.tipo_user_config_id.some((tipoId) => {
+          const tipo = tiposUsuario.find((t2) => t2.id === tipoId);
+          return (tipo == null ? void 0 : tipo.tipo) === "vendedor";
+        });
+        if (temTipoVendedor) {
           await salvarComissaoVendedor(usuarioForm.id, usuarioData.empresa_id);
         } else {
           await desativarComissaoVendedor(usuarioForm.id);
@@ -53009,8 +53185,11 @@ const ConfiguracoesPage = () => {
           // Definir o status como ativo por padrão
         }]);
         if (insertError) throw insertError;
-        const tipoSelecionado = tiposUsuario.find((tipo) => tipo.id === usuarioForm.tipo_user_config_id);
-        if ((tipoSelecionado == null ? void 0 : tipoSelecionado.tipo) === "vendedor") {
+        const temTipoVendedor = usuarioForm.tipo_user_config_id.some((tipoId) => {
+          const tipo = tiposUsuario.find((t2) => t2.id === tipoId);
+          return (tipo == null ? void 0 : tipo.tipo) === "vendedor";
+        });
+        if (temTipoVendedor) {
           await salvarComissaoVendedor(authData.user.id, usuarioData.empresa_id);
         }
         showMessage("success", "Usuário adicionado com sucesso!");
@@ -53021,7 +53200,7 @@ const ConfiguracoesPage = () => {
         email: "",
         senha: "",
         confirmarSenha: "",
-        tipo_user_config_id: "",
+        tipo_user_config_id: [],
         serie_nfce: 1,
         tipo_comissao: "total_venda",
         percentual_comissao: 0,
@@ -53610,7 +53789,10 @@ const ConfiguracoesPage = () => {
                       usuario.serie_nfce || 1
                     ] }),
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2 mt-2", children: [
-                      usuario.tipo_user_config && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400", children: usuario.tipo_user_config.tipo.charAt(0).toUpperCase() + usuario.tipo_user_config.tipo.slice(1) }),
+                      Array.isArray(usuario.tipo_user_config_id) && usuario.tipo_user_config_id.length > 0 ? usuario.tipo_user_config_id.map((tipoId) => {
+                        const tipo = tiposUsuario.find((t2) => t2.id === tipoId);
+                        return tipo ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400", children: tipo.tipo.charAt(0).toUpperCase() + tipo.tipo.slice(1) }, tipoId) : null;
+                      }) : usuario.tipo_user_config ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400", children: usuario.tipo_user_config.tipo.charAt(0).toUpperCase() + usuario.tipo_user_config.tipo.slice(1) }) : null,
                       usuario.perfil && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-500/10 text-primary-400", children: usuario.perfil.nome })
                     ] })
                   ] }),
@@ -53624,7 +53806,10 @@ const ConfiguracoesPage = () => {
                         children: /* @__PURE__ */ jsxRuntimeExports.jsx(Pencil, { size: 16 })
                       }
                     ),
-                    (usuarioLogado == null ? void 0 : usuarioLogado.tipo) === "admin" && ((_a2 = usuario.tipo_user_config) == null ? void 0 : _a2.tipo) !== "admin" && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    (usuarioLogado == null ? void 0 : usuarioLogado.tipo) === "admin" && !Array.isArray(usuario.tipo_user_config_id) ? false : !((_a2 = usuario.tipo_user_config_id) == null ? void 0 : _a2.some((tipoId) => {
+                      const tipo = tiposUsuario.find((t2) => t2.id === tipoId);
+                      return (tipo == null ? void 0 : tipo.tipo) === "admin";
+                    })) && (usuarioLogado == null ? void 0 : usuarioLogado.tipo) === "admin" && /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "button",
                       {
                         onClick: () => handleToggleUserStatus(usuario.id, usuario.nome, usuario.status),
@@ -55260,22 +55445,24 @@ const ConfiguracoesPage = () => {
                 )
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                SearchableSelect,
+                MultiSelect,
                 {
-                  label: "Tipo de Usuário",
+                  label: "Tipos de Usuário",
                   options: tiposUsuario.map((tipo) => ({
                     value: tipo.id,
                     label: `${tipo.tipo.charAt(0).toUpperCase() + tipo.tipo.slice(1)} - ${tipo.descricao || ""}`
                   })),
                   value: usuarioForm.tipo_user_config_id,
                   onChange: (value) => setUsuarioForm((prev) => ({ ...prev, tipo_user_config_id: value })),
-                  placeholder: "Selecione o tipo de usuário",
+                  placeholder: "Selecione os tipos de usuário",
                   required: true
                 }
               ) }),
               (() => {
-                const tipoSelecionado = tiposUsuario.find((tipo) => tipo.id === usuarioForm.tipo_user_config_id);
-                return (tipoSelecionado == null ? void 0 : tipoSelecionado.tipo) === "vendedor";
+                return usuarioForm.tipo_user_config_id.some((tipoId) => {
+                  const tipo = tiposUsuario.find((t2) => t2.id === tipoId);
+                  return (tipo == null ? void 0 : tipo.tipo) === "vendedor";
+                });
               })() && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "text-sm font-medium text-gray-300", children: "Configurações de Comissão" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -56654,6 +56841,11 @@ const PDVPage = () => {
   const [observacaoTexto, setObservacaoTexto] = reactExports.useState("");
   const [itemEditandoObservacao, setItemEditandoObservacao] = reactExports.useState(null);
   const [observacaoEditando, setObservacaoEditando] = reactExports.useState("");
+  const [showVendedorModal, setShowVendedorModal] = reactExports.useState(false);
+  const [vendedores, setVendedores] = reactExports.useState([]);
+  const [vendedorSelecionado, setVendedorSelecionado] = reactExports.useState(null);
+  const [aguardandoSelecaoVendedor, setAguardandoSelecaoVendedor] = reactExports.useState(false);
+  const [produtoAguardandoVendedor, setProdutoAguardandoVendedor] = reactExports.useState(null);
   const savePDVState = () => {
     try {
       const pdvState = {
@@ -57508,7 +57700,8 @@ const PDVPage = () => {
           loadClientes(),
           loadEstoque(),
           loadPdvConfig(),
-          loadFormasPagamento()
+          loadFormasPagamento(),
+          loadVendedores()
         ]);
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
@@ -57654,6 +57847,34 @@ const PDVPage = () => {
       }
     } catch (error) {
       console.error("Erro ao carregar formas de pagamento:", error);
+    }
+  };
+  const loadVendedores = async () => {
+    try {
+      const { data: userData2 } = await supabase.auth.getUser();
+      if (!userData2.user) return;
+      const { data: usuarioData } = await supabase.from("usuarios").select("empresa_id").eq("id", userData2.user.id).single();
+      if (!(usuarioData == null ? void 0 : usuarioData.empresa_id)) return;
+      const { data: tiposUsuario } = await supabase.from("tipo_user_config").select("id").eq("tipo", "vendedor");
+      if (!tiposUsuario || tiposUsuario.length === 0) {
+        setVendedores([]);
+        return;
+      }
+      const tipoVendedorIds = tiposUsuario.map((tipo) => tipo.id);
+      const { data, error } = await supabase.from("usuarios").select("id, nome, email, tipo_user_config_id").eq("empresa_id", usuarioData.empresa_id).order("nome");
+      if (error) throw error;
+      const vendedoresFiltrados = (data || []).filter((usuario) => {
+        if (Array.isArray(usuario.tipo_user_config_id)) {
+          return usuario.tipo_user_config_id.some(
+            (tipoId) => tipoVendedorIds.includes(tipoId)
+          );
+        } else {
+          return tipoVendedorIds.includes(usuario.tipo_user_config_id);
+        }
+      });
+      setVendedores(vendedoresFiltrados);
+    } catch (error) {
+      console.error("Erro ao carregar vendedores:", error);
     }
   };
   const loadPedidos = async () => {
@@ -58427,6 +58648,13 @@ const PDVPage = () => {
       // Incluir informações do vendedor
     };
     setPedidosImportados((prev) => [...prev, novoPedidoImportado]);
+    if ((pdvConfig == null ? void 0 : pdvConfig.vendedor) && pedido.usuario && !vendedorSelecionado) {
+      setVendedorSelecionado({
+        id: pedido.usuario.id,
+        nome: pedido.usuario.nome,
+        email: pedido.usuario.email
+      });
+    }
     if (pedido.cliente && !clienteSelecionado) {
       setClienteSelecionado({
         id: pedido.cliente.id,
@@ -58445,7 +58673,7 @@ const PDVPage = () => {
       setDescontoPrazoSelecionado(pedido.desconto_prazo_id);
     }
     const novosItens = pedido.pedidos_itens.map((item) => {
-      var _a3, _b3;
+      var _a3, _b3, _c2, _d2;
       const temDesconto = ((_a3 = item.produto) == null ? void 0 : _a3.preco) && item.valor_unitario < item.produto.preco;
       const precoOriginal = ((_b3 = item.produto) == null ? void 0 : _b3.preco) || item.valor_unitario;
       let descontoInfo = void 0;
@@ -58471,8 +58699,12 @@ const PDVPage = () => {
         pedido_origem_id: pedido.id,
         // Marcar de qual pedido veio
         pedido_origem_numero: pedido.numero,
-        desconto: descontoInfo
+        desconto: descontoInfo,
         // Preservar informações de desconto
+        vendedor_id: (_c2 = pedido.usuario) == null ? void 0 : _c2.id,
+        // Vendedor do pedido importado
+        vendedor_nome: (_d2 = pedido.usuario) == null ? void 0 : _d2.nome
+        // Nome do vendedor do pedido importado
       };
     });
     if (pdvConfig == null ? void 0 : pdvConfig.agrupa_itens) {
@@ -58530,6 +58762,12 @@ const PDVPage = () => {
     }
   };
   const adicionarAoCarrinho = async (produto, quantidadePersonalizada) => {
+    if ((pdvConfig == null ? void 0 : pdvConfig.vendedor) && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
+      setProdutoAguardandoVendedor(produto);
+      setAguardandoSelecaoVendedor(true);
+      setShowVendedorModal(true);
+      return;
+    }
     let quantidadeParaAdicionar = 1;
     if (searchTerm.includes("*")) {
       const [qtdStr] = searchTerm.split("*");
@@ -58547,7 +58785,9 @@ const PDVPage = () => {
       produto,
       quantidade: quantidadeParaAdicionar,
       subtotal: precoFinal * quantidadeParaAdicionar,
-      temOpcoesAdicionais
+      temOpcoesAdicionais,
+      vendedor_id: vendedorSelecionado == null ? void 0 : vendedorSelecionado.id,
+      vendedor_nome: vendedorSelecionado == null ? void 0 : vendedorSelecionado.nome
     };
     setCarrinho((prev) => {
       const deveAgrupar = (pdvConfig == null ? void 0 : pdvConfig.agrupa_itens) === true;
@@ -58569,6 +58809,56 @@ const PDVPage = () => {
         return [...prev, novoItem];
       }
     });
+  };
+  const selecionarVendedor = (vendedor) => {
+    setVendedorSelecionado(vendedor);
+    setShowVendedorModal(false);
+    if (produtoAguardandoVendedor) {
+      setAguardandoSelecaoVendedor(false);
+      adicionarProdutoComVendedor(produtoAguardandoVendedor, vendedor);
+      setProdutoAguardandoVendedor(null);
+    }
+  };
+  const cancelarSelecaoVendedor = () => {
+    setShowVendedorModal(false);
+    setAguardandoSelecaoVendedor(false);
+    setProdutoAguardandoVendedor(null);
+  };
+  const adicionarProdutoComVendedor = async (produto, vendedor, quantidadePersonalizada) => {
+    let quantidadeParaAdicionar = 1;
+    if (searchTerm.includes("*")) {
+      const [qtdStr] = searchTerm.split("*");
+      const qtdParsed = parseInt(qtdStr.trim());
+      if (!isNaN(qtdParsed) && qtdParsed > 0) {
+        quantidadeParaAdicionar = qtdParsed;
+        setSearchTerm("");
+      }
+    }
+    const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
+    const precoFinal = calcularPrecoFinal(produto);
+    const novoItem = {
+      id: `${produto.id}-${Date.now()}-${Math.random()}`,
+      // ID único
+      produto,
+      quantidade: quantidadeParaAdicionar,
+      subtotal: precoFinal * quantidadeParaAdicionar,
+      temOpcoesAdicionais,
+      vendedor_id: vendedor == null ? void 0 : vendedor.id,
+      vendedor_nome: vendedor == null ? void 0 : vendedor.nome
+    };
+    if (temOpcoesAdicionais) {
+      setItemParaAdicionais(novoItem);
+      setShowAdicionaisModal(true);
+    } else {
+      setCarrinho((prev) => [...prev, novoItem]);
+      if (pdvConfig == null ? void 0 : pdvConfig.som_adicionar_produto) {
+        playSuccessSound();
+      }
+      if (searchTerm && !searchTerm.includes("*")) {
+        setSearchTerm("");
+      }
+      savePDVState();
+    }
   };
   const confirmarRemocao = (itemId) => {
     setItemParaRemover(itemId);
@@ -61142,6 +61432,10 @@ const PDVPage = () => {
                                     "💰 ",
                                     item.desconto.tipo === "percentual" && item.desconto.percentualDesconto ? `${Math.round(item.desconto.percentualDesconto)}% OFF` : `${formatCurrency(item.desconto.valorDesconto)} OFF`,
                                     item.desconto.origemPedido && " (do pedido)"
+                                  ] }),
+                                  (pdvConfig == null ? void 0 : pdvConfig.vendedor) && item.vendedor_nome && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-green-400 mt-1 lg:mt-0", children: [
+                                    "👤 ",
+                                    item.vendedor_nome
                                   ] })
                                 ] }),
                                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -61500,7 +61794,17 @@ const PDVPage = () => {
                           /* @__PURE__ */ jsxRuntimeExports.jsx(UserCheck, { size: 12, className: "text-green-400" }),
                           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-green-400 font-medium", children: "Vendedor" })
                         ] }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs font-medium", children: "Em desenvolvimento" })
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-white text-xs font-medium", children: vendedorSelecionado ? vendedorSelecionado.nome : "Nenhum selecionado" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "button",
+                            {
+                              onClick: () => setShowVendedorModal(true),
+                              className: "text-xs text-green-400 hover:text-green-300 transition-colors",
+                              children: vendedorSelecionado ? "Trocar" : "Selecionar"
+                            }
+                          )
+                        ] })
                       ] }) }),
                       (pdvConfig == null ? void 0 : pdvConfig.comandas) && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-yellow-500/10 border border-yellow-500/30 rounded p-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-1", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1", children: [
@@ -65673,6 +65977,66 @@ const PDVPage = () => {
                   }
                 )
               ] }) })
+            ]
+          }
+        )
+      }
+    ) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(AnimatePresence, { children: showVendedorModal && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      motion.div,
+      {
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        exit: { opacity: 0 },
+        className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50",
+        children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          motion.div,
+          {
+            initial: { scale: 0.9, opacity: 0 },
+            animate: { scale: 1, opacity: 1 },
+            exit: { scale: 0.9, opacity: 0 },
+            className: "bg-background-card border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 mb-6", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(UserCheck, { size: 20, className: "text-green-400" }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-lg font-semibold text-white", children: "Selecionar Vendedor" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-gray-400", children: "Escolha o vendedor responsável por este item" })
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-3 mb-6 max-h-60 overflow-y-auto", children: vendedores.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-4", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 text-sm mb-2", children: "Nenhum vendedor encontrado" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-xs", children: "Configure vendedores em: Configurações → Usuários" })
+              ] }) : vendedores.map((vendedor) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "button",
+                {
+                  onClick: () => selecionarVendedor(vendedor),
+                  className: `w-full p-3 rounded-lg border transition-colors text-left ${(vendedorSelecionado == null ? void 0 : vendedorSelecionado.id) === vendedor.id ? "bg-green-500/20 border-green-500/50 text-green-300" : "bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700/50 hover:border-gray-600"}`,
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "font-medium", children: vendedor.nome }),
+                    vendedor.email && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm text-gray-400 mt-1", children: vendedor.email })
+                  ]
+                },
+                vendedor.id
+              )) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-3", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    onClick: cancelarSelecaoVendedor,
+                    className: "flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors",
+                    children: "Cancelar"
+                  }
+                ),
+                vendedorSelecionado && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    onClick: () => selecionarVendedor(vendedorSelecionado),
+                    className: "flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors",
+                    children: "Confirmar"
+                  }
+                )
+              ] })
             ]
           }
         )
@@ -72921,30 +73285,36 @@ const UserDashboardPage = () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const { data: usuarioData } = await supabase.from("usuarios").select(`
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("id", userData.user.id).single();
-      if (usuarioData == null ? void 0 : usuarioData.tipo_user_config) {
-        setIsAdmin(usuarioData.tipo_user_config.tipo === "admin");
+      if ((usuarioData == null ? void 0 : usuarioData.tipo_user_config_id) && Array.isArray(usuarioData.tipo_user_config_id) && usuarioData.tipo_user_config_id.length > 0) {
+        const { data: tiposData } = await supabase.from("tipo_user_config").select("tipo").in("id", usuarioData.tipo_user_config_id);
+        setIsAdmin((tiposData == null ? void 0 : tiposData.some((t2) => t2.tipo === "admin")) || false);
       }
     } catch (error) {
       console.error("Erro ao verificar tipo de usuário:", error);
     }
   };
   const loadUsuarios = async () => {
-    var _a3;
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const { data: usuarioData } = await supabase.from("usuarios").select(`
           empresa_id,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("id", userData.user.id).single();
-      if (!(usuarioData == null ? void 0 : usuarioData.empresa_id) || ((_a3 = usuarioData.tipo_user_config) == null ? void 0 : _a3.tipo) !== "admin") return;
+      if (!(usuarioData == null ? void 0 : usuarioData.empresa_id)) return;
+      let isAdmin2 = false;
+      if (usuarioData.tipo_user_config_id && Array.isArray(usuarioData.tipo_user_config_id) && usuarioData.tipo_user_config_id.length > 0) {
+        const { data: tiposData } = await supabase.from("tipo_user_config").select("tipo").in("id", usuarioData.tipo_user_config_id);
+        isAdmin2 = (tiposData == null ? void 0 : tiposData.some((t2) => t2.tipo === "admin")) || false;
+      }
+      if (!isAdmin2) return;
       const { data: usuariosData } = await supabase.from("usuarios").select(`
           id,
           nome,
           email,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("empresa_id", usuarioData.empresa_id).order("nome");
       if (usuariosData) {
         setUsuarios(usuariosData);
@@ -72961,7 +73331,7 @@ const UserDashboardPage = () => {
       if (!userData.user) return;
       const { data: usuarioData } = await supabase.from("usuarios").select(`
           empresa_id,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `).eq("id", userData.user.id).single();
       if (!(usuarioData == null ? void 0 : usuarioData.empresa_id)) return;
       let query = supabase.from("pedidos").select("*").eq("empresa_id", usuarioData.empresa_id);

@@ -78,7 +78,7 @@ const FaturamentoPage: React.FC = () => {
         .select(`
           id,
           nome,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');

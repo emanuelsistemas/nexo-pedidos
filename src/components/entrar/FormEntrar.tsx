@@ -31,7 +31,7 @@ const FormEntrar: React.FC = () => {
         .from('usuarios')
         .select(`
           status,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `)
         .eq('id', (await supabase.auth.getUser()).data.user?.id)
         .single();
@@ -43,9 +43,21 @@ const FormEntrar: React.FC = () => {
         throw new Error('Sua conta está bloqueada. Entre em contato com o administrador do sistema.');
       }
 
-      // Se for usuário do tipo "user", redirecionar para o dashboard mobile
+      // Verificar se é usuário do tipo "user" apenas
+      let isUserOnly = false;
+      if (userData?.tipo_user_config_id && Array.isArray(userData.tipo_user_config_id) && userData.tipo_user_config_id.length > 0) {
+        const { data: tiposData } = await supabase
+          .from('tipo_user_config')
+          .select('tipo')
+          .in('id', userData.tipo_user_config_id);
+
+        // Se só tem tipo "user" e nenhum outro tipo, é user only
+        isUserOnly = tiposData?.length === 1 && tiposData[0].tipo === 'user';
+      }
+
+      // Se for usuário do tipo "user" apenas, redirecionar para o dashboard mobile
       // Caso contrário, redirecionar para o dashboard normal
-      if (userData?.tipo === 'user') {
+      if (isUserOnly) {
         navigate('/user/dashboard', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });

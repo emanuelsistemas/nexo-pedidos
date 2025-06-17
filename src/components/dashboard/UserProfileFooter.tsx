@@ -25,12 +25,22 @@ const UserProfileFooter: React.FC = () => {
             .from('usuarios')
             .select(`
               empresa_id,
-              tipo_user_config:tipo_user_config_id(tipo)
+              tipo_user_config_id
             `)
             .eq('id', user.id)
             .single();
 
-          setIsAdmin(userData?.tipo_user_config?.tipo === 'admin');
+          // Verificar se é admin
+          let isAdmin = false;
+          if (userData?.tipo_user_config_id && Array.isArray(userData.tipo_user_config_id) && userData.tipo_user_config_id.length > 0) {
+            const { data: tiposData } = await supabase
+              .from('tipo_user_config')
+              .select('tipo')
+              .in('id', userData.tipo_user_config_id);
+
+            isAdmin = tiposData?.some(t => t.tipo === 'admin') || false;
+          }
+          setIsAdmin(isAdmin);
 
           // Buscar o nome fantasia da empresa
           if (userData?.empresa_id) {

@@ -116,6 +116,8 @@ interface ItemCarrinho {
   }>;
   temOpcoesAdicionais?: boolean; // Indica se o produto tem opções adicionais disponíveis
   observacao?: string; // Observação adicional do produto
+  vendedor_id?: string; // ID do vendedor responsável por este item
+  vendedor_nome?: string; // Nome do vendedor responsável por este item
 }
 
 interface Cliente {
@@ -330,6 +332,13 @@ const PDVPage: React.FC = () => {
   const [observacaoTexto, setObservacaoTexto] = useState<string>('');
   const [itemEditandoObservacao, setItemEditandoObservacao] = useState<string | null>(null);
   const [observacaoEditando, setObservacaoEditando] = useState<string>('');
+
+  // Estados para seleção de vendedor
+  const [showVendedorModal, setShowVendedorModal] = useState(false);
+  const [vendedores, setVendedores] = useState<any[]>([]);
+  const [vendedorSelecionado, setVendedorSelecionado] = useState<any>(null);
+  const [aguardandoSelecaoVendedor, setAguardandoSelecaoVendedor] = useState(false);
+  const [produtoAguardandoVendedor, setProdutoAguardandoVendedor] = useState<Produto | null>(null);
 
   // Funções para localStorage
   const savePDVState = () => {
@@ -1558,7 +1567,8 @@ const PDVPage: React.FC = () => {
           loadClientes(),
           loadEstoque(),
           loadPdvConfig(),
-          loadFormasPagamento()
+          loadFormasPagamento(),
+          loadVendedores()
         ]);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -1787,6 +1797,59 @@ const PDVPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Erro ao carregar formas de pagamento:', error);
+    }
+  };
+
+  const loadVendedores = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar usuários que são vendedores na empresa
+      const { data: tiposUsuario } = await supabase
+        .from('tipo_user_config')
+        .select('id')
+        .eq('tipo', 'vendedor');
+
+      if (!tiposUsuario || tiposUsuario.length === 0) {
+        setVendedores([]);
+        return;
+      }
+
+      const tipoVendedorIds = tiposUsuario.map(tipo => tipo.id);
+
+      // Buscar usuários que têm o tipo vendedor em seu array de tipos
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('id, nome, email, tipo_user_config_id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('nome');
+
+      if (error) throw error;
+
+      // Filtrar usuários que têm tipo vendedor
+      const vendedoresFiltrados = (data || []).filter(usuario => {
+        if (Array.isArray(usuario.tipo_user_config_id)) {
+          return usuario.tipo_user_config_id.some((tipoId: string) =>
+            tipoVendedorIds.includes(tipoId)
+          );
+        } else {
+          // Compatibilidade com formato antigo
+          return tipoVendedorIds.includes(usuario.tipo_user_config_id);
+        }
+      });
+
+      setVendedores(vendedoresFiltrados);
+    } catch (error) {
+      console.error('Erro ao carregar vendedores:', error);
     }
   };
 
@@ -2835,6 +2898,15 @@ const PDVPage: React.FC = () => {
 
     setPedidosImportados(prev => [...prev, novoPedidoImportado]);
 
+    // Importar vendedor do pedido se existir e configuração estiver habilitada
+    if (pdvConfig?.vendedor && pedido.usuario && !vendedorSelecionado) {
+      setVendedorSelecionado({
+        id: pedido.usuario.id,
+        nome: pedido.usuario.nome,
+        email: pedido.usuario.email
+      });
+    }
+
     // Importar cliente do pedido se existir e não houver cliente selecionado
     if (pedido.cliente && !clienteSelecionado) {
       setClienteSelecionado({
@@ -2889,7 +2961,9 @@ const PDVPage: React.FC = () => {
         subtotal: item.quantidade * item.valor_unitario,
         pedido_origem_id: pedido.id, // Marcar de qual pedido veio
         pedido_origem_numero: pedido.numero,
-        desconto: descontoInfo // Preservar informações de desconto
+        desconto: descontoInfo, // Preservar informações de desconto
+        vendedor_id: pedido.usuario?.id, // Vendedor do pedido importado
+        vendedor_nome: pedido.usuario?.nome // Nome do vendedor do pedido importado
       };
     });
 
@@ -2973,6 +3047,14 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
+    // Verificar se precisa selecionar vendedor (apenas se não há vendedor selecionado)
+    if (pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
+      setProdutoAguardandoVendedor(produto);
+      setAguardandoSelecaoVendedor(true);
+      setShowVendedorModal(true);
+      return;
+    }
+
     // Verificar se há quantidade especificada na busca (formato: quantidade*termo)
     let quantidadeParaAdicionar = quantidadePersonalizada || 1;
 
@@ -2998,7 +3080,9 @@ const PDVPage: React.FC = () => {
       produto,
       quantidade: quantidadeParaAdicionar,
       subtotal: precoFinal * quantidadeParaAdicionar,
-      temOpcoesAdicionais
+      temOpcoesAdicionais,
+      vendedor_id: vendedorSelecionado?.id,
+      vendedor_nome: vendedorSelecionado?.nome
     };
 
     setCarrinho(prev => {
@@ -3028,6 +3112,80 @@ const PDVPage: React.FC = () => {
         return [...prev, novoItem];
       }
     });
+  };
+
+  // Funções para seleção de vendedor
+  const selecionarVendedor = (vendedor: any) => {
+    setVendedorSelecionado(vendedor);
+    setShowVendedorModal(false);
+
+    // Se há um produto aguardando, adicionar ao carrinho agora com o vendedor selecionado
+    if (produtoAguardandoVendedor) {
+      setAguardandoSelecaoVendedor(false);
+      adicionarProdutoComVendedor(produtoAguardandoVendedor, vendedor);
+      setProdutoAguardandoVendedor(null);
+    }
+  };
+
+  const cancelarSelecaoVendedor = () => {
+    setShowVendedorModal(false);
+    setAguardandoSelecaoVendedor(false);
+    setProdutoAguardandoVendedor(null);
+  };
+
+  // Função para adicionar produto com vendedor específico
+  const adicionarProdutoComVendedor = async (produto: Produto, vendedor: any, quantidadePersonalizada?: number) => {
+    // Verificar se há quantidade especificada na busca (formato: quantidade*termo)
+    let quantidadeParaAdicionar = quantidadePersonalizada || 1;
+
+    if (!quantidadePersonalizada && searchTerm.includes('*')) {
+      const [qtdStr] = searchTerm.split('*');
+      const qtdParsed = parseInt(qtdStr.trim());
+      if (!isNaN(qtdParsed) && qtdParsed > 0) {
+        quantidadeParaAdicionar = qtdParsed;
+        // Limpar o campo de busca após adicionar
+        setSearchTerm('');
+      }
+    }
+
+    // Verificar se o produto tem opções adicionais
+    const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
+
+    // Calcular o preço final considerando promoções
+    const precoFinal = calcularPrecoFinal(produto);
+
+    // Criar o item do carrinho com o vendedor específico
+    const novoItem: ItemCarrinho = {
+      id: `${produto.id}-${Date.now()}-${Math.random()}`, // ID único
+      produto,
+      quantidade: quantidadeParaAdicionar,
+      subtotal: precoFinal * quantidadeParaAdicionar,
+      temOpcoesAdicionais,
+      vendedor_id: vendedor?.id,
+      vendedor_nome: vendedor?.nome
+    };
+
+    // Se o produto tem opções adicionais, abrir modal
+    if (temOpcoesAdicionais) {
+      setItemParaAdicionais(novoItem);
+      setShowAdicionaisModal(true);
+    } else {
+      // Adicionar diretamente ao carrinho
+      setCarrinho(prev => [...prev, novoItem]);
+
+      // Tocar som de sucesso se habilitado
+      if (pdvConfig?.som_adicionar_produto) {
+        playSuccessSound();
+      }
+
+      // Limpar busca se foi usado
+      if (searchTerm && !searchTerm.includes('*')) {
+        setSearchTerm('');
+      }
+
+      // Salvar estado do PDV
+      savePDVState();
+    }
   };
 
   const confirmarRemocao = (itemId: string) => {
@@ -6453,6 +6611,13 @@ const PDVPage: React.FC = () => {
                                       </div>
                                     )}
 
+                                    {/* Informações do vendedor */}
+                                    {pdvConfig?.vendedor && item.vendedor_nome && (
+                                      <div className="text-xs text-green-400 mt-1 lg:mt-0">
+                                        👤 {item.vendedor_nome}
+                                      </div>
+                                    )}
+
 
                                   </div>
 
@@ -6943,7 +7108,17 @@ const PDVPage: React.FC = () => {
                       <UserCheck size={12} className="text-green-400" />
                       <div className="text-xs text-green-400 font-medium">Vendedor</div>
                     </div>
-                    <div className="text-white text-xs font-medium">Em desenvolvimento</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-white text-xs font-medium">
+                        {vendedorSelecionado ? vendedorSelecionado.nome : 'Nenhum selecionado'}
+                      </div>
+                      <button
+                        onClick={() => setShowVendedorModal(true)}
+                        className="text-xs text-green-400 hover:text-green-300 transition-colors"
+                      >
+                        {vendedorSelecionado ? 'Trocar' : 'Selecionar'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -12194,6 +12369,80 @@ const PDVPage: React.FC = () => {
                     )}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Seleção de Vendedor */}
+      <AnimatePresence>
+        {showVendedorModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center">
+                  <UserCheck size={20} className="text-green-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Selecionar Vendedor</h3>
+                  <p className="text-sm text-gray-400">Escolha o vendedor responsável por este item</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-6 max-h-60 overflow-y-auto">
+                {vendedores.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-gray-400 text-sm mb-2">Nenhum vendedor encontrado</p>
+                    <p className="text-gray-500 text-xs">
+                      Configure vendedores em: Configurações → Usuários
+                    </p>
+                  </div>
+                ) : (
+                  vendedores.map(vendedor => (
+                    <button
+                      key={vendedor.id}
+                      onClick={() => selecionarVendedor(vendedor)}
+                      className={`w-full p-3 rounded-lg border transition-colors text-left ${
+                        vendedorSelecionado?.id === vendedor.id
+                          ? 'bg-green-500/20 border-green-500/50 text-green-300'
+                          : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:bg-gray-700/50 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="font-medium">{vendedor.nome}</div>
+                      {vendedor.email && (
+                        <div className="text-sm text-gray-400 mt-1">{vendedor.email}</div>
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelarSelecaoVendedor}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                {vendedorSelecionado && (
+                  <button
+                    onClick={() => selecionarVendedor(vendedorSelecionado)}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors"
+                  >
+                    Confirmar
+                  </button>
+                )}
               </div>
             </motion.div>
           </motion.div>

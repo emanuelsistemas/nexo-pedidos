@@ -139,13 +139,20 @@ const DashboardPage: React.FC = () => {
       const { data: usuarioData } = await supabase
         .from('usuarios')
         .select(`
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `)
         .eq('id', userData.user.id)
         .single();
 
-      if (usuarioData?.tipo_user_config) {
-        setIsAdmin(usuarioData.tipo_user_config.tipo === 'admin');
+      if (usuarioData?.tipo_user_config_id && Array.isArray(usuarioData.tipo_user_config_id) && usuarioData.tipo_user_config_id.length > 0) {
+        // Buscar os tipos de usuário
+        const { data: tiposData } = await supabase
+          .from('tipo_user_config')
+          .select('tipo')
+          .in('id', usuarioData.tipo_user_config_id);
+
+        // Se tem tipo admin, é admin
+        setIsAdmin(tiposData?.some(t => t.tipo === 'admin') || false);
       }
     } catch (error) {
       console.error('Erro ao verificar tipo de usuário:', error);
@@ -162,12 +169,25 @@ const DashboardPage: React.FC = () => {
         .from('usuarios')
         .select(`
           empresa_id,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `)
         .eq('id', userData.user.id)
         .single();
 
-      if (!usuarioData?.empresa_id || usuarioData.tipo_user_config?.tipo !== 'admin') return;
+      if (!usuarioData?.empresa_id) return;
+
+      // Verificar se é admin
+      let isAdmin = false;
+      if (usuarioData.tipo_user_config_id && Array.isArray(usuarioData.tipo_user_config_id) && usuarioData.tipo_user_config_id.length > 0) {
+        const { data: tiposData } = await supabase
+          .from('tipo_user_config')
+          .select('tipo')
+          .in('id', usuarioData.tipo_user_config_id);
+
+        isAdmin = tiposData?.some(t => t.tipo === 'admin') || false;
+      }
+
+      if (!isAdmin) return;
 
       const { data: usuariosData } = await supabase
         .from('usuarios')
@@ -175,7 +195,7 @@ const DashboardPage: React.FC = () => {
           id,
           nome,
           email,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .order('nome');
@@ -378,7 +398,7 @@ const DashboardPage: React.FC = () => {
         .from('usuarios')
         .select(`
           empresa_id,
-          tipo_user_config:tipo_user_config_id(tipo)
+          tipo_user_config_id
         `)
         .eq('id', userData.user.id)
         .single();
