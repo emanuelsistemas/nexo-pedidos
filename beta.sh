@@ -43,6 +43,20 @@ if [ ! -f "package.json" ]; then
     exit 1
 fi
 
+# Verificar branch atual
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" != "beta" ]; then
+    warn "Você não está na branch beta (atual: $CURRENT_BRANCH)"
+    read -p "Mudar para branch beta? (Y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+        log "Mudando para branch beta..."
+        git checkout beta
+    else
+        warn "Continuando na branch $CURRENT_BRANCH..."
+    fi
+fi
+
 # Verificar dependências
 if [ ! -d "node_modules" ]; then
     log "📦 Instalando dependências..."
