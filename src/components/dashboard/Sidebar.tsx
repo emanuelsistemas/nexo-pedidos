@@ -187,8 +187,8 @@ const Sidebar: React.FC = () => {
         label: 'Parceiros',
         tooltip: 'Parceiros',
         submenu: [
-          { icon: UserCheck, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' },
-          { icon: Briefcase, label: 'Vendedores', path: '/dashboard/vendedores', tooltip: 'Vendedores' }
+          { icon: UserCheck, label: 'Clientes', path: '/dashboard/clientes', tooltip: 'Clientes' }
+          // { icon: Briefcase, label: 'Vendedores', path: '/dashboard/vendedores', tooltip: 'Vendedores' }
         ]
       },
       { icon: ShoppingBag, label: 'Pedidos', path: '/dashboard/pedidos', tooltip: 'Pedidos' },

@@ -179,11 +179,18 @@ const ConfiguracoesPage: React.FC = () => {
     senha: '',
     confirmarSenha: '',
     tipo_user_config_id: '',
-    serie_nfce: 1 // ✅ NOVO: Série da NFC-e para o usuário
+    serie_nfce: 1, // ✅ NOVO: Série da NFC-e para o usuário
+    // Campos de comissão para vendedores
+    tipo_comissao: 'total_venda', // 'total_venda' ou 'grupos'
+    percentual_comissao: 0,
+    grupos_comissao: [] as string[] // IDs dos grupos selecionados
   });
 
   // Estado para tipos de usuário
   const [tiposUsuario, setTiposUsuario] = useState<TipoUserConfig[]>([]);
+
+  // Estado para grupos de produtos (para comissão de vendedores)
+  const [grupos, setGrupos] = useState<any[]>([]);
 
   // Estado para controlar a visibilidade da senha
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -365,6 +372,20 @@ const ConfiguracoesPage: React.FC = () => {
           showMessage('error', 'Erro ao carregar tipos de usuário');
         } else {
           setTiposUsuario(tiposData || []);
+        }
+
+        // Carregar grupos de produtos para comissão de vendedores
+        const { data: gruposData, error: gruposError } = await supabase
+          .from('grupos')
+          .select('id, nome')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .or('deletado.is.null,deletado.eq.false')
+          .order('nome');
+
+        if (gruposError) {
+          console.error('Erro ao carregar grupos:', gruposError);
+        } else {
+          setGrupos(gruposData || []);
         }
 
         // Se o usuário for do tipo 'user', mostrar apenas o próprio usuário
@@ -1178,13 +1199,25 @@ const ConfiguracoesPage: React.FC = () => {
   };
 
   // Função para carregar os dados do usuário para edição
-  const handleEditUsuario = (usuario: any) => {
+  const handleEditUsuario = async (usuario: any) => {
     // Limpar erros anteriores
     setFormErrors({
       senha: '',
       email: '',
       serie_nfce: ''
     });
+
+    // Carregar configurações de comissão se for vendedor
+    const tipoSelecionado = tiposUsuario.find(tipo => tipo.id === usuario.tipo_user_config_id);
+    let comissaoData = {
+      tipo_comissao: 'total_venda',
+      percentual_comissao: 0,
+      grupos_comissao: []
+    };
+
+    if (tipoSelecionado?.tipo === 'vendedor') {
+      comissaoData = await carregarComissaoVendedor(usuario.id);
+    }
 
     // Carregar os dados do usuário no formulário
     setUsuarioForm({
@@ -1194,7 +1227,11 @@ const ConfiguracoesPage: React.FC = () => {
       senha: '', // Campos de senha vazios na edição
       confirmarSenha: '',
       tipo_user_config_id: usuario.tipo_user_config_id || '',
-      serie_nfce: usuario.serie_nfce || 1 // ✅ NOVO: Carregar série da NFC-e
+      serie_nfce: usuario.serie_nfce || 1, // ✅ NOVO: Carregar série da NFC-e
+      // Campos de comissão para vendedores
+      tipo_comissao: comissaoData.tipo_comissao,
+      percentual_comissao: comissaoData.percentual_comissao,
+      grupos_comissao: comissaoData.grupos_comissao
     });
 
     // Ativar o modo de edição
@@ -1642,6 +1679,84 @@ const ConfiguracoesPage: React.FC = () => {
       .substring(0, 15);
   };
 
+  // Função para salvar configurações de comissão do vendedor
+  const salvarComissaoVendedor = async (usuarioId: string, empresaId: string) => {
+    try {
+      // Primeiro, desativar configurações existentes
+      await supabase
+        .from('vendedor_comissao')
+        .update({ ativo: false })
+        .eq('usuario_id', usuarioId);
+
+      // Criar nova configuração ativa
+      const { error } = await supabase
+        .from('vendedor_comissao')
+        .insert({
+          usuario_id: usuarioId,
+          empresa_id: empresaId,
+          tipo_comissao: usuarioForm.tipo_comissao,
+          percentual_comissao: usuarioForm.tipo_comissao === 'total_venda' ? usuarioForm.percentual_comissao : 0,
+          grupos_selecionados: usuarioForm.tipo_comissao === 'grupos' ? usuarioForm.grupos_comissao : [],
+          ativo: true
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Erro ao salvar comissão do vendedor:', error);
+      throw error;
+    }
+  };
+
+  // Função para desativar configurações de comissão do vendedor
+  const desativarComissaoVendedor = async (usuarioId: string) => {
+    try {
+      await supabase
+        .from('vendedor_comissao')
+        .update({ ativo: false })
+        .eq('usuario_id', usuarioId);
+    } catch (error) {
+      console.error('Erro ao desativar comissão do vendedor:', error);
+      // Não lançar erro aqui para não interromper o fluxo principal
+    }
+  };
+
+  // Função para carregar configurações de comissão do vendedor
+  const carregarComissaoVendedor = async (usuarioId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('vendedor_comissao')
+        .select('*')
+        .eq('usuario_id', usuarioId)
+        .eq('ativo', true)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw error;
+      }
+
+      if (data) {
+        return {
+          tipo_comissao: data.tipo_comissao,
+          percentual_comissao: data.percentual_comissao || 0,
+          grupos_comissao: data.grupos_selecionados || []
+        };
+      }
+
+      return {
+        tipo_comissao: 'total_venda',
+        percentual_comissao: 0,
+        grupos_comissao: []
+      };
+    } catch (error) {
+      console.error('Erro ao carregar comissão do vendedor:', error);
+      return {
+        tipo_comissao: 'total_venda',
+        percentual_comissao: 0,
+        grupos_comissao: []
+      };
+    }
+  };
+
   // Função para lidar com o envio do formulário de usuário
   const handleSubmitUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1749,6 +1864,15 @@ const ConfiguracoesPage: React.FC = () => {
           if (passwordError) throw passwordError;
         }
 
+        // 3. Se for vendedor, salvar/atualizar configurações de comissão
+        const tipoSelecionado = tiposUsuario.find(tipo => tipo.id === usuarioForm.tipo_user_config_id);
+        if (tipoSelecionado?.tipo === 'vendedor') {
+          await salvarComissaoVendedor(usuarioForm.id, usuarioData.empresa_id);
+        } else {
+          // Se não for mais vendedor, desativar configurações de comissão existentes
+          await desativarComissaoVendedor(usuarioForm.id);
+        }
+
         showMessage('success', 'Usuário atualizado com sucesso!');
       }
       // Modo de criação
@@ -1820,6 +1944,12 @@ const ConfiguracoesPage: React.FC = () => {
 
         if (insertError) throw insertError;
 
+        // 5. Se for vendedor, salvar configurações de comissão
+        const tipoSelecionado = tiposUsuario.find(tipo => tipo.id === usuarioForm.tipo_user_config_id);
+        if (tipoSelecionado?.tipo === 'vendedor') {
+          await salvarComissaoVendedor(authData.user.id, usuarioData.empresa_id);
+        }
+
         showMessage('success', 'Usuário adicionado com sucesso!');
       }
 
@@ -1831,7 +1961,10 @@ const ConfiguracoesPage: React.FC = () => {
         senha: '',
         confirmarSenha: '',
         tipo_user_config_id: '',
-        serie_nfce: 1
+        serie_nfce: 1,
+        tipo_comissao: 'total_venda',
+        percentual_comissao: 0,
+        grupos_comissao: []
       });
       setIsEditingUsuario(false);
 
@@ -4689,6 +4822,100 @@ const ConfiguracoesPage: React.FC = () => {
                       />
                     </div>
 
+                    {/* Campos de comissão para vendedores */}
+                    {(() => {
+                      const tipoSelecionado = tiposUsuario.find(tipo => tipo.id === usuarioForm.tipo_user_config_id);
+                      return tipoSelecionado?.tipo === 'vendedor';
+                    })() && (
+                      <div className="space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+                        <h4 className="text-sm font-medium text-gray-300">Configurações de Comissão</h4>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Tipo de Comissão
+                          </label>
+                          <div className="space-y-2">
+                            <label className="flex items-center">
+                              <input
+                                type="radio"
+                                name="tipo_comissao"
+                                value="total_venda"
+                                checked={usuarioForm.tipo_comissao === 'total_venda'}
+                                onChange={(e) => setUsuarioForm(prev => ({ ...prev, tipo_comissao: e.target.value }))}
+                                className="mr-2 text-primary-500 focus:ring-primary-500"
+                              />
+                              <span className="text-gray-300">Total da Venda</span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="radio"
+                                name="tipo_comissao"
+                                value="grupos"
+                                checked={usuarioForm.tipo_comissao === 'grupos'}
+                                onChange={(e) => setUsuarioForm(prev => ({ ...prev, tipo_comissao: e.target.value }))}
+                                className="mr-2 text-primary-500 focus:ring-primary-500"
+                              />
+                              <span className="text-gray-300">Grupos</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        {usuarioForm.tipo_comissao === 'total_venda' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              Percentual de Comissão (%)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={usuarioForm.percentual_comissao}
+                              onChange={(e) => setUsuarioForm(prev => ({ ...prev, percentual_comissao: parseFloat(e.target.value) || 0 }))}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="Ex: 5.00"
+                            />
+                          </div>
+                        )}
+
+                        {usuarioForm.tipo_comissao === 'grupos' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              Grupos de Produtos
+                            </label>
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                              {grupos.map(grupo => (
+                                <label key={grupo.id} className="flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={usuarioForm.grupos_comissao.includes(grupo.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setUsuarioForm(prev => ({
+                                          ...prev,
+                                          grupos_comissao: [...prev.grupos_comissao, grupo.id]
+                                        }));
+                                      } else {
+                                        setUsuarioForm(prev => ({
+                                          ...prev,
+                                          grupos_comissao: prev.grupos_comissao.filter(id => id !== grupo.id)
+                                        }));
+                                      }
+                                    }}
+                                    className="mr-2 text-primary-500 focus:ring-primary-500"
+                                  />
+                                  <span className="text-gray-300">{grupo.nome}</span>
+                                </label>
+                              ))}
+                              {grupos.length === 0 && (
+                                <p className="text-gray-500 text-sm">Nenhum grupo de produtos encontrado</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-sm font-medium text-gray-400 mb-2">
                         Email
@@ -4832,7 +5059,10 @@ const ConfiguracoesPage: React.FC = () => {
                             senha: '',
                             confirmarSenha: '',
                             tipo_user_config_id: '',
-                            serie_nfce: 1
+                            serie_nfce: 1,
+                            tipo_comissao: 'total_venda',
+                            percentual_comissao: 0,
+                            grupos_comissao: []
                           });
                           setIsEditingUsuario(false); // Resetar o modo de edição
                         }}

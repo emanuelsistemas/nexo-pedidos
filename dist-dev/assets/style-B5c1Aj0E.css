@@ -2355,6 +2355,9 @@ video {
 .max-h-20 {
   max-height: 5rem;
 }
+.max-h-40 {
+  max-height: 10rem;
+}
 .max-h-48 {
   max-height: 12rem;
 }

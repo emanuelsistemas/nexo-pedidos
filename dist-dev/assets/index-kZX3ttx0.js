@@ -9108,16 +9108,6 @@ const BookOpen = createLucideIcon("BookOpen", [
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
  */
-const Briefcase = createLucideIcon("Briefcase", [
-  ["rect", { width: "20", height: "14", x: "2", y: "7", rx: "2", ry: "2", key: "eto64e" }],
-  ["path", { d: "M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16", key: "zwj3tp" }]
-]);
-/**
- * @license lucide-react v0.331.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */
 const Bug = createLucideIcon("Bug", [
   ["path", { d: "m8 2 1.88 1.88", key: "fmnt4t" }],
   ["path", { d: "M14.12 3.88 16 2", key: "qol33r" }],
@@ -25385,8 +25375,8 @@ const Sidebar = () => {
         label: "Parceiros",
         tooltip: "Parceiros",
         submenu: [
-          { icon: UserCheck, label: "Clientes", path: "/dashboard/clientes", tooltip: "Clientes" },
-          { icon: Briefcase, label: "Vendedores", path: "/dashboard/vendedores", tooltip: "Vendedores" }
+          { icon: UserCheck, label: "Clientes", path: "/dashboard/clientes", tooltip: "Clientes" }
+          // { icon: Briefcase, label: 'Vendedores', path: '/dashboard/vendedores', tooltip: 'Vendedores' }
         ]
       },
       { icon: ShoppingBag, label: "Pedidos", path: "/dashboard/pedidos", tooltip: "Pedidos" },
@@ -51815,10 +51805,17 @@ const ConfiguracoesPage = () => {
     senha: "",
     confirmarSenha: "",
     tipo_user_config_id: "",
-    serie_nfce: 1
+    serie_nfce: 1,
     // ✅ NOVO: Série da NFC-e para o usuário
+    // Campos de comissão para vendedores
+    tipo_comissao: "total_venda",
+    // 'total_venda' ou 'grupos'
+    percentual_comissao: 0,
+    grupos_comissao: []
+    // IDs dos grupos selecionados
   });
   const [tiposUsuario, setTiposUsuario] = reactExports.useState([]);
+  const [grupos, setGrupos] = reactExports.useState([]);
   const [mostrarSenha, setMostrarSenha] = reactExports.useState(false);
   const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = reactExports.useState(false);
   const [formErrors, setFormErrors] = reactExports.useState({
@@ -51953,6 +51950,12 @@ const ConfiguracoesPage = () => {
           showMessage("error", "Erro ao carregar tipos de usuário");
         } else {
           setTiposUsuario(tiposData || []);
+        }
+        const { data: gruposData, error: gruposError } = await supabase.from("grupos").select("id, nome").eq("empresa_id", usuarioData.empresa_id).or("deletado.is.null,deletado.eq.false").order("nome");
+        if (gruposError) {
+          console.error("Erro ao carregar grupos:", gruposError);
+        } else {
+          setGrupos(gruposData || []);
         }
         let query = supabase.from("usuarios").select(`
             *,
@@ -52452,12 +52455,21 @@ const ConfiguracoesPage = () => {
     setIsEditingHorario(true);
     setShowSidebar(true);
   };
-  const handleEditUsuario = (usuario) => {
+  const handleEditUsuario = async (usuario) => {
     setFormErrors({
       senha: "",
       email: "",
       serie_nfce: ""
     });
+    const tipoSelecionado = tiposUsuario.find((tipo) => tipo.id === usuario.tipo_user_config_id);
+    let comissaoData = {
+      tipo_comissao: "total_venda",
+      percentual_comissao: 0,
+      grupos_comissao: []
+    };
+    if ((tipoSelecionado == null ? void 0 : tipoSelecionado.tipo) === "vendedor") {
+      comissaoData = await carregarComissaoVendedor(usuario.id);
+    }
     setUsuarioForm({
       id: usuario.id,
       nome: usuario.nome,
@@ -52466,8 +52478,12 @@ const ConfiguracoesPage = () => {
       // Campos de senha vazios na edição
       confirmarSenha: "",
       tipo_user_config_id: usuario.tipo_user_config_id || "",
-      serie_nfce: usuario.serie_nfce || 1
+      serie_nfce: usuario.serie_nfce || 1,
       // ✅ NOVO: Carregar série da NFC-e
+      // Campos de comissão para vendedores
+      tipo_comissao: comissaoData.tipo_comissao,
+      percentual_comissao: comissaoData.percentual_comissao,
+      grupos_comissao: comissaoData.grupos_comissao
     });
     setIsEditingUsuario(true);
     setActiveSection("usuarios");
@@ -52716,6 +52732,57 @@ const ConfiguracoesPage = () => {
   const formatWhatsapp = (value) => {
     return value.replace(/\D/g, "").replace(/^(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2").substring(0, 15);
   };
+  const salvarComissaoVendedor = async (usuarioId, empresaId) => {
+    try {
+      await supabase.from("vendedor_comissao").update({ ativo: false }).eq("usuario_id", usuarioId);
+      const { error } = await supabase.from("vendedor_comissao").insert({
+        usuario_id: usuarioId,
+        empresa_id: empresaId,
+        tipo_comissao: usuarioForm.tipo_comissao,
+        percentual_comissao: usuarioForm.tipo_comissao === "total_venda" ? usuarioForm.percentual_comissao : 0,
+        grupos_selecionados: usuarioForm.tipo_comissao === "grupos" ? usuarioForm.grupos_comissao : [],
+        ativo: true
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error("Erro ao salvar comissão do vendedor:", error);
+      throw error;
+    }
+  };
+  const desativarComissaoVendedor = async (usuarioId) => {
+    try {
+      await supabase.from("vendedor_comissao").update({ ativo: false }).eq("usuario_id", usuarioId);
+    } catch (error) {
+      console.error("Erro ao desativar comissão do vendedor:", error);
+    }
+  };
+  const carregarComissaoVendedor = async (usuarioId) => {
+    try {
+      const { data, error } = await supabase.from("vendedor_comissao").select("*").eq("usuario_id", usuarioId).eq("ativo", true).single();
+      if (error && error.code !== "PGRST116") {
+        throw error;
+      }
+      if (data) {
+        return {
+          tipo_comissao: data.tipo_comissao,
+          percentual_comissao: data.percentual_comissao || 0,
+          grupos_comissao: data.grupos_selecionados || []
+        };
+      }
+      return {
+        tipo_comissao: "total_venda",
+        percentual_comissao: 0,
+        grupos_comissao: []
+      };
+    } catch (error) {
+      console.error("Erro ao carregar comissão do vendedor:", error);
+      return {
+        tipo_comissao: "total_venda",
+        percentual_comissao: 0,
+        grupos_comissao: []
+      };
+    }
+  };
   const handleSubmitUsuario = async (e) => {
     e.preventDefault();
     setFormErrors({
@@ -52779,6 +52846,12 @@ const ConfiguracoesPage = () => {
           });
           if (passwordError) throw passwordError;
         }
+        const tipoSelecionado = tiposUsuario.find((tipo) => tipo.id === usuarioForm.tipo_user_config_id);
+        if ((tipoSelecionado == null ? void 0 : tipoSelecionado.tipo) === "vendedor") {
+          await salvarComissaoVendedor(usuarioForm.id, usuarioData.empresa_id);
+        } else {
+          await desativarComissaoVendedor(usuarioForm.id);
+        }
         showMessage("success", "Usuário atualizado com sucesso!");
       } else {
         const { data: emailExistente } = await supabase.from("usuarios").select("id").eq("email", usuarioForm.email).eq("empresa_id", usuarioData.empresa_id).maybeSingle();
@@ -52823,6 +52896,10 @@ const ConfiguracoesPage = () => {
           // Definir o status como ativo por padrão
         }]);
         if (insertError) throw insertError;
+        const tipoSelecionado = tiposUsuario.find((tipo) => tipo.id === usuarioForm.tipo_user_config_id);
+        if ((tipoSelecionado == null ? void 0 : tipoSelecionado.tipo) === "vendedor") {
+          await salvarComissaoVendedor(authData.user.id, usuarioData.empresa_id);
+        }
         showMessage("success", "Usuário adicionado com sucesso!");
       }
       setUsuarioForm({
@@ -52832,7 +52909,10 @@ const ConfiguracoesPage = () => {
         senha: "",
         confirmarSenha: "",
         tipo_user_config_id: "",
-        serie_nfce: 1
+        serie_nfce: 1,
+        tipo_comissao: "total_venda",
+        percentual_comissao: 0,
+        grupos_comissao: []
       });
       setIsEditingUsuario(false);
       setShowSidebar(false);
@@ -55080,6 +55160,91 @@ const ConfiguracoesPage = () => {
                   required: true
                 }
               ) }),
+              (() => {
+                const tipoSelecionado = tiposUsuario.find((tipo) => tipo.id === usuarioForm.tipo_user_config_id);
+                return (tipoSelecionado == null ? void 0 : tipoSelecionado.tipo) === "vendedor";
+              })() && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "text-sm font-medium text-gray-300", children: "Configurações de Comissão" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Tipo de Comissão" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "input",
+                        {
+                          type: "radio",
+                          name: "tipo_comissao",
+                          value: "total_venda",
+                          checked: usuarioForm.tipo_comissao === "total_venda",
+                          onChange: (e) => setUsuarioForm((prev) => ({ ...prev, tipo_comissao: e.target.value })),
+                          className: "mr-2 text-primary-500 focus:ring-primary-500"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300", children: "Total da Venda" })
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "input",
+                        {
+                          type: "radio",
+                          name: "tipo_comissao",
+                          value: "grupos",
+                          checked: usuarioForm.tipo_comissao === "grupos",
+                          onChange: (e) => setUsuarioForm((prev) => ({ ...prev, tipo_comissao: e.target.value })),
+                          className: "mr-2 text-primary-500 focus:ring-primary-500"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300", children: "Grupos" })
+                    ] })
+                  ] })
+                ] }),
+                usuarioForm.tipo_comissao === "total_venda" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Percentual de Comissão (%)" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "input",
+                    {
+                      type: "number",
+                      min: "0",
+                      max: "100",
+                      step: "0.01",
+                      value: usuarioForm.percentual_comissao,
+                      onChange: (e) => setUsuarioForm((prev) => ({ ...prev, percentual_comissao: parseFloat(e.target.value) || 0 })),
+                      className: "w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20",
+                      placeholder: "Ex: 5.00"
+                    }
+                  )
+                ] }),
+                usuarioForm.tipo_comissao === "grupos" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Grupos de Produtos" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2 max-h-40 overflow-y-auto", children: [
+                    grupos.map((grupo) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "input",
+                        {
+                          type: "checkbox",
+                          checked: usuarioForm.grupos_comissao.includes(grupo.id),
+                          onChange: (e) => {
+                            if (e.target.checked) {
+                              setUsuarioForm((prev) => ({
+                                ...prev,
+                                grupos_comissao: [...prev.grupos_comissao, grupo.id]
+                              }));
+                            } else {
+                              setUsuarioForm((prev) => ({
+                                ...prev,
+                                grupos_comissao: prev.grupos_comissao.filter((id2) => id2 !== grupo.id)
+                              }));
+                            }
+                          },
+                          className: "mr-2 text-primary-500 focus:ring-primary-500"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300", children: grupo.nome })
+                    ] }, grupo.id)),
+                    grupos.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-sm", children: "Nenhum grupo de produtos encontrado" })
+                  ] })
+                ] })
+              ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Email" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -55217,7 +55382,10 @@ const ConfiguracoesPage = () => {
                         senha: "",
                         confirmarSenha: "",
                         tipo_user_config_id: "",
-                        serie_nfce: 1
+                        serie_nfce: 1,
+                        tipo_comissao: "total_venda",
+                        percentual_comissao: 0,
+                        grupos_comissao: []
                       });
                       setIsEditingUsuario(false);
                     },
