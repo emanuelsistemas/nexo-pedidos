@@ -377,7 +377,7 @@ const ConfiguracoesPage: React.FC = () => {
         // Carregar grupos de produtos para comissão de vendedores
         const { data: gruposData, error: gruposError } = await supabase
           .from('grupos')
-          .select('id, nome')
+          .select('id, nome, comissao_percentual')
           .eq('empresa_id', usuarioData.empresa_id)
           .or('deletado.is.null,deletado.eq.false')
           .order('nome');
@@ -1688,6 +1688,25 @@ const ConfiguracoesPage: React.FC = () => {
         .update({ ativo: false })
         .eq('usuario_id', usuarioId);
 
+      let gruposDetalhados = [];
+
+      // Se for tipo grupos, buscar detalhes dos grupos selecionados
+      if (usuarioForm.tipo_comissao === 'grupos' && usuarioForm.grupos_comissao.length > 0) {
+        const { data: gruposData, error: gruposError } = await supabase
+          .from('grupos')
+          .select('id, nome, comissao_percentual')
+          .in('id', usuarioForm.grupos_comissao);
+
+        if (gruposError) throw gruposError;
+
+        gruposDetalhados = gruposData.map(grupo => ({
+          grupo_id: grupo.id,
+          grupo_nome: grupo.nome,
+          percentual_vigente: grupo.comissao_percentual || 0,
+          data_configuracao: new Date().toISOString()
+        }));
+      }
+
       // Criar nova configuração ativa
       const { error } = await supabase
         .from('vendedor_comissao')
@@ -1696,7 +1715,7 @@ const ConfiguracoesPage: React.FC = () => {
           empresa_id: empresaId,
           tipo_comissao: usuarioForm.tipo_comissao,
           percentual_comissao: usuarioForm.tipo_comissao === 'total_venda' ? usuarioForm.percentual_comissao : 0,
-          grupos_selecionados: usuarioForm.tipo_comissao === 'grupos' ? usuarioForm.grupos_comissao : [],
+          grupos_selecionados: gruposDetalhados,
           ativo: true
         });
 
@@ -1728,17 +1747,25 @@ const ConfiguracoesPage: React.FC = () => {
         .select('*')
         .eq('usuario_id', usuarioId)
         .eq('ativo', true)
-        .single();
+        .maybeSingle(); // Usar maybeSingle() em vez de single()
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      if (error) {
+        console.error('Erro ao carregar comissão do vendedor:', error);
         throw error;
       }
 
       if (data) {
+        // Extrair apenas os IDs dos grupos para compatibilidade com o formulário
+        const gruposIds = Array.isArray(data.grupos_selecionados)
+          ? data.grupos_selecionados.map((grupo: any) =>
+              typeof grupo === 'string' ? grupo : grupo.grupo_id
+            )
+          : [];
+
         return {
           tipo_comissao: data.tipo_comissao,
           percentual_comissao: data.percentual_comissao || 0,
-          grupos_comissao: data.grupos_selecionados || []
+          grupos_comissao: gruposIds
         };
       }
 
@@ -4881,34 +4908,46 @@ const ConfiguracoesPage: React.FC = () => {
                         {usuarioForm.tipo_comissao === 'grupos' && (
                           <div>
                             <label className="block text-sm font-medium text-gray-400 mb-2">
-                              Grupos de Produtos
+                              Grupos de Produtos com Comissão
                             </label>
                             <div className="space-y-2 max-h-40 overflow-y-auto">
-                              {grupos.map(grupo => (
-                                <label key={grupo.id} className="flex items-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={usuarioForm.grupos_comissao.includes(grupo.id)}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setUsuarioForm(prev => ({
-                                          ...prev,
-                                          grupos_comissao: [...prev.grupos_comissao, grupo.id]
-                                        }));
-                                      } else {
-                                        setUsuarioForm(prev => ({
-                                          ...prev,
-                                          grupos_comissao: prev.grupos_comissao.filter(id => id !== grupo.id)
-                                        }));
-                                      }
-                                    }}
-                                    className="mr-2 text-primary-500 focus:ring-primary-500"
-                                  />
-                                  <span className="text-gray-300">{grupo.nome}</span>
+                              {grupos
+                                .filter(grupo => grupo.comissao_percentual > 0) // Filtrar apenas grupos com comissão
+                                .map(grupo => (
+                                <label key={grupo.id} className="flex items-center justify-between p-2 bg-gray-800/20 rounded">
+                                  <div className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={usuarioForm.grupos_comissao.includes(grupo.id)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setUsuarioForm(prev => ({
+                                            ...prev,
+                                            grupos_comissao: [...prev.grupos_comissao, grupo.id]
+                                          }));
+                                        } else {
+                                          setUsuarioForm(prev => ({
+                                            ...prev,
+                                            grupos_comissao: prev.grupos_comissao.filter(id => id !== grupo.id)
+                                          }));
+                                        }
+                                      }}
+                                      className="mr-2 text-primary-500 focus:ring-primary-500"
+                                    />
+                                    <span className="text-gray-300">{grupo.nome}</span>
+                                  </div>
+                                  <span className="text-sm text-green-400">
+                                    {grupo.comissao_percentual}%
+                                  </span>
                                 </label>
                               ))}
-                              {grupos.length === 0 && (
-                                <p className="text-gray-500 text-sm">Nenhum grupo de produtos encontrado</p>
+                              {grupos.filter(grupo => grupo.comissao_percentual > 0).length === 0 && (
+                                <div className="text-center py-4">
+                                  <p className="text-gray-500 text-sm mb-2">Nenhum grupo com comissão configurada</p>
+                                  <p className="text-gray-400 text-xs">
+                                    Configure comissão nos grupos em: Produtos → Grupos
+                                  </p>
+                                </div>
                               )}
                             </div>
                           </div>

@@ -40742,6 +40742,8 @@ const ProdutosPage = () => {
   }, [loadingStates, isDataReady]);
   const [novoGrupoNome, setNovoGrupoNome] = reactExports.useState("");
   const [selectedGrupo, setSelectedGrupo] = reactExports.useState(null);
+  const [comissaoPorGrupo, setComissaoPorGrupo] = reactExports.useState(false);
+  const [percentualComissao, setPercentualComissao] = reactExports.useState(0);
   const [searchTerm, setSearchTerm] = reactExports.useState("");
   const [sortOrder, setSortOrder] = reactExports.useState("asc");
   const [productSearchTerms, setProductSearchTerms] = reactExports.useState({});
@@ -41201,7 +41203,7 @@ const ProdutosPage = () => {
       if (!userData.user) throw new Error("Usuário não autenticado");
       const { data: usuarioData, error: usuarioError } = await supabase.from("usuarios").select("empresa_id").eq("id", userData.user.id).single();
       if (usuarioError) throw usuarioError;
-      const { data: gruposData, error: gruposError } = await supabase.from("grupos").select("*").eq("empresa_id", usuarioData.empresa_id).eq("deletado", false);
+      const { data: gruposData, error: gruposError } = await supabase.from("grupos").select("*, comissao_percentual").eq("empresa_id", usuarioData.empresa_id).eq("deletado", false);
       if (gruposError) throw gruposError;
       const { data: produtosData, error: produtosError } = await supabase.from("produtos").select(`
           *,
@@ -41284,12 +41286,16 @@ const ProdutosPage = () => {
     setIsGrupoForm(true);
     setSelectedGrupo(null);
     setNovoGrupoNome("");
+    setComissaoPorGrupo(false);
+    setPercentualComissao(0);
     setShowSidebar(true);
   };
   const handleEditGrupo = (grupo) => {
     setIsGrupoForm(true);
     setSelectedGrupo(grupo);
     setNovoGrupoNome(grupo.nome);
+    setComissaoPorGrupo(grupo.comissao_percentual > 0);
+    setPercentualComissao(grupo.comissao_percentual || 0);
     setShowSidebar(true);
   };
   const handleAddProduto = async (grupo) => {
@@ -41736,9 +41742,59 @@ const ProdutosPage = () => {
       setDeleteConfirmation((prev) => ({ ...prev, isOpen: false }));
     }
   };
+  const atualizarComissaoVendedores = async (grupoId, grupoNome, novoPercentual) => {
+    try {
+      const { data: comissoes, error: comissoesError } = await supabase.from("vendedor_comissao").select("*").eq("ativo", true).eq("tipo_comissao", "grupos");
+      if (comissoesError) {
+        console.error("Erro ao buscar comissões:", comissoesError);
+        return;
+      }
+      if (!comissoes || comissoes.length === 0) return;
+      const comissoesAfetadas = comissoes.filter((comissao) => {
+        const grupos2 = comissao.grupos_selecionados || [];
+        return grupos2.some(
+          (grupo) => typeof grupo === "string" && grupo === grupoId || typeof grupo === "object" && grupo.grupo_id === grupoId
+        );
+      });
+      for (const comissao of comissoesAfetadas) {
+        const gruposAtualizados = (comissao.grupos_selecionados || []).map((grupo) => {
+          if (typeof grupo === "string" && grupo === grupoId) {
+            return {
+              grupo_id: grupoId,
+              grupo_nome: grupoNome,
+              percentual_vigente: novoPercentual,
+              data_configuracao: (/* @__PURE__ */ new Date()).toISOString()
+            };
+          } else if (typeof grupo === "object" && grupo.grupo_id === grupoId) {
+            return {
+              ...grupo,
+              grupo_nome: grupoNome,
+              percentual_vigente: novoPercentual,
+              data_configuracao: (/* @__PURE__ */ new Date()).toISOString()
+            };
+          }
+          return grupo;
+        });
+        const { error: updateError } = await supabase.from("vendedor_comissao").update({ grupos_selecionados: gruposAtualizados }).eq("id", comissao.id);
+        if (updateError) {
+          console.error("Erro ao atualizar comissão:", updateError);
+        }
+      }
+      console.log(`✅ Atualizadas ${comissoesAfetadas.length} configurações de comissão para o grupo ${grupoNome}`);
+    } catch (error) {
+      console.error("Erro ao atualizar comissões dos vendedores:", error);
+    }
+  };
   const handleSubmitGrupo = async (e) => {
     e.preventDefault();
-    if (!novoGrupoNome.trim()) return;
+    if (!novoGrupoNome.trim()) {
+      showMessage("error", "O nome do grupo é obrigatório");
+      return;
+    }
+    if (comissaoPorGrupo && (!percentualComissao || percentualComissao <= 0)) {
+      showMessage("error", 'Percentual de comissão deve ser maior que 0% quando "Comissão pelo grupo" estiver marcado');
+      return;
+    }
     setIsLoading(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -41746,16 +41802,22 @@ const ProdutosPage = () => {
       const { data: usuarioData, error: usuarioError } = await supabase.from("usuarios").select("empresa_id").eq("id", userData.user.id).single();
       if (usuarioError) throw usuarioError;
       if (selectedGrupo) {
-        const { data, error } = await supabase.from("grupos").update({ nome: novoGrupoNome }).eq("id", selectedGrupo.id).select().single();
+        const novoPercentual = comissaoPorGrupo ? percentualComissao : 0;
+        const { data, error } = await supabase.from("grupos").update({
+          nome: novoGrupoNome,
+          comissao_percentual: novoPercentual
+        }).eq("id", selectedGrupo.id).select().single();
         if (error) throw error;
+        await atualizarComissaoVendedores(selectedGrupo.id, novoGrupoNome, novoPercentual);
         setGrupos(grupos.map(
           (grupo) => grupo.id === selectedGrupo.id ? { ...data, produtos: grupo.produtos } : grupo
         ));
-        showMessage("success", "Grupo atualizado com sucesso!");
+        showMessage("success", "Grupo e comissões dos vendedores atualizados com sucesso!");
       } else {
         const { data, error } = await supabase.from("grupos").insert([{
           nome: novoGrupoNome,
-          empresa_id: usuarioData.empresa_id
+          empresa_id: usuarioData.empresa_id,
+          comissao_percentual: comissaoPorGrupo ? percentualComissao : 0
         }]).select().single();
         if (error) throw error;
         setGrupos([...grupos, { ...data, produtos: [] }]);
@@ -42656,6 +42718,42 @@ const ProdutosPage = () => {
                     placeholder: "Digite o nome do grupo"
                   }
                 )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "text-sm font-medium text-gray-300", children: "Configurações de Comissão" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "input",
+                    {
+                      type: "checkbox",
+                      checked: comissaoPorGrupo,
+                      onChange: (e) => {
+                        setComissaoPorGrupo(e.target.checked);
+                        if (!e.target.checked) {
+                          setPercentualComissao(0);
+                        }
+                      },
+                      className: "mr-2 text-primary-500 focus:ring-primary-500"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300", children: "Comissão pelo grupo" })
+                ] }) }),
+                comissaoPorGrupo && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Percentual de Comissão (%)" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "input",
+                    {
+                      type: "number",
+                      min: "0",
+                      max: "100",
+                      step: "0.01",
+                      value: percentualComissao,
+                      onChange: (e) => setPercentualComissao(parseFloat(e.target.value) || 0),
+                      className: "w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20",
+                      placeholder: "Ex: 5.00"
+                    }
+                  )
+                ] })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-4 pt-4", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -51951,7 +52049,7 @@ const ConfiguracoesPage = () => {
         } else {
           setTiposUsuario(tiposData || []);
         }
-        const { data: gruposData, error: gruposError } = await supabase.from("grupos").select("id, nome").eq("empresa_id", usuarioData.empresa_id).or("deletado.is.null,deletado.eq.false").order("nome");
+        const { data: gruposData, error: gruposError } = await supabase.from("grupos").select("id, nome, comissao_percentual").eq("empresa_id", usuarioData.empresa_id).or("deletado.is.null,deletado.eq.false").order("nome");
         if (gruposError) {
           console.error("Erro ao carregar grupos:", gruposError);
         } else {
@@ -52735,12 +52833,23 @@ const ConfiguracoesPage = () => {
   const salvarComissaoVendedor = async (usuarioId, empresaId) => {
     try {
       await supabase.from("vendedor_comissao").update({ ativo: false }).eq("usuario_id", usuarioId);
+      let gruposDetalhados = [];
+      if (usuarioForm.tipo_comissao === "grupos" && usuarioForm.grupos_comissao.length > 0) {
+        const { data: gruposData, error: gruposError } = await supabase.from("grupos").select("id, nome, comissao_percentual").in("id", usuarioForm.grupos_comissao);
+        if (gruposError) throw gruposError;
+        gruposDetalhados = gruposData.map((grupo) => ({
+          grupo_id: grupo.id,
+          grupo_nome: grupo.nome,
+          percentual_vigente: grupo.comissao_percentual || 0,
+          data_configuracao: (/* @__PURE__ */ new Date()).toISOString()
+        }));
+      }
       const { error } = await supabase.from("vendedor_comissao").insert({
         usuario_id: usuarioId,
         empresa_id: empresaId,
         tipo_comissao: usuarioForm.tipo_comissao,
         percentual_comissao: usuarioForm.tipo_comissao === "total_venda" ? usuarioForm.percentual_comissao : 0,
-        grupos_selecionados: usuarioForm.tipo_comissao === "grupos" ? usuarioForm.grupos_comissao : [],
+        grupos_selecionados: gruposDetalhados,
         ativo: true
       });
       if (error) throw error;
@@ -52758,15 +52867,19 @@ const ConfiguracoesPage = () => {
   };
   const carregarComissaoVendedor = async (usuarioId) => {
     try {
-      const { data, error } = await supabase.from("vendedor_comissao").select("*").eq("usuario_id", usuarioId).eq("ativo", true).single();
-      if (error && error.code !== "PGRST116") {
+      const { data, error } = await supabase.from("vendedor_comissao").select("*").eq("usuario_id", usuarioId).eq("ativo", true).maybeSingle();
+      if (error) {
+        console.error("Erro ao carregar comissão do vendedor:", error);
         throw error;
       }
       if (data) {
+        const gruposIds = Array.isArray(data.grupos_selecionados) ? data.grupos_selecionados.map(
+          (grupo) => typeof grupo === "string" ? grupo : grupo.grupo_id
+        ) : [];
         return {
           tipo_comissao: data.tipo_comissao,
           percentual_comissao: data.percentual_comissao || 0,
-          grupos_comissao: data.grupos_selecionados || []
+          grupos_comissao: gruposIds
         };
       }
       return {
@@ -55215,33 +55328,42 @@ const ConfiguracoesPage = () => {
                   )
                 ] }),
                 usuarioForm.tipo_comissao === "grupos" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Grupos de Produtos" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-gray-400 mb-2", children: "Grupos de Produtos com Comissão" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-2 max-h-40 overflow-y-auto", children: [
-                    grupos.map((grupo) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "input",
-                        {
-                          type: "checkbox",
-                          checked: usuarioForm.grupos_comissao.includes(grupo.id),
-                          onChange: (e) => {
-                            if (e.target.checked) {
-                              setUsuarioForm((prev) => ({
-                                ...prev,
-                                grupos_comissao: [...prev.grupos_comissao, grupo.id]
-                              }));
-                            } else {
-                              setUsuarioForm((prev) => ({
-                                ...prev,
-                                grupos_comissao: prev.grupos_comissao.filter((id2) => id2 !== grupo.id)
-                              }));
-                            }
-                          },
-                          className: "mr-2 text-primary-500 focus:ring-primary-500"
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300", children: grupo.nome })
+                    grupos.filter((grupo) => grupo.comissao_percentual > 0).map((grupo) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center justify-between p-2 bg-gray-800/20 rounded", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "input",
+                          {
+                            type: "checkbox",
+                            checked: usuarioForm.grupos_comissao.includes(grupo.id),
+                            onChange: (e) => {
+                              if (e.target.checked) {
+                                setUsuarioForm((prev) => ({
+                                  ...prev,
+                                  grupos_comissao: [...prev.grupos_comissao, grupo.id]
+                                }));
+                              } else {
+                                setUsuarioForm((prev) => ({
+                                  ...prev,
+                                  grupos_comissao: prev.grupos_comissao.filter((id2) => id2 !== grupo.id)
+                                }));
+                              }
+                            },
+                            className: "mr-2 text-primary-500 focus:ring-primary-500"
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gray-300", children: grupo.nome })
+                      ] }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm text-green-400", children: [
+                        grupo.comissao_percentual,
+                        "%"
+                      ] })
                     ] }, grupo.id)),
-                    grupos.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-sm", children: "Nenhum grupo de produtos encontrado" })
+                    grupos.filter((grupo) => grupo.comissao_percentual > 0).length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-4", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-500 text-sm mb-2", children: "Nenhum grupo com comissão configurada" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-gray-400 text-xs", children: "Configure comissão nos grupos em: Produtos → Grupos" })
+                    ] })
                   ] })
                 ] })
               ] }),

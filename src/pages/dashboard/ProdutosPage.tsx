@@ -168,6 +168,8 @@ const ProdutosPage: React.FC = () => {
 
   const [novoGrupoNome, setNovoGrupoNome] = useState('');
   const [selectedGrupo, setSelectedGrupo] = useState<Grupo | null>(null);
+  const [comissaoPorGrupo, setComissaoPorGrupo] = useState(false);
+  const [percentualComissao, setPercentualComissao] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [productSearchTerms, setProductSearchTerms] = useState<Record<string, string>>({});
@@ -903,7 +905,7 @@ const ProdutosPage: React.FC = () => {
 
       const { data: gruposData, error: gruposError } = await supabase
         .from('grupos')
-        .select('*')
+        .select('*, comissao_percentual')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false);
 
@@ -1042,6 +1044,8 @@ const ProdutosPage: React.FC = () => {
     setIsGrupoForm(true);
     setSelectedGrupo(null);
     setNovoGrupoNome('');
+    setComissaoPorGrupo(false);
+    setPercentualComissao(0);
     setShowSidebar(true);
   };
 
@@ -1049,6 +1053,8 @@ const ProdutosPage: React.FC = () => {
     setIsGrupoForm(true);
     setSelectedGrupo(grupo);
     setNovoGrupoNome(grupo.nome);
+    setComissaoPorGrupo((grupo as any).comissao_percentual > 0);
+    setPercentualComissao((grupo as any).comissao_percentual || 0);
     setShowSidebar(true);
   };
 
@@ -1781,9 +1787,86 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
+  // Função para atualizar comissões dos vendedores quando grupo for alterado
+  const atualizarComissaoVendedores = async (grupoId: string, grupoNome: string, novoPercentual: number) => {
+    try {
+      // Buscar todas as configurações de comissão ativas que incluem este grupo
+      const { data: comissoes, error: comissoesError } = await supabase
+        .from('vendedor_comissao')
+        .select('*')
+        .eq('ativo', true)
+        .eq('tipo_comissao', 'grupos');
+
+      if (comissoesError) {
+        console.error('Erro ao buscar comissões:', comissoesError);
+        return;
+      }
+
+      if (!comissoes || comissoes.length === 0) return;
+
+      // Filtrar comissões que contêm o grupo alterado
+      const comissoesAfetadas = comissoes.filter(comissao => {
+        const grupos = comissao.grupos_selecionados || [];
+        return grupos.some((grupo: any) =>
+          (typeof grupo === 'string' && grupo === grupoId) ||
+          (typeof grupo === 'object' && grupo.grupo_id === grupoId)
+        );
+      });
+
+      // Atualizar cada comissão afetada
+      for (const comissao of comissoesAfetadas) {
+        const gruposAtualizados = (comissao.grupos_selecionados || []).map((grupo: any) => {
+          if (typeof grupo === 'string' && grupo === grupoId) {
+            // Converter formato antigo para novo
+            return {
+              grupo_id: grupoId,
+              grupo_nome: grupoNome,
+              percentual_vigente: novoPercentual,
+              data_configuracao: new Date().toISOString()
+            };
+          } else if (typeof grupo === 'object' && grupo.grupo_id === grupoId) {
+            // Atualizar formato novo
+            return {
+              ...grupo,
+              grupo_nome: grupoNome,
+              percentual_vigente: novoPercentual,
+              data_configuracao: new Date().toISOString()
+            };
+          }
+          return grupo;
+        });
+
+        // Atualizar no banco
+        const { error: updateError } = await supabase
+          .from('vendedor_comissao')
+          .update({ grupos_selecionados: gruposAtualizados })
+          .eq('id', comissao.id);
+
+        if (updateError) {
+          console.error('Erro ao atualizar comissão:', updateError);
+        }
+      }
+
+      console.log(`✅ Atualizadas ${comissoesAfetadas.length} configurações de comissão para o grupo ${grupoNome}`);
+    } catch (error) {
+      console.error('Erro ao atualizar comissões dos vendedores:', error);
+    }
+  };
+
   const handleSubmitGrupo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!novoGrupoNome.trim()) return;
+
+    // Validação do nome do grupo
+    if (!novoGrupoNome.trim()) {
+      showMessage('error', 'O nome do grupo é obrigatório');
+      return;
+    }
+
+    // Validação da comissão
+    if (comissaoPorGrupo && (!percentualComissao || percentualComissao <= 0)) {
+      showMessage('error', 'Percentual de comissão deve ser maior que 0% quando "Comissão pelo grupo" estiver marcado');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -1799,27 +1882,36 @@ const ProdutosPage: React.FC = () => {
       if (usuarioError) throw usuarioError;
 
       if (selectedGrupo) {
+        const novoPercentual = comissaoPorGrupo ? percentualComissao : 0;
+
         const { data, error } = await supabase
           .from('grupos')
-          .update({ nome: novoGrupoNome })
+          .update({
+            nome: novoGrupoNome,
+            comissao_percentual: novoPercentual
+          })
           .eq('id', selectedGrupo.id)
           .select()
           .single();
 
         if (error) throw error;
 
+        // Atualizar comissões dos vendedores que têm este grupo vinculado
+        await atualizarComissaoVendedores(selectedGrupo.id, novoGrupoNome, novoPercentual);
+
         setGrupos(grupos.map(grupo =>
           grupo.id === selectedGrupo.id
             ? { ...data, produtos: grupo.produtos }
             : grupo
         ));
-        showMessage('success', 'Grupo atualizado com sucesso!');
+        showMessage('success', 'Grupo e comissões dos vendedores atualizados com sucesso!');
       } else {
         const { data, error } = await supabase
           .from('grupos')
           .insert([{
             nome: novoGrupoNome,
-            empresa_id: usuarioData.empresa_id
+            empresa_id: usuarioData.empresa_id,
+            comissao_percentual: comissaoPorGrupo ? percentualComissao : 0
           }])
           .select()
           .single();
@@ -3075,6 +3167,46 @@ const ProdutosPage: React.FC = () => {
                         className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                         placeholder="Digite o nome do grupo"
                       />
+                    </div>
+
+                    {/* Configurações de Comissão */}
+                    <div className="space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+                      <h4 className="text-sm font-medium text-gray-300">Configurações de Comissão</h4>
+
+                      <div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={comissaoPorGrupo}
+                            onChange={(e) => {
+                              setComissaoPorGrupo(e.target.checked);
+                              if (!e.target.checked) {
+                                setPercentualComissao(0);
+                              }
+                            }}
+                            className="mr-2 text-primary-500 focus:ring-primary-500"
+                          />
+                          <span className="text-gray-300">Comissão pelo grupo</span>
+                        </label>
+                      </div>
+
+                      {comissaoPorGrupo && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Percentual de Comissão (%)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
+                            value={percentualComissao}
+                            onChange={(e) => setPercentualComissao(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Ex: 5.00"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-4 pt-4">
