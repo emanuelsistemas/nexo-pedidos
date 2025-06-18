@@ -5892,10 +5892,41 @@ const PDVPage: React.FC = () => {
             </div>
           ` : ''}
 
-          <div class="item-linha bold">
+          <div class="item-linha bold" style="font-size: 14px; margin: 5px 0;">
             <span>TOTAL:</span>
             <span>${formatCurrency(dadosImpressao.venda.valor_total)}</span>
           </div>
+
+          ${dadosImpressao.pagamento ? `
+            ${dadosImpressao.pagamento.tipo_pagamento === 'vista' && dadosImpressao.pagamento.forma_pagamento_id ? `
+              ${(() => {
+                const forma = formasPagamento.find(f => f.id === dadosImpressao.pagamento.forma_pagamento_id);
+                return forma ? `
+                  <div class="item-linha">
+                    <span>${forma.nome}:</span>
+                    <span>${formatCurrency(dadosImpressao.pagamento.valor_pago)}</span>
+                  </div>
+                ` : '';
+              })()}
+            ` : ''}
+            ${dadosImpressao.pagamento.tipo_pagamento === 'parcial' && dadosImpressao.pagamento.formas_pagamento ? `
+              ${dadosImpressao.pagamento.formas_pagamento.map(pag => {
+                const forma = formasPagamento.find(f => f.id === pag.forma);
+                return forma ? `
+                  <div class="item-linha">
+                    <span>${forma.nome}:</span>
+                    <span>${formatCurrency(pag.valor)}</span>
+                  </div>
+                ` : '';
+              }).join('')}
+            ` : ''}
+            ${dadosImpressao.pagamento.valor_troco > 0 ? `
+              <div class="item-linha bold" style="margin-top: 3px;">
+                <span>TROCO:</span>
+                <span>${formatCurrency(dadosImpressao.pagamento.valor_troco)}</span>
+              </div>
+            ` : ''}
+          ` : ''}
 
           <div class="linha"></div>
 
@@ -6064,10 +6095,41 @@ const PDVPage: React.FC = () => {
             </div>
           ` : ''}
 
-          <div class="item-linha bold">
+          <div class="item-linha bold" style="font-size: 14px; margin: 5px 0;">
             <span>TOTAL:</span>
             <span>${formatCurrency(dadosImpressao.venda.valor_total)}</span>
           </div>
+
+          ${dadosImpressao.pagamento ? `
+            ${dadosImpressao.pagamento.tipo_pagamento === 'vista' && dadosImpressao.pagamento.forma_pagamento_id ? `
+              ${(() => {
+                const forma = formasPagamento.find(f => f.id === dadosImpressao.pagamento.forma_pagamento_id);
+                return forma ? `
+                  <div class="item-linha">
+                    <span>${forma.nome}:</span>
+                    <span>${formatCurrency(dadosImpressao.pagamento.valor_pago)}</span>
+                  </div>
+                ` : '';
+              })()}
+            ` : ''}
+            ${dadosImpressao.pagamento.tipo_pagamento === 'parcial' && dadosImpressao.pagamento.formas_pagamento ? `
+              ${dadosImpressao.pagamento.formas_pagamento.map(pag => {
+                const forma = formasPagamento.find(f => f.id === pag.forma);
+                return forma ? `
+                  <div class="item-linha">
+                    <span>${forma.nome}:</span>
+                    <span>${formatCurrency(pag.valor)}</span>
+                  </div>
+                ` : '';
+              }).join('')}
+            ` : ''}
+            ${dadosImpressao.pagamento.valor_troco > 0 ? `
+              <div class="item-linha bold" style="margin-top: 3px;">
+                <span>TROCO:</span>
+                <span>${formatCurrency(dadosImpressao.pagamento.valor_troco)}</span>
+              </div>
+            ` : ''}
+          ` : ''}
 
           <div class="linha"></div>
 
