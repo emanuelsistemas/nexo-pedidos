@@ -404,7 +404,8 @@ push  # Detecta a branch e faz commit/push automático
 
 ---
 
-**🎯 Implementação completa de 3 ambientes profissionais**  
-**🔒 Segurança e isolamento garantidos**  
-**🚀 Workflow otimizado para desenvolvimento**  
+**🎯 Implementação completa de 3 ambientes profissionais**
+**🔒 Segurança e isolamento garantidos**
+**🚀 Workflow otimizado para desenvolvimento**
 **📊 Monitoramento e logs separados**
+**✅ Comandos separados: nexo-dev, nexo-beta, nexo**
