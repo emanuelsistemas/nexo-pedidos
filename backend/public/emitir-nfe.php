@@ -183,6 +183,49 @@ try {
     // USAR MÉTODO NATIVO PARA ADICIONAR IDENTIFICAÇÃO
     $make->taginfNFe($std);
 
+    // ✅ ADICIONADO: Processar chaves de referência (obrigatórias para finalidades 2, 3 e 4)
+    $chavesRef = $nfeData['chaves_ref'] ?? [];
+    $finalidade = $identificacao['finalidade'] ?? '1';
+
+    error_log("🔍 DEBUG CHAVES REF - Dados recebidos:");
+    error_log("  - Finalidade: " . $finalidade);
+    error_log("  - Quantidade de chaves: " . count($chavesRef));
+
+    // Verificar se finalidade exige chave de referência
+    $finalidadeExigeChave = in_array($finalidade, ['2', '3', '4']);
+
+    if ($finalidadeExigeChave) {
+        error_log("✅ Finalidade {$finalidade} exige chave de referência");
+
+        if (empty($chavesRef)) {
+            error_log("❌ ERRO: Finalidade {$finalidade} exige chave de referência, mas nenhuma foi informada");
+            throw new Exception("NFe com finalidade {$finalidade} deve ter pelo menos uma chave de referência");
+        }
+
+        // Processar cada chave de referência
+        foreach ($chavesRef as $index => $chaveRef) {
+            $chave = $chaveRef['chave'] ?? '';
+
+            if (empty($chave) || strlen($chave) !== 44) {
+                error_log("❌ ERRO: Chave de referência {$index} inválida: {$chave}");
+                throw new Exception("Chave de referência " . ($index + 1) . " deve ter 44 dígitos");
+            }
+
+            // Criar tag NFref para cada chave
+            $stdRef = new stdClass();
+            $stdRef->refNFe = $chave;
+
+            $make->tagNFref($stdRef);
+            error_log("✅ Chave de referência adicionada: {$chave}");
+        }
+    } else {
+        error_log("ℹ️ Finalidade {$finalidade} não exige chave de referência");
+
+        if (!empty($chavesRef)) {
+            error_log("⚠️ AVISO: Chaves de referência informadas mas finalidade não exige");
+        }
+    }
+
     // CRIAR TAG IDE (IDENTIFICAÇÃO) - OBRIGATÓRIO ANTES DOS PRODUTOS
     $std = new stdClass();
     $std->cUF = $codigosUF[$uf]; // Usar código real da UF da empresa (SEM FALLBACK)
@@ -201,6 +244,10 @@ try {
     $std->dhEmi = date('Y-m-d\TH:i:sP'); // ✅ Agora com timezone brasileiro
     $std->tpNF = 1; // Saída
     $std->idDest = 1; // Operação interna
+
+    // ✅ ADICIONADO: Finalidade da emissão (obrigatório para chaves de referência)
+    $std->finNFe = (int)$finalidade; // 1=Normal, 2=Complementar, 3=Ajuste, 4=Devolução
+    error_log("✅ Finalidade NFe definida: {$finalidade}");
 
     // Validar código do município obrigatório (SEM FALLBACK)
     if (empty($empresa['codigo_municipio'])) {

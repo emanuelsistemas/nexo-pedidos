@@ -3272,6 +3272,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             volumes_peso_bruto: nfeData.transportadora.volumes_peso_bruto || '',
             volumes_peso_liquido: nfeData.transportadora.volumes_peso_liquido || ''
           },
+          // ✅ ADICIONADO: Chaves de referência (obrigatórias para finalidades 2, 3 e 4)
+          chaves_ref: nfeData.chaves_ref || [],
           // ✅ CORREÇÃO: Adicionar informação adicional que estava faltando
           informacao_adicional: nfeData.identificacao.informacao_adicional || '',
           ambiente: ambienteNFe
@@ -3346,6 +3348,18 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       addLog(`   Volumes - Numeração: ${localPayload.nfe_data.transportadora.volumes_numeracao || 'VAZIO'}`);
       addLog(`   Volumes - Peso Bruto: ${localPayload.nfe_data.transportadora.volumes_peso_bruto || 'VAZIO'}`);
       addLog(`   Volumes - Peso Líquido: ${localPayload.nfe_data.transportadora.volumes_peso_liquido || 'VAZIO'}`);
+
+      // 🔍 DEBUG: Log das chaves de referência sendo enviadas
+      addLog('🔍 DEBUG - Chaves de referência sendo enviadas:');
+      addLog(`   Finalidade NFe: ${localPayload.nfe_data.identificacao.finalidade || 'VAZIO'}`);
+      addLog(`   Quantidade de chaves: ${(localPayload.nfe_data.chaves_ref || []).length}`);
+      if ((localPayload.nfe_data.chaves_ref || []).length > 0) {
+        localPayload.nfe_data.chaves_ref.forEach((chave, index) => {
+          addLog(`   Chave ${index + 1}: ${chave.chave || 'VAZIO'}`);
+        });
+      } else {
+        addLog('   Nenhuma chave de referência informada');
+      }
 
       const response = await fetch('/backend/public/emitir-nfe.php', {
         method: 'POST',
@@ -4044,13 +4058,24 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     }
   };
 
+  // ✅ REGRA FISCAL: Chaves de Referência só aparecem quando finalidade exige
+  const finalidadeExigeChaveRef = ['2', '3', '4'].includes(nfeData.identificacao.finalidade);
+
+  // ✅ REGRA FISCAL: Redirecionar se estiver na aba Chaves Ref e finalidade não exigir mais
+  React.useEffect(() => {
+    if (activeSection === 'chaves_ref' && !finalidadeExigeChaveRef) {
+      setActiveSection('identificacao');
+    }
+  }, [finalidadeExigeChaveRef, activeSection]);
+
   const sections = [
     { id: 'identificacao', label: 'Identificação', number: 1 },
     { id: 'destinatario', label: 'Destinatário', number: 2 },
     { id: 'produtos', label: 'Produtos', number: 3 },
     { id: 'totais', label: 'Totais', number: 4 },
     { id: 'pagamentos', label: 'Pagamentos', number: 5 },
-    { id: 'chaves_ref', label: 'Chaves Ref.', icon: FileText },
+    // ✅ REGRA FISCAL: Só mostrar Chaves Ref se finalidade = 2, 3 ou 4
+    ...(finalidadeExigeChaveRef ? [{ id: 'chaves_ref', label: 'Chaves Ref.', icon: FileText }] : []),
     { id: 'transportadora', label: 'Transportadora', icon: FileText },
     { id: 'intermediador', label: 'Intermediador', icon: FileText },
     // Só mostrar a aba de Autorização após a NFe ser emitida OU em modo visualização de NFe autorizada
@@ -7050,6 +7075,19 @@ const ChavesRefSection: React.FC<{ data: any[]; onChange: (data: any[]) => void 
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold text-white mb-4">Lista de Chaves Referenciadas</h2>
+
+      {/* ✅ ADICIONADO: Informação sobre quando usar chaves de referência */}
+      <div className="mb-6 bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
+        <h3 className="text-blue-300 font-medium mb-2 flex items-center gap-2">
+          <FileText size={16} />
+          Quando usar Chaves de Referência?
+        </h3>
+        <div className="text-sm text-blue-200 space-y-1">
+          <p><strong>✅ Finalidade 2 - Complementar:</strong> Informar chave da NFe original que está sendo complementada</p>
+          <p><strong>✅ Finalidade 3 - Ajuste:</strong> Informar chave da NFe original que está sendo ajustada</p>
+          <p><strong>✅ Finalidade 4 - Devolução:</strong> Informar chave da NFe original que está sendo devolvida</p>
+        </div>
+      </div>
 
       {/* Formulário para adicionar chave */}
       <div className="mb-6">
