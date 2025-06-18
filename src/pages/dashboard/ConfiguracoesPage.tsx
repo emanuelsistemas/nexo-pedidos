@@ -245,7 +245,10 @@ const ConfiguracoesPage: React.FC = () => {
     ocultar_nfce_sem_impressao: false,
     ocultar_nfce_producao: false,
     ocultar_producao: false,
-    rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
+    rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
+    mostrar_razao_social_cupom_finalizar: false,
+    mostrar_endereco_cupom_finalizar: false,
+    mostrar_operador_cupom_finalizar: false
   });
 
   // Estado para controlar as abas do PDV
@@ -2458,7 +2461,10 @@ const ConfiguracoesPage: React.FC = () => {
           ocultar_nfce_sem_impressao: config.ocultar_nfce_sem_impressao || false,
           ocultar_nfce_producao: config.ocultar_nfce_producao || false,
           ocultar_producao: config.ocultar_producao || false,
-          rodape_personalizado: config.rodape_personalizado || 'Obrigado pela preferencia volte sempre!'
+          rodape_personalizado: config.rodape_personalizado || 'Obrigado pela preferencia volte sempre!',
+          mostrar_razao_social_cupom_finalizar: config.mostrar_razao_social_cupom_finalizar || false,
+          mostrar_endereco_cupom_finalizar: config.mostrar_endereco_cupom_finalizar || false,
+          mostrar_operador_cupom_finalizar: config.mostrar_operador_cupom_finalizar || false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2489,7 +2495,10 @@ const ConfiguracoesPage: React.FC = () => {
           ocultar_nfce_sem_impressao: false,
           ocultar_nfce_producao: false,
           ocultar_producao: false,
-          rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
+          rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
+          mostrar_razao_social_cupom_finalizar: false,
+          mostrar_endereco_cupom_finalizar: false,
+          mostrar_operador_cupom_finalizar: false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2522,7 +2531,10 @@ const ConfiguracoesPage: React.FC = () => {
         ocultar_nfce_sem_impressao: false,
         ocultar_nfce_producao: false,
         ocultar_producao: false,
-        rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
+        rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
+        mostrar_razao_social_cupom_finalizar: false,
+        mostrar_endereco_cupom_finalizar: false,
+        mostrar_operador_cupom_finalizar: false
       });
 
       // Atualizar também o estado separado do rodapé
@@ -2766,7 +2778,10 @@ const ConfiguracoesPage: React.FC = () => {
         ocultar_nfce_sem_impressao: field === 'ocultar_nfce_sem_impressao' ? value : pdvConfig.ocultar_nfce_sem_impressao,
         ocultar_nfce_producao: field === 'ocultar_nfce_producao' ? value : pdvConfig.ocultar_nfce_producao,
         ocultar_producao: field === 'ocultar_producao' ? value : pdvConfig.ocultar_producao,
-        rodape_personalizado: pdvConfig.rodape_personalizado
+        rodape_personalizado: pdvConfig.rodape_personalizado,
+        mostrar_razao_social_cupom_finalizar: field === 'mostrar_razao_social_cupom_finalizar' ? value : pdvConfig.mostrar_razao_social_cupom_finalizar,
+        mostrar_endereco_cupom_finalizar: field === 'mostrar_endereco_cupom_finalizar' ? value : pdvConfig.mostrar_endereco_cupom_finalizar,
+        mostrar_operador_cupom_finalizar: field === 'mostrar_operador_cupom_finalizar' ? value : pdvConfig.mostrar_operador_cupom_finalizar
       };
 
       if (existingConfig) {
@@ -4076,8 +4091,62 @@ const ConfiguracoesPage: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Rodapé Personalizado */}
-                    <div className="space-y-4">
+                    {/* Configurações do Cupom "Finalizar com Impressão" */}
+                    <div className="space-y-6">
+                      <div>
+                        <h4 className="text-lg font-medium text-white mb-4">
+                          Configurações do Cupom "Finalizar com Impressão"
+                        </h4>
+                        <p className="text-sm text-gray-400 mb-4">
+                          Configure quais informações aparecerão no cupom não fiscal (apenas para "Finalizar com Impressão").
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {/* Mostrar Razão Social */}
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              id="mostrar_razao_social_cupom_finalizar"
+                              checked={pdvConfig.mostrar_razao_social_cupom_finalizar}
+                              onChange={(e) => handlePdvConfigChange('mostrar_razao_social_cupom_finalizar', e.target.checked)}
+                              className="w-4 h-4 text-primary-600 bg-gray-800 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
+                            />
+                            <label htmlFor="mostrar_razao_social_cupom_finalizar" className="text-sm text-white">
+                              Mostrar Razão Social
+                            </label>
+                          </div>
+
+                          {/* Mostrar Endereço */}
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              id="mostrar_endereco_cupom_finalizar"
+                              checked={pdvConfig.mostrar_endereco_cupom_finalizar}
+                              onChange={(e) => handlePdvConfigChange('mostrar_endereco_cupom_finalizar', e.target.checked)}
+                              className="w-4 h-4 text-primary-600 bg-gray-800 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
+                            />
+                            <label htmlFor="mostrar_endereco_cupom_finalizar" className="text-sm text-white">
+                              Mostrar Endereço
+                            </label>
+                          </div>
+
+                          {/* Mostrar Operador */}
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              id="mostrar_operador_cupom_finalizar"
+                              checked={pdvConfig.mostrar_operador_cupom_finalizar}
+                              onChange={(e) => handlePdvConfigChange('mostrar_operador_cupom_finalizar', e.target.checked)}
+                              className="w-4 h-4 text-primary-600 bg-gray-800 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
+                            />
+                            <label htmlFor="mostrar_operador_cupom_finalizar" className="text-sm text-white">
+                              Mostrar Operador (Caixa)
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Rodapé Personalizado */}
                       <div>
                         <label htmlFor="rodape_personalizado" className="block text-sm font-medium text-white mb-2">
                           Rodapé Personalizado dos Recibos

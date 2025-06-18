@@ -1773,7 +1773,8 @@ const PDVPage: React.FC = () => {
         ocultar_nfce_com_impressao: false,
         ocultar_nfce_sem_impressao: false,
         ocultar_nfce_producao: false,
-        ocultar_producao: false
+        ocultar_producao: false,
+        rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
       });
     } else {
       setPdvConfig(data);
@@ -5304,6 +5305,7 @@ const PDVPage: React.FC = () => {
             },
             cliente: clienteData || {},
             vendedor: vendedorSelecionado || null, // Incluir dados do vendedor
+            operador: userData || null, // Incluir dados do operador (usuário atual)
             itens: carrinho.map(item => ({
               codigo: item.produto.codigo,
               nome: item.produto.nome,
@@ -5386,6 +5388,7 @@ const PDVPage: React.FC = () => {
             },
             cliente: clienteData || {},
             vendedor: vendedorSelecionado || null, // Incluir dados do vendedor
+            operador: userData || null, // Incluir dados do operador (usuário atual)
             itens: carrinho.map(item => ({
               codigo: item.produto.codigo,
               nome: item.produto.nome,
@@ -5923,8 +5926,7 @@ const PDVPage: React.FC = () => {
           <div class="linha"></div>
 
           <div class="center">
-            <div>Obrigado pela preferência!</div>
-            <div>Volte sempre!</div>
+            <div>${pdvConfig?.rodape_personalizado || 'Obrigado pela preferencia volte sempre!'}</div>
           </div>
 
           <script>
@@ -5995,13 +5997,14 @@ const PDVPage: React.FC = () => {
         </head>
         <body>
           <div class="center">
-            <div class="bold">${dadosImpressao.empresa.razao_social}</div>
-            ${dadosImpressao.empresa.nome_fantasia ? `<div>${dadosImpressao.empresa.nome_fantasia}</div>` : ''}
+            ${pdvConfig?.mostrar_razao_social_cupom_finalizar ? `<div class="bold">${dadosImpressao.empresa.razao_social}</div>` : ''}
+            ${dadosImpressao.empresa.nome_fantasia ? `<div class="bold">${dadosImpressao.empresa.nome_fantasia}</div>` : ''}
             <div>CNPJ: ${dadosImpressao.empresa.cnpj}</div>
-            ${dadosImpressao.empresa.inscricao_estadual ? `<div>IE: ${dadosImpressao.empresa.inscricao_estadual}</div>` : ''}
-            <div>${dadosImpressao.empresa.endereco}</div>
-            <div>${dadosImpressao.empresa.bairro} - ${dadosImpressao.empresa.cidade}/${dadosImpressao.empresa.uf}</div>
-            <div>CEP: ${dadosImpressao.empresa.cep}</div>
+            ${pdvConfig?.mostrar_endereco_cupom_finalizar ? `
+              <div>${dadosImpressao.empresa.endereco}</div>
+              <div>${dadosImpressao.empresa.bairro} - ${dadosImpressao.empresa.cidade}/${dadosImpressao.empresa.uf}</div>
+              <div>CEP: ${dadosImpressao.empresa.cep}</div>
+            ` : ''}
             ${dadosImpressao.empresa.telefone ? `<div>Tel: ${dadosImpressao.empresa.telefone}</div>` : ''}
           </div>
 
@@ -6011,19 +6014,29 @@ const PDVPage: React.FC = () => {
           <div class="center">Venda: ${dadosImpressao.venda.numero}</div>
           <div class="center">${dadosImpressao.venda.data}</div>
 
-          ${dadosImpressao.cliente?.nome_cliente || dadosImpressao.vendedor?.nome ? `
+          ${(dadosImpressao.cliente?.nome_cliente && pdvConfig?.seleciona_clientes) ||
+            (dadosImpressao.vendedor?.nome && pdvConfig?.vendedor) ||
+            (dadosImpressao.operador?.nome && pdvConfig?.mostrar_operador_cupom_finalizar) ? `
             <div class="linha"></div>
-            ${dadosImpressao.cliente?.nome_cliente ? `
-              <div class="center">
-                <div class="bold">CLIENTE: ${dadosImpressao.cliente.nome_cliente}</div>
-                ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
-              </div>
-            ` : ''}
-            ${dadosImpressao.vendedor?.nome ? `
-              <div class="center">
-                <div class="bold">VENDEDOR: ${dadosImpressao.vendedor.nome}</div>
-              </div>
-            ` : ''}
+          ` : ''}
+
+          ${dadosImpressao.cliente?.nome_cliente && pdvConfig?.seleciona_clientes ? `
+            <div class="center">
+              <div class="bold">CLIENTE: ${dadosImpressao.cliente.nome_cliente}</div>
+              ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
+            </div>
+          ` : ''}
+
+          ${dadosImpressao.vendedor?.nome && pdvConfig?.vendedor ? `
+            <div class="center">
+              <div class="bold">VENDEDOR: ${dadosImpressao.vendedor.nome}</div>
+            </div>
+          ` : ''}
+
+          ${dadosImpressao.operador?.nome && pdvConfig?.mostrar_operador_cupom_finalizar ? `
+            <div class="center">
+              <div class="bold">OPERADOR: ${dadosImpressao.operador.nome}</div>
+            </div>
           ` : ''}
 
           <div class="linha"></div>
@@ -6059,8 +6072,7 @@ const PDVPage: React.FC = () => {
           <div class="linha"></div>
 
           <div class="center">
-            <div>Obrigado pela preferência!</div>
-            <div>Volte sempre!</div>
+            <div>${pdvConfig?.rodape_personalizado || 'Obrigado pela preferencia volte sempre!'}</div>
           </div>
 
           <script>
