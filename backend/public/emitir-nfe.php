@@ -191,10 +191,11 @@ try {
     error_log("  - Finalidade: " . $finalidade);
     error_log("  - Quantidade de chaves: " . count($chavesRef));
 
-    // ✅ CORREÇÃO: Verificar regras corretas de chave de referência
-    // Finalidade 2 (Complementar) e 3 (Ajuste) = SEMPRE obrigatória
-    // Finalidade 4 (Devolução) = SEMPRE obrigatória
-    // Finalidade 1 (Normal) = Opcional (pode usar para devolução com CFOP)
+    // ✅ CORREÇÃO: Regras oficiais de chave de referência
+    // Finalidade 1 (Normal) = OPCIONAL (se informada, deve aparecer no XML/DANFE)
+    // Finalidade 2 (Complementar) = OBRIGATÓRIA
+    // Finalidade 3 (Ajuste) = OBRIGATÓRIA
+    // Finalidade 4 (Devolução) = OBRIGATÓRIA
     $finalidadeExigeChave = in_array($finalidade, ['2', '3', '4']);
 
     if ($finalidadeExigeChave) {
@@ -204,8 +205,12 @@ try {
             error_log("❌ ERRO: Finalidade {$finalidade} exige chave de referência, mas nenhuma foi informada");
             throw new Exception("NFe com finalidade {$finalidade} deve ter pelo menos uma chave de referência");
         }
+    }
 
-        // Processar cada chave de referência
+    // ✅ CORREÇÃO: Processar chaves de referência se informadas (independente da finalidade)
+    if (!empty($chavesRef)) {
+        error_log("✅ Processando " . count($chavesRef) . " chave(s) de referência para finalidade {$finalidade}");
+
         foreach ($chavesRef as $index => $chaveRef) {
             $chave = $chaveRef['chave'] ?? '';
 
@@ -222,10 +227,10 @@ try {
             error_log("✅ Chave de referência adicionada: {$chave}");
         }
     } else {
-        error_log("ℹ️ Finalidade {$finalidade} não exige chave de referência");
-
-        if (!empty($chavesRef)) {
-            error_log("⚠️ AVISO: Chaves de referência informadas mas finalidade não exige");
+        if ($finalidadeExigeChave) {
+            error_log("❌ ERRO: Finalidade {$finalidade} exige chave de referência");
+        } else {
+            error_log("ℹ️ Finalidade {$finalidade} - nenhuma chave de referência informada (opcional)");
         }
     }
 

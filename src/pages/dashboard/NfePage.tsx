@@ -4058,11 +4058,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     }
   };
 
-  // ✅ CORREÇÃO: Chaves de Referência podem ser usadas em qualquer finalidade
-  // Finalidade 1 + CFOP devolução = devolução sem chave obrigatória
-  // Finalidade 4 = devolução com chave obrigatória
-  // Finalidade 2,3 = complementar/ajuste com chave obrigatória
-  const finalidadeExigeChaveRef = true; // Sempre permitir chaves de referência
+  // ✅ CORREÇÃO: Regras oficiais de chaves de referência
+  // Finalidade 1 (Normal) = OPCIONAL (se informada, aparece no XML/DANFE)
+  // Finalidade 2 (Complementar) = OBRIGATÓRIA
+  // Finalidade 3 (Ajuste) = OBRIGATÓRIA
+  // Finalidade 4 (Devolução) = OBRIGATÓRIA
+  const finalidadeExigeChaveRef = true; // Sempre mostrar aba (mas com avisos sobre obrigatoriedade)
 
   // ✅ REMOVIDO: Redirecionamento automático (não é mais necessário)
 
@@ -4443,6 +4444,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           <ChavesRefSection
             data={nfeData.chaves_ref}
             onChange={(data) => setNfeData(prev => ({ ...prev, chaves_ref: data }))}
+            finalidade={finalidade}
           />
         );
       case 'transportadora':
@@ -7330,8 +7332,15 @@ const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void
   );
 };
 
-const ChavesRefSection: React.FC<{ data: any[]; onChange: (data: any[]) => void }> = ({ data: chaves = [], onChange }) => {
+const ChavesRefSection: React.FC<{
+  data: any[];
+  onChange: (data: any[]) => void;
+  finalidade?: string;
+}> = ({ data: chaves = [], onChange, finalidade = '1' }) => {
   const [chaveForm, setChaveForm] = useState('');
+
+  // Determinar se chave é obrigatória baseado na finalidade
+  const isObrigatoria = ['2', '3', '4'].includes(finalidade);
 
   const handleAdicionarChave = () => {
     if (!chaveForm.trim()) {
@@ -7381,25 +7390,43 @@ const ChavesRefSection: React.FC<{ data: any[]; onChange: (data: any[]) => void 
     <div className="p-4">
       <h2 className="text-xl font-bold text-white mb-4">Lista de Chaves Referenciadas</h2>
 
-      {/* ✅ ATUALIZADO: Informação sobre quando usar chaves de referência */}
-      <div className="mb-6 bg-blue-900/20 border border-blue-700/50 rounded-lg p-4">
-        <h3 className="text-blue-300 font-medium mb-2 flex items-center gap-2">
+      {/* ✅ ATUALIZADO: Aviso baseado na finalidade atual */}
+      <div className={`mb-6 rounded-lg p-4 border ${
+        isObrigatoria
+          ? 'bg-red-900/20 border-red-700/50'
+          : 'bg-blue-900/20 border-blue-700/50'
+      }`}>
+        <h3 className={`font-medium mb-2 flex items-center gap-2 ${
+          isObrigatoria ? 'text-red-300' : 'text-blue-300'
+        }`}>
           <FileText size={16} />
-          Quando usar Chaves de Referência?
+          {isObrigatoria ? 'Chave de Referência OBRIGATÓRIA' : 'Chave de Referência OPCIONAL'}
         </h3>
-        <div className="text-sm text-blue-200 space-y-2">
-          <div>
-            <p><strong>✅ Finalidade 2 - Complementar:</strong> Chave da NFe original <span className="text-red-300">(OBRIGATÓRIA)</span></p>
-            <p><strong>✅ Finalidade 3 - Ajuste:</strong> Chave da NFe original <span className="text-red-300">(OBRIGATÓRIA)</span></p>
-            <p><strong>✅ Finalidade 4 - Devolução:</strong> Chave da NFe original <span className="text-red-300">(OBRIGATÓRIA)</span></p>
-          </div>
-          <div className="border-t border-blue-700/30 pt-2">
-            <p><strong>📋 Finalidade 1 - Normal:</strong> Opcional para devolução com CFOP 1202/2202</p>
-            <p className="text-xs text-blue-300 mt-1">
-              💡 <strong>Dica:</strong> Para devolução simples, use Finalidade 1 + CFOP devolução (sem chave).
-              Para rastreabilidade específica, use Finalidade 4 + chave obrigatória.
+
+        {isObrigatoria ? (
+          <div className="text-sm text-red-200 space-y-2">
+            <p>
+              <strong>⚠️ Para finalidade {finalidade}:</strong> Pelo menos uma chave de referência é obrigatória.
+            </p>
+            <p className="text-xs text-red-300">
+              Esta NFe referencia documentos fiscais anteriores e deve conter a chave de acesso da NFe original.
             </p>
           </div>
+        ) : (
+          <div className="text-sm text-blue-200 space-y-2">
+            <p>
+              <strong>ℹ️ Para finalidade {finalidade} (Normal):</strong> Chaves de referência são opcionais.
+            </p>
+            <p className="text-xs text-blue-300">
+              Se informadas, as chaves aparecerão no XML e na DANFE no campo "Documentos Fiscais Referenciados".
+            </p>
+          </div>
+        )}
+
+        <div className="border-t border-gray-700/30 pt-2 mt-3">
+          <p className="text-xs text-gray-400">
+            <strong>Regras Oficiais SEFAZ:</strong> Finalidades 2, 3 e 4 exigem chaves obrigatórias. Finalidade 1 permite chaves opcionais.
+          </p>
         </div>
       </div>
 
