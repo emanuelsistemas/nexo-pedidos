@@ -5711,22 +5711,58 @@ const ProdutosSection: React.FC<{
   const [produtoEditandoCFOP, setProdutoEditandoCFOP] = useState<any>(null);
   const [novoCFOP, setNovoCFOP] = useState('');
 
-  // CFOPs de devolução mais comuns
-  const cfopsDevolucao = [
-    { codigo: '1202', descricao: '1202 - Devolução de venda de mercadoria adquirida ou recebida de terceiros (dentro do estado)' },
-    { codigo: '2202', descricao: '2202 - Devolução de venda de mercadoria adquirida ou recebida de terceiros (fora do estado)' },
+  // ✅ ADICIONADO: Estados para controlar modos de CFOP no formulário
+  const [modoDevolucao, setModoDevolucao] = useState(false);
+  const [modoEntrada, setModoEntrada] = useState(false);
+
+  // ✅ CORREÇÃO: CFOPs baseados na finalidade da NFe
+
+  // CFOPs para FINALIDADE 4 (Devolução) - Apenas CFOPs de devolução
+  const cfopsFinalidade4 = [
     { codigo: '5202', descricao: '5202 - Devolução de compra para comercialização (dentro do estado)' },
     { codigo: '6202', descricao: '6202 - Devolução de compra para comercialização (fora do estado)' },
+    { codigo: '5411', descricao: '5411 - Devolução de compra para industrialização (dentro do estado)' },
+    { codigo: '6411', descricao: '6411 - Devolução de compra para industrialização (fora do estado)' },
+    { codigo: '5903', descricao: '5903 - Devolução de mercadoria recebida com fim específico de exportação' },
+    { codigo: '6903', descricao: '6903 - Devolução de mercadoria recebida com fim específico de exportação' }
+  ];
+
+  // CFOPs para FINALIDADE 1 (Normal) - Saída normal (NÃO são CFOPs de devolução)
+  const cfopsSaidaNormal = [
+    { codigo: '5102', descricao: '5102 - Venda de mercadoria adquirida ou recebida de terceiros (dentro do estado)' },
+    { codigo: '6102', descricao: '6102 - Venda de mercadoria adquirida ou recebida de terceiros (fora do estado)' },
+    { codigo: '5101', descricao: '5101 - Venda de produção do estabelecimento (dentro do estado)' },
+    { codigo: '6101', descricao: '6101 - Venda de produção do estabelecimento (fora do estado)' },
+    { codigo: '5403', descricao: '5403 - Venda de mercadoria sujeita ao regime de substituição tributária (dentro do estado)' },
+    { codigo: '6403', descricao: '6403 - Venda de mercadoria sujeita ao regime de substituição tributária (fora do estado)' }
+  ];
+
+  // CFOPs para FINALIDADE 1 (Normal) - Entrada (série 1000/2000)
+  const cfopsEntrada = [
+    { codigo: '1202', descricao: '1202 - Devolução de venda de mercadoria de terceiros (dentro do estado)' },
+    { codigo: '2202', descricao: '2202 - Devolução de venda de mercadoria de terceiros (fora do estado)' },
     { codigo: '1411', descricao: '1411 - Devolução de venda de produção do estabelecimento (dentro do estado)' },
     { codigo: '2411', descricao: '2411 - Devolução de venda de produção do estabelecimento (fora do estado)' },
-    { codigo: '5411', descricao: '5411 - Devolução de compra para industrialização (dentro do estado)' },
-    { codigo: '6411', descricao: '6411 - Devolução de compra para industrialização (fora do estado)' }
+    { codigo: '1102', descricao: '1102 - Compra para comercialização (dentro do estado)' },
+    { codigo: '2102', descricao: '2102 - Compra para comercialização (fora do estado)' }
   ];
+
+  // ✅ FUNÇÃO: Obter CFOPs baseados na finalidade
+  const obterCfopsDisponiveis = (tipo: 'devolucao' | 'entrada') => {
+    if (finalidade === '4') {
+      // Finalidade 4: Apenas CFOPs específicos de devolução (não permitir entrada)
+      return tipo === 'devolucao' ? cfopsFinalidade4 : [];
+    } else {
+      // Finalidade 1,2,3: CFOPs normais (não específicos de devolução)
+      return tipo === 'devolucao' ? cfopsSaidaNormal : cfopsEntrada;
+    }
+  };
   const [produtoForm, setProdutoForm] = useState({
     quantidade: 1,
     valor_unitario: 0,
     valor_total: 0,
-    cfop_devolucao: '', // Campo para CFOP de devolução
+    cfop_devolucao: '', // Campo para CFOP de devolução (SAÍDA)
+    cfop_entrada: '', // Campo para CFOP de entrada
     cfop_geral: '' // Campo para CFOP geral (editável)
   });
 
@@ -5778,6 +5814,7 @@ const ProdutosSection: React.FC<{
       valor_unitario: precoFinal,
       valor_total: precoFinal,
       cfop_devolucao: '',
+      cfop_entrada: '',
       cfop_geral: produto.cfop || '' // Preencher com CFOP do produto
     });
     setShowProdutoModal(false);
@@ -5800,7 +5837,14 @@ const ProdutosSection: React.FC<{
 
       // ✅ TODOS OS DADOS FISCAIS DO CADASTRO DO PRODUTO (SEM FALLBACKS):
       ncm: produtoSelecionado.ncm,
-      cfop: finalidade === '4' && produtoForm.cfop_devolucao ? produtoForm.cfop_devolucao : (produtoForm.cfop_geral || produtoSelecionado.cfop),
+      // ✅ ATUALIZADO: Lógica de CFOP considerando todos os modos
+      cfop: finalidade === '4' && produtoForm.cfop_devolucao
+        ? produtoForm.cfop_devolucao
+        : modoDevolucao && produtoForm.cfop_devolucao
+        ? produtoForm.cfop_devolucao
+        : modoEntrada && produtoForm.cfop_entrada
+        ? produtoForm.cfop_entrada
+        : (produtoForm.cfop_geral || produtoSelecionado.cfop),
       unidade: produtoSelecionado.unidade_medida?.sigla,
       ean: produtoSelecionado.codigo_barras, // ✅ EAN vem do codigo_barras
       origem_produto: produtoSelecionado.origem_produto,
@@ -5835,8 +5879,12 @@ const ProdutosSection: React.FC<{
       valor_unitario: 0,
       valor_total: 0,
       cfop_devolucao: '',
+      cfop_entrada: '',
       cfop_geral: ''
     });
+    // ✅ ADICIONADO: Reset dos modos
+    setModoDevolucao(false);
+    setModoEntrada(false);
   };
 
   // Função para remover produto
@@ -6132,22 +6180,152 @@ const ProdutosSection: React.FC<{
               />
             </div>
 
-            {/* CFOP Geral - Só aparece quando finalidade NÃO for 4 */}
+            {/* CFOP - Aparece quando finalidade NÃO for 4 */}
             {finalidade !== '4' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  CFOP *
-                </label>
-                <input
-                  type="text"
-                  value={produtoForm.cfop_geral || ''}
-                  onChange={(e) => updateProdutoForm('cfop_geral', e.target.value)}
-                  placeholder="Ex: 5102"
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  💡 Vem do cadastro do produto, mas pode ser editado
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-300">
+                    CFOP *
+                  </label>
+                  {/* ✅ ADICIONADO: Checkboxes de devolução e entrada com validação por finalidade */}
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={modoDevolucao}
+                        onChange={(e) => {
+                          setModoDevolucao(e.target.checked);
+                          if (e.target.checked) {
+                            setModoEntrada(false); // Desmarcar entrada
+                            updateProdutoForm('cfop_devolucao', '');
+                            updateProdutoForm('cfop_entrada', '');
+                            updateProdutoForm('cfop_geral', '');
+                          } else {
+                            updateProdutoForm('cfop_devolucao', '');
+                          }
+                        }}
+                        className="w-4 h-4 text-orange-600 bg-gray-800 border-gray-600 rounded focus:ring-orange-500 focus:ring-2"
+                      />
+                      <span className="text-orange-300">Devolução</span>
+                    </label>
+
+                    {/* Checkbox Entrada - Desabilitado para finalidade 4 */}
+                    <label className={`flex items-center gap-2 text-sm cursor-pointer ${
+                      finalidade === '4' ? 'text-gray-500 cursor-not-allowed' : 'text-gray-300'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={modoEntrada}
+                        disabled={finalidade === '4'}
+                        onChange={(e) => {
+                          if (finalidade === '4') return; // Bloquear para finalidade 4
+                          setModoEntrada(e.target.checked);
+                          if (e.target.checked) {
+                            setModoDevolucao(false); // Desmarcar devolução
+                            updateProdutoForm('cfop_entrada', '');
+                            updateProdutoForm('cfop_devolucao', '');
+                            updateProdutoForm('cfop_geral', '');
+                          } else {
+                            updateProdutoForm('cfop_entrada', '');
+                          }
+                        }}
+                        className={`w-4 h-4 bg-gray-800 border-gray-600 rounded focus:ring-2 ${
+                          finalidade === '4'
+                            ? 'text-gray-500 cursor-not-allowed'
+                            : 'text-blue-600 focus:ring-blue-500'
+                        }`}
+                      />
+                      <span className={finalidade === '4' ? 'text-gray-500' : 'text-blue-300'}>
+                        Entrada
+                        {finalidade === '4' && <span className="text-xs ml-1">(não permitido)</span>}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Campo CFOP condicional baseado na finalidade */}
+                {modoDevolucao ? (
+                  // Dropdown de CFOPs de devolução
+                  <div>
+                    <select
+                      value={produtoForm.cfop_devolucao || ''}
+                      onChange={(e) => updateProdutoForm('cfop_devolucao', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-800 border border-orange-500 rounded-lg text-white focus:outline-none focus:border-orange-400"
+                    >
+                      <option value="">
+                        {finalidade === '4'
+                          ? 'Selecione o CFOP de devolução (OBRIGATÓRIO)'
+                          : 'Selecione o CFOP de devolução (SAÍDA)'
+                        }
+                      </option>
+                      {obterCfopsDisponiveis('devolucao').map((cfop) => (
+                        <option key={cfop.codigo} value={cfop.codigo}>
+                          {cfop.descricao}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-orange-300 mt-1">
+                      {finalidade === '4'
+                        ? '🔄 Finalidade 4 - CFOPs específicos de devolução (série 5000/6000)'
+                        : '📤 Finalidade 1 - CFOPs normais de saída (não específicos de devolução)'
+                      }
+                    </p>
+                  </div>
+                ) : modoEntrada && finalidade !== '4' ? (
+                  // Dropdown de CFOPs de entrada (não disponível para finalidade 4)
+                  <div>
+                    <select
+                      value={produtoForm.cfop_entrada || ''}
+                      onChange={(e) => updateProdutoForm('cfop_entrada', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-800 border border-blue-500 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                    >
+                      <option value="">Selecione o CFOP de entrada</option>
+                      {obterCfopsDisponiveis('entrada').map((cfop) => (
+                        <option key={cfop.codigo} value={cfop.codigo}>
+                          {cfop.descricao}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-blue-300 mt-1">
+                      📥 Modo entrada ativo - CFOPs de ENTRADA (série 1000/2000)
+                    </p>
+                  </div>
+                ) : (
+                  // Campo de texto normal
+                  <div>
+                    <input
+                      type="text"
+                      value={produtoForm.cfop_geral || ''}
+                      onChange={(e) => updateProdutoForm('cfop_geral', e.target.value)}
+                      placeholder={finalidade === '4' ? 'Use o checkbox Devolução' : 'Ex: 5102'}
+                      disabled={finalidade === '4'}
+                      className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-400 focus:outline-none ${
+                        finalidade === '4'
+                          ? 'border-gray-600 cursor-not-allowed opacity-50'
+                          : 'border-gray-700 focus:border-primary-500'
+                      }`}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {finalidade === '4'
+                        ? '⚠️ Para finalidade 4, use o checkbox "Devolução"'
+                        : '💡 Vem do cadastro do produto, mas pode ser editado'
+                      }
+                    </p>
+                  </div>
+                )}
+
+                {/* Aviso sobre finalidade - Movido para baixo do campo CFOP */}
+                <div className="mt-3">
+                  {finalidade === '4' ? (
+                    <div className="p-2 bg-orange-500/10 border border-orange-500/20 rounded text-xs text-orange-300">
+                      ⚠️ <strong>Finalidade 4 (Devolução):</strong> Apenas CFOPs específicos de devolução são permitidos
+                    </div>
+                  ) : (
+                    <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs text-blue-300">
+                      ℹ️ <strong>Finalidade 1 (Normal):</strong> Use CFOPs normais - checkbox "Devolução" = CFOPs de saída normais
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -6160,17 +6338,17 @@ const ProdutosSection: React.FC<{
                 <select
                   value={produtoForm.cfop_devolucao || ''}
                   onChange={(e) => updateProdutoForm('cfop_devolucao', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                  className="w-full px-3 py-2 bg-gray-800 border border-orange-500 rounded-lg text-white focus:outline-none focus:border-orange-400"
                 >
-                  <option value="">Selecione o CFOP de devolução</option>
-                  {cfopsDevolucao.map((cfop) => (
+                  <option value="">Selecione o CFOP de devolução (OBRIGATÓRIO)</option>
+                  {obterCfopsDisponiveis('devolucao').map((cfop) => (
                     <option key={cfop.codigo} value={cfop.codigo}>
                       {cfop.descricao}
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  ⚠️ Para devoluções, é obrigatório usar CFOP específico de devolução
+                <p className="text-xs text-orange-300 mt-1">
+                  🔄 Finalidade 4 - Apenas CFOPs de devolução são permitidos
                 </p>
               </div>
             )}
