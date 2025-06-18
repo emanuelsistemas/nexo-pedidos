@@ -339,6 +339,12 @@ const PDVPage: React.FC = () => {
   const [vendedorSelecionado, setVendedorSelecionado] = useState<any>(null);
   const [aguardandoSelecaoVendedor, setAguardandoSelecaoVendedor] = useState(false);
   const [produtoAguardandoVendedor, setProdutoAguardandoVendedor] = useState<Produto | null>(null);
+  const [quantidadeAguardandoVendedor, setQuantidadeAguardandoVendedor] = useState<number>(1); // ✅ NOVO: Para armazenar quantidade do modal
+
+  // Estados para modal de quantidade (vendas_itens_multiplicacao)
+  const [showQuantidadeModal, setShowQuantidadeModal] = useState(false);
+  const [produtoParaQuantidade, setProdutoParaQuantidade] = useState<Produto | null>(null);
+  const [quantidadeModal, setQuantidadeModal] = useState(1);
 
   // Funções para localStorage
   const savePDVState = () => {
@@ -1768,6 +1774,7 @@ const PDVPage: React.FC = () => {
         desconto_no_item: false,
         editar_nome_produto: false,
         fiado: false,
+        vendas_itens_multiplicacao: false,
         ocultar_finalizar_com_impressao: false,
         ocultar_finalizar_sem_impressao: false,
         ocultar_nfce_com_impressao: false,
@@ -3048,11 +3055,23 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
-    // Verificar se precisa selecionar vendedor (apenas se não há vendedor selecionado)
+    // ✅ FLUXO SEQUENCIAL: Verificar se precisa selecionar vendedor primeiro
     if (pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
       setProdutoAguardandoVendedor(produto);
       setAguardandoSelecaoVendedor(true);
       setShowVendedorModal(true);
+      // ✅ NOVO: Se também tem multiplicação ativa, salvar para usar no fluxo sequencial
+      if (pdvConfig?.vendas_itens_multiplicacao && !quantidadePersonalizada && !searchTerm.includes('*')) {
+        setQuantidadeAguardandoVendedor(0); // 0 indica que deve abrir modal de quantidade depois
+      }
+      return;
+    }
+
+    // ✅ VERIFICAR: Modal de quantidade (apenas se não veio do fluxo do vendedor)
+    if (pdvConfig?.vendas_itens_multiplicacao && !quantidadePersonalizada && !searchTerm.includes('*')) {
+      setProdutoParaQuantidade(produto);
+      setQuantidadeModal(1);
+      setShowQuantidadeModal(true);
       return;
     }
 
@@ -3120,11 +3139,30 @@ const PDVPage: React.FC = () => {
     setVendedorSelecionado(vendedor);
     setShowVendedorModal(false);
 
-    // Se há um produto aguardando, adicionar ao carrinho agora com o vendedor selecionado
+    // Se há um produto aguardando, verificar o fluxo
     if (produtoAguardandoVendedor) {
       setAguardandoSelecaoVendedor(false);
-      adicionarProdutoComVendedor(produtoAguardandoVendedor, vendedor);
-      setProdutoAguardandoVendedor(null);
+
+      // ✅ FLUXO SEQUENCIAL: Se quantidade = 0, significa que deve abrir modal de quantidade
+      if (quantidadeAguardandoVendedor === 0 && pdvConfig?.vendas_itens_multiplicacao) {
+        // Abrir modal de quantidade após selecionar vendedor
+        setProdutoParaQuantidade(produtoAguardandoVendedor);
+        setQuantidadeModal(1);
+        setShowQuantidadeModal(true);
+        // Limpar produto aguardando vendedor mas manter vendedor selecionado
+        setProdutoAguardandoVendedor(null);
+        setQuantidadeAguardandoVendedor(1);
+      } else {
+        // Fluxo normal: adicionar produto com vendedor e quantidade definida
+        adicionarProdutoComVendedor(produtoAguardandoVendedor, vendedor, quantidadeAguardandoVendedor > 0 ? quantidadeAguardandoVendedor : 1);
+        setProdutoAguardandoVendedor(null);
+        setQuantidadeAguardandoVendedor(1);
+
+        // ✅ NOVO: Fechar também o modal de produtos se estiver aberto
+        if (showAreaProdutos) {
+          setShowAreaProdutos(false);
+        }
+      }
     }
   };
 
@@ -3132,10 +3170,49 @@ const PDVPage: React.FC = () => {
     setShowVendedorModal(false);
     setAguardandoSelecaoVendedor(false);
     setProdutoAguardandoVendedor(null);
+    setQuantidadeAguardandoVendedor(1); // ✅ NOVO: Limpar também a quantidade salva
+  };
+
+  // ✅ NOVO: Funções para modal de quantidade
+  const confirmarQuantidade = () => {
+    if (!produtoParaQuantidade || quantidadeModal <= 0) return;
+
+    // ✅ FLUXO SEQUENCIAL: Se chegou aqui, o vendedor já foi selecionado (se necessário)
+    // Adicionar produto com vendedor (se houver) e quantidade definida
+    if (vendedorSelecionado) {
+      adicionarProdutoComVendedor(produtoParaQuantidade, vendedorSelecionado, quantidadeModal);
+    } else {
+      adicionarAoCarrinho(produtoParaQuantidade, quantidadeModal);
+    }
+
+    // Fechar modal de quantidade e limpar estados
+    setShowQuantidadeModal(false);
+    setProdutoParaQuantidade(null);
+    setQuantidadeModal(1);
+
+    // ✅ NOVO: Fechar também o modal de produtos se estiver aberto
+    if (showAreaProdutos) {
+      setShowAreaProdutos(false);
+    }
+  };
+
+  const cancelarQuantidade = () => {
+    setShowQuantidadeModal(false);
+    setProdutoParaQuantidade(null);
+    setQuantidadeModal(1);
+  };
+
+  const aumentarQuantidade = () => {
+    setQuantidadeModal(prev => prev + 1);
+  };
+
+  const diminuirQuantidade = () => {
+    setQuantidadeModal(prev => Math.max(1, prev - 1));
   };
 
   // Função para adicionar produto com vendedor específico
   const adicionarProdutoComVendedor = async (produto: Produto, vendedor: any, quantidadePersonalizada?: number) => {
+    // ✅ FLUXO SEQUENCIAL: Esta função só é chamada quando vendedor já foi selecionado
     // Verificar se há quantidade especificada na busca (formato: quantidade*termo)
     let quantidadeParaAdicionar = quantidadePersonalizada || 1;
 
@@ -5304,14 +5381,26 @@ const PDVPage: React.FC = () => {
               telefone: empresaData.telefone
             },
             cliente: clienteData || {},
-            vendedor: vendedorSelecionado || null, // Incluir dados do vendedor
+            vendedor: vendedorSelecionado || null, // Incluir dados do vendedor principal
+            vendedores: (() => {
+              // Coletar todos os vendedores únicos do carrinho
+              const vendedoresUnicos = new Map();
+              carrinho.forEach(item => {
+                if (item.vendedor_id && item.vendedor_nome) {
+                  vendedoresUnicos.set(item.vendedor_id, item.vendedor_nome);
+                }
+              });
+              return Array.from(vendedoresUnicos.entries()).map(([id, nome]) => ({ id, nome }));
+            })(),
             operador: userData || null, // Incluir dados do operador (usuário atual)
             itens: carrinho.map(item => ({
               codigo: item.produto.codigo,
               nome: item.produto.nome,
               quantidade: item.quantidade,
               valor_unitario: item.produto.preco,
-              valor_total: item.subtotal
+              valor_total: item.subtotal,
+              vendedor_id: item.vendedor_id || null,
+              vendedor_nome: item.vendedor_nome || null
             })),
             pagamento: pagamentoData,
             timestamp: new Date().toISOString(),
@@ -5387,14 +5476,26 @@ const PDVPage: React.FC = () => {
               telefone: empresaData.telefone
             },
             cliente: clienteData || {},
-            vendedor: vendedorSelecionado || null, // Incluir dados do vendedor
+            vendedor: vendedorSelecionado || null, // Incluir dados do vendedor principal
+            vendedores: (() => {
+              // Coletar todos os vendedores únicos do carrinho
+              const vendedoresUnicos = new Map();
+              carrinho.forEach(item => {
+                if (item.vendedor_id && item.vendedor_nome) {
+                  vendedoresUnicos.set(item.vendedor_id, item.vendedor_nome);
+                }
+              });
+              return Array.from(vendedoresUnicos.entries()).map(([id, nome]) => ({ id, nome }));
+            })(),
             operador: userData || null, // Incluir dados do operador (usuário atual)
             itens: carrinho.map(item => ({
               codigo: item.produto.codigo,
               nome: item.produto.nome,
               quantidade: item.quantidade,
               valor_unitario: item.produto.preco,
-              valor_total: item.subtotal
+              valor_total: item.subtotal,
+              vendedor_id: item.vendedor_id || null,
+              vendedor_nome: item.vendedor_nome || null
             })),
             pagamento: pagamentoData,
             timestamp: new Date().toISOString(),
@@ -5863,11 +5964,26 @@ const PDVPage: React.FC = () => {
                 ${dadosImpressao.cliente.documento_cliente ? `<div>Doc: ${dadosImpressao.cliente.documento_cliente}</div>` : ''}
               </div>
             ` : ''}
-            ${dadosImpressao.vendedor?.nome ? `
-              <div class="center">
-                <div class="bold">VENDEDOR: ${dadosImpressao.vendedor.nome}</div>
-              </div>
-            ` : ''}
+            ${(() => {
+              // Se há múltiplos vendedores, mostrar todos separados por /
+              if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1) {
+                const nomesVendedores = dadosImpressao.vendedores.map(v => v.nome).join(' / ');
+                return `
+                  <div class="center">
+                    <div class="bold">VENDEDORES: ${nomesVendedores}</div>
+                  </div>
+                `;
+              }
+              // Se há apenas um vendedor, mostrar normalmente
+              else if (dadosImpressao.vendedor?.nome) {
+                return `
+                  <div class="center">
+                    <div class="bold">VENDEDOR: ${dadosImpressao.vendedor.nome}</div>
+                  </div>
+                `;
+              }
+              return '';
+            })()}
           ` : ''}
 
           <div class="linha"></div>
@@ -5879,6 +5995,13 @@ const PDVPage: React.FC = () => {
                 <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
                 <span>${formatCurrency(item.valor_total)}</span>
               </div>
+              ${(() => {
+                // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
+                if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
+                  return `<div style="font-size: 10px; color: #666; margin-top: 2px;">Vendedor: ${item.vendedor_nome}</div>`;
+                }
+                return '';
+              })()}
             </div>
           `).join('')}
 
@@ -6064,10 +6187,27 @@ const PDVPage: React.FC = () => {
             </div>
           ` : ''}
 
-          ${dadosImpressao.vendedor?.nome && pdvConfig?.vendedor ? `
-            <div class="center">
-              <div class="bold">VENDEDOR: ${dadosImpressao.vendedor.nome}</div>
-            </div>
+          ${pdvConfig?.vendedor ? `
+            ${(() => {
+              // Se há múltiplos vendedores, mostrar todos separados por /
+              if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1) {
+                const nomesVendedores = dadosImpressao.vendedores.map(v => v.nome).join(' / ');
+                return `
+                  <div class="center">
+                    <div class="bold">VENDEDORES: ${nomesVendedores}</div>
+                  </div>
+                `;
+              }
+              // Se há apenas um vendedor, mostrar normalmente
+              else if (dadosImpressao.vendedor?.nome) {
+                return `
+                  <div class="center">
+                    <div class="bold">VENDEDOR: ${dadosImpressao.vendedor.nome}</div>
+                  </div>
+                `;
+              }
+              return '';
+            })()}
           ` : ''}
 
           ${dadosImpressao.operador?.nome && pdvConfig?.mostrar_operador_cupom_finalizar ? `
@@ -6085,6 +6225,13 @@ const PDVPage: React.FC = () => {
                 <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
                 <span>${formatCurrency(item.valor_total)}</span>
               </div>
+              ${(() => {
+                // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
+                if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
+                  return `<div style="font-size: 10px; color: #666; margin-top: 2px;">Vendedor: ${item.vendedor_nome}</div>`;
+                }
+                return '';
+              })()}
             </div>
           `).join('')}
 
@@ -11479,11 +11626,14 @@ const PDVPage: React.FC = () => {
                             adicionarAoCarrinho(produtosFiltrados[0]);
                             // Limpar o campo de pesquisa após adicionar o produto
                             setSearchTerm('');
-                            // Manter o foco no campo para próxima digitação
-                            setTimeout(() => {
-                              const input = e.target as HTMLInputElement;
-                              input.focus();
-                            }, 10);
+                            // ✅ NOVO: Só fechar o modal se não abrir o modal de quantidade
+                            if (!pdvConfig?.vendas_itens_multiplicacao) {
+                              // Manter o foco no campo para próxima digitação
+                              setTimeout(() => {
+                                const input = e.target as HTMLInputElement;
+                                input.focus();
+                              }, 10);
+                            }
                           } else {
                             // Produto não encontrado - extrair o termo de busca real
                             let termoBusca = searchTerm.trim();
@@ -11574,7 +11724,10 @@ const PDVPage: React.FC = () => {
                           whileTap={{ scale: 0.98 }}
                           onClick={() => {
                             adicionarAoCarrinho(produto);
-                            setShowAreaProdutos(false);
+                            // ✅ NOVO: Só fechar o modal se não abrir o modal de quantidade
+                            if (!pdvConfig?.vendas_itens_multiplicacao) {
+                              setShowAreaProdutos(false);
+                            }
                           }}
                           className="bg-gray-800 rounded overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer flex flex-col"
                         >
@@ -12582,6 +12735,105 @@ const PDVPage: React.FC = () => {
                     Confirmar
                   </button>
                 )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Quantidade */}
+      <AnimatePresence>
+        {showQuantidadeModal && produtoParaQuantidade && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                  <Package size={20} className="text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Definir Quantidade</h3>
+                  <p className="text-sm text-gray-400">Informe a quantidade do produto</p>
+                </div>
+              </div>
+
+              {/* Informações do produto */}
+              <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+                <h4 className="text-white font-medium mb-2">{produtoParaQuantidade.nome}</h4>
+                <div className="text-sm text-gray-400">
+                  <p>Código: {produtoParaQuantidade.codigo}</p>
+                  <p>Preço: {formatCurrency(calcularPrecoFinal(produtoParaQuantidade))}</p>
+                </div>
+              </div>
+
+              {/* Campo de quantidade com botões + e - */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-white mb-3">
+                  Quantidade
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={diminuirQuantidade}
+                    className="w-10 h-10 bg-gray-700 hover:bg-gray-600 text-white rounded-lg flex items-center justify-center transition-colors"
+                  >
+                    <Minus size={16} />
+                  </button>
+
+                  <input
+                    type="number"
+                    value={quantidadeModal}
+                    onChange={(e) => {
+                      const valor = parseInt(e.target.value);
+                      if (!isNaN(valor) && valor > 0) {
+                        setQuantidadeModal(valor);
+                      }
+                    }}
+                    min="1"
+                    className="flex-1 bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white text-center focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                  />
+
+                  <button
+                    onClick={aumentarQuantidade}
+                    className="w-10 h-10 bg-gray-700 hover:bg-gray-600 text-white rounded-lg flex items-center justify-center transition-colors"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Total */}
+              <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3 mb-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-primary-300 font-medium">Total:</span>
+                  <span className="text-primary-300 font-bold text-lg">
+                    {formatCurrency(calcularPrecoFinal(produtoParaQuantidade) * quantidadeModal)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelarQuantidade}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarQuantidade}
+                  className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Adicionar ao Carrinho
+                </button>
               </div>
             </motion.div>
           </motion.div>

@@ -239,6 +239,7 @@ const ConfiguracoesPage: React.FC = () => {
     desconto_no_item: false,
     editar_nome_produto: false,
     fiado: false,
+    vendas_itens_multiplicacao: false,
     ocultar_finalizar_com_impressao: false,
     ocultar_finalizar_sem_impressao: false,
     ocultar_nfce_com_impressao: false,
@@ -2455,6 +2456,7 @@ const ConfiguracoesPage: React.FC = () => {
           desconto_no_item: config.desconto_no_item || false,
           editar_nome_produto: config.editar_nome_produto || false,
           fiado: config.fiado || false,
+          vendas_itens_multiplicacao: config.vendas_itens_multiplicacao || false,
           ocultar_finalizar_com_impressao: config.ocultar_finalizar_com_impressao || false,
           ocultar_finalizar_sem_impressao: config.ocultar_finalizar_sem_impressao || false,
           ocultar_nfce_com_impressao: config.ocultar_nfce_com_impressao || false,
@@ -2489,6 +2491,7 @@ const ConfiguracoesPage: React.FC = () => {
           desconto_no_item: false,
           editar_nome_produto: false,
           fiado: false,
+          vendas_itens_multiplicacao: false,
           ocultar_finalizar_com_impressao: false,
           ocultar_finalizar_sem_impressao: false,
           ocultar_nfce_com_impressao: false,
@@ -2525,6 +2528,7 @@ const ConfiguracoesPage: React.FC = () => {
         desconto_no_item: false,
         editar_nome_produto: false,
         fiado: false,
+        vendas_itens_multiplicacao: false,
         ocultar_finalizar_com_impressao: false,
         ocultar_finalizar_sem_impressao: false,
         ocultar_nfce_com_impressao: false,
@@ -2772,6 +2776,8 @@ const ConfiguracoesPage: React.FC = () => {
         observacao_no_item: field === 'observacao_no_item' ? value : pdvConfig.observacao_no_item,
         desconto_no_item: field === 'desconto_no_item' ? value : pdvConfig.desconto_no_item,
         editar_nome_produto: field === 'editar_nome_produto' ? value : pdvConfig.editar_nome_produto,
+        fiado: field === 'fiado' ? value : pdvConfig.fiado,
+        vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : pdvConfig.vendas_itens_multiplicacao,
         ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
         ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
         ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : pdvConfig.ocultar_nfce_com_impressao,
@@ -2828,6 +2834,7 @@ const ConfiguracoesPage: React.FC = () => {
         desconto_no_item: 'Desconto no Item',
         editar_nome_produto: 'Editar nome do produto na venda',
         fiado: 'Fiado',
+        vendas_itens_multiplicacao: 'Vendas de Itens por Multiplicação',
         ocultar_finalizar_com_impressao: 'Ocultar "Finalizar com Impressão"',
         ocultar_finalizar_sem_impressao: 'Ocultar "Finalizar sem Impressão"',
         ocultar_nfce_com_impressao: 'Ocultar "NFC-e com Impressão"',
@@ -3987,6 +3994,22 @@ const ConfiguracoesPage: React.FC = () => {
                           <h4 className="text-white font-medium">Editar nome do produto na venda</h4>
                           <p className="text-sm text-gray-400 mt-1">
                             Permite editar o nome do produto durante a venda no PDV para personalização.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.vendas_itens_multiplicacao}
+                          onChange={(e) => handlePdvConfigChange('vendas_itens_multiplicacao', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Vendas de Itens por Multiplicação</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Habilita a funcionalidade de venda de produtos usando multiplicação de quantidade no PDV.
                           </p>
                         </div>
                       </label>
