@@ -5821,12 +5821,15 @@ const PDVPage: React.FC = () => {
             body {
               font-family: 'Courier New', monospace;
               font-size: 12px;
+              font-weight: 500; /* Medium - peso intermediário */
+              color: #000000; /* Preto absoluto para máximo contraste */
+              text-shadow: 0.3px 0 0 currentColor; /* Simula peso ligeiramente maior - técnica para impressão térmica */
               line-height: 1.2;
+              letter-spacing: 0.2px; /* Leve espaçamento para melhor legibilidade */
               margin: 10px;
-              color: black;
             }
             .center { text-align: center; }
-            .bold { font-weight: bold; }
+            .bold { font-weight: 900; } /* Extra bold para manter diferenciação clara */
             .linha { border-top: 1px dashed #000; margin: 5px 0; }
             .item { margin: 2px 0; }
             .item-linha { display: flex; justify-content: space-between; }
@@ -6015,12 +6018,15 @@ const PDVPage: React.FC = () => {
             body {
               font-family: 'Courier New', monospace;
               font-size: 12px;
+              font-weight: 500; /* Medium - peso intermediário */
+              color: #000000; /* Preto absoluto para máximo contraste */
+              text-shadow: 0.3px 0 0 currentColor; /* Simula peso ligeiramente maior - técnica para impressão térmica */
               line-height: 1.2;
+              letter-spacing: 0.2px; /* Leve espaçamento para melhor legibilidade */
               margin: 10px;
-              color: black;
             }
             .center { text-align: center; }
-            .bold { font-weight: bold; }
+            .bold { font-weight: 900; } /* Extra bold para manter diferenciação clara */
             .linha { border-top: 1px dashed #000; margin: 5px 0; }
             .item { margin: 2px 0; }
             .item-linha { display: flex; justify-content: space-between; }
