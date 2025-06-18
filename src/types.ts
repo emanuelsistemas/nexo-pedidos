@@ -132,6 +132,7 @@ export interface PDVConfig {
   ocultar_nfce_sem_impressao?: boolean;
   ocultar_nfce_producao?: boolean;
   ocultar_producao?: boolean;
+  rodape_personalizado?: string;
   created_at?: string;
   updated_at?: string;
 }

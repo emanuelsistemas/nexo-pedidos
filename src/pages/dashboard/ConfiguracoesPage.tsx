@@ -244,8 +244,15 @@ const ConfiguracoesPage: React.FC = () => {
     ocultar_nfce_com_impressao: false,
     ocultar_nfce_sem_impressao: false,
     ocultar_nfce_producao: false,
-    ocultar_producao: false
+    ocultar_producao: false,
+    rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
   });
+
+  // Estado para controlar as abas do PDV
+  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes'>('geral');
+
+  // Estado para rodapé personalizado das impressões
+  const [rodapePersonalizado, setRodapePersonalizado] = useState('Obrigado pela preferencia volte sempre!');
   const [horarioForm, setHorarioForm] = useState({
     id: '',
     dia_semana: '0',
@@ -2450,8 +2457,12 @@ const ConfiguracoesPage: React.FC = () => {
           ocultar_nfce_com_impressao: config.ocultar_nfce_com_impressao || false,
           ocultar_nfce_sem_impressao: config.ocultar_nfce_sem_impressao || false,
           ocultar_nfce_producao: config.ocultar_nfce_producao || false,
-          ocultar_producao: config.ocultar_producao || false
+          ocultar_producao: config.ocultar_producao || false,
+          rodape_personalizado: config.rodape_personalizado || 'Obrigado pela preferencia volte sempre!'
         });
+
+        // Atualizar também o estado separado do rodapé
+        setRodapePersonalizado(config.rodape_personalizado || 'Obrigado pela preferencia volte sempre!');
       } else {
         // Se não encontrou configuração, definir valores padrão
         setPdvConfig({
@@ -2477,8 +2488,12 @@ const ConfiguracoesPage: React.FC = () => {
           ocultar_nfce_com_impressao: false,
           ocultar_nfce_sem_impressao: false,
           ocultar_nfce_producao: false,
-          ocultar_producao: false
+          ocultar_producao: false,
+          rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
         });
+
+        // Atualizar também o estado separado do rodapé
+        setRodapePersonalizado('Obrigado pela preferencia volte sempre!');
       }
     } catch (error) {
       console.error('Erro ao carregar configurações do PDV:', error);
@@ -2506,8 +2521,12 @@ const ConfiguracoesPage: React.FC = () => {
         ocultar_nfce_com_impressao: false,
         ocultar_nfce_sem_impressao: false,
         ocultar_nfce_producao: false,
-        ocultar_producao: false
+        ocultar_producao: false,
+        rodape_personalizado: 'Obrigado pela preferencia volte sempre!'
       });
+
+      // Atualizar também o estado separado do rodapé
+      setRodapePersonalizado('Obrigado pela preferencia volte sempre!');
     }
   };
 
@@ -2746,7 +2765,8 @@ const ConfiguracoesPage: React.FC = () => {
         ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : pdvConfig.ocultar_nfce_com_impressao,
         ocultar_nfce_sem_impressao: field === 'ocultar_nfce_sem_impressao' ? value : pdvConfig.ocultar_nfce_sem_impressao,
         ocultar_nfce_producao: field === 'ocultar_nfce_producao' ? value : pdvConfig.ocultar_nfce_producao,
-        ocultar_producao: field === 'ocultar_producao' ? value : pdvConfig.ocultar_producao
+        ocultar_producao: field === 'ocultar_producao' ? value : pdvConfig.ocultar_producao,
+        rodape_personalizado: pdvConfig.rodape_personalizado
       };
 
       if (existingConfig) {
@@ -2809,6 +2829,66 @@ const ConfiguracoesPage: React.FC = () => {
       // Reverter o estado local em caso de erro
       setPdvConfig(prev => ({ ...prev, [field]: !value }));
       showMessage('Erro ao salvar configuração: ' + error.message, 'error');
+    }
+  };
+
+  // Função para salvar o rodapé personalizado
+  const handleSalvarRodapePersonalizado = async () => {
+    try {
+      setIsLoading(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada');
+      }
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('pdv_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      const configData = {
+        empresa_id: usuarioData.empresa_id,
+        ...pdvConfig,
+        rodape_personalizado: rodapePersonalizado
+      };
+
+      if (existingConfig) {
+        const { error } = await supabase
+          .from('pdv_config')
+          .update({ rodape_personalizado: rodapePersonalizado })
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('pdv_config')
+          .insert([configData]);
+
+        if (error) throw error;
+      }
+
+      // Atualizar o estado local
+      setPdvConfig(prev => ({ ...prev, rodape_personalizado: rodapePersonalizado }));
+
+      showMessage('success', 'Rodapé personalizado salvo com sucesso!');
+
+    } catch (error: any) {
+      console.error('Erro ao salvar rodapé personalizado:', error);
+      showMessage('error', 'Erro ao salvar rodapé personalizado: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -3594,384 +3674,61 @@ const ConfiguracoesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
-              <div className="space-y-6">
-                {/* Comandas e Mesas */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.comandas}
-                      onChange={(e) => handlePdvConfigChange('comandas', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Comandas</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Permite controlar vendas por comandas numeradas para organização de pedidos.
-                      </p>
-                    </div>
-                  </label>
+            {/* Navegação das Abas */}
+            <div className="bg-background-card rounded-lg border border-gray-800">
+              <div className="border-b border-gray-800">
+                <nav className="flex space-x-8 px-6 py-4">
+                  <button
+                    onClick={() => setPdvActiveTab('geral')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      pdvActiveTab === 'geral'
+                        ? 'border-primary-500 text-primary-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    Geral
+                  </button>
+                  <button
+                    onClick={() => setPdvActiveTab('botoes')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      pdvActiveTab === 'botoes'
+                        ? 'border-primary-500 text-primary-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    Botões de Finalização
+                  </button>
+                  <button
+                    onClick={() => setPdvActiveTab('impressoes')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      pdvActiveTab === 'impressoes'
+                        ? 'border-primary-500 text-primary-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    Impressões
+                  </button>
+                </nav>
+              </div>
 
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.mesas}
-                      onChange={(e) => handlePdvConfigChange('mesas', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Mesas</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Habilita o controle de mesas para restaurantes e estabelecimentos com atendimento no local.
-                      </p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Outras configurações */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.vendedor}
-                      onChange={(e) => handlePdvConfigChange('vendedor', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Vendedor</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Permite associar vendedores às vendas para controle de comissões e relatórios.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.exibe_foto_item}
-                      onChange={(e) => handlePdvConfigChange('exibe_foto_item', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Exibe foto no item lançado</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Mostra a foto do produto no carrinho para facilitar a identificação visual.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.seleciona_clientes}
-                      onChange={(e) => handlePdvConfigChange('seleciona_clientes', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Seleciona clientes</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Permite vincular clientes às vendas para histórico e fidelização.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.controla_caixa}
-                      onChange={(e) => handlePdvConfigChange('controla_caixa', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Controla Caixa</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Habilita controle de abertura e fechamento de caixa com relatórios financeiros.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.agrupa_itens}
-                      onChange={(e) => handlePdvConfigChange('agrupa_itens', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Agrupa Itens</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Agrupa automaticamente itens idênticos no carrinho para melhor organização.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.delivery}
-                      onChange={(e) => handlePdvConfigChange('delivery', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Delivery</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Habilita funcionalidades de entrega com controle de endereços e taxas.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.cardapio_digital}
-                      onChange={(e) => handlePdvConfigChange('cardapio_digital', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Cardápio Digital</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Disponibiliza cardápio digital para clientes fazerem pedidos via QR Code.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.delivery_chat_ia}
-                      onChange={(e) => handlePdvConfigChange('delivery_chat_ia', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Delivery como chat IA</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Integra inteligência artificial para atendimento automatizado via chat.
-                      </p>
-                    </div>
-                  </label>
-
-                  {/* <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.baixa_estoque_pdv}
-                      onChange={(e) => handlePdvConfigChange('baixa_estoque_pdv', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Baixa estoque na venda do PDV</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Automaticamente reduz o estoque dos produtos quando uma venda é finalizada no PDV.
-                      </p>
-                    </div>
-                  </label> */}
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.venda_codigo_barras}
-                      onChange={(e) => handlePdvConfigChange('venda_codigo_barras', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Venda de produtos por Código de barras</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Permite adicionar produtos ao carrinho digitando números mesmo sem focar no campo de busca.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.forca_venda_fiscal_cartao}
-                      onChange={(e) => handlePdvConfigChange('forca_venda_fiscal_cartao', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Força venda fiscal nos cartões</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Quando habilitado, vendas com cartão só podem ser finalizadas com NFC-e, desabilitando as opções de finalização simples e produção.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.observacao_no_item}
-                      onChange={(e) => handlePdvConfigChange('observacao_no_item', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Observação no Item</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Permite adicionar observações personalizadas aos itens durante a venda no PDV.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.desconto_no_item}
-                      onChange={(e) => handlePdvConfigChange('desconto_no_item', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Desconto no Item</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Permite aplicar desconto individual em cada item durante a venda no PDV.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.fiado}
-                      onChange={(e) => handlePdvConfigChange('fiado', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Fiado</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Habilita a opção de venda fiado no PDV.
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={pdvConfig.editar_nome_produto}
-                      onChange={(e) => handlePdvConfigChange('editar_nome_produto', e.target.checked)}
-                      className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                      style={{ borderRadius: '50%' }}
-                    />
-                    <div>
-                      <h4 className="text-white font-medium">Editar nome do produto na venda</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Permite editar o nome do produto durante a venda no PDV para personalização.
-                      </p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Seção: Botões de Finalização */}
-                <div className="space-y-4">
-                  <div className="border-t border-gray-700/50 pt-6">
-                    <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                      <Receipt size={18} className="text-blue-400" />
-                      Controle de Botões de Finalização
-                    </h3>
-                    <p className="text-sm text-gray-400 mb-6">
-                      Configure quais botões de finalização devem ser <strong>ocultados</strong> no PDV.
-                      Marque as opções que você <strong>NÃO</strong> quer exibir na tela de finalização.
-                    </p>
-                  </div>
-
-                  {/* Finalização Simples */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={pdvConfig.ocultar_finalizar_com_impressao}
-                        onChange={(e) => handlePdvConfigChange('ocultar_finalizar_com_impressao', e.target.checked)}
-                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                        style={{ borderRadius: '50%' }}
-                      />
-                      <div>
-                        <h4 className="text-white font-medium">Ocultar "Finalizar com Impressão"</h4>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Remove o botão de finalização simples com impressão da tela de finalização.
-                        </p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={pdvConfig.ocultar_finalizar_sem_impressao}
-                        onChange={(e) => handlePdvConfigChange('ocultar_finalizar_sem_impressao', e.target.checked)}
-                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                        style={{ borderRadius: '50%' }}
-                      />
-                      <div>
-                        <h4 className="text-white font-medium">Ocultar "Finalizar sem Impressão"</h4>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Remove o botão de finalização simples sem impressão da tela de finalização.
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* NFC-e */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={pdvConfig.ocultar_nfce_com_impressao}
-                        onChange={(e) => handlePdvConfigChange('ocultar_nfce_com_impressao', e.target.checked)}
-                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                        style={{ borderRadius: '50%' }}
-                      />
-                      <div>
-                        <h4 className="text-white font-medium">Ocultar "NFC-e com Impressão"</h4>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Remove o botão de emissão de NFC-e com impressão da tela de finalização.
-                        </p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={pdvConfig.ocultar_nfce_sem_impressao}
-                        onChange={(e) => handlePdvConfigChange('ocultar_nfce_sem_impressao', e.target.checked)}
-                        className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                        style={{ borderRadius: '50%' }}
-                      />
-                      <div>
-                        <h4 className="text-white font-medium">Ocultar "NFC-e sem Impressão"</h4>
-                        <p className="text-sm text-gray-400 mt-1">
-                          Remove o botão de emissão de NFC-e sem impressão da tela de finalização.
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* NFC-e + Produção e Produção - OCULTO DAS CONFIGURAÇÕES */}
-                  {false && (
+              {/* Conteúdo das Abas */}
+              <div className="p-6">
+                {pdvActiveTab === 'geral' && (
+                  <div className="space-y-6">
+                    {/* Comandas e Mesas */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                         <input
                           type="checkbox"
-                          checked={pdvConfig.ocultar_nfce_producao}
-                          onChange={(e) => handlePdvConfigChange('ocultar_nfce_producao', e.target.checked)}
+                          checked={pdvConfig.comandas}
+                          onChange={(e) => handlePdvConfigChange('comandas', e.target.checked)}
                           className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
                           style={{ borderRadius: '50%' }}
                         />
                         <div>
-                          <h4 className="text-white font-medium">Ocultar "NFC-e + Produção"</h4>
+                          <h4 className="text-white font-medium">Comandas</h4>
                           <p className="text-sm text-gray-400 mt-1">
-                            Remove o botão de emissão de NFC-e com envio para produção da tela de finalização.
+                            Permite controlar vendas por comandas numeradas para organização de pedidos.
                           </p>
                         </div>
                       </label>
@@ -3979,21 +3736,386 @@ const ConfiguracoesPage: React.FC = () => {
                       <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                         <input
                           type="checkbox"
-                          checked={pdvConfig.ocultar_producao}
-                          onChange={(e) => handlePdvConfigChange('ocultar_producao', e.target.checked)}
+                          checked={pdvConfig.mesas}
+                          onChange={(e) => handlePdvConfigChange('mesas', e.target.checked)}
                           className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
                           style={{ borderRadius: '50%' }}
                         />
                         <div>
-                          <h4 className="text-white font-medium">Ocultar "Produção"</h4>
+                          <h4 className="text-white font-medium">Mesas</h4>
                           <p className="text-sm text-gray-400 mt-1">
-                            Remove o botão de envio direto para produção da tela de finalização.
+                            Habilita o controle de mesas para restaurantes e estabelecimentos com atendimento no local.
                           </p>
                         </div>
                       </label>
                     </div>
-                  )}
-                </div>
+
+                    {/* Outras configurações */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.vendedor}
+                          onChange={(e) => handlePdvConfigChange('vendedor', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Vendedor</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Permite associar vendedores às vendas para controle de comissões e relatórios.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.exibe_foto_item}
+                          onChange={(e) => handlePdvConfigChange('exibe_foto_item', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Exibe foto no item lançado</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Mostra a foto do produto no carrinho para facilitar a identificação visual.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.seleciona_clientes}
+                          onChange={(e) => handlePdvConfigChange('seleciona_clientes', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Seleciona clientes</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Permite vincular clientes às vendas para histórico e fidelização.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.controla_caixa}
+                          onChange={(e) => handlePdvConfigChange('controla_caixa', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Controla Caixa</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Habilita controle de abertura e fechamento de caixa com relatórios financeiros.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.agrupa_itens}
+                          onChange={(e) => handlePdvConfigChange('agrupa_itens', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Agrupa Itens</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Agrupa automaticamente itens idênticos no carrinho para melhor organização.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.delivery}
+                          onChange={(e) => handlePdvConfigChange('delivery', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Delivery</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Habilita funcionalidades de entrega com controle de endereços e taxas.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.cardapio_digital}
+                          onChange={(e) => handlePdvConfigChange('cardapio_digital', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Cardápio Digital</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Disponibiliza cardápio digital para clientes fazerem pedidos via QR Code.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.delivery_chat_ia}
+                          onChange={(e) => handlePdvConfigChange('delivery_chat_ia', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Delivery como chat IA</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Integra inteligência artificial para atendimento automatizado via chat.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.venda_codigo_barras}
+                          onChange={(e) => handlePdvConfigChange('venda_codigo_barras', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Venda de produtos por Código de barras</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Permite adicionar produtos ao carrinho digitando números mesmo sem focar no campo de busca.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.forca_venda_fiscal_cartao}
+                          onChange={(e) => handlePdvConfigChange('forca_venda_fiscal_cartao', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Força venda fiscal nos cartões</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Quando habilitado, vendas com cartão só podem ser finalizadas com NFC-e, desabilitando as opções de finalização simples e produção.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.observacao_no_item}
+                          onChange={(e) => handlePdvConfigChange('observacao_no_item', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Observação no Item</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Permite adicionar observações personalizadas aos itens durante a venda no PDV.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.desconto_no_item}
+                          onChange={(e) => handlePdvConfigChange('desconto_no_item', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Desconto no Item</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Permite aplicar desconto individual em cada item durante a venda no PDV.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.fiado}
+                          onChange={(e) => handlePdvConfigChange('fiado', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Fiado</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Habilita a opção de venda fiado no PDV.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.editar_nome_produto}
+                          onChange={(e) => handlePdvConfigChange('editar_nome_produto', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Editar nome do produto na venda</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Permite editar o nome do produto durante a venda no PDV para personalização.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {pdvActiveTab === 'botoes' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <Receipt size={18} className="text-blue-400" />
+                        Controle de Botões de Finalização
+                      </h3>
+                      <p className="text-sm text-gray-400 mb-6">
+                        Configure quais botões de finalização devem ser <strong>ocultados</strong> no PDV.
+                        Marque as opções que você <strong>NÃO</strong> quer exibir na tela de finalização.
+                      </p>
+                    </div>
+
+                    {/* Finalização Simples */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.ocultar_finalizar_com_impressao}
+                          onChange={(e) => handlePdvConfigChange('ocultar_finalizar_com_impressao', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Ocultar "Finalizar com Impressão"</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Remove o botão de finalização simples com impressão da tela de finalização.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.ocultar_finalizar_sem_impressao}
+                          onChange={(e) => handlePdvConfigChange('ocultar_finalizar_sem_impressao', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Ocultar "Finalizar sem Impressão"</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Remove o botão de finalização simples sem impressão da tela de finalização.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* NFC-e */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.ocultar_nfce_com_impressao}
+                          onChange={(e) => handlePdvConfigChange('ocultar_nfce_com_impressao', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Ocultar "NFC-e com Impressão"</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Remove o botão de emissão de NFC-e com impressão da tela de finalização.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.ocultar_nfce_sem_impressao}
+                          onChange={(e) => handlePdvConfigChange('ocultar_nfce_sem_impressao', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Ocultar "NFC-e sem Impressão"</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Remove o botão de emissão de NFC-e sem impressão da tela de finalização.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {pdvActiveTab === 'impressoes' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <Receipt size={18} className="text-green-400" />
+                        Configurações de Impressão
+                      </h3>
+                      <p className="text-sm text-gray-400 mb-6">
+                        Configure as opções de impressão para recibos e documentos fiscais.
+                      </p>
+                    </div>
+
+                    {/* Rodapé Personalizado */}
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="rodape_personalizado" className="block text-sm font-medium text-white mb-2">
+                          Rodapé Personalizado dos Recibos
+                        </label>
+                        <textarea
+                          id="rodape_personalizado"
+                          value={rodapePersonalizado}
+                          onChange={(e) => setRodapePersonalizado(e.target.value)}
+                          placeholder="Digite a mensagem que aparecerá no rodapé dos recibos..."
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                          rows={3}
+                          maxLength={200}
+                        />
+                        <div className="flex justify-between items-center mt-2">
+                          <p className="text-xs text-gray-400">
+                            Esta mensagem substituirá o texto padrão "Obrigado pela preferencia volte sempre!" nos recibos.
+                          </p>
+                          <span className="text-xs text-gray-400">
+                            {rodapePersonalizado.length}/200
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botão para salvar configurações de impressão */}
+                    <div className="flex justify-end pt-4 border-t border-gray-700">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={handleSalvarRodapePersonalizado}
+                        disabled={isLoading}
+                        className="min-w-[120px]"
+                      >
+                        {isLoading ? 'Salvando...' : 'Salvar'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
