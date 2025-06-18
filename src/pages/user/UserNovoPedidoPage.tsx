@@ -1305,7 +1305,9 @@ const UserNovoPedidoPage: React.FC = () => {
                   <p className="text-sm text-gray-400">
                     {produtoSelecionadoObj.codigo} - {formatarPreco(produtoSelecionadoObj.preco)}
                   </p>
-                  {produtoSelecionadoObj.desconto_quantidade && produtoSelecionadoObj.quantidade_minima && (
+                  {produtoSelecionadoObj.desconto_quantidade && produtoSelecionadoObj.quantidade_minima &&
+                   ((produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual' && produtoSelecionadoObj.percentual_desconto_quantidade) ||
+                    (produtoSelecionadoObj.tipo_desconto_quantidade === 'valor' && produtoSelecionadoObj.valor_desconto_quantidade)) && (
                     <p className="text-xs text-green-400 mt-1">
                       Desconto para {produtoSelecionadoObj.quantidade_minima}+ unidades:
                       {produtoSelecionadoObj.tipo_desconto_quantidade === 'percentual'

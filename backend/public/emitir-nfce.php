@@ -328,6 +328,14 @@ try {
         $tools = new \NFePHP\NFe\Tools(json_encode($config), $certificate);
         logDetalhado('038', 'Tools criado, configurando modelo 65');
         $tools->model('65'); // Modelo NFC-e
+
+        // ✅ DESABILITAR criação automática de diretórios pela biblioteca
+        // Isso evita que a biblioteca crie pastas 55/65 no storage raiz
+        if (method_exists($tools, 'setPathNFePHP')) {
+            $tools->setPathNFePHP(null);
+            logDetalhado('038.1', 'PathNFePHP desabilitado para evitar criação de pastas automáticas');
+        }
+
         logDetalhado('039', 'Tools configurado para modelo 65 com sucesso');
     } catch (Exception $toolsError) {
         logDetalhado('040', 'ERRO: Falha ao inicializar Tools', ['error' => $toolsError->getMessage()]);

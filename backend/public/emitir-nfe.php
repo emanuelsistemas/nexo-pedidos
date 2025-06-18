@@ -128,7 +128,9 @@ try {
         "cnpj" => $cnpjLimpo,
         "siglaUF" => $empresa['uf'],
         "schemes" => "PL_009_V4",
-        "versao" => '4.00'
+        "versao" => '4.00',
+        // ✅ DESABILITAR criação automática de pastas pela biblioteca
+        "pathNFePHP" => null
     ];
     
     // Criar objeto Certificate
@@ -137,6 +139,12 @@ try {
     // Inicializar Tools (MÉTODO NATIVO)
     $tools = new \NFePHP\NFe\Tools(json_encode($config), $certificate);
     $tools->model('55'); // Modelo NFe
+
+    // ✅ DESABILITAR criação automática de diretórios pela biblioteca
+    // Isso evita que a biblioteca crie pastas 55/65 no storage raiz
+    if (method_exists($tools, 'setPathNFePHP')) {
+        $tools->setPathNFePHP(null);
+    }
 
     // Inicializar Make (MÉTODO NATIVO)
     $make = new \NFePHP\NFe\Make();
@@ -1038,40 +1046,126 @@ try {
     // TRADUZIR ERROS SEFAZ PARA MENSAGENS AMIGÁVEIS
     function traduzirErroSefaz($status, $motivo) {
         $errosComuns = [
-            '209' => [
-                'titulo' => 'Inscrição Estadual Inválida',
-                'descricao' => 'A Inscrição Estadual da empresa está incorreta ou inválida.',
-                'solucao' => 'Verifique e corrija a Inscrição Estadual da empresa nas configurações.'
+            // Erros de Duplicidade e Numeração
+            '206' => [
+                'titulo' => 'NFe Duplicada',
+                'descricao' => 'Esta NFe já foi inutilizada na SEFAZ e não pode ser emitida.',
+                'solucao' => 'Use um número diferente ou verifique se a numeração não foi inutilizada.'
             ],
+            '539' => [
+                'titulo' => 'NFe Duplicada',
+                'descricao' => 'Já existe uma NFe autorizada com este número e série.',
+                'solucao' => 'Use um número sequencial diferente para esta NFe.'
+            ],
+
+            // Erros de Documentos
             '204' => [
                 'titulo' => 'CNPJ Inválido',
                 'descricao' => 'O CNPJ da empresa está incorreto ou inválido.',
                 'solucao' => 'Verifique e corrija o CNPJ da empresa nas configurações.'
+            ],
+            '207' => [
+                'titulo' => 'CNPJ Inválido',
+                'descricao' => 'O CNPJ do emitente está incorreto ou inválido.',
+                'solucao' => 'Verifique e corrija o CNPJ da empresa nas configurações.'
+            ],
+            '209' => [
+                'titulo' => 'Inscrição Estadual Inválida',
+                'descricao' => 'A Inscrição Estadual da empresa está incorreta ou inválida.',
+                'solucao' => 'Verifique e corrija a Inscrição Estadual da empresa nas configurações.'
             ],
             '215' => [
                 'titulo' => 'CNPJ do Destinatário Inválido',
                 'descricao' => 'O CNPJ/CPF do destinatário está incorreto.',
                 'solucao' => 'Verifique e corrija o documento do destinatário.'
             ],
+            '401' => [
+                'titulo' => 'CPF Inválido',
+                'descricao' => 'O CPF do emitente está incorreto ou inválido.',
+                'solucao' => 'Verifique e corrija o CPF nas configurações.'
+            ],
+
+            // Erros de Data e Horário
+            '228' => [
+                'titulo' => 'Data de Emissão Atrasada',
+                'descricao' => 'A data de emissão está muito atrasada (mais de 30 dias).',
+                'solucao' => 'Ajuste a data de emissão para uma data mais recente.'
+            ],
+            '703' => [
+                'titulo' => 'Data de Emissão Futura',
+                'descricao' => 'A data de emissão está no futuro.',
+                'solucao' => 'Ajuste a data de emissão para a data atual ou anterior.'
+            ],
+
+            // Erros de Chave de Acesso
+            '502' => [
+                'titulo' => 'Chave de Acesso Inválida',
+                'descricao' => 'A chave de acesso não corresponde aos dados da NFe.',
+                'solucao' => 'Regenere a NFe para criar uma nova chave de acesso válida.'
+            ],
+            '253' => [
+                'titulo' => 'Dígito Verificador Inválido',
+                'descricao' => 'O dígito verificador da chave de acesso está incorreto.',
+                'solucao' => 'Regenere a NFe para corrigir o dígito verificador.'
+            ],
+
+            // Erros de Ambiente
+            '252' => [
+                'titulo' => 'Ambiente Incorreto',
+                'descricao' => 'O ambiente da NFe não corresponde ao ambiente do servidor.',
+                'solucao' => 'Verifique se está emitindo no ambiente correto (produção/homologação).'
+            ],
+
+            // Erros de UF e Localização
+            '226' => [
+                'titulo' => 'UF Incorreta',
+                'descricao' => 'A UF do emitente não corresponde à UF autorizadora.',
+                'solucao' => 'Verifique se a UF da empresa está configurada corretamente.'
+            ],
+            '270' => [
+                'titulo' => 'Município Inexistente',
+                'descricao' => 'O código do município não existe na tabela do IBGE.',
+                'solucao' => 'Verifique e corrija o código do município da empresa.'
+            ],
+            '272' => [
+                'titulo' => 'Município Inexistente',
+                'descricao' => 'O código do município do emitente não existe.',
+                'solucao' => 'Verifique e corrija o código do município da empresa.'
+            ],
+
+            // Erros de Certificado
             '280' => [
                 'titulo' => 'Certificado Digital Inválido',
                 'descricao' => 'O certificado digital está vencido ou inválido.',
-                'solucao' => 'Renove ou reinstale o certificado digital da empresa.'
+                'solucao' => 'Renove ou configure um certificado digital válido.'
             ],
+
+            // Erros de Produtos e Impostos
+            '897' => [
+                'titulo' => 'Código Numérico Inválido',
+                'descricao' => 'O código numérico da NFe está em formato inválido.',
+                'solucao' => 'Regenere a NFe para criar um novo código numérico válido.'
+            ],
+
+            // Erros de Certificado
+            '280' => [
+                'titulo' => 'Certificado Digital Inválido',
+                'descricao' => 'O certificado digital está vencido ou inválido.',
+                'solucao' => 'Renove ou configure um certificado digital válido.'
+            ],
+
+            // Erros de Produtos
             '611' => [
                 'titulo' => 'Código EAN/GTIN Inválido',
                 'descricao' => 'O código de barras EAN/GTIN de um ou mais produtos está incorreto.',
                 'solucao' => 'Verifique e corrija os códigos EAN/GTIN dos produtos ou deixe em branco se não possuir.'
             ],
+
+            // Erros de Processamento
             '103' => [
                 'titulo' => 'Lote em Processamento',
                 'descricao' => 'A NFe foi enviada e está sendo processada pela SEFAZ.',
                 'solucao' => 'Aguarde alguns segundos e consulte o status novamente.'
-            ],
-            '539' => [
-                'titulo' => 'NFe Duplicada',
-                'descricao' => 'Já existe uma NFe com este número e série para esta empresa.',
-                'solucao' => 'Verifique se a NFe já foi emitida anteriormente ou use um número diferente.'
             ]
         ];
 

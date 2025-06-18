@@ -3091,8 +3091,8 @@ const PDVPage: React.FC = () => {
     // Verificar se o produto tem opções adicionais
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
 
-    // Calcular o preço final considerando promoções
-    const precoFinal = calcularPrecoFinal(produto);
+    // ✅ CORRIGIDO: Calcular o preço final considerando promoções E desconto por quantidade
+    const precoFinal = calcularPrecoModalQuantidade(produto, quantidadeParaAdicionar);
 
     // Criar o item do carrinho
     const novoItem: ItemCarrinho = {
@@ -3210,6 +3210,31 @@ const PDVPage: React.FC = () => {
     setQuantidadeModal(prev => Math.max(1, prev - 1));
   };
 
+  // ✅ NOVO: Função para calcular preço considerando desconto por quantidade no modal
+  const calcularPrecoModalQuantidade = (produto: Produto, quantidade: number) => {
+    let precoUnitario = calcularPrecoFinal(produto); // Já considera promoção
+
+    // Verificar se a quantidade atinge o mínimo para desconto por quantidade
+    if (produto.desconto_quantidade &&
+        produto.quantidade_minima &&
+        quantidade >= produto.quantidade_minima) {
+
+      // Calcular preço com desconto por quantidade
+      let precoComDescontoQuantidade = produto.preco;
+
+      if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+        precoComDescontoQuantidade = produto.preco * (1 - produto.percentual_desconto_quantidade / 100);
+      } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+        precoComDescontoQuantidade = produto.preco - produto.valor_desconto_quantidade;
+      }
+
+      // Usar o menor preço entre promoção e desconto por quantidade
+      precoUnitario = Math.min(precoUnitario, precoComDescontoQuantidade);
+    }
+
+    return Math.max(precoUnitario, 0);
+  };
+
   // Função para adicionar produto com vendedor específico
   const adicionarProdutoComVendedor = async (produto: Produto, vendedor: any, quantidadePersonalizada?: number) => {
     // ✅ FLUXO SEQUENCIAL: Esta função só é chamada quando vendedor já foi selecionado
@@ -3229,8 +3254,8 @@ const PDVPage: React.FC = () => {
     // Verificar se o produto tem opções adicionais
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
 
-    // Calcular o preço final considerando promoções
-    const precoFinal = calcularPrecoFinal(produto);
+    // ✅ CORRIGIDO: Calcular o preço final considerando promoções E desconto por quantidade
+    const precoFinal = calcularPrecoModalQuantidade(produto, quantidadeParaAdicionar);
 
     // Criar o item do carrinho com o vendedor específico
     const novoItem: ItemCarrinho = {
@@ -3318,8 +3343,8 @@ const PDVPage: React.FC = () => {
     setCarrinho(prev =>
       prev.map(item => {
         if (item.id === itemId) {
-          // Usar o preço com desconto aplicado pelo usuário, ou o preço final do produto (considerando promoções)
-          const precoUnitario = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
+          // ✅ CORRIGIDO: Usar o preço com desconto aplicado pelo usuário, ou recalcular considerando promoções E desconto por quantidade
+          const precoUnitario = item.desconto ? item.desconto.precoComDesconto : calcularPrecoModalQuantidade(item.produto, novaQuantidade);
           return {
             ...item,
             quantidade: novaQuantidade,
@@ -6724,16 +6749,21 @@ const PDVPage: React.FC = () => {
                     <span className="text-xs text-gray-300 bg-gray-700 px-1 py-0.5 rounded">F1</span>
                   </button>
 
-                  {/* Indicador de quantidade */}
+                  {/* ✅ CORRIGIDO: Indicadores com posicionamento inteligente */}
+                  {/* Indicador de quantidade - posição dinâmica */}
                   {searchTerm.includes('*') && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className={`absolute top-1/2 -translate-y-1/2 ${
+                      pdvConfig?.venda_codigo_barras && codigoBarrasBuffer
+                        ? 'right-20' // Mais à esquerda quando há código de barras
+                        : 'right-3'  // Posição normal quando não há código de barras
+                    }`}>
                       <div className="bg-primary-500 text-white text-xs px-2 py-1 rounded-full">
                         Qtd: {searchTerm.split('*')[0]}
                       </div>
                     </div>
                   )}
 
-                  {/* Indicador de código de barras buffer */}
+                  {/* Indicador de código de barras buffer - sempre à direita */}
                   {pdvConfig?.venda_codigo_barras && codigoBarrasBuffer && (
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
                       <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
@@ -6873,12 +6903,33 @@ const PDVPage: React.FC = () => {
                                           <span>{item.produto.codigo_barras}</span>
                                         </div>
                                       )}
-                                      {item.quantidade > 1 && (
-                                        <span className="bg-gray-700 px-1.5 py-0.5 rounded text-white font-medium">
-                                          {item.quantidade}
-                                        </span>
-                                      )}
                                     </div>
+
+                                    {/* ✅ NOVO: Exibir informações de desconto como no sistema de pedidos */}
+                                    {(item.produto.promocao || (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0))) && (
+                                      <div className="mt-1">
+                                        {/* Preço com desconto no formato: preço_original x quantidade = subtotal */}
+                                        <p className="text-sm">
+                                          <span className="text-gray-400 line-through">{formatCurrency(item.produto.preco)}</span>
+                                          <span className="text-primary-400 ml-2">{formatCurrency(calcularPrecoModalQuantidade(item.produto, item.quantidade))}</span>
+                                          <span className="text-gray-400"> x {item.quantidade} = {formatCurrency(item.subtotal)}</span>
+                                        </p>
+                                        {/* Texto explicativo do desconto */}
+                                        <p className="text-xs text-green-400">
+                                          {item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0) ? (
+                                            <>
+                                              Desconto por quantidade:
+                                              {item.produto.tipo_desconto_quantidade === 'percentual'
+                                                ? ` ${item.produto.percentual_desconto_quantidade}%`
+                                                : ` ${formatCurrency(item.produto.valor_desconto_quantidade || 0)}`
+                                              }
+                                            </>
+                                          ) : (
+                                            'Produto em promoção'
+                                          )}
+                                        </p>
+                                      </div>
+                                    )}
 
                                     {/* Informações de origem do pedido */}
                                     {item.pedido_origem_numero && (
@@ -11661,17 +11712,18 @@ const PDVPage: React.FC = () => {
                     />
                     <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
 
-                    {/* Ícone ESC */}
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                      <span className="text-xs text-gray-300 bg-gray-700 px-1 py-0.5 rounded">ESC</span>
-                    </div>
-
-                    {/* Indicador de quantidade */}
-                    {searchTerm.includes('*') && (
+                    {/* ✅ CORRIGIDO: Posicionamento inteligente dos indicadores */}
+                    {/* Indicador de quantidade - posição dinâmica */}
+                    {searchTerm.includes('*') ? (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
                         <div className="bg-primary-500 text-white text-xs px-2 py-1 rounded-full">
                           Qtd: {searchTerm.split('*')[0]}
                         </div>
+                      </div>
+                    ) : (
+                      /* Ícone ESC - só aparece quando não há indicador de quantidade */
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <span className="text-xs text-gray-300 bg-gray-700 px-1 py-0.5 rounded">ESC</span>
                       </div>
                     )}
                   </div>
@@ -12769,17 +12821,48 @@ const PDVPage: React.FC = () => {
               {/* Informações do produto */}
               <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
                 <h4 className="text-white font-medium mb-2">{produtoParaQuantidade.nome}</h4>
-                <div className="text-sm text-gray-400">
+                <div className="text-sm text-gray-400 space-y-1">
                   <p>Código: {produtoParaQuantidade.codigo}</p>
-                  <p>Preço: {formatCurrency(calcularPrecoFinal(produtoParaQuantidade))}</p>
+
+                  {/* ✅ NOVO: Exibir informações de preço com desconto */}
+                  {produtoParaQuantidade.promocao ? (
+                    <div>
+                      <p>
+                        <span className="line-through">{formatCurrency(produtoParaQuantidade.preco)}</span>
+                        <span className="text-primary-400 ml-2 font-medium">{formatCurrency(calcularPrecoFinal(produtoParaQuantidade))}</span>
+                      </p>
+                      <p className="text-xs text-green-400">Produto em promoção</p>
+                    </div>
+                  ) : (
+                    <p>Preço: {formatCurrency(calcularPrecoFinal(produtoParaQuantidade))}</p>
+                  )}
+
+                  {/* ✅ NOVO: Informações de desconto por quantidade */}
+                  {produtoParaQuantidade.desconto_quantidade && produtoParaQuantidade.quantidade_minima && (
+                    <div className="text-xs text-green-400 mt-2">
+                      Desconto para {produtoParaQuantidade.quantidade_minima}+ unidades:
+                      {produtoParaQuantidade.tipo_desconto_quantidade === 'percentual'
+                        ? ` ${produtoParaQuantidade.percentual_desconto_quantidade}%`
+                        : ` ${formatCurrency(produtoParaQuantidade.valor_desconto_quantidade || 0)}`
+                      }
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Campo de quantidade com botões + e - */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-white mb-3">
-                  Quantidade
-                </label>
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-sm font-medium text-white">
+                    Quantidade
+                  </label>
+                  {/* ✅ NOVO: Indicação de quantidade mínima para desconto */}
+                  {produtoParaQuantidade.desconto_quantidade && produtoParaQuantidade.quantidade_minima && (
+                    <span className="text-xs text-gray-400">
+                      Mín. {produtoParaQuantidade.quantidade_minima} para desconto
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={diminuirQuantidade}
@@ -12788,18 +12871,36 @@ const PDVPage: React.FC = () => {
                     <Minus size={16} />
                   </button>
 
-                  <input
-                    type="number"
-                    value={quantidadeModal}
-                    onChange={(e) => {
-                      const valor = parseInt(e.target.value);
-                      if (!isNaN(valor) && valor > 0) {
-                        setQuantidadeModal(valor);
-                      }
-                    }}
-                    min="1"
-                    className="flex-1 bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white text-center focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                  />
+                  <div className="flex-1 relative">
+                    <input
+                      type="number"
+                      value={quantidadeModal}
+                      onChange={(e) => {
+                        const valor = parseInt(e.target.value);
+                        if (!isNaN(valor) && valor > 0) {
+                          setQuantidadeModal(valor);
+                        }
+                      }}
+                      min="1"
+                      className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white text-center focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
+                        produtoParaQuantidade.desconto_quantidade &&
+                        produtoParaQuantidade.quantidade_minima &&
+                        quantidadeModal >= produtoParaQuantidade.quantidade_minima
+                          ? 'border-green-500 focus:border-green-500'
+                          : 'border-gray-700 focus:border-primary-500'
+                      }`}
+                    />
+                    {/* ✅ NOVO: Indicador de desconto aplicado */}
+                    {produtoParaQuantidade.desconto_quantidade &&
+                     produtoParaQuantidade.quantidade_minima &&
+                     quantidadeModal >= produtoParaQuantidade.quantidade_minima && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <span className="text-xs text-green-400 font-medium">
+                          Desconto aplicado!
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     onClick={aumentarQuantidade}
@@ -12812,12 +12913,41 @@ const PDVPage: React.FC = () => {
 
               {/* Total */}
               <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3 mb-6">
-                <div className="flex justify-between items-center">
-                  <span className="text-primary-300 font-medium">Total:</span>
-                  <span className="text-primary-300 font-bold text-lg">
-                    {formatCurrency(calcularPrecoFinal(produtoParaQuantidade) * quantidadeModal)}
-                  </span>
-                </div>
+                {/* ✅ NOVO: Mostrar cálculo detalhado quando há desconto */}
+                {(produtoParaQuantidade.promocao ||
+                  (produtoParaQuantidade.desconto_quantidade &&
+                   produtoParaQuantidade.quantidade_minima &&
+                   quantidadeModal >= produtoParaQuantidade.quantidade_minima)) ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-400">Preço original:</span>
+                      <span className="text-gray-400 line-through">
+                        {formatCurrency(produtoParaQuantidade.preco)} x {quantidadeModal}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-green-400">Preço com desconto:</span>
+                      <span className="text-green-400">
+                        {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade, quantidadeModal))} x {quantidadeModal}
+                      </span>
+                    </div>
+                    <div className="border-t border-primary-500/30 pt-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-primary-300 font-medium">Total:</span>
+                        <span className="text-primary-300 font-bold text-lg">
+                          {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade, quantidadeModal) * quantidadeModal)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <span className="text-primary-300 font-medium">Total:</span>
+                    <span className="text-primary-300 font-bold text-lg">
+                      {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade, quantidadeModal) * quantidadeModal)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Botões */}

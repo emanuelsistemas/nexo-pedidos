@@ -702,14 +702,16 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
                     )}
 
                     {/* Desconto por quantidade */}
-                    {produtoEmVisualizacao.desconto_quantidade && produtoEmVisualizacao.quantidade_minima && produtoEmVisualizacao.valor_desconto_quantidade && (
+                    {produtoEmVisualizacao.desconto_quantidade && produtoEmVisualizacao.quantidade_minima &&
+                     ((produtoEmVisualizacao.tipo_desconto_quantidade === 'percentual' && produtoEmVisualizacao.percentual_desconto_quantidade) ||
+                      (produtoEmVisualizacao.tipo_desconto_quantidade === 'valor' && produtoEmVisualizacao.valor_desconto_quantidade)) && (
                       <div className="mt-2 text-sm text-green-400 bg-green-900/20 px-2 py-1 rounded flex items-center gap-1">
                         <Percent size={14} />
                         <span>
                           Desconto para {produtoEmVisualizacao.quantidade_minima}+ unidades:
                           {produtoEmVisualizacao.tipo_desconto_quantidade === 'percentual'
-                            ? ` ${produtoEmVisualizacao.valor_desconto_quantidade}%`
-                            : ` ${formatarPreco(produtoEmVisualizacao.valor_desconto_quantidade)}`}
+                            ? ` ${produtoEmVisualizacao.percentual_desconto_quantidade}%`
+                            : ` ${formatarPreco(produtoEmVisualizacao.valor_desconto_quantidade || 0)}`}
                         </span>
                       </div>
                     )}

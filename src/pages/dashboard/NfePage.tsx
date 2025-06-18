@@ -6,6 +6,7 @@ import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
 import { supabase } from '../../lib/supabase';
 import { useApiLogs } from '../../hooks/useApiLogs';
 import { showMessage } from '../../utils/toast';
+import { traduzirErroSefaz, extrairCodigoSefaz, gerarMensagemAmigavel, categorizarErro } from '../../utils/sefazErrorTranslator';
 
 interface NFe {
   id: string;
@@ -3615,18 +3616,29 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         addLog('⚠️ Não foi possível carregar logs da API');
       }
 
-      // Categorizar o erro para logs mais detalhados
-      if (error.message.includes('NFe Duplicada') || error.message.includes('Duplicidade')) {
-        addLog('Tipo: ❌ NFe Duplicada (Status SEFAZ 539)');
-        addLog('Solução: Verifique se esta NFe já foi emitida ou use um número diferente');
-      } else if (error.message.includes('Failed to fetch')) {
-        addLog('Tipo: Erro de conexão com a API');
+      // ✅ MELHORADO: Usar utilitário de tradução de erros SEFAZ
+      const errorMessage = error.message || 'Erro desconhecido';
+
+      // Extrair código de status SEFAZ da mensagem
+      const statusCode = extrairCodigoSefaz(errorMessage);
+
+      if (statusCode) {
+        // Traduzir erro usando o utilitário
+        const erroTraduzido = traduzirErroSefaz(statusCode, errorMessage);
+        const categoria = categorizarErro(statusCode);
+
+        addLog(`Tipo: ${categoria} - ${erroTraduzido.titulo}`);
+        addLog(`📋 ${erroTraduzido.descricao}`);
+        addLog(`💡 ${erroTraduzido.solucao}`);
+
+      } else if (errorMessage.includes('Failed to fetch')) {
+        addLog('Tipo: ❌ Erro de Conexão com a API');
         addLog('Solução: Verifique sua conexão e se a API está funcionando');
-      } else if (error.message.includes('HTTP 404')) {
-        addLog('Tipo: Endpoint não encontrado');
+      } else if (errorMessage.includes('HTTP 404')) {
+        addLog('Tipo: ❌ Endpoint Não Encontrado');
         addLog('Solução: Verifique se a API está configurada corretamente');
-      } else if (error.message.includes('HTTP 500')) {
-        addLog('Tipo: Erro interno do servidor');
+      } else if (errorMessage.includes('HTTP 500')) {
+        addLog('Tipo: ❌ Erro Interno do Servidor');
         addLog('Solução: Verifique os logs da API para detalhes específicos');
       } else if (error.message.includes('timeout')) {
         addLog('Tipo: Timeout na requisição');
@@ -3635,7 +3647,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         addLog('Tipo: ❌ Erro de Validação SEFAZ');
         addLog('Solução: Verifique os dados da NFe e corrija os problemas indicados');
       } else {
-        addLog('Tipo: Erro não categorizado');
+        addLog('Tipo: ❌ Erro de Validação SEFAZ');
+        addLog('Solução: Verifique os dados da NFe e corrija os problemas indicados');
       }
 
       addLog('');
@@ -7063,10 +7076,9 @@ const ChavesRefSection: React.FC<{ data: any[]; onChange: (data: any[]) => void 
 
 const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({ data, onChange }) => {
   const [showTransportadoraModal, setShowTransportadoraModal] = useState(false);
-  const [transportadoraSelecionada, setTransportadoraSelecionada] = useState<any>(null);
 
   const handleSelecionarTransportadora = (transportadora: any) => {
-    setTransportadoraSelecionada(transportadora);
+    // ✅ CORREÇÃO: Salvar dados da transportadora diretamente no estado da NFe
     onChange({
       ...data,
       transportadora_id: transportadora.id,
@@ -7075,6 +7087,16 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
       transportadora_endereco: transportadora.endereco_completo
     });
     setShowTransportadoraModal(false);
+  };
+
+  const limparTransportadora = () => {
+    onChange({
+      ...data,
+      transportadora_id: '',
+      transportadora_nome: '',
+      transportadora_documento: '',
+      transportadora_endereco: ''
+    });
   };
 
   return (
@@ -7089,7 +7111,7 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
             <div className="flex items-center space-x-2">
               <input
                 type="text"
-                value={transportadoraSelecionada ? transportadoraSelecionada.nome : ''}
+                value={data.transportadora_nome || ''}
                 placeholder="Selecione uma transportadora"
                 className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
                 readOnly
@@ -7101,8 +7123,34 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
               >
                 <Search size={16} />
               </button>
+              {data.transportadora_nome && (
+                <button
+                  type="button"
+                  onClick={limparTransportadora}
+                  className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  title="Limpar transportadora"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Mostrar detalhes da transportadora selecionada */}
+          {data.transportadora_nome && (
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+              <h4 className="text-white font-medium mb-2">Transportadora Selecionada:</h4>
+              <div className="space-y-1 text-sm text-gray-300">
+                <p><strong>Nome:</strong> {data.transportadora_nome}</p>
+                {data.transportadora_documento && (
+                  <p><strong>Documento:</strong> {data.transportadora_documento}</p>
+                )}
+                {data.transportadora_endereco && (
+                  <p><strong>Endereço:</strong> {data.transportadora_endereco}</p>
+                )}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
