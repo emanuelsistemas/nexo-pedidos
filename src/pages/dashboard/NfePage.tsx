@@ -5706,6 +5706,11 @@ const ProdutosSection: React.FC<{
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [produtoDetalhesFiscais, setProdutoDetalhesFiscais] = useState(null);
 
+  // ✅ ADICIONADO: Estados para edição de CFOP
+  const [showEditarCFOPModal, setShowEditarCFOPModal] = useState(false);
+  const [produtoEditandoCFOP, setProdutoEditandoCFOP] = useState<any>(null);
+  const [novoCFOP, setNovoCFOP] = useState('');
+
   // CFOPs de devolução mais comuns
   const cfopsDevolucao = [
     { codigo: '1202', descricao: '1202 - Devolução de venda de mercadoria adquirida ou recebida de terceiros (dentro do estado)' },
@@ -5837,6 +5842,40 @@ const ProdutosSection: React.FC<{
   // Função para remover produto
   const handleRemoverProduto = (id: string) => {
     onChange(produtos.filter(p => p.id !== id));
+  };
+
+  // ✅ ADICIONADO: Função para abrir modal de edição de CFOP
+  const handleEditarCFOP = (produto: any) => {
+    setProdutoEditandoCFOP(produto);
+    setNovoCFOP(produto.cfop || '');
+    setShowEditarCFOPModal(true);
+  };
+
+  // ✅ ADICIONADO: Função para salvar novo CFOP
+  const handleSalvarCFOP = () => {
+    if (!novoCFOP.trim()) {
+      showToast('CFOP é obrigatório', 'error');
+      return;
+    }
+
+    if (novoCFOP.length !== 4 || !/^\d{4}$/.test(novoCFOP)) {
+      showToast('CFOP deve ter exatamente 4 dígitos', 'error');
+      return;
+    }
+
+    // Atualizar o produto na lista
+    const produtosAtualizados = produtos.map(p =>
+      p.id === produtoEditandoCFOP.id
+        ? { ...p, cfop: novoCFOP }
+        : p
+    );
+
+    onChange(produtosAtualizados);
+    setShowEditarCFOPModal(false);
+    setProdutoEditandoCFOP(null);
+    setNovoCFOP('');
+
+    showToast(`CFOP do produto "${produtoEditandoCFOP.descricao}" atualizado para ${novoCFOP}`, 'success');
   };
 
   // Função para abrir modal de detalhes fiscais
@@ -6239,7 +6278,18 @@ const ProdutosSection: React.FC<{
                       <td className="px-3 py-2 text-sm text-white">{produto.quantidade}</td>
                       <td className="px-3 py-2 text-sm text-white">R$ {produto.valor_total.toFixed(2)}</td>
                       <td className="px-3 py-2 text-sm text-white">{produto.ncm}</td>
-                      <td className="px-3 py-2 text-sm text-white">{produto.cfop}</td>
+                      <td className="px-3 py-2 text-sm text-white">
+                        <div className="flex items-center gap-2">
+                          <span>{produto.cfop}</span>
+                          <button
+                            onClick={() => handleEditarCFOP(produto)}
+                            className="text-yellow-400 hover:text-yellow-300 p-1"
+                            title="Editar CFOP"
+                          >
+                            <Edit size={12} />
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-sm text-white">{produto.csosn_icms}</td>
                       <td className="px-3 py-2 text-sm text-white text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -6521,6 +6571,85 @@ const ProdutosSection: React.FC<{
                 className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ ADICIONADO: Modal de Edição de CFOP */}
+      {showEditarCFOPModal && produtoEditandoCFOP && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-background-card rounded-lg border border-gray-800 p-6 max-w-md w-full mx-4">
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white">
+                Editar CFOP
+              </h3>
+              <button
+                onClick={() => setShowEditarCFOPModal(false)}
+                className="text-gray-400 hover:text-white p-1"
+                title="Fechar"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Informações do Produto */}
+            <div className="mb-6 p-4 bg-gray-800/50 rounded-lg">
+              <div className="text-sm">
+                <div className="mb-2">
+                  <span className="text-gray-400">Produto:</span>
+                  <span className="text-white ml-2 font-medium">{produtoEditandoCFOP.descricao}</span>
+                </div>
+                <div className="mb-2">
+                  <span className="text-gray-400">Código:</span>
+                  <span className="text-white ml-2">{produtoEditandoCFOP.codigo}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">CFOP Atual:</span>
+                  <span className="text-white ml-2 font-mono bg-gray-700 px-2 py-1 rounded">
+                    {produtoEditandoCFOP.cfop}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Campo de Edição */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Novo CFOP *
+              </label>
+              <input
+                type="text"
+                value={novoCFOP}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setNovoCFOP(value);
+                }}
+                placeholder="Ex: 5102"
+                maxLength={4}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 font-mono text-center text-lg"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                💡 Digite apenas os 4 dígitos do CFOP
+              </p>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowEditarCFOPModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSalvarCFOP}
+                disabled={!novoCFOP.trim() || novoCFOP.length !== 4}
+                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                Salvar CFOP
               </button>
             </div>
           </div>
