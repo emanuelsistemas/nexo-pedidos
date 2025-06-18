@@ -1661,7 +1661,22 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       transportadora_nome: '',
       transportadora_documento: '',
       transportadora_endereco: '',
-      modalidade_frete: '9'
+      // ✅ ADICIONADO: Campos obrigatórios para NFe
+      transportadora_cidade: '',
+      transportadora_uf: '',
+      transportadora_ie: '',
+      modalidade_frete: '9',
+      // ✅ ADICIONADO: Campos de veículo
+      veiculo_placa: '',
+      veiculo_uf: '',
+      veiculo_rntc: '',
+      // ✅ ADICIONADO: Campos de volumes
+      volumes_quantidade: '',
+      volumes_especie: '',
+      volumes_marca: '',
+      volumes_numeracao: '',
+      volumes_peso_bruto: '',
+      volumes_peso_liquido: ''
     },
     empresa: null
   });
@@ -3234,6 +3249,29 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           totais: payload.totais,
           pagamentos: payload.pagamentos,
           identificacao: payload.identificacao,
+          // ✅ CORREÇÃO: Adicionar dados da transportadora
+          transportadora: {
+            modalidade_frete: nfeData.transportadora.modalidade_frete,
+            transportadora_id: nfeData.transportadora.transportadora_id || '',
+            transportadora_nome: nfeData.transportadora.transportadora_nome || '',
+            transportadora_documento: nfeData.transportadora.transportadora_documento || '',
+            transportadora_endereco: nfeData.transportadora.transportadora_endereco || '',
+            // ✅ ADICIONADO: Campos obrigatórios
+            transportadora_cidade: nfeData.transportadora.transportadora_cidade || '',
+            transportadora_uf: nfeData.transportadora.transportadora_uf || '',
+            transportadora_ie: nfeData.transportadora.transportadora_ie || '',
+            // ✅ ADICIONADO: Campos de veículo
+            veiculo_placa: nfeData.transportadora.veiculo_placa || '',
+            veiculo_uf: nfeData.transportadora.veiculo_uf || '',
+            veiculo_rntc: nfeData.transportadora.veiculo_rntc || '',
+            // ✅ ADICIONADO: Campos de volumes
+            volumes_quantidade: nfeData.transportadora.volumes_quantidade || '',
+            volumes_especie: nfeData.transportadora.volumes_especie || '',
+            volumes_marca: nfeData.transportadora.volumes_marca || '',
+            volumes_numeracao: nfeData.transportadora.volumes_numeracao || '',
+            volumes_peso_bruto: nfeData.transportadora.volumes_peso_bruto || '',
+            volumes_peso_liquido: nfeData.transportadora.volumes_peso_liquido || ''
+          },
           // ✅ CORREÇÃO: Adicionar informação adicional que estava faltando
           informacao_adicional: nfeData.identificacao.informacao_adicional || '',
           ambiente: ambienteNFe
@@ -3289,6 +3327,25 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       addLog('🔍 DEBUG - Informação Adicional:');
       addLog(`   Valor: "${localPayload.nfe_data.informacao_adicional || 'VAZIO'}"`);
       addLog(`   Tamanho: ${(localPayload.nfe_data.informacao_adicional || '').length} caracteres`);
+
+      // 🔍 DEBUG: Log dos dados da transportadora sendo enviados
+      addLog('🔍 DEBUG - Dados da transportadora sendo enviados:');
+      addLog(`   Modalidade: ${localPayload.nfe_data.transportadora.modalidade_frete || 'VAZIO'}`);
+      addLog(`   ID: ${localPayload.nfe_data.transportadora.transportadora_id || 'VAZIO'}`);
+      addLog(`   Nome: ${localPayload.nfe_data.transportadora.transportadora_nome || 'VAZIO'}`);
+      addLog(`   Documento: ${localPayload.nfe_data.transportadora.transportadora_documento || 'VAZIO'}`);
+      addLog(`   Endereço: ${localPayload.nfe_data.transportadora.transportadora_endereco || 'VAZIO'}`);
+      addLog(`   Cidade: ${localPayload.nfe_data.transportadora.transportadora_cidade || 'VAZIO'}`);
+      addLog(`   UF: ${localPayload.nfe_data.transportadora.transportadora_uf || 'VAZIO'}`);
+      addLog(`   IE: ${localPayload.nfe_data.transportadora.transportadora_ie || 'VAZIO'}`);
+      addLog(`   Veículo - Placa: ${localPayload.nfe_data.transportadora.veiculo_placa || 'VAZIO'}`);
+      addLog(`   Veículo - UF: ${localPayload.nfe_data.transportadora.veiculo_uf || 'VAZIO'}`);
+      addLog(`   Volumes - Qtd: ${localPayload.nfe_data.transportadora.volumes_quantidade || 'VAZIO'}`);
+      addLog(`   Volumes - Espécie: ${localPayload.nfe_data.transportadora.volumes_especie || 'VAZIO'}`);
+      addLog(`   Volumes - Marca: ${localPayload.nfe_data.transportadora.volumes_marca || 'VAZIO'}`);
+      addLog(`   Volumes - Numeração: ${localPayload.nfe_data.transportadora.volumes_numeracao || 'VAZIO'}`);
+      addLog(`   Volumes - Peso Bruto: ${localPayload.nfe_data.transportadora.volumes_peso_bruto || 'VAZIO'}`);
+      addLog(`   Volumes - Peso Líquido: ${localPayload.nfe_data.transportadora.volumes_peso_liquido || 'VAZIO'}`);
 
       const response = await fetch('/backend/public/emitir-nfe.php', {
         method: 'POST',
@@ -7084,7 +7141,11 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
       transportadora_id: transportadora.id,
       transportadora_nome: transportadora.nome,
       transportadora_documento: transportadora.documento,
-      transportadora_endereco: transportadora.endereco_completo
+      transportadora_endereco: transportadora.endereco_completo,
+      // ✅ ADICIONADO: Campos obrigatórios para NFe
+      transportadora_cidade: transportadora.cidade,
+      transportadora_uf: transportadora.estado,
+      transportadora_ie: transportadora.inscricao_estadual
     });
     setShowTransportadoraModal(false);
   };
@@ -7095,7 +7156,11 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
       transportadora_id: '',
       transportadora_nome: '',
       transportadora_documento: '',
-      transportadora_endereco: ''
+      transportadora_endereco: '',
+      // ✅ ADICIONADO: Limpar campos obrigatórios
+      transportadora_cidade: '',
+      transportadora_uf: '',
+      transportadora_ie: ''
     });
   };
 
@@ -7108,32 +7173,52 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Transportadora
             </label>
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={data.transportadora_nome || ''}
-                placeholder="Selecione uma transportadora"
-                className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                readOnly
-              />
-              <button
-                type="button"
-                onClick={() => setShowTransportadoraModal(true)}
-                className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <Search size={16} />
-              </button>
-              {data.transportadora_nome && (
-                <button
-                  type="button"
-                  onClick={limparTransportadora}
-                  className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  title="Limpar transportadora"
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
+
+            {/* ✅ REGRA FISCAL: Modalidade 9 (Sem Ocorrência de Transporte) NÃO pode ter transportadora */}
+            {data.modalidade_frete === '9' ? (
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-yellow-400 mb-2">
+                  <AlertTriangle size={16} />
+                  <span className="font-medium">Transportadora Não Permitida</span>
+                </div>
+                <p className="text-gray-300 text-sm">
+                  <strong>Regra Fiscal:</strong> Para modalidade "9 - Sem Ocorrência de Transporte",
+                  não é permitido informar dados da transportadora conforme regras da SEFAZ.
+                </p>
+                <p className="text-gray-400 text-xs mt-1">
+                  Para informar transportadora, altere a modalidade de frete para 0, 1, 2, 3 ou 4.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={data.transportadora_nome || ''}
+                    placeholder="Selecione uma transportadora"
+                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                    readOnly
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTransportadoraModal(true)}
+                    className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <Search size={16} />
+                  </button>
+                  {data.transportadora_nome && (
+                    <button
+                      type="button"
+                      onClick={limparTransportadora}
+                      className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                      title="Limpar transportadora"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Mostrar detalhes da transportadora selecionada */}
@@ -7148,6 +7233,209 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
                 {data.transportadora_endereco && (
                   <p><strong>Endereço:</strong> {data.transportadora_endereco}</p>
                 )}
+                {data.transportadora_cidade && (
+                  <p><strong>Cidade:</strong> {data.transportadora_cidade}</p>
+                )}
+                {data.transportadora_uf && (
+                  <p><strong>UF:</strong> {data.transportadora_uf}</p>
+                )}
+                {data.transportadora_ie && (
+                  <p><strong>IE:</strong> {data.transportadora_ie}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ✅ ADICIONADO: Campos obrigatórios da transportadora */}
+          {data.modalidade_frete !== '9' && data.transportadora_nome && (
+            <div className="space-y-4">
+              <h4 className="text-white font-medium">Dados Complementares da Transportadora</h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Município <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={data.transportadora_cidade || ''}
+                    onChange={(e) => onChange({ ...data, transportadora_cidade: e.target.value })}
+                    placeholder="Nome do município"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    UF <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={data.transportadora_uf || ''}
+                    onChange={(e) => onChange({ ...data, transportadora_uf: e.target.value.toUpperCase() })}
+                    placeholder="Ex: SP"
+                    maxLength={2}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Inscrição Estadual
+                  </label>
+                  <input
+                    type="text"
+                    value={data.transportadora_ie || ''}
+                    onChange={(e) => onChange({ ...data, transportadora_ie: e.target.value })}
+                    placeholder="IE ou ISENTO"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Digite "ISENTO" para transportadoras isentas
+                  </p>
+                </div>
+
+                {/* ✅ ADICIONADO: Campos de veículo (opcionais) */}
+                <div className="space-y-4">
+                  <h5 className="text-white font-medium">Dados do Veículo (Opcional)</h5>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Placa do Veículo
+                      </label>
+                      <input
+                        type="text"
+                        value={data.veiculo_placa || ''}
+                        onChange={(e) => onChange({ ...data, veiculo_placa: e.target.value.toUpperCase() })}
+                        placeholder="Ex: ABC1234"
+                        maxLength={8}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        UF da Placa
+                      </label>
+                      <input
+                        type="text"
+                        value={data.veiculo_uf || ''}
+                        onChange={(e) => onChange({ ...data, veiculo_uf: e.target.value.toUpperCase() })}
+                        placeholder="Ex: SP"
+                        maxLength={2}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        RNTC (ANTT)
+                      </label>
+                      <input
+                        type="text"
+                        value={data.veiculo_rntc || ''}
+                        onChange={(e) => onChange({ ...data, veiculo_rntc: e.target.value })}
+                        placeholder="Registro ANTT"
+                        maxLength={20}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ✅ ADICIONADO: Campos de volumes (opcionais) */}
+                <div className="space-y-4">
+                  <h5 className="text-white font-medium">Dados dos Volumes (Opcional)</h5>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Quantidade de Volumes
+                      </label>
+                      <input
+                        type="number"
+                        value={data.volumes_quantidade || ''}
+                        onChange={(e) => onChange({ ...data, volumes_quantidade: e.target.value })}
+                        placeholder="Ex: 1"
+                        min="1"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Espécie dos Volumes
+                      </label>
+                      <input
+                        type="text"
+                        value={data.volumes_especie || ''}
+                        onChange={(e) => onChange({ ...data, volumes_especie: e.target.value })}
+                        placeholder="Ex: caixa, pacote, unidade"
+                        maxLength={60}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Marca dos Volumes
+                      </label>
+                      <input
+                        type="text"
+                        value={data.volumes_marca || ''}
+                        onChange={(e) => onChange({ ...data, volumes_marca: e.target.value })}
+                        placeholder="Ex: Samsung, Apple, etc"
+                        maxLength={60}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Numeração dos Volumes
+                      </label>
+                      <input
+                        type="text"
+                        value={data.volumes_numeracao || ''}
+                        onChange={(e) => onChange({ ...data, volumes_numeracao: e.target.value })}
+                        placeholder="Ex: 001/010, A-001, etc"
+                        maxLength={60}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Peso Bruto (kg)
+                      </label>
+                      <input
+                        type="number"
+                        value={data.volumes_peso_bruto || ''}
+                        onChange={(e) => onChange({ ...data, volumes_peso_bruto: e.target.value })}
+                        placeholder="Ex: 10.5"
+                        step="0.001"
+                        min="0"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Peso Líquido (kg)
+                      </label>
+                      <input
+                        type="number"
+                        value={data.volumes_peso_liquido || ''}
+                        onChange={(e) => onChange({ ...data, volumes_peso_liquido: e.target.value })}
+                        placeholder="Ex: 9.8"
+                        step="0.001"
+                        min="0"
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -7158,7 +7446,36 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
             </label>
             <select
               value={data.modalidade_frete || '9'}
-              onChange={(e) => onChange({ ...data, modalidade_frete: e.target.value })}
+              onChange={(e) => {
+                const novaModalidade = e.target.value;
+                // ✅ REGRA FISCAL NFe: Se modalidade = 9, limpar dados da transportadora
+                if (novaModalidade === '9') {
+                  onChange({
+                    ...data,
+                    modalidade_frete: novaModalidade,
+                    transportadora_id: '',
+                    transportadora_nome: '',
+                    transportadora_documento: '',
+                    transportadora_endereco: '',
+                    // ✅ ADICIONADO: Limpar campos obrigatórios
+                    transportadora_cidade: '',
+                    transportadora_uf: '',
+                    transportadora_ie: '',
+                    // ✅ ADICIONADO: Limpar campos de veículo e volumes
+                    veiculo_placa: '',
+                    veiculo_uf: '',
+                    veiculo_rntc: '',
+                    volumes_quantidade: '',
+                    volumes_especie: '',
+                    volumes_marca: '',
+                    volumes_numeracao: '',
+                    volumes_peso_bruto: '',
+                    volumes_peso_liquido: ''
+                  });
+                } else {
+                  onChange({ ...data, modalidade_frete: novaModalidade });
+                }
+              }}
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
             >
               <option value="1">1 - Contratação do Frete por conta do Destinatário (FOB)</option>
@@ -8073,6 +8390,10 @@ const TransportadoraSeletorModal: React.FC<{
         documento: cliente.documento,
         telefone: cliente.telefone,
         email: cliente.email,
+        // ✅ ADICIONADO: Campos obrigatórios para NFe
+        cidade: cliente.cidade || '',
+        estado: cliente.estado || '',
+        inscricao_estadual: cliente.inscricao_estadual || '',
         endereco_completo: [
           cliente.endereco,
           cliente.numero,

@@ -638,11 +638,120 @@ try {
 
     $make->tagICMSTot($std);
 
+    // ✅ DEBUG: Verificar dados da transportadora recebidos do frontend
+    error_log("🔍 DEBUG TRANSPORTADORA - Dados recebidos:");
+    error_log("  - Modalidade: " . ($nfeData['transportadora']['modalidade_frete'] ?? 'NÃO INFORMADA'));
+    error_log("  - ID: " . ($nfeData['transportadora']['transportadora_id'] ?? 'NÃO INFORMADA'));
+    error_log("  - Nome: " . ($nfeData['transportadora']['transportadora_nome'] ?? 'NÃO INFORMADA'));
+    error_log("  - Documento: " . ($nfeData['transportadora']['transportadora_documento'] ?? 'NÃO INFORMADO'));
+    error_log("  - Endereço: " . ($nfeData['transportadora']['transportadora_endereco'] ?? 'NÃO INFORMADO'));
+    error_log("  - Cidade: " . ($nfeData['transportadora']['transportadora_cidade'] ?? 'NÃO INFORMADA'));
+    error_log("  - UF: " . ($nfeData['transportadora']['transportadora_uf'] ?? 'NÃO INFORMADA'));
+    error_log("  - IE: " . ($nfeData['transportadora']['transportadora_ie'] ?? 'NÃO INFORMADA'));
+    error_log("  - Veículo Placa: " . ($nfeData['transportadora']['veiculo_placa'] ?? 'NÃO INFORMADA'));
+    error_log("  - Veículo UF: " . ($nfeData['transportadora']['veiculo_uf'] ?? 'NÃO INFORMADA'));
+    error_log("  - Volumes Qtd: " . ($nfeData['transportadora']['volumes_quantidade'] ?? 'NÃO INFORMADA'));
+    error_log("  - Volumes Espécie: " . ($nfeData['transportadora']['volumes_especie'] ?? 'NÃO INFORMADA'));
+    error_log("  - Volumes Marca: " . ($nfeData['transportadora']['volumes_marca'] ?? 'NÃO INFORMADA'));
+    error_log("  - Volumes Numeração: " . ($nfeData['transportadora']['volumes_numeracao'] ?? 'NÃO INFORMADA'));
+    error_log("  - Volumes Peso Bruto: " . ($nfeData['transportadora']['volumes_peso_bruto'] ?? 'NÃO INFORMADO'));
+    error_log("  - Volumes Peso Líquido: " . ($nfeData['transportadora']['volumes_peso_liquido'] ?? 'NÃO INFORMADO'));
+
     // Transporte (MÉTODO NATIVO) - OBRIGATÓRIO antes do pagamento
     $std = new stdClass();
-    $std->modFrete = 9; // 9=Sem Ocorrência de Transporte
+
+    // ❌ REMOVER FALLBACK - Usar apenas dados do frontend
+    if (!isset($nfeData['transportadora']['modalidade_frete'])) {
+        throw new Exception('Modalidade de frete é obrigatória');
+    }
+
+    $std->modFrete = $nfeData['transportadora']['modalidade_frete'];
+    error_log("✅ NFe - Modalidade de frete definida: " . $std->modFrete);
 
     $make->tagtransp($std);
+
+    // ✅ REGRA FISCAL NFe: Só incluir dados da transportadora se modalidade ≠ 9 E transportadora selecionada
+    $modalidadeFrete = $nfeData['transportadora']['modalidade_frete'];
+
+    if ($modalidadeFrete !== '9' && !empty($nfeData['transportadora']['transportadora_id']) && !empty($nfeData['transportadora']['transportadora_nome'])) {
+        $stdTransportadora = new stdClass();
+        $stdTransportadora->xNome = $nfeData['transportadora']['transportadora_nome'];
+
+        // Verificar se é CNPJ ou CPF baseado no tamanho do documento
+        $documento = preg_replace('/[^0-9]/', '', $nfeData['transportadora']['transportadora_documento'] ?? '');
+        if (strlen($documento) == 14) {
+            $stdTransportadora->CNPJ = $documento;
+            $stdTransportadora->CPF = null;
+        } elseif (strlen($documento) == 11) {
+            $stdTransportadora->CPF = $documento;
+            $stdTransportadora->CNPJ = null;
+        } else {
+            // Se não tem documento válido, usar apenas o nome
+            $stdTransportadora->CNPJ = null;
+            $stdTransportadora->CPF = null;
+        }
+
+        // ✅ CORRIGIDO: Endereço da transportadora com campos obrigatórios
+        $stdTransportadora->xEnder = $nfeData['transportadora']['transportadora_endereco'] ?? '';
+        $stdTransportadora->xMun = $nfeData['transportadora']['transportadora_cidade'] ?? '';
+        $stdTransportadora->UF = $nfeData['transportadora']['transportadora_uf'] ?? '';
+
+        // IE da transportadora (obrigatório se aplicável)
+        $ieTransportadora = $nfeData['transportadora']['transportadora_ie'] ?? '';
+        if (!empty($ieTransportadora) && strtoupper($ieTransportadora) !== 'ISENTO') {
+            $stdTransportadora->IE = $ieTransportadora;
+        } else {
+            $stdTransportadora->IE = null; // Não informar se for isento ou vazio
+        }
+
+        $make->tagtransporta($stdTransportadora);
+
+        error_log("✅ NFe - Transportadora adicionada: " . $nfeData['transportadora']['transportadora_nome'] . " (Modalidade: $modalidadeFrete)");
+
+        // ✅ ADICIONADO: Tag de veículo (se informado)
+        if (!empty($nfeData['transportadora']['veiculo_placa'])) {
+            $stdVeiculo = new stdClass();
+            $stdVeiculo->placa = $nfeData['transportadora']['veiculo_placa'];
+            $stdVeiculo->UF = $nfeData['transportadora']['veiculo_uf'] ?? '';
+            $stdVeiculo->RNTC = $nfeData['transportadora']['veiculo_rntc'] ?? null;
+
+            $make->tagveicTransp($stdVeiculo);
+            error_log("✅ NFe - Veículo adicionado: Placa " . $stdVeiculo->placa . " (" . $stdVeiculo->UF . ")");
+        }
+
+        // ✅ ADICIONADO: Tag de volumes (se informado)
+        if (!empty($nfeData['transportadora']['volumes_quantidade']) && !empty($nfeData['transportadora']['volumes_especie'])) {
+            $stdVolume = new stdClass();
+            $stdVolume->item = 1; // Número do volume
+            $stdVolume->qVol = (int)$nfeData['transportadora']['volumes_quantidade'];
+            $stdVolume->esp = $nfeData['transportadora']['volumes_especie'];
+
+            // ✅ ADICIONADO: Campos marca e numeração
+            $stdVolume->marca = !empty($nfeData['transportadora']['volumes_marca']) ?
+                $nfeData['transportadora']['volumes_marca'] : null;
+            $stdVolume->nVol = !empty($nfeData['transportadora']['volumes_numeracao']) ?
+                $nfeData['transportadora']['volumes_numeracao'] : null;
+
+            // ✅ ADICIONADO: Peso líquido e bruto
+            $stdVolume->pesoL = !empty($nfeData['transportadora']['volumes_peso_liquido']) ?
+                (float)$nfeData['transportadora']['volumes_peso_liquido'] : null;
+            $stdVolume->pesoB = !empty($nfeData['transportadora']['volumes_peso_bruto']) ?
+                (float)$nfeData['transportadora']['volumes_peso_bruto'] : null;
+
+            $make->tagvol($stdVolume);
+            error_log("✅ NFe - Volume adicionado: " . $stdVolume->qVol . " " . $stdVolume->esp .
+                     ($stdVolume->marca ? " (Marca: " . $stdVolume->marca . ")" : "") .
+                     ($stdVolume->nVol ? " (Num: " . $stdVolume->nVol . ")" : ""));
+        }
+    } else {
+        if ($modalidadeFrete === '9') {
+            error_log("ℹ️ NFe - Modalidade 9 (Sem Ocorrência de Transporte): Transportadora não incluída conforme regra fiscal");
+        } else {
+            error_log("ℹ️ NFe - Nenhuma transportadora selecionada para modalidade: $modalidadeFrete");
+        }
+    }
+
+    // ❌ CÓDIGO DUPLICADO REMOVIDO - Lógica já implementada acima
 
     // Pagamento (MÉTODO NATIVO) - Conforme documentação fiscal
     // 1. PRIMEIRO: Criar grupo PAG (container)
