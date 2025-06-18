@@ -191,11 +191,14 @@ try {
     error_log("  - Finalidade: " . $finalidade);
     error_log("  - Quantidade de chaves: " . count($chavesRef));
 
-    // Verificar se finalidade exige chave de referência
+    // ✅ CORREÇÃO: Verificar regras corretas de chave de referência
+    // Finalidade 2 (Complementar) e 3 (Ajuste) = SEMPRE obrigatória
+    // Finalidade 4 (Devolução) = SEMPRE obrigatória
+    // Finalidade 1 (Normal) = Opcional (pode usar para devolução com CFOP)
     $finalidadeExigeChave = in_array($finalidade, ['2', '3', '4']);
 
     if ($finalidadeExigeChave) {
-        error_log("✅ Finalidade {$finalidade} exige chave de referência");
+        error_log("✅ Finalidade {$finalidade} exige chave de referência obrigatória");
 
         if (empty($chavesRef)) {
             error_log("❌ ERRO: Finalidade {$finalidade} exige chave de referência, mas nenhuma foi informada");
@@ -259,7 +262,7 @@ try {
     $std->tpEmis = 1; // Emissão normal
     $std->cDV = 0;
     $std->tpAmb = $ambiente;
-    $std->finNFe = 1; // Normal
+    // ✅ REMOVIDO: $std->finNFe = 1; (já definido acima com valor correto)
     $std->indFinal = 1; // Consumidor final
     $std->indPres = 1; // Presencial
     $std->procEmi = 0; // Aplicativo do contribuinte
