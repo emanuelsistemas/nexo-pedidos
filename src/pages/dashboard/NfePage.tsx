@@ -5910,10 +5910,16 @@ const ProdutosSection: React.FC<{
   const handleSelecionarProduto = (produto: any) => {
     setProdutoSelecionado(produto);
 
-    // ✅ CALCULAR PREÇO PROMOCIONAL SE HOUVER PROMOÇÃO
+    // ✅ CALCULAR PREÇO COM TODOS OS DESCONTOS APLICÁVEIS
     let precoFinal = produto.preco || 0;
+    let temDesconto = false;
+    let tipoDesconto = '';
 
+    // 1. VERIFICAR DESCONTO DE PROMOÇÃO
     if (produto.promocao && produto.valor_desconto) {
+      temDesconto = true;
+      tipoDesconto = 'promoção';
+
       if (produto.tipo_desconto === 'percentual') {
         // Desconto percentual
         const desconto = (precoFinal * produto.valor_desconto) / 100;
@@ -5924,8 +5930,48 @@ const ProdutosSection: React.FC<{
       }
     }
 
+    // 2. VERIFICAR DESCONTO POR QUANTIDADE MÍNIMA (quantidade inicial = 1)
+    const quantidadeInicial = 1;
+    if (produto.desconto_quantidade &&
+        produto.quantidade_minima &&
+        quantidadeInicial >= produto.quantidade_minima &&
+        ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+         (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade))) {
+
+      let precoComDescontoQuantidade = produto.preco || 0;
+
+      if (produto.tipo_desconto_quantidade === 'percentual') {
+        precoComDescontoQuantidade = (produto.preco || 0) * (1 - produto.percentual_desconto_quantidade / 100);
+      } else {
+        precoComDescontoQuantidade = (produto.preco || 0) - produto.valor_desconto_quantidade;
+      }
+
+      // Se já tem desconto de promoção, usar o menor preço entre os dois
+      if (temDesconto) {
+        if (precoComDescontoQuantidade < precoFinal) {
+          precoFinal = precoComDescontoQuantidade;
+          tipoDesconto = 'quantidade mínima';
+        }
+      } else {
+        precoFinal = precoComDescontoQuantidade;
+        temDesconto = true;
+        tipoDesconto = 'quantidade mínima';
+      }
+    }
+
+    console.log('🏷️ Produto selecionado para NFe:', {
+      nome: produto.nome,
+      precoOriginal: produto.preco,
+      precoFinal,
+      temDesconto,
+      tipoDesconto,
+      promocao: produto.promocao,
+      descontoQuantidade: produto.desconto_quantidade,
+      quantidadeMinima: produto.quantidade_minima
+    });
+
     setProdutoForm({
-      quantidade: 1,
+      quantidade: quantidadeInicial,
       valor_unitario: precoFinal,
       valor_total: precoFinal,
       cfop_devolucao: '',
@@ -6222,10 +6268,76 @@ const ProdutosSection: React.FC<{
   const updateProdutoForm = (field: string, value: number | string) => {
     setProdutoForm(prev => {
       const newForm = { ...prev, [field]: value };
-      // Só recalcula total para campos numéricos
-      if (field === 'quantidade' || field === 'valor_unitario') {
+
+      // ✅ RECALCULAR PREÇO QUANDO QUANTIDADE MUDAR (para aplicar desconto por quantidade)
+      if (field === 'quantidade' && produtoSelecionado) {
+        const novaQuantidade = typeof value === 'number' ? value : parseFloat(value as string) || 0;
+
+        // Recalcular preço com base na nova quantidade
+        let precoFinal = produtoSelecionado.preco || 0;
+        let temDesconto = false;
+        let tipoDesconto = '';
+
+        // 1. VERIFICAR DESCONTO DE PROMOÇÃO
+        if (produtoSelecionado.promocao && produtoSelecionado.valor_desconto) {
+          temDesconto = true;
+          tipoDesconto = 'promoção';
+
+          if (produtoSelecionado.tipo_desconto === 'percentual') {
+            const desconto = (precoFinal * produtoSelecionado.valor_desconto) / 100;
+            precoFinal = precoFinal - desconto;
+          } else if (produtoSelecionado.tipo_desconto === 'valor') {
+            precoFinal = precoFinal - produtoSelecionado.valor_desconto;
+          }
+        }
+
+        // 2. VERIFICAR DESCONTO POR QUANTIDADE MÍNIMA
+        if (produtoSelecionado.desconto_quantidade &&
+            produtoSelecionado.quantidade_minima &&
+            novaQuantidade >= produtoSelecionado.quantidade_minima &&
+            ((produtoSelecionado.tipo_desconto_quantidade === 'percentual' && produtoSelecionado.percentual_desconto_quantidade) ||
+             (produtoSelecionado.tipo_desconto_quantidade === 'valor' && produtoSelecionado.valor_desconto_quantidade))) {
+
+          let precoComDescontoQuantidade = produtoSelecionado.preco || 0;
+
+          if (produtoSelecionado.tipo_desconto_quantidade === 'percentual') {
+            precoComDescontoQuantidade = (produtoSelecionado.preco || 0) * (1 - produtoSelecionado.percentual_desconto_quantidade / 100);
+          } else {
+            precoComDescontoQuantidade = (produtoSelecionado.preco || 0) - produtoSelecionado.valor_desconto_quantidade;
+          }
+
+          // Se já tem desconto de promoção, usar o menor preço entre os dois
+          if (temDesconto) {
+            if (precoComDescontoQuantidade < precoFinal) {
+              precoFinal = precoComDescontoQuantidade;
+              tipoDesconto = 'quantidade mínima';
+            }
+          } else {
+            precoFinal = precoComDescontoQuantidade;
+            temDesconto = true;
+            tipoDesconto = 'quantidade mínima';
+          }
+        }
+
+        console.log('🔄 Recalculando preço por quantidade:', {
+          produto: produtoSelecionado.nome,
+          quantidade: novaQuantidade,
+          precoOriginal: produtoSelecionado.preco,
+          precoFinal,
+          temDesconto,
+          tipoDesconto
+        });
+
+        newForm.valor_unitario = precoFinal;
+        newForm.valor_total = novaQuantidade * precoFinal;
+      } else if (field === 'valor_unitario') {
+        // Recalcular total quando valor unitário mudar
+        newForm.valor_total = newForm.quantidade * newForm.valor_unitario;
+      } else if (field === 'quantidade' || field === 'valor_unitario') {
+        // Fallback para outros casos
         newForm.valor_total = newForm.quantidade * newForm.valor_unitario;
       }
+
       return newForm;
     });
   };
@@ -6260,8 +6372,8 @@ const ProdutosSection: React.FC<{
             </div>
           </div>
 
-          {/* Campos de valores - grid corrigido */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Campos de valores - grid 2 colunas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Valor Unitário */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -6294,200 +6406,128 @@ const ProdutosSection: React.FC<{
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
               />
             </div>
+          </div>
 
-            {/* CFOP - Aparece quando finalidade NÃO for 4 */}
-            {finalidade !== '4' && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-300">
-                    CFOP *
-                  </label>
-                  {/* ✅ ADICIONADO: Checkboxes de devolução e entrada com validação por finalidade */}
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={modoDevolucao}
-                        onChange={(e) => {
-                          setModoDevolucao(e.target.checked);
-                          if (e.target.checked) {
-                            setModoEntrada(false); // Desmarcar entrada
-                            updateProdutoForm('cfop_devolucao', '');
-                            updateProdutoForm('cfop_entrada', '');
-                            updateProdutoForm('cfop_geral', '');
-                          } else {
-                            updateProdutoForm('cfop_devolucao', '');
-                          }
-                        }}
-                        className="w-4 h-4 text-orange-600 bg-gray-800 border-gray-600 rounded focus:ring-orange-500 focus:ring-2"
-                      />
-                      <span className="text-orange-300">Devolução</span>
-                    </label>
-
-                    {/* Checkbox Entrada - Desabilitado para finalidade 4 */}
-                    <label className={`flex items-center gap-2 text-sm cursor-pointer ${
-                      finalidade === '4' ? 'text-gray-500 cursor-not-allowed' : 'text-gray-300'
-                    }`}>
-                      <input
-                        type="checkbox"
-                        checked={modoEntrada}
-                        disabled={finalidade === '4'}
-                        onChange={(e) => {
-                          if (finalidade === '4') return; // Bloquear para finalidade 4
-                          setModoEntrada(e.target.checked);
-                          if (e.target.checked) {
-                            setModoDevolucao(false); // Desmarcar devolução
-                            updateProdutoForm('cfop_entrada', '');
-                            updateProdutoForm('cfop_devolucao', '');
-                            updateProdutoForm('cfop_geral', '');
-                          } else {
-                            updateProdutoForm('cfop_entrada', '');
-                          }
-                        }}
-                        className={`w-4 h-4 bg-gray-800 border-gray-600 rounded focus:ring-2 ${
-                          finalidade === '4'
-                            ? 'text-gray-500 cursor-not-allowed'
-                            : 'text-blue-600 focus:ring-blue-500'
-                        }`}
-                      />
-                      <span className={finalidade === '4' ? 'text-gray-500' : 'text-blue-300'}>
-                        Entrada
-                        {finalidade === '4' && <span className="text-xs ml-1">(não permitido)</span>}
+          {/* ✅ ÁREA DE EXIBIÇÃO DOS DESCONTOS - Similar ao sistema de pedidos */}
+          {produtoSelecionado && (
+            <div className="mt-4 p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-white font-medium text-sm">{produtoSelecionado.nome}</h4>
+                  <div className="flex items-center gap-4 mt-1">
+                    {/* Preço Original */}
+                    <div className="text-sm">
+                      <span className="text-gray-400">Preço original: </span>
+                      <span className={`${
+                        (produtoSelecionado.promocao && produtoSelecionado.valor_desconto) ||
+                        (produtoSelecionado.desconto_quantidade &&
+                         produtoSelecionado.quantidade_minima &&
+                         produtoForm.quantidade >= produtoSelecionado.quantidade_minima)
+                          ? 'line-through text-gray-500'
+                          : 'text-white'
+                      }`}>
+                        R$ {(produtoSelecionado.preco || 0).toFixed(2)}
                       </span>
-                    </label>
-                  </div>
-                </div>
+                    </div>
 
-                {/* Campo CFOP condicional baseado na finalidade */}
-                {modoDevolucao ? (
-                  // Dropdown de CFOPs de devolução
-                  <div>
-                    <select
-                      value={produtoForm.cfop_devolucao || ''}
-                      onChange={(e) => updateProdutoForm('cfop_devolucao', e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-800 border border-orange-500 rounded-lg text-white focus:outline-none focus:border-orange-400"
-                    >
-                      <option value="">
-                        {finalidade === '4'
-                          ? 'Selecione o CFOP de devolução (OBRIGATÓRIO)'
-                          : 'Selecione o CFOP de devolução (SAÍDA)'
+                    {/* Preço Final */}
+                    {((produtoSelecionado.promocao && produtoSelecionado.valor_desconto) ||
+                      (produtoSelecionado.desconto_quantidade &&
+                       produtoSelecionado.quantidade_minima &&
+                       produtoForm.quantidade >= produtoSelecionado.quantidade_minima)) && (
+                      <div className="text-sm">
+                        <span className="text-gray-400">→ </span>
+                        <span className="text-green-400 font-medium">
+                          R$ {produtoForm.valor_unitario.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Detalhes dos Descontos */}
+                  <div className="mt-2 space-y-1">
+                    {/* Desconto de Promoção */}
+                    {produtoSelecionado.promocao && produtoSelecionado.valor_desconto && (
+                      <div className="text-xs text-orange-400">
+                        🏷️ Promoção:
+                        {produtoSelecionado.tipo_desconto === 'percentual'
+                          ? ` -${produtoSelecionado.valor_desconto}%`
+                          : ` -R$ ${produtoSelecionado.valor_desconto.toFixed(2)}`
                         }
-                      </option>
-                      {obterCfopsDisponiveis('devolucao').map((cfop) => (
-                        <option key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.descricao}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-orange-300 mt-1">
-                      {finalidade === '4'
-                        ? '🔄 Finalidade 4 - CFOPs específicos de devolução (série 5000/6000)'
-                        : '📤 Finalidade 1 - CFOPs normais de saída (não específicos de devolução)'
-                      }
-                    </p>
-                  </div>
-                ) : modoEntrada && finalidade !== '4' ? (
-                  // Dropdown de CFOPs de entrada (não disponível para finalidade 4)
-                  <div>
-                    <select
-                      value={produtoForm.cfop_entrada || ''}
-                      onChange={(e) => updateProdutoForm('cfop_entrada', e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-800 border border-blue-500 rounded-lg text-white focus:outline-none focus:border-blue-400"
-                    >
-                      <option value="">Selecione o CFOP de entrada</option>
-                      {obterCfopsDisponiveis('entrada').map((cfop) => (
-                        <option key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.descricao}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-blue-300 mt-1">
-                      📥 Modo entrada ativo - CFOPs de ENTRADA (série 1000/2000)
-                    </p>
-                  </div>
-                ) : (
-                  // Campo de texto normal
-                  <div>
-                    <input
-                      type="text"
-                      value={produtoForm.cfop_geral || ''}
-                      onChange={(e) => updateProdutoForm('cfop_geral', e.target.value)}
-                      placeholder={finalidade === '4' ? 'Use o checkbox Devolução' : 'Ex: 5102'}
-                      disabled={finalidade === '4'}
-                      className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-400 focus:outline-none ${
-                        finalidade === '4'
-                          ? 'border-gray-600 cursor-not-allowed opacity-50'
-                          : 'border-gray-700 focus:border-primary-500'
-                      }`}
-                    />
-                    <p className="text-xs text-gray-400 mt-1">
-                      {finalidade === '4'
-                        ? '⚠️ Para finalidade 4, use o checkbox "Devolução"'
-                        : '💡 Vem do cadastro do produto, mas pode ser editado'
-                      }
-                    </p>
-                  </div>
-                )}
+                      </div>
+                    )}
 
-                {/* Aviso sobre finalidade - Movido para baixo do campo CFOP */}
-                <div className="mt-3">
-                  {finalidade === '4' ? (
-                    <div className="p-2 bg-orange-500/10 border border-orange-500/20 rounded text-xs text-orange-300">
-                      ⚠️ <strong>Finalidade 4 (Devolução):</strong> Apenas CFOPs específicos de devolução são permitidos
-                    </div>
-                  ) : (
-                    <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded text-xs text-blue-300">
-                      ℹ️ <strong>Finalidade 1 (Normal):</strong> Use CFOPs normais - checkbox "Devolução" = CFOPs de saída normais
-                    </div>
-                  )}
+                    {/* Desconto por Quantidade */}
+                    {produtoSelecionado.desconto_quantidade &&
+                     produtoSelecionado.quantidade_minima && (
+                      <div className={`text-xs ${
+                        produtoForm.quantidade >= produtoSelecionado.quantidade_minima
+                          ? 'text-green-400'
+                          : 'text-gray-500'
+                      }`}>
+                        📦 Desconto por quantidade: {produtoSelecionado.quantidade_minima}+ unid
+                        {produtoSelecionado.tipo_desconto_quantidade === 'percentual'
+                          ? ` -${produtoSelecionado.percentual_desconto_quantidade}%`
+                          : ` -R$ ${(produtoSelecionado.valor_desconto_quantidade || 0).toFixed(2)}`
+                        }
+                        {produtoForm.quantidade >= produtoSelecionado.quantidade_minima && (
+                          <span className="ml-2 font-medium">✅ APLICADO</span>
+                        )}
+                        {produtoForm.quantidade < produtoSelecionado.quantidade_minima && (
+                          <span className="ml-2">
+                            (faltam {(produtoSelecionado.quantidade_minima - produtoForm.quantidade).toFixed(0)} unid)
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Economia Total */}
+                    {((produtoSelecionado.promocao && produtoSelecionado.valor_desconto) ||
+                      (produtoSelecionado.desconto_quantidade &&
+                       produtoSelecionado.quantidade_minima &&
+                       produtoForm.quantidade >= produtoSelecionado.quantidade_minima)) && (
+                      <div className="text-xs text-green-300 font-medium">
+                        💰 Economia: R$ {((produtoSelecionado.preco || 0) - produtoForm.valor_unitario).toFixed(2)} por unidade
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* CFOP de Devolução - Só aparece quando finalidade for 4 */}
-            {finalidade === '4' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  CFOP de Devolução *
-                </label>
-                <select
-                  value={produtoForm.cfop_devolucao || ''}
-                  onChange={(e) => updateProdutoForm('cfop_devolucao', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-800 border border-orange-500 rounded-lg text-white focus:outline-none focus:border-orange-400"
-                >
-                  <option value="">Selecione o CFOP de devolução (OBRIGATÓRIO)</option>
-                  {obterCfopsDisponiveis('devolucao').map((cfop) => (
-                    <option key={cfop.codigo} value={cfop.codigo}>
-                      {cfop.descricao}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-orange-300 mt-1">
-                  🔄 Finalidade 4 - Apenas CFOPs de devolução são permitidos
-                </p>
-              </div>
-            )}
-
-            {/* Total */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Total
-              </label>
-              <div className="flex items-center">
-                <span className="text-sm text-gray-400 mr-2">R$</span>
-                <input
-                  type="text"
-                  value={(produtoForm.valor_total || 0).toFixed(2)}
-                  placeholder="0.00"
-                  readOnly
-                  className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none cursor-not-allowed"
-                />
+                {/* Total da Linha */}
+                <div className="text-right">
+                  <div className="text-lg font-bold text-white">
+                    R$ {produtoForm.valor_total.toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {produtoForm.quantidade.toFixed(3)} × R$ {produtoForm.valor_unitario.toFixed(2)}
+                  </div>
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Botão Adicionar */}
-            <div className="flex items-end">
-              <button
+          {/* CFOP */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              CFOP *
+            </label>
+            <input
+              type="text"
+              value={produtoForm.cfop || ''}
+              onChange={(e) => updateProdutoForm('cfop', e.target.value)}
+              placeholder="Ex: 5102"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              💡 Vem do cadastro do produto, mas pode ser editado
+            </p>
+          </div>
+
+
+
+          {/* Botão Adicionar */}
+          <div className="mt-6">
+            <button
                 type="button"
                 onClick={handleAdicionarProduto}
                 disabled={!produtoSelecionado}
@@ -6498,10 +6538,9 @@ const ProdutosSection: React.FC<{
                 }`}
                 title={!produtoSelecionado ? 'Selecione um produto para adicionar' : 'Adicionar produto à NFe'}
               >
-                <Plus size={16} />
-                ADICIONAR
-              </button>
-            </div>
+              <Plus size={16} />
+              ADICIONAR
+            </button>
           </div>
         </div>
       </div>
