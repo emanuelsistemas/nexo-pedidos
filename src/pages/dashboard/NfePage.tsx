@@ -1678,6 +1678,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       volumes_peso_bruto: '',
       volumes_peso_liquido: ''
     },
+    intermediador: {
+      nome: '',
+      cnpj: '',
+      cnpj_formatado: ''
+    },
     empresa: null
   });
 
@@ -3354,6 +3359,11 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           },
           // ✅ ADICIONADO: Chaves de referência (obrigatórias para finalidades 2, 3 e 4)
           chaves_ref: nfeData.chaves_ref || [],
+          // ✅ ADICIONADO: Intermediador da transação (YB01, YB02, YB03)
+          intermediador: nfeData.intermediador && nfeData.intermediador.nome && nfeData.intermediador.cnpj ? {
+            nome: nfeData.intermediador.nome,
+            cnpj: nfeData.intermediador.cnpj
+          } : null,
           // ✅ CORREÇÃO: Adicionar informação adicional que estava faltando
           informacao_adicional: nfeData.identificacao.informacao_adicional || '',
           ambiente: ambienteNFe
@@ -3439,6 +3449,16 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         });
       } else {
         addLog('   Nenhuma chave de referência informada');
+      }
+
+      // 🔍 DEBUG: Log do intermediador sendo enviado
+      addLog('🔍 DEBUG - Intermediador da transação sendo enviado:');
+      if (localPayload.nfe_data.intermediador) {
+        addLog(`   Nome: ${localPayload.nfe_data.intermediador.nome || 'VAZIO'}`);
+        addLog(`   CNPJ: ${localPayload.nfe_data.intermediador.cnpj || 'VAZIO'}`);
+        addLog('   Status: SERÁ INCLUÍDO NO XML (YB01, YB02, YB03)');
+      } else {
+        addLog('   Status: NÃO INFORMADO - XML sem intermediador');
       }
 
       const response = await fetch('/backend/public/emitir-nfe.php', {
@@ -4543,7 +4563,12 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           />
         );
       case 'intermediador':
-        return <IntermediadorSection />;
+        return (
+          <IntermediadorSection
+            data={nfeData.intermediador}
+            onChange={(data) => setNfeData(prev => ({ ...prev, intermediador: data }))}
+          />
+        );
       case 'autorizacao':
         return (
           <AutorizacaoSection
@@ -8093,28 +8118,227 @@ const TransportadoraSection: React.FC<{ data: any; onChange: (data: any) => void
   );
 };
 
-const IntermediadorSection: React.FC = () => (
-  <div className="p-4">
-    <h2 className="text-xl font-bold text-white mb-4">Intermediador da Venda</h2>
-    <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Intermediador da venda
-        </label>
-        <div className="flex items-center space-x-2">
-          <input
-            type="text"
-            placeholder="Selecione ou digite o intermediador"
-            className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-          />
-          <button className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
-            +
-          </button>
+const IntermediadorSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({ data, onChange }) => {
+  const [intermediadorForm, setIntermediadorForm] = useState({
+    nome: '',
+    cnpj: ''
+  });
+
+  // Função para formatar CNPJ
+  const formatarCNPJ = (valor: string) => {
+    const numeros = valor.replace(/\D/g, '');
+    return numeros.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  };
+
+  // Função para validar CNPJ
+  const validarCNPJ = (cnpj: string) => {
+    const numeros = cnpj.replace(/\D/g, '');
+
+    if (numeros.length !== 14) return false;
+    if (/^(\d)\1+$/.test(numeros)) return false; // Todos os dígitos iguais
+
+    // Validação dos dígitos verificadores
+    let soma = 0;
+    let peso = 2;
+
+    // Primeiro dígito
+    for (let i = 11; i >= 0; i--) {
+      soma += parseInt(numeros[i]) * peso;
+      peso = peso === 9 ? 2 : peso + 1;
+    }
+
+    let digito1 = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    if (parseInt(numeros[12]) !== digito1) return false;
+
+    // Segundo dígito
+    soma = 0;
+    peso = 2;
+    for (let i = 12; i >= 0; i--) {
+      soma += parseInt(numeros[i]) * peso;
+      peso = peso === 9 ? 2 : peso + 1;
+    }
+
+    let digito2 = soma % 11 < 2 ? 0 : 11 - (soma % 11);
+    return parseInt(numeros[13]) === digito2;
+  };
+
+  const handleCNPJChange = (valor: string) => {
+    const numeros = valor.replace(/\D/g, '').slice(0, 14);
+    setIntermediadorForm(prev => ({
+      ...prev,
+      cnpj: formatarCNPJ(numeros)
+    }));
+  };
+
+  const handleAdicionarIntermediador = () => {
+    if (!intermediadorForm.nome.trim()) {
+      alert('Nome do intermediador é obrigatório');
+      return;
+    }
+
+    if (!intermediadorForm.cnpj.trim()) {
+      alert('CNPJ do intermediador é obrigatório');
+      return;
+    }
+
+    const cnpjNumeros = intermediadorForm.cnpj.replace(/\D/g, '');
+    if (!validarCNPJ(cnpjNumeros)) {
+      alert('CNPJ inválido');
+      return;
+    }
+
+    // Adicionar intermediador (único)
+    onChange({
+      ...data,
+      nome: intermediadorForm.nome.trim(),
+      cnpj: cnpjNumeros,
+      cnpj_formatado: intermediadorForm.cnpj
+    });
+
+    // Limpar formulário
+    setIntermediadorForm({ nome: '', cnpj: '' });
+  };
+
+  const handleRemoverIntermediador = () => {
+    onChange({
+      ...data,
+      nome: '',
+      cnpj: '',
+      cnpj_formatado: ''
+    });
+  };
+
+  const temIntermediador = data?.nome && data?.cnpj;
+
+  return (
+    <div className="p-4">
+      <h2 className="text-xl font-bold text-white mb-4">Intermediador da Transação</h2>
+
+      {/* Aviso explicativo */}
+      <div className="mb-6 rounded-lg p-4 border bg-blue-900/20 border-blue-700/50">
+        <h3 className="font-medium mb-2 flex items-center gap-2 text-blue-300">
+          <Users size={16} />
+          Quando Informar o Intermediador?
+        </h3>
+        <div className="text-sm text-blue-200 space-y-2">
+          <p><strong>✅ OBRIGATÓRIO para:</strong></p>
+          <ul className="list-disc list-inside ml-4 space-y-1 text-xs text-blue-300">
+            <li>Marketplaces (Mercado Livre, Amazon, Shopee)</li>
+            <li>Delivery (iFood, Uber Eats, Rappi)</li>
+            <li>Plataformas de E-commerce terceiras</li>
+            <li>Agenciadores que processam a transação</li>
+          </ul>
+          <p><strong>❌ NÃO informar para:</strong> Vendas diretas, site próprio, loja física</p>
         </div>
       </div>
+
+      {/* Formulário para adicionar intermediador */}
+      {!temIntermediador && (
+        <div className="mb-6">
+          <h3 className="text-lg font-bold text-white mb-4">Novo Intermediador</h3>
+          <div className="bg-background-card rounded-lg border border-gray-800 p-4">
+            <div className="space-y-4">
+              {/* Nome do Intermediador */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Nome do Intermediador <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={intermediadorForm.nome}
+                  onChange={(e) => setIntermediadorForm(prev => ({ ...prev, nome: e.target.value }))}
+                  placeholder="Ex: iFood, Mercado Livre, Amazon"
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                  maxLength={60}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Nome da plataforma/marketplace que intermediou a venda
+                </p>
+              </div>
+
+              {/* CNPJ do Intermediador */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  CNPJ do Intermediador <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={intermediadorForm.cnpj}
+                  onChange={(e) => handleCNPJChange(e.target.value)}
+                  placeholder="00.000.000/0000-00"
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 font-mono"
+                  maxLength={18}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  CNPJ da empresa intermediadora (com validação automática)
+                </p>
+              </div>
+
+              {/* Botão Adicionar */}
+              <div>
+                <button
+                  type="button"
+                  onClick={handleAdicionarIntermediador}
+                  className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center justify-center gap-2"
+                >
+                  <Plus size={16} />
+                  ADICIONAR INTERMEDIADOR
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Intermediador Adicionado */}
+      {temIntermediador && (
+        <div>
+          <h3 className="text-lg font-bold text-white mb-4">Intermediador Configurado</h3>
+          <div className="bg-background-card rounded-lg border border-gray-800 overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-sm text-gray-400">Nome:</p>
+                      <p className="text-white font-medium">{data.nome}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400">CNPJ:</p>
+                      <p className="text-white font-mono">{data.cnpj_formatado}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setIntermediadorForm({
+                        nome: data.nome,
+                        cnpj: data.cnpj_formatado
+                      });
+                      handleRemoverIntermediador();
+                    }}
+                    className="px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 focus:outline-none text-sm"
+                    title="Alterar intermediador"
+                  >
+                    <Edit size={14} />
+                  </button>
+                  <button
+                    onClick={handleRemoverIntermediador}
+                    className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none text-sm"
+                    title="Remover intermediador"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const AutorizacaoSection: React.FC<{
   dados: any;

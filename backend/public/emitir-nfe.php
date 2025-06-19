@@ -870,8 +870,18 @@ try {
         error_log("✅ Chaves de referência adicionadas às informações complementares para DANFE");
     }
 
-    // Combinar informação adicional com chaves de referência
-    $informacaoCompleta = trim($informacaoAdicional . $chavesRefTexto);
+    // ✅ ADICIONAR: Intermediador às informações complementares para aparecer na DANFE
+    $intermediadorTexto = '';
+    if (!empty($nfeData['intermediador']) && !empty($nfeData['intermediador']['nome']) && !empty($nfeData['intermediador']['cnpj'])) {
+        $cnpjFormatado = preg_replace('/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/', '$1.$2.$3/$4-$5', $nfeData['intermediador']['cnpj']);
+        $intermediadorTexto = "\n\nINTERMEDIADOR DA TRANSACAO:\n";
+        $intermediadorTexto .= "Nome: " . $nfeData['intermediador']['nome'] . "\n";
+        $intermediadorTexto .= "CNPJ: " . $cnpjFormatado;
+        error_log("✅ Intermediador adicionado às informações complementares para DANFE");
+    }
+
+    // Combinar informação adicional com chaves de referência e intermediador
+    $informacaoCompleta = trim($informacaoAdicional . $chavesRefTexto . $intermediadorTexto);
 
     if (!empty($informacaoCompleta)) {
         $std = new stdClass();
@@ -880,6 +890,33 @@ try {
         error_log("NFE: Informação adicional incluída: " . substr($informacaoCompleta, 0, 100) . "...");
     } else {
         error_log("NFE: Nenhuma informação adicional fornecida");
+    }
+
+    // ✅ INTERMEDIADOR DA TRANSAÇÃO (YB01, YB02, YB03) - Nota Técnica 2020.006
+    if (!empty($nfeData['intermediador']) && !empty($nfeData['intermediador']['nome']) && !empty($nfeData['intermediador']['cnpj'])) {
+        error_log("🔍 DEBUG INTERMEDIADOR - Dados recebidos:");
+        error_log("  - Nome: " . $nfeData['intermediador']['nome']);
+        error_log("  - CNPJ: " . $nfeData['intermediador']['cnpj']);
+
+        // Validar CNPJ do intermediador
+        $cnpjIntermediador = preg_replace('/[^0-9]/', '', $nfeData['intermediador']['cnpj']);
+        if (strlen($cnpjIntermediador) !== 14) {
+            throw new Exception('CNPJ do intermediador deve ter 14 dígitos');
+        }
+
+        // Criar tag do intermediador conforme especificação SEFAZ
+        $stdIntermed = new stdClass();
+        $stdIntermed->CNPJ = $cnpjIntermediador; // YB02 - CNPJ do Intermediador da Transação
+        $stdIntermed->idCadIntTran = $nfeData['intermediador']['nome']; // YB03 - Nome/Identificador do intermediador
+
+        $make->taginfIntermed($stdIntermed);
+
+        error_log("✅ NFe - Intermediador da transação adicionado:");
+        error_log("  - CNPJ: " . $cnpjIntermediador);
+        error_log("  - Nome: " . $nfeData['intermediador']['nome']);
+        error_log("  - Tags XML: YB01 (infIntermed), YB02 (CNPJ), YB03 (idCadIntTran)");
+    } else {
+        error_log("ℹ️ NFe - Nenhum intermediador informado - XML sem grupo infIntermed");
     }
 
     // GERAR XML (MÉTODO NATIVO)
