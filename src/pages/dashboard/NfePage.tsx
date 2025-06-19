@@ -5830,6 +5830,9 @@ const ProdutosSection: React.FC<{
   const [modoDevolucao, setModoDevolucao] = useState(false);
   const [modoEntrada, setModoEntrada] = useState(false);
 
+  // ✅ ADICIONADO: Estado para busca por código/EAN
+  const [codigoProdutoBusca, setCodigoProdutoBusca] = useState('');
+
   // ✅ CORREÇÃO: CFOPs baseados na finalidade da NFe
 
   // CFOPs para FINALIDADE 4 (Devolução) - Apenas CFOPs de devolução
@@ -5870,6 +5873,93 @@ const ProdutosSection: React.FC<{
     } else {
       // Finalidade 1,2,3: CFOPs normais (não específicos de devolução)
       return tipo === 'devolucao' ? cfopsSaidaNormal : cfopsEntrada;
+    }
+  };
+
+  // ✅ FUNÇÃO: Buscar produto por código ou EAN
+  const buscarProdutoPorCodigo = async (codigo: string) => {
+    try {
+      showToast('Buscando produto...', 'info');
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        showToast('Usuário não autenticado', 'error');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showToast('Empresa não encontrada', 'error');
+        return;
+      }
+
+      // Buscar produto por código ou código de barras
+      const { data: produtoEncontrado, error } = await supabase
+        .from('produtos')
+        .select(`
+          id,
+          nome,
+          preco,
+          codigo,
+          codigo_barras,
+          descricao,
+          grupo_id,
+          promocao,
+          tipo_desconto,
+          valor_desconto,
+          desconto_quantidade,
+          quantidade_minima,
+          tipo_desconto_quantidade,
+          valor_desconto_quantidade,
+          percentual_desconto_quantidade,
+          ncm,
+          cfop,
+          origem_produto,
+          situacao_tributaria,
+          cst_icms,
+          csosn_icms,
+          cst_pis,
+          cst_cofins,
+          cst_ipi,
+          aliquota_icms,
+          aliquota_pis,
+          aliquota_cofins,
+          aliquota_ipi,
+          valor_ipi,
+          cest,
+          peso_liquido,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome
+          )
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .eq('deletado', false)
+        .or(`codigo.eq.${codigo},codigo_barras.eq.${codigo}`)
+        .limit(1)
+        .single();
+
+      if (error || !produtoEncontrado) {
+        showToast(`Produto não encontrado com código/EAN: ${codigo}`, 'error');
+        return;
+      }
+
+      // Selecionar o produto encontrado
+      handleSelecionarProduto(produtoEncontrado);
+      setCodigoProdutoBusca('');
+      showToast(`Produto "${produtoEncontrado.nome}" adicionado!`, 'success');
+
+    } catch (error: any) {
+      console.error('Erro ao buscar produto por código:', error);
+      showToast(`Erro ao buscar produto: ${error.message}`, 'error');
     }
   };
   const [produtoForm, setProdutoForm] = useState({
@@ -6356,20 +6446,52 @@ const ProdutosSection: React.FC<{
             <div className="relative">
               <input
                 type="text"
-                value={produtoSelecionado ? produtoSelecionado.nome : ''}
-                placeholder="Selecione ou digite o produto"
+                value={produtoSelecionado ? produtoSelecionado.nome : codigoProdutoBusca}
+                onChange={(e) => {
+                  if (!produtoSelecionado) {
+                    setCodigoProdutoBusca(e.target.value);
+                  }
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter' && codigoProdutoBusca.trim()) {
+                    e.preventDefault();
+                    await buscarProdutoPorCodigo(codigoProdutoBusca.trim());
+                  }
+                }}
+                placeholder={produtoSelecionado ? produtoSelecionado.nome : "Digite código/EAN e pressione Enter ou clique na lupa"}
                 className="w-full px-3 py-2 pr-10 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                readOnly
+                readOnly={!!produtoSelecionado}
               />
               <button
                 type="button"
-                onClick={() => setShowProdutoModal(true)}
+                onClick={() => {
+                  if (produtoSelecionado) {
+                    // Limpar produto selecionado
+                    setProdutoSelecionado(null);
+                    setCodigoProdutoBusca('');
+                    setProdutoForm({
+                      valor_unitario: 0,
+                      quantidade: 1,
+                      valor_total: 0,
+                      cfop: '',
+                      cfop_devolucao: '',
+                      cfop_entrada: ''
+                    });
+                  } else {
+                    setShowProdutoModal(true);
+                  }
+                }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
-                title="Buscar produto"
+                title={produtoSelecionado ? "Limpar produto" : "Buscar produto"}
               >
-                <Search size={16} />
+                {produtoSelecionado ? <X size={16} /> : <Search size={16} />}
               </button>
             </div>
+            {!produtoSelecionado && (
+              <p className="text-xs text-gray-400 mt-1">
+                💡 Digite o código do produto ou código de barras e pressione Enter
+              </p>
+            )}
           </div>
 
           {/* Campos de valores - grid 2 colunas */}
