@@ -6508,19 +6508,108 @@ const ProdutosSection: React.FC<{
 
           {/* CFOP */}
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              CFOP *
-            </label>
-            <input
-              type="text"
-              value={produtoForm.cfop || ''}
-              onChange={(e) => updateProdutoForm('cfop', e.target.value)}
-              placeholder="Ex: 5102"
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              💡 Vem do cadastro do produto, mas pode ser editado
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-300">
+                CFOP *
+              </label>
+              {/* Checkboxes de devolução e entrada */}
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={modoDevolucao}
+                    onChange={(e) => {
+                      setModoDevolucao(e.target.checked);
+                      if (e.target.checked) {
+                        setModoEntrada(false);
+                        updateProdutoForm('cfop_devolucao', '');
+                        updateProdutoForm('cfop_entrada', '');
+                        updateProdutoForm('cfop', '');
+                      } else {
+                        updateProdutoForm('cfop_devolucao', '');
+                      }
+                    }}
+                    className="w-4 h-4 text-orange-600 bg-gray-800 border-gray-600 rounded focus:ring-orange-500 focus:ring-2"
+                  />
+                  <span className="text-orange-300">Devolução</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={modoEntrada}
+                    onChange={(e) => {
+                      setModoEntrada(e.target.checked);
+                      if (e.target.checked) {
+                        setModoDevolucao(false);
+                        updateProdutoForm('cfop_entrada', '');
+                        updateProdutoForm('cfop_devolucao', '');
+                        updateProdutoForm('cfop', '');
+                      } else {
+                        updateProdutoForm('cfop_entrada', '');
+                      }
+                    }}
+                    className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <span className="text-blue-300">Entrada</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Campo CFOP condicional */}
+            {modoDevolucao ? (
+              // Dropdown de CFOPs de devolução
+              <div>
+                <select
+                  value={produtoForm.cfop_devolucao || ''}
+                  onChange={(e) => updateProdutoForm('cfop_devolucao', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-orange-500 rounded-lg text-white focus:outline-none focus:border-orange-400"
+                >
+                  <option value="">Selecione o CFOP de devolução</option>
+                  {obterCfopsDisponiveis('devolucao').map((cfop) => (
+                    <option key={cfop.codigo} value={cfop.codigo}>
+                      {cfop.descricao}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-orange-300 mt-1">
+                  📤 CFOPs específicos de devolução (série 5000/6000)
+                </p>
+              </div>
+            ) : modoEntrada ? (
+              // Dropdown de CFOPs de entrada
+              <div>
+                <select
+                  value={produtoForm.cfop_entrada || ''}
+                  onChange={(e) => updateProdutoForm('cfop_entrada', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-800 border border-blue-500 rounded-lg text-white focus:outline-none focus:border-blue-400"
+                >
+                  <option value="">Selecione o CFOP de entrada</option>
+                  {obterCfopsDisponiveis('entrada').map((cfop) => (
+                    <option key={cfop.codigo} value={cfop.codigo}>
+                      {cfop.descricao}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-blue-300 mt-1">
+                  📥 CFOPs de entrada (série 1000/2000)
+                </p>
+              </div>
+            ) : (
+              // Campo de texto normal
+              <div>
+                <input
+                  type="text"
+                  value={produtoForm.cfop || ''}
+                  onChange={(e) => updateProdutoForm('cfop', e.target.value)}
+                  placeholder="Ex: 5102"
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  💡 Vem do cadastro do produto, mas pode ser editado
+                </p>
+              </div>
+            )}
           </div>
 
 
