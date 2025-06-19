@@ -2,12 +2,23 @@
 // ✅ CONFIGURAR TIMEZONE BRASILEIRO PARA CORRIGIR HORÁRIO
 date_default_timezone_set('America/Sao_Paulo');
 
+// ✅ DEBUG: Configurar logs de erro
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+ini_set('error_log', '/var/log/php_nfe_debug.log');
+
 header('Content-Type: application/json');
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
+
+// ✅ DEBUG: Log início da execução
+error_log("=== INÍCIO EMISSÃO NFE === " . date('Y-m-d H:i:s'));
+error_log("REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD']);
+error_log("CONTENT_TYPE: " . ($_SERVER['CONTENT_TYPE'] ?? 'N/A'));
 
 require_once '../vendor/autoload.php';
 
@@ -29,8 +40,12 @@ try {
     $empresaId = $input['empresa_id'] ?? null;
 
     if (!$empresaId) {
+        error_log("❌ ERRO: empresa_id vazio ou não informado");
+        error_log("Input recebido: " . json_encode($input));
         throw new Exception('empresa_id é obrigatório');
     }
+
+    error_log("✅ empresa_id válido: " . $empresaId);
 
     if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $empresaId)) {
         throw new Exception('empresa_id inválido');
@@ -93,7 +108,8 @@ try {
         error_log("Faltando - Empresa: " . (!isset($nfeData['empresa']) ? 'SIM' : 'NÃO'));
         error_log("Faltando - Destinatário: " . (!isset($nfeData['destinatario']) ? 'SIM' : 'NÃO'));
         error_log("Faltando - Produtos: " . (!isset($nfeData['produtos']) ? 'SIM' : 'NÃO'));
-        throw new Exception('Dados da NFe incompletos');
+        error_log("Dados recebidos completos: " . json_encode($nfeData, JSON_PRETTY_PRINT));
+        throw new Exception('Dados da NFe incompletos - verifique se todos os campos obrigatórios estão preenchidos');
     }
 
     // Configuração da empresa (USANDO DADOS REAIS DA EMPRESA)
@@ -190,6 +206,13 @@ try {
     error_log("🔍 DEBUG CHAVES REF - Dados recebidos:");
     error_log("  - Finalidade: " . $finalidade);
     error_log("  - Quantidade de chaves: " . count($chavesRef));
+    error_log("  - Estrutura identificacao: " . json_encode($identificacao));
+
+    // ✅ DEBUG: Verificar se finalidade está sendo definida corretamente
+    if (empty($finalidade)) {
+        error_log("❌ ERRO: Finalidade vazia ou não definida");
+        throw new Exception('Finalidade da NFe é obrigatória');
+    }
 
     // ✅ CORREÇÃO: Regras oficiais de chave de referência
     // Finalidade 1 (Normal) = OPCIONAL (se informada, deve aparecer no XML/DANFE)
@@ -219,11 +242,11 @@ try {
                 throw new Exception("Chave de referência " . ($index + 1) . " deve ter 44 dígitos");
             }
 
-            // Criar tag NFref para cada chave
+            // ✅ CORREÇÃO: Usar método correto tagrefNFe() em vez de tagNFref()
             $stdRef = new stdClass();
             $stdRef->refNFe = $chave;
 
-            $make->tagNFref($stdRef);
+            $make->tagrefNFe($stdRef);
             error_log("✅ Chave de referência adicionada: {$chave}");
         }
     } else {
@@ -817,18 +840,44 @@ try {
     // 2. DEPOIS: Criar detalhes do pagamento dentro do grupo PAG
     $std = new stdClass();
     $std->indPag = 0; // 0=À vista, 1=À prazo
-    $std->tPag = '01'; // 01=Dinheiro (conforme tabela fiscal)
-    $std->vPag = $totalProdutos - (float)($totais['valor_desconto'] ?? 0); // Usar valor calculado
+
+    // ✅ CORREÇÃO CRÍTICA: Para finalidade 4 (devolução), usar "90 - Sem Pagamento"
+    if ($finalidade === '4') {
+        $std->tPag = '90'; // 90=Sem Pagamento (específico para devolução)
+        $std->vPag = 0.00; // Valor zero para devolução
+        error_log("✅ Pagamento configurado para devolução: tPag=90 (Sem Pagamento), vPag=0.00");
+    } else {
+        $std->tPag = '01'; // 01=Dinheiro (conforme tabela fiscal)
+        $std->vPag = $totalProdutos - (float)($totais['valor_desconto'] ?? 0); // Usar valor calculado
+        error_log("✅ Pagamento configurado para venda normal: tPag=01, vPag=" . $std->vPag);
+    }
 
     $make->tagdetPag($std);
 
     // Informações Adicionais (MÉTODO NATIVO) - ANTES DE GERAR XML
     $informacaoAdicional = $nfeData['informacao_adicional'] ?? '';
-    if (!empty($informacaoAdicional)) {
+
+    // ✅ CORREÇÃO: Adicionar chaves de referência às informações complementares para aparecer na DANFE
+    $chavesRefTexto = '';
+    if (!empty($chavesRef)) {
+        $chavesRefTexto = "\n\nDOCUMENTOS FISCAIS REFERENCIADOS:\n";
+        foreach ($chavesRef as $index => $chaveRef) {
+            $chave = $chaveRef['chave'] ?? '';
+            if (!empty($chave)) {
+                $chavesRefTexto .= "NFe: " . $chave . "\n";
+            }
+        }
+        error_log("✅ Chaves de referência adicionadas às informações complementares para DANFE");
+    }
+
+    // Combinar informação adicional com chaves de referência
+    $informacaoCompleta = trim($informacaoAdicional . $chavesRefTexto);
+
+    if (!empty($informacaoCompleta)) {
         $std = new stdClass();
-        $std->infCpl = $informacaoAdicional;
+        $std->infCpl = $informacaoCompleta;
         $make->taginfAdic($std);
-        error_log("NFE: Informação adicional incluída: " . substr($informacaoAdicional, 0, 100) . "...");
+        error_log("NFE: Informação adicional incluída: " . substr($informacaoCompleta, 0, 100) . "...");
     } else {
         error_log("NFE: Nenhuma informação adicional fornecida");
     }

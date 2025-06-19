@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Download, Copy, Trash2, X, Ban, Mail, MoreVertical, ImageIcon, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Eye, FileText, Search, Filter, ArrowLeft, Save, Send, Download, Copy, Trash2, X, Ban, Mail, MoreVertical, ImageIcon, AlertTriangle, Calculator, Truck, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Button from '../../components/comum/Button';
 import ProdutoSeletorModal from '../../components/comum/ProdutoSeletorModal';
@@ -2840,10 +2840,64 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     checkSefazStatus();
   }, []);
 
+  // ✅ NOVA FUNÇÃO: Validação prévia ANTES de abrir o modal
+  const validarAntesDeEmitir = () => {
+    const erros = [];
+
+    // 1. Validação básica de dados obrigatórios
+    if (!nfeData.empresa) {
+      erros.push('Dados da empresa não carregados');
+    }
+
+    if (!nfeData.destinatario.documento || !nfeData.destinatario.nome) {
+      erros.push('Destinatário é obrigatório (CNPJ/CPF e Nome)');
+    }
+
+    if (!nfeData.destinatario.endereco?.trim()) {
+      erros.push('Endereço do destinatário é obrigatório');
+    }
+
+    if (nfeData.produtos.length === 0) {
+      erros.push('Adicione pelo menos um produto');
+    }
+
+    // ✅ TEMPORÁRIO: Validar pagamentos para todas as finalidades (para debug)
+    const finalidadeNFe = nfeData.identificacao.finalidade || '1';
+    if (nfeData.pagamentos.length === 0) {
+      erros.push('Adicione pelo menos uma forma de pagamento');
+    }
+
+    if (!nfeData.identificacao.natureza_operacao) {
+      erros.push('Natureza da operação é obrigatória');
+    }
+
+    // ✅ VALIDAÇÃO CRÍTICA: Chaves de referência para finalidade 4
+    if (finalidadeNFe === '4') {
+      if (!nfeData.chaves_ref || nfeData.chaves_ref.length === 0) {
+        erros.push('Para NFe de devolução (finalidade 4), pelo menos uma chave de referência é obrigatória');
+      }
+    }
+
+    return erros;
+  };
+
   // Função para emitir NFe
   const handleEmitirNFe = async () => {
     try {
-      // Abrir modal diretamente e iniciar processo
+      // ✅ VALIDAÇÃO PRÉVIA: Verificar dados obrigatórios ANTES de abrir modal
+      const errosValidacao = validarAntesDeEmitir();
+
+      if (errosValidacao.length > 0) {
+        // Mostrar erros em alert simples
+        const mensagemErro = '❌ ERROS DE VALIDAÇÃO:\n\n' +
+          errosValidacao.map((erro, index) => `${index + 1}. ${erro}`).join('\n') +
+          '\n\n📝 Corrija os erros acima antes de emitir a NFe.';
+
+        alert(mensagemErro);
+        return; // Não abrir modal
+      }
+
+      // Se passou na validação prévia, abrir modal e iniciar processo
       setIsLoading(true);
       setShowProgressModal(true);
       clearAllLogs(); // ✅ Limpar logs ao iniciar nova emissão
@@ -3032,6 +3086,30 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         addLog(`✅ Natureza da operação: ${nfeData.identificacao.natureza_operacao}`);
       }
 
+      // ✅ NOVA VALIDAÇÃO: Chaves de referência obrigatórias para finalidade 4 (devolução)
+      const finalidadeNFe = nfeData.identificacao.finalidade || '1';
+      addLog(`🔗 Validando chaves de referência (finalidade ${finalidadeNFe})...`);
+
+      if (finalidadeNFe === '4') {
+        // Para finalidade 4 (devolução), chaves de referência são OBRIGATÓRIAS
+        if (!nfeData.chaves_ref || nfeData.chaves_ref.length === 0) {
+          const erro = 'Para NFe de devolução (finalidade 4), pelo menos uma chave de referência é obrigatória';
+          validationErrors.push(erro);
+          addLog(`❌ ${erro}`);
+          addLog(`   Finalidade: ${finalidadeNFe} (Devolução)`);
+          addLog(`   Chaves informadas: ${nfeData.chaves_ref?.length || 0}`);
+        } else {
+          addLog(`✅ ${nfeData.chaves_ref.length} chave(s) de referência informada(s)`);
+          nfeData.chaves_ref.forEach((chave, index) => {
+            addLog(`   ${index + 1}. ${chave.chave || chave.chave_formatada || 'Chave inválida'}`);
+          });
+        }
+      } else {
+        // Para outras finalidades, chaves são opcionais
+        const qtdChaves = nfeData.chaves_ref?.length || 0;
+        addLog(`✅ Chaves de referência opcionais: ${qtdChaves} informada(s)`);
+      }
+
       addLog(`📊 Resumo da validação: ${validationErrors.length} erro(s) encontrado(s)`);
 
       if (validationErrors.length > 0) {
@@ -3178,7 +3256,9 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           numero: numeroNFe,
           serie: parseInt(nfeData.identificacao.serie) || 1,
           codigo_numerico: codigoNumerico,
-          natureza_operacao: nfeData.identificacao.natureza_operacao
+          natureza_operacao: nfeData.identificacao.natureza_operacao,
+          // ✅ CORREÇÃO CRÍTICA: Adicionar finalidade que estava faltando
+          finalidade: nfeData.identificacao.finalidade || '1'
         }
       };
 
@@ -4063,20 +4143,27 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
   // Finalidade 2 (Complementar) = OBRIGATÓRIA
   // Finalidade 3 (Ajuste) = OBRIGATÓRIA
   // Finalidade 4 (Devolução) = OBRIGATÓRIA
+  const finalidade = nfeData.identificacao?.finalidade || '1';
   const finalidadeExigeChaveRef = true; // Sempre mostrar aba (mas com avisos sobre obrigatoriedade)
 
-  // ✅ REMOVIDO: Redirecionamento automático (não é mais necessário)
+  // ✅ TEMPORÁRIO: Redirecionamento removido para debug
 
   const sections = [
     { id: 'identificacao', label: 'Identificação', number: 1 },
     { id: 'destinatario', label: 'Destinatário', number: 2 },
     { id: 'produtos', label: 'Produtos', number: 3 },
-    { id: 'totais', label: 'Totais', number: 4 },
-    { id: 'pagamentos', label: 'Pagamentos', number: 5 },
-    // ✅ REGRA FISCAL: Só mostrar Chaves Ref se finalidade = 2, 3 ou 4
-    ...(finalidadeExigeChaveRef ? [{ id: 'chaves_ref', label: 'Chaves Ref.', icon: FileText }] : []),
-    { id: 'transportadora', label: 'Transportadora', icon: FileText },
-    { id: 'intermediador', label: 'Intermediador', icon: FileText },
+    // ✅ TEMPORÁRIO: Mostrar aba Pagamentos para debug (depois remover para finalidade 4)
+    { id: 'pagamentos', label: 'Pagamentos', number: 4 },
+    // ✅ CORREÇÃO: Para finalidade 4, Chaves Ref vira passo 4 (obrigatório). Para outras, fica como ícone opcional
+    ...(finalidadeExigeChaveRef ? [{
+      id: 'chaves_ref',
+      label: 'Chaves Ref.',
+      ...(finalidade === '4' ? { number: 4 } : { icon: FileText })
+    }] : []),
+    // ✅ CORREÇÃO: Totais movido para baixo e sem número (só ícone)
+    { id: 'totais', label: 'Totais', icon: Calculator },
+    { id: 'transportadora', label: 'Transportadora', icon: Truck },
+    { id: 'intermediador', label: 'Intermediador', icon: Users },
     // Só mostrar a aba de Autorização após a NFe ser emitida OU em modo visualização de NFe autorizada
     ...(nfeEmitida || isViewMode ? [{ id: 'autorizacao', label: 'Autorização', icon: FileText }] : []),
   ];
@@ -4437,6 +4524,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             data={nfeData.pagamentos}
             onChange={(data) => setNfeData(prev => ({ ...prev, pagamentos: data }))}
             totalNota={nfeData.totais.valor_total || 0}
+            finalidade={finalidade}
           />
         );
       case 'chaves_ref':
@@ -7154,28 +7242,91 @@ const TotaisSection: React.FC<{ data: any; onChange: (data: any) => void }> = ({
   );
 };
 
-const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void; totalNota: number }> = ({ data: pagamentos, onChange, totalNota }) => {
-  const [pagamentoForm, setPagamentoForm] = useState({
-    tipo: '01',
-    valor: totalNota || 0
+const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void; totalNota: number; finalidade?: string }> = ({ data: pagamentos, onChange, totalNota, finalidade = '1' }) => {
+
+  // 🔍 DEBUG COMPLETO - Vamos ver todos os valores
+  console.log('🔍 PAGAMENTOS SECTION - Props recebidas:', {
+    totalNota,
+    finalidade,
+    pagamentos,
+    'typeof totalNota': typeof totalNota,
+    'totalNota > 0': totalNota > 0
   });
 
-  // Atualizar valor do pagamento quando o total da nota mudar
-  useEffect(() => {
-    if (totalNota > 0) {
-      // ✅ CORREÇÃO: Sempre atualizar quando total mudar
-      setPagamentoForm(prev => ({ ...prev, valor: totalNota }));
+  // ✅ CORREÇÃO: Estado inicial sempre com valor correto
+  const [pagamentoForm, setPagamentoForm] = useState(() => {
+    const valorInicial = finalidade === '4' ? 0 : (totalNota || 0);
+    console.log('🔍 ESTADO INICIAL - Criando com valor:', valorInicial);
+    return {
+      tipo: finalidade === '4' ? '90' : '01',
+      valor: valorInicial
+    };
+  });
 
-      // ✅ Se há apenas um pagamento, ajustar automaticamente
+  // 🔍 DEBUG - Monitorar mudanças no estado
+  useEffect(() => {
+    console.log('🔍 ESTADO ATUAL - pagamentoForm:', pagamentoForm);
+  }, [pagamentoForm]);
+
+  // ✅ CORREÇÃO: Atualizar valor automaticamente quando totalNota ou finalidade mudar
+  useEffect(() => {
+    console.log('🔍 USE EFFECT - Executando com:', { totalNota, finalidade, 'totalNota type': typeof totalNota, 'pagamentos.length': pagamentos.length });
+
+    if (finalidade === '4') {
+      console.log('🔍 FINALIDADE 4 - Definindo valor 0');
+      // Para devolução: tipo 90 e valor 0
+      setPagamentoForm(prev => {
+        console.log('🔍 FINALIDADE 4 - Estado anterior:', prev);
+        const novoEstado = {
+          ...prev,
+          tipo: '90',
+          valor: 0
+        };
+        console.log('🔍 FINALIDADE 4 - Novo estado:', novoEstado);
+        return novoEstado;
+      });
+
+      // ✅ CORREÇÃO: SEMPRE adicionar automaticamente pagamento tipo 90 para finalidade 4
+      console.log('🔍 FINALIDADE 4 - Adicionando pagamento automático tipo 90');
+      console.log('🔍 FINALIDADE 4 - Pagamentos antes:', pagamentos);
+
+      const pagamentoAutomatico = [{
+        id: 'auto-90',
+        tipo: '90',
+        tipo_descricao: 'Sem pagamento',
+        valor: 0
+      }];
+
+      console.log('🔍 FINALIDADE 4 - Pagamento a ser adicionado:', pagamentoAutomatico);
+      onChange(pagamentoAutomatico);
+
+      // Verificar se foi adicionado
+      setTimeout(() => {
+        console.log('🔍 FINALIDADE 4 - Pagamentos depois (verificação):', pagamentos);
+      }, 100);
+    } else {
+      console.log('🔍 FINALIDADE NORMAL - Definindo valor:', totalNota);
+      // Para outras finalidades: preencher automaticamente com total da nota
+      setPagamentoForm(prev => {
+        console.log('🔍 FINALIDADE NORMAL - Estado anterior:', prev);
+        const novoEstado = {
+          ...prev,
+          valor: totalNota || 0
+        };
+        console.log('🔍 FINALIDADE NORMAL - Novo estado:', novoEstado);
+        return novoEstado;
+      });
+
+      // Se há apenas um pagamento, ajustar automaticamente
       if (pagamentos.length === 1) {
         const pagamentosAtualizados = pagamentos.map(p => ({
           ...p,
-          valor: totalNota
+          valor: totalNota || 0
         }));
         onChange(pagamentosAtualizados);
       }
     }
-  }, [totalNota]); // ✅ CORREÇÃO: Remover dependências que causam loop
+  }, [totalNota, finalidade]); // Executar quando total ou finalidade mudar
 
   const tiposPagamento = {
     '01': 'Dinheiro',
@@ -7192,8 +7343,14 @@ const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void
     '99': 'Outros'
   };
 
+  // ✅ CORREÇÃO: Para finalidade 4 (devolução), mostrar apenas "90 - Sem pagamento"
+  const tiposPagamentoFiltrados = finalidade === '4'
+    ? { '90': 'Sem pagamento' }
+    : tiposPagamento;
+
   const handleAdicionarPagamento = () => {
-    if (pagamentoForm.valor <= 0) {
+    // ✅ CORREÇÃO: Para finalidade 4 (devolução), permitir valor 0
+    if (finalidade !== '4' && pagamentoForm.valor <= 0) {
       alert('Valor deve ser maior que zero');
       return;
     }
@@ -7207,10 +7364,10 @@ const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void
 
     onChange([...pagamentos, novoPagamento]);
 
-    // Limpar formulário
+    // ✅ CORREÇÃO: Limpar formulário respeitando regras da finalidade
     setPagamentoForm({
-      tipo: '01',
-      valor: 0
+      tipo: finalidade === '4' ? '90' : '01',
+      valor: finalidade === '4' ? 0 : totalNota // Preencher automaticamente com total da nota
     });
   };
 
@@ -7232,7 +7389,23 @@ const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void
           </div>
         </div>
         <div className="bg-background-card rounded-lg border border-gray-800 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          {/* ✅ AVISO para finalidade 4 */}
+          {finalidade === '4' && (
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                <p className="text-sm text-blue-300 font-medium">
+                  🔒 NFe de Devolução - Apenas "Sem Pagamento" permitido
+                </p>
+              </div>
+              <p className="text-xs text-blue-400 mt-1 ml-4">
+                Para finalidade 4 (devolução), o SEFAZ exige que a forma de pagamento seja "90 - Sem pagamento"
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {/* Primeira linha: Tipo de Pagamento */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Tipo Pagamento
@@ -7240,48 +7413,82 @@ const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void
               <select
                 value={pagamentoForm.tipo}
                 onChange={(e) => setPagamentoForm(prev => ({ ...prev, tipo: e.target.value }))}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                disabled={finalidade === '4'} // Desabilitar para finalidade 4
+                className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white focus:outline-none ${
+                  finalidade === '4'
+                    ? 'border-gray-600 cursor-not-allowed opacity-75'
+                    : 'border-gray-700 focus:border-primary-500'
+                }`}
               >
-                {Object.entries(tiposPagamento).map(([codigo, descricao]) => (
+                {Object.entries(tiposPagamentoFiltrados).map(([codigo, descricao]) => (
                   <option key={codigo} value={codigo}>{codigo} - {descricao}</option>
                 ))}
               </select>
+              {finalidade === '4' && (
+                <p className="text-xs text-gray-400 mt-1">
+                  🔒 Bloqueado para devolução - apenas "Sem pagamento" é permitido
+                </p>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Valor
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-400">R$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={pagamentoForm.valor}
-                  onChange={(e) => setPagamentoForm(prev => ({ ...prev, valor: parseFloat(e.target.value) || 0 }))}
-                  placeholder="0,00"
-                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                />
+            {/* Segunda linha: Valor e Botão */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Valor
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={pagamentoForm.valor}
+                    onChange={(e) => setPagamentoForm(prev => ({ ...prev, valor: parseFloat(e.target.value) || 0 }))}
+                    placeholder="0,00"
+                    disabled={finalidade === '4'} // Desabilitar para finalidade 4
+                    className={`flex-1 px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-400 focus:outline-none ${
+                      finalidade === '4'
+                        ? 'border-gray-600 cursor-not-allowed opacity-75'
+                        : 'border-gray-700 focus:border-primary-500'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPagamentoForm(prev => ({ ...prev, valor: totalNota }))}
+                    disabled={finalidade === '4'} // Desabilitar para finalidade 4
+                    className={`px-3 py-2 rounded-lg focus:outline-none text-xs whitespace-nowrap ${
+                      finalidade === '4'
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-75'
+                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
+                    title={finalidade === '4' ? 'Bloqueado para devolução' : 'Preencher com valor total da nota'}
+                  >
+                    Total
+                  </button>
+                </div>
+                {finalidade === '4' && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    🔒 Valor fixo R$ 0,00 para devolução (sem pagamento)
+                  </p>
+                )}
+              </div>
+
+              <div>
                 <button
                   type="button"
-                  onClick={() => setPagamentoForm(prev => ({ ...prev, valor: totalNota }))}
-                  className="px-2 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 focus:outline-none text-xs"
-                  title="Preencher com valor total da nota"
+                  onClick={handleAdicionarPagamento}
+                  disabled={finalidade === '4'} // Desabilitar para finalidade 4
+                  className={`w-full px-4 py-2 rounded-lg focus:outline-none flex items-center justify-center gap-2 ${
+                    finalidade === '4'
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed opacity-75'
+                      : 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-2 focus:ring-primary-500'
+                  }`}
+                  title={finalidade === '4' ? 'Pagamento automático para devolução' : 'Adicionar forma de pagamento'}
                 >
-                  Total
+                  <Plus size={16} />
+                  {finalidade === '4' ? 'AUTOMÁTICO' : 'ADICIONAR'}
                 </button>
               </div>
-            </div>
-
-            <div>
-              <button
-                type="button"
-                onClick={handleAdicionarPagamento}
-                className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 flex items-center justify-center gap-2"
-              >
-                <Plus size={16} />
-                ADICIONAR
-              </button>
             </div>
           </div>
         </div>
@@ -7312,13 +7519,19 @@ const PagamentosSection: React.FC<{ data: any[]; onChange: (data: any[]) => void
                       <td className="px-4 py-3 text-sm text-white">{pagamento.tipo_descricao}</td>
                       <td className="px-4 py-3 text-sm text-white text-right">R$ {pagamento.valor.toFixed(2)}</td>
                       <td className="px-4 py-3 text-sm text-white text-right">
-                        <button
-                          onClick={() => handleRemoverPagamento(pagamento.id)}
-                          className="text-red-400 hover:text-red-300 p-1"
-                          title="Remover pagamento"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {finalidade === '4' ? (
+                          <span className="text-xs text-gray-500 px-2 py-1 bg-gray-700 rounded">
+                            🔒 Automático
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleRemoverPagamento(pagamento.id)}
+                            className="text-red-400 hover:text-red-300 p-1"
+                            title="Remover pagamento"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
