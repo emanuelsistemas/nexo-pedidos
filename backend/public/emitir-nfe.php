@@ -909,7 +909,7 @@ try {
         $stdIntermed->CNPJ = $cnpjIntermediador; // YB02 - CNPJ do Intermediador da Transação
         $stdIntermed->idCadIntTran = $nfeData['intermediador']['nome']; // YB03 - Nome/Identificador do intermediador
 
-        $make->taginfIntermed($stdIntermed);
+        $make->tagIntermed($stdIntermed);
 
         error_log("✅ NFe - Intermediador da transação adicionado:");
         error_log("  - CNPJ: " . $cnpjIntermediador);
