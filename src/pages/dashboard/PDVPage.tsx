@@ -322,6 +322,10 @@ const PDVPage: React.FC = () => {
   const [produtoParaAdicionais, setProdutoParaAdicionais] = useState<Produto | null>(null);
   const [itemCarrinhoParaAdicionais, setItemCarrinhoParaAdicionais] = useState<string | null>(null);
 
+  // ✅ ADICIONADO: Estados que estavam faltando para adicionais
+  const [showAdicionaisModal, setShowAdicionaisModal] = useState(false);
+  const [itemParaAdicionais, setItemParaAdicionais] = useState<ItemCarrinho | null>(null);
+
   // Estados para edição de nome do produto
   const [itemEditandoNome, setItemEditandoNome] = useState<string | null>(null);
   const [nomeEditando, setNomeEditando] = useState<string>('');
@@ -4071,7 +4075,7 @@ const PDVPage: React.FC = () => {
 
       // Verificar opções adicionais se existirem
       const itensComAdicionais = carrinho.filter(item => item.adicionais && item.adicionais.length > 0);
-      if (itensComAdicionais.length > 0) {
+      if (itensComAdicionais.length > 0 && itensData && itensData.length > 0) {
         const { data: adicionaisData, error: adicionaisError } = await supabase
           .from('pdv_itens_adicionais')
           .select('id')
@@ -4900,14 +4904,16 @@ const PDVPage: React.FC = () => {
       if (itensComAdicionais.length > 0) {
         setEtapaProcessamento('Salvando opções adicionais...');
 
-        for (const item of itensComAdicionais) {
-          // Buscar o ID do item inserido
+        for (const [index, item] of itensComAdicionais.entries()) {
+          // ✅ CORREÇÃO: Buscar item usando índice para evitar duplicatas
           const { data: itemInserido } = await supabase
             .from('pdv_itens')
             .select('id')
             .eq('pdv_id', vendaId)
             .eq('produto_id', item.produto.id)
-            .single();
+            .eq('codigo_produto', item.produto.codigo)
+            .limit(1)
+            .maybeSingle();
 
           if (itemInserido && item.adicionais) {
             const adicionaisParaInserir = item.adicionais.map(adicional => ({
@@ -5186,7 +5192,8 @@ const PDVPage: React.FC = () => {
               unidade: item.produto.unidade_medida?.sigla, // Unidade real do produto (SEM FALLBACK)
               ncm: item.produto.ncm, // NCM real do produto (SEM FALLBACK)
               cfop: item.produto.cfop, // CFOP real do produto (SEM FALLBACK)
-              codigo_barras: item.produto.codigo_barras // Código de barras real (SEM FALLBACK)
+              codigo_barras: item.produto.codigo_barras, // Código de barras real (SEM FALLBACK)
+              adicionais: item.adicionais || [] // ✅ NOVO: Incluir adicionais para NFC-e
             }))
           };
 
@@ -5425,7 +5432,8 @@ const PDVPage: React.FC = () => {
               valor_unitario: item.produto.preco,
               valor_total: item.subtotal,
               vendedor_id: item.vendedor_id || null,
-              vendedor_nome: item.vendedor_nome || null
+              vendedor_nome: item.vendedor_nome || null,
+              adicionais: item.adicionais || [] // ✅ NOVO: Incluir adicionais
             })),
             pagamento: pagamentoData,
             timestamp: new Date().toISOString(),
@@ -5520,7 +5528,8 @@ const PDVPage: React.FC = () => {
               valor_unitario: item.produto.preco,
               valor_total: item.subtotal,
               vendedor_id: item.vendedor_id || null,
-              vendedor_nome: item.vendedor_nome || null
+              vendedor_nome: item.vendedor_nome || null,
+              adicionais: item.adicionais || [] // ✅ NOVO: Incluir adicionais
             })),
             pagamento: pagamentoData,
             timestamp: new Date().toISOString(),
@@ -6021,11 +6030,23 @@ const PDVPage: React.FC = () => {
                 <span>${formatCurrency(item.valor_total)}</span>
               </div>
               ${(() => {
-                // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
-                if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
-                  return `<div style="font-size: 10px; color: #666; margin-top: 2px;">Vendedor: ${item.vendedor_nome}</div>`;
+                // ✅ NOVO: Mostrar adicionais identados abaixo do produto principal
+                let adicionaisHtml = '';
+                if (item.adicionais && item.adicionais.length > 0) {
+                  adicionaisHtml = item.adicionais.map(adicional => `
+                    <div style="margin-left: 15px; font-size: 10px; color: #666; margin-top: 1px; font-weight: bold;">
+                      + ${adicional.quantidade}x ${adicional.nome} - ${formatCurrency(adicional.preco * adicional.quantidade)}
+                    </div>
+                  `).join('');
                 }
-                return '';
+
+                // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
+                let vendedorHtml = '';
+                if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
+                  vendedorHtml = `<div style="font-size: 10px; color: #666; margin-top: 2px;">Vendedor: ${item.vendedor_nome}</div>`;
+                }
+
+                return adicionaisHtml + vendedorHtml;
               })()}
             </div>
           `).join('')}
@@ -6251,11 +6272,23 @@ const PDVPage: React.FC = () => {
                 <span>${formatCurrency(item.valor_total)}</span>
               </div>
               ${(() => {
-                // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
-                if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
-                  return `<div style="font-size: 10px; color: #666; margin-top: 2px;">Vendedor: ${item.vendedor_nome}</div>`;
+                // ✅ NOVO: Mostrar adicionais identados abaixo do produto principal
+                let adicionaisHtml = '';
+                if (item.adicionais && item.adicionais.length > 0) {
+                  adicionaisHtml = item.adicionais.map(adicional => `
+                    <div style="margin-left: 15px; font-size: 10px; color: #666; margin-top: 1px; font-weight: bold;">
+                      + ${adicional.quantidade}x ${adicional.nome} - ${formatCurrency(adicional.preco * adicional.quantidade)}
+                    </div>
+                  `).join('');
                 }
-                return '';
+
+                // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
+                let vendedorHtml = '';
+                if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
+                  vendedorHtml = `<div style="font-size: 10px; color: #666; margin-top: 2px;">Vendedor: ${item.vendedor_nome}</div>`;
+                }
+
+                return adicionaisHtml + vendedorHtml;
               })()}
             </div>
           `).join('')}
@@ -12210,6 +12243,60 @@ const PDVPage: React.FC = () => {
           }}
           produto={produtoParaAdicionais}
           onConfirm={confirmarOpcoesAdicionais}
+        />
+      )}
+
+      {/* ✅ ADICIONADO: Modal de Adicionais para Produtos Novos */}
+      {itemParaAdicionais && (
+        <OpcoesAdicionaisModal
+          isOpen={showAdicionaisModal}
+          onClose={() => {
+            setShowAdicionaisModal(false);
+            setItemParaAdicionais(null);
+          }}
+          produto={itemParaAdicionais.produto}
+          onConfirm={(adicionaisSelecionados) => {
+            // Converter adicionais para o formato do carrinho
+            const adicionaisFormatados = adicionaisSelecionados.map(item => ({
+              id: item.item.id,
+              nome: item.item.nome,
+              preco: item.item.preco,
+              quantidade: item.quantidade
+            }));
+
+            // Calcular valor total dos adicionais
+            const valorAdicionais = adicionaisFormatados.reduce((total, adicional) =>
+              total + (adicional.preco * adicional.quantidade), 0
+            );
+
+            // Calcular novo subtotal (produto + adicionais) * quantidade
+            const precoUnitario = calcularPrecoFinal(itemParaAdicionais.produto);
+            const novoSubtotal = (precoUnitario * itemParaAdicionais.quantidade) + valorAdicionais;
+
+            // Adicionar produto ao carrinho com adicionais e subtotal correto
+            const itemComAdicionais = {
+              ...itemParaAdicionais,
+              adicionais: adicionaisFormatados,
+              subtotal: novoSubtotal
+            };
+
+            setCarrinho(prev => [...prev, itemComAdicionais]);
+            setShowAdicionaisModal(false);
+            setItemParaAdicionais(null);
+
+            // Tocar som de sucesso se habilitado
+            if (pdvConfig?.som_adicionar_produto) {
+              playSuccessSound();
+            }
+
+            // Toast de confirmação
+            const totalAdicionais = adicionaisSelecionados.length;
+            if (totalAdicionais > 0) {
+              toast.success(`Produto adicionado com ${totalAdicionais} ${totalAdicionais === 1 ? 'adicional' : 'adicionais'}!`);
+            } else {
+              toast.success('Produto adicionado ao carrinho!');
+            }
+          }}
         />
       )}
 
