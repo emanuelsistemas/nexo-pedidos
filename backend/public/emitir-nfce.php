@@ -55,12 +55,54 @@ function logDetalhado($step, $message, $data = null) {
     // flush();
 }
 
+// Função para buscar configuração PDV da empresa (LEI DOS DADOS REAIS)
+function buscarConfiguracaoPDV($empresaId) {
+    $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
+    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
+
+    $url = $supabaseUrl . "/rest/v1/pdv_config?empresa_id=eq.{$empresaId}&select=seleciona_clientes";
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . $supabaseKey,
+        'Authorization: Bearer ' . $supabaseKey,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        logDetalhado('PDV_CONFIG_ERROR', "Erro ao buscar configuração PDV da empresa {$empresaId}", [
+            'http_code' => $httpCode,
+            'response' => $response
+        ]);
+        return ['seleciona_clientes' => false]; // Fallback seguro
+    }
+
+    $data = json_decode($response, true);
+    if (empty($data)) {
+        logDetalhado('PDV_CONFIG_NOT_FOUND', "Configuração PDV não encontrada para empresa {$empresaId}");
+        return ['seleciona_clientes' => false]; // Fallback seguro
+    }
+
+    $config = $data[0];
+    logDetalhado('PDV_CONFIG_SUCCESS', "Configuração PDV carregada para empresa {$empresaId}", $config);
+
+    return $config;
+}
+
 // Função para buscar dados fiscais REAIS do produto (LEI DOS DADOS REAIS)
 function buscarDadosFiscaisProduto($codigoProduto, $empresaId) {
     $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
     $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
 
-    $url = $supabaseUrl . "/rest/v1/produtos?empresa_id=eq.{$empresaId}&codigo=eq.{$codigoProduto}&select=codigo,cst_pis,aliquota_pis,cst_cofins,aliquota_cofins,cst_icms";
+    $url = $supabaseUrl . "/rest/v1/produtos?empresa_id=eq.{$empresaId}&codigo=eq.{$codigoProduto}&select=codigo,cst_pis,aliquota_pis,cst_cofins,aliquota_cofins,cst_icms,csosn_icms,aliquota_icms,origem_produto";
 
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
@@ -95,6 +137,56 @@ function buscarDadosFiscaisProduto($codigoProduto, $empresaId) {
     logDetalhado('FISCAL_SUCCESS', "Dados fiscais carregados para produto {$codigoProduto}", $produto);
 
     return $produto;
+}
+
+// ✅ NOVA FUNÇÃO: Validar dados fiscais conforme regime tributário
+function validarDadosFiscaisPorRegime($produtoFiscal, $regimeTributario, $codigoProduto) {
+    $isSimples = in_array((int)$regimeTributario, [1, 2]); // 1 ou 2 = Simples Nacional
+
+    logDetalhado('FISCAL_VALIDATION', "Validando dados fiscais por regime", [
+        'produto' => $codigoProduto,
+        'regime_tributario' => $regimeTributario,
+        'is_simples' => $isSimples
+    ]);
+
+    if ($isSimples) {
+        // ✅ SIMPLES NACIONAL: Validar CSOSN obrigatório
+        if (empty($produtoFiscal['csosn_icms'])) {
+            logDetalhado('FISCAL_ERROR', "Produto {$codigoProduto} - CSOSN ICMS obrigatório para Simples Nacional", [
+                'regime' => $regimeTributario,
+                'csosn_icms' => $produtoFiscal['csosn_icms'] ?? 'NULL'
+            ]);
+            throw new Exception("Produto {$codigoProduto}: CSOSN ICMS é obrigatório para empresas do Simples Nacional");
+        }
+
+        logDetalhado('FISCAL_SUCCESS', "Produto {$codigoProduto} - Dados Simples Nacional válidos", [
+            'csosn_icms' => $produtoFiscal['csosn_icms']
+        ]);
+    } else {
+        // ✅ REGIME NORMAL: Validar CST obrigatório
+        if (empty($produtoFiscal['cst_icms'])) {
+            logDetalhado('FISCAL_ERROR', "Produto {$codigoProduto} - CST ICMS obrigatório para Regime Normal", [
+                'regime' => $regimeTributario,
+                'cst_icms' => $produtoFiscal['cst_icms'] ?? 'NULL'
+            ]);
+            throw new Exception("Produto {$codigoProduto}: CST ICMS é obrigatório para empresas do Regime Normal");
+        }
+
+        logDetalhado('FISCAL_SUCCESS', "Produto {$codigoProduto} - Dados Regime Normal válidos", [
+            'cst_icms' => $produtoFiscal['cst_icms']
+        ]);
+    }
+
+    // ✅ Validar PIS e COFINS (obrigatórios para ambos os regimes)
+    if (empty($produtoFiscal['cst_pis'])) {
+        throw new Exception("Produto {$codigoProduto}: CST PIS é obrigatório");
+    }
+
+    if (empty($produtoFiscal['cst_cofins'])) {
+        throw new Exception("Produto {$codigoProduto}: CST COFINS é obrigatório");
+    }
+
+    return true;
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -455,7 +547,54 @@ try {
     $std->cDV = 0;
     $std->tpAmb = $ambiente;
     $std->finNFe = 1; // Normal
-    $std->indFinal = 1; // Consumidor final
+
+    // ✅ CORREÇÃO CRÍTICA: Para NFC-e, SEMPRE indFinal = 1 (consumidor final)
+    // Conforme documentação oficial: "Operações acobertadas por NFCe devem apenas ocorrer com Consumidor Final"
+    // Rejeição 716: "NFC-e para operação não destinada a Consumidor Final (tag:indFinal=0)"
+    $pdvConfig = buscarConfiguracaoPDV($empresaId);
+    $destinatario = $nfceData['destinatario'] ?? [];
+
+    // ✅ REGRA OFICIAL: NFC-e SEMPRE é consumidor final, independente do tipo de documento
+    $std->indFinal = 1; // ✅ SEMPRE consumidor final para NFC-e
+
+    if (!empty($pdvConfig['seleciona_clientes']) && $pdvConfig['seleciona_clientes'] && !empty($destinatario['documento'])) {
+        // Funcionalidade de clientes HABILITADA + cliente SELECIONADO
+        $documento = preg_replace('/[^0-9]/', '', $destinatario['documento']);
+
+        if (strlen($documento) === 11) {
+            // Cliente com CPF
+            logDetalhado('050.1', 'NFC-e com CPF - SEMPRE consumidor final', [
+                'documento_tipo' => 'CPF',
+                'documento_tamanho' => strlen($documento),
+                'indFinal' => $std->indFinal,
+                'regra' => 'NFC-e sempre consumidor final'
+            ]);
+        } elseif (strlen($documento) === 14) {
+            // Cliente com CNPJ - MAS NFC-e SEMPRE é consumidor final
+            logDetalhado('050.2', 'NFC-e com CNPJ - SEMPRE consumidor final (regra NFC-e)', [
+                'documento_tipo' => 'CNPJ',
+                'documento_tamanho' => strlen($documento),
+                'indFinal' => $std->indFinal,
+                'regra' => 'NFC-e sempre consumidor final (diferente de NFe)'
+            ]);
+        } else {
+            // Documento inválido
+            logDetalhado('050.3', 'NFC-e com documento inválido - SEMPRE consumidor final', [
+                'documento_tamanho' => strlen($documento),
+                'indFinal' => $std->indFinal,
+                'regra' => 'NFC-e sempre consumidor final'
+            ]);
+        }
+    } else {
+        // Funcionalidade DESABILITADA OU sem cliente
+        logDetalhado('050.4', 'NFC-e sem cliente - SEMPRE consumidor final', [
+            'seleciona_clientes' => $pdvConfig['seleciona_clientes'] ?? false,
+            'tem_documento' => !empty($destinatario['documento']),
+            'indFinal' => $std->indFinal,
+            'regra' => 'NFC-e sempre consumidor final'
+        ]);
+    }
+
     $std->indPres = 1; // Presencial
     $std->procEmi = 0; // Aplicativo do contribuinte
     $std->verProc = '1.0.0';
@@ -606,7 +745,22 @@ try {
         }
 
         $std->xNome = $destinatario['nome'] ?? 'CONSUMIDOR';
-        $std->indIEDest = 9; // Não contribuinte
+
+        // ✅ CORREÇÃO CRÍTICA: Usar indicador IE real do destinatário (não hardcoded)
+        // Para sistema SaaS, este campo é VITAL e deve ser dinâmico
+        if (!empty($destinatario['ie_destinatario'])) {
+            $std->indIEDest = (int)$destinatario['ie_destinatario']; // ✅ VALOR REAL do payload
+            logDetalhado('089.1', 'Usando indicador IE real do destinatário', ['ie_destinatario' => $std->indIEDest]);
+        } else {
+            $std->indIEDest = 9; // Fallback = Não contribuinte (apenas se não informado)
+            logDetalhado('089.2', 'Usando indicador IE fallback (não contribuinte)', ['ie_destinatario' => $std->indIEDest]);
+        }
+
+        // ✅ ADICIONAR: Inscrição Estadual se informada (para contribuintes)
+        if (!empty($destinatario['inscricao_estadual']) && $std->indIEDest !== 9) {
+            $std->IE = $destinatario['inscricao_estadual']; // ✅ IE REAL do destinatário
+            logDetalhado('089.3', 'Adicionando IE do destinatário', ['ie' => $std->IE]);
+        }
 
         logDetalhado('089', 'Dados do destinatário preparados', (array)$std);
 
@@ -626,14 +780,72 @@ try {
     logDetalhado('094', 'Iniciando processamento dos produtos');
 
     $produtos = $nfceData['produtos'] ?? [];
-    logDetalhado('095', 'Produtos extraídos dos dados', $produtos);
+    logDetalhado('095', 'Produtos extraídos dos dados (antes do filtro)', $produtos);
 
     if (empty($produtos)) {
         logDetalhado('096', 'ERRO: Nenhum produto informado');
         throw new Exception('Pelo menos um produto é obrigatório');
     }
 
-    logDetalhado('097', 'Validação de produtos concluída', ['total_produtos' => count($produtos)]);
+    // ✅ CORREÇÃO CRÍTICA: Filtrar itens adicionais para NFC-e (apenas para SEFAZ)
+    // Itens adicionais não têm dados fiscais e causam erro 386
+    // Manter internamente para impressão e banco, mas excluir do XML fiscal
+    $produtosFiscais = [];
+    $totalItensOriginais = count($produtos);
+
+    foreach ($produtos as $produto) {
+        // ✅ CRITÉRIO MAIS ESPECÍFICO: Verificar se é item adicional por nome/código
+        // Não verificar campos fiscais vazios pois podem estar em outras tabelas
+        $descricao = strtolower($produto['descricao'] ?? '');
+        $codigo = strtolower($produto['codigo'] ?? '');
+
+        $isItemAdicional = (
+            // Verificar por palavras-chave na descrição
+            strpos($descricao, 'adicional') !== false ||
+            strpos($descricao, 'extra') !== false ||
+            strpos($descricao, 'complemento') !== false ||
+            strpos($descricao, 'acréscimo') !== false ||
+            // Verificar por código
+            strpos($codigo, 'add') !== false ||
+            strpos($codigo, 'ext') !== false ||
+            // Verificar se valor é muito baixo (provavelmente adicional)
+            (isset($produto['valor_unitario']) && (float)$produto['valor_unitario'] <= 0.50)
+        );
+
+        if ($isItemAdicional) {
+            logDetalhado('095.1', 'Item adicional excluído da NFC-e (identificado por critério)', [
+                'codigo' => $produto['codigo'] ?? 'N/A',
+                'descricao' => $produto['descricao'] ?? 'N/A',
+                'valor_unitario' => $produto['valor_unitario'] ?? 'N/A',
+                'motivo' => 'Item adicional identificado por nome/código/valor'
+            ]);
+            continue; // ✅ Pular item adicional apenas para SEFAZ
+        }
+
+        // ✅ Incluir produto principal na NFC-e
+        $produtosFiscais[] = $produto;
+        logDetalhado('095.2', 'Produto principal incluído na NFC-e', [
+            'codigo' => $produto['codigo'] ?? 'N/A',
+            'descricao' => $produto['descricao'] ?? 'N/A',
+            'valor_unitario' => $produto['valor_unitario'] ?? 'N/A'
+        ]);
+    }
+
+    // Usar produtos filtrados para processamento fiscal
+    $produtos = $produtosFiscais;
+
+    logDetalhado('095.3', 'Filtro de itens adicionais aplicado', [
+        'total_original' => $totalItensOriginais,
+        'total_fiscal' => count($produtos),
+        'itens_excluidos' => $totalItensOriginais - count($produtos)
+    ]);
+
+    if (empty($produtos)) {
+        logDetalhado('096.1', 'ERRO: Nenhum produto principal encontrado após filtro');
+        throw new Exception('Pelo menos um produto principal (com dados fiscais) é obrigatório para NFC-e');
+    }
+
+    logDetalhado('097', 'Validação de produtos fiscais concluída', ['total_produtos_fiscais' => count($produtos)]);
 
     $totalProdutos = 0;
     $totalICMS = 0;
@@ -732,7 +944,26 @@ try {
         $std = new stdClass();
         $std->item = $nItem; // ✅ CORREÇÃO CRÍTICA: Definir nItem para a tag <det>
         $std->cProd = $produto['codigo'];
-        $std->cEAN = $produto['codigo_barras'] ?? 'SEM GTIN'; // EAN13 ou SEM GTIN
+
+        // ✅ CORREÇÃO CRÍTICA: GTIN conforme documentação oficial NFe
+        // Documentação: https://www.mjailton.com.br/manualnfe/tag/campo/153
+        // Para produtos SEM código de barras, deve ser informado o literal "SEM GTIN"
+        $codigoBarras = $produto['codigo_barras'] ?? '';
+        if (empty($codigoBarras) || trim($codigoBarras) === '') {
+            $std->cEAN = 'SEM GTIN'; // ✅ OBRIGATÓRIO conforme documentação oficial
+            logDetalhado('117.1', "Produto {$nItem} sem código de barras - usando 'SEM GTIN'");
+        } else {
+            // Validar se é um GTIN válido (8, 12, 13 ou 14 dígitos)
+            $codigoLimpo = preg_replace('/[^0-9]/', '', $codigoBarras);
+            if (in_array(strlen($codigoLimpo), [8, 12, 13, 14])) {
+                $std->cEAN = $codigoLimpo; // GTIN válido
+                logDetalhado('117.2', "Produto {$nItem} com GTIN válido", ['gtin' => $codigoLimpo]);
+            } else {
+                $std->cEAN = 'SEM GTIN'; // GTIN inválido = SEM GTIN
+                logDetalhado('117.3', "Produto {$nItem} com GTIN inválido - usando 'SEM GTIN'", ['gtin_original' => $codigoBarras]);
+            }
+        }
+
         $std->xProd = $produto['descricao'];
         $std->NCM = preg_replace('/[^0-9]/', '', $produto['ncm']);
 
@@ -753,7 +984,13 @@ try {
         $std->qCom = $quantidade;
         $std->vUnCom = $valorUnitario;
         $std->vProd = $valorTotal;
-        $std->cEANTrib = $std->cEAN; // Mesmo EAN para tributação
+
+        // ✅ CORREÇÃO CRÍTICA: cEANTrib deve ter o mesmo valor de cEAN
+        // Documentação: https://www.mjailton.com.br/manualnfe/tag/campo/168
+        // Para produtos SEM GTIN, deve ser informado o literal "SEM GTIN"
+        $std->cEANTrib = $std->cEAN; // ✅ OBRIGATÓRIO: mesmo valor de cEAN
+        logDetalhado('117.4', "Produto {$nItem} - cEANTrib configurado", ['cEANTrib' => $std->cEANTrib]);
+
         $std->uTrib = $std->uCom; // Mesma unidade para tributação
         $std->qTrib = $std->qCom; // Mesma quantidade para tributação
         $std->vUnTrib = $std->vUnCom; // Mesmo valor unitário para tributação
@@ -787,31 +1024,110 @@ try {
             throw new Exception("Erro no container de impostos do produto {$nItem}: " . $impostoError->getMessage());
         }
 
-        // 2. SEGUNDO: ICMS - OBRIGATÓRIO
+        // 2. SEGUNDO: ICMS - OBRIGATÓRIO (USANDO DADOS REAIS DO PRODUTO)
         logDetalhado('127', "Criando ICMS para produto {$nItem}");
-        $std = new stdClass();
-        $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
-        $std->orig = 0; // Nacional
-        $std->CSOSN = '102'; // Simples Nacional - Sem tributação
 
-        try {
-            logDetalhado('128', "Executando make->tagICMSSN() para produto {$nItem}");
-            $make->tagICMSSN($std);
-            logDetalhado('129', "ICMS criado com sucesso para produto {$nItem}");
-        } catch (Exception $icmsError) {
-            logDetalhado('130', "ERRO: Falha ao criar ICMS para produto {$nItem}", ['error' => $icmsError->getMessage()]);
-            throw new Exception("Erro no ICMS do produto {$nItem}: " . $icmsError->getMessage());
-        }
-
-        // 3. TERCEIRO: PIS - OBRIGATÓRIO (USANDO DADOS REAIS DO PRODUTO)
-        logDetalhado('131', "Criando PIS para produto {$nItem}");
-
-        // ✅ BUSCAR DADOS FISCAIS REAIS DO PRODUTO (LEI DOS DADOS REAIS)
+        // ✅ BUSCAR DADOS FISCAIS REAIS DO PRODUTO PARA ICMS (LEI DOS DADOS REAIS)
         $produtoFiscal = buscarDadosFiscaisProduto($produto['codigo'], $empresaId);
         if (!$produtoFiscal) {
             throw new Exception("Dados fiscais não encontrados para produto {$produto['codigo']}");
         }
 
+        // ✅ VALIDAR DADOS FISCAIS CONFORME REGIME TRIBUTÁRIO (SEM FALLBACKS)
+        $regimeTributario = (int)($empresa['regime_tributario'] ?? 1);
+        validarDadosFiscaisPorRegime($produtoFiscal, $regimeTributario, $produto['codigo']);
+
+        $std = new stdClass();
+        $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
+        $std->orig = (int)($produtoFiscal['origem_produto'] ?? 0); // ✅ ORIGEM REAL do produto
+
+        // ✅ USAR REGIME TRIBUTÁRIO VALIDADO PARA DETERMINAR CST/CSOSN
+        $isSimples = in_array($regimeTributario, [1, 2]); // 1 ou 2 = Simples Nacional
+
+        logDetalhado('127.0', "Regime tributário validado - usando dados fiscais corretos", [
+            'regime_tributario' => $regimeTributario,
+            'is_simples' => $isSimples,
+            'produto' => $nItem,
+            'csosn_icms' => $produtoFiscal['csosn_icms'] ?? 'NULL',
+            'cst_icms' => $produtoFiscal['cst_icms'] ?? 'NULL'
+        ]);
+
+        if ($isSimples) {
+            // ✅ EMPRESA SIMPLES NACIONAL: Usar CSOSN REAL (SEM FALLBACKS)
+            $std->CSOSN = $produtoFiscal['csosn_icms']; // ✅ CSOSN REAL do produto (já validado)
+
+            logDetalhado('127.1', "Produto {$nItem} - Empresa Simples Nacional - Usando CSOSN real", [
+                'csosn' => $std->CSOSN,
+                'origem' => $std->orig,
+                'regime' => $regimeTributario
+            ]);
+
+            // Para CSOSN 500 (ST), adicionar campos específicos se necessário
+            if ($std->CSOSN === '500') {
+                // CSOSN 500 = ICMS por substituição tributária
+                logDetalhado('127.2', "Produto {$nItem} - CSOSN 500 (Substituição Tributária)", [
+                    'csosn' => $std->CSOSN
+                ]);
+            }
+
+            try {
+                logDetalhado('128', "Executando make->tagICMSSN() para produto {$nItem} (Simples Nacional)", ['csosn' => $std->CSOSN, 'origem' => $std->orig]);
+                $make->tagICMSSN($std);
+                logDetalhado('129', "ICMS Simples Nacional criado com sucesso para produto {$nItem}");
+            } catch (Exception $icmsError) {
+                logDetalhado('130', "ERRO: Falha ao criar ICMS Simples Nacional para produto {$nItem}", ['error' => $icmsError->getMessage()]);
+                throw new Exception("Erro no ICMS Simples Nacional do produto {$nItem}: " . $icmsError->getMessage());
+            }
+        } else {
+            // ✅ EMPRESA REGIME NORMAL: Usar CST REAL (SEM FALLBACKS)
+            $std->CST = $produtoFiscal['cst_icms']; // ✅ CST REAL do produto (já validado)
+
+            logDetalhado('127.4', "Produto {$nItem} - Empresa Regime Normal - Usando CST real", [
+                'cst' => $std->CST,
+                'origem' => $std->orig,
+                'regime' => $regimeTributario
+            ]);
+
+            // Adicionar campos obrigatórios para CST
+            $aliquotaICMS = (float)($produtoFiscal['aliquota_icms'] ?? 0);
+            $valorBase = (float)($produto['valor_total'] ?? 0);
+
+            if ($std->CST === '00' || $std->CST === '10' || $std->CST === '20') {
+                // Operações tributadas
+                $std->modBC = 0; // Margem Valor Agregado (%)
+                $std->vBC = $valorBase; // Base de cálculo
+                $std->pICMS = $aliquotaICMS; // Alíquota
+                $std->vICMS = round(($valorBase * $aliquotaICMS) / 100, 2); // Valor ICMS
+                $totalICMS += $std->vICMS;
+                logDetalhado('127.5', "Produto {$nItem} - CST tributado configurado", [
+                    'cst' => $std->CST,
+                    'aliquota' => $aliquotaICMS,
+                    'valor_icms' => $std->vICMS
+                ]);
+            } else {
+                // Outras operações (isentas, não tributadas, etc.)
+                $std->vBC = null;
+                $std->pICMS = null;
+                $std->vICMS = null;
+                logDetalhado('127.6', "Produto {$nItem} - CST não tributado configurado", [
+                    'cst' => $std->CST
+                ]);
+            }
+
+            try {
+                logDetalhado('128.1', "Executando make->tagICMS() para produto {$nItem} (Regime Normal)", ['cst' => $std->CST, 'origem' => $std->orig]);
+                $make->tagICMS($std);
+                logDetalhado('129.1', "ICMS Regime Normal criado com sucesso para produto {$nItem}");
+            } catch (Exception $icmsError) {
+                logDetalhado('130.1', "ERRO: Falha ao criar ICMS Regime Normal para produto {$nItem}", ['error' => $icmsError->getMessage()]);
+                throw new Exception("Erro no ICMS Regime Normal do produto {$nItem}: " . $icmsError->getMessage());
+            }
+        }
+
+        // 3. TERCEIRO: PIS - OBRIGATÓRIO (USANDO DADOS REAIS DO PRODUTO)
+        logDetalhado('131', "Criando PIS para produto {$nItem}");
+
+        // ✅ DADOS FISCAIS JÁ CARREGADOS ACIMA (reutilizar $produtoFiscal)
         $std = new stdClass();
         $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
         $std->CST = $produtoFiscal['cst_pis']; // ✅ DADO REAL do produto
@@ -942,10 +1258,23 @@ try {
     // CORREÇÃO: Ordem correta baseada na documentação oficial
     logDetalhado('150', 'Iniciando criação do pagamento');
 
-    // 1. PRIMEIRO: Criar grupo PAG (container) com troco
+    // 1. PRIMEIRO: Criar grupo PAG (container) com troco - USANDO DADOS REAIS
     logDetalhado('151', 'Criando grupo PAG (container)');
+
+    // ✅ BUSCAR DADOS DE PAGAMENTO REAIS (não hardcoded)
+    $pagamento = $nfceData['pagamento'] ?? [];
+    logDetalhado('151.0', 'Dados de pagamento para troco extraídos', $pagamento);
+
     $std = new stdClass();
-    $std->vTroco = 0.00; // Troco (obrigatório para NFC-e)
+
+    // ✅ CORREÇÃO CRÍTICA: Usar troco real (não hardcoded)
+    if (!empty($pagamento['troco'])) {
+        $std->vTroco = (float)$pagamento['troco']; // ✅ TROCO REAL do PDV
+        logDetalhado('151.1', 'Usando troco real', ['troco' => $std->vTroco]);
+    } else {
+        $std->vTroco = 0.00; // Fallback = sem troco
+        logDetalhado('151.2', 'Usando troco fallback (zero)', ['troco' => $std->vTroco]);
+    }
 
     try {
         logDetalhado('152', 'Executando make->tagpag()');
@@ -956,12 +1285,34 @@ try {
         throw new Exception("Erro no grupo pagamento: " . $pagError->getMessage());
     }
 
-    // 2. SEGUNDO: Adicionar forma de pagamento (detPag)
+    // 2. SEGUNDO: Adicionar forma de pagamento (detPag) - USANDO DADOS REAIS
     logDetalhado('155', 'Criando detalhes do pagamento');
+
+    // ✅ CORREÇÃO CRÍTICA: Buscar forma de pagamento real dos dados (não hardcoded)
+    $pagamento = $nfceData['pagamento'] ?? [];
+    logDetalhado('155.1', 'Dados de pagamento extraídos', $pagamento);
+
     $std = new stdClass();
-    $std->indPag = 0; // Pagamento à vista
-    $std->tPag = '01'; // Dinheiro (padrão para NFC-e)
-    $std->vPag = $totalProdutos; // Valor pago
+    $std->indPag = 0; // Pagamento à vista (padrão para NFC-e)
+
+    // ✅ USAR FORMA DE PAGAMENTO REAL (não hardcoded)
+    if (!empty($pagamento['forma_pagamento'])) {
+        $std->tPag = $pagamento['forma_pagamento']; // ✅ FORMA REAL do PDV
+        logDetalhado('155.2', 'Usando forma de pagamento real', ['forma' => $std->tPag]);
+    } else {
+        // Fallback apenas se não informado
+        $std->tPag = '01'; // Dinheiro (fallback)
+        logDetalhado('155.3', 'Usando forma de pagamento fallback (dinheiro)', ['forma' => $std->tPag]);
+    }
+
+    // ✅ USAR VALOR REAL DO PAGAMENTO (pode ser diferente do total se houver troco)
+    if (!empty($pagamento['valor_pago'])) {
+        $std->vPag = (float)$pagamento['valor_pago']; // ✅ VALOR REAL pago
+        logDetalhado('155.4', 'Usando valor pago real', ['valor' => $std->vPag]);
+    } else {
+        $std->vPag = $totalProdutos; // Fallback = total dos produtos
+        logDetalhado('155.5', 'Usando valor pago fallback (total produtos)', ['valor' => $std->vPag]);
+    }
 
     try {
         logDetalhado('156', 'Executando make->tagdetPag()', ['valor_pago' => $totalProdutos]);

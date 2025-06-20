@@ -1679,7 +1679,7 @@ const PDVPage: React.FC = () => {
 
     const { data, error } = await supabase
       .from('clientes')
-      .select('id, nome, telefone')
+      .select('id, nome, telefone, documento') // ✅ CORREÇÃO: Incluir campo documento para preenchimento automático da Nota Fiscal Paulista
       .eq('empresa_id', usuarioData.empresa_id)
       .order('nome')
       .limit(50);
@@ -1891,7 +1891,7 @@ const PDVPage: React.FC = () => {
           desconto_prazo_id,
           desconto_valor_id,
           usuario_id,
-          cliente:clientes(id, nome, telefone),
+          cliente:clientes(id, nome, telefone, documento), // ✅ CORREÇÃO: Incluir campo documento para preenchimento automático da Nota Fiscal Paulista
           pedidos_itens(
             id,
             quantidade,
@@ -2921,14 +2921,36 @@ const PDVPage: React.FC = () => {
 
     // Importar cliente do pedido se existir e não houver cliente selecionado
     if (pedido.cliente && !clienteSelecionado) {
-      setClienteSelecionado({
+      const clienteImportado = {
         id: pedido.cliente.id,
         nome: pedido.cliente.nome,
-        telefone: pedido.cliente.telefone
-      });
+        telefone: pedido.cliente.telefone,
+        documento: pedido.cliente.documento // ✅ NOVO: Incluir documento para preenchimento automático
+      };
+
+      setClienteSelecionado(clienteImportado);
 
       // Carregar descontos do cliente
       carregarDescontosCliente(pedido.cliente.id);
+
+      // ✅ NOVO: Preencher automaticamente CPF/CNPJ na Nota Fiscal Paulista
+      if (pedido.cliente.documento && pedido.cliente.documento.trim()) {
+        const documentoLimpo = pedido.cliente.documento.replace(/\D/g, '');
+        if (documentoLimpo.length === 11) {
+          // CPF
+          setTipoDocumento('cpf');
+          setCpfCnpjNota(formatCpf(documentoLimpo));
+          setClienteEncontrado(clienteImportado);
+          console.log('🎯 PDV: CPF do cliente importado preenchido automaticamente na Nota Fiscal Paulista:', formatCpf(documentoLimpo));
+        } else if (documentoLimpo.length === 14) {
+          // CNPJ
+          setTipoDocumento('cnpj');
+          setCpfCnpjNota(formatCnpj(documentoLimpo));
+          setClienteEncontrado(clienteImportado);
+          console.log('🎯 PDV: CNPJ do cliente importado preenchido automaticamente na Nota Fiscal Paulista:', formatCnpj(documentoLimpo));
+        }
+        setErroValidacao(''); // Limpar qualquer erro anterior
+      }
     } else if (pedido.cliente && clienteSelecionado && clienteSelecionado.id === pedido.cliente.id) {
       // Se é o mesmo cliente, garantir que os descontos estejam carregados
       if (descontosCliente.prazo.length === 0 && descontosCliente.valor.length === 0) {
@@ -8694,6 +8716,25 @@ const PDVPage: React.FC = () => {
                       setShowClienteModal(false);
                       // Carregar descontos do cliente selecionado
                       carregarDescontosCliente(cliente.id);
+
+                      // ✅ NOVO: Preencher automaticamente CPF/CNPJ na Nota Fiscal Paulista
+                      if (cliente.documento && cliente.documento.trim()) {
+                        const documentoLimpo = cliente.documento.replace(/\D/g, '');
+                        if (documentoLimpo.length === 11) {
+                          // CPF
+                          setTipoDocumento('cpf');
+                          setCpfCnpjNota(formatCpf(documentoLimpo));
+                          setClienteEncontrado(cliente);
+                          console.log('🎯 PDV: CPF do cliente preenchido automaticamente na Nota Fiscal Paulista:', formatCpf(documentoLimpo));
+                        } else if (documentoLimpo.length === 14) {
+                          // CNPJ
+                          setTipoDocumento('cnpj');
+                          setCpfCnpjNota(formatCnpj(documentoLimpo));
+                          setClienteEncontrado(cliente);
+                          console.log('🎯 PDV: CNPJ do cliente preenchido automaticamente na Nota Fiscal Paulista:', formatCnpj(documentoLimpo));
+                        }
+                        setErroValidacao(''); // Limpar qualquer erro anterior
+                      }
                     }}
                     className="w-full text-left p-2.5 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
                   >

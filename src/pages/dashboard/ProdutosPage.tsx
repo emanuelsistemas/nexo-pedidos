@@ -254,12 +254,23 @@ const ProdutosPage: React.FC = () => {
     valido: boolean | null;
     descricao: string;
     erro: string;
+    temSubstituicaoTributaria: boolean;
+    fonte: 'LOCAL' | 'BRASILAPI' | null;
   }>({
     validando: false,
     valido: null,
     descricao: '',
-    erro: ''
+    erro: '',
+    temSubstituicaoTributaria: false,
+    fonte: null
   });
+
+  // Estados para CEST
+  const [cestOpcoes, setCestOpcoes] = useState<Array<{
+    codigo_cest: string;
+    descricao_cest: string;
+  }>>([]);
+  const [showCestModal, setShowCestModal] = useState(false);
 
   // Estado para controlar o formulário de unidade de medida
   const [showUnidadeMedidaForm, setShowUnidadeMedidaForm] = useState(false);
@@ -361,21 +372,84 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
-  // Função para validar NCM usando BrasilAPI
+  // Função para validar NCM usando tabela local primeiro, depois BrasilAPI
   const validarNCM = async (codigo: string) => {
     if (!codigo || codigo.length !== 8) {
       setNcmValidacao({
         validando: false,
         valido: null,
         descricao: '',
-        erro: ''
+        erro: '',
+        temSubstituicaoTributaria: false,
+        fonte: null
       });
+      setCestOpcoes([]);
       return;
     }
 
     setNcmValidacao(prev => ({ ...prev, validando: true }));
 
     try {
+      // Primeiro, buscar na tabela local
+      const { data: ncmLocal, error: errorLocal } = await supabase
+        .from('ncm')
+        .select('codigo_ncm, descricao_ncm, tem_substituicao_tributaria, codigo_cest, descricao_cest')
+        .eq('codigo_ncm', codigo)
+        .limit(1);
+
+      if (!errorLocal && ncmLocal && ncmLocal.length > 0) {
+        // NCM encontrado na tabela local
+        const ncmInfo = ncmLocal[0];
+
+        setNcmValidacao({
+          validando: false,
+          valido: true,
+          descricao: ncmInfo.descricao_ncm || '',
+          erro: '',
+          temSubstituicaoTributaria: ncmInfo.tem_substituicao_tributaria || false,
+          fonte: 'LOCAL'
+        });
+
+        // Se tem ST, buscar todas as opções de CEST e ajustar CFOP
+        if (ncmInfo.tem_substituicao_tributaria) {
+          const { data: cestData, error: cestError } = await supabase
+            .from('ncm')
+            .select('codigo_cest, descricao_cest')
+            .eq('codigo_ncm', codigo)
+            .not('codigo_cest', 'is', null);
+
+          if (!cestError && cestData) {
+            setCestOpcoes(cestData);
+          }
+
+          // Ajustar automaticamente o CFOP para 5405 (ST obrigatória)
+          setNovoProduto(prev => ({
+            ...prev,
+            cfop: '5405',
+            situacao_tributaria: 'tributado_st' // CST 60 ou CSOSN 500
+          }));
+
+          showMessage('info', 'CFOP ajustado automaticamente para 5405 (Substituição Tributária)');
+        } else {
+          setCestOpcoes([]);
+
+          // Se não tem ST, voltar para CFOP padrão se estava em 5405
+          if (novoProduto.cfop === '5405') {
+            setNovoProduto(prev => ({
+              ...prev,
+              cfop: '5102',
+              situacao_tributaria: 'tributado_integral',
+              cest: '' // Limpar CEST se não tem ST
+            }));
+
+            showMessage('info', 'CFOP ajustado para 5102 (produto sem Substituição Tributária)');
+          }
+        }
+
+        return;
+      }
+
+      // Se não encontrou na tabela local, buscar na BrasilAPI
       const response = await fetch(`https://brasilapi.com.br/api/ncm/v1/${codigo}`);
 
       if (response.ok) {
@@ -384,23 +458,32 @@ const ProdutosPage: React.FC = () => {
           validando: false,
           valido: true,
           descricao: data.descricao || '',
-          erro: ''
+          erro: '',
+          temSubstituicaoTributaria: false,
+          fonte: 'BRASILAPI'
         });
+        setCestOpcoes([]);
       } else {
         setNcmValidacao({
           validando: false,
           valido: false,
           descricao: '',
-          erro: 'NCM não encontrado na base de dados'
+          erro: 'NCM não encontrado na base de dados',
+          temSubstituicaoTributaria: false,
+          fonte: null
         });
+        setCestOpcoes([]);
       }
     } catch (error) {
       setNcmValidacao({
         validando: false,
         valido: false,
         descricao: '',
-        erro: 'Erro ao validar NCM. Verifique sua conexão.'
+        erro: 'Erro ao validar NCM. Verifique sua conexão.',
+        temSubstituicaoTributaria: false,
+        fonte: null
       });
+      setCestOpcoes([]);
     }
   };
 
@@ -426,6 +509,16 @@ const ProdutosPage: React.FC = () => {
     }, 800),
     []
   );
+
+  // Função para selecionar CEST
+  const selecionarCEST = (cestSelecionado: { codigo_cest: string; descricao_cest: string }) => {
+    setNovoProduto(prev => ({
+      ...prev,
+      cest: cestSelecionado.codigo_cest
+    }));
+    setShowCestModal(false);
+    showMessage('success', `CEST ${cestSelecionado.codigo_cest} selecionado`);
+  };
 
   // useEffect separado para verificar produto para editar após grupos carregarem
   useEffect(() => {
@@ -1314,8 +1407,11 @@ const ProdutosPage: React.FC = () => {
         validando: false,
         valido: null,
         descricao: '',
-        erro: ''
+        erro: '',
+        temSubstituicaoTributaria: false,
+        fonte: null
       });
+      setCestOpcoes([]);
     }
 
     // Abrir o sidebar imediatamente
@@ -4620,8 +4716,11 @@ const ProdutosPage: React.FC = () => {
                                         validando: false,
                                         valido: null,
                                         descricao: '',
-                                        erro: ''
+                                        erro: '',
+                                        temSubstituicaoTributaria: false,
+                                        fonte: null
                                       });
+                                      setCestOpcoes([]);
                                     }
                                   }}
                                   className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 pr-10 text-white focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
@@ -4658,8 +4757,22 @@ const ProdutosPage: React.FC = () => {
                               {/* Mensagem de status */}
                               {ncmValidacao.valido === true && ncmValidacao.descricao && (
                                 <div className="mt-2 p-2 bg-green-900/20 border border-green-700/50 rounded text-xs">
-                                  <p className="text-green-300 font-medium">✓ NCM válido</p>
-                                  <p className="text-green-200 mt-1 line-clamp-2">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <p className="text-green-300 font-medium">✓ NCM válido</p>
+                                    <span className={`px-2 py-0.5 rounded text-xs ${
+                                      ncmValidacao.fonte === 'LOCAL'
+                                        ? 'bg-blue-500/20 text-blue-300'
+                                        : 'bg-yellow-500/20 text-yellow-300'
+                                    }`}>
+                                      {ncmValidacao.fonte === 'LOCAL' ? 'Base Local' : 'BrasilAPI'}
+                                    </span>
+                                    {ncmValidacao.temSubstituicaoTributaria && (
+                                      <span className="px-2 py-0.5 rounded text-xs bg-orange-500/20 text-orange-300">
+                                        ST
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-green-200 line-clamp-2">
                                     {ncmValidacao.descricao.length > 100
                                       ? `${ncmValidacao.descricao.substring(0, 100)}...`
                                       : ncmValidacao.descricao
@@ -4686,12 +4799,23 @@ const ProdutosPage: React.FC = () => {
                             <div>
                               <label className="block text-sm font-medium text-gray-400 mb-2">
                                 CFOP (Código Fiscal de Operações) <span className="text-red-500">*</span>
+                                {ncmValidacao.temSubstituicaoTributaria && (
+                                  <span className="ml-2 text-xs px-2 py-0.5 rounded bg-orange-500/20 text-orange-300">
+                                    Auto: ST
+                                  </span>
+                                )}
                               </label>
                               <select
                                 value={novoProduto.cfop || '5102'}
                                 onChange={(e) => {
                                   const newCfop = e.target.value;
                                   let newSituacaoTributaria = novoProduto.situacao_tributaria;
+
+                                  // Verificar se está tentando mudar CFOP de produto com ST
+                                  if (ncmValidacao.temSubstituicaoTributaria && newCfop !== '5405') {
+                                    showMessage('warning', 'Produtos com Substituição Tributária devem usar CFOP 5405');
+                                    return; // Impede a mudança
+                                  }
 
                                   // Aplicar regras fiscais obrigatórias baseadas no CFOP
                                   let newAliquotaIcms = novoProduto.aliquota_icms;
@@ -4767,7 +4891,22 @@ const ProdutosPage: React.FC = () => {
                               <p className="text-xs text-gray-500 mt-1">
                                 Passe o mouse sobre as opções para ver a descrição completa
                               </p>
-                              {(['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')) && (
+
+                              {/* Mensagem específica para ST automática */}
+                              {ncmValidacao.temSubstituicaoTributaria && novoProduto.cfop === '5405' && (
+                                <div className="mt-2 p-2 bg-orange-900/20 border border-orange-700/50 rounded text-xs">
+                                  <p className="text-orange-300 font-medium">🔄 CFOP Ajustado Automaticamente</p>
+                                  <p className="text-orange-200 mt-1">
+                                    NCM {novoProduto.ncm} tem Substituição Tributária obrigatória. CFOP foi ajustado para 5405.
+                                  </p>
+                                  <p className="text-orange-200 mt-1">
+                                    🔒 Este CFOP não pode ser alterado para produtos com ST.
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Mensagem geral de regras fiscais */}
+                              {(['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')) && !ncmValidacao.temSubstituicaoTributaria && (
                                 <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-700/50 rounded text-xs">
                                   <p className="text-yellow-300 font-medium">⚠️ Regra Fiscal Aplicada</p>
                                   <p className="text-yellow-200 mt-1">
@@ -4985,28 +5124,50 @@ const ProdutosPage: React.FC = () => {
 
                             {/* Campos Opcionais */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* CEST - Mostrar apenas se CFOP for 5405 */}
-                              {novoProduto.cfop === '5405' && (
+                              {/* CEST - Mostrar apenas se NCM tem ST */}
+                              {ncmValidacao.temSubstituicaoTributaria && (
                                 <div>
                                   <label className="block text-sm font-medium text-gray-400 mb-2">
                                     CEST (Código Especificador ST) <span className="text-red-500">*</span>
                                   </label>
-                                  <input
-                                    type="text"
-                                    value={novoProduto.cest || ''}
-                                    onChange={(e) => {
-                                      // Permitir apenas números e limitar a 7 dígitos
-                                      const valor = e.target.value.replace(/\D/g, '').slice(0, 7);
-                                      setNovoProduto({ ...novoProduto, cest: valor });
-                                    }}
-                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                    placeholder="1234567 (7 dígitos)"
-                                    maxLength={7}
-                                    required
-                                  />
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Obrigatório para CFOP 5405 - Venda de mercadoria sujeita à Substituição Tributária.
-                                  </p>
+                                  <div className="relative">
+                                    <input
+                                      type="text"
+                                      value={novoProduto.cest || ''}
+                                      onChange={(e) => {
+                                        // Permitir apenas números e limitar a 7 dígitos
+                                        const valor = e.target.value.replace(/\D/g, '').slice(0, 7);
+                                        setNovoProduto({ ...novoProduto, cest: valor });
+                                      }}
+                                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 pr-10 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                      placeholder="1234567 (7 dígitos)"
+                                      maxLength={7}
+                                      required
+                                    />
+                                    {cestOpcoes.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowCestModal(true)}
+                                        className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-primary-400 transition-colors"
+                                        title="Selecionar CEST disponível para este NCM"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <circle cx="11" cy="11" r="8"></circle>
+                                          <path d="21 21l-4.35-4.35"></path>
+                                        </svg>
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center justify-between mt-1">
+                                    <p className="text-xs text-blue-300">
+                                      Obrigatório para produtos com Substituição Tributária.
+                                    </p>
+                                    {cestOpcoes.length > 0 && (
+                                      <p className="text-xs text-green-300">
+                                        {cestOpcoes.length} opção{cestOpcoes.length > 1 ? 'ões' : ''} disponível{cestOpcoes.length > 1 ? 'eis' : ''}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
                               )}
 
@@ -5089,10 +5250,10 @@ const ProdutosPage: React.FC = () => {
                                 return;
                               }
 
-                              // Validar CEST se CFOP for 5405
-                              if (novoProduto.cfop === '5405') {
+                              // Validar CEST se NCM tem ST
+                              if (ncmValidacao.temSubstituicaoTributaria) {
                                 if (!novoProduto.cest || novoProduto.cest.length !== 7) {
-                                  showMessage('error', 'CEST é obrigatório e deve ter 7 dígitos para CFOP 5405');
+                                  showMessage('error', 'CEST é obrigatório e deve ter 7 dígitos para produtos com Substituição Tributária');
                                   return;
                                 }
                               }
@@ -5228,6 +5389,106 @@ const ProdutosPage: React.FC = () => {
                     </Button>
                   </div>
                 </form>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Seleção de CEST */}
+      <AnimatePresence>
+        {showCestModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => setShowCestModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-xl border border-gray-700 p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Selecionar CEST</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    NCM: {novoProduto.ncm} - {cestOpcoes.length} opção{cestOpcoes.length > 1 ? 'ões' : ''} disponível{cestOpcoes.length > 1 ? 'eis' : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowCestModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="overflow-y-auto max-h-[60vh]">
+                <div className="space-y-3">
+                  {cestOpcoes.map((cest, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg border cursor-pointer transition-all hover:border-primary-500 ${
+                        novoProduto.cest === cest.codigo_cest
+                          ? 'border-primary-500 bg-primary-500/10'
+                          : 'border-gray-700 bg-gray-800/50'
+                      }`}
+                      onClick={() => selecionarCEST(cest)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-primary-400 font-mono font-medium">
+                              {cest.codigo_cest}
+                            </span>
+                            {novoProduto.cest === cest.codigo_cest && (
+                              <span className="text-xs px-2 py-0.5 rounded bg-primary-500/20 text-primary-300">
+                                Selecionado
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-300 leading-relaxed">
+                            {cest.descricao_cest}
+                          </p>
+                        </div>
+                        <div className="ml-4">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-700">
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="text"
+                    className="flex-1"
+                    onClick={() => setShowCestModal(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="flex-1"
+                    onClick={() => setShowCestModal(false)}
+                    disabled={!novoProduto.cest}
+                  >
+                    Confirmar Seleção
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
