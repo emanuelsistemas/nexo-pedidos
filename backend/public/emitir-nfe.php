@@ -454,13 +454,15 @@ try {
         $std->cProd = $produto['codigo'] ?? $produto['id'] ?? "PROD{$item}";
         // Validar EAN/GTIN - deve ser válido ou 'SEM GTIN'
         $ean = $produto['ean'] ?? '';
+        $eanValidado = '';
         if (empty($ean) || !preg_match('/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/', $ean)) {
             // EAN vazio ou inválido - usar 'SEM GTIN'
-            $std->cEAN = 'SEM GTIN';
+            $eanValidado = 'SEM GTIN';
         } else {
             // EAN válido - usar o código
-            $std->cEAN = $ean;
+            $eanValidado = $ean;
         }
+        $std->cEAN = $eanValidado;
 
         // Validar nome do produto obrigatório (SEM FALLBACKS)
         $nomeProduto = '';
@@ -488,12 +490,25 @@ try {
 
         $std->xProd = $nomeProduto;
         $std->NCM = $produto['ncm']; // NCM real obrigatório
+
+        // ✅ CORREÇÃO: CEST obrigatório para produtos com ST (Substituição Tributária)
+        if (!empty($produto['cest'])) {
+            $std->CEST = $produto['cest']; // CEST obrigatório para ST
+            error_log("✅ CEST adicionado ao produto {$item}: " . $produto['cest']);
+        } else {
+            // Log se produto ST não tem CEST
+            $situacaoTributaria = $produto['situacao_tributaria'] ?? '';
+            if (strpos($situacaoTributaria, 'st') !== false) {
+                error_log("⚠️ AVISO: Produto {$item} com ST mas sem CEST informado");
+            }
+        }
+
         $std->CFOP = $produto['cfop']; // CFOP real obrigatório
         $std->uCom = $produto['unidade'] ?? 'UN';
         $std->qCom = (float)($produto['quantidade'] ?? 1);
         $std->vUnCom = (float)($produto['valor_unitario'] ?? $produto['preco'] ?? 0);
         $std->vProd = (float)($produto['valor_total'] ?? $produto['total'] ?? 0);
-        $std->cEANTrib = $produto['ean'] ?? 'SEM GTIN'; // CRÍTICO: deve ser 'SEM GTIN' quando não há EAN
+        $std->cEANTrib = $eanValidado; // ✅ CORREÇÃO: usar EAN validado (igual ao cEAN)
         $std->uTrib = $produto['unidade'] ?? 'UN';
         $std->qTrib = (float)($produto['quantidade'] ?? 1);
         $std->vUnTrib = (float)($produto['valor_unitario'] ?? $produto['preco'] ?? 0);
@@ -545,15 +560,27 @@ try {
                 $std->pCredSN = $aliquotaICMS;
                 $std->vCredICMSSN = round($valorBase * ($aliquotaICMS / 100), 2);
             } elseif ($csosn === '500') {
-                // ✅ ADICIONADO: CSOSN 500 - ICMS cobrado anteriormente por ST (Simples Nacional)
-                // Equivale ao CST 60 para Regime Normal
+                // ✅ CORREÇÃO: CSOSN 500 - ICMS cobrado anteriormente por ST (Simples Nacional)
+                // Campos obrigatórios conforme documentação oficial SEFAZ
+
+                // Valores de ST retido (obrigatórios)
                 $valorSTRetido = (float)($produto['valor_st_retido'] ?? 0);
                 $baseSTRetido = (float)($produto['base_st_retido'] ?? $valorBase);
 
-                $std->vBCSTRet = $baseSTRetido; // Base de cálculo do ST retido
-                $std->vICMSSTRet = $valorSTRetido; // Valor do ST retido
+                // ✅ CORREÇÃO: Alíquota suportada pelo consumidor final (obrigatório)
+                $aliquotaST = (float)($produto['aliquota_st'] ?? $produto['aliquota_icms'] ?? 18);
 
-                error_log("✅ CSOSN 500 - ST Retido: Base R$ {$baseSTRetido}, Valor R$ {$valorSTRetido}");
+                // ✅ CORREÇÃO: Valor do ICMS Substituto (obrigatório)
+                // Para CSOSN 500, é o valor que foi pago pelo substituto tributário
+                $valorICMSSubstituto = (float)($produto['valor_icms_substituto'] ?? $valorSTRetido);
+
+                // Campos obrigatórios para CSOSN 500
+                $std->vBCSTRet = $baseSTRetido;           // Base de cálculo do ST retido
+                $std->pST = $aliquotaST;                  // Alíquota suportada pelo Consumidor Final
+                $std->vICMSSubstituto = $valorICMSSubstituto; // Valor do ICMS Substituto
+                $std->vICMSSTRet = $valorSTRetido;        // Valor do ICMS ST retido
+
+                error_log("✅ CSOSN 500 - ST Completo: Base R$ {$baseSTRetido}, Alíquota {$aliquotaST}%, ICMS Substituto R$ {$valorICMSSubstituto}, ST Retido R$ {$valorSTRetido}");
             } elseif (in_array($csosn, ['201', '202', '203'])) {
                 // ✅ ADICIONADO: CSOSN 201/202/203 - Com permissão de crédito e ST
                 if ($aliquotaICMS > 0) {
