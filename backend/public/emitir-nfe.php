@@ -4,63 +4,11 @@ date_default_timezone_set('America/Sao_Paulo');
 
 // ✅ DEBUG: Configurar logs de erro
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // ✅ DESABILITAR display_errors para evitar HTML no JSON
+ini_set('display_errors', 1);
 ini_set('log_errors', 1);
 ini_set('error_log', '/var/log/php_nfe_debug.log');
 
-// ✅ FUNÇÃO DE LOG DETALHADO (igual à NFC-e)
-function logDetalhado($step, $message, $data = []) {
-    $timestamp = date('Y-m-d H:i:s');
-    $logEntry = "[{$timestamp}] [{$step}] {$message}";
-
-    if (!empty($data)) {
-        $logEntry .= " | DATA: " . json_encode($data, JSON_UNESCAPED_UNICODE);
-    }
-
-    error_log($logEntry);
-
-    // Salvar também em arquivo específico para debug
-    $debugFile = '/tmp/nfe_detailed.log';
-    file_put_contents($debugFile, $logEntry . "\n", FILE_APPEND | LOCK_EX);
-}
-
-// ✅ DEBUG CRÍTICO: Registrar handler de erro fatal para capturar HTTP 502
-register_shutdown_function(function() {
-    $error = error_get_last();
-    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR])) {
-        $errorMsg = "❌ ERRO FATAL NFe: " . $error['message'] . " em " . $error['file'] . ":" . $error['line'];
-        error_log($errorMsg);
-
-        // Salvar em arquivo específico para debug
-        file_put_contents('/tmp/nfe_fatal_error.log', date('Y-m-d H:i:s') . " - " . $errorMsg . "\n", FILE_APPEND);
-
-        // Tentar enviar resposta JSON mesmo com erro fatal
-        if (!headers_sent()) {
-            header('Content-Type: application/json; charset=utf-8');
-            http_response_code(500);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Erro fatal no servidor: ' . $error['message'],
-                'error_type' => 'fatal_error',
-                'debug_info' => [
-                    'file' => basename($error['file']),
-                    'line' => $error['line'],
-                    'type' => $error['type'],
-                    'step' => 'FATAL_ERROR'
-                ]
-            ]);
-        }
-    }
-});
-
-// ✅ CONFIGURAÇÃO DE TIMEOUT PARA EVITAR 502
-ini_set('max_execution_time', 300); // 5 minutos
-ini_set('memory_limit', '512M');
-
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Content-Type: application/json');
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -74,195 +22,19 @@ error_log("CONTENT_TYPE: " . ($_SERVER['CONTENT_TYPE'] ?? 'N/A'));
 
 require_once '../vendor/autoload.php';
 
-// TRADUZIR ERROS SEFAZ PARA MENSAGENS AMIGÁVEIS
-function traduzirErroSefaz($status, $motivo) {
-    $errosComuns = [
-        // Erros de Duplicidade e Numeração
-        '206' => [
-            'titulo' => 'NFe Duplicada',
-            'descricao' => 'Esta NFe já foi inutilizada na SEFAZ e não pode ser emitida.',
-            'solucao' => 'Use um número diferente ou verifique se a numeração não foi inutilizada.'
-        ],
-        '539' => [
-            'titulo' => 'NFe Duplicada',
-            'descricao' => 'Já existe uma NFe autorizada com este número e série.',
-            'solucao' => 'Use um número sequencial diferente para esta NFe.'
-        ],
-
-        // Erros de Documentos
-        '204' => [
-            'titulo' => 'CNPJ Inválido',
-            'descricao' => 'O CNPJ da empresa está incorreto ou inválido.',
-            'solucao' => 'Verifique e corrija o CNPJ da empresa nas configurações.'
-        ],
-        '207' => [
-            'titulo' => 'CNPJ Inválido',
-            'descricao' => 'O CNPJ do emitente está incorreto ou inválido.',
-            'solucao' => 'Verifique e corrija o CNPJ da empresa nas configurações.'
-        ],
-        '209' => [
-            'titulo' => 'Inscrição Estadual Inválida',
-            'descricao' => 'A Inscrição Estadual da empresa está incorreta ou inválida.',
-            'solucao' => 'Verifique e corrija a Inscrição Estadual da empresa nas configurações.'
-        ],
-        '215' => [
-            'titulo' => 'CNPJ do Destinatário Inválido',
-            'descricao' => 'O CNPJ/CPF do destinatário está incorreto.',
-            'solucao' => 'Verifique e corrija o documento do destinatário.'
-        ],
-        '401' => [
-            'titulo' => 'CPF Inválido',
-            'descricao' => 'O CPF do emitente está incorreto ou inválido.',
-            'solucao' => 'Verifique e corrija o CPF nas configurações.'
-        ],
-
-        // Erros de Data e Horário
-        '228' => [
-            'titulo' => 'Data de Emissão Atrasada',
-            'descricao' => 'A data de emissão está muito atrasada (mais de 30 dias).',
-            'solucao' => 'Ajuste a data de emissão para uma data mais recente.'
-        ],
-        '703' => [
-            'titulo' => 'Data de Emissão Futura',
-            'descricao' => 'A data de emissão está no futuro.',
-            'solucao' => 'Ajuste a data de emissão para a data atual ou anterior.'
-        ],
-
-        // Erros de Chave de Acesso
-        '502' => [
-            'titulo' => 'Chave de Acesso Inválida',
-            'descricao' => 'A chave de acesso não corresponde aos dados da NFe.',
-            'solucao' => 'Regenere a NFe para criar uma nova chave de acesso válida.'
-        ],
-        '253' => [
-            'titulo' => 'Dígito Verificador Inválido',
-            'descricao' => 'O dígito verificador da chave de acesso está incorreto.',
-            'solucao' => 'Regenere a NFe para corrigir o dígito verificador.'
-        ],
-
-        // Erros de Ambiente
-        '252' => [
-            'titulo' => 'Ambiente Incorreto',
-            'descricao' => 'O ambiente da NFe não corresponde ao ambiente do servidor.',
-            'solucao' => 'Verifique se está emitindo no ambiente correto (produção/homologação).'
-        ],
-
-        // Erros de UF e Localização
-        '226' => [
-            'titulo' => 'UF Incorreta',
-            'descricao' => 'A UF do emitente não corresponde à UF autorizadora.',
-            'solucao' => 'Verifique se a UF da empresa está configurada corretamente.'
-        ],
-        '270' => [
-            'titulo' => 'Município Inexistente',
-            'descricao' => 'O código do município não existe na tabela do IBGE.',
-            'solucao' => 'Verifique e corrija o código do município da empresa.'
-        ],
-        '272' => [
-            'titulo' => 'Município Inexistente',
-            'descricao' => 'O código do município do emitente não existe.',
-            'solucao' => 'Verifique e corrija o código do município da empresa.'
-        ],
-
-        // Erros de Certificado
-        '280' => [
-            'titulo' => 'Certificado Digital Inválido',
-            'descricao' => 'O certificado digital está vencido ou inválido.',
-            'solucao' => 'Renove ou configure um certificado digital válido.'
-        ],
-
-        // Erros de Produtos e Impostos
-        '897' => [
-            'titulo' => 'Código Numérico Inválido',
-            'descricao' => 'O código numérico da NFe está em formato inválido.',
-            'solucao' => 'Regenere a NFe para criar um novo código numérico válido.'
-        ],
-
-        // Erros de Produtos
-        '611' => [
-            'titulo' => 'Código EAN/GTIN Inválido',
-            'descricao' => 'O código de barras EAN/GTIN de um ou mais produtos está incorreto.',
-            'solucao' => 'Verifique e corrija os códigos EAN/GTIN dos produtos ou deixe em branco se não possuir.'
-        ],
-
-        // Erros de Processamento
-        '103' => [
-            'titulo' => 'Lote em Processamento',
-            'descricao' => 'A NFe foi enviada e está sendo processada pela SEFAZ.',
-            'solucao' => 'Aguarde alguns segundos e consulte o status novamente.'
-        ]
-    ];
-
-    if (isset($errosComuns[$status])) {
-        $erro = $errosComuns[$status];
-        return [
-            'titulo' => $erro['titulo'],
-            'descricao' => $erro['descricao'],
-            'solucao' => $erro['solucao'],
-            'status_original' => $status,
-            'motivo_original' => $motivo
-        ];
-    }
-
-    return [
-        'titulo' => 'Erro na Validação da NFe',
-        'descricao' => $motivo,
-        'solucao' => 'Verifique os dados da NFe e tente novamente.',
-        'status_original' => $status,
-        'motivo_original' => $motivo
-    ];
-}
-
 try {
-    logDetalhado('001', 'Iniciando emissão de NFe modelo 55');
-    error_log("🚀 CHECKPOINT 1: Iniciando emissão de NFe modelo 55");
-
-    // ✅ ADICIONAR TRATAMENTO DE ERRO FATAL
-    register_shutdown_function(function() {
-        $error = error_get_last();
-        if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-            error_log("❌ ERRO FATAL NFe: " . $error['message'] . " em " . $error['file'] . " linha " . $error['line']);
-
-            if (!headers_sent()) {
-                http_response_code(500);
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'Erro fatal no servidor: ' . $error['message'],
-                    'error_type' => 'fatal_error',
-                    'timestamp' => date('Y-m-d H:i:s'),
-                    'debug_info' => [
-                        'file' => basename($error['file']),
-                        'line' => $error['line'],
-                        'step' => 'FATAL_ERROR'
-                    ]
-                ], JSON_UNESCAPED_UNICODE);
-            }
-        }
-    });
-
+    
     // Validar método
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        logDetalhado('002', 'Erro: Método não permitido', ['method' => $_SERVER['REQUEST_METHOD']]);
         throw new Exception('Método não permitido. Use POST.');
     }
-
-    logDetalhado('003', 'Método POST validado');
-    error_log("✅ CHECKPOINT 2: Método POST validado");
-
+    
     // Receber dados
-    $rawInput = file_get_contents('php://input');
-    logDetalhado('004', 'Dados brutos recebidos', ['size' => strlen($rawInput)]);
-    error_log("✅ CHECKPOINT 3: Dados brutos recebidos - " . strlen($rawInput) . " bytes");
-
-    $input = json_decode($rawInput, true);
-
+    $input = json_decode(file_get_contents('php://input'), true);
+    
     if (!$input) {
-        logDetalhado('005', 'Erro: JSON inválido', ['raw_input' => substr($rawInput, 0, 500)]);
         throw new Exception('Dados JSON inválidos');
     }
-
-    logDetalhado('006', 'JSON decodificado com sucesso', ['keys' => array_keys($input)]);
-    error_log("✅ CHECKPOINT 4: JSON decodificado com sucesso");
     
     // Validar empresa_id (OBRIGATÓRIO para multi-tenant)
     $empresaId = $input['empresa_id'] ?? null;
@@ -378,15 +150,11 @@ try {
     ];
     
     // Criar objeto Certificate
-    error_log("✅ CHECKPOINT 5: Criando certificado digital");
     $certificate = \NFePHP\Common\Certificate::readPfx($certificado, $metadata['password'] ?? '');
-    error_log("✅ CHECKPOINT 6: Certificado digital criado com sucesso");
 
     // Inicializar Tools (MÉTODO NATIVO)
-    error_log("✅ CHECKPOINT 7: Inicializando Tools NFePHP");
     $tools = new \NFePHP\NFe\Tools(json_encode($config), $certificate);
     $tools->model('55'); // Modelo NFe
-    error_log("✅ CHECKPOINT 8: Tools NFePHP inicializado com sucesso");
 
     // ✅ DESABILITAR criação automática de diretórios pela biblioteca
     // Isso evita que a biblioteca crie pastas 55/65 no storage raiz
@@ -395,9 +163,7 @@ try {
     }
 
     // Inicializar Make (MÉTODO NATIVO)
-    error_log("✅ CHECKPOINT 9: Inicializando Make NFePHP");
     $make = new \NFePHP\NFe\Make();
-    error_log("✅ CHECKPOINT 10: Make NFePHP inicializado com sucesso");
     
     // MONTAGEM DA NFe USANDO MÉTODOS NATIVOS DA BIBLIOTECA
     // Identificação da NFe
@@ -603,10 +369,8 @@ try {
         $nomeDestinatario = $destinatario['razao_social'];
     } elseif (isset($destinatario['cliente'])) {
         $nomeDestinatario = $destinatario['cliente'];
-    }
-
-    if (empty($nomeDestinatario)) {
-        throw new Exception("Nome do destinatário não encontrado");
+    } else {
+        throw new Exception('Nome do destinatário não encontrado');
     }
 
     $std->xNome = $nomeDestinatario;
@@ -669,84 +433,10 @@ try {
     // Produtos (MÉTODO NATIVO) - USANDO DADOS FISCAIS REAIS
     $produtos = $nfeData['produtos'] ?? [];
 
-    // ✅ VALIDAÇÃO CRÍTICA: Verificar se há produtos válidos
-    if (empty($produtos)) {
-        error_log("❌ ERRO CRÍTICO: Nenhum produto encontrado nos dados da NFe");
-        error_log("📊 DADOS RECEBIDOS: " . json_encode($nfeData, JSON_UNESCAPED_UNICODE));
-        throw new Exception('NFe deve conter pelo menos um produto');
-    }
-
-    error_log("🚀 INICIANDO PROCESSAMENTO NFe:");
-    error_log("  - Total de produtos: " . count($produtos));
-    error_log("  - Empresa ID: " . ($nfeData['empresa_id'] ?? 'N/A'));
-    error_log("  - Regime tributário: " . ($nfeData['regime_tributario'] ?? 'N/A'));
-
-    // ✅ CONTADOR DE TAGS CRIADAS PARA DIAGNÓSTICO
-    $contadorTags = [
-        'produtos' => 0,
-        'impostos' => 0,
-        'icms' => 0,
-        'pis' => 0,
-        'cofins' => 0
-    ];
-
-    error_log("📊 CONTADORES INICIALIZADOS: " . json_encode($contadorTags));
+    error_log("NFE: Processando " . count($produtos) . " produtos com dados fiscais reais");
 
     foreach ($produtos as $index => $produto) {
         $item = $index + 1;
-
-        error_log("🔍 PROCESSANDO PRODUTO {$item}:");
-        error_log("  - Dados recebidos: " . json_encode($produto, JSON_UNESCAPED_UNICODE));
-
-        // ✅ TIMEOUT DE SEGURANÇA: Verificar se não está demorando muito
-        $tempoInicio = microtime(true);
-
-        try {
-
-        // ✅ VALIDAÇÃO CRÍTICA: Verificar se produto tem dados mínimos
-        if (empty($produto) || !is_array($produto)) {
-            error_log("❌ PRODUTO {$item}: Dados inválidos ou vazios - PULANDO");
-            continue;
-        }
-
-        // ✅ VALIDAÇÃO: Verificar campos obrigatórios do produto
-        $camposFaltando = [];
-
-        // Verificar código do produto
-        if (empty($produto['codigo']) && empty($produto['id'])) {
-            $camposFaltando[] = 'codigo';
-        }
-
-        // Verificar nome/descrição do produto (aceitar qualquer um dos campos)
-        $temNome = !empty($produto['descricao']) || !empty($produto['nome']) ||
-                   !empty($produto['name']) || !empty($produto['produto']);
-        if (!$temNome) {
-            $camposFaltando[] = 'nome/descricao';
-        }
-
-        // Verificar NCM
-        if (empty($produto['ncm'])) {
-            $camposFaltando[] = 'ncm';
-        }
-
-        // Verificar CFOP
-        if (empty($produto['cfop'])) {
-            $camposFaltando[] = 'cfop';
-        }
-
-        if (!empty($camposFaltando)) {
-            error_log("❌ PRODUTO {$item}: Campos obrigatórios faltando: " . implode(', ', $camposFaltando));
-            error_log("📊 ESTADO DOS CONTADORES NO MOMENTO DO ERRO:");
-            error_log("  - Produtos: {$contadorTags['produtos']}");
-            error_log("  - IMPOSTO: {$contadorTags['impostos']}");
-            error_log("  - ICMS/ICMSSN: {$contadorTags['icms']}");
-            error_log("  - PIS: {$contadorTags['pis']}");
-            error_log("  - COFINS: {$contadorTags['cofins']}");
-            
-            throw new Exception("Produto {$item}: Campos obrigatórios faltando: " . implode(', ', $camposFaltando));
-        }
-
-        error_log("✅ PRODUTO {$item}: Validação inicial aprovada - iniciando criação das tags");
 
         // Log dos dados fiscais do produto
         error_log("NFE: Produto {$item} - NCM: " . ($produto['ncm'] ?? 'N/A') .
@@ -754,64 +444,7 @@ try {
                   ", ICMS: " . ($produto['aliquota_icms'] ?? 0) . "%" .
                   ", CST ICMS: " . ($produto['cst_icms'] ?? $produto['csosn_icms'] ?? 'N/A') .
                   ", Origem: " . ($produto['origem_produto'] ?? 0) .
-                  ", EAN: " . ($produto['ean'] ?? 'VAZIO') .
-                  ", CEST: " . ($produto['cest'] ?? 'VAZIO')); // ✅ ADICIONADO: Log do CEST
-
-        // ✅ LOG DETALHADO DA CONFIGURAÇÃO TRIBUTÁRIA
-        logDetalhado("PRODUTO_{$item}_CONFIG_TRIBUTARIA", "Configuração tributária do produto", [
-            'ncm' => $produto['ncm'] ?? 'N/A',
-            'cfop' => $produto['cfop'] ?? 'N/A',
-            'cest' => $produto['cest'] ?? 'VAZIO',
-            'cst_icms' => $produto['cst_icms'] ?? 'N/A',
-            'csosn_icms' => $produto['csosn_icms'] ?? 'N/A',
-            'aliquota_icms' => $produto['aliquota_icms'] ?? 0,
-            'origem_produto' => $produto['origem_produto'] ?? 0,
-            'situacao_tributaria' => $produto['situacao_tributaria'] ?? 'N/A'
-        ]);
-
-        // ✅ VALIDAÇÃO DETALHADA PARA SUBSTITUIÇÃO TRIBUTÁRIA
-        $isSubstituicaoTributaria = ($produto['csosn_icms'] == '500' || $produto['cfop'] == '5405');
-        if ($isSubstituicaoTributaria) {
-            logDetalhado("PRODUTO_{$item}_ST_DETECTADA", "Produto com Substituição Tributária detectado");
-
-            $errosST = [];
-
-            // Validar CEST
-            if (empty($produto['cest'])) {
-                $errosST[] = "CEST obrigatório para ST";
-            }
-
-            // Validar alíquota ICMS
-            if (empty($produto['aliquota_icms']) || $produto['aliquota_icms'] == 0) {
-                $errosST[] = "Alíquota ICMS obrigatória para ST (ex: 18%)";
-            }
-
-            // Validar CFOP
-            if ($produto['cfop'] != '5405') {
-                $errosST[] = "CFOP deve ser 5405 para ST (atual: " . ($produto['cfop'] ?? 'N/A') . ")";
-            }
-
-            // Validar CSOSN
-            if ($produto['csosn_icms'] != '500') {
-                $errosST[] = "CSOSN deve ser 500 para ST (atual: " . ($produto['csosn_icms'] ?? 'N/A') . ")";
-            }
-
-            if (!empty($errosST)) {
-                logDetalhado("PRODUTO_{$item}_ST_ERROS", "Erros de validação ST encontrados", [
-                    'erros' => $errosST,
-                    'total_erros' => count($errosST)
-                ]);
-
-                $mensagemErro = "Produto {$item} - Erros de Substituição Tributária:\n";
-                foreach ($errosST as $erro) {
-                    $mensagemErro .= "• {$erro}\n";
-                }
-
-                throw new Exception($mensagemErro);
-            } else {
-                logDetalhado("PRODUTO_{$item}_ST_VALIDACAO_OK", "Validação ST passou - todos os campos obrigatórios presentes");
-            }
-        }
+                  ", EAN: " . ($produto['ean'] ?? 'VAZIO'));
 
         // Log da tag ICMS que será usada (será atualizado após processamento)
 
@@ -819,19 +452,14 @@ try {
         $std = new stdClass();
         $std->item = $item;
         $std->cProd = $produto['codigo'] ?? $produto['id'] ?? "PROD{$item}";
-        // ✅ CORREÇÃO CRÍTICA: Validar EAN/GTIN - deve ser válido ou 'SEM GTIN'
-        $ean = $produto['ean'] ?? $produto['codigo_barras'] ?? '';
-        $eanValido = false;
-
-        if (!empty($ean) && preg_match('/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/', $ean)) {
-            // EAN válido - usar o código
-            $std->cEAN = $ean;
-            $eanValido = true;
-            logDetalhado("PRODUTO_{$item}_EAN_VALIDO", "EAN válido encontrado", ['ean' => $ean]);
-        } else {
+        // Validar EAN/GTIN - deve ser válido ou 'SEM GTIN'
+        $ean = $produto['ean'] ?? '';
+        if (empty($ean) || !preg_match('/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/', $ean)) {
             // EAN vazio ou inválido - usar 'SEM GTIN'
             $std->cEAN = 'SEM GTIN';
-            logDetalhado("PRODUTO_{$item}_EAN_INVALIDO", "EAN inválido ou vazio - usando SEM GTIN", ['ean_original' => $ean]);
+        } else {
+            // EAN válido - usar o código
+            $std->cEAN = $ean;
         }
 
         // Validar nome do produto obrigatório (SEM FALLBACKS)
@@ -860,98 +488,31 @@ try {
 
         $std->xProd = $nomeProduto;
         $std->NCM = $produto['ncm']; // NCM real obrigatório
-
-        // ✅ CORREÇÃO CRÍTICA: CEST deve ser adicionado ANTES de tagprod() conforme documentação oficial
-        if (!empty($produto['cest'])) {
-            $std->CEST = trim($produto['cest']); // CEST real do produto (trim para remover espaços)
-            logDetalhado("PRODUTO_{$item}_CEST_INFORMADO", "CEST configurado para tagprod", [
-                'cest' => $produto['cest'],
-                'cest_trimmed' => trim($produto['cest']),
-                'cest_length' => strlen(trim($produto['cest']))
-            ]);
-        } else {
-            logDetalhado("PRODUTO_{$item}_CEST_VAZIO", "CEST não informado - pode causar erro 806 se houver ST");
-        }
-
         $std->CFOP = $produto['cfop']; // CFOP real obrigatório
         $std->uCom = $produto['unidade'] ?? 'UN';
         $std->qCom = (float)($produto['quantidade'] ?? 1);
         $std->vUnCom = (float)($produto['valor_unitario'] ?? $produto['preco'] ?? 0);
-        $std->vProd = (float)($produto['valor_total'] ?? 0);
-
-        // ✅ CORREÇÃO CRÍTICA: cEANTrib deve usar a mesma validação do cEAN
-        if ($eanValido) {
-            $std->cEANTrib = $ean; // Usar EAN válido
-            logDetalhado("PRODUTO_{$item}_EANTRIB_VALIDO", "cEANTrib configurado com EAN válido", ['ean' => $ean]);
-        } else {
-            $std->cEANTrib = 'SEM GTIN'; // Usar 'SEM GTIN' quando não há EAN válido
-            logDetalhado("PRODUTO_{$item}_EANTRIB_SEM_GTIN", "cEANTrib configurado como SEM GTIN");
-        }
-
+        $std->vProd = (float)($produto['valor_total'] ?? $produto['total'] ?? 0);
+        $std->cEANTrib = $produto['ean'] ?? 'SEM GTIN'; // CRÍTICO: deve ser 'SEM GTIN' quando não há EAN
         $std->uTrib = $produto['unidade'] ?? 'UN';
         $std->qTrib = (float)($produto['quantidade'] ?? 1);
         $std->vUnTrib = (float)($produto['valor_unitario'] ?? $produto['preco'] ?? 0);
 
-        // ✅ CORREÇÃO CRÍTICA: Campos opcionais conforme documentação oficial NFe
-        // Segundo mjailton.com.br/manualnfe - campos opcionais devem ser omitidos quando zero
-        // NÃO definir campos opcionais quando não há valor - biblioteca NFePHP omite automaticamente
-
-        $std->indTot = 1;    // Indica se valor compõe total da NFe (1=Sim)
-
-        // ✅ ADICIONADO: Campos que podem ser obrigatórios para CEST funcionar
-        if (!empty($produto['cest'])) {
-            // Verificar se há campos específicos necessários para CEST
-            logDetalhado("PRODUTO_{$item}_CEST_CAMPOS_VERIFICACAO", "Verificando campos necessários para CEST", [
-                'tem_ncm' => !empty($std->NCM),
-                'tem_cfop' => !empty($std->CFOP),
-                'tem_cest' => !empty($std->CEST),
-                'ncm_valor' => $std->NCM ?? 'VAZIO',
-                'cfop_valor' => $std->CFOP ?? 'VAZIO',
-                'cest_valor' => $std->CEST ?? 'VAZIO'
-            ]);
-        }
+        // Campos obrigatórios que estavam faltando (conforme documentação)
+        $std->vFrete = null;
+        $std->vSeg = null;
+        $std->vDesc = null;
+        $std->vOutro = null;
+        $std->indTot = 1;
 
         $make->tagprod($std);
 
-        // ✅ LOG DO XML DO PRODUTO PARA DEBUG
-        try {
-            $xmlAtual = $make->getXML();
-            if ($xmlAtual && strpos($xmlAtual, '<CEST>') !== false) {
-                logDetalhado("PRODUTO_{$item}_XML_CEST_OK", "CEST encontrado no XML gerado");
-            } else {
-                logDetalhado("PRODUTO_{$item}_XML_CEST_FALTANDO", "CEST NÃO encontrado no XML - possível causa do erro 806");
-            }
-        } catch (Exception $e) {
-            logDetalhado("PRODUTO_{$item}_XML_ERRO", "Erro ao verificar XML", ['erro' => $e->getMessage()]);
-        }
-
-        // ✅ CORREÇÃO CRÍTICA: Tag IMPOSTO deve ser criada APÓS todas as tags de tributos
-        // Conforme documentação NFePHP, a ordem correta é:
-        // 1. tagprod() - produto
-        // 2. tagimposto() - container de impostos
-        // 3. tagICMS/tagICMSSN() - ICMS
-        // 4. tagPIS() - PIS
-        // 5. tagCOFINS() - COFINS
-
-        // PRIMEIRO: Criar container de impostos
+        // Tag IMPOSTO (container obrigatório)
         $std = new stdClass();
         $std->item = $item;
         $std->vTotTrib = 0.00; // Valor total dos tributos
 
-        logDetalhado("PRODUTO_{$item}_IMPOSTO_INICIO", "Iniciando criação da tag imposto");
-        try {
-            $make->tagimposto($std);
-            $contadorTags['impostos']++;
-            logDetalhado("PRODUTO_{$item}_IMPOSTO_CRIADO", "Tag imposto criada com sucesso");
-            error_log("✅ PRODUTO {$item}: Tag IMPOSTO criada (total: {$contadorTags['impostos']})");
-        } catch (Exception $e) {
-            logDetalhado("PRODUTO_{$item}_IMPOSTO_ERRO", "Erro ao criar tag imposto", [
-                'erro' => $e->getMessage(),
-                'linha' => $e->getLine(),
-                'arquivo' => $e->getFile()
-            ]);
-            throw $e;
-        }
+        $make->tagimposto($std);
 
         // ICMS (usando dados reais do produto com tag específica)
         $std = new stdClass();
@@ -963,30 +524,12 @@ try {
         $regimeTributario = (int)($nfeData['empresa']['regime_tributario'] ?? 1);
         $isSimples = in_array($regimeTributario, [1, 2]); // 1 ou 2 = Simples Nacional
 
-        // ✅ CORREÇÃO CONFORME DOCUMENTAÇÃO OFICIAL NFe:
-        // "Informar apenas um dos grupos de tributação do ICMS" - mjailton.com.br/manualnfe/tag/detalhe/47
-        // NUNCA processar CST e CSOSN simultaneamente - usar apenas o coerente com o regime
+        // Para Simples Nacional, deve usar CSOSN; para outros regimes, usar CST
+        $temCST = isset($produto['cst_icms']) && !empty($produto['cst_icms']);
+        $temCSOSN = isset($produto['csosn_icms']) && !empty($produto['csosn_icms']);
 
-        if ($isSimples) {
-            // ✅ SIMPLES NACIONAL: Usar APENAS CSOSN, IGNORAR CST
-            $temCSOSN = isset($produto['csosn_icms']) && !empty($produto['csosn_icms']);
-            $temCST = false; // FORÇAR false para ignorar CST
-
-            error_log("✅ REGIME SIMPLES NACIONAL - Produto {$item}:");
-            error_log("  - Regime: {$regimeTributario} (Simples Nacional)");
-            error_log("  - CSOSN: " . ($produto['csosn_icms'] ?? 'VAZIO') . " (será usado)");
-            error_log("  - CST: " . ($produto['cst_icms'] ?? 'VAZIO') . " (será IGNORADO)");
-
-        } else {
-            // ✅ REGIME NORMAL: Usar APENAS CST, IGNORAR CSOSN
-            $temCST = isset($produto['cst_icms']) && !empty($produto['cst_icms']);
-            $temCSOSN = false; // FORÇAR false para ignorar CSOSN
-
-            error_log("✅ REGIME NORMAL - Produto {$item}:");
-            error_log("  - Regime: {$regimeTributario} (Regime Normal)");
-            error_log("  - CST: " . ($produto['cst_icms'] ?? 'VAZIO') . " (será usado)");
-            error_log("  - CSOSN: " . ($produto['csosn_icms'] ?? 'VAZIO') . " (será IGNORADO)");
-        }
+        // Log do regime e dados fiscais
+        error_log("NFE: Produto {$item} - Regime: {$regimeTributario}, CST: " . ($produto['cst_icms'] ?? 'N/A') . ", CSOSN: " . ($produto['csosn_icms'] ?? 'N/A'));
 
         if ($isSimples && $temCSOSN) {
             // Simples Nacional - usar CSOSN
@@ -995,45 +538,13 @@ try {
 
             // Para Simples Nacional, configurar campos específicos
             $aliquotaICMS = (float)($produto['aliquota_icms'] ?? 0);
-
             if ($csosn === '101' && $aliquotaICMS > 0) {
                 // CSOSN 101 - Tributada pelo Simples Nacional com permissão de crédito
                 $std->pCredSN = $aliquotaICMS;
                 $std->vCredICMSSN = round((float)($produto['valor_total'] ?? 0) * ($aliquotaICMS / 100), 2);
-            } elseif ($csosn === '500') {
-                // ✅ CORREÇÃO CRÍTICA: CSOSN 500 - Campos obrigatórios conforme documentação oficial
-                // Conforme mjailton.com.br/manualnfe/tag/detalhe/66
-                $valorProduto = (float)($produto['valor_total'] ?? 0);
-
-                // Campos obrigatórios para CSOSN 500:
-                $std->vBCSTRet = $valorProduto; // Base de cálculo ST retida (obrigatório)
-                $std->pST = $aliquotaICMS; // Alíquota suportada (obrigatório)
-                $std->vICMSSTRet = round($valorProduto * ($aliquotaICMS / 100), 2); // Valor ICMS ST retido (obrigatório)
-
-                logDetalhado("PRODUTO_{$item}_ST_CAMPOS_OBRIGATORIOS", "Campos ST obrigatórios configurados", [
-                    'csosn' => '500',
-                    'vBCSTRet' => $std->vBCSTRet,
-                    'pST' => $std->pST,
-                    'vICMSSTRet' => $std->vICMSSTRet,
-                    'valor_produto' => $valorProduto,
-                    'aliquota' => $aliquotaICMS
-                ]);
             }
-
             // Usar método específico para Simples Nacional
-            try {
-                $make->tagICMSSN($std);
-                $contadorTags['icms']++;
-                logDetalhado("PRODUTO_{$item}_ICMSSN_CRIADO", "Tag ICMSSN criada com sucesso", [
-                    'csosn' => $std->CSOSN
-                ]);
-                error_log("✅ PRODUTO {$item}: Tag ICMSSN criada (total: {$contadorTags['icms']})");
-            } catch (Exception $e) {
-                logDetalhado("PRODUTO_{$item}_ICMSSN_ERRO", "Erro ao criar tag ICMSSN", [
-                    'erro' => $e->getMessage()
-                ]);
-                throw $e;
-            }
+            $make->tagICMSSN($std);
         } elseif (!$isSimples && $temCST) {
             // Regime Normal/Lucro Real/Lucro Presumido - usar CST
             $cst = $produto['cst_icms'];
@@ -1069,48 +580,33 @@ try {
             }
 
             // Usar método genérico para todos os CSTs
-            try {
-                $make->tagICMS($std);
-                $contadorTags['icms']++;
-                logDetalhado("PRODUTO_{$item}_ICMS_CRIADO", "Tag ICMS criada com sucesso", [
-                    'cst' => $std->CST
-                ]);
-                error_log("✅ PRODUTO {$item}: Tag ICMS criada (total: {$contadorTags['icms']})");
-            } catch (Exception $e) {
-                logDetalhado("PRODUTO_{$item}_ICMS_ERRO", "Erro ao criar tag ICMS", [
-                    'erro' => $e->getMessage()
-                ]);
-                throw $e;
-            }
+            $make->tagICMS($std);
         } else {
-            // ❌ SEM FALLBACKS - IDENTIFICAR PROBLEMA REAL
-            $erro = "Produto {$item} ({$nomeProduto}): DADOS FISCAIS OBRIGATÓRIOS AUSENTES\n\n";
-
-            $erro .= "📊 ANÁLISE DOS DADOS RECEBIDOS:\n";
-            $erro .= "  - Regime da empresa: {$regimeTributario}\n";
-            $erro .= "  - É Simples Nacional: " . ($isSimples ? 'SIM' : 'NÃO') . "\n";
-            $erro .= "  - Tem CST: " . ($temCST ? 'SIM' : 'NÃO') . "\n";
-            $erro .= "  - Tem CSOSN: " . ($temCSOSN ? 'SIM' : 'NÃO') . "\n";
-            $erro .= "  - CST valor: " . ($produto['cst_icms'] ?? 'VAZIO') . "\n";
-            $erro .= "  - CSOSN valor: " . ($produto['csosn_icms'] ?? 'VAZIO') . "\n\n";
-
-            $erro .= "🔍 DADOS COMPLETOS DO PRODUTO:\n";
-            $erro .= json_encode($produto, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n\n";
-
+            // ERRO: Inconsistência entre regime tributário e dados fiscais
+            $erro = "Inconsistência fiscal no produto {$item}: ";
             if ($isSimples && !$temCSOSN) {
-                $erro .= "❌ PROBLEMA: Empresa no Simples Nacional mas produto sem CSOSN\n";
-                $erro .= "✅ SOLUÇÃO: Verificar por que o campo 'csosn_icms' não está sendo enviado do frontend\n";
+                $erro .= "Empresa no Simples Nacional mas produto sem CSOSN";
+                error_log("NFE ERRO: {$erro}");
+                // Fallback: usar CSOSN 102 (mais comum)
+                $std->CSOSN = '102';
+                $make->tagICMSSN($std);
             } elseif (!$isSimples && !$temCST) {
-                $erro .= "❌ PROBLEMA: Empresa no Regime Normal mas produto sem CST\n";
-                $erro .= "✅ SOLUÇÃO: Verificar por que o campo 'cst_icms' não está sendo enviado do frontend\n";
+                $erro .= "Empresa no Regime Normal mas produto sem CST";
+                error_log("NFE ERRO: {$erro}");
+                // Fallback: usar CST 00 (tributado integralmente)
+                $std->CST = '00';
+                $aliquotaICMS = (float)($produto['aliquota_icms'] ?? 18); // 18% padrão SP
+                $valorBase = (float)($produto['valor_total'] ?? 0);
+                $std->modBC = 0;
+                $std->vBC = $valorBase;
+                $std->pICMS = $aliquotaICMS;
+                $std->vICMS = round($valorBase * ($aliquotaICMS / 100), 2);
+                $make->tagICMS($std);
             } else {
-                $erro .= "❌ PROBLEMA: Regime tributário não reconhecido ou dados inconsistentes\n";
+                $erro .= "Regime {$regimeTributario} não reconhecido";
+                error_log("NFE ERRO: {$erro}");
+                throw new Exception($erro);
             }
-
-            error_log("❌ NFE ERRO CRÍTICO - DADOS FISCAIS AUSENTES:");
-            error_log($erro);
-
-            throw new Exception($erro);
         }
         
         // PIS (usando dados reais do produto)
@@ -1135,19 +631,7 @@ try {
             $std->vPIS = null;
         }
 
-        try {
-            $make->tagPIS($std);
-            $contadorTags['pis']++;
-            logDetalhado("PRODUTO_{$item}_PIS_CRIADO", "Tag PIS criada com sucesso", [
-                'cst' => $std->CST
-            ]);
-            error_log("✅ PRODUTO {$item}: Tag PIS criada (total: {$contadorTags['pis']})");
-        } catch (Exception $e) {
-            logDetalhado("PRODUTO_{$item}_PIS_ERRO", "Erro ao criar tag PIS", [
-                'erro' => $e->getMessage()
-            ]);
-            throw $e;
-        }
+        $make->tagPIS($std);
         
         // COFINS (usando dados reais do produto)
         $std = new stdClass();
@@ -1171,78 +655,9 @@ try {
             $std->vCOFINS = null;
         }
 
-        try {
-            $make->tagCOFINS($std);
-            $contadorTags['cofins']++;
-            logDetalhado("PRODUTO_{$item}_COFINS_CRIADO", "Tag COFINS criada com sucesso", [
-                'cst' => $std->CST
-            ]);
-            error_log("✅ PRODUTO {$item}: Tag COFINS criada (total: {$contadorTags['cofins']})");
-        } catch (Exception $e) {
-            logDetalhado("PRODUTO_{$item}_COFINS_ERRO", "Erro ao criar tag COFINS", [
-                'erro' => $e->getMessage()
-            ]);
-            throw $e;
-        }
-
-        // ✅ LOG FINAL: Produto processado com sucesso
-        $contadorTags['produtos']++;
-        error_log("✅ PRODUTO {$item}: Tags fiscais criadas - ICMS/ICMSSN, PIS, COFINS (produto {$contadorTags['produtos']} de " . count($produtos) . ")");
-
-        logDetalhado("PRODUTO_{$item}_TAGS_FINALIZADAS", "Todas as tags do produto processadas", [
-            'item' => $item,
-            'produto_codigo' => $produto['codigo'] ?? 'N/A',
-            'produto_nome' => $produto['nome'] ?? 'N/A'
-        ]);
-
-        // ✅ LOG DE TEMPO: Verificar se algum produto está demorando muito
-        $tempoFinal = microtime(true);
-        $tempoProcessamento = round(($tempoFinal - $tempoInicio) * 1000, 2);
-        error_log("⏱️ PRODUTO {$item}: Processado em {$tempoProcessamento}ms");
-
-        } catch (Exception $produtoError) {
-            error_log("❌ ERRO NO PROCESSAMENTO DO PRODUTO {$item}: " . $produtoError->getMessage());
-            error_log("📊 ESTADO DOS CONTADORES NO MOMENTO DO ERRO:");
-            error_log("  - Produtos: {$contadorTags['produtos']}");
-            error_log("  - IMPOSTO: {$contadorTags['impostos']}");
-            error_log("  - ICMS/ICMSSN: {$contadorTags['icms']}");
-            error_log("  - PIS: {$contadorTags['pis']}");
-            error_log("  - COFINS: {$contadorTags['cofins']}");
-            error_log("📋 DADOS DO PRODUTO COM ERRO: " . json_encode($produto, JSON_UNESCAPED_UNICODE));
-
-            // Re-lançar o erro para parar o processamento
-            throw new Exception("Erro no produto {$item}: " . $produtoError->getMessage());
-        }
+        $make->tagCOFINS($std);
     }
-
-    // ✅ LOG FINAL: Resumo das tags criadas
-    error_log("📊 RESUMO TAGS CRIADAS:");
-    error_log("  - Produtos processados: {$contadorTags['produtos']} de " . count($produtos));
-    error_log("  - Tags IMPOSTO: {$contadorTags['impostos']}");
-    error_log("  - Tags ICMS/ICMSSN: {$contadorTags['icms']}");
-    error_log("  - Tags PIS: {$contadorTags['pis']}");
-    error_log("  - Tags COFINS: {$contadorTags['cofins']}");
-
-    // ✅ VALIDAÇÃO CRÍTICA: Verificar se todas as tags foram criadas
-    if ($contadorTags['produtos'] !== count($produtos)) {
-        throw new Exception("Nem todos os produtos foram processados: {$contadorTags['produtos']} de " . count($produtos));
-    }
-
-    if ($contadorTags['impostos'] !== $contadorTags['produtos'] ||
-        $contadorTags['icms'] !== $contadorTags['produtos'] ||
-        $contadorTags['pis'] !== $contadorTags['produtos'] ||
-        $contadorTags['cofins'] !== $contadorTags['produtos']) {
-
-        error_log("❌ INCONSISTÊNCIA NAS TAGS DE IMPOSTOS:");
-        error_log("  - Esperado: {$contadorTags['produtos']} de cada tipo");
-        error_log("  - IMPOSTO: {$contadorTags['impostos']}");
-        error_log("  - ICMS: {$contadorTags['icms']}");
-        error_log("  - PIS: {$contadorTags['pis']}");
-        error_log("  - COFINS: {$contadorTags['cofins']}");
-
-        throw new Exception("Inconsistência nas tags de impostos - nem todos os produtos têm todas as tags fiscais");
-    }
-
+    
     // Totais (CALCULADOS AUTOMATICAMENTE baseado nos produtos)
     $totais = $nfeData['totais'] ?? [];
 
@@ -1257,12 +672,26 @@ try {
         $valorProduto = (float)($produto['valor_total'] ?? 0);
         $totalProdutos += $valorProduto;
 
-        // Somar ICMS se tributado
+        // ✅ CORREÇÃO FISCAL: Somar ICMS apenas para regimes que realmente têm ICMS
+        // CSOSN 102 (Simples Nacional) NÃO gera ICMS próprio
+        $regimeTributario = (int)($nfeData['empresa']['regime_tributario'] ?? 1);
+        $isSimples = in_array($regimeTributario, [1, 2]); // 1 ou 2 = Simples Nacional
+
         $aliquotaICMS = (float)($produto['aliquota_icms'] ?? 0);
-        if ($aliquotaICMS > 0) {
+        $csosn = $produto['csosn_icms'] ?? '';
+        $cst = $produto['cst_icms'] ?? '';
+
+        // Só somar ICMS se for regime normal OU se for Simples Nacional com CSOSN que gera ICMS
+        if (!$isSimples && $aliquotaICMS > 0 && !empty($cst)) {
+            // Regime Normal - calcular ICMS normalmente
+            $totalICMSBC += $valorProduto;
+            $totalICMS += round($valorProduto * ($aliquotaICMS / 100), 2);
+        } elseif ($isSimples && $csosn === '101' && $aliquotaICMS > 0) {
+            // Simples Nacional CSOSN 101 - tem crédito de ICMS
             $totalICMSBC += $valorProduto;
             $totalICMS += round($valorProduto * ($aliquotaICMS / 100), 2);
         }
+        // CSOSN 102, 103, 300, 400, 500 não geram ICMS nos totais
 
         // Somar PIS se tributado
         $cstPIS = $produto['cst_pis'] ?? '01';
@@ -1286,22 +715,15 @@ try {
     $std->vBCST = 0.00;
     $std->vST = 0.00;
     $std->vProd = $totalProdutos; // Valor real dos produtos
-
-    // ✅ CORREÇÃO CRÍTICA: Campos opcionais conforme documentação oficial NFe
-    // Segundo mjailton.com.br/manualnfe - campos com valor zero devem ser omitidos
-    // NÃO definir vFrete, vSeg, vOutro quando zero - biblioteca NFePHP omite automaticamente
-
-    // Desconto: só incluir se houver valor
-    $valorDesconto = (float)($totais['valor_desconto'] ?? 0);
-    if ($valorDesconto > 0) {
-        $std->vDesc = $valorDesconto;
-    }
-
+    $std->vFrete = 0.00;
+    $std->vSeg = 0.00;
+    $std->vDesc = (float)($totais['valor_desconto'] ?? 0);
     $std->vII = 0.00;
     $std->vIPI = 0.00;
     $std->vPIS = $totalPIS; // PIS real calculado
     $std->vCOFINS = $totalCOFINS; // COFINS real calculado
-    $std->vNF = $totalProdutos - $valorDesconto; // Valor final da NFe
+    $std->vOutro = 0.00;
+    $std->vNF = $totalProdutos - (float)($totais['valor_desconto'] ?? 0); // Valor final da NFe
 
     // Log dos totais calculados com dados reais
     error_log("NFE: Totais calculados - Produtos: R$ {$totalProdutos}, ICMS: R$ {$totalICMS}, PIS: R$ {$totalPIS}, COFINS: R$ {$totalCOFINS}, Total NFe: R$ " . $std->vNF);
@@ -1311,8 +733,8 @@ try {
     // ✅ DEBUG: Verificar dados da transportadora recebidos do frontend
     error_log("🔍 DEBUG TRANSPORTADORA - Dados recebidos:");
     error_log("  - Modalidade: " . ($nfeData['transportadora']['modalidade_frete'] ?? 'NÃO INFORMADA'));
-    error_log("  - ID: " . ($nfeData['transportadora']['transportadora_id'] ?? 'NÃO INFORMADO'));
-    error_log("  - Nome: " . ($nfeData['transportadora']['transportadora_nome'] ?? 'NÃO INFORMADO'));
+    error_log("  - ID: " . ($nfeData['transportadora']['transportadora_id'] ?? 'NÃO INFORMADA'));
+    error_log("  - Nome: " . ($nfeData['transportadora']['transportadora_nome'] ?? 'NÃO INFORMADA'));
     error_log("  - Documento: " . ($nfeData['transportadora']['transportadora_documento'] ?? 'NÃO INFORMADO'));
     error_log("  - Endereço: " . ($nfeData['transportadora']['transportadora_endereco'] ?? 'NÃO INFORMADO'));
     error_log("  - Cidade: " . ($nfeData['transportadora']['transportadora_cidade'] ?? 'NÃO INFORMADA'));
@@ -1330,53 +752,18 @@ try {
     // Transporte (MÉTODO NATIVO) - OBRIGATÓRIO antes do pagamento
     $std = new stdClass();
 
-    // Transporte (MÉTODO NATIVO) - OBRIGATÓRIO conforme documentação oficial
-    // Conforme mjailton.com.br/manualnfe/tag/detalhe/91 - Tag transp é obrigatória
-    $std = new stdClass();
-
-    // ✅ CORREÇÃO: Verificar se há dados de transportadora informados
-    $transportadoraData = $nfeData['transportadora'] ?? [];
-    $temTransportadora = !empty($transportadoraData) &&
-                        !empty($transportadoraData['modalidade_frete']) &&
-                        $transportadoraData['modalidade_frete'] !== '9';
-
-    if ($temTransportadora) {
-        // Usar modalidade informada quando há transportadora
-        $std->modFrete = $transportadoraData['modalidade_frete'];
-        error_log("✅ NFe - Modalidade de frete informada: " . $std->modFrete);
-    } else {
-        // Usar modalidade 9 (Sem Ocorrência de Transporte) quando não há transportadora
-        $std->modFrete = 9;
-        error_log("✅ NFe - Modalidade de frete: 9 (Sem Ocorrência de Transporte)");
+    // ❌ REMOVER FALLBACK - Usar apenas dados do frontend
+    if (!isset($nfeData['transportadora']['modalidade_frete'])) {
+        throw new Exception('Modalidade de frete é obrigatória');
     }
 
-    logDetalhado("TRANSPORTADORA_DADOS_RECEBIDOS", "Dados da transportadora processados", [
-        'tem_transportadora' => $temTransportadora,
-        'modFrete' => $std->modFrete,
-        'transportadora_completa' => $transportadoraData
-    ]);
+    $std->modFrete = $nfeData['transportadora']['modalidade_frete'];
+    error_log("✅ NFe - Modalidade de frete definida: " . $std->modFrete);
 
-    logDetalhado("TRANSPORTADORA_TAG_INICIO", "Iniciando criação da tag transp");
-    try {
-        $make->tagtransp($std);
-        logDetalhado("TRANSPORTADORA_TAG_CRIADA", "Tag transp criada com sucesso", [
-            'modFrete' => $std->modFrete
-        ]);
-
-        error_log("✅ TRANSP: Tag transp criada com modFrete = " . $std->modFrete);
-
-    } catch (Exception $e) {
-        logDetalhado("TRANSPORTADORA_TAG_ERRO", "Erro ao criar tag transp", [
-            'erro' => $e->getMessage(),
-            'linha' => $e->getLine(),
-            'arquivo' => $e->getFile(),
-            'modFrete_enviado' => $std->modFrete ?? 'NÃO DEFINIDO'
-        ]);
-        throw $e;
-    }
+    $make->tagtransp($std);
 
     // ✅ REGRA FISCAL NFe: Só incluir dados da transportadora se modalidade ≠ 9 E transportadora selecionada
-    $modalidadeFrete = $std->modFrete;
+    $modalidadeFrete = $nfeData['transportadora']['modalidade_frete'];
 
     if ($modalidadeFrete !== '9' && !empty($nfeData['transportadora']['transportadora_id']) && !empty($nfeData['transportadora']['transportadora_nome'])) {
         $stdTransportadora = new stdClass();
@@ -1455,6 +842,8 @@ try {
             error_log("ℹ️ NFe - Nenhuma transportadora selecionada para modalidade: $modalidadeFrete");
         }
     }
+
+    // ❌ CÓDIGO DUPLICADO REMOVIDO - Lógica já implementada acima
 
     // Pagamento (MÉTODO NATIVO) - Conforme documentação fiscal
     // 1. PRIMEIRO: Criar grupo PAG (container)
@@ -1544,148 +933,9 @@ try {
         error_log("ℹ️ NFe - Nenhum intermediador informado - XML sem grupo infIntermed");
     }
 
-    // ✅ VERIFICAR ERROS DA BIBLIOTECA ANTES DE GERAR XML
-    $errors = $make->getErrors();
-    if (!empty($errors)) {
-        logDetalhado("BIBLIOTECA_ERROS_DETECTADOS", "Erros encontrados na biblioteca NFePHP", [
-            'erros' => $errors,
-            'total_erros' => count($errors)
-        ]);
-        throw new Exception('Erros na estrutura da NFe: ' . implode('; ', $errors));
-    }
-
-    // ✅ VALIDAÇÃO FINAL CONFORME DOCUMENTAÇÃO OFICIAL NFe
-    // Verificar se todas as tags obrigatórias estão presentes antes de gerar XML final
-    try {
-        // ✅ DEBUG CRÍTICO: Verificar erros da biblioteca antes de gerar XML
-        $errorsBeforeXML = $make->getErrors();
-        if (!empty($errorsBeforeXML)) {
-            error_log("❌ ERROS NA BIBLIOTECA ANTES DE GERAR XML:");
-            foreach ($errorsBeforeXML as $error) {
-                error_log("  - " . $error);
-            }
-        }
-
-        error_log("🔍 TENTANDO GERAR XML PRELIMINAR PARA VALIDAÇÃO...");
-        $xmlPreliminar = $make->getXML();
-        error_log("✅ XML PRELIMINAR GERADO - Tamanho: " . strlen($xmlPreliminar) . " bytes");
-
-        // ✅ SALVAR XML PRELIMINAR PARA DEBUG
-        $xmlPreliminarPath = "/tmp/nfe_preliminar_" . date('Y-m-d_H-i-s') . ".xml";
-        file_put_contents($xmlPreliminarPath, $xmlPreliminar);
-        error_log("🔍 XML PRELIMINAR SALVO EM: " . $xmlPreliminarPath);
-
-        // ✅ PREVIEW DO XML PRELIMINAR
-        $xmlPreview = substr($xmlPreliminar, 0, 3000);
-        error_log("🔍 XML PRELIMINAR PREVIEW (primeiros 3000 chars):");
-        error_log($xmlPreview);
-
-        // Tags obrigatórias conforme mjailton.com.br/manualnfe
-        $validacaoFinal = [
-            'transp' => strpos($xmlPreliminar, '<transp>') !== false,
-            'modFrete' => strpos($xmlPreliminar, '<modFrete>') !== false,
-            'imposto' => strpos($xmlPreliminar, '<imposto>') !== false,
-            'icms_ou_icmssn' => strpos($xmlPreliminar, '<ICMS>') !== false || strpos($xmlPreliminar, '<ICMSSN>') !== false,
-            'pis' => strpos($xmlPreliminar, '<PIS>') !== false,
-            'cofins' => strpos($xmlPreliminar, '<COFINS>') !== false
-        ];
-
-        // ✅ LOG DETALHADO DA VALIDAÇÃO
-        error_log("🔍 VALIDAÇÃO DETALHADA DAS TAGS:");
-        foreach ($validacaoFinal as $tag => $encontrada) {
-            $status = $encontrada ? '✅' : '❌';
-            error_log("  - {$tag}: {$status}");
-        }
-
-        $tagsAusentes = [];
-        foreach ($validacaoFinal as $tag => $presente) {
-            if (!$presente) {
-                $tagsAusentes[] = $tag;
-            }
-        }
-
-        if (!empty($tagsAusentes)) {
-            error_log("❌ VALIDAÇÃO FINAL FALHOU - Tags obrigatórias ausentes: " . implode(', ', $tagsAusentes));
-            error_log("📊 DIAGNÓSTICO DETALHADO:");
-            error_log("  - Produtos processados: {$contadorTags['produtos']}");
-            error_log("  - Tags IMPOSTO criadas: {$contadorTags['impostos']}");
-            error_log("  - Tags ICMS/ICMSSN criadas: {$contadorTags['icms']}");
-            error_log("  - Tags PIS criadas: {$contadorTags['pis']}");
-            error_log("  - Tags COFINS criadas: {$contadorTags['cofins']}");
-            
-            logDetalhado("VALIDACAO_FINAL_ERRO", "Tags obrigatórias ausentes no XML", [
-                'tags_ausentes' => $tagsAusentes,
-                'validacao_completa' => $validacaoFinal,
-                'contador_tags' => $contadorTags,
-                'total_produtos' => count($produtos)
-            ]);
-            throw new Exception('XML inválido - Tags obrigatórias ausentes: ' . implode(', ', $tagsAusentes));
-        }
-
-        error_log("✅ VALIDAÇÃO FINAL: Todas as tags obrigatórias estão presentes");
-        error_log("📊 TAGS VALIDADAS COM SUCESSO:");
-        error_log("  - Produtos: {$contadorTags['produtos']}");
-        error_log("  - IMPOSTO: {$contadorTags['impostos']}");
-        error_log("  - ICMS/ICMSSN: {$contadorTags['icms']}");
-        error_log("  - PIS: {$contadorTags['pis']}");
-        error_log("  - COFINS: {$contadorTags['cofins']}");
-        error_log("  - TRANSP: ✅");
-        error_log("  - modFrete: ✅");
-        
-        logDetalhado("VALIDACAO_FINAL_SUCESSO", "Todas as tags obrigatórias validadas", [
-            'validacao_completa' => $validacaoFinal,
-            'contador_tags' => $contadorTags,
-            'total_produtos' => count($produtos)
-        ]);
-
-    } catch (Exception $xmlError) {
-        error_log("ERRO: Falha ao processar XML: " . $xmlError->getMessage());
-        error_log("📊 ESTADO DOS CONTADORES NO MOMENTO DO ERRO:");
-        error_log("  - Produtos: {$contadorTags['produtos']}");
-        error_log("  - IMPOSTO: {$contadorTags['impostos']}");
-        error_log("  - ICMS/ICMSSN: {$contadorTags['icms']}");
-        error_log("  - PIS: {$contadorTags['pis']}");
-        error_log("  - COFINS: {$contadorTags['cofins']}");
-        // SEGUINDO AS 4 LEIS NFe - SEM DADOS FICTÍCIOS
-        throw new Exception("Erro ao processar resposta da SEFAZ: " . $xmlError->getMessage());
-    }
     // GERAR XML (MÉTODO NATIVO)
     try {
-        logDetalhado("XML_GERACAO_INICIO", "Iniciando geração do XML");
         $xml = $make->getXML();
-
-        // ✅ SALVAR XML PARA DEBUG
-        $xmlDebugPath = "/tmp/nfe_debug_" . date('Y-m-d_H-i-s') . ".xml";
-        file_put_contents($xmlDebugPath, $xml);
-
-        // ✅ VALIDAÇÃO DETALHADA DO XML CONFORME DOCUMENTAÇÃO OFICIAL
-        $validacaoXML = [
-            'tamanho_xml' => strlen($xml),
-            'tem_imposto' => strpos($xml, '<imposto>') !== false,
-            'tem_transp' => strpos($xml, '<transp>') !== false,
-            'tem_modFrete' => strpos($xml, '<modFrete>') !== false,
-            'tem_cest' => strpos($xml, '<CEST>') !== false,
-            'tem_icms' => strpos($xml, '<ICMS>') !== false || strpos($xml, '<ICMSSN>') !== false,
-            'tem_pis' => strpos($xml, '<PIS>') !== false,
-            'tem_cofins' => strpos($xml, '<COFINS>') !== false,
-            'xml_debug_path' => $xmlDebugPath
-        ];
-
-        // ✅ LOG DETALHADO PARA DEBUG
-        error_log("🔍 VALIDAÇÃO XML DETALHADA:");
-        foreach ($validacaoXML as $campo => $valor) {
-            if ($campo !== 'xml_debug_path') {
-                $status = is_bool($valor) ? ($valor ? '✅' : '❌') : $valor;
-                error_log("  - {$campo}: {$status}");
-            }
-        }
-
-        // ✅ SALVAR PREVIEW DO XML PARA ANÁLISE
-        $xmlPreview = substr($xml, 0, 2000);
-        error_log("🔍 XML PREVIEW (primeiros 2000 chars):");
-        error_log($xmlPreview);
-
-        logDetalhado("XML_GERACAO_SUCESSO", "XML gerado com sucesso", $validacaoXML);
     } catch (Exception $xmlError) {
         // Capturar erros da biblioteca
         $errors = $make->getErrors();
@@ -1693,10 +943,6 @@ try {
         if (!empty($errors)) {
             $errorMessage .= ' | Erros detalhados: ' . implode('; ', $errors);
         }
-        logDetalhado("XML_GERACAO_ERRO", "Erro ao gerar XML", [
-            'erro' => $xmlError->getMessage(),
-            'erros_biblioteca' => $errors
-        ]);
         throw new Exception($errorMessage);
     }
 
@@ -1737,14 +983,13 @@ try {
             $xml = @simplexml_load_string($response);
         }
 
-        // Tentativa 2: Limpar declaração XML e tentar novamente
+        // Tentativa 2: XML limpo
         if (!$xml) {
             $xml = @simplexml_load_string($cleanResponse);
         }
 
         // Tentativa 3: Usar regex como fallback (mais simples e confiável)
         if (!$xml) {
-
             // Não usar DOMDocument para evitar problemas com libxml
             // Ir direto para extração via regex
         }
@@ -1772,61 +1017,440 @@ try {
             }
         }
 
-        // Extrair dados da consulta do recibo
-        // A estrutura da consulta do recibo é diferente do envio
-        $cStatRecibo = $xml->xpath('//cStat') ?: $xml->xpath('//*[local-name()="cStat"]');
-        $xMotivoRecibo = $xml->xpath('//xMotivo') ?: $xml->xpath('//*[local-name()="xMotivo"]');
+        // Se chegou aqui, ou XML foi processado ou dados foram extraídos via regex
+        if ($xml !== false) {
 
-        // Para consulta de recibo, o protocolo está em protNFe/infProt/nProt dentro de cada NFe
-        $nProtRecibo = $xml->xpath('//protNFe/infProt/nProt') ?:
-                      $xml->xpath('//infProt/nProt') ?:
-                      $xml->xpath('//nProt') ?:
-                      $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
-                      $xml->xpath('//*[local-name()="nProt"]');
+            // Extrair informações do XML usando XPath com namespaces
+            $cStat = $xml->xpath('//cStat') ?: $xml->xpath('//*[local-name()="cStat"]');
+            $xMotivo = $xml->xpath('//xMotivo') ?: $xml->xpath('//*[local-name()="xMotivo"]');
+            $chNFe = $xml->xpath('//chNFe') ?: $xml->xpath('//*[local-name()="chNFe"]');
+            $nRec = $xml->xpath('//nRec') ?: $xml->xpath('//*[local-name()="nRec"]');
 
-        $status = !empty($cStatRecibo) ? (string)$cStatRecibo[0] : 'DESCONHECIDO';
-        $motivo = !empty($xMotivoRecibo) ? (string)$xMotivoRecibo[0] : 'Sem motivo';
-        $chave = 'CHAVE_NAO_ENCONTRADA'; // Será definida posteriormente
-        $recibo = 'RECIBO_NAO_ENCONTRADO'; // Será definida posteriormente
-        $protocolo = null; // Inicializar protocolo
+            // Extrair protocolo baseado na documentação oficial da SEFAZ
+            // Estrutura oficial: protNFe > infProt > nProt
+            $nProt = $xml->xpath('//protNFe/infProt/nProt') ?:
+                     $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
+                     $xml->xpath('//infProt/nProt') ?:
+                     $xml->xpath('//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
+                     $xml->xpath('//nProt') ?:
+                     $xml->xpath('//*[local-name()="nProt"]');
 
-        // SEGUINDO DOCUMENTAÇÃO OFICIAL SEFAZ - Status 104 = "Lote processado"
-        // Conforme MOC: "cStat=104, com os resultados individuais de processamento das NF-e"
-        if ($status === '104') {
-            error_log("📋 STATUS 104 - Lote processado. Buscando resultado individual da NFe...");
+            // Log para debug da extração do protocolo
+            error_log("DEBUG PROTOCOLO: Tentativas de extração:");
+            error_log("  - protNFe/infProt/nProt: " . (!empty($xml->xpath('//protNFe/infProt/nProt')) ? 'ENCONTRADO' : 'NÃO ENCONTRADO'));
+            error_log("  - infProt/nProt: " . (!empty($xml->xpath('//infProt/nProt')) ? 'ENCONTRADO' : 'NÃO ENCONTRADO'));
+            error_log("  - nProt direto: " . (!empty($xml->xpath('//nProt')) ? 'ENCONTRADO' : 'NÃO ENCONTRADO'));
 
-            // Buscar status específico da NFe dentro do elemento protNFe/infProt
-            // Conforme documentação: protNFe/infProt/cStat e protNFe/infProt/nProt
-            $cStatNFe = $xml->xpath('//protNFe/infProt/cStat') ?:
-                       $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="cStat"]');
+            $status = !empty($cStat) ? (string)$cStat[0] : 'DESCONHECIDO';
+            $motivo = !empty($xMotivo) ? (string)$xMotivo[0] : 'Sem motivo';
+            $chave = !empty($chNFe) ? (string)$chNFe[0] : 'CHAVE_NAO_ENCONTRADA';
+            $recibo = !empty($nRec) ? (string)$nRec[0] : 'RECIBO_NAO_ENCONTRADO';
 
-            $xMotivoNFe = $xml->xpath('//protNFe/infProt/xMotivo') ?:
-                         $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="xMotivo"]');
-
-            $nProtNFe = $xml->xpath('//protNFe/infProt/nProt') ?:
-                       $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]');
-
-            if (!empty($cStatNFe)) {
-                $status = (string)$cStatNFe[0];
-                $motivo = !empty($xMotivoNFe) ? (string)$xMotivoNFe[0] : $motivo;
-                $chave = 'CHAVE_EXTRAIDA_DO_XML'; // Será extraída posteriormente
-                $protocolo = !empty($nProtNFe) ? (string)$nProtNFe[0] : null;
-
-                error_log("✅ RESULTADO INDIVIDUAL DA NFe ENCONTRADO:");
-                error_log("  - Status NFe: {$status}");
-                error_log("  - Motivo NFe: {$motivo}");
-                error_log("  - Chave NFe: {$chave}");
-                error_log("  - Protocolo NFe: " . ($protocolo ? $protocolo : 'NÃO ENCONTRADO'));
+            // SEGUINDO AS 4 LEIS NFe - NUNCA USAR FALLBACKS PARA PROTOCOLO
+            if (!empty($nProt)) {
+                $protocolo = (string)$nProt[0];
+                error_log("✅ PROTOCOLO REAL EXTRAÍDO: {$protocolo}");
             } else {
-                error_log("❌ ERRO: Não foi possível encontrar resultado individual da NFe no lote processado");
+                // SEM FALLBACKS - Se não há protocolo, NFe não foi autorizada
+                $protocolo = null;
+                error_log("❌ PROTOCOLO NÃO ENCONTRADO - NFe não foi autorizada pela SEFAZ");
+                error_log("❌ Status SEFAZ: {$status} - {$motivo}");
             }
+        } else {
+            // Variáveis já foram definidas no bloco regex acima
         }
 
-        error_log("📋 RESULTADO FINAL - Status: {$status} - {$motivo}");
 
-    } catch (Exception $consultaError) {
-        error_log("❌ ERRO ao consultar recibo: " . $consultaError->getMessage());
-        throw new Exception("Erro ao consultar recibo da SEFAZ: " . $consultaError->getMessage());
+    } catch (Exception $xmlError) {
+        error_log("ERRO: Falha ao processar XML: " . $xmlError->getMessage());
+        // SEGUINDO AS 4 LEIS NFe - SEM DADOS FICTÍCIOS
+        throw new Exception("Erro ao processar resposta da SEFAZ: " . $xmlError->getMessage());
+    }
+
+    // SEGUINDO AS 4 LEIS NFe - FLUXO CORRETO DA SEFAZ
+    error_log("🔍 ANALISANDO RESPOSTA SEFAZ - Status: {$status} - {$motivo}");
+
+    // Status 103 = Lote recebido com sucesso (precisa consultar recibo)
+    if ($status === '103') {
+        error_log("📋 LOTE RECEBIDO - Consultando recibo para obter resultado final");
+
+        // Extrair número do recibo
+        if (empty($recibo) || $recibo === 'RECIBO_NAO_ENCONTRADO') {
+            throw new Exception("Recibo não encontrado na resposta da SEFAZ. Status: {$status}");
+        }
+
+        error_log("🔍 CONSULTANDO RECIBO: {$recibo}");
+
+        // Aguardar processamento (SEFAZ recomenda aguardar alguns segundos)
+        sleep(3);
+
+        // Consultar recibo para obter resultado final
+        try {
+            $consultaRecibo = $tools->sefazConsultaRecibo($recibo);
+            error_log("📋 RESPOSTA CONSULTA RECIBO: " . strlen($consultaRecibo) . " bytes recebidos");
+
+            // Processar resposta da consulta do recibo com múltiplas tentativas
+            $xmlRecibo = false;
+
+            // Tentativa 1: XML direto
+            $xmlRecibo = @simplexml_load_string($consultaRecibo);
+
+            // Tentativa 2: Limpar declaração XML e tentar novamente
+            if (!$xmlRecibo) {
+                $consultaReciboLimpo = preg_replace('/^<\?xml[^>]*\?>/', '', trim($consultaRecibo));
+                $xmlRecibo = @simplexml_load_string($consultaReciboLimpo);
+            }
+
+            // Tentativa 3: Usar DOMDocument para parsing mais robusto
+            if (!$xmlRecibo) {
+                $dom = new DOMDocument();
+                $dom->loadXML($consultaRecibo);
+                $xmlRecibo = simplexml_import_dom($dom);
+            }
+
+            // Se ainda não conseguiu processar, tentar extrair dados diretamente do XML string
+            if (!$xmlRecibo) {
+                error_log("⚠️ TENTATIVA FINAL: Extraindo dados diretamente do XML string");
+
+                // SEGUINDO AS 4 LEIS NFe - USAR BIBLIOTECA CORRETAMENTE
+                // Primeiro, remover envelope SOAP para processar apenas o conteúdo NFe
+                $xmlLimpo = $consultaRecibo;
+
+                // Extrair apenas o conteúdo retConsReciNFe do envelope SOAP
+                if (preg_match('/<retConsReciNFe[^>]*>.*?<\/retConsReciNFe>/s', $consultaRecibo, $xmlMatch)) {
+                    $xmlLimpo = $xmlMatch[0];
+                    error_log("✅ XML NFe extraído do envelope SOAP");
+                } else {
+                    error_log("⚠️ Não foi possível extrair XML do envelope SOAP, usando XML completo");
+                }
+
+                // Tentar processar XML limpo com SimpleXML
+                $xmlLimpoObj = @simplexml_load_string($xmlLimpo);
+                if ($xmlLimpoObj) {
+                    error_log("✅ XML limpo processado com sucesso via SimpleXML");
+
+                    // Extrair dados do lote (Status 104)
+                    $statusLote = (string)($xmlLimpoObj->cStat ?? '');
+                    $motivoLote = (string)($xmlLimpoObj->xMotivo ?? '');
+
+                    error_log("📋 DADOS DO LOTE - Status: {$statusLote} - {$motivoLote}");
+
+                    // CONFORME DOCUMENTAÇÃO OFICIAL SEFAZ - Status 104 contém resultados individuais
+                    if ($statusLote === '104') {
+                        error_log("📋 STATUS 104 DETECTADO - Extraindo resultado individual da NFe");
+
+                        // Buscar dados da NFe individual em protNFe/infProt
+                        $protNFe = $xmlLimpoObj->protNFe ?? null;
+                        if ($protNFe && isset($protNFe->infProt)) {
+                            $infProt = $protNFe->infProt;
+
+                            $statusNFe = (string)($infProt->cStat ?? '');
+                            $motivoNFe = (string)($infProt->xMotivo ?? '');
+                            $protocoloNFe = (string)($infProt->nProt ?? '');
+
+                            error_log("✅ RESULTADO INDIVIDUAL DA NFe EXTRAÍDO:");
+                            error_log("  - Status NFe: {$statusNFe}");
+                            error_log("  - Motivo NFe: {$motivoNFe}");
+                            error_log("  - Protocolo NFe: {$protocoloNFe}");
+
+                            // Usar dados da NFe individual (não do lote)
+                            $status = $statusNFe;
+                            $motivo = $motivoNFe;
+                            $protocolo = $protocoloNFe;
+
+                            // Pular processamento adicional
+                            goto validacao_final;
+
+                        } else {
+                            error_log("❌ ERRO: protNFe/infProt não encontrado no XML");
+                        }
+                    } else {
+                        // Para outros status, usar dados do lote
+                        $status = $statusLote;
+                        $motivo = $motivoLote;
+
+                        // Tentar extrair protocolo se disponível
+                        $protocoloLote = (string)($xmlLimpoObj->protNFe->infProt->nProt ?? '');
+                        $protocolo = $protocoloLote ?: null;
+
+                        error_log("✅ DADOS DO LOTE EXTRAÍDOS:");
+                        error_log("  - Status: {$status}");
+                        error_log("  - Motivo: {$motivo}");
+                        error_log("  - Protocolo: " . ($protocolo ?: 'NÃO ENCONTRADO'));
+
+                        goto validacao_final;
+                    }
+                }
+
+                // Se SimpleXML falhou, usar regex como último recurso (seguindo as 4 Leis)
+                error_log("⚠️ SimpleXML falhou, usando regex como último recurso");
+
+                // Extrair dados básicos do lote
+                preg_match('/<cStat>(\d+)<\/cStat>/', $consultaRecibo, $statusMatch);
+                preg_match('/<xMotivo>([^<]+)<\/xMotivo>/', $consultaRecibo, $motivoMatch);
+
+                if (!empty($statusMatch)) {
+                    $statusFinal = $statusMatch[1];
+                    $motivoFinal = $motivoMatch[1] ?? 'Motivo não encontrado';
+
+                    // Para Status 104, extrair dados da NFe individual usando regex específica
+                    if ($statusFinal === '104') {
+                        error_log("🔍 STATUS 104 - Buscando dados da NFe individual via regex");
+
+                        // Regex para extrair dados de protNFe/infProt (estrutura oficial SEFAZ)
+                        preg_match('/<protNFe[^>]*>.*?<infProt[^>]*>.*?<cStat>(\d+)<\/cStat>.*?<xMotivo>([^<]+)<\/xMotivo>.*?<nProt>(\d+)<\/nProt>.*?<\/infProt>.*?<\/protNFe>/s', $consultaRecibo, $nfeMatch);
+
+                        if (!empty($nfeMatch)) {
+                            $statusFinal = $nfeMatch[1];  // cStat da NFe
+                            $motivoFinal = $nfeMatch[2];  // xMotivo da NFe
+                            $protocoloFinal = $nfeMatch[3]; // nProt da NFe
+
+                            error_log("✅ DADOS DA NFe INDIVIDUAL EXTRAÍDOS VIA REGEX:");
+                            error_log("  - Status NFe: {$statusFinal}");
+                            error_log("  - Motivo NFe: {$motivoFinal}");
+                            error_log("  - Protocolo NFe: {$protocoloFinal}");
+                        } else {
+                            error_log("❌ ERRO: Não foi possível extrair dados da NFe individual via regex");
+                            $protocoloFinal = null;
+                        }
+                    } else {
+                        // Para outros status, tentar extrair protocolo diretamente
+                        preg_match('/<nProt>(\d+)<\/nProt>/', $consultaRecibo, $protocoloMatch);
+                        $protocoloFinal = $protocoloMatch[1] ?? null;
+
+                        error_log("✅ DADOS EXTRAÍDOS VIA REGEX:");
+                        error_log("  - Status: {$statusFinal}");
+                        error_log("  - Motivo: {$motivoFinal}");
+                        error_log("  - Protocolo: " . ($protocoloFinal ? $protocoloFinal : 'NÃO ENCONTRADO'));
+                    }
+
+                    // Atualizar variáveis com resultado final
+                    $status = $statusFinal;
+                    $motivo = $motivoFinal;
+                    $protocolo = $protocoloFinal;
+
+                    // Pular o processamento XML normal
+                    goto validacao_final;
+                }
+
+                error_log("❌ ERRO: XML da consulta do recibo inválido após múltiplas tentativas");
+                error_log("XML início: " . substr($consultaRecibo, 0, 200));
+                error_log("XML fim: " . substr($consultaRecibo, -200));
+                error_log("Tamanho total: " . strlen($consultaRecibo) . " bytes");
+                throw new Exception('Erro ao processar resposta da consulta do recibo - XML inválido');
+            }
+
+            // Extrair dados da consulta do recibo
+            // A estrutura da consulta do recibo é diferente do envio
+            $cStatRecibo = $xmlRecibo->xpath('//cStat') ?: $xmlRecibo->xpath('//*[local-name()="cStat"]');
+            $xMotivoRecibo = $xmlRecibo->xpath('//xMotivo') ?: $xmlRecibo->xpath('//*[local-name()="xMotivo"]');
+
+            // Para consulta de recibo, o protocolo está em protNFe/infProt/nProt dentro de cada NFe
+            $nProtRecibo = $xmlRecibo->xpath('//protNFe/infProt/nProt') ?:
+                          $xmlRecibo->xpath('//infProt/nProt') ?:
+                          $xmlRecibo->xpath('//nProt') ?:
+                          $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]') ?:
+                          $xmlRecibo->xpath('//*[local-name()="nProt"]');
+
+            $statusFinal = !empty($cStatRecibo) ? (string)$cStatRecibo[0] : 'DESCONHECIDO';
+            $motivoFinal = !empty($xMotivoRecibo) ? (string)$xMotivoRecibo[0] : 'Sem motivo';
+            $protocoloFinal = !empty($nProtRecibo) ? (string)$nProtRecibo[0] : null;
+
+            error_log("🔍 DADOS EXTRAÍDOS DO RECIBO:");
+            error_log("  - Status: {$statusFinal}");
+            error_log("  - Motivo: {$motivoFinal}");
+            error_log("  - Protocolo: " . ($protocoloFinal ? $protocoloFinal : 'NÃO ENCONTRADO'));
+
+            // SEGUINDO DOCUMENTAÇÃO OFICIAL SEFAZ - Status 104 = "Lote processado"
+            // Conforme MOC: "cStat=104, com os resultados individuais de processamento das NF-e"
+            if ($statusFinal === '104') {
+                error_log("📋 STATUS 104 - Lote processado. Buscando resultado individual da NFe...");
+
+                // Buscar status específico da NFe dentro do elemento protNFe/infProt
+                // Conforme documentação: protNFe/infProt/cStat e protNFe/infProt/nProt
+                $cStatNFe = $xmlRecibo->xpath('//protNFe/infProt/cStat') ?:
+                           $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="cStat"]');
+
+                $xMotivoNFe = $xmlRecibo->xpath('//protNFe/infProt/xMotivo') ?:
+                             $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="xMotivo"]');
+
+                $nProtNFe = $xmlRecibo->xpath('//protNFe/infProt/nProt') ?:
+                           $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]');
+
+                if (!empty($cStatNFe)) {
+                    $statusFinal = (string)$cStatNFe[0];
+                    $motivoFinal = !empty($xMotivoNFe) ? (string)$xMotivoNFe[0] : $motivoFinal;
+                    $protocoloFinal = !empty($nProtNFe) ? (string)$nProtNFe[0] : $protocoloFinal;
+
+                    error_log("✅ RESULTADO INDIVIDUAL DA NFe ENCONTRADO:");
+                    error_log("  - Status NFe: {$statusFinal}");
+                    error_log("  - Motivo NFe: {$motivoFinal}");
+                    error_log("  - Protocolo NFe: " . ($protocoloFinal ? $protocoloFinal : 'NÃO ENCONTRADO'));
+                } else {
+                    error_log("❌ ERRO: Não foi possível encontrar resultado individual da NFe no lote processado");
+                }
+            }
+
+            error_log("📋 RESULTADO FINAL - Status: {$statusFinal} - {$motivoFinal}");
+
+            // Atualizar variáveis com resultado final
+            $status = $statusFinal;
+            $motivo = $motivoFinal;
+            $protocolo = $protocoloFinal;
+
+        } catch (Exception $consultaError) {
+            error_log("❌ ERRO ao consultar recibo: " . $consultaError->getMessage());
+            throw new Exception("Erro ao consultar recibo da SEFAZ: " . $consultaError->getMessage());
+        }
+    }
+
+    // Label para goto
+    validacao_final:
+
+    // TRADUZIR ERROS SEFAZ PARA MENSAGENS AMIGÁVEIS
+    function traduzirErroSefaz($status, $motivo) {
+        $errosComuns = [
+            // Erros de Duplicidade e Numeração
+            '206' => [
+                'titulo' => 'NFe Duplicada',
+                'descricao' => 'Esta NFe já foi inutilizada na SEFAZ e não pode ser emitida.',
+                'solucao' => 'Use um número diferente ou verifique se a numeração não foi inutilizada.'
+            ],
+            '539' => [
+                'titulo' => 'NFe Duplicada',
+                'descricao' => 'Já existe uma NFe autorizada com este número e série.',
+                'solucao' => 'Use um número sequencial diferente para esta NFe.'
+            ],
+
+            // Erros de Documentos
+            '204' => [
+                'titulo' => 'CNPJ Inválido',
+                'descricao' => 'O CNPJ da empresa está incorreto ou inválido.',
+                'solucao' => 'Verifique e corrija o CNPJ da empresa nas configurações.'
+            ],
+            '207' => [
+                'titulo' => 'CNPJ Inválido',
+                'descricao' => 'O CNPJ do emitente está incorreto ou inválido.',
+                'solucao' => 'Verifique e corrija o CNPJ da empresa nas configurações.'
+            ],
+            '209' => [
+                'titulo' => 'Inscrição Estadual Inválida',
+                'descricao' => 'A Inscrição Estadual da empresa está incorreta ou inválida.',
+                'solucao' => 'Verifique e corrija a Inscrição Estadual da empresa nas configurações.'
+            ],
+            '215' => [
+                'titulo' => 'CNPJ do Destinatário Inválido',
+                'descricao' => 'O CNPJ/CPF do destinatário está incorreto.',
+                'solucao' => 'Verifique e corrija o documento do destinatário.'
+            ],
+            '401' => [
+                'titulo' => 'CPF Inválido',
+                'descricao' => 'O CPF do emitente está incorreto ou inválido.',
+                'solucao' => 'Verifique e corrija o CPF nas configurações.'
+            ],
+
+            // Erros de Data e Horário
+            '228' => [
+                'titulo' => 'Data de Emissão Atrasada',
+                'descricao' => 'A data de emissão está muito atrasada (mais de 30 dias).',
+                'solucao' => 'Ajuste a data de emissão para uma data mais recente.'
+            ],
+            '703' => [
+                'titulo' => 'Data de Emissão Futura',
+                'descricao' => 'A data de emissão está no futuro.',
+                'solucao' => 'Ajuste a data de emissão para a data atual ou anterior.'
+            ],
+
+            // Erros de Chave de Acesso
+            '502' => [
+                'titulo' => 'Chave de Acesso Inválida',
+                'descricao' => 'A chave de acesso não corresponde aos dados da NFe.',
+                'solucao' => 'Regenere a NFe para criar uma nova chave de acesso válida.'
+            ],
+            '253' => [
+                'titulo' => 'Dígito Verificador Inválido',
+                'descricao' => 'O dígito verificador da chave de acesso está incorreto.',
+                'solucao' => 'Regenere a NFe para corrigir o dígito verificador.'
+            ],
+
+            // Erros de Ambiente
+            '252' => [
+                'titulo' => 'Ambiente Incorreto',
+                'descricao' => 'O ambiente da NFe não corresponde ao ambiente do servidor.',
+                'solucao' => 'Verifique se está emitindo no ambiente correto (produção/homologação).'
+            ],
+
+            // Erros de UF e Localização
+            '226' => [
+                'titulo' => 'UF Incorreta',
+                'descricao' => 'A UF do emitente não corresponde à UF autorizadora.',
+                'solucao' => 'Verifique se a UF da empresa está configurada corretamente.'
+            ],
+            '270' => [
+                'titulo' => 'Município Inexistente',
+                'descricao' => 'O código do município não existe na tabela do IBGE.',
+                'solucao' => 'Verifique e corrija o código do município da empresa.'
+            ],
+            '272' => [
+                'titulo' => 'Município Inexistente',
+                'descricao' => 'O código do município do emitente não existe.',
+                'solucao' => 'Verifique e corrija o código do município da empresa.'
+            ],
+
+            // Erros de Certificado
+            '280' => [
+                'titulo' => 'Certificado Digital Inválido',
+                'descricao' => 'O certificado digital está vencido ou inválido.',
+                'solucao' => 'Renove ou configure um certificado digital válido.'
+            ],
+
+            // Erros de Produtos e Impostos
+            '897' => [
+                'titulo' => 'Código Numérico Inválido',
+                'descricao' => 'O código numérico da NFe está em formato inválido.',
+                'solucao' => 'Regenere a NFe para criar um novo código numérico válido.'
+            ],
+
+            // Erros de Certificado
+            '280' => [
+                'titulo' => 'Certificado Digital Inválido',
+                'descricao' => 'O certificado digital está vencido ou inválido.',
+                'solucao' => 'Renove ou configure um certificado digital válido.'
+            ],
+
+            // Erros de Produtos
+            '611' => [
+                'titulo' => 'Código EAN/GTIN Inválido',
+                'descricao' => 'O código de barras EAN/GTIN de um ou mais produtos está incorreto.',
+                'solucao' => 'Verifique e corrija os códigos EAN/GTIN dos produtos ou deixe em branco se não possuir.'
+            ],
+
+            // Erros de Processamento
+            '103' => [
+                'titulo' => 'Lote em Processamento',
+                'descricao' => 'A NFe foi enviada e está sendo processada pela SEFAZ.',
+                'solucao' => 'Aguarde alguns segundos e consulte o status novamente.'
+            ]
+        ];
+
+        if (isset($errosComuns[$status])) {
+            $erro = $errosComuns[$status];
+            return [
+                'titulo' => $erro['titulo'],
+                'descricao' => $erro['descricao'],
+                'solucao' => $erro['solucao'],
+                'status_original' => $status,
+                'motivo_original' => $motivo
+            ];
+        }
+
+        return [
+            'titulo' => 'Erro na Validação da NFe',
+            'descricao' => $motivo,
+            'solucao' => 'Verifique os dados da NFe e tente novamente.',
+            'status_original' => $status,
+            'motivo_original' => $motivo
+        ];
     }
 
     // VALIDAÇÃO CRÍTICA - SEGUINDO AS 4 LEIS NFe
@@ -1909,6 +1533,7 @@ try {
     $xmlTrimmed = trim($xmlAssinado);
     if (substr($xmlTrimmed, 0, 5) !== '<?xml') {
         $xmlComDeclaracao = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . $xmlAssinado;
+    } else {
     }
 
     $xmlPath = "{$xmlDir}/{$chaveParaSalvar}.xml";
@@ -1976,8 +1601,7 @@ try {
             throw new Exception("Erro ao gerar PDF DANFE: " . $pdfError->getMessage());
         }
     }
-
-    // ✅ SUCESSO: NFe emitida com sucesso
+    
     echo json_encode([
         'success' => true,
         'message' => 'NFe emitida com sucesso',
@@ -1995,49 +1619,14 @@ try {
             'xml' => base64_encode($xmlAssinado)
         ],
         'resultado_sefaz' => $resultado
-    ], JSON_UNESCAPED_UNICODE);
-
-} catch (Exception $e) {
-    logDetalhado('FATAL_ERROR', 'Erro crítico na emissão da NFe', [
-        'error' => $e->getMessage(),
-        'file' => $e->getFile(),
-        'line' => $e->getLine(),
-        'trace' => $e->getTraceAsString()
     ]);
-
-    // Determinar tipo de erro e código HTTP apropriado
-    $errorMessage = $e->getMessage();
-    $httpCode = 500;
-    $errorType = 'server_error';
-
-    // Erros de validação (dados do usuário)
-    if (strpos($errorMessage, 'obrigatório') !== false ||
-        strpos($errorMessage, 'inválido') !== false ||
-        strpos($errorMessage, 'deve ter') !== false ||
-        strpos($errorMessage, 'não encontrado') !== false) {
-        $httpCode = 400;
-        $errorType = 'user_error';
-    }
-
-    // Erros da SEFAZ
-    if (strpos($errorMessage, 'SEFAZ') !== false ||
-        strpos($errorMessage, 'Status') !== false ||
-        strpos($errorMessage, 'Rejeição') !== false) {
-        $httpCode = 400;
-        $errorType = 'sefaz_error';
-    }
-
-    http_response_code($httpCode);
+    
+} catch (Exception $e) {
+    http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => $errorMessage,
-        'error_type' => $errorType,
-        'timestamp' => date('Y-m-d H:i:s'),
-        'debug_info' => [
-            'file' => basename($e->getFile()),
-            'line' => $e->getLine(),
-            'step' => 'FATAL_ERROR'
-        ]
-    ], JSON_UNESCAPED_UNICODE);
+        'error' => $e->getMessage(),
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
 }
 ?>
