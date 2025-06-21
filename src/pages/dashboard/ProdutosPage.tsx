@@ -193,11 +193,11 @@ const ProdutosPage: React.FC = () => {
     cfop: '5102',
     origem_produto: 0,
     situacao_tributaria: 'tributado_integral',
-    cst_icms: '',
-    csosn_icms: '',
+    cst_icms: '00',    // CST padrão para tributado integral (Regime Normal)
+    csosn_icms: '102', // CSOSN padrão para tributado integral (Simples Nacional)
     cst_pis: '01',
     cst_cofins: '01',
-    aliquota_icms: 0,
+    aliquota_icms: 18, // ✅ Padrão 18% para SP
     aliquota_pis: 1.65,
     aliquota_cofins: 7.60,
     cest: '',
@@ -246,7 +246,7 @@ const ProdutosPage: React.FC = () => {
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadeMedida[]>([]);
 
   // Estado para regime tributário da empresa
-  const [regimeTributario, setRegimeTributario] = useState<number>(3);
+  const [regimeTributario, setRegimeTributario] = useState<number>(4); // Padrão MEI
 
   // Estados para validação de NCM
   const [ncmValidacao, setNcmValidacao] = useState<{
@@ -410,7 +410,7 @@ const ProdutosPage: React.FC = () => {
           fonte: 'LOCAL'
         });
 
-        // Se tem ST, buscar todas as opções de CEST e ajustar CFOP
+        // Se tem ST, buscar todas as opções de CEST
         if (ncmInfo.tem_substituicao_tributaria) {
           const { data: cestData, error: cestError } = await supabase
             .from('ncm')
@@ -422,23 +422,32 @@ const ProdutosPage: React.FC = () => {
             setCestOpcoes(cestData);
           }
 
-          // Ajustar automaticamente o CFOP para 5405 (ST obrigatória)
-          setNovoProduto(prev => ({
-            ...prev,
-            cfop: '5405',
-            situacao_tributaria: 'tributado_st' // CST 60 ou CSOSN 500
-          }));
-
-          showMessage('info', 'CFOP ajustado automaticamente para 5405 (Substituição Tributária)');
+          // Apenas sugerir CFOP e situação tributária se for um produto NOVO (não editando)
+          if (!editingProduto) {
+            const codigosFiscais = obterCodigosFiscais('tributado_st');
+            setNovoProduto(prev => ({
+              ...prev,
+              cfop: '5405',
+              situacao_tributaria: 'tributado_st',
+              // Aplicar códigos CST e CSOSN automaticamente
+              cst_icms: codigosFiscais.cst,
+              csosn_icms: codigosFiscais.csosn
+            }));
+            // CFOP ajustado automaticamente para 5405 (Substituição Tributária) - sem toast
+          }
         } else {
           setCestOpcoes([]);
 
-          // Se não tem ST, voltar para CFOP padrão se estava em 5405
-          if (novoProduto.cfop === '5405') {
+          // Se não tem ST, voltar para CFOP padrão se estava em 5405 (apenas para produtos novos)
+          if (!editingProduto && novoProduto.cfop === '5405') {
+            const codigosFiscais = obterCodigosFiscais('tributado_integral');
             setNovoProduto(prev => ({
               ...prev,
               cfop: '5102',
               situacao_tributaria: 'tributado_integral',
+              // Aplicar códigos CST e CSOSN automaticamente
+              cst_icms: codigosFiscais.cst,
+              csosn_icms: codigosFiscais.csosn,
               cest: '' // Limpar CEST se não tem ST
             }));
 
@@ -509,6 +518,114 @@ const ProdutosPage: React.FC = () => {
     }, 800),
     []
   );
+
+  // Função para verificar se a situação tributária requer ST
+  const situacaoTributariaTemST = (situacao: string) => {
+    return situacao === 'tributado_st';
+  };
+
+  // Função para validar NCM sem aplicar regras automáticas (apenas para edição)
+  const validarNCMSemRegrasAutomaticas = async (codigo: string) => {
+    if (codigo.length !== 8) return;
+
+    setNcmValidacao(prev => ({ ...prev, validando: true }));
+
+    try {
+      // Primeiro, tentar buscar na base local
+      const { data: ncmLocal, error: ncmError } = await supabase
+        .from('ncm')
+        .select('codigo_ncm, descricao_ncm, tem_substituicao_tributaria, codigo_cest, descricao_cest')
+        .eq('codigo_ncm', codigo)
+        .limit(1);
+
+      if (!ncmError && ncmLocal && ncmLocal.length > 0) {
+        const ncmInfo = ncmLocal[0];
+
+        setNcmValidacao({
+          validando: false,
+          valido: true,
+          descricao: ncmInfo.descricao_ncm || '',
+          erro: '',
+          temSubstituicaoTributaria: ncmInfo.tem_substituicao_tributaria || false,
+          fonte: 'Base Local'
+        });
+
+        // Se tem ST, buscar opções de CEST sem alterar campos
+        if (ncmInfo.tem_substituicao_tributaria) {
+          const { data: cestData, error: cestError } = await supabase
+            .from('ncm')
+            .select('codigo_cest, descricao_cest')
+            .eq('codigo_ncm', codigo)
+            .not('codigo_cest', 'is', null);
+
+          if (!cestError && cestData) {
+            setCestOpcoes(cestData);
+          }
+        } else {
+          setCestOpcoes([]);
+        }
+
+        return;
+      }
+
+      // Se não encontrou na base local, tentar API externa
+      const response = await fetch(`https://servicodados.ibge.gov.br/api/v1/nomenclaturas/ncm/classes/${codigo}`);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        setNcmValidacao({
+          validando: false,
+          valido: true,
+          descricao: data.descricao || '',
+          erro: '',
+          temSubstituicaoTributaria: false,
+          fonte: 'API IBGE'
+        });
+        setCestOpcoes([]);
+      } else {
+        throw new Error('NCM não encontrado');
+      }
+    } catch (error) {
+      setNcmValidacao({
+        validando: false,
+        valido: false,
+        descricao: '',
+        erro: 'NCM não encontrado ou inválido',
+        temSubstituicaoTributaria: false,
+        fonte: null
+      });
+      setCestOpcoes([]);
+    }
+  };
+
+  // Mapeamento oficial entre situações tributárias e códigos CST/CSOSN
+  const obterCodigosFiscais = (situacaoTributaria: string) => {
+    const mapeamento = {
+      'tributado_integral': {
+        cst: '00',      // Tributada integralmente (Regime Normal)
+        csosn: '102'    // Tributada pelo Simples Nacional sem permissão de crédito
+      },
+      'tributado_st': {
+        cst: '60',      // ICMS cobrado anteriormente por substituição tributária (Regime Normal)
+        csosn: '500'    // ICMS cobrado por substituição tributária (Simples Nacional)
+      },
+      'isento': {
+        cst: '40',      // Isenta (Regime Normal)
+        csosn: '300'    // Imune/Isenta (Simples Nacional)
+      },
+      'nao_tributado': {
+        cst: '41',      // Não tributada (Regime Normal)
+        csosn: '400'    // Não tributada pelo Simples Nacional
+      },
+      'suspenso': {
+        cst: '50',      // Suspensão (Regime Normal)
+        csosn: '103'    // Isenção do ICMS no Simples Nacional para faixa de receita bruta
+      }
+    };
+
+    return mapeamento[situacaoTributaria] || { cst: '', csosn: '' };
+  };
 
   // Função para selecionar CEST
   const selecionarCEST = (cestSelecionado: { codigo_cest: string; descricao_cest: string }) => {
@@ -1186,11 +1303,11 @@ const ProdutosPage: React.FC = () => {
       cfop: '5102',
       origem_produto: 0,
       situacao_tributaria: 'tributado_integral',
-      cst_icms: '',
-      csosn_icms: '',
+      cst_icms: '00',    // CST padrão para tributado integral (Regime Normal)
+      csosn_icms: '102', // CSOSN padrão para tributado integral (Simples Nacional)
       cst_pis: '01',
       cst_cofins: '01',
-      aliquota_icms: 0,
+      aliquota_icms: 18, // ✅ Padrão 18% para SP
       aliquota_pis: 1.65,
       aliquota_cofins: 7.60,
       cest: '',
@@ -1380,6 +1497,17 @@ const ProdutosPage: React.FC = () => {
     // Definir o estado do novo produto
     setNovoProduto(produtoState);
 
+    // Garantir que os códigos CST/CSOSN estejam preenchidos
+    if (produtoState.situacao_tributaria && (!produtoState.cst_icms || !produtoState.csosn_icms)) {
+      const codigosFiscais = obterCodigosFiscais(produtoState.situacao_tributaria);
+      setNovoProduto(prev => ({
+        ...prev,
+        cst_icms: codigosFiscais.cst,
+        csosn_icms: codigosFiscais.csosn
+      }));
+      console.log('Códigos fiscais aplicados automaticamente na edição:', codigosFiscais);
+    }
+
     // Definir o preço formatado
     setPrecoFormatado(formatarPreco(produto.preco));
 
@@ -1399,9 +1527,10 @@ const ProdutosPage: React.FC = () => {
       setDescontoQuantidadeFormatado(formatarPreco(produto.valor_desconto_quantidade));
     }
 
-    // Validar NCM se existir
+    // Para produtos em edição, apenas validar NCM sem aplicar regras automáticas
     if (produto.ncm && produto.ncm.length === 8) {
-      validarNCM(produto.ncm);
+      // Validar NCM apenas para mostrar informações, sem alterar CFOP/situação tributária
+      validarNCMSemRegrasAutomaticas(produto.ncm);
     } else {
       setNcmValidacao({
         validando: false,
@@ -2200,17 +2329,28 @@ const ProdutosPage: React.FC = () => {
           aliquota_pis: novoProduto.aliquota_pis,
           cst_cofins: novoProduto.cst_cofins,
           aliquota_cofins: novoProduto.aliquota_cofins,
+          cest: novoProduto.cest, // ✅ CORREÇÃO CRÍTICA: CEST estava faltando na edição!
+          peso_liquido: novoProduto.peso_liquido,
           empresa_id: usuarioData.empresa_id
         };
+
+        // SEMPRE garantir que AMBOS os códigos (CST E CSOSN) estejam preenchidos
+        const codigosFiscais = obterCodigosFiscais(updateData.situacao_tributaria || 'tributado_integral');
+        updateData.cst_icms = codigosFiscais.cst;     // SEMPRE salvar CST (Regime Normal)
+        updateData.csosn_icms = codigosFiscais.csosn; // SEMPRE salvar CSOSN (Simples Nacional)
+        console.log('🔧 Códigos fiscais aplicados (AMBOS):', codigosFiscais);
 
         // Log para confirmar que os dados fiscais estão sendo salvos
         console.log('=== SALVANDO DADOS FISCAIS (EDIÇÃO) ===');
         console.log('NCM:', updateData.ncm);
         console.log('CFOP:', updateData.cfop);
         console.log('Origem:', updateData.origem_produto);
+        console.log('Situação Tributária:', updateData.situacao_tributaria);
         console.log('CST ICMS:', updateData.cst_icms);
         console.log('CSOSN ICMS:', updateData.csosn_icms);
         console.log('Alíquota ICMS:', updateData.aliquota_icms);
+        console.log('CEST:', updateData.cest);
+        console.log('Peso Líquido:', updateData.peso_liquido);
 
         const { data, error } = await supabase
           .from('produtos')
@@ -2316,6 +2456,17 @@ const ProdutosPage: React.FC = () => {
 
       // Atualizar o estoque na grid imediatamente após criar o produto
       await loadProdutosEstoque();
+
+      // Limpar cache de validação NCM para evitar dados incorretos na interface
+      setNcmValidacao({
+        validando: false,
+        valido: null,
+        descricao: '',
+        erro: '',
+        temSubstituicaoTributaria: false,
+        fonte: null
+      });
+      setCestOpcoes([]);
 
       // Se for um novo produto com estoque inicial, atualizar o estado local imediatamente
       if (!editingProduto && novoProduto.estoque_inicial && novoProduto.estoque_inicial > 0) {
@@ -4801,7 +4952,7 @@ const ProdutosPage: React.FC = () => {
                                 CFOP (Código Fiscal de Operações) <span className="text-red-500">*</span>
                                 {ncmValidacao.temSubstituicaoTributaria && (
                                   <span className="ml-2 text-xs px-2 py-0.5 rounded bg-orange-500/20 text-orange-300">
-                                    Auto: ST
+                                    Sugestão: ST
                                   </span>
                                 )}
                               </label>
@@ -4811,10 +4962,9 @@ const ProdutosPage: React.FC = () => {
                                   const newCfop = e.target.value;
                                   let newSituacaoTributaria = novoProduto.situacao_tributaria;
 
-                                  // Verificar se está tentando mudar CFOP de produto com ST
+                                  // Aviso informativo se produto com ST usar CFOP diferente de 5405
                                   if (ncmValidacao.temSubstituicaoTributaria && newCfop !== '5405') {
-                                    showMessage('warning', 'Produtos com Substituição Tributária devem usar CFOP 5405');
-                                    return; // Impede a mudança
+                                    showMessage('info', 'Produto com ST alterado para CFOP ' + newCfop + '. Verifique se está correto conforme sua operação.');
                                   }
 
                                   // Aplicar regras fiscais obrigatórias baseadas no CFOP
@@ -4892,18 +5042,7 @@ const ProdutosPage: React.FC = () => {
                                 Passe o mouse sobre as opções para ver a descrição completa
                               </p>
 
-                              {/* Mensagem específica para ST automática */}
-                              {ncmValidacao.temSubstituicaoTributaria && novoProduto.cfop === '5405' && (
-                                <div className="mt-2 p-2 bg-orange-900/20 border border-orange-700/50 rounded text-xs">
-                                  <p className="text-orange-300 font-medium">🔄 CFOP Ajustado Automaticamente</p>
-                                  <p className="text-orange-200 mt-1">
-                                    NCM {novoProduto.ncm} tem Substituição Tributária obrigatória. CFOP foi ajustado para 5405.
-                                  </p>
-                                  <p className="text-orange-200 mt-1">
-                                    🔒 Este CFOP não pode ser alterado para produtos com ST.
-                                  </p>
-                                </div>
-                              )}
+                              {/* Mensagem específica para ST automática - removida */}
 
                               {/* Mensagem geral de regras fiscais */}
                               {(['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')) && !ncmValidacao.temSubstituicaoTributaria && (
@@ -4979,7 +5118,25 @@ const ProdutosPage: React.FC = () => {
                               </label>
                               <select
                                 value={novoProduto.situacao_tributaria || 'tributado_integral'}
-                                onChange={(e) => setNovoProduto({ ...novoProduto, situacao_tributaria: e.target.value })}
+                                onChange={(e) => {
+                                  const novaSituacao = e.target.value;
+                                  const codigosFiscais = obterCodigosFiscais(novaSituacao);
+
+                                  setNovoProduto(prev => ({
+                                    ...prev,
+                                    situacao_tributaria: novaSituacao,
+                                    // Sempre salvar ambos os códigos automaticamente
+                                    cst_icms: codigosFiscais.cst,
+                                    csosn_icms: codigosFiscais.csosn,
+                                    // Limpar CEST se a nova situação não for ST
+                                    cest: situacaoTributariaTemST(novaSituacao) ? prev.cest : ''
+                                  }));
+
+                                  // Mostrar toast informativo sobre os códigos aplicados
+                                  if (codigosFiscais.cst && codigosFiscais.csosn) {
+                                    showMessage('info', `Códigos aplicados: CST ${codigosFiscais.cst} (Normal) / CSOSN ${codigosFiscais.csosn} (Simples)`);
+                                  }
+                                }}
                                 disabled={['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')}
                                 className={`w-full border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
                                   ['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')
@@ -4996,60 +5153,60 @@ const ProdutosPage: React.FC = () => {
                               >
                                 <option
                                   value="tributado_integral"
-                                  title={regimeTributario === 1 || regimeTributario === 2
-                                    ? '102 - Tributada sem permissão de crédito (Simples Nacional)'
+                                  title={regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
+                                    ? '102 - Tributada sem permissão de crédito (Simples Nacional/MEI)'
                                     : '00 - Tributada integralmente (Regime Normal)'
                                   }
                                 >
-                                  {regimeTributario === 1 || regimeTributario === 2
+                                  {regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
                                     ? '102 - Tributada sem permissão de crédito'
                                     : '00 - Tributada integralmente'
                                   }
                                 </option>
                                 <option
                                   value="tributado_st"
-                                  title={regimeTributario === 1 || regimeTributario === 2
-                                    ? '500 - ICMS cobrado por substituição tributária (Simples Nacional)'
+                                  title={regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
+                                    ? '500 - ICMS cobrado por substituição tributária (Simples Nacional/MEI)'
                                     : '60 - ICMS cobrado por substituição tributária (Regime Normal)'
                                   }
                                 >
-                                  {regimeTributario === 1 || regimeTributario === 2
+                                  {regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
                                     ? '500 - ICMS por substituição tributária'
                                     : '60 - ICMS por substituição tributária'
                                   }
                                 </option>
                                 <option
                                   value="isento"
-                                  title={regimeTributario === 1 || regimeTributario === 2
-                                    ? '300 - Imune/Não tributada/Isenta (Simples Nacional)'
+                                  title={regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
+                                    ? '300 - Imune/Não tributada/Isenta (Simples Nacional/MEI)'
                                     : '40 - Isenta/Imune/Não tributada (Regime Normal)'
                                   }
                                 >
-                                  {regimeTributario === 1 || regimeTributario === 2
+                                  {regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
                                     ? '300 - Imune/Não tributada/Isenta'
                                     : '40 - Isenta/Imune/Não tributada'
                                   }
                                 </option>
                                 <option
                                   value="nao_tributado"
-                                  title={regimeTributario === 1 || regimeTributario === 2
-                                    ? '400 - Não tributada pelo Simples Nacional'
+                                  title={regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
+                                    ? '400 - Não tributada pelo Simples Nacional/MEI'
                                     : '41 - Não tributada (Regime Normal)'
                                   }
                                 >
-                                  {regimeTributario === 1 || regimeTributario === 2
+                                  {regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
                                     ? '400 - Não tributada pelo Simples'
                                     : '41 - Não tributada'
                                   }
                                 </option>
                                 <option
                                   value="suspenso"
-                                  title={regimeTributario === 1 || regimeTributario === 2
-                                    ? '103 - Tributada com permissão de crédito (Simples Nacional)'
+                                  title={regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
+                                    ? '103 - Tributada com permissão de crédito (Simples Nacional/MEI)'
                                     : '50 - Suspensão (Regime Normal)'
                                   }
                                 >
-                                  {regimeTributario === 1 || regimeTributario === 2
+                                  {regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
                                     ? '103 - Tributada com permissão de crédito'
                                     : '50 - Suspensão'
                                   }
@@ -5061,8 +5218,8 @@ const ProdutosPage: React.FC = () => {
                                     🔒 Campo bloqueado - Situação tributária definida automaticamente pelo CFOP selecionado
                                   </span>
                                 ) : (
-                                  regimeTributario === 1 || regimeTributario === 2
-                                    ? 'Códigos CSOSN para Simples Nacional. Passe o mouse sobre as opções para ver detalhes.'
+                                  regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
+                                    ? 'Códigos CSOSN para Simples Nacional/MEI. Passe o mouse sobre as opções para ver detalhes.'
                                     : 'Códigos CST para Regime Normal. Passe o mouse sobre as opções para ver detalhes.'
                                 )}
                               </p>
@@ -5124,8 +5281,8 @@ const ProdutosPage: React.FC = () => {
 
                             {/* Campos Opcionais */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* CEST - Mostrar apenas se NCM tem ST */}
-                              {ncmValidacao.temSubstituicaoTributaria && (
+                              {/* CEST - Mostrar apenas se situação tributária tem ST */}
+                              {situacaoTributariaTemST(novoProduto.situacao_tributaria || '') && (
                                 <div>
                                   <label className="block text-sm font-medium text-gray-400 mb-2">
                                     CEST (Código Especificador ST) <span className="text-red-500">*</span>
@@ -5160,7 +5317,7 @@ const ProdutosPage: React.FC = () => {
                                   </div>
                                   <div className="flex items-center justify-between mt-1">
                                     <p className="text-xs text-blue-300">
-                                      Obrigatório para produtos com Substituição Tributária.
+                                      Obrigatório para situação tributária com Substituição Tributária.
                                     </p>
                                     {cestOpcoes.length > 0 && (
                                       <p className="text-xs text-green-300">
@@ -5205,11 +5362,12 @@ const ProdutosPage: React.FC = () => {
                                     {regimeTributario === 1 && 'Simples Nacional - Utiliza códigos CSOSN (Código de Situação da Operação no Simples Nacional).'}
                                     {regimeTributario === 2 && 'Simples Nacional (Excesso) - Utiliza códigos CSOSN (Código de Situação da Operação no Simples Nacional).'}
                                     {regimeTributario === 3 && 'Regime Normal - Utiliza códigos CST (Código de Situação Tributária).'}
+                                    {regimeTributario === 4 && 'MEI - Microempreendedor Individual - Utiliza códigos CSOSN (Código de Situação da Operação no Simples Nacional).'}
                                   </p>
                                   <p className="text-blue-200 text-xs mt-1">
-                                    {regimeTributario === 1 || regimeTributario === 2
+                                    {regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
                                       ? 'Se a empresa mudar para Regime Normal, os códigos CSOSN serão convertidos automaticamente para CST.'
-                                      : 'Se a empresa mudar para Simples Nacional, os códigos CST serão convertidos automaticamente para CSOSN.'
+                                      : 'Se a empresa mudar para Simples Nacional/MEI, os códigos CST serão convertidos automaticamente para CSOSN.'
                                     }
                                   </p>
                                 </div>
@@ -5250,10 +5408,10 @@ const ProdutosPage: React.FC = () => {
                                 return;
                               }
 
-                              // Validar CEST se NCM tem ST
-                              if (ncmValidacao.temSubstituicaoTributaria) {
+                              // Validar CEST se situação tributária tem ST
+                              if (situacaoTributariaTemST(novoProduto.situacao_tributaria || '')) {
                                 if (!novoProduto.cest || novoProduto.cest.length !== 7) {
-                                  showMessage('error', 'CEST é obrigatório e deve ter 7 dígitos para produtos com Substituição Tributária');
+                                  showMessage('error', 'CEST é obrigatório e deve ter 7 dígitos para situação tributária com Substituição Tributária');
                                   return;
                                 }
                               }

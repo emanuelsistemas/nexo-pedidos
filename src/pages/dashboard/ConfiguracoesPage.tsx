@@ -293,7 +293,7 @@ const ConfiguracoesPage: React.FC = () => {
     cidade: '',
     estado: '',
     inscricao_estadual: '',
-    regime_tributario: 3,
+    regime_tributario: 4, // Padrão MEI
     codigo_municipio: '',
     email: ''
   });
@@ -3322,7 +3322,7 @@ const ConfiguracoesPage: React.FC = () => {
                       cidade: '',
                       estado: '',
                       inscricao_estadual: '',
-                      regime_tributario: 3,
+                      regime_tributario: 4, // Padrão MEI
                       codigo_municipio: '',
                       email: ''
                     });
@@ -3464,6 +3464,7 @@ const ConfiguracoesPage: React.FC = () => {
                           {empresa.regime_tributario === 1 && '1 - Simples Nacional'}
                           {empresa.regime_tributario === 2 && '2 - Simples Nacional - Excesso'}
                           {empresa.regime_tributario === 3 && '3 - Regime Normal'}
+                          {empresa.regime_tributario === 4 && '4 - MEI - Microempreendedor Individual'}
                           {!empresa.regime_tributario && '-'}
                         </p>
                       </div>
@@ -5790,6 +5791,7 @@ const ConfiguracoesPage: React.FC = () => {
                         <option value={1}>1 - Simples Nacional</option>
                         <option value={2}>2 - Simples Nacional - Excesso</option>
                         <option value={3}>3 - Regime Normal</option>
+                        <option value={4}>4 - MEI - Microempreendedor Individual</option>
                       </select>
                     </div>
 

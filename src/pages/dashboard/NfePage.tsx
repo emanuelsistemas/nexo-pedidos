@@ -6927,6 +6927,23 @@ const ProdutosSection: React.FC<{
                     <span className="text-gray-400">CFOP:</span>
                     <span className="text-white ml-2">{(produtoDetalhesFiscais as any).cfop}</span>
                   </div>
+                  <div>
+                    <span className="text-gray-400">CEST:</span>
+                    <span className="text-white ml-2">
+                      {(produtoDetalhesFiscais as any).cest || (
+                        <span className="text-yellow-400">Não informado</span>
+                      )}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Peso Líquido:</span>
+                    <span className="text-white ml-2">
+                      {(produtoDetalhesFiscais as any).peso_liquido ?
+                        `${(produtoDetalhesFiscais as any).peso_liquido} kg` :
+                        'Não informado'
+                      }
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
