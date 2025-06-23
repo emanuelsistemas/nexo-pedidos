@@ -1079,7 +1079,8 @@ try {
     
     // ENVIAR PARA SEFAZ (MÉTODO NATIVO)
     try {
-        $response = $tools->sefazEnviaLote([$xmlAssinado], 1);
+        // ✅ CORREÇÃO: Para NFe usar envio síncrono (indSinc=1) para evitar erro 452
+        $response = $tools->sefazEnviaLote([$xmlAssinado], 1, 1); // Terceiro parâmetro = indSinc=1 (síncrono)
     } catch (Exception $sefazError) {
         throw new Exception("Erro ao enviar para SEFAZ: " . $sefazError->getMessage());
     }
@@ -1387,6 +1388,8 @@ try {
             // Conforme MOC: "cStat=104, com os resultados individuais de processamento das NF-e"
             if ($statusFinal === '104') {
                 error_log("📋 STATUS 104 - Lote processado. Buscando resultado individual da NFe...");
+                error_log("🔍 DEBUG XML RECIBO - Tamanho: " . strlen($consultaRecibo) . " bytes");
+                error_log("🔍 DEBUG XML RECIBO - Início: " . substr($consultaRecibo, 0, 500));
 
                 // Buscar status específico da NFe dentro do elemento protNFe/infProt
                 // Conforme documentação: protNFe/infProt/cStat e protNFe/infProt/nProt
@@ -1399,6 +1402,11 @@ try {
                 $nProtNFe = $xmlRecibo->xpath('//protNFe/infProt/nProt') ?:
                            $xmlRecibo->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]');
 
+                error_log("🔍 DEBUG XPATH RESULTS:");
+                error_log("  - cStatNFe encontrados: " . count($cStatNFe));
+                error_log("  - xMotivoNFe encontrados: " . count($xMotivoNFe));
+                error_log("  - nProtNFe encontrados: " . count($nProtNFe));
+
                 if (!empty($cStatNFe)) {
                     $statusFinal = (string)$cStatNFe[0];
                     $motivoFinal = !empty($xMotivoNFe) ? (string)$xMotivoNFe[0] : $motivoFinal;
@@ -1410,6 +1418,12 @@ try {
                     error_log("  - Protocolo NFe: " . ($protocoloFinal ? $protocoloFinal : 'NÃO ENCONTRADO'));
                 } else {
                     error_log("❌ ERRO: Não foi possível encontrar resultado individual da NFe no lote processado");
+                    error_log("🔍 DEBUG: Tentando buscar qualquer elemento cStat no XML...");
+                    $todosCStat = $xmlRecibo->xpath('//cStat');
+                    error_log("🔍 DEBUG: Total de elementos cStat encontrados: " . count($todosCStat));
+                    foreach ($todosCStat as $i => $cstat) {
+                        error_log("🔍 DEBUG: cStat[$i] = " . (string)$cstat);
+                    }
                 }
             }
 
@@ -1577,6 +1591,12 @@ try {
 
     // VALIDAÇÃO CRÍTICA - SEGUINDO AS 4 LEIS NFe
     // Verificar se NFe foi realmente autorizada (Status 100)
+    error_log("🔍 DEBUG VALIDAÇÃO FINAL:");
+    error_log("  - Status recebido: '{$status}'");
+    error_log("  - Motivo: '{$motivo}'");
+    error_log("  - Protocolo: " . ($protocolo ? $protocolo : 'VAZIO'));
+    error_log("  - Tipo do status: " . gettype($status));
+
     if ($status !== '100') {
         error_log("❌ NFe NÃO AUTORIZADA - Status: {$status} - {$motivo}");
 
