@@ -474,6 +474,8 @@ const ProdutosPage: React.FC = () => {
               csosn_icms: codigosFiscais.csosn
             }));
             // CFOP ajustado automaticamente para 5405 (Substituição Tributária) - sem toast
+
+
           }
         } else {
           setCestOpcoes([]);
@@ -778,6 +780,8 @@ const ProdutosPage: React.FC = () => {
 
     return mapeamento[situacaoTributaria] || { cst: '', csosn: '' };
   };
+
+
 
   // Função para selecionar CEST
   const selecionarCEST = (cestSelecionado: { codigo_cest: string; descricao_cest: string }) => {
@@ -1655,6 +1659,7 @@ const ProdutosPage: React.FC = () => {
       aliquota_pis: produto.aliquota_pis || 1.65,
       aliquota_cofins: produto.aliquota_cofins || 7.60,
       cest: produto.cest || '',
+      margem_st: produto.margem_st || null, // ✅ CORREÇÃO: Carregar margem ST na edição
       peso_liquido: produto.peso_liquido || 0,
     };
 
@@ -2489,6 +2494,7 @@ const ProdutosPage: React.FC = () => {
           cst_cofins: novoProduto.cst_cofins,
           aliquota_cofins: novoProduto.aliquota_cofins,
           cest: novoProduto.cest, // ✅ CORREÇÃO CRÍTICA: CEST estava faltando na edição!
+          margem_st: novoProduto.margem_st, // ✅ CORREÇÃO: Margem ST estava faltando na edição!
           peso_liquido: novoProduto.peso_liquido,
           empresa_id: usuarioData.empresa_id
         };
@@ -2509,6 +2515,7 @@ const ProdutosPage: React.FC = () => {
         console.log('CSOSN ICMS:', updateData.csosn_icms);
         console.log('Alíquota ICMS:', updateData.aliquota_icms);
         console.log('CEST:', updateData.cest);
+        console.log('Margem ST:', updateData.margem_st);
         console.log('Peso Líquido:', updateData.peso_liquido);
 
         const { data, error } = await supabase
@@ -2555,6 +2562,8 @@ const ProdutosPage: React.FC = () => {
         console.log('CST ICMS:', produtoData.cst_icms);
         console.log('CSOSN ICMS:', produtoData.csosn_icms);
         console.log('Alíquota ICMS:', produtoData.aliquota_icms);
+        console.log('CEST:', produtoData.cest);
+        console.log('Margem ST:', produtoData.margem_st);
 
         const { data, error } = await supabase
           .from('produtos')
@@ -2756,6 +2765,7 @@ const ProdutosPage: React.FC = () => {
         aliquota_pis: produtoOriginal.aliquota_pis || 1.65,
         aliquota_cofins: produtoOriginal.aliquota_cofins || 7.60,
         cest: produtoOriginal.cest || '',
+        margem_st: produtoOriginal.margem_st || null, // ✅ CORREÇÃO: Incluir margem ST na clonagem
         peso_liquido: produtoOriginal.peso_liquido || 0,
       };
 
@@ -5567,6 +5577,35 @@ const ProdutosPage: React.FC = () => {
                                 </div>
                               )}
 
+                              {/* Margem ST - Mostrar apenas se situação tributária tem ST */}
+                              {situacaoTributariaTemST(novoProduto.situacao_tributaria || '') && (
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                                    Margem ST (%) <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                    value={novoProduto.margem_st || ''}
+                                    onChange={(e) => {
+                                      const valor = parseFloat(e.target.value);
+                                      setNovoProduto({
+                                        ...novoProduto,
+                                        margem_st: isNaN(valor) ? null : valor
+                                      });
+                                    }}
+                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                    placeholder="Ex: 30.0"
+                                    required
+                                  />
+                                  <p className="text-xs text-orange-300 mt-1">
+                                    Margem de Valor Agregado para ST. Consulte seu contador para o valor correto.
+                                  </p>
+                                </div>
+                              )}
+
                               <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-2">
                                   Peso Líquido (kg)
@@ -5647,10 +5686,15 @@ const ProdutosPage: React.FC = () => {
                                 return;
                               }
 
-                              // Validar CEST se situação tributária tem ST
+                              // Validar CEST e Margem ST se situação tributária tem ST
                               if (situacaoTributariaTemST(novoProduto.situacao_tributaria || '')) {
                                 if (!novoProduto.cest || novoProduto.cest.length !== 7) {
                                   showMessage('error', 'CEST é obrigatório e deve ter 7 dígitos para situação tributária com Substituição Tributária');
+                                  return;
+                                }
+
+                                if (!novoProduto.margem_st || novoProduto.margem_st <= 0) {
+                                  showMessage('error', 'Margem ST é obrigatória e deve ser maior que 0 para situação tributária com Substituição Tributária');
                                   return;
                                 }
                               }
