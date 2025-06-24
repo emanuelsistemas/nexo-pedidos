@@ -652,51 +652,38 @@ try {
                 $std->pCredSN = $aliquotaICMS;
                 $std->vCredICMSSN = round($valorBase * ($aliquotaICMS / 100), 2);
             } elseif ($csosn === '500') {
-                // ✅ CORREÇÃO BASEADA NA DOCUMENTAÇÃO OFICIAL: CSOSN 500 - ICMS cobrado anteriormente por ST
+                // ✅ CSOSN 500 - ICMS cobrado anteriormente por ST - USANDO DADOS REAIS
                 // Conforme Manual NFe - campos obrigatórios: vBCSTRet, pST, vICMSSTRet
 
-                // ✅ CÁLCULO BASEADO NO PREÇO ATUAL COM MARGEM PRESUMIDA (Opção A)
-                // Base: preço de venda atual + margem presumida para ST
-                $margemSTPresumida = 30.0; // 30% margem presumida padrão para bebidas
-                $baseSTCalculada = $valorBase * (1 + ($margemSTPresumida / 100));
+                // ✅ USAR DADOS REAIS DO PRODUTO (SEM FALLBACKS)
+                $margemST = (float)$produto['margem_st'];
+                $aliquotaICMS = (float)$produto['aliquota_icms'];
 
-                // ✅ ALÍQUOTA ST: Conforme documentação oficial (ICMS ST + FCP)
-                $aliquotaSTEstado = 18.0; // 18% padrão SP para bebidas alcoólicas
-                $fcpST = 2.0; // 2% FCP São Paulo (conforme tabela oficial SEFAZ)
-                $aliquotaSTTotal = $aliquotaSTEstado + $fcpST; // 20% total (18% + 2%)
+                // Validar se dados ST estão configurados
+                if (!$margemST || !$aliquotaICMS) {
+                    throw new Exception("Produto '{$produto['nome']}' com CSOSN 500 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                }
 
-                // ✅ VALOR ST RETIDO: Calculado sobre a base presumida
-                $valorSTCalculado = $baseSTCalculada * ($aliquotaSTTotal / 100);
+                // ✅ CÁLCULO BASEADO NOS DADOS REAIS DO PRODUTO
+                $baseSTCalculada = $valorBase * (1 + ($margemST / 100));
+                $valorSTCalculado = $baseSTCalculada * ($aliquotaICMS / 100);
 
                 // ✅ CAMPOS OBRIGATÓRIOS CONFORME DOCUMENTAÇÃO OFICIAL
                 // IMPORTANTE: Garantir que sejam números válidos (não null)
                 $std->vBCSTRet = (float)round($baseSTCalculada, 2);     // Base de cálculo do ST retido
-                $std->pST = (float)$aliquotaSTTotal;                    // Alíquota suportada pelo Consumidor Final (ICMS ST + FCP)
+                $std->pST = (float)$aliquotaICMS;                       // Alíquota ICMS ST (dados reais)
                 $std->vICMSSTRet = (float)round($valorSTCalculado, 2);  // Valor do ICMS ST retido
-
-                // ✅ CAMPOS FCP OBRIGATÓRIOS (São Paulo tem FCP 2%)
-                if ($fcpST > 0) {
-                    $valorFCPSTCalculado = $baseSTCalculada * ($fcpST / 100);
-                    $std->vBCFCPSTRet = (float)round($baseSTCalculada, 2);      // Base de cálculo do FCP ST retido
-                    $std->pFCPSTRet = (float)$fcpST;                           // Alíquota do FCP ST retido
-                    $std->vFCPSTRet = (float)round($valorFCPSTCalculado, 2);   // Valor do FCP ST retido
-                }
 
                 // ✅ CAMPO OPCIONAL: Valor do ICMS próprio do Substituto (se aplicável)
                 // IMPORTANTE: Se não informado, não incluir no objeto (deixar undefined)
                 // $std->vICMSSubstituto = null; // Comentado - não incluir se não tiver valor
 
-                error_log("✅ CSOSN 500 - CÁLCULO BASEADO NO PREÇO ATUAL:");
+                error_log("✅ CSOSN 500 - CÁLCULO COM DADOS REAIS:");
                 error_log("  - Preço base: R$ {$valorBase}");
-                error_log("  - Margem ST presumida: {$margemSTPresumida}%");
+                error_log("  - Margem ST (produto): {$margemST}%");
                 error_log("  - Base ST calculada: R$ " . round($baseSTCalculada, 2));
-                error_log("  - Alíquota ICMS ST: {$aliquotaSTEstado}%");
-                error_log("  - Alíquota FCP ST: {$fcpST}%");
-                error_log("  - Alíquota total (pST): {$aliquotaSTTotal}%");
+                error_log("  - Alíquota ICMS (produto): {$aliquotaICMS}%");
                 error_log("  - Valor ST retido: R$ " . round($valorSTCalculado, 2));
-                if ($fcpST > 0) {
-                    error_log("  - Valor FCP ST retido: R$ " . round($valorFCPSTCalculado, 2));
-                }
 
                 // ✅ DEBUG CRÍTICO: Verificar objeto $std antes de tagICMSSN
                 error_log("🔍 DEBUG OBJETO ICMS ANTES tagICMSSN():");
@@ -711,17 +698,21 @@ try {
                     $std->vCredICMSSN = round($valorBase * ($aliquotaICMS / 100), 2);
                 }
 
-                // Campos de ST para CSOSN 201/202/203
-                $margemST = (float)($produto['margem_st'] ?? 30);
-                $aliquotaST = (float)($produto['aliquota_st'] ?? 18);
+                // ✅ CAMPOS DE ST PARA CSOSN 201/202/203 - DADOS REAIS
+                $margemST = (float)$produto['margem_st'];
+                $aliquotaICMS = (float)$produto['aliquota_icms'];
+
+                // Validar se dados ST estão configurados
+                if (!$margemST || !$aliquotaICMS) {
+                    throw new Exception("Produto '{$produto['nome']}' com CSOSN {$csosn} deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                }
 
                 $std->modBCST = 4; // 4=Margem Valor Agregado (%)
-                $std->pMVAST = $margemST;
-                $std->vBCST = round($valorBase * (1 + ($margemST / 100)), 2);
-                $std->pICMSST = $aliquotaST;
-                $std->vICMSST = round($std->vBCST * ($aliquotaST / 100), 2);
+                $std->pMVAST = $margemST; // Margem ST (dados reais)
+                $std->pICMSST = $aliquotaICMS; // Alíquota ICMS (dados reais)
 
-                error_log("✅ CSOSN {$csosn} - Com ST: Base R$ {$std->vBCST}, Valor R$ {$std->vICMSST}");
+                // ✅ BIBLIOTECA CALCULA vBCST e vICMSST AUTOMATICAMENTE
+                error_log("✅ CSOSN {$csosn} - Dados ST configurados: Margem {$margemST}%, Alíquota {$aliquotaICMS}%");
             }
 
             // Usar método específico para Simples Nacional
@@ -757,32 +748,47 @@ try {
                     $std->pRedBC = 0; // Percentual de redução da BC
                 }
                 if ($cst === '10') {
-                    // CST 10 - Tributada e com cobrança do ICMS por ST
-                    // ✅ CORREÇÃO: Calcular ICMS ST com margem de lucro presumida
-                    $margemST = (float)($produto['margem_st'] ?? 30); // 30% margem padrão
-                    $aliquotaST = (float)($produto['aliquota_st'] ?? $aliquotaICMS); // Usar alíquota ST ou ICMS
+                    // ✅ CST 10 - Tributada e com cobrança do ICMS por ST - DADOS REAIS
+                    $margemST = (float)$produto['margem_st'];
+                    $aliquotaICMS = (float)$produto['aliquota_icms'];
+
+                    // Validar se dados ST estão configurados
+                    if (!$margemST || !$aliquotaICMS) {
+                        throw new Exception("Produto '{$produto['nome']}' com CST 10 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                    }
 
                     $std->modBCST = 4; // 4=Margem Valor Agregado (%)
-                    $std->pMVAST = $margemST; // Margem de valor agregado ST
-                    $std->vBCST = round($valorBase * (1 + ($margemST / 100)), 2); // Base com margem
-                    $std->pICMSST = $aliquotaST;
-                    $std->vICMSST = round($std->vBCST * ($aliquotaST / 100), 2) - $std->vICMS; // ST = Total - Próprio
+                    $std->pMVAST = $margemST; // Margem de valor agregado ST (dados reais)
+                    $std->pICMSST = $aliquotaICMS; // Alíquota ICMS ST (dados reais)
+
+                    // ✅ BIBLIOTECA CALCULA vBCST e vICMSST AUTOMATICAMENTE
+                    error_log("✅ CST 10 - Dados ST configurados: Margem {$margemST}%, Alíquota {$aliquotaICMS}%");
                 }
             } elseif (in_array($cst, ['40', '41', '50'])) {
                 // CSTs isentos/não tributados - não precisam de campos adicionais
             } elseif ($cst === '60') {
-                // CST 60 - ICMS cobrado anteriormente por ST
-                // ✅ CORREÇÃO: Usar valores reais de ST retido
-                $valorSTRetido = (float)($produto['valor_st_retido'] ?? 0);
-                $baseSTRetido = (float)($produto['base_st_retido'] ?? $valorBase);
+                // ✅ CST 60 - ICMS cobrado anteriormente por ST - CALCULAR DINAMICAMENTE
+                $margemST = (float)$produto['margem_st'];
+                $aliquotaICMS = (float)$produto['aliquota_icms'];
 
-                $std->vBCSTRet = $baseSTRetido; // Base de cálculo do ST retido
-                $std->vICMSSTRet = $valorSTRetido; // Valor do ST retido
+                // Validar se dados ST estão configurados
+                if (!$margemST || !$aliquotaICMS) {
+                    throw new Exception("Produto '{$produto['nome']}' com CST 60 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                }
+
+                // ✅ CALCULAR DINAMICAMENTE (sem campos valor_st_retido/base_st_retido)
+                $baseSTRetido = $valorBase * (1 + ($margemST / 100));
+                $valorSTRetido = $baseSTRetido * ($aliquotaICMS / 100);
+
+                $std->vBCSTRet = round($baseSTRetido, 2); // Base de cálculo do ST retido
+                $std->vICMSSTRet = round($valorSTRetido, 2); // Valor do ST retido
 
                 // CST 60 não tem ICMS próprio (já foi pago pelo substituto)
                 $std->vBC = 0;
                 $std->vICMS = 0;
                 $std->pICMS = 0;
+
+                error_log("✅ CST 60 - ST calculado dinamicamente: Base R$ {$baseSTRetido}, Valor R$ {$valorSTRetido}");
             }
 
             // Usar método genérico para todos os CSTs

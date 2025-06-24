@@ -251,6 +251,110 @@ const NfePage: React.FC = () => {
   const [motivoInutilizacao, setMotivoInutilizacao] = useState('');
   const [inutilizandoNFe, setInutilizandoNFe] = useState(false);
 
+  // ✅ NOVO: Estados para clonagem de NFe
+  const [showClonagemModal, setShowClonagemModal] = useState(false);
+  const [nfeParaClonar, setNfeParaClonar] = useState<NFe | null>(null);
+  const [clonandoNFe, setClonandoNFe] = useState(false);
+
+  // ✅ NOVO: Função para clonar NFe
+  const handleClonarNFe = (nfe: NFe) => {
+    setNfeParaClonar(nfe);
+    setShowClonagemModal(true);
+  };
+
+  // ✅ NOVO: Função para confirmar clonagem
+  const handleConfirmarClonagem = async () => {
+    if (!nfeParaClonar) return;
+
+    try {
+      setClonandoNFe(true);
+
+      // Buscar dados completos da NFe original
+      const { data: nfeOriginal, error: nfeError } = await supabase
+        .from('pdv')
+        .select('*')
+        .eq('id', nfeParaClonar.id)
+        .single();
+
+      if (nfeError) throw nfeError;
+
+      // Buscar produtos da NFe original
+      const { data: produtosOriginais, error: produtosError } = await supabase
+        .from('pdv_itens')
+        .select('*')
+        .eq('pdv_id', nfeParaClonar.id);
+
+      if (produtosError) throw produtosError;
+
+      // Os pagamentos estão incluídos nos dados da própria NFe
+
+      // As chaves de referência estão no campo chaves_referenciadas da própria NFe
+
+      // Preparar dados da NFe clonada (removendo campos que serão gerados automaticamente)
+      const { id, created_at, updated_at, ...nfeOriginalSemIds } = nfeOriginal;
+      const nfeClonada = {
+        ...nfeOriginalSemIds,
+        numero_documento: null, // Será gerado automaticamente
+        status_nfe: 'rascunho', // Sempre criar como rascunho
+        chave_nfe: null, // Será gerada na emissão
+        protocolo_nfe: null, // Limpar protocolo
+        data_emissao_nfe: null, // Limpar data de emissão
+        xml_nfe: null // Limpar XML
+      };
+
+      // Criar NFe clonada
+      const { data: nfeCriada, error: criarError } = await supabase
+        .from('pdv')
+        .insert(nfeClonada)
+        .select()
+        .single();
+
+      if (criarError) throw criarError;
+
+      // Clonar produtos
+      if (produtosOriginais && produtosOriginais.length > 0) {
+        const produtosClonados = produtosOriginais.map(produto => {
+          const { id, created_at, updated_at, ...produtoSemIds } = produto;
+          return {
+            ...produtoSemIds,
+            pdv_id: nfeCriada.id
+          };
+        });
+
+        const { error: produtosCloneError } = await supabase
+          .from('pdv_itens')
+          .insert(produtosClonados);
+
+        if (produtosCloneError) throw produtosCloneError;
+      }
+
+      // Pagamentos já estão incluídos na NFe clonada (campo JSON)
+
+      // Fechar modal
+      setShowClonagemModal(false);
+      setNfeParaClonar(null);
+
+      // Recarregar lista
+      await loadNfes();
+
+      // Abrir NFe clonada para edição
+      const nfeParaEdicao = {
+        ...nfeCriada,
+        produtos: produtosOriginais || []
+      };
+
+      handleEditarRascunho(nfeParaEdicao);
+
+      showToast('NFe clonada com sucesso!', 'success');
+
+    } catch (error) {
+      console.error('Erro ao clonar NFe:', error);
+      showToast('Erro ao clonar NFe. Tente novamente.', 'error');
+    } finally {
+      setClonandoNFe(false);
+    }
+  };
+
   // Funções para ações da NFe
   const handleInutilizar = (nfe: NFe) => {
     setNfeParaInutilizar(nfe);
@@ -900,6 +1004,18 @@ const NfePage: React.FC = () => {
               {/* Separador */}
               <div className="border-t border-gray-700 my-1"></div>
 
+              {/* ✅ NOVO: Clonar NFe */}
+              <button
+                onClick={() => handleAction(() => handleClonarNFe(nfe))}
+                className="w-full px-4 py-2 text-left text-sm text-cyan-400 hover:bg-gray-700 flex items-center gap-2"
+              >
+                <Copy size={14} />
+                Clonar NFe
+              </button>
+
+              {/* Separador */}
+              <div className="border-t border-gray-700 my-1"></div>
+
               {/* Ações para NFe Autorizadas */}
               {nfe.status_nfe === 'autorizada' && (
                 <>
@@ -1488,6 +1604,70 @@ const NfePage: React.FC = () => {
                   </>
                 ) : (
                   'Confirmar Inutilização'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NOVO: Modal de Clonagem */}
+      {showClonagemModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-cyan-400 mb-4">
+              📋 Clonar NFe
+            </h3>
+
+            <div className="bg-cyan-900/20 border border-cyan-500/30 rounded-lg p-4 mb-4">
+              <p className="text-cyan-300 text-sm mb-2">
+                <strong>CLONAGEM DE NFe:</strong> Uma cópia será criada
+              </p>
+              <p className="text-gray-300 text-sm">
+                NFe nº <strong>{nfeParaClonar?.numero_documento}</strong> será clonada com:
+              </p>
+              <ul className="text-gray-300 text-sm mt-2 ml-4 list-disc">
+                <li>Todos os produtos e quantidades</li>
+                <li>Dados do destinatário</li>
+                <li>Formas de pagamento</li>
+                <li>Chaves de referência (se houver)</li>
+              </ul>
+            </div>
+
+            <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 mb-4">
+              <p className="text-blue-300 text-sm">
+                <strong>💡 A NFe clonada será criada como:</strong>
+              </p>
+              <ul className="text-gray-300 text-sm mt-1 ml-4 list-disc">
+                <li>Status: <strong>Rascunho</strong></li>
+                <li>Número: <strong>Será gerado automaticamente</strong></li>
+                <li>Data: <strong>Data atual</strong></li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowClonagemModal(false);
+                  setNfeParaClonar(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                disabled={clonandoNFe}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarClonagem}
+                disabled={clonandoNFe}
+                className="flex-1 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {clonandoNFe ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Clonando...
+                  </>
+                ) : (
+                  'Confirmar Clonagem'
                 )}
               </button>
             </div>
@@ -3242,7 +3422,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           aliquota_cofins: produto.aliquota_cofins,
           cst_ipi: produto.cst_ipi,
           aliquota_ipi: produto.aliquota_ipi,
-          cest: produto.cest
+          cest: produto.cest,
+          margem_st: produto.margem_st // ✅ CORREÇÃO CRÍTICA: Incluir margem ST no payload
         })),
         totais: {
           valor_produtos: parseFloat(nfeData.totais.valor_produtos?.toString() || '0'),
@@ -5933,6 +6114,7 @@ const ProdutosSection: React.FC<{
           aliquota_ipi,
           valor_ipi,
           cest,
+          margem_st,
           peso_liquido,
           unidade_medida:unidade_medida_id (
             id,
@@ -6118,6 +6300,7 @@ const ProdutosSection: React.FC<{
 
       // OUTROS
       cest: produtoSelecionado.cest,
+      margem_st: produtoSelecionado.margem_st, // ✅ CORREÇÃO CRÍTICA: Incluir margem ST
       peso_liquido: produtoSelecionado.peso_liquido
     };
 
@@ -6274,6 +6457,7 @@ const ProdutosSection: React.FC<{
           aliquota_cofins,
           aliquota_ipi,
           cest,
+          margem_st,
           peso_liquido,
           unidade_medida:unidade_medida_id (
             id,
@@ -7122,6 +7306,74 @@ const ProdutosSection: React.FC<{
                   </div>
                 </div>
               </div>
+
+              {/* ✅ SUBSTITUIÇÃO TRIBUTÁRIA (ST) */}
+              {(() => {
+                const cstICMS = (produtoDetalhesFiscais as any).cst_icms;
+                const csosnICMS = (produtoDetalhesFiscais as any).csosn_icms;
+                const temST = ['10', '30', '60', '70', '90'].includes(cstICMS) ||
+                             ['201', '202', '203', '500', '900'].includes(csosnICMS);
+
+                return temST ? (
+                  <div className="bg-orange-900/20 border border-orange-700/50 rounded-lg p-4">
+                    <h4 className="text-lg font-semibold text-orange-300 mb-4 flex items-center gap-2">
+                      ⚠️ Substituição Tributária (ST)
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Margem ST (%) <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          value={(produtoDetalhesFiscais as any).margem_st || ''}
+                          onChange={(e) => {
+                            const valor = parseFloat(e.target.value) || null;
+                            const novosProdutos = produtos.map((p: any) =>
+                              p.id === (produtoDetalhesFiscais as any).id
+                                ? { ...p, margem_st: valor }
+                                : p
+                            );
+                            onChange(novosProdutos);
+                            setProdutoDetalhesFiscais((prev: any) => ({
+                              ...prev,
+                              margem_st: valor
+                            }));
+                          }}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                          placeholder="Ex: 30.0"
+                        />
+                        <p className="text-xs text-orange-300 mt-1">
+                          Margem de Valor Agregado para ST
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Alíquota ICMS (%) <span className="text-red-400">*</span>
+                        </label>
+                        <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                          {(produtoDetalhesFiscais as any).aliquota_icms || '0,00'}%
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Alíquota ICMS (usada também para ST)
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Informações sobre ST */}
+                    <div className="mt-4 p-3 bg-orange-900/10 border border-orange-700/30 rounded-lg">
+                      <div className="text-xs text-orange-200">
+                        <p className="mb-1"><strong>Tipo ST:</strong> {cstICMS ? `CST ${cstICMS}` : `CSOSN ${csosnICMS}`}</p>
+                        <p className="mb-1"><strong>CEST:</strong> {(produtoDetalhesFiscais as any).cest || 'Não informado'}</p>
+                        <p><strong>💡 Dica:</strong> Configure a margem ST conforme legislação do seu estado. Consulte seu contador para os valores corretos.</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             {/* Rodapé */}
