@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 // ✅ DEBUG: Log início da execução
 error_log("=== INÍCIO EMISSÃO NFE === " . date('Y-m-d H:i:s'));
+error_log("🔥 VERSÃO CORRIGIDA - CACHE LIMPO - STATUS 104 CORRIGIDO");
 error_log("REQUEST_METHOD: " . $_SERVER['REQUEST_METHOD']);
 error_log("CONTENT_TYPE: " . ($_SERVER['CONTENT_TYPE'] ?? 'N/A'));
 
@@ -1194,8 +1195,13 @@ try {
     error_log("🔍 ANALISANDO RESPOSTA SEFAZ - Status: {$status} - {$motivo}");
 
     // Status 103 = Lote recebido com sucesso (precisa consultar recibo)
-    if ($status === '103') {
-        error_log("📋 LOTE RECEBIDO - Consultando recibo para obter resultado final");
+    // Status 104 = Lote processado (também precisa consultar recibo para obter status individual)
+    if ($status === '103' || $status === '104') {
+        if ($status === '103') {
+            error_log("📋 LOTE RECEBIDO (103) - Consultando recibo para obter resultado final");
+        } else {
+            error_log("📋 LOTE PROCESSADO (104) - Consultando recibo para extrair status individual da NFe");
+        }
 
         // Extrair número do recibo
         if (empty($recibo) || $recibo === 'RECIBO_NAO_ENCONTRADO') {
