@@ -1589,15 +1589,19 @@ try {
         ];
     }
 
-    // VALIDAÇÃO CRÍTICA - SEGUINDO AS 4 LEIS NFe
-    // Verificar se NFe foi realmente autorizada (Status 100)
+    // VALIDAÇÃO CRÍTICA - SEGUINDO DOCUMENTAÇÃO OFICIAL ROBERTO MACHADO (sped-nfe)
+    // Conforme documentação: Status individual da NFe deve ser 100 ou 150 para autorização
     error_log("🔍 DEBUG VALIDAÇÃO FINAL:");
     error_log("  - Status recebido: '{$status}'");
     error_log("  - Motivo: '{$motivo}'");
     error_log("  - Protocolo: " . ($protocolo ? $protocolo : 'VAZIO'));
     error_log("  - Tipo do status: " . gettype($status));
 
-    if ($status !== '100') {
+    // ✅ CORREÇÃO BASEADA NA DOCUMENTAÇÃO OFICIAL:
+    // Status 100 = NFe autorizada
+    // Status 150 = NFe autorizada fora de prazo
+    // Qualquer outro status = ERRO na NFe
+    if ($status !== '100' && $status !== '150') {
         error_log("❌ NFe NÃO AUTORIZADA - Status: {$status} - {$motivo}");
 
         $erroTraduzido = traduzirErroSefaz($status, $motivo);
