@@ -714,39 +714,6 @@ try {
             // Usar método específico para Simples Nacional
             $make->tagICMSSN($std);
 
-            // ✅ DEBUG CRÍTICO: Verificar se os valores foram aplicados no XML
-            if ($csosn === '500') {
-                // Obter XML parcial para verificar se os valores foram aplicados
-                try {
-                    $xmlParcial = $make->getXML();
-
-                    // Extrair valores do XML gerado
-                    preg_match('/<vBCSTRet>(.*?)<\/vBCSTRet>/', $xmlParcial, $vBCSTRetMatch);
-                    preg_match('/<pST>(.*?)<\/pST>/', $xmlParcial, $pSTMatch);
-                    preg_match('/<vICMSSTRet>(.*?)<\/vICMSSTRet>/', $xmlParcial, $vICMSSTRetMatch);
-
-                    $vBCSTRetXML = $vBCSTRetMatch[1] ?? 'NÃO ENCONTRADO';
-                    $pSTXML = $pSTMatch[1] ?? 'NÃO ENCONTRADO';
-                    $vICMSSTRetXML = $vICMSSTRetMatch[1] ?? 'NÃO ENCONTRADO';
-
-                    error_log("🔍 DEBUG XML APÓS tagICMSSN():");
-                    error_log("  - vBCSTRet no XML: {$vBCSTRetXML}");
-                    error_log("  - pST no XML: {$pSTXML}");
-                    error_log("  - vICMSSTRet no XML: {$vICMSSTRetXML}");
-
-                    // Verificar se os valores estão corretos
-                    if ($vBCSTRetXML != '6.50' || $pSTXML != '18.0000' || $vICMSSTRetXML != '1.17') {
-                        error_log("❌ VALORES INCORRETOS NO XML! Biblioteca ignorou os valores definidos.");
-                        error_log("  - Esperado: vBCSTRet=6.50, pST=18.0000, vICMSSTRet=1.17");
-                        error_log("  - Encontrado: vBCSTRet={$vBCSTRetXML}, pST={$pSTXML}, vICMSSTRet={$vICMSSTRetXML}");
-                    } else {
-                        error_log("✅ VALORES CORRETOS NO XML!");
-                    }
-                } catch (Exception $e) {
-                    error_log("⚠️ Erro ao verificar XML parcial: " . $e->getMessage());
-                }
-            }
-
             // ✅ CORREÇÃO CRÍTICA: Para CSOSN 500, a biblioteca sped-nfe NÃO adiciona automaticamente
             // os valores aos totalizadores. Precisamos fazer isso manualmente.
             if ($csosn === '500') {
