@@ -727,38 +727,14 @@ try {
             // Usar método específico para Simples Nacional
             $make->tagICMSSN($std);
 
-            // ✅ CORREÇÃO CRÍTICA: Para CSOSN 500, a biblioteca sped-nfe NÃO adiciona automaticamente
-            // os valores aos totalizadores. Precisamos fazer isso manualmente.
+            // ✅ SOLUÇÃO CORRETA BASEADA EM SISTEMAS DE REFERÊNCIA (ACBr/sped-nfe):
+            // A biblioteca sped-nfe calcula automaticamente os totais ST via tagICMSSN()
+            // NÃO manipular totalizadores manualmente - deixar a biblioteca fazer seu trabalho
             if ($csosn === '500') {
-                try {
-                    // Acessar os totalizadores internos da biblioteca via reflexão
-                    $reflection = new ReflectionClass($make);
-                    $stdTotProperty = $reflection->getProperty('stdTot');
-                    $stdTotProperty->setAccessible(true);
-                    $stdTot = $stdTotProperty->getValue($make);
-
-                    // ✅ CORREÇÃO ERRO 533: Garantir que os valores sejam exatamente os mesmos
-                    // que serão usados nos totais finais
-                    $valorBCST = (float)round($std->vBCSTRet, 2);
-                    $valorST = (float)round($std->vICMSSTRet, 2);
-
-                    // Verificar se os totalizadores existem
-                    if (!isset($stdTot->vBCST)) $stdTot->vBCST = 0.00;
-                    if (!isset($stdTot->vST)) $stdTot->vST = 0.00;
-
-                    // Adicionar manualmente aos totalizadores (como outros CSOSN fazem automaticamente)
-                    $stdTot->vBCST += $valorBCST;    // Base ST retido
-                    $stdTot->vST += $valorST;        // Valor ST retido
-
-                    error_log("✅ CSOSN 500 - Totalizadores corrigidos manualmente:");
-                    error_log("  - Item vBCSTRet: " . $std->vBCSTRet . " -> Totalizador: " . $valorBCST);
-                    error_log("  - Item vICMSSTRet: " . $std->vICMSSTRet . " -> Totalizador: " . $valorST);
-                    error_log("  - stdTot->vBCST total: " . $stdTot->vBCST);
-                    error_log("  - stdTot->vST total: " . $stdTot->vST);
-                } catch (Exception $e) {
-                    error_log("❌ ERRO na manipulação dos totalizadores CSOSN 500: " . $e->getMessage());
-                    // Fallback: não manipular totalizadores se houver erro
-                }
+                error_log("✅ CSOSN 500 - Configurado para cálculo automático da biblioteca:");
+                error_log("  - vBCSTRet: " . $std->vBCSTRet);
+                error_log("  - vICMSSTRet: " . $std->vICMSSTRet);
+                error_log("  - Biblioteca calculará totais automaticamente");
             }
         } elseif (!$isSimples && $temCST) {
             // Regime Normal/Lucro Real/Lucro Presumido - usar CST
@@ -976,71 +952,36 @@ try {
         }
     }
 
-    // ✅ CORREÇÃO CRÍTICA: Calcular totais ST manualmente para garantir consistência
-    // Recalcular todos os valores ST baseado nos produtos processados
-    $totalICMSSTBC = 0; // Base de cálculo do ICMS ST
-    $totalICMSST = 0;   // Valor do ICMS ST
+    // ✅ SOLUÇÃO CORRETA: Usar totalizadores automáticos da biblioteca sped-nfe
+    // A biblioteca calcula automaticamente os totais ST quando usamos tagICMS() e tagICMSSN()
+    // NÃO recalcular manualmente - confiar na biblioteca oficial
 
-    foreach ($nfeData['produtos'] as $item => $produto) {
-        $valorProduto = (float)($produto['valor_total'] ?? 0);
-        $cst = $produto['cst_icms'] ?? '';
-        $csosn = $produto['csosn_icms'] ?? '';
-        $aliquotaICMS = (float)($produto['aliquota_icms'] ?? 0);
+    error_log("🔍 USANDO TOTALIZADORES AUTOMÁTICOS DA BIBLIOTECA SPED-NFE:");
+    error_log("  - Regime Simples Nacional: " . ($isSimples ? 'SIM' : 'NÃO'));
+    error_log("  - Total de produtos: " . count($nfeData['produtos']));
+    error_log("  - Biblioteca calculou totais ST automaticamente via tagICMS()/tagICMSSN()");
 
-        // Calcular ST baseado no tipo de tributação
-        if ($isSimples && $csosn === '500') {
-            // CSOSN 500 - ICMS ST retido (Simples Nacional)
-            $margemSTPresumida = 30.0; // Mesma margem usada nos itens
-            $baseSTCalculada = $valorProduto * (1 + ($margemSTPresumida / 100));
-            $aliquotaSTTotal = 20.0; // ICMS ST (18%) + FCP (2%) = 20% total
-            $valorSTCalculado = $baseSTCalculada * ($aliquotaSTTotal / 100);
+    // ✅ SOLUÇÃO CORRETA: Usar totalizadores automáticos da biblioteca sped-nfe
+    // Acessar os totalizadores internos que foram calculados automaticamente
+    $reflection = new ReflectionClass($make);
+    $stdTotProperty = $reflection->getProperty('stdTot');
+    $stdTotProperty->setAccessible(true);
+    $stdTotBiblioteca = $stdTotProperty->getValue($make);
 
-            $totalICMSSTBC += round($baseSTCalculada, 2);
-            $totalICMSST += round($valorSTCalculado, 2);
-
-            error_log("✅ TOTAIS RECALCULADOS CSOSN 500 - Base ST: R$ " . round($baseSTCalculada, 2) . ", Valor ST: R$ " . round($valorSTCalculado, 2));
-        } elseif (!$isSimples && $cst === '10') {
-            // CST 10 - Produto com ST (Regime Normal)
-            $margemST = (float)($produto['margem_st'] ?? 30);
-            $aliquotaST = (float)($produto['aliquota_st'] ?? $aliquotaICMS);
-            $baseST = round($valorProduto * (1 + ($margemST / 100)), 2);
-            $valorST = round($baseST * ($aliquotaST / 100), 2) - round($valorProduto * ($aliquotaICMS / 100), 2);
-
-            $totalICMSSTBC += $baseST;
-            $totalICMSST += $valorST;
-
-            error_log("✅ TOTAIS RECALCULADOS CST 10 - Base ST: R$ {$baseST}, Valor ST: R$ {$valorST}");
-        } elseif (!$isSimples && $cst === '60') {
-            // CST 60 - ST retido anteriormente (Regime Normal)
-            $valorSTRetido = (float)($produto['valor_st_retido'] ?? 0);
-            $baseSTRetido = (float)($produto['base_st_retido'] ?? $valorProduto);
-
-            $totalICMSSTBC += $baseSTRetido;
-            $totalICMSST += $valorSTRetido;
-
-            error_log("✅ TOTAIS RECALCULADOS CST 60 - Base ST: R$ {$baseSTRetido}, Valor ST: R$ {$valorSTRetido}");
-        } elseif ($isSimples && in_array($csosn, ['201', '202', '203'])) {
-            // CSOSN 201/202/203 - Com crédito e ST (Simples Nacional)
-            $margemST = (float)($produto['margem_st'] ?? 30);
-            $aliquotaST = (float)($produto['aliquota_st'] ?? 18);
-            $baseST = round($valorProduto * (1 + ($margemST / 100)), 2);
-            $valorST = round($baseST * ($aliquotaST / 100), 2);
-
-            $totalICMSSTBC += $baseST;
-            $totalICMSST += $valorST;
-
-            error_log("✅ TOTAIS RECALCULADOS CSOSN {$csosn} - Base ST: R$ {$baseST}, Valor ST: R$ {$valorST}");
-        }
-    }
+    error_log("🔍 TOTALIZADORES AUTOMÁTICOS DA BIBLIOTECA:");
+    error_log("  - vBCST (Base ST): " . ($stdTotBiblioteca->vBCST ?? 'NULL'));
+    error_log("  - vST (Valor ST): " . ($stdTotBiblioteca->vST ?? 'NULL'));
+    error_log("  - vBC (Base ICMS): " . ($stdTotBiblioteca->vBC ?? 'NULL'));
+    error_log("  - vICMS (Valor ICMS): " . ($stdTotBiblioteca->vICMS ?? 'NULL'));
 
     $std = new stdClass();
     $std->vBC = $totalICMSBC; // Base de cálculo real do ICMS
     $std->vICMS = $totalICMS; // ICMS real calculado
     $std->vICMSDeson = 0.00;
 
-    // ✅ USAR TOTAIS RECALCULADOS MANUALMENTE (garantia de consistência)
-    $std->vBCST = $totalICMSSTBC; // Base ST recalculada
-    $std->vST = $totalICMSST;     // Valor ST recalculado
+    // ✅ USAR TOTALIZADORES AUTOMÁTICOS DA BIBLIOTECA (sem manipulação manual)
+    $std->vBCST = $stdTotBiblioteca->vBCST ?? 0.00; // Base ST calculada automaticamente
+    $std->vST = $stdTotBiblioteca->vST ?? 0.00;     // Valor ST calculado automaticamente
 
     $std->vProd = $totalProdutos; // Valor real dos produtos
     $std->vFrete = 0.00;
