@@ -255,11 +255,54 @@ const NfePage: React.FC = () => {
   const [showClonagemModal, setShowClonagemModal] = useState(false);
   const [nfeParaClonar, setNfeParaClonar] = useState<NFe | null>(null);
   const [clonandoNFe, setClonandoNFe] = useState(false);
+  const [proximoNumeroNFe, setProximoNumeroNFe] = useState<number | null>(null);
 
   // ✅ NOVO: Função para clonar NFe
-  const handleClonarNFe = (nfe: NFe) => {
-    setNfeParaClonar(nfe);
-    setShowClonagemModal(true);
+  const handleClonarNFe = async (nfe: NFe) => {
+    try {
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        showToast('Usuário não autenticado', 'error');
+        return;
+      }
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData) {
+        showToast('Dados do usuário não encontrados', 'error');
+        return;
+      }
+
+      // Buscar próximo número disponível
+      const { data: ultimaNFe, error } = await supabase
+        .from('pdv')
+        .select('numero_documento')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('modelo_documento', 55)
+        .not('numero_documento', 'is', null)
+        .order('numero_documento', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Erro ao buscar último número:', error);
+        setProximoNumeroNFe(null);
+      } else {
+        const ultimoNumero = ultimaNFe?.[0]?.numero_documento || 0;
+        setProximoNumeroNFe(ultimoNumero + 1);
+      }
+
+      setNfeParaClonar(nfe);
+      setShowClonagemModal(true);
+    } catch (error) {
+      console.error('Erro ao preparar clonagem:', error);
+      showToast('Erro ao preparar clonagem. Tente novamente.', 'error');
+    }
   };
 
   // ✅ NOVO: Função para confirmar clonagem
@@ -291,15 +334,41 @@ const NfePage: React.FC = () => {
       // As chaves de referência estão no campo chaves_referenciadas da própria NFe
 
       // Preparar dados da NFe clonada (removendo campos que serão gerados automaticamente)
-      const { id, created_at, updated_at, ...nfeOriginalSemIds } = nfeOriginal;
+      const {
+        id,
+        created_at,
+        updated_at,
+        numero_documento,  // ✅ REMOVER: Para gerar próximo número automaticamente
+        numero_nfe,        // ✅ REMOVER: Para gerar próximo número automaticamente
+        ...nfeOriginalSemIds
+      } = nfeOriginal;
+
       const nfeClonada = {
         ...nfeOriginalSemIds,
-        numero_documento: null, // Será gerado automaticamente
+        numero_documento: proximoNumeroNFe, // ✅ Usar número calculado
         status_nfe: 'rascunho', // Sempre criar como rascunho
         chave_nfe: null, // Será gerada na emissão
         protocolo_nfe: null, // Limpar protocolo
         data_emissao_nfe: null, // Limpar data de emissão
-        xml_nfe: null // Limpar XML
+        xml_nfe: null, // Limpar XML
+        // ✅ CORREÇÃO CRÍTICA: Atualizar dados_nfe com número correto
+        dados_nfe: nfeOriginal.dados_nfe ? (() => {
+          try {
+            let dadosNfe = typeof nfeOriginal.dados_nfe === 'string'
+              ? JSON.parse(nfeOriginal.dados_nfe)
+              : nfeOriginal.dados_nfe;
+
+            // Atualizar número nos dados_nfe
+            if (dadosNfe.identificacao) {
+              dadosNfe.identificacao.numero = proximoNumeroNFe?.toString() || '';
+            }
+
+            return JSON.stringify(dadosNfe);
+          } catch (error) {
+            console.error('Erro ao atualizar dados_nfe:', error);
+            return nfeOriginal.dados_nfe;
+          }
+        })() : null
       };
 
       // Criar NFe clonada
@@ -333,6 +402,7 @@ const NfePage: React.FC = () => {
       // Fechar modal
       setShowClonagemModal(false);
       setNfeParaClonar(null);
+      setProximoNumeroNFe(null);
 
       // Recarregar lista
       await loadNfes();
@@ -342,6 +412,10 @@ const NfePage: React.FC = () => {
         ...nfeCriada,
         produtos: produtosOriginais || []
       };
+
+      console.log('🔍 NFe clonada criada:', nfeCriada);
+      console.log('🔍 Número da NFe clonada:', nfeCriada.numero_documento);
+      console.log('🔍 NFe para edição:', nfeParaEdicao);
 
       handleEditarRascunho(nfeParaEdicao);
 
@@ -1624,7 +1698,10 @@ const NfePage: React.FC = () => {
                 <strong>CLONAGEM DE NFe:</strong> Uma cópia será criada
               </p>
               <p className="text-gray-300 text-sm">
-                NFe nº <strong>{nfeParaClonar?.numero_documento}</strong> será clonada com:
+                NFe nº <strong>{nfeParaClonar?.numero_documento}</strong> será clonada como:
+              </p>
+              <p className="text-green-300 text-sm font-semibold mt-1">
+                ➜ Nova NFe nº <strong>{proximoNumeroNFe || '(calculando...)'}</strong>
               </p>
               <ul className="text-gray-300 text-sm mt-2 ml-4 list-disc">
                 <li>Todos os produtos e quantidades</li>
@@ -1650,6 +1727,7 @@ const NfePage: React.FC = () => {
                 onClick={() => {
                   setShowClonagemModal(false);
                   setNfeParaClonar(null);
+                  setProximoNumeroNFe(null);
                 }}
                 className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
                 disabled={clonandoNFe}
