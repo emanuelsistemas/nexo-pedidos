@@ -165,6 +165,26 @@ try {
 
     // Inicializar Make (MÉTODO NATIVO)
     $make = new \NFePHP\NFe\Make();
+
+    // 🔍 TESTE CRÍTICO: Verificar se há configurações específicas para CEST
+    // Baseado no fórum SAP, pode haver configurações internas necessárias
+    error_log("🔍 BIBLIOTECA SPED-NFE - Versão e configurações:");
+    error_log("  - Classe Make: " . get_class($make));
+    error_log("  - Métodos disponíveis: " . implode(', ', array_slice(get_class_methods($make), 0, 10)) . "...");
+
+    // Verificar se há propriedades ou métodos específicos para CEST
+    $reflection = new ReflectionClass($make);
+    $properties = $reflection->getProperties();
+    error_log("  - Propriedades da classe: " . count($properties));
+
+    // Verificar se há método específico para configurar CEST
+    if (method_exists($make, 'setCEST')) {
+        error_log("✅ MÉTODO setCEST ENCONTRADO");
+    } elseif (method_exists($make, 'enableCEST')) {
+        error_log("✅ MÉTODO enableCEST ENCONTRADO");
+    } else {
+        error_log("❌ NENHUM MÉTODO ESPECÍFICO PARA CEST ENCONTRADO");
+    }
     
     // MONTAGEM DA NFe USANDO MÉTODOS NATIVOS DA BIBLIOTECA
     // Identificação da NFe
@@ -492,18 +512,37 @@ try {
         $std->xProd = $nomeProduto;
         $std->NCM = $produto['ncm']; // NCM real obrigatório
 
-        // ✅ CORREÇÃO: CEST obrigatório para produtos com ST (Substituição Tributária)
-        if (!empty($produto['cest'])) {
-            $std->CEST = $produto['cest']; // CEST obrigatório para ST
-            error_log("✅ CEST adicionado ao produto {$item}: " . $produto['cest']);
-        } else {
-            // Log se produto ST não tem CEST
-            $situacaoTributaria = $produto['situacao_tributaria'] ?? '';
-            if (strpos($situacaoTributaria, 'st') !== false) {
-                error_log("⚠️ AVISO: Produto {$item} com ST mas sem CEST informado");
+        // ✅ CORREÇÃO CRÍTICA: CEST deve vir IMEDIATAMENTE APÓS NCM (conforme documentação oficial)
+        // Verificar se produto tem ST baseado nos códigos CST/CSOSN
+        $cstICMS = $produto['cst_icms'] ?? '';
+        $csosnICMS = $produto['csosn_icms'] ?? '';
+        $temST = in_array($cstICMS, ['10', '30', '60', '70', '90']) ||
+                 in_array($csosnICMS, ['201', '202', '203', '500', '900']);
+
+        if ($temST) {
+            // Produto com ST - CEST é OBRIGATÓRIO
+            if (empty($produto['cest'])) {
+                throw new Exception("CEST é obrigatório para produto {$item} ({$nomeProduto}) com Substituição Tributária (CST/CSOSN: {$cstICMS}{$csosnICMS})");
             }
+
+            // Formatar CEST corretamente (7 dígitos com zeros à esquerda se necessário)
+            $cestFormatado = str_pad($produto['cest'], 7, '0', STR_PAD_LEFT);
+
+            // 🔍 TESTE CRÍTICO: Definir CEST como string explícita
+            $std->CEST = (string)$cestFormatado;
+
+            error_log("✅ CEST OBRIGATÓRIO adicionado APÓS NCM (ST): " . $produto['cest'] . " -> formatado: " . $cestFormatado);
+            error_log("🔍 DEBUG CEST - Tipo: " . gettype($std->CEST) . ", Valor: '{$std->CEST}', Tamanho: " . strlen($std->CEST));
+        } elseif (!empty($produto['cest'])) {
+            // Produto sem ST mas com CEST informado - incluir mesmo assim
+            $cestFormatado = str_pad($produto['cest'], 7, '0', STR_PAD_LEFT);
+            $std->CEST = (string)$cestFormatado;
+            error_log("✅ CEST opcional adicionado APÓS NCM (sem ST): " . $produto['cest'] . " -> formatado: " . $cestFormatado);
+        } else {
+            error_log("ℹ️ Produto {$item} sem ST e sem CEST - OK");
         }
 
+        // CFOP deve vir APÓS CEST (conforme documentação oficial)
         $std->CFOP = $produto['cfop']; // CFOP real obrigatório
         $std->uCom = $produto['unidade'] ?? 'UN';
         $std->qCom = (float)($produto['quantidade'] ?? 1);
@@ -521,7 +560,28 @@ try {
         $std->vOutro = null;
         $std->indTot = 1;
 
-        $make->tagprod($std);
+        // 🔍 DEBUG: Verificar objeto $std antes de chamar tagprod
+        error_log("🔍 DEBUG ANTES tagprod() - Objeto \$std completo: " . json_encode($std));
+        error_log("🔍 DEBUG ANTES tagprod() - CEST presente: " . (isset($std->CEST) ? "SIM ({$std->CEST})" : "NÃO"));
+
+        // 🔍 CORREÇÃO: Usar método tagprod normal com CEST incluído
+        // O erro anterior mostrou que tagCEST() existe mas causa problemas
+        try {
+            $make->tagprod($std);
+            error_log("🔍 DEBUG - tagprod() executado COM CEST incluído no objeto");
+
+            // Verificar se há erros na biblioteca após processar
+            $errors = $make->getErrors();
+            if (!empty($errors)) {
+                error_log("⚠️ ERROS DA BIBLIOTECA após tagprod(): " . json_encode($errors));
+            } else {
+                error_log("✅ NENHUM ERRO da biblioteca após tagprod()");
+            }
+        } catch (Exception $e) {
+            error_log("❌ ERRO CRÍTICO em tagprod(): " . $e->getMessage());
+            error_log("🔍 STACK TRACE: " . $e->getTraceAsString());
+            throw $e;
+        }
 
         // Tag IMPOSTO (container obrigatório)
         $std = new stdClass();
@@ -1059,6 +1119,48 @@ try {
     // GERAR XML (MÉTODO NATIVO)
     try {
         $xml = $make->getXML();
+
+        // 🔍 DEBUG: Verificar se CEST está no XML final
+        if (strpos($xml, '<CEST>') !== false) {
+            preg_match('/<CEST>(.*?)<\/CEST>/', $xml, $matches);
+            $cestNoXml = $matches[1] ?? 'NÃO ENCONTRADO';
+            error_log("✅ CEST ENCONTRADO NO XML: {$cestNoXml}");
+        } else {
+            error_log("❌ CEST NÃO ENCONTRADO NO XML FINAL!");
+            error_log("🔍 DEBUG: Verificando se há produtos no XML...");
+            if (strpos($xml, '<det ') !== false) {
+                error_log("✅ Produtos encontrados no XML");
+                // Buscar todos os produtos e verificar se algum tem CEST
+                preg_match_all('/<det nItem="(\d+)".*?<\/det>/s', $xml, $produtos);
+                error_log("🔍 Total de produtos no XML: " . count($produtos[0]));
+                foreach ($produtos[0] as $i => $produtoXml) {
+                    $nItem = $produtos[1][$i];
+                    if (strpos($produtoXml, '<CEST>') !== false) {
+                        error_log("✅ Produto {$nItem} TEM CEST no XML");
+                        // Extrair o CEST encontrado
+                        preg_match('/<CEST>(.*?)<\/CEST>/', $produtoXml, $cestMatch);
+                        $cestEncontrado = $cestMatch[1] ?? 'NÃO EXTRAÍDO';
+                        error_log("🔍 CEST encontrado no produto {$nItem}: {$cestEncontrado}");
+                    } else {
+                        error_log("❌ Produto {$nItem} NÃO TEM CEST no XML");
+                        // 🔍 ANÁLISE MINUCIOSA: Mostrar XML COMPLETO do produto
+                        error_log("🔍 XML COMPLETO do produto {$nItem}: {$produtoXml}");
+
+                        // Verificar se há alguma variação da tag CEST
+                        if (strpos($produtoXml, 'CEST') !== false) {
+                            error_log("⚠️ Palavra 'CEST' encontrada no XML, mas não como tag válida");
+                        }
+
+                        // Verificar posição do NCM e CFOP para entender a estrutura
+                        $posNCM = strpos($produtoXml, '<NCM>');
+                        $posCFOP = strpos($produtoXml, '<CFOP>');
+                        error_log("🔍 Posições no XML - NCM: {$posNCM}, CFOP: {$posCFOP}");
+                    }
+                }
+            } else {
+                error_log("❌ Nenhum produto encontrado no XML!");
+            }
+        }
     } catch (Exception $xmlError) {
         // Capturar erros da biblioteca
         $errors = $make->getErrors();
