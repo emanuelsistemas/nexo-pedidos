@@ -163,15 +163,34 @@ const ClientesPage: React.FC = () => {
     loadEmpresas();
   }, []);
 
-  // Selecionar automaticamente a primeira empresa quando elas forem carregadas
+  // Definir a empresa_id do usuário atual quando o formulário for inicializado
   useEffect(() => {
-    if (empresas.length > 0 && !formData.empresa_id) {
-      setFormData(prev => ({
-        ...prev,
-        empresa_id: empresas[0].id
-      }));
-    }
-  }, [empresas]);
+    const setUserEmpresaId = async () => {
+      if (!formData.empresa_id) {
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          if (!userData.user) return;
+
+          const { data: usuarioData } = await supabase
+            .from('usuarios')
+            .select('empresa_id')
+            .eq('id', userData.user.id)
+            .single();
+
+          if (usuarioData?.empresa_id) {
+            setFormData(prev => ({
+              ...prev,
+              empresa_id: usuarioData.empresa_id
+            }));
+          }
+        } catch (error) {
+          console.error('Erro ao obter empresa do usuário:', error);
+        }
+      }
+    };
+
+    setUserEmpresaId();
+  }, []);
 
   useEffect(() => {
     applyFilters();
@@ -195,10 +214,15 @@ const ClientesPage: React.FC = () => {
   const loadClientes = async () => {
     try {
       setIsLoading(true);
+      console.log('Iniciando carregamento de clientes...');
 
       // Obter o usuário atual
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      if (!userData.user) {
+        console.log('Usuário não autenticado');
+        return;
+      }
+      console.log('Usuário autenticado:', userData.user.id);
 
       // Obter a empresa do usuário
       const { data: usuarioData } = await supabase
@@ -207,7 +231,11 @@ const ClientesPage: React.FC = () => {
         .eq('id', userData.user.id)
         .single();
 
-      if (!usuarioData?.empresa_id) return;
+      if (!usuarioData?.empresa_id) {
+        console.log('Empresa do usuário não encontrada');
+        return;
+      }
+      console.log('Empresa do usuário:', usuarioData.empresa_id);
 
       // Buscar apenas os clientes da empresa do usuário
       const { data: clientesData, error } = await supabase
@@ -217,9 +245,13 @@ const ClientesPage: React.FC = () => {
         .or('deletado.is.null,deletado.eq.false')
         .order('nome');
 
-      console.log('Clientes encontrados:', clientesData?.length);
+      console.log('Query executada. Clientes encontrados:', clientesData?.length);
+      console.log('Dados dos clientes:', clientesData);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro na query de clientes:', error);
+        throw error;
+      }
 
       if (clientesData && clientesData.length > 0) {
         // Buscar todas as empresas para associar aos clientes
@@ -256,6 +288,12 @@ const ClientesPage: React.FC = () => {
   };
 
   const applyFilters = () => {
+    console.log('Aplicando filtros...');
+    console.log('Total de clientes antes dos filtros:', clientes.length);
+    console.log('Termo de busca:', searchTerm);
+    console.log('Filtro de empresa:', empresaFilter);
+    console.log('Filtro de tipo de cliente:', tipoClienteFilter);
+
     let filtered = [...clientes];
 
     // Aplicar filtro de busca
@@ -268,11 +306,13 @@ const ClientesPage: React.FC = () => {
           (cliente.emails && cliente.emails.some(email => email.toLowerCase().includes(searchLower))) ||
           cliente.endereco?.toLowerCase().includes(searchLower)
       );
+      console.log('Após filtro de busca:', filtered.length);
     }
 
     // Aplicar filtro de empresa
     if (empresaFilter !== 'todas') {
       filtered = filtered.filter(cliente => cliente.empresa_id === empresaFilter);
+      console.log('Após filtro de empresa:', filtered.length);
     }
 
     // Aplicar filtro de tipo de cliente
@@ -293,8 +333,10 @@ const ClientesPage: React.FC = () => {
             return true;
         }
       });
+      console.log('Após filtro de tipo de cliente:', filtered.length);
     }
 
+    console.log('Total de clientes filtrados final:', filtered.length);
     setFilteredClientes(filtered);
   };
 
@@ -953,6 +995,9 @@ const ClientesPage: React.FC = () => {
         usuario_id: (await supabase.auth.getUser()).data.user?.id
       };
 
+      console.log('Dados do cliente a serem salvos:', clienteData);
+      console.log('Empresa ID que será salva:', formData.empresa_id);
+
       let clienteId: string;
 
       if (editingCliente) {
@@ -1062,9 +1107,10 @@ const ClientesPage: React.FC = () => {
       }
 
       // Recarregar a lista e fechar o sidebar
-      loadClientes();
+      console.log('Cliente salvo com sucesso, recarregando lista...');
+      await loadClientes();
       setShowSidebar(false);
-      resetForm();
+      await resetForm();
     } catch (error: any) {
       console.error('Erro ao salvar cliente:', error);
       toast.error(`Erro ao salvar cliente: ${error.message}`);
@@ -1181,9 +1227,26 @@ const ClientesPage: React.FC = () => {
     }
   };
 
-  const resetForm = () => {
-    // Manter a empresa_id atual ao resetar o formulário
-    const currentEmpresaId = formData.empresa_id || (empresas.length > 0 ? empresas[0].id : '');
+  const resetForm = async () => {
+    // Obter a empresa_id do usuário atual
+    let currentEmpresaId = formData.empresa_id;
+
+    if (!currentEmpresaId) {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+          const { data: usuarioData } = await supabase
+            .from('usuarios')
+            .select('empresa_id')
+            .eq('id', userData.user.id)
+            .single();
+
+          currentEmpresaId = usuarioData?.empresa_id || '';
+        }
+      } catch (error) {
+        console.error('Erro ao obter empresa do usuário:', error);
+      }
+    }
 
     setFormData({
       tipo_documento: 'CNPJ',
@@ -1385,8 +1448,8 @@ const ClientesPage: React.FC = () => {
     }).format(valor);
   };
 
-  const handleAddNew = () => {
-    resetForm();
+  const handleAddNew = async () => {
+    await resetForm();
     setShowSidebar(true);
   };
 

@@ -371,6 +371,20 @@ const ProdutosPage: React.FC = () => {
     loadRegimeTributario();
   }, []);
 
+  // Fechar dropdown de CFOP quando clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (cfopDropdownOpen && !target.closest('.cfop-dropdown')) {
+        setCfopDropdownOpen(false);
+        setCfopSearchTerm('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [cfopDropdownOpen]);
+
   const loadRegimeTributario = async () => {
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -574,6 +588,67 @@ const ProdutosPage: React.FC = () => {
         type: 'warning'
       });
     }
+  };
+
+  // Função para filtrar CFOPs baseada na pesquisa
+  const filtrarCfops = () => {
+    if (!cfopSearchTerm.trim()) {
+      return cfopsDisponiveis;
+    }
+
+    const termo = cfopSearchTerm.toLowerCase();
+    return cfopsDisponiveis.filter(cfop =>
+      cfop.codigo.includes(termo) ||
+      cfop.descricao.toLowerCase().includes(termo)
+    );
+  };
+
+  // Função para selecionar um CFOP
+  const selecionarCfop = (cfop: { codigo: string; descricao: string }) => {
+    // Validar coerência com NCM se disponível
+    if (ncmValidacao.valido && ncmValidacao.temSubstituicaoTributaria !== undefined) {
+      validarCoerenciaCfopNcm(cfop.codigo, ncmValidacao.temSubstituicaoTributaria);
+    }
+
+    // Sugerir situação tributária baseada no CFOP (como sugestão, não obrigatório)
+    let situacaoSugerida = novoProduto.situacao_tributaria;
+
+    // CFOPs com Substituição Tributária - sugerir ST
+    if (['5405', '5401', '5403'].includes(cfop.codigo)) {
+      situacaoSugerida = 'tributado_st';
+    }
+    // CFOPs sem Substituição Tributária - sugerir tributação normal
+    else if (['5102', '5101', '5103', '5104', '5109', '5110', '5111', '5112', '5113', '5114', '5115', '5116', '5117', '5118', '5119', '5120', '5122', '5123'].includes(cfop.codigo)) {
+      situacaoSugerida = 'tributado_integral';
+    }
+
+    // Obter códigos fiscais para a situação sugerida
+    const codigosFiscais = obterCodigosFiscais(situacaoSugerida);
+
+    // Atualizar o produto com CFOP e situação tributária sugerida
+    setNovoProduto({
+      ...novoProduto,
+      cfop: cfop.codigo,
+      situacao_tributaria: situacaoSugerida,
+      // Aplicar códigos fiscais sugeridos
+      cst_icms: codigosFiscais.cst,
+      csosn_icms: codigosFiscais.csosn,
+      // Limpar CEST se a situação sugerida não for ST
+      cest: situacaoSugerida === 'tributado_st' ? novoProduto.cest : ''
+    });
+
+    // Mostrar toast informativo sobre a sugestão (não obrigatório)
+    if (situacaoSugerida !== novoProduto.situacao_tributaria) {
+      const situacaoTexto = situacaoSugerida === 'tributado_st'
+        ? 'ICMS por Substituição Tributária'
+        : 'Tributada Integralmente';
+
+      showMessage('info', `💡 Sugestão: CFOP ${cfop.codigo} sugere situação tributária "${situacaoTexto}". Você pode alterar se necessário.`);
+    }
+
+    // Fechar dropdown e limpar pesquisa
+    setCfopDropdownOpen(false);
+    setCfopSearchTerm('');
   };
 
   // Função para validar NCM sem aplicar regras automáticas (apenas para edição)
@@ -5152,43 +5227,68 @@ const ProdutosPage: React.FC = () => {
                                   </span>
                                 )}
                               </label>
-                              <select
-                                value={novoProduto.cfop || '5102'}
-                                onChange={(e) => {
-                                  const newCfop = e.target.value;
+                              <div className="relative cfop-dropdown">
+                                {/* Campo de exibição do CFOP selecionado */}
+                                <div
+                                  onClick={() => setCfopDropdownOpen(!cfopDropdownOpen)}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white cursor-pointer focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 flex items-center justify-between"
+                                >
+                                  <span className="truncate">
+                                    {novoProduto.cfop ? (
+                                      <>
+                                        {novoProduto.cfop} - {cfopsDisponiveis.find(c => c.codigo === novoProduto.cfop)?.descricao || 'CFOP selecionado'}
+                                      </>
+                                    ) : (
+                                      'Selecione um CFOP'
+                                    )}
+                                  </span>
+                                  <ChevronDown
+                                    size={16}
+                                    className={`transition-transform ${cfopDropdownOpen ? 'rotate-180' : ''}`}
+                                  />
+                                </div>
 
-                                  // Validar coerência com NCM se disponível
-                                  if (ncmValidacao.valido && ncmValidacao.temSubstituicaoTributaria !== undefined) {
-                                    validarCoerenciaCfopNcm(newCfop, ncmValidacao.temSubstituicaoTributaria);
-                                  }
+                                {/* Dropdown com pesquisa */}
+                                {cfopDropdownOpen && (
+                                  <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-64 overflow-hidden">
+                                    {/* Campo de pesquisa */}
+                                    <div className="p-2 border-b border-gray-700">
+                                      <input
+                                        type="text"
+                                        value={cfopSearchTerm}
+                                        onChange={(e) => setCfopSearchTerm(e.target.value)}
+                                        placeholder="Pesquisar CFOP..."
+                                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-primary-500"
+                                        autoFocus
+                                      />
+                                    </div>
 
-                                  // Apenas atualizar o CFOP, sem alterar situação tributária automaticamente
-                                  setNovoProduto({
-                                    ...novoProduto,
-                                    cfop: newCfop
-                                  });
-                                }}
-                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                style={{
-                                  maxWidth: '100%',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}
-                                required
-                              >
-                                {cfopsDisponiveis.map((cfop) => (
-                                  <option
-                                    key={cfop.codigo}
-                                    value={cfop.codigo}
-                                    title={`${cfop.codigo} - ${cfop.descricao}`}
-                                  >
-                                    {cfop.codigo} - {cfop.descricao.length > 50 ? cfop.descricao.substring(0, 50) + '...' : cfop.descricao}
-                                  </option>
-                                ))}
-                              </select>
+                                    {/* Lista de CFOPs filtrados */}
+                                    <div className="max-h-48 overflow-y-auto">
+                                      {filtrarCfops().map((cfop) => (
+                                        <div
+                                          key={cfop.codigo}
+                                          onClick={() => selecionarCfop(cfop)}
+                                          className={`px-3 py-2 cursor-pointer hover:bg-gray-700 border-b border-gray-700/50 last:border-b-0 ${
+                                            novoProduto.cfop === cfop.codigo ? 'bg-primary-500/20 text-primary-300' : 'text-white'
+                                          }`}
+                                        >
+                                          <div className="font-medium text-sm">{cfop.codigo}</div>
+                                          <div className="text-xs text-gray-400 truncate">{cfop.descricao}</div>
+                                        </div>
+                                      ))}
+
+                                      {filtrarCfops().length === 0 && (
+                                        <div className="px-3 py-2 text-gray-400 text-sm">
+                                          Nenhum CFOP encontrado
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                               <p className="text-xs text-gray-500 mt-1">
-                                Passe o mouse sobre as opções para ver a descrição completa
+                                Digite para pesquisar por código ou descrição do CFOP
                               </p>
 
                               {/* Alerta de coerência CFOP x NCM */}
@@ -5259,6 +5359,11 @@ const ProdutosPage: React.FC = () => {
                             <div>
                               <label className="block text-sm font-medium text-gray-400 mb-2">
                                 Situação Tributária <span className="text-red-500">*</span>
+                                {novoProduto.cfop && (
+                                  <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                                    💡 Sugerida pelo CFOP {novoProduto.cfop}
+                                  </span>
+                                )}
                               </label>
                               <select
                                 value={novoProduto.situacao_tributaria || 'tributado_integral'}
