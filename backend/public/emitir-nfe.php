@@ -652,27 +652,36 @@ try {
                 $std->pCredSN = $aliquotaICMS;
                 $std->vCredICMSSN = round($valorBase * ($aliquotaICMS / 100), 2);
             } elseif ($csosn === '500') {
-                // ✅ CORREÇÃO: CSOSN 500 - ICMS cobrado anteriormente por ST (Simples Nacional)
-                // Campos obrigatórios conforme documentação oficial SEFAZ
+                // ✅ CORREÇÃO BASEADA NA DOCUMENTAÇÃO OFICIAL: CSOSN 500 - ICMS cobrado anteriormente por ST
+                // Conforme Manual NFe - campos obrigatórios: vBCSTRet, pST, vICMSSTRet
 
-                // Valores de ST retido (obrigatórios)
-                $valorSTRetido = (float)($produto['valor_st_retido'] ?? 0);
-                $baseSTRetido = (float)($produto['base_st_retido'] ?? $valorBase);
+                // ✅ CÁLCULO BASEADO NO PREÇO ATUAL COM MARGEM PRESUMIDA (Opção A)
+                // Base: preço de venda atual + margem presumida para ST
+                $margemSTPresumida = 30.0; // 30% margem presumida padrão para bebidas
+                $baseSTCalculada = $valorBase * (1 + ($margemSTPresumida / 100));
 
-                // ✅ CORREÇÃO: Alíquota suportada pelo consumidor final (obrigatório)
-                $aliquotaST = (float)($produto['aliquota_st'] ?? $produto['aliquota_icms'] ?? 18);
+                // ✅ ALÍQUOTA ST: Alíquota padrão do estado (18% SP + eventual FCP)
+                $aliquotaSTEstado = 18.0; // 18% padrão SP para bebidas alcoólicas
+                $fcpST = 0.0; // FCP se houver (verificar legislação estadual)
+                $aliquotaSTTotal = $aliquotaSTEstado + $fcpST;
 
-                // ✅ CORREÇÃO: Valor do ICMS Substituto (obrigatório)
-                // Para CSOSN 500, é o valor que foi pago pelo substituto tributário
-                $valorICMSSubstituto = (float)($produto['valor_icms_substituto'] ?? $valorSTRetido);
+                // ✅ VALOR ST RETIDO: Calculado sobre a base presumida
+                $valorSTCalculado = $baseSTCalculada * ($aliquotaSTTotal / 100);
 
-                // Campos obrigatórios para CSOSN 500
-                $std->vBCSTRet = $baseSTRetido;           // Base de cálculo do ST retido
-                $std->pST = $aliquotaST;                  // Alíquota suportada pelo Consumidor Final
-                $std->vICMSSubstituto = $valorICMSSubstituto; // Valor do ICMS Substituto
-                $std->vICMSSTRet = $valorSTRetido;        // Valor do ICMS ST retido
+                // ✅ CAMPOS OBRIGATÓRIOS CONFORME DOCUMENTAÇÃO OFICIAL
+                $std->vBCSTRet = round($baseSTCalculada, 2);     // Base de cálculo do ST retido
+                $std->pST = $aliquotaSTTotal;                    // Alíquota suportada pelo Consumidor Final
+                $std->vICMSSTRet = round($valorSTCalculado, 2);  // Valor do ICMS ST retido
 
-                error_log("✅ CSOSN 500 - ST Completo: Base R$ {$baseSTRetido}, Alíquota {$aliquotaST}%, ICMS Substituto R$ {$valorICMSSubstituto}, ST Retido R$ {$valorSTRetido}");
+                // ✅ CAMPO OPCIONAL: Valor do ICMS próprio do Substituto (se aplicável)
+                $std->vICMSSubstituto = null; // Opcional conforme NT 2018.005
+
+                error_log("✅ CSOSN 500 - CÁLCULO BASEADO NO PREÇO ATUAL:");
+                error_log("  - Preço base: R$ {$valorBase}");
+                error_log("  - Margem ST presumida: {$margemSTPresumida}%");
+                error_log("  - Base ST calculada: R$ " . round($baseSTCalculada, 2));
+                error_log("  - Alíquota ST total: {$aliquotaSTTotal}%");
+                error_log("  - Valor ST retido: R$ " . round($valorSTCalculado, 2));
             } elseif (in_array($csosn, ['201', '202', '203'])) {
                 // ✅ ADICIONADO: CSOSN 201/202/203 - Com permissão de crédito e ST
                 if ($aliquotaICMS > 0) {
@@ -881,14 +890,20 @@ try {
             $totalICMSBC += $valorProduto;
             $totalICMS += round($valorProduto * ($aliquotaICMS / 100), 2);
         } elseif ($isSimples && $csosn === '500') {
-            // ✅ ADICIONADO: CSOSN 500 - ICMS ST retido (Simples Nacional)
-            $valorSTRetido = (float)($produto['valor_st_retido'] ?? 0);
-            $baseSTRetido = (float)($produto['base_st_retido'] ?? $valorProduto);
+            // ✅ CORREÇÃO: CSOSN 500 - ICMS ST retido (Simples Nacional)
+            // Usar os mesmos cálculos dos itens para manter consistência
 
-            $totalICMSSTBC += $baseSTRetido;
-            $totalICMSST += $valorSTRetido;
+            // ✅ RECALCULAR com a mesma lógica dos itens (Opção A)
+            $margemSTPresumida = 30.0; // Mesma margem usada nos itens
+            $baseSTCalculada = $valorProduto * (1 + ($margemSTPresumida / 100));
+            $aliquotaSTTotal = 18.0; // Mesma alíquota usada nos itens
+            $valorSTCalculado = $baseSTCalculada * ($aliquotaSTTotal / 100);
+
+            $totalICMSSTBC += round($baseSTCalculada, 2);
+            $totalICMSST += round($valorSTCalculado, 2);
 
             // CSOSN 500 não gera ICMS próprio (já foi pago pelo substituto)
+            error_log("✅ TOTAIS CSOSN 500 - Base ST: R$ " . round($baseSTCalculada, 2) . ", Valor ST: R$ " . round($valorSTCalculado, 2));
         } elseif ($isSimples && in_array($csosn, ['201', '202', '203'])) {
             // ✅ ADICIONADO: CSOSN 201/202/203 - Com crédito e ST (Simples Nacional)
             if ($aliquotaICMS > 0) {
