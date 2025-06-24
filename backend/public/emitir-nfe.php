@@ -660,10 +660,10 @@ try {
                 $margemSTPresumida = 30.0; // 30% margem presumida padrão para bebidas
                 $baseSTCalculada = $valorBase * (1 + ($margemSTPresumida / 100));
 
-                // ✅ ALÍQUOTA ST: Alíquota padrão do estado (18% SP + eventual FCP)
+                // ✅ ALÍQUOTA ST: Conforme documentação oficial (ICMS ST + FCP)
                 $aliquotaSTEstado = 18.0; // 18% padrão SP para bebidas alcoólicas
-                $fcpST = 0.0; // FCP se houver (verificar legislação estadual)
-                $aliquotaSTTotal = $aliquotaSTEstado + $fcpST;
+                $fcpST = 2.0; // 2% FCP São Paulo (conforme tabela oficial SEFAZ)
+                $aliquotaSTTotal = $aliquotaSTEstado + $fcpST; // 20% total (18% + 2%)
 
                 // ✅ VALOR ST RETIDO: Calculado sobre a base presumida
                 $valorSTCalculado = $baseSTCalculada * ($aliquotaSTTotal / 100);
@@ -671,8 +671,16 @@ try {
                 // ✅ CAMPOS OBRIGATÓRIOS CONFORME DOCUMENTAÇÃO OFICIAL
                 // IMPORTANTE: Garantir que sejam números válidos (não null)
                 $std->vBCSTRet = (float)round($baseSTCalculada, 2);     // Base de cálculo do ST retido
-                $std->pST = (float)$aliquotaSTTotal;                    // Alíquota suportada pelo Consumidor Final
+                $std->pST = (float)$aliquotaSTTotal;                    // Alíquota suportada pelo Consumidor Final (ICMS ST + FCP)
                 $std->vICMSSTRet = (float)round($valorSTCalculado, 2);  // Valor do ICMS ST retido
+
+                // ✅ CAMPOS FCP OBRIGATÓRIOS (São Paulo tem FCP 2%)
+                if ($fcpST > 0) {
+                    $valorFCPSTCalculado = $baseSTCalculada * ($fcpST / 100);
+                    $std->vBCFCPSTRet = (float)round($baseSTCalculada, 2);      // Base de cálculo do FCP ST retido
+                    $std->pFCPSTRet = (float)$fcpST;                           // Alíquota do FCP ST retido
+                    $std->vFCPSTRet = (float)round($valorFCPSTCalculado, 2);   // Valor do FCP ST retido
+                }
 
                 // ✅ CAMPO OPCIONAL: Valor do ICMS próprio do Substituto (se aplicável)
                 // IMPORTANTE: Se não informado, não incluir no objeto (deixar undefined)
@@ -682,8 +690,13 @@ try {
                 error_log("  - Preço base: R$ {$valorBase}");
                 error_log("  - Margem ST presumida: {$margemSTPresumida}%");
                 error_log("  - Base ST calculada: R$ " . round($baseSTCalculada, 2));
-                error_log("  - Alíquota ST total: {$aliquotaSTTotal}%");
+                error_log("  - Alíquota ICMS ST: {$aliquotaSTEstado}%");
+                error_log("  - Alíquota FCP ST: {$fcpST}%");
+                error_log("  - Alíquota total (pST): {$aliquotaSTTotal}%");
                 error_log("  - Valor ST retido: R$ " . round($valorSTCalculado, 2));
+                if ($fcpST > 0) {
+                    error_log("  - Valor FCP ST retido: R$ " . round($valorFCPSTCalculado, 2));
+                }
 
                 // ✅ DEBUG CRÍTICO: Verificar objeto $std antes de tagICMSSN
                 error_log("🔍 DEBUG OBJETO ICMS ANTES tagICMSSN():");
@@ -717,19 +730,35 @@ try {
             // ✅ CORREÇÃO CRÍTICA: Para CSOSN 500, a biblioteca sped-nfe NÃO adiciona automaticamente
             // os valores aos totalizadores. Precisamos fazer isso manualmente.
             if ($csosn === '500') {
-                // Acessar os totalizadores internos da biblioteca via reflexão
-                $reflection = new ReflectionClass($make);
-                $stdTotProperty = $reflection->getProperty('stdTot');
-                $stdTotProperty->setAccessible(true);
-                $stdTot = $stdTotProperty->getValue($make);
+                try {
+                    // Acessar os totalizadores internos da biblioteca via reflexão
+                    $reflection = new ReflectionClass($make);
+                    $stdTotProperty = $reflection->getProperty('stdTot');
+                    $stdTotProperty->setAccessible(true);
+                    $stdTot = $stdTotProperty->getValue($make);
 
-                // Adicionar manualmente aos totalizadores (como outros CSOSN fazem automaticamente)
-                $stdTot->vBCST += (float)$std->vBCSTRet;    // Base ST retido
-                $stdTot->vST += (float)$std->vICMSSTRet;    // Valor ST retido
+                    // ✅ CORREÇÃO ERRO 533: Garantir que os valores sejam exatamente os mesmos
+                    // que serão usados nos totais finais
+                    $valorBCST = (float)round($std->vBCSTRet, 2);
+                    $valorST = (float)round($std->vICMSSTRet, 2);
 
-                error_log("✅ CSOSN 500 - Totalizadores corrigidos manualmente:");
-                error_log("  - stdTot->vBCST: " . $stdTot->vBCST);
-                error_log("  - stdTot->vST: " . $stdTot->vST);
+                    // Verificar se os totalizadores existem
+                    if (!isset($stdTot->vBCST)) $stdTot->vBCST = 0.00;
+                    if (!isset($stdTot->vST)) $stdTot->vST = 0.00;
+
+                    // Adicionar manualmente aos totalizadores (como outros CSOSN fazem automaticamente)
+                    $stdTot->vBCST += $valorBCST;    // Base ST retido
+                    $stdTot->vST += $valorST;        // Valor ST retido
+
+                    error_log("✅ CSOSN 500 - Totalizadores corrigidos manualmente:");
+                    error_log("  - Item vBCSTRet: " . $std->vBCSTRet . " -> Totalizador: " . $valorBCST);
+                    error_log("  - Item vICMSSTRet: " . $std->vICMSSTRet . " -> Totalizador: " . $valorST);
+                    error_log("  - stdTot->vBCST total: " . $stdTot->vBCST);
+                    error_log("  - stdTot->vST total: " . $stdTot->vST);
+                } catch (Exception $e) {
+                    error_log("❌ ERRO na manipulação dos totalizadores CSOSN 500: " . $e->getMessage());
+                    // Fallback: não manipular totalizadores se houver erro
+                }
             }
         } elseif (!$isSimples && $temCST) {
             // Regime Normal/Lucro Real/Lucro Presumido - usar CST
@@ -890,23 +919,19 @@ try {
             $totalICMSBC += $valorProduto;
             $totalICMS += round($valorProduto * ($aliquotaICMS / 100), 2);
 
-            // ✅ ADICIONADO: Calcular ICMS ST se aplicável
+            // ✅ CORREÇÃO ERRO 533: Calcular ICMS ST se aplicável
             if ($cst === '10') {
-                // CST 10 - Produto com ST
-                $margemST = (float)($produto['margem_st'] ?? 30);
-                $aliquotaST = (float)($produto['aliquota_st'] ?? $aliquotaICMS);
-                $baseST = round($valorProduto * (1 + ($margemST / 100)), 2);
-                $valorST = round($baseST * ($aliquotaST / 100), 2) - round($valorProduto * ($aliquotaICMS / 100), 2);
+                // ✅ CST 10 - NÃO calcular aqui pois a biblioteca
+                // já adiciona automaticamente aos totalizadores via tagICMS()
 
-                $totalICMSSTBC += $baseST;
-                $totalICMSST += $valorST;
+                // Os valores de ST já foram adicionados aos totalizadores internos da biblioteca
+                error_log("✅ TOTAIS CST 10 - Valores já adicionados aos totalizadores via tagICMS()");
             } elseif ($cst === '60') {
-                // CST 60 - ST retido anteriormente
-                $valorSTRetido = (float)($produto['valor_st_retido'] ?? 0);
-                $baseSTRetido = (float)($produto['base_st_retido'] ?? $valorProduto);
+                // ✅ CORREÇÃO ERRO 533: CST 60 - NÃO calcular aqui pois a biblioteca
+                // já adiciona automaticamente aos totalizadores via tagICMS()
 
-                $totalICMSSTBC += $baseSTRetido;
-                $totalICMSST += $valorSTRetido;
+                // Os valores de ST já foram adicionados aos totalizadores internos da biblioteca
+                error_log("✅ TOTAIS CST 60 - Valores já adicionados aos totalizadores via tagICMS()");
 
                 // CST 60 não soma no ICMS próprio
                 $totalICMSBC -= $valorProduto;
@@ -917,35 +942,22 @@ try {
             $totalICMSBC += $valorProduto;
             $totalICMS += round($valorProduto * ($aliquotaICMS / 100), 2);
         } elseif ($isSimples && $csosn === '500') {
-            // ✅ CORREÇÃO: CSOSN 500 - ICMS ST retido (Simples Nacional)
-            // Usar os mesmos cálculos dos itens para manter consistência
-
-            // ✅ RECALCULAR com a mesma lógica dos itens (Opção A)
-            $margemSTPresumida = 30.0; // Mesma margem usada nos itens
-            $baseSTCalculada = $valorProduto * (1 + ($margemSTPresumida / 100));
-            $aliquotaSTTotal = 18.0; // Mesma alíquota usada nos itens
-            $valorSTCalculado = $baseSTCalculada * ($aliquotaSTTotal / 100);
-
-            $totalICMSSTBC += round($baseSTCalculada, 2);
-            $totalICMSST += round($valorSTCalculado, 2);
+            // ✅ CORREÇÃO ERRO 533: CSOSN 500 - NÃO calcular aqui pois já foi adicionado
+            // aos totalizadores via reflexão nos itens individuais
 
             // CSOSN 500 não gera ICMS próprio (já foi pago pelo substituto)
-            error_log("✅ TOTAIS CSOSN 500 - Base ST: R$ " . round($baseSTCalculada, 2) . ", Valor ST: R$ " . round($valorSTCalculado, 2));
+            // Os valores de ST já foram adicionados aos totalizadores internos da biblioteca
+            error_log("✅ TOTAIS CSOSN 500 - Valores já adicionados aos totalizadores via reflexão");
         } elseif ($isSimples && in_array($csosn, ['201', '202', '203'])) {
-            // ✅ ADICIONADO: CSOSN 201/202/203 - Com crédito e ST (Simples Nacional)
+            // ✅ CORREÇÃO ERRO 533: CSOSN 201/202/203 - Com crédito e ST (Simples Nacional)
             if ($aliquotaICMS > 0) {
                 $totalICMSBC += $valorProduto;
                 $totalICMS += round($valorProduto * ($aliquotaICMS / 100), 2);
             }
 
-            // Calcular ST para CSOSN 201/202/203
-            $margemST = (float)($produto['margem_st'] ?? 30);
-            $aliquotaST = (float)($produto['aliquota_st'] ?? 18);
-            $baseST = round($valorProduto * (1 + ($margemST / 100)), 2);
-            $valorST = round($baseST * ($aliquotaST / 100), 2);
-
-            $totalICMSSTBC += $baseST;
-            $totalICMSST += $valorST;
+            // ✅ NÃO calcular ST aqui pois a biblioteca já adiciona automaticamente
+            // aos totalizadores via tagICMSSN()
+            error_log("✅ TOTAIS CSOSN {$csosn} - Valores ST já adicionados aos totalizadores via tagICMSSN()");
         }
         // CSOSN 102, 103, 300, 400 não geram ICMS nos totais
 
@@ -964,21 +976,71 @@ try {
         }
     }
 
-    // ✅ CORREÇÃO CRÍTICA: Usar totalizadores internos da biblioteca em vez de variáveis manuais
-    // Para CSOSN 500, os totalizadores foram corrigidos manualmente via reflexão
-    $reflection = new ReflectionClass($make);
-    $stdTotProperty = $reflection->getProperty('stdTot');
-    $stdTotProperty->setAccessible(true);
-    $stdTotBiblioteca = $stdTotProperty->getValue($make);
+    // ✅ CORREÇÃO CRÍTICA: Calcular totais ST manualmente para garantir consistência
+    // Recalcular todos os valores ST baseado nos produtos processados
+    $totalICMSSTBC = 0; // Base de cálculo do ICMS ST
+    $totalICMSST = 0;   // Valor do ICMS ST
+
+    foreach ($nfeData['produtos'] as $item => $produto) {
+        $valorProduto = (float)($produto['valor_total'] ?? 0);
+        $cst = $produto['cst_icms'] ?? '';
+        $csosn = $produto['csosn_icms'] ?? '';
+        $aliquotaICMS = (float)($produto['aliquota_icms'] ?? 0);
+
+        // Calcular ST baseado no tipo de tributação
+        if ($isSimples && $csosn === '500') {
+            // CSOSN 500 - ICMS ST retido (Simples Nacional)
+            $margemSTPresumida = 30.0; // Mesma margem usada nos itens
+            $baseSTCalculada = $valorProduto * (1 + ($margemSTPresumida / 100));
+            $aliquotaSTTotal = 20.0; // ICMS ST (18%) + FCP (2%) = 20% total
+            $valorSTCalculado = $baseSTCalculada * ($aliquotaSTTotal / 100);
+
+            $totalICMSSTBC += round($baseSTCalculada, 2);
+            $totalICMSST += round($valorSTCalculado, 2);
+
+            error_log("✅ TOTAIS RECALCULADOS CSOSN 500 - Base ST: R$ " . round($baseSTCalculada, 2) . ", Valor ST: R$ " . round($valorSTCalculado, 2));
+        } elseif (!$isSimples && $cst === '10') {
+            // CST 10 - Produto com ST (Regime Normal)
+            $margemST = (float)($produto['margem_st'] ?? 30);
+            $aliquotaST = (float)($produto['aliquota_st'] ?? $aliquotaICMS);
+            $baseST = round($valorProduto * (1 + ($margemST / 100)), 2);
+            $valorST = round($baseST * ($aliquotaST / 100), 2) - round($valorProduto * ($aliquotaICMS / 100), 2);
+
+            $totalICMSSTBC += $baseST;
+            $totalICMSST += $valorST;
+
+            error_log("✅ TOTAIS RECALCULADOS CST 10 - Base ST: R$ {$baseST}, Valor ST: R$ {$valorST}");
+        } elseif (!$isSimples && $cst === '60') {
+            // CST 60 - ST retido anteriormente (Regime Normal)
+            $valorSTRetido = (float)($produto['valor_st_retido'] ?? 0);
+            $baseSTRetido = (float)($produto['base_st_retido'] ?? $valorProduto);
+
+            $totalICMSSTBC += $baseSTRetido;
+            $totalICMSST += $valorSTRetido;
+
+            error_log("✅ TOTAIS RECALCULADOS CST 60 - Base ST: R$ {$baseSTRetido}, Valor ST: R$ {$valorSTRetido}");
+        } elseif ($isSimples && in_array($csosn, ['201', '202', '203'])) {
+            // CSOSN 201/202/203 - Com crédito e ST (Simples Nacional)
+            $margemST = (float)($produto['margem_st'] ?? 30);
+            $aliquotaST = (float)($produto['aliquota_st'] ?? 18);
+            $baseST = round($valorProduto * (1 + ($margemST / 100)), 2);
+            $valorST = round($baseST * ($aliquotaST / 100), 2);
+
+            $totalICMSSTBC += $baseST;
+            $totalICMSST += $valorST;
+
+            error_log("✅ TOTAIS RECALCULADOS CSOSN {$csosn} - Base ST: R$ {$baseST}, Valor ST: R$ {$valorST}");
+        }
+    }
 
     $std = new stdClass();
     $std->vBC = $totalICMSBC; // Base de cálculo real do ICMS
     $std->vICMS = $totalICMS; // ICMS real calculado
     $std->vICMSDeson = 0.00;
 
-    // ✅ USAR TOTALIZADORES DA BIBLIOTECA (já corrigidos para CSOSN 500)
-    $std->vBCST = $stdTotBiblioteca->vBCST; // Base ST dos totalizadores internos
-    $std->vST = $stdTotBiblioteca->vST;     // Valor ST dos totalizadores internos
+    // ✅ USAR TOTAIS RECALCULADOS MANUALMENTE (garantia de consistência)
+    $std->vBCST = $totalICMSSTBC; // Base ST recalculada
+    $std->vST = $totalICMSST;     // Valor ST recalculado
 
     $std->vProd = $totalProdutos; // Valor real dos produtos
     $std->vFrete = 0.00;
