@@ -669,12 +669,14 @@ try {
                 $valorSTCalculado = $baseSTCalculada * ($aliquotaSTTotal / 100);
 
                 // ✅ CAMPOS OBRIGATÓRIOS CONFORME DOCUMENTAÇÃO OFICIAL
-                $std->vBCSTRet = round($baseSTCalculada, 2);     // Base de cálculo do ST retido
-                $std->pST = $aliquotaSTTotal;                    // Alíquota suportada pelo Consumidor Final
-                $std->vICMSSTRet = round($valorSTCalculado, 2);  // Valor do ICMS ST retido
+                // IMPORTANTE: Garantir que sejam números válidos (não null)
+                $std->vBCSTRet = (float)round($baseSTCalculada, 2);     // Base de cálculo do ST retido
+                $std->pST = (float)$aliquotaSTTotal;                    // Alíquota suportada pelo Consumidor Final
+                $std->vICMSSTRet = (float)round($valorSTCalculado, 2);  // Valor do ICMS ST retido
 
                 // ✅ CAMPO OPCIONAL: Valor do ICMS próprio do Substituto (se aplicável)
-                $std->vICMSSubstituto = null; // Opcional conforme NT 2018.005
+                // IMPORTANTE: Se não informado, não incluir no objeto (deixar undefined)
+                // $std->vICMSSubstituto = null; // Comentado - não incluir se não tiver valor
 
                 error_log("✅ CSOSN 500 - CÁLCULO BASEADO NO PREÇO ATUAL:");
                 error_log("  - Preço base: R$ {$valorBase}");
@@ -682,6 +684,13 @@ try {
                 error_log("  - Base ST calculada: R$ " . round($baseSTCalculada, 2));
                 error_log("  - Alíquota ST total: {$aliquotaSTTotal}%");
                 error_log("  - Valor ST retido: R$ " . round($valorSTCalculado, 2));
+
+                // ✅ DEBUG CRÍTICO: Verificar objeto $std antes de tagICMSSN
+                error_log("🔍 DEBUG OBJETO ICMS ANTES tagICMSSN():");
+                error_log("  - vBCSTRet: " . $std->vBCSTRet);
+                error_log("  - pST: " . $std->pST);
+                error_log("  - vICMSSTRet: " . $std->vICMSSTRet);
+                error_log("  - vICMSSubstituto: " . ($std->vICMSSubstituto ?? 'NULL'));
             } elseif (in_array($csosn, ['201', '202', '203'])) {
                 // ✅ ADICIONADO: CSOSN 201/202/203 - Com permissão de crédito e ST
                 if ($aliquotaICMS > 0) {
@@ -704,6 +713,57 @@ try {
 
             // Usar método específico para Simples Nacional
             $make->tagICMSSN($std);
+
+            // ✅ DEBUG CRÍTICO: Verificar se os valores foram aplicados no XML
+            if ($csosn === '500') {
+                // Obter XML parcial para verificar se os valores foram aplicados
+                try {
+                    $xmlParcial = $make->getXML();
+
+                    // Extrair valores do XML gerado
+                    preg_match('/<vBCSTRet>(.*?)<\/vBCSTRet>/', $xmlParcial, $vBCSTRetMatch);
+                    preg_match('/<pST>(.*?)<\/pST>/', $xmlParcial, $pSTMatch);
+                    preg_match('/<vICMSSTRet>(.*?)<\/vICMSSTRet>/', $xmlParcial, $vICMSSTRetMatch);
+
+                    $vBCSTRetXML = $vBCSTRetMatch[1] ?? 'NÃO ENCONTRADO';
+                    $pSTXML = $pSTMatch[1] ?? 'NÃO ENCONTRADO';
+                    $vICMSSTRetXML = $vICMSSTRetMatch[1] ?? 'NÃO ENCONTRADO';
+
+                    error_log("🔍 DEBUG XML APÓS tagICMSSN():");
+                    error_log("  - vBCSTRet no XML: {$vBCSTRetXML}");
+                    error_log("  - pST no XML: {$pSTXML}");
+                    error_log("  - vICMSSTRet no XML: {$vICMSSTRetXML}");
+
+                    // Verificar se os valores estão corretos
+                    if ($vBCSTRetXML != '6.50' || $pSTXML != '18.0000' || $vICMSSTRetXML != '1.17') {
+                        error_log("❌ VALORES INCORRETOS NO XML! Biblioteca ignorou os valores definidos.");
+                        error_log("  - Esperado: vBCSTRet=6.50, pST=18.0000, vICMSSTRet=1.17");
+                        error_log("  - Encontrado: vBCSTRet={$vBCSTRetXML}, pST={$pSTXML}, vICMSSTRet={$vICMSSTRetXML}");
+                    } else {
+                        error_log("✅ VALORES CORRETOS NO XML!");
+                    }
+                } catch (Exception $e) {
+                    error_log("⚠️ Erro ao verificar XML parcial: " . $e->getMessage());
+                }
+            }
+
+            // ✅ CORREÇÃO CRÍTICA: Para CSOSN 500, a biblioteca sped-nfe NÃO adiciona automaticamente
+            // os valores aos totalizadores. Precisamos fazer isso manualmente.
+            if ($csosn === '500') {
+                // Acessar os totalizadores internos da biblioteca via reflexão
+                $reflection = new ReflectionClass($make);
+                $stdTotProperty = $reflection->getProperty('stdTot');
+                $stdTotProperty->setAccessible(true);
+                $stdTot = $stdTotProperty->getValue($make);
+
+                // Adicionar manualmente aos totalizadores (como outros CSOSN fazem automaticamente)
+                $stdTot->vBCST += (float)$std->vBCSTRet;    // Base ST retido
+                $stdTot->vST += (float)$std->vICMSSTRet;    // Valor ST retido
+
+                error_log("✅ CSOSN 500 - Totalizadores corrigidos manualmente:");
+                error_log("  - stdTot->vBCST: " . $stdTot->vBCST);
+                error_log("  - stdTot->vST: " . $stdTot->vST);
+            }
         } elseif (!$isSimples && $temCST) {
             // Regime Normal/Lucro Real/Lucro Presumido - usar CST
             $cst = $produto['cst_icms'];
@@ -937,12 +997,22 @@ try {
         }
     }
 
+    // ✅ CORREÇÃO CRÍTICA: Usar totalizadores internos da biblioteca em vez de variáveis manuais
+    // Para CSOSN 500, os totalizadores foram corrigidos manualmente via reflexão
+    $reflection = new ReflectionClass($make);
+    $stdTotProperty = $reflection->getProperty('stdTot');
+    $stdTotProperty->setAccessible(true);
+    $stdTotBiblioteca = $stdTotProperty->getValue($make);
+
     $std = new stdClass();
     $std->vBC = $totalICMSBC; // Base de cálculo real do ICMS
     $std->vICMS = $totalICMS; // ICMS real calculado
     $std->vICMSDeson = 0.00;
-    $std->vBCST = $totalICMSSTBC; // ✅ CORREÇÃO: Base de cálculo real do ICMS ST
-    $std->vST = $totalICMSST;     // ✅ CORREÇÃO: ICMS ST real calculado
+
+    // ✅ USAR TOTALIZADORES DA BIBLIOTECA (já corrigidos para CSOSN 500)
+    $std->vBCST = $stdTotBiblioteca->vBCST; // Base ST dos totalizadores internos
+    $std->vST = $stdTotBiblioteca->vST;     // Valor ST dos totalizadores internos
+
     $std->vProd = $totalProdutos; // Valor real dos produtos
     $std->vFrete = 0.00;
     $std->vSeg = 0.00;
@@ -955,7 +1025,8 @@ try {
     $std->vNF = $totalProdutos - (float)($totais['valor_desconto'] ?? 0); // Valor final da NFe
 
     // Log dos totais calculados com dados reais
-    error_log("NFE: Totais calculados - Produtos: R$ {$totalProdutos}, ICMS: R$ {$totalICMS}, ICMS ST: R$ {$totalICMSST}, PIS: R$ {$totalPIS}, COFINS: R$ {$totalCOFINS}, Total NFe: R$ " . $std->vNF);
+    error_log("NFE: Totais calculados - Produtos: R$ {$totalProdutos}, ICMS: R$ {$totalICMS}, ICMS ST: R$ {$std->vST}, PIS: R$ {$totalPIS}, COFINS: R$ {$totalCOFINS}, Total NFe: R$ " . $std->vNF);
+    error_log("✅ TOTAIS FINAIS - Base ST: R$ {$std->vBCST}, Valor ST: R$ {$std->vST} (usando totalizadores da biblioteca)");
 
     $make->tagICMSTot($std);
 
