@@ -1195,13 +1195,8 @@ try {
     error_log("🔍 ANALISANDO RESPOSTA SEFAZ - Status: {$status} - {$motivo}");
 
     // Status 103 = Lote recebido com sucesso (precisa consultar recibo)
-    // Status 104 = Lote processado (também precisa consultar recibo para obter status individual)
-    if ($status === '103' || $status === '104') {
-        if ($status === '103') {
-            error_log("📋 LOTE RECEBIDO (103) - Consultando recibo para obter resultado final");
-        } else {
-            error_log("📋 LOTE PROCESSADO (104) - Consultando recibo para extrair status individual da NFe");
-        }
+    if ($status === '103') {
+        error_log("📋 LOTE RECEBIDO (103) - Consultando recibo para obter resultado final");
 
         // Extrair número do recibo
         if (empty($recibo) || $recibo === 'RECIBO_NAO_ENCONTRADO') {
@@ -1443,6 +1438,53 @@ try {
         } catch (Exception $consultaError) {
             error_log("❌ ERRO ao consultar recibo: " . $consultaError->getMessage());
             throw new Exception("Erro ao consultar recibo da SEFAZ: " . $consultaError->getMessage());
+        }
+    }
+
+    // Status 104 = Lote processado (resultado já está no XML de resposta)
+    if ($status === '104') {
+        error_log("📋 LOTE PROCESSADO (104) - Extraindo resultado individual diretamente do XML de resposta");
+
+        // Para status 104, o XML de resposta já contém o resultado individual da NFe
+        // Não precisamos consultar recibo, apenas extrair os dados do XML atual
+        try {
+            // Buscar status específico da NFe dentro do elemento protNFe/infProt
+            $cStatNFe = $xml->xpath('//protNFe/infProt/cStat') ?:
+                       $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="cStat"]');
+
+            $xMotivoNFe = $xml->xpath('//protNFe/infProt/xMotivo') ?:
+                         $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="xMotivo"]');
+
+            $nProtNFe = $xml->xpath('//protNFe/infProt/nProt') ?:
+                       $xml->xpath('//*[local-name()="protNFe"]//*[local-name()="infProt"]//*[local-name()="nProt"]');
+
+            error_log("🔍 DEBUG XPATH RESULTS (Status 104):");
+            error_log("  - cStatNFe encontrados: " . count($cStatNFe));
+            error_log("  - xMotivoNFe encontrados: " . count($xMotivoNFe));
+            error_log("  - nProtNFe encontrados: " . count($nProtNFe));
+
+            if (!empty($cStatNFe)) {
+                $status = (string)$cStatNFe[0];
+                $motivo = !empty($xMotivoNFe) ? (string)$xMotivoNFe[0] : $motivo;
+                $protocolo = !empty($nProtNFe) ? (string)$nProtNFe[0] : null;
+
+                error_log("✅ RESULTADO INDIVIDUAL DA NFe EXTRAÍDO (Status 104):");
+                error_log("  - Status NFe: {$status}");
+                error_log("  - Motivo NFe: {$motivo}");
+                error_log("  - Protocolo NFe: " . ($protocolo ? $protocolo : 'NÃO ENCONTRADO'));
+            } else {
+                error_log("❌ ERRO: Não foi possível encontrar resultado individual da NFe no XML de resposta (Status 104)");
+                error_log("🔍 DEBUG: Tentando buscar qualquer elemento cStat no XML...");
+                $todosCStat = $xml->xpath('//cStat');
+                error_log("🔍 DEBUG: Total de elementos cStat encontrados: " . count($todosCStat));
+                foreach ($todosCStat as $i => $cstat) {
+                    error_log("🔍 DEBUG: cStat[$i] = " . (string)$cstat);
+                }
+            }
+
+        } catch (Exception $status104Error) {
+            error_log("❌ ERRO ao processar status 104: " . $status104Error->getMessage());
+            throw new Exception("Erro ao processar resposta da SEFAZ com status 104: " . $status104Error->getMessage());
         }
     }
 
