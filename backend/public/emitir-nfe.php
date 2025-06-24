@@ -1506,11 +1506,11 @@ try {
                 'solucao' => 'Use um número sequencial diferente para esta NFe.'
             ],
 
-            // Erros de Documentos
+            // Erros de Duplicidade e Numeração
             '204' => [
-                'titulo' => 'CNPJ Inválido',
-                'descricao' => 'O CNPJ da empresa está incorreto ou inválido.',
-                'solucao' => 'Verifique e corrija o CNPJ da empresa nas configurações.'
+                'titulo' => 'NFe Duplicada',
+                'descricao' => 'Já existe uma NFe com este número, série e chave de acesso.',
+                'solucao' => 'Use um número sequencial diferente ou verifique se esta NFe já foi emitida anteriormente.'
             ],
             '207' => [
                 'titulo' => 'CNPJ Inválido',
