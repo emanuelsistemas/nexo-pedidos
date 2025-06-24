@@ -1621,6 +1621,93 @@ try {
                 'titulo' => 'CEST Obrigatório para ICMS-ST',
                 'descricao' => 'Operação com ICMS-ST sem informação do CEST (Código Especificador da Substituição Tributária).',
                 'solucao' => 'Informe o código CEST correto para produtos com Substituição Tributária (CST/CSOSN: 10, 30, 60, 70, 90, 201, 202, 203, 500, 900).'
+            ],
+
+            // Erros de CST e Tributação
+            '508' => [
+                'titulo' => 'CST Incompatível com Não Contribuinte',
+                'descricao' => 'CST informado é incompatível para operação com destinatário não contribuinte.',
+                'solucao' => 'Verifique se o destinatário é contribuinte ou ajuste o CST para operação com não contribuinte.'
+            ],
+            '770' => [
+                'titulo' => 'CFOP Inexistente',
+                'descricao' => 'O CFOP informado não existe na tabela oficial.',
+                'solucao' => 'Verifique e corrija o CFOP do produto conforme a tabela oficial.'
+            ],
+            '732' => [
+                'titulo' => 'CFOP Interestadual Incorreto',
+                'descricao' => 'CFOP de operação interestadual mas destinatário não é de UF diferente.',
+                'solucao' => 'Use CFOP de operação interna ou verifique a UF do destinatário.'
+            ],
+            '733' => [
+                'titulo' => 'CFOP Interno Incorreto',
+                'descricao' => 'CFOP de operação interna mas destinatário é de UF diferente.',
+                'solucao' => 'Use CFOP de operação interestadual ou verifique a UF do destinatário.'
+            ],
+            '696' => [
+                'titulo' => 'Operação com Não Contribuinte',
+                'descricao' => 'Operação com não contribuinte deve indicar consumidor final.',
+                'solucao' => 'Marque o campo "Consumidor Final" como SIM para destinatários não contribuintes.'
+            ],
+
+            // Erros de Valores e Cálculos
+            '351' => [
+                'titulo' => 'Valor ICMS Divergente',
+                'descricao' => 'Valor do ICMS difere do cálculo base de cálculo x alíquota.',
+                'solucao' => 'Recalcule o ICMS ou verifique a base de cálculo e alíquota informadas.'
+            ],
+            '685' => [
+                'titulo' => 'Valor Aproximado de Tributos Divergente',
+                'descricao' => 'Total do valor aproximado dos tributos difere do somatório dos itens.',
+                'solucao' => 'Recalcule o valor aproximado dos tributos conforme tabela IBPT.'
+            ],
+
+            // Erros de Pagamento
+            '871' => [
+                'titulo' => 'Meio de Pagamento Incorreto',
+                'descricao' => 'O campo meio de pagamento deve ser preenchido com "Sem Pagamento".',
+                'solucao' => 'Para NFe de devolução, use meio de pagamento "90 - Sem Pagamento".'
+            ],
+            '866' => [
+                'titulo' => 'Troco Ausente',
+                'descricao' => 'Ausência de troco quando valor dos pagamentos é maior que total da nota.',
+                'solucao' => 'Informe o valor do troco ou ajuste os valores de pagamento.'
+            ],
+
+            // Erros de Schema e Estrutura
+            '215' => [
+                'titulo' => 'Falha no Schema XML',
+                'descricao' => 'O XML da NFe não está conforme o schema oficial.',
+                'solucao' => 'Verifique a estrutura do XML ou regenere a NFe.'
+            ],
+            '239' => [
+                'titulo' => 'Versão XML Não Suportada',
+                'descricao' => 'A versão do arquivo XML não é suportada.',
+                'solucao' => 'Use a versão mais recente do layout da NFe.'
+            ],
+
+            // Erros de Serviço SEFAZ
+            '108' => [
+                'titulo' => 'Serviço Temporariamente Indisponível',
+                'descricao' => 'Serviço da SEFAZ paralisado momentaneamente.',
+                'solucao' => 'Aguarde alguns minutos e tente novamente.'
+            ],
+            '109' => [
+                'titulo' => 'Serviço Indisponível',
+                'descricao' => 'Serviço da SEFAZ paralisado sem previsão.',
+                'solucao' => 'Consulte o status da SEFAZ ou tente mais tarde.'
+            ],
+
+            // Erros de Destinatário
+            '305' => [
+                'titulo' => 'Destinatário Bloqueado',
+                'descricao' => 'Destinatário está bloqueado na UF.',
+                'solucao' => 'Verifique a situação cadastral do destinatário na SEFAZ.'
+            ],
+            '306' => [
+                'titulo' => 'IE do Destinatário Inativa',
+                'descricao' => 'Inscrição Estadual do destinatário não está ativa.',
+                'solucao' => 'Verifique a IE do destinatário ou marque como não contribuinte.'
             ]
         ];
 
