@@ -346,6 +346,21 @@ const ProdutosPage: React.FC = () => {
     validationResult: { isValid: true, errors: [] }
   });
 
+  // Estado para alerta de CFOP
+  const [cfopAlert, setCfopAlert] = useState<{
+    show: boolean;
+    message: string;
+    type: 'warning' | 'info';
+  }>({
+    show: false,
+    message: '',
+    type: 'warning'
+  });
+
+  // Estados para o dropdown de CFOP com pesquisa
+  const [cfopDropdownOpen, setCfopDropdownOpen] = useState(false);
+  const [cfopSearchTerm, setCfopSearchTerm] = useState('');
+
   useEffect(() => {
     loadGrupos();
     loadAvailableOpcoes();
@@ -535,6 +550,32 @@ const ProdutosPage: React.FC = () => {
     return situacao === 'tributado_st';
   };
 
+  // Função para validar coerência entre CFOP e NCM
+  const validarCoerenciaCfopNcm = (cfop: string, temST: boolean) => {
+    const cfopsComST = ['5405', '5401', '5403'];
+    const cfopsSemST = ['5102', '5101'];
+
+    if (temST && cfopsSemST.includes(cfop)) {
+      setCfopAlert({
+        show: true,
+        message: '⚠️ Atenção: Este NCM possui Substituição Tributária, mas o CFOP selecionado não é específico para ST. Considere usar CFOP 5405 ou 5401.',
+        type: 'warning'
+      });
+    } else if (!temST && cfopsComST.includes(cfop)) {
+      setCfopAlert({
+        show: true,
+        message: '⚠️ Atenção: Este NCM não possui Substituição Tributária, mas o CFOP selecionado é específico para ST. Considere usar CFOP 5102 ou 5101.',
+        type: 'warning'
+      });
+    } else {
+      setCfopAlert({
+        show: false,
+        message: '',
+        type: 'warning'
+      });
+    }
+  };
+
   // Função para validar NCM sem aplicar regras automáticas (apenas para edição)
   const validarNCMSemRegrasAutomaticas = async (codigo: string) => {
     if (codigo.length !== 8) return;
@@ -609,6 +650,31 @@ const ProdutosPage: React.FC = () => {
       setCestOpcoes([]);
     }
   };
+
+  // Lista completa de CFOPs mais utilizados
+  const cfopsDisponiveis = [
+    { codigo: '5102', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros' },
+    { codigo: '5101', descricao: 'Venda de produção do estabelecimento' },
+    { codigo: '5405', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros (ST)' },
+    { codigo: '5401', descricao: 'Venda de produção do estabelecimento (ST)' },
+    { codigo: '5403', descricao: 'Venda com substituição tributária' },
+    { codigo: '5103', descricao: 'Venda de produção do estabelecimento, quando não especificado nos códigos anteriores' },
+    { codigo: '5104', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros, quando não especificado nos códigos anteriores' },
+    { codigo: '5109', descricao: 'Venda de produção do estabelecimento, quando não especificado nos códigos anteriores' },
+    { codigo: '5110', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros, quando não especificado nos códigos anteriores' },
+    { codigo: '5111', descricao: 'Venda de produção do estabelecimento remetida anteriormente em consignação industrial' },
+    { codigo: '5112', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros remetida anteriormente em consignação industrial' },
+    { codigo: '5113', descricao: 'Venda de produção do estabelecimento remetida anteriormente em consignação mercantil' },
+    { codigo: '5114', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros remetida anteriormente em consignação mercantil' },
+    { codigo: '5115', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros, recebida anteriormente em consignação mercantil' },
+    { codigo: '5116', descricao: 'Venda de produção do estabelecimento originada de encomenda para entrega futura' },
+    { codigo: '5117', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros originada de encomenda para entrega futura' },
+    { codigo: '5118', descricao: 'Venda de produção do estabelecimento entregue ao destinatário por conta e ordem do adquirente originário, em venda à ordem' },
+    { codigo: '5119', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros entregue ao destinatário por conta e ordem do adquirente originário, em venda à ordem' },
+    { codigo: '5120', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros entregue ao destinatário por conta e ordem do adquirente originário, em venda à ordem, já tributada pelo ICMS em operação anterior' },
+    { codigo: '5122', descricao: 'Venda de produção do estabelecimento remetida para industrialização, por conta e ordem do adquirente, sem transitar pelo estabelecimento do adquirente' },
+    { codigo: '5123', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros remetida para industrialização, por conta e ordem do adquirente, sem transitar pelo estabelecimento do adquirente' }
+  ];
 
   // Mapeamento oficial entre situações tributárias e códigos CST/CSOSN
   const obterCodigosFiscais = (situacaoTributaria: string) => {
@@ -1550,21 +1616,16 @@ const ProdutosPage: React.FC = () => {
       setDescontoQuantidadeFormatado(formatarPreco(produto.valor_desconto_quantidade));
     }
 
-    // Para produtos em edição, apenas validar NCM sem aplicar regras automáticas
-    if (produto.ncm && produto.ncm.length === 8) {
-      // Validar NCM apenas para mostrar informações, sem alterar CFOP/situação tributária
-      validarNCMSemRegrasAutomaticas(produto.ncm);
-    } else {
-      setNcmValidacao({
-        validando: false,
-        valido: null,
-        descricao: '',
-        erro: '',
-        temSubstituicaoTributaria: false,
-        fonte: null
-      });
-      setCestOpcoes([]);
-    }
+    // Limpar validação de NCM (não revalidar automaticamente na edição)
+    setNcmValidacao({
+      validando: false,
+      valido: null,
+      descricao: '',
+      erro: '',
+      temSubstituicaoTributaria: false,
+      fonte: null
+    });
+    setCestOpcoes([]);
 
     // Abrir o sidebar imediatamente
     setShowSidebar(true);
@@ -2587,18 +2648,41 @@ const ProdutosPage: React.FC = () => {
       // Obter o próximo código disponível
       const nextCode = await getNextAvailableCode();
 
-      // Criar uma cópia do produto com novo código e nome modificado
+      // Criar uma cópia completa do produto com novo código e nome modificado
       const produtoClonado = {
-        ...produtoOriginal,
-        codigo: nextCode,
         nome: `${produtoOriginal.nome} - COPIA`,
+        preco: produtoOriginal.preco || 0,
+        descricao: produtoOriginal.descricao || '',
+        codigo: nextCode,
         codigo_barras: '', // Limpar código de barras para evitar duplicatas
+        promocao: produtoOriginal.promocao || false,
+        tipo_desconto: produtoOriginal.tipo_desconto || 'percentual',
+        valor_desconto: produtoOriginal.valor_desconto || 0,
+        ativo: produtoOriginal.ativo !== false,
+        unidade_medida_id: produtoOriginal.unidade_medida_id,
+        desconto_quantidade: produtoOriginal.desconto_quantidade || false,
+        quantidade_minima: produtoOriginal.quantidade_minima || 5,
+        tipo_desconto_quantidade: produtoOriginal.tipo_desconto_quantidade || 'percentual',
+        percentual_desconto_quantidade: produtoOriginal.percentual_desconto_quantidade || 10,
+        valor_desconto_quantidade: produtoOriginal.valor_desconto_quantidade || 0,
+        estoque_inicial: produtoOriginal.estoque_inicial || 0,
+        estoque_minimo: produtoOriginal.estoque_minimo || 0,
+        estoque_minimo_ativo: produtoOriginal.estoque_minimo_ativo || false,
+        // Campos fiscais NFe
+        ncm: produtoOriginal.ncm || '',
+        cfop: produtoOriginal.cfop || '5102',
+        origem_produto: produtoOriginal.origem_produto || 0,
+        situacao_tributaria: produtoOriginal.situacao_tributaria || 'tributado_integral',
+        cst_icms: produtoOriginal.cst_icms || '',
+        csosn_icms: produtoOriginal.csosn_icms || '',
+        cst_pis: produtoOriginal.cst_pis || '01',
+        cst_cofins: produtoOriginal.cst_cofins || '01',
+        aliquota_icms: produtoOriginal.aliquota_icms || 0,
+        aliquota_pis: produtoOriginal.aliquota_pis || 1.65,
+        aliquota_cofins: produtoOriginal.aliquota_cofins || 7.60,
+        cest: produtoOriginal.cest || '',
+        peso_liquido: produtoOriginal.peso_liquido || 0,
       };
-
-      // Remover campos que não devem ser copiados
-      delete produtoClonado.id;
-      delete produtoClonado.created_at;
-      delete produtoClonado.updated_at;
 
       // Configurar para edição
       setIsGrupoForm(false);
@@ -2606,6 +2690,27 @@ const ProdutosPage: React.FC = () => {
       setEditingProduto(null);
       setSelectedOpcoes([]);
       setNovoProduto(produtoClonado);
+
+      // Atualizar os campos formatados com os valores clonados
+      setPrecoFormatado(formatarPreco(produtoClonado.preco));
+      setDescontoFormatado(produtoClonado.valor_desconto?.toString() || '0');
+      setDescontoQuantidadeFormatado(produtoClonado.percentual_desconto_quantidade?.toString() || '10');
+
+      // Resetar estados de validação
+      setEstoqueInputVazio(false);
+      setQuantidadeMinimaVazia(false);
+      setEstoqueMinimoVazio(false);
+
+      // Limpar validação de NCM (não revalidar automaticamente)
+      setNcmValidacao({
+        validando: false,
+        valido: null,
+        descricao: '',
+        erro: '',
+        temSubstituicaoTributaria: false,
+        fonte: null
+      });
+      setCestOpcoes([]);
 
       // Fechar modal de confirmação
       setCloneConfirmation({
@@ -5051,50 +5156,17 @@ const ProdutosPage: React.FC = () => {
                                 value={novoProduto.cfop || '5102'}
                                 onChange={(e) => {
                                   const newCfop = e.target.value;
-                                  let newSituacaoTributaria = novoProduto.situacao_tributaria;
 
-                                  // Aviso informativo se produto com ST usar CFOP diferente de 5405
-                                  if (ncmValidacao.temSubstituicaoTributaria && newCfop !== '5405') {
-                                    showMessage('info', 'Produto com ST alterado para CFOP ' + newCfop + '. Verifique se está correto conforme sua operação.');
+                                  // Validar coerência com NCM se disponível
+                                  if (ncmValidacao.valido && ncmValidacao.temSubstituicaoTributaria !== undefined) {
+                                    validarCoerenciaCfopNcm(newCfop, ncmValidacao.temSubstituicaoTributaria);
                                   }
 
-                                  // Aplicar regras fiscais obrigatórias baseadas no CFOP
-                                  let newAliquotaIcms = novoProduto.aliquota_icms;
-
-                                  if (newCfop === '5102' || newCfop === '5101') {
-                                    // CFOP 5102/5101: CST 00 (Normal) ou CSOSN 102 (Simples)
-                                    newSituacaoTributaria = 'tributado_integral';
-                                    // CFOP 5102: Alíquota ICMS 18%
-                                    if (newCfop === '5102') {
-                                      newAliquotaIcms = 18;
-                                    }
-                                  } else if (newCfop === '5405' || newCfop === '5401' || newCfop === '5403') {
-                                    // CFOP 5405/5401/5403: CST 60 (Normal) ou CSOSN 500 (Simples)
-                                    newSituacaoTributaria = 'tributado_st';
-                                    // Outros CFOPs: Alíquota ICMS 0%
-                                    newAliquotaIcms = 0;
-                                  } else {
-                                    // Outros CFOPs: Alíquota ICMS 0%
-                                    newAliquotaIcms = 0;
-                                  }
-
-                                  // Se o CFOP não for 5405, limpar o CEST
-                                  if (newCfop !== '5405') {
-                                    setNovoProduto({
-                                      ...novoProduto,
-                                      cfop: newCfop,
-                                      cest: '',
-                                      situacao_tributaria: newSituacaoTributaria,
-                                      aliquota_icms: newAliquotaIcms
-                                    });
-                                  } else {
-                                    setNovoProduto({
-                                      ...novoProduto,
-                                      cfop: newCfop,
-                                      situacao_tributaria: newSituacaoTributaria,
-                                      aliquota_icms: newAliquotaIcms
-                                    });
-                                  }
+                                  // Apenas atualizar o CFOP, sem alterar situação tributária automaticamente
+                                  setNovoProduto({
+                                    ...novoProduto,
+                                    cfop: newCfop
+                                  });
                                 }}
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                 style={{
@@ -5104,50 +5176,31 @@ const ProdutosPage: React.FC = () => {
                                   whiteSpace: 'nowrap'
                                 }}
                                 required
-                                title={`${novoProduto.cfop || '5102'} - ${
-                                  novoProduto.cfop === '5102' ? 'Venda de mercadoria adquirida ou recebida de terceiros' :
-                                  novoProduto.cfop === '5101' ? 'Venda de produção do estabelecimento' :
-                                  novoProduto.cfop === '5405' ? 'Venda de mercadoria adquirida ou recebida de terceiros (ST)' :
-                                  novoProduto.cfop === '5401' ? 'Venda de produção do estabelecimento (ST)' :
-                                  novoProduto.cfop === '5403' ? 'Venda de mercadoria adquirida ou recebida de terceiros, sujeita ao regime de substituição tributária' :
-                                  'Código CFOP selecionado'
-                                }`}
                               >
-                                <option value="5102" title="5102 - Venda de mercadoria adquirida ou recebida de terceiros">
-                                  5102 - Venda de mercadoria de terceiros
-                                </option>
-                                <option value="5101" title="5101 - Venda de produção do estabelecimento">
-                                  5101 - Venda de produção própria
-                                </option>
-                                <option value="5405" title="5405 - Venda de mercadoria adquirida ou recebida de terceiros (ST)">
-                                  5405 - Venda de mercadoria de terceiros (ST)
-                                </option>
-                                <option value="5401" title="5401 - Venda de produção do estabelecimento (ST)">
-                                  5401 - Venda de produção própria (ST)
-                                </option>
-                                <option value="5403" title="5403 - Venda de mercadoria adquirida ou recebida de terceiros, sujeita ao regime de substituição tributária">
-                                  5403 - Venda com substituição tributária
-                                </option>
+                                {cfopsDisponiveis.map((cfop) => (
+                                  <option
+                                    key={cfop.codigo}
+                                    value={cfop.codigo}
+                                    title={`${cfop.codigo} - ${cfop.descricao}`}
+                                  >
+                                    {cfop.codigo} - {cfop.descricao.length > 50 ? cfop.descricao.substring(0, 50) + '...' : cfop.descricao}
+                                  </option>
+                                ))}
                               </select>
                               <p className="text-xs text-gray-500 mt-1">
                                 Passe o mouse sobre as opções para ver a descrição completa
                               </p>
 
-                              {/* Mensagem específica para ST automática - removida */}
-
-                              {/* Mensagem geral de regras fiscais */}
-                              {(['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')) && !ncmValidacao.temSubstituicaoTributaria && (
-                                <div className="mt-2 p-2 bg-yellow-900/20 border border-yellow-700/50 rounded text-xs">
-                                  <p className="text-yellow-300 font-medium">⚠️ Regra Fiscal Aplicada</p>
-                                  <p className="text-yellow-200 mt-1">
-                                    {(novoProduto.cfop === '5102' || novoProduto.cfop === '5101') && 'CFOP requer situação tributária "Tributada integralmente" (CST 00/CSOSN 102)'}
-                                    {(novoProduto.cfop === '5405' || novoProduto.cfop === '5401' || novoProduto.cfop === '5403') && 'CFOP requer situação tributária "ICMS por substituição tributária" (CST 60/CSOSN 500)'}
+                              {/* Alerta de coerência CFOP x NCM */}
+                              {cfopAlert.show && (
+                                <div className={`mt-2 p-2 border rounded text-xs ${
+                                  cfopAlert.type === 'warning'
+                                    ? 'bg-yellow-900/20 border-yellow-700/50'
+                                    : 'bg-blue-900/20 border-blue-700/50'
+                                }`}>
+                                  <p className={cfopAlert.type === 'warning' ? 'text-yellow-300' : 'text-blue-300'}>
+                                    {cfopAlert.message}
                                   </p>
-                                  {novoProduto.cfop === '5102' && (
-                                    <p className="text-yellow-200 mt-1 text-xs">
-                                      💡 CFOP 5102 sugere alíquota ICMS de 18% (varia por estado)
-                                    </p>
-                                  )}
                                 </div>
                               )}
                             </div>
@@ -5228,12 +5281,7 @@ const ProdutosPage: React.FC = () => {
                                     showMessage('info', `Códigos aplicados: CST ${codigosFiscais.cst} (Normal) / CSOSN ${codigosFiscais.csosn} (Simples)`);
                                   }
                                 }}
-                                disabled={['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')}
-                                className={`w-full border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
-                                  ['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '')
-                                    ? 'bg-gray-700/50 border-gray-600 cursor-not-allowed opacity-75'
-                                    : 'bg-gray-800/50 border-gray-700 focus:border-primary-500'
-                                }`}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                 style={{
                                   maxWidth: '100%',
                                   overflow: 'hidden',
@@ -5304,15 +5352,10 @@ const ProdutosPage: React.FC = () => {
                                 </option>
                               </select>
                               <p className="text-xs text-gray-500 mt-1">
-                                {['5102', '5101', '5405', '5401', '5403'].includes(novoProduto.cfop || '') ? (
-                                  <span className="text-yellow-400">
-                                    🔒 Campo bloqueado - Situação tributária definida automaticamente pelo CFOP selecionado
-                                  </span>
-                                ) : (
-                                  regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
-                                    ? 'Códigos CSOSN para Simples Nacional/MEI. Passe o mouse sobre as opções para ver detalhes.'
-                                    : 'Códigos CST para Regime Normal. Passe o mouse sobre as opções para ver detalhes.'
-                                )}
+                                {regimeTributario === 1 || regimeTributario === 2 || regimeTributario === 4
+                                  ? 'Códigos CSOSN para Simples Nacional/MEI. Passe o mouse sobre as opções para ver detalhes.'
+                                  : 'Códigos CST para Regime Normal. Passe o mouse sobre as opções para ver detalhes.'
+                                }
                               </p>
                             </div>
 
