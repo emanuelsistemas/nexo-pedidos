@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode } from 'lucide-react';
+import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Grupo, Produto, OpcaoAdicional, ProdutoOpcao } from '../../types';
 import { showMessage } from '../../utils/toast';
@@ -223,6 +223,17 @@ const ProdutosPage: React.FC = () => {
     title: '',
     message: '',
   });
+
+  const [cloneConfirmation, setCloneConfirmation] = useState<{
+    isOpen: boolean;
+    produto: Produto | null;
+    grupo: Grupo | null;
+  }>({
+    isOpen: false,
+    produto: null,
+    grupo: null,
+  });
+
   const [showWarning, setShowWarning] = useState(false);
   const [warningMessage, setWarningMessage] = useState('');
   const [produtoOpcoes, setProdutoOpcoes] = useState<Record<string, OpcaoAdicional[]>>({});
@@ -2556,6 +2567,67 @@ const ProdutosPage: React.FC = () => {
     });
   };
 
+  const handleCloneProduto = (grupo: Grupo, produto: Produto) => {
+    setCloneConfirmation({
+      isOpen: true,
+      produto,
+      grupo,
+    });
+  };
+
+  const handleConfirmClone = async () => {
+    if (!cloneConfirmation.produto || !cloneConfirmation.grupo) return;
+
+    try {
+      setIsLoading(true);
+
+      const produtoOriginal = cloneConfirmation.produto;
+      const grupo = cloneConfirmation.grupo;
+
+      // Obter o próximo código disponível
+      const nextCode = await getNextAvailableCode();
+
+      // Criar uma cópia do produto com novo código e nome modificado
+      const produtoClonado = {
+        ...produtoOriginal,
+        codigo: nextCode,
+        nome: `${produtoOriginal.nome} - COPIA`,
+        codigo_barras: '', // Limpar código de barras para evitar duplicatas
+      };
+
+      // Remover campos que não devem ser copiados
+      delete produtoClonado.id;
+      delete produtoClonado.created_at;
+      delete produtoClonado.updated_at;
+
+      // Configurar para edição
+      setIsGrupoForm(false);
+      setSelectedGrupo(grupo);
+      setEditingProduto(null);
+      setSelectedOpcoes([]);
+      setNovoProduto(produtoClonado);
+
+      // Fechar modal de confirmação
+      setCloneConfirmation({
+        isOpen: false,
+        produto: null,
+        grupo: null,
+      });
+
+      // Abrir sidebar para edição
+      setShowSidebar(true);
+      setActiveTab('dados');
+
+      showMessage('success', 'Produto clonado! Ajuste os dados conforme necessário.');
+
+    } catch (error) {
+      console.error('Erro ao clonar produto:', error);
+      showMessage('error', 'Erro ao clonar produto');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDeleteProduto = async (produtoId: string, grupoId: string) => {
     const { data: addons } = await supabase
       .from('produtos_opcoes_adicionais')
@@ -3127,6 +3199,13 @@ const ProdutosPage: React.FC = () => {
               title="Editar produto"
             >
               <Pencil size={14} />
+            </button>
+            <button
+              className="p-1.5 text-blue-400 hover:text-blue-300 transition-colors rounded"
+              onClick={() => handleCloneProduto(grupo, produto)}
+              title="Clonar produto"
+            >
+              <Copy size={14} />
             </button>
             <button
               className="p-1.5 text-red-400 hover:text-red-300 transition-colors rounded"
@@ -5464,6 +5543,50 @@ const ProdutosPage: React.FC = () => {
           setNfeValidationModal(prev => ({ ...prev, isOpen: false }));
         }}
       />
+
+      {/* Modal de Confirmação de Clonagem */}
+      <AnimatePresence>
+        {cloneConfirmation.isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card p-6 rounded-lg shadow-xl max-w-sm mx-4 w-full"
+            >
+              <h3 className="text-xl font-semibold text-white mb-2">Clonar Produto</h3>
+              <p className="text-gray-400 mb-6">
+                Deseja clonar o produto "{cloneConfirmation.produto?.nome}"?
+                Uma cópia será criada com um novo código e o nome será alterado para incluir "- COPIA".
+              </p>
+              <div className="flex gap-4">
+                <Button
+                  type="button"
+                  variant="text"
+                  className="flex-1"
+                  onClick={() => setCloneConfirmation({ isOpen: false, produto: null, grupo: null })}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="flex-1"
+                  onClick={handleConfirmClone}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Clonando...' : 'Clonar'}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <DeleteConfirmation
         isOpen={deleteConfirmation.isOpen}
