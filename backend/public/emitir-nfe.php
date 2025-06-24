@@ -512,13 +512,15 @@ try {
         $std->xProd = $nomeProduto;
         $std->NCM = $produto['ncm']; // NCM real obrigatório
 
-        // ✅ CORREÇÃO CRÍTICA: CEST deve vir IMEDIATAMENTE APÓS NCM (conforme documentação oficial)
+        // ✅ CORREÇÃO CRÍTICA: CEST deve ser tratado SEPARADAMENTE usando tagCEST()
         // Verificar se produto tem ST baseado nos códigos CST/CSOSN
         $cstICMS = $produto['cst_icms'] ?? '';
         $csosnICMS = $produto['csosn_icms'] ?? '';
         $temST = in_array($cstICMS, ['10', '30', '60', '70', '90']) ||
                  in_array($csosnICMS, ['201', '202', '203', '500', '900']);
 
+        // Armazenar dados do CEST para usar depois do tagprod()
+        $cestDados = null;
         if ($temST) {
             // Produto com ST - CEST é OBRIGATÓRIO
             if (empty($produto['cest'])) {
@@ -527,17 +529,14 @@ try {
 
             // Formatar CEST corretamente (7 dígitos com zeros à esquerda se necessário)
             $cestFormatado = str_pad($produto['cest'], 7, '0', STR_PAD_LEFT);
+            $cestDados = $cestFormatado;
 
-            // 🔍 TESTE CRÍTICO: Definir CEST como string explícita
-            $std->CEST = (string)$cestFormatado;
-
-            error_log("✅ CEST OBRIGATÓRIO adicionado APÓS NCM (ST): " . $produto['cest'] . " -> formatado: " . $cestFormatado);
-            error_log("🔍 DEBUG CEST - Tipo: " . gettype($std->CEST) . ", Valor: '{$std->CEST}', Tamanho: " . strlen($std->CEST));
+            error_log("✅ CEST OBRIGATÓRIO preparado para ST: " . $produto['cest'] . " -> formatado: " . $cestFormatado);
         } elseif (!empty($produto['cest'])) {
             // Produto sem ST mas com CEST informado - incluir mesmo assim
             $cestFormatado = str_pad($produto['cest'], 7, '0', STR_PAD_LEFT);
-            $std->CEST = (string)$cestFormatado;
-            error_log("✅ CEST opcional adicionado APÓS NCM (sem ST): " . $produto['cest'] . " -> formatado: " . $cestFormatado);
+            $cestDados = $cestFormatado;
+            error_log("✅ CEST opcional preparado (sem ST): " . $produto['cest'] . " -> formatado: " . $cestFormatado);
         } else {
             error_log("ℹ️ Produto {$item} sem ST e sem CEST - OK");
         }
@@ -560,15 +559,17 @@ try {
         $std->vOutro = null;
         $std->indTot = 1;
 
-        // 🔍 DEBUG: Verificar objeto $std antes de chamar tagprod
-        error_log("🔍 DEBUG ANTES tagprod() - Objeto \$std completo: " . json_encode($std));
-        error_log("🔍 DEBUG ANTES tagprod() - CEST presente: " . (isset($std->CEST) ? "SIM ({$std->CEST})" : "NÃO"));
+        // ✅ DEBUG: Verificar objeto $std antes de chamar tagprod (SEM CEST)
+        $debugProps = [];
+        foreach (get_object_vars($std) as $prop => $value) {
+            $debugProps[$prop] = $value;
+        }
+        error_log("🔍 DEBUG ANTES tagprod() - OBJETO SEM CEST: " . json_encode($debugProps, JSON_UNESCAPED_UNICODE));
 
-        // 🔍 CORREÇÃO: Usar método tagprod normal com CEST incluído
-        // O erro anterior mostrou que tagCEST() existe mas causa problemas
+        // ✅ CORREÇÃO BASEADA NA DOCUMENTAÇÃO SPED-NFE: tagprod() SEM CEST
         try {
-            $make->tagprod($std);
-            error_log("🔍 DEBUG - tagprod() executado COM CEST incluído no objeto");
+            $resposta = $make->tagprod($std);
+            error_log("✅ tagprod() executado - Resposta: " . ($resposta === true ? "TRUE" : json_encode($resposta)));
 
             // Verificar se há erros na biblioteca após processar
             $errors = $make->getErrors();
@@ -577,10 +578,40 @@ try {
             } else {
                 error_log("✅ NENHUM ERRO da biblioteca após tagprod()");
             }
+
         } catch (Exception $e) {
             error_log("❌ ERRO CRÍTICO em tagprod(): " . $e->getMessage());
             error_log("🔍 STACK TRACE: " . $e->getTraceAsString());
             throw $e;
+        }
+
+        // ✅ CORREÇÃO CRÍTICA: Usar tagCEST() SEPARADAMENTE após tagprod()
+        if ($cestDados !== null) {
+            try {
+                $stdCEST = new stdClass();
+                $stdCEST->item = $item;
+                $stdCEST->CEST = $cestDados;
+                $stdCEST->indEscala = null; // Opcional - indicador de escala relevante
+                $stdCEST->CNPJFab = null;   // Opcional - CNPJ do fabricante
+
+                error_log("🔍 DEBUG ANTES tagCEST() - OBJETO: " . json_encode($stdCEST, JSON_UNESCAPED_UNICODE));
+
+                $respostaCEST = $make->tagCEST($stdCEST);
+                error_log("✅ tagCEST() executado - Resposta: " . ($respostaCEST === true ? "TRUE" : json_encode($respostaCEST)));
+
+                // Verificar se há erros na biblioteca após processar CEST
+                $errorsCEST = $make->getErrors();
+                if (!empty($errorsCEST)) {
+                    error_log("⚠️ ERROS DA BIBLIOTECA após tagCEST(): " . json_encode($errorsCEST));
+                } else {
+                    error_log("✅ NENHUM ERRO da biblioteca após tagCEST()");
+                }
+
+            } catch (Exception $e) {
+                error_log("❌ ERRO CRÍTICO em tagCEST(): " . $e->getMessage());
+                error_log("🔍 STACK TRACE: " . $e->getTraceAsString());
+                throw $e;
+            }
         }
 
         // Tag IMPOSTO (container obrigatório)
