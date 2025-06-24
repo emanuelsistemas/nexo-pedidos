@@ -1614,6 +1614,13 @@ try {
                 'titulo' => 'Lote em Processamento',
                 'descricao' => 'A NFe foi enviada e está sendo processada pela SEFAZ.',
                 'solucao' => 'Aguarde alguns segundos e consulte o status novamente.'
+            ],
+
+            // Erros de ICMS-ST e CEST
+            '806' => [
+                'titulo' => 'CEST Obrigatório para ICMS-ST',
+                'descricao' => 'Operação com ICMS-ST sem informação do CEST (Código Especificador da Substituição Tributária).',
+                'solucao' => 'Informe o código CEST correto para produtos com Substituição Tributária (CST/CSOSN: 10, 30, 60, 70, 90, 201, 202, 203, 500, 900).'
             ]
         ];
 
