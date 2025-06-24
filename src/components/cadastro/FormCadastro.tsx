@@ -47,6 +47,9 @@ const FormCadastro: React.FC = () => {
     e.preventDefault();
     if (!isFormValid || isLoading) return;
 
+    let empresaId: string | null = null;
+    let userId: string | null = null;
+
     try {
       setIsLoading(true);
       setError('');
@@ -58,6 +61,7 @@ const FormCadastro: React.FC = () => {
       });
 
       if (authError) throw authError;
+      userId = authData.user?.id || null;
 
       // 2. Create empresa after auth user is created
       const { data: empresaData, error: empresaError } = await supabase
@@ -67,6 +71,7 @@ const FormCadastro: React.FC = () => {
         .single();
 
       if (empresaError) throw empresaError;
+      empresaId = empresaData.id;
 
       // 3. Get admin tipo_user_config_id
       const { data: adminTipoData, error: adminTipoError } = await supabase
@@ -77,6 +82,7 @@ const FormCadastro: React.FC = () => {
 
       if (adminTipoError) {
         console.error('Erro ao buscar tipo admin:', adminTipoError);
+        throw new Error('Erro ao buscar tipo de usuário admin');
       }
 
       // 4. Create usuario record with admin type and active status
@@ -88,7 +94,7 @@ const FormCadastro: React.FC = () => {
             nome,
             email,
             empresa_id: empresaData.id,
-            tipo_user_config_id: adminTipoData?.id, // Associar ao tipo admin
+            tipo_user_config_id: adminTipoData?.id ? [adminTipoData.id] : [], // Associar ao tipo admin como array
             status: true, // Define o status como ativo por padrão
           },
         ]);
@@ -135,6 +141,50 @@ const FormCadastro: React.FC = () => {
         // Não interrompe o fluxo de cadastro se houver erro na configuração de estoque
       }
 
+      // 8. Create default config tables records
+      try {
+        // Criar configuração de produtos padrão
+        const { error: produtosConfigError } = await supabase
+          .from('produtos_config')
+          .insert([{
+            empresa_id: empresaData.id,
+            opcoes_adicionais: false
+          }]);
+
+        if (produtosConfigError) {
+          console.error('Erro ao criar configuração de produtos:', produtosConfigError);
+        }
+
+        // Criar configuração de taxa de entrega padrão
+        const { error: taxaEntregaConfigError } = await supabase
+          .from('taxa_entrega_config')
+          .insert([{
+            empresa_id: empresaData.id,
+            habilitado: false,
+            tipo: 'distancia'
+          }]);
+
+        if (taxaEntregaConfigError) {
+          console.error('Erro ao criar configuração de taxa de entrega:', taxaEntregaConfigError);
+        }
+
+        // Criar configuração de conexão padrão
+        const { error: conexaoConfigError } = await supabase
+          .from('conexao_config')
+          .insert([{
+            empresa_id: empresaData.id,
+            habilita_conexao_whatsapp: false
+          }]);
+
+        if (conexaoConfigError) {
+          console.error('Erro ao criar configuração de conexão:', conexaoConfigError);
+        }
+
+      } catch (configTablesError) {
+        console.error('Erro ao criar tabelas de configuração padrão:', configTablesError);
+        // Não bloquear o cadastro se falhar ao criar essas configurações
+      }
+
       // Sign out the user since we want them to confirm their email first
       await supabase.auth.signOut();
 
@@ -145,6 +195,37 @@ const FormCadastro: React.FC = () => {
       });
     } catch (err: any) {
       console.error('Erro no cadastro:', err);
+
+      // Se houve erro e uma empresa foi criada, fazer limpeza
+      if (empresaId) {
+        console.log('Erro durante cadastro, iniciando limpeza da empresa:', empresaId);
+        try {
+          // Tentar deletar a empresa completa usando a função do banco
+          const { error: deleteError } = await supabase.rpc('deletar_empresa_completa', {
+            empresa_uuid: empresaId
+          });
+
+          if (deleteError) {
+            console.error('Erro ao limpar empresa após falha no cadastro:', deleteError);
+          } else {
+            console.log('Empresa limpa com sucesso após falha no cadastro');
+          }
+        } catch (cleanupError) {
+          console.error('Erro durante limpeza:', cleanupError);
+        }
+      }
+
+      // Se houve erro e um usuário foi criado no auth, tentar deletar
+      if (userId && !empresaId) {
+        console.log('Erro durante cadastro, tentando deletar usuário do auth:', userId);
+        try {
+          // Fazer logout para limpar a sessão
+          await supabase.auth.signOut();
+        } catch (authCleanupError) {
+          console.error('Erro ao limpar auth após falha no cadastro:', authCleanupError);
+        }
+      }
+
       setError(translateErrorMessage(err));
     } finally {
       setIsLoading(false);

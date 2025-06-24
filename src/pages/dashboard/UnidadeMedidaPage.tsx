@@ -168,6 +168,18 @@ const UnidadeMedidaPage: React.FC = () => {
       return;
     }
 
+    // Validar sigla: deve ter exatamente 2 caracteres
+    if (formData.sigla.length !== 2) {
+      showMessage('error', 'A sigla deve ter exatamente 2 caracteres');
+      return;
+    }
+
+    // Validar se a sigla contém apenas letras
+    if (!/^[A-Z]{2}$/.test(formData.sigla)) {
+      showMessage('error', 'A sigla deve conter apenas letras maiúsculas');
+      return;
+    }
+
     try {
       setIsLoading(true);
       const { data: userData } = await supabase.auth.getUser();
@@ -382,11 +394,26 @@ const UnidadeMedidaPage: React.FC = () => {
                       <input
                         type="text"
                         value={formData.sigla}
-                        onChange={(e) => setFormData({ ...formData, sigla: e.target.value })}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                        onChange={(e) => {
+                          // Remover espaços, converter para maiúsculas e limitar a 2 caracteres
+                          const value = e.target.value.replace(/\s/g, '').toUpperCase().slice(0, 2);
+                          setFormData({ ...formData, sigla: value });
+                        }}
+                        className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
+                          formData.sigla.length === 2
+                            ? 'border-green-500 focus:border-green-500'
+                            : 'border-red-500 focus:border-red-500'
+                        }`}
                         placeholder="Ex: KG, UN, CX"
+                        maxLength={2}
+                        minLength={2}
                         required
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        <span className={formData.sigla.length === 2 ? 'text-green-400' : 'text-red-400'}>
+                          Obrigatório: exatamente 2 caracteres ({formData.sigla.length}/2)
+                        </span>
+                      </p>
                     </div>
 
                     <div>
@@ -416,7 +443,7 @@ const UnidadeMedidaPage: React.FC = () => {
                         type="submit"
                         variant="primary"
                         className="flex-1"
-                        disabled={isLoading}
+                        disabled={isLoading || formData.sigla.length !== 2 || !formData.nome.trim()}
                       >
                         {isLoading ? 'Salvando...' : editingUnidade ? 'Salvar' : 'Criar'}
                       </Button>

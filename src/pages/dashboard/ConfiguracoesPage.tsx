@@ -1065,7 +1065,22 @@ const ConfiguracoesPage: React.FC = () => {
 
       const empresaId = usuarioData.empresa_id;
 
-      // Executar o script de exclusão completa da empresa
+      // 1. PRIMEIRO: Remover certificado digital se existir
+      try {
+        console.log('🗑️ Removendo certificado digital da empresa...');
+        const success = await removeCertificateLocal(empresaId);
+        if (success) {
+          console.log('✅ Certificado removido com sucesso');
+        } else {
+          console.log('⚠️ Certificado não encontrado ou já removido');
+        }
+      } catch (certError) {
+        console.warn('⚠️ Erro ao remover certificado (continuando com deleção):', certError);
+        // Não interromper o processo se falhar ao remover certificado
+      }
+
+      // 2. SEGUNDO: Executar o script de exclusão completa da empresa
+      console.log('🗑️ Deletando empresa completa...');
       const { error } = await supabase.rpc('deletar_empresa_completa', {
         empresa_uuid: empresaId
       });
@@ -1075,7 +1090,7 @@ const ConfiguracoesPage: React.FC = () => {
         throw new Error('Erro ao deletar empresa: ' + error.message);
       }
 
-      showMessage('success', 'Empresa deletada com sucesso!');
+      showMessage('success', 'Empresa e certificado deletados com sucesso!');
 
       // Fazer logout e redirecionar
       await supabase.auth.signOut();
