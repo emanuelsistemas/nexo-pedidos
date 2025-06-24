@@ -1580,6 +1580,18 @@ try {
             ];
         }
 
+        // ✅ CORREÇÃO: Status 104 não deve ser tratado como erro aqui
+        // Se chegou até aqui com status 104, significa que houve problema na extração do status individual
+        if ($status === '104') {
+            return [
+                'titulo' => 'Erro no Processamento do Lote',
+                'descricao' => 'O lote foi processado pela SEFAZ, mas não foi possível extrair o status individual da NFe.',
+                'solucao' => 'Consulte o status da NFe diretamente na SEFAZ ou tente reenviar.',
+                'status_original' => $status,
+                'motivo_original' => $motivo
+            ];
+        }
+
         return [
             'titulo' => 'Erro na Validação da NFe',
             'descricao' => $motivo,
