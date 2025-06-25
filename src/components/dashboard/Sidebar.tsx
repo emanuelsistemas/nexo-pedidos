@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart, Truck, FileText, UserCheck, Briefcase, Receipt, FileX } from 'lucide-react';
+import { ChevronRight, Home, Settings, QrCode, MessageSquare, Package2, ChevronDown, ListOrdered, PlusCircle, Bike, MapPin, Users, DollarSign, Ruler, ShoppingBag, ShoppingCart, Truck, FileText, UserCheck, Briefcase, Receipt, FileX, BarChart3 } from 'lucide-react';
 import Logo from '../comum/Logo';
 import UserProfileFooter from './UserProfileFooter';
 import { useSidebarStore } from '../../store/sidebarStore';
@@ -224,6 +224,14 @@ const Sidebar: React.FC = () => {
         tooltip: 'Conexão com WhatsApp'
       });
     }
+
+    // Adicionar relatórios antes das configurações
+    menuItems.push({
+      icon: BarChart3,
+      label: 'Relatórios',
+      path: '/dashboard/relatorios',
+      tooltip: 'Relatórios'
+    });
 
     // Adicionar configurações sempre por último
     menuItems.push({

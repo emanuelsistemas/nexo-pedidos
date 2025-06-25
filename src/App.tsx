@@ -24,6 +24,7 @@ import EstoqueMinimoPage from './pages/dashboard/EstoqueMinimoPage';
 import NfePage from './pages/dashboard/NfePage';
 import InutilizacaoPage from './pages/dashboard/InutilizacaoPage';
 import TesteEmailPage from './pages/dashboard/TesteEmailPage';
+import RelatoriosPage from './pages/dashboard/RelatoriosPage';
 
 // Páginas de usuário mobile
 import UserMobileLayout from './components/dashboard/UserMobileLayout';
@@ -72,6 +73,7 @@ function App() {
           <Route path="nfe" element={<NfePage />} />
           <Route path="inutilizacao" element={<InutilizacaoPage />} />
           <Route path="teste-email" element={<TesteEmailPage />} />
+          <Route path="relatorios" element={<RelatoriosPage />} />
           <Route path="configuracoes" element={<ConfiguracoesPage />} />
         </Route>
 
