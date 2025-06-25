@@ -6726,9 +6726,9 @@ const PDVPage: React.FC = () => {
             body {
               font-family: 'Courier New', monospace;
               font-size: 12px; /* Fonte original */
-              font-weight: 500; /* Peso original */
+              font-weight: 600; /* Aumentado de 500 para 600 para melhor impressão */
               color: #000000;
-              text-shadow: 0.3px 0 0 currentColor; /* Text-shadow original */
+              text-shadow: 0.4px 0 0 currentColor; /* Aumentado de 0.3px para 0.4px */
               line-height: 1.2;
               letter-spacing: 0.2px; /* Espaçamento original */
               padding: 0.1in !important; /* Padding em polegadas - MANTÉM */
@@ -7139,9 +7139,9 @@ const PDVPage: React.FC = () => {
             body {
               font-family: 'Courier New', monospace;
               font-size: 12px; /* Fonte original */
-              font-weight: 500; /* Peso original */
+              font-weight: 600; /* Aumentado de 500 para 600 para melhor impressão */
               color: #000000;
-              text-shadow: 0.3px 0 0 currentColor; /* Text-shadow original */
+              text-shadow: 0.4px 0 0 currentColor; /* Aumentado de 0.3px para 0.4px */
               line-height: 1.2;
               letter-spacing: 0.2px; /* Espaçamento original */
               padding: 0.1in !important; /* Padding em polegadas - MANTÉM */
@@ -7175,6 +7175,7 @@ const PDVPage: React.FC = () => {
             }
             .empresa-info {
               font-size: 12px; /* Tamanho original */
+              font-weight: 600; /* Adicionado peso para melhor impressão */
             }
             .total-section {
               font-size: 14px; /* Tamanho original */
