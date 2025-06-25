@@ -255,11 +255,23 @@ function criarXMLEspelho($nfeData, $empresa_id) {
         $produtos = $nfeData['produtos'] ?? [];
         $totais = $nfeData['totais'] ?? [];
 
-        // Debug específico das informações adicionais
-        // ✅ CORREÇÃO: Verificar ambos os campos (singular e plural)
-        $infoAdicional = $identificacao['informacao_adicional'] ?? $identificacao['informacoes_adicionais'] ?? '';
+        // ✅ CORREÇÃO: Buscar informações adicionais do JSON dados_nfe quando disponível
+        $infoAdicional = '';
 
-        // Debug completo dos dados de identificação
+        // 1. Primeiro tentar do campo identificacao (dados do formulário atual)
+        if (!empty($identificacao['informacao_adicional'])) {
+            $infoAdicional = $identificacao['informacao_adicional'];
+        }
+        // 2. Se não tiver, tentar do campo informacoes_adicionais da tabela
+        elseif (!empty($identificacao['informacoes_adicionais'])) {
+            $infoAdicional = $identificacao['informacoes_adicionais'];
+        }
+        // 3. Se ainda não tiver, usar texto padrão
+        else {
+            $infoAdicional = 'DOCUMENTO AUXILIAR PARA CONFERENCIA - NAO POSSUI VALOR FISCAL';
+        }
+
+        // Debug completo
         $debugInfoFile = __DIR__ . "/../storage/debug_info_adicional.txt";
         $debugContent = "=== DEBUG INFORMAÇÕES ADICIONAIS ===\n";
         $debugContent .= "Info Adicional Final: '" . $infoAdicional . "'\n";
@@ -500,7 +512,7 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                 </detPag>
             </pag>
             <infAdic>
-                <infCpl>' . htmlspecialchars(!empty($infoAdicional) ? $infoAdicional : 'DOCUMENTO AUXILIAR PARA CONFERENCIA - NAO POSSUI VALOR FISCAL') . '</infCpl>
+                <infCpl>' . htmlspecialchars($infoAdicional) . '</infCpl>
             </infAdic>
         </infNFe>
     </NFe>

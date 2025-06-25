@@ -2258,6 +2258,26 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         console.log('📦 ITENS REAIS:', itensReais);
 
         // ✅ USAR DADOS REAIS DA TABELA PDV (SEM FALLBACKS)
+        // ✅ CORREÇÃO: Carregar informações adicionais do JSON dados_nfe quando disponível
+        let informacaoAdicionalReal = '';
+
+        // 1. Primeiro tentar do JSON dados_nfe (dados completos salvos)
+        if (nfeSalva.dados_nfe) {
+          try {
+            const dadosNfeJson = typeof nfeSalva.dados_nfe === 'string'
+              ? JSON.parse(nfeSalva.dados_nfe)
+              : nfeSalva.dados_nfe;
+            informacaoAdicionalReal = dadosNfeJson?.identificacao?.informacao_adicional || '';
+          } catch (error) {
+            console.error('Erro ao fazer parse do dados_nfe:', error);
+          }
+        }
+
+        // 2. Se não tiver no JSON, usar campo direto da tabela
+        if (!informacaoAdicionalReal) {
+          informacaoAdicionalReal = nfeSalva.informacoes_adicionais || '';
+        }
+
         dadosReaisNfe = {
           // Dados da identificação REAIS
           identificacao: {
@@ -2268,7 +2288,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             data_emissao: nfeSalva.data_emissao_nfe || nfeSalva.created_at,
             chave_nfe: nfeSalva.chave_nfe,
             protocolo: nfeSalva.protocolo_nfe,
-            informacao_adicional: nfeSalva.informacoes_adicionais || ''
+            informacao_adicional: informacaoAdicionalReal
           },
           // Dados do destinatário REAIS
           destinatario: {
