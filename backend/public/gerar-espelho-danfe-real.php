@@ -255,6 +255,21 @@ function criarXMLEspelho($nfeData, $empresa_id) {
         $produtos = $nfeData['produtos'] ?? [];
         $totais = $nfeData['totais'] ?? [];
 
+        // Debug específico das informações adicionais
+        // ✅ CORREÇÃO: Verificar ambos os campos (singular e plural)
+        $infoAdicional = $identificacao['informacao_adicional'] ?? $identificacao['informacoes_adicionais'] ?? '';
+
+        // Debug completo dos dados de identificação
+        $debugInfoFile = __DIR__ . "/../storage/debug_info_adicional.txt";
+        $debugContent = "=== DEBUG INFORMAÇÕES ADICIONAIS ===\n";
+        $debugContent .= "Info Adicional Final: '" . $infoAdicional . "'\n";
+        $debugContent .= "Campo Singular (informacao_adicional): '" . ($identificacao['informacao_adicional'] ?? 'VAZIO') . "'\n";
+        $debugContent .= "Campo Plural (informacoes_adicionais): '" . ($identificacao['informacoes_adicionais'] ?? 'VAZIO') . "'\n";
+        $debugContent .= "Todos os campos de identificação:\n";
+        $debugContent .= json_encode($identificacao, JSON_PRETTY_PRINT) . "\n";
+        $debugContent .= "=== FIM DEBUG ===\n";
+        file_put_contents($debugInfoFile, $debugContent);
+
         // Debug específico do destinatário
         $debugDestFile = __DIR__ . "/../storage/debug_destinatario.json";
         file_put_contents($debugDestFile, json_encode($destinatario, JSON_PRETTY_PRINT));
@@ -386,20 +401,31 @@ function criarXMLEspelho($nfeData, $empresa_id) {
         if (!empty($produtos)) {
             foreach ($produtos as $index => $produto) {
                 $nItem = $index + 1;
+
+                // ✅ USAR DADOS CORRETOS DOS PRODUTOS
+                $ncm = $produto['ncm'] ?? '22021000'; // NCM correto para bebidas
+                $cfop = $produto['cfop'] ?? '5102'; // CFOP correto
+                $aliquotaIcms = $produto['aliquota_icms'] ?? 18; // Alíquota ICMS 18%
+
+                // Calcular valores de ICMS baseados nos dados reais
+                $valorProduto = $produto['valor_total'] ?? 0;
+                $baseCalculoIcms = $valorProduto; // Base de cálculo = valor do produto
+                $valorIcms = ($valorProduto * $aliquotaIcms) / 100; // Calcular ICMS real
+
                 $xml .= '
             <det nItem="' . $nItem . '">
                 <prod>
                     <cProd>' . htmlspecialchars($produto['codigo'] ?? $nItem) . '</cProd>
-                    <cEAN>SEM GTIN</cEAN>
+                    <cEAN>' . htmlspecialchars($produto['ean'] ?? 'SEM GTIN') . '</cEAN>
                     <xProd>' . htmlspecialchars($produto['descricao'] ?? 'Produto') . '</xProd>
-                    <NCM>00000000</NCM>
-                    <CFOP>5102</CFOP>
-                    <uCom>UN</uCom>
+                    <NCM>' . htmlspecialchars($ncm) . '</NCM>
+                    <CFOP>' . htmlspecialchars($cfop) . '</CFOP>
+                    <uCom>' . htmlspecialchars($produto['unidade'] ?? 'UN') . '</uCom>
                     <qCom>' . number_format($produto['quantidade'] ?? 1, 4, '.', '') . '</qCom>
                     <vUnCom>' . number_format($produto['valor_unitario'] ?? 0, 2, '.', '') . '</vUnCom>
-                    <vProd>' . number_format($produto['valor_total'] ?? 0, 2, '.', '') . '</vProd>
-                    <cEANTrib>SEM GTIN</cEANTrib>
-                    <uTrib>UN</uTrib>
+                    <vProd>' . number_format($valorProduto, 2, '.', '') . '</vProd>
+                    <cEANTrib>' . htmlspecialchars($produto['ean'] ?? 'SEM GTIN') . '</cEANTrib>
+                    <uTrib>' . htmlspecialchars($produto['unidade'] ?? 'UN') . '</uTrib>
                     <qTrib>' . number_format($produto['quantidade'] ?? 1, 4, '.', '') . '</qTrib>
                     <vUnTrib>' . number_format($produto['valor_unitario'] ?? 0, 2, '.', '') . '</vUnTrib>
                     <indTot>1</indTot>
@@ -409,10 +435,10 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                         <ICMS00>
                             <orig>0</orig>
                             <CST>00</CST>
-                            <modBC>0</modBC>
-                            <vBC>0.00</vBC>
-                            <pICMS>0.00</pICMS>
-                            <vICMS>0.00</vICMS>
+                            <modBC>3</modBC>
+                            <vBC>' . number_format($baseCalculoIcms, 2, '.', '') . '</vBC>
+                            <pICMS>' . number_format($aliquotaIcms, 2, '.', '') . '</pICMS>
+                            <vICMS>' . number_format($valorIcms, 2, '.', '') . '</vICMS>
                         </ICMS00>
                     </ICMS>
                     <PIS>
@@ -474,7 +500,7 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                 </detPag>
             </pag>
             <infAdic>
-                <infCpl>DOCUMENTO AUXILIAR PARA CONFERENCIA - NAO POSSUI VALOR FISCAL</infCpl>
+                <infCpl>' . htmlspecialchars(!empty($infoAdicional) ? $infoAdicional : 'DOCUMENTO AUXILIAR PARA CONFERENCIA - NAO POSSUI VALOR FISCAL') . '</infCpl>
             </infAdic>
         </infNFe>
     </NFe>
