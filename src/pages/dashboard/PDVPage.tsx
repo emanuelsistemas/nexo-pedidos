@@ -5057,9 +5057,36 @@ const PDVPage: React.FC = () => {
         console.log('🔢 FRONTEND: Série NFC-e do usuário:', serieUsuario);
       }
 
+      // ✅ NOVO: Coletar todos os vendedores únicos do carrinho
+      setEtapaProcessamento('Coletando vendedores da venda...');
+      const vendedoresUnicos = new Map();
+
+      // Adicionar vendedor principal se existir
+      if (vendedorSelecionado) {
+        vendedoresUnicos.set(vendedorSelecionado.id, {
+          id: vendedorSelecionado.id,
+          nome: vendedorSelecionado.nome
+        });
+      }
+
+      // Adicionar vendedores dos itens do carrinho
+      carrinho.forEach(item => {
+        if (item.vendedor_id && item.vendedor_nome) {
+          vendedoresUnicos.set(item.vendedor_id, {
+            id: item.vendedor_id,
+            nome: item.vendedor_nome
+          });
+        }
+      });
+
+      // Converter para array de IDs
+      const vendedoresIds = Array.from(vendedoresUnicos.keys());
+      console.log('🧑‍💼 FRONTEND: Vendedores coletados:', Array.from(vendedoresUnicos.values()));
+
       const vendaData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
+        vendedores_ids: vendedoresIds.length > 0 ? vendedoresIds : null, // ✅ NOVO: Salvar lista de vendedores
         numero_venda: numeroVenda,
         data_venda: new Date().toISOString(),
         status_venda: 'finalizada',

@@ -18,8 +18,12 @@ const RelatoriosPage: React.FC = () => {
   const [ambiente, setAmbiente] = useState(''); // 1=Produção, 2=Homologação
   const [tipoVenda, setTipoVenda] = useState(''); // 'nfce' ou 'vendas'
   const [incluirValor, setIncluirValor] = useState(true);
-  const [incluirProdutos, setIncluirProdutos] = useState(false);
-  const [incluirAdicionais, setIncluirAdicionais] = useState(false);
+  const [incluirProdutos, setIncluirProdutos] = useState(true);
+  const [incluirAdicionais, setIncluirAdicionais] = useState(true);
+
+  // Estados específicos para comissões
+  const [vendedorSelecionado, setVendedorSelecionado] = useState('');
+  const [vendedores, setVendedores] = useState<any[]>([]);
 
   // Estados para dados dos relatórios
   const [dadosVendas, setDadosVendas] = useState<any[]>([]);
@@ -109,8 +113,39 @@ const RelatoriosPage: React.FC = () => {
     }
   };
 
+  const carregarVendedores = async (empresaId: string) => {
+    try {
+      console.log('Carregando vendedores para empresa:', empresaId);
+
+      const { data, error } = await supabase
+        .from('vendedor_comissao')
+        .select(`
+          id,
+          usuario_id,
+          percentual_comissao,
+          tipo_comissao,
+          usuarios!inner(nome)
+        `)
+        .eq('empresa_id', empresaId)
+        .eq('ativo', true);
+
+      console.log('Resultado da consulta vendedores:', { data, error });
+
+      if (data && !error) {
+        setVendedores(data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar vendedores:', error);
+    }
+  };
+
   const handleSectionChange = (section: 'vendas' | 'comissoes') => {
     setActiveSection(section);
+
+    // Carregar vendedores quando mudar para comissões
+    if (section === 'comissoes' && empresaId && vendedores.length === 0) {
+      carregarVendedores(empresaId);
+    }
   };
 
   const testarAutenticacao = async () => {
@@ -256,8 +291,14 @@ const RelatoriosPage: React.FC = () => {
       }
 
       // Buscar produtos e adicionais separadamente se necessário
+      console.log('Verificando condições para buscar produtos/adicionais:');
+      console.log('- dadosFiltrados.length:', dadosFiltrados.length);
+      console.log('- incluirProdutos:', incluirProdutos);
+      console.log('- incluirAdicionais:', incluirAdicionais);
+      console.log('- Condição atendida:', dadosFiltrados.length > 0 && (incluirProdutos || incluirAdicionais));
+
       if (dadosFiltrados.length > 0 && (incluirProdutos || incluirAdicionais)) {
-        console.log('Buscando produtos e adicionais...');
+        console.log('✅ Buscando produtos e adicionais...');
 
         const pdvIds = dadosFiltrados.map(venda => venda.id);
 
@@ -280,6 +321,7 @@ const RelatoriosPage: React.FC = () => {
             .eq('empresa_id', empresaId);
 
           console.log('Produtos encontrados:', { produtosData, produtosError });
+          console.log('Total de produtos encontrados:', produtosData?.length || 0);
 
           if (produtosData && !produtosError) {
             produtosPorPdv = produtosData.reduce((acc, produto) => {
@@ -287,6 +329,7 @@ const RelatoriosPage: React.FC = () => {
               acc[produto.pdv_id].push(produto);
               return acc;
             }, {});
+            console.log('Produtos organizados por PDV:', produtosPorPdv);
           }
         }
 
@@ -354,35 +397,58 @@ const RelatoriosPage: React.FC = () => {
 
     setLoading(true);
     try {
-      // Por enquanto, vamos manter uma estrutura básica para comissões
-      // que pode ser expandida futuramente quando o sistema de vendedores for implementado
+      console.log('=== INICIANDO GERAÇÃO DE RELATÓRIO DE COMISSÕES ===');
+      console.log('Filtros aplicados:', {
+        dataInicio,
+        dataFim,
+        ambiente,
+        tipoVenda,
+        vendedorSelecionado
+      });
+
+      // Buscar itens de vendas com informações dos vendedores
       let query = supabase
-        .from('pdv')
+        .from('pdv_itens')
         .select(`
           id,
-          created_at,
-          valor_total,
-          nome_cliente,
-          status_venda,
-          status_fiscal,
-          modelo_documento
+          pdv_id,
+          produto_id,
+          nome_produto,
+          quantidade,
+          valor_unitario,
+          valor_total_item,
+          vendedor_id,
+          vendedor_nome,
+          pdv!inner(
+            created_at,
+            empresa_id,
+            status_venda,
+            status_fiscal,
+            modelo_documento,
+            nome_cliente
+          )
         `)
-        .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
+        .eq('pdv.empresa_id', empresaId)
+        .order('pdv.created_at', { ascending: false });
 
-      // Aplicar filtros
+      // Aplicar filtro por vendedor se selecionado
+      if (vendedorSelecionado) {
+        query = query.eq('vendedor_id', vendedorSelecionado);
+      }
+
+      // Aplicar filtros de data
       if (dataInicio) {
-        query = query.gte('created_at', `${dataInicio}T00:00:00`);
+        query = query.gte('pdv.created_at', `${dataInicio}T00:00:00`);
       }
       if (dataFim) {
-        query = query.lte('created_at', `${dataFim}T23:59:59`);
+        query = query.lte('pdv.created_at', `${dataFim}T23:59:59`);
       }
 
       // Filtro por tipo de venda
       if (tipoVenda === 'nfce') {
-        query = query.eq('modelo_documento', 65);
+        query = query.eq('pdv.modelo_documento', 65);
       } else if (tipoVenda === 'vendas') {
-        query = query.is('modelo_documento', null);
+        query = query.is('pdv.modelo_documento', null);
       }
 
       const { data, error } = await query;
@@ -394,17 +460,15 @@ const RelatoriosPage: React.FC = () => {
       // Filtrar por ambiente no frontend
       if (ambiente) {
         if (ambiente === '1') {
-          // Produção
-          dadosFiltrados = dadosFiltrados.filter(venda => {
-            if (venda.modelo_documento === 65) {
+          dadosFiltrados = dadosFiltrados.filter(item => {
+            if (item.pdv.modelo_documento === 65) {
               return ambienteAtual === '1';
             }
             return false;
           });
         } else if (ambiente === '2') {
-          // Homologação
-          dadosFiltrados = dadosFiltrados.filter(venda => {
-            if (venda.modelo_documento === 65) {
+          dadosFiltrados = dadosFiltrados.filter(item => {
+            if (item.pdv.modelo_documento === 65) {
               return ambienteAtual === '2';
             }
             return true;
@@ -412,13 +476,48 @@ const RelatoriosPage: React.FC = () => {
         }
       }
 
-      // Por enquanto, comissões serão 0 até implementarmos o sistema de vendedores
-      const comissoes = dadosFiltrados.map(venda => ({
-        ...venda,
-        valor_comissao: (venda.valor_total * 0.05) || 0 // 5% de comissão exemplo
-      }));
+      // Calcular comissões baseado na configuração dos vendedores
+      // Mostrar apenas itens que têm vendedor configurado
+      const comissoes = dadosFiltrados
+        .map((item) => {
+          // Buscar configuração de comissão do vendedor
+          const vendedorConfig = vendedores.find(v => v.usuario_id === item.vendedor_id);
+
+          if (!vendedorConfig) {
+            return null; // Não incluir itens sem vendedor configurado
+          }
+
+          let percentualComissao = 0;
+          let nomeVendedor = item.vendedor_nome || vendedorConfig.usuarios?.nome || 'Vendedor sem nome';
+
+          if (vendedorConfig.tipo_comissao === 'grupos') {
+            // Para comissão por grupos, usar 5% como exemplo
+            percentualComissao = 5;
+          } else {
+            percentualComissao = parseFloat(vendedorConfig.percentual_comissao) || 0;
+          }
+
+          const valorComissao = (item.valor_total_item * percentualComissao) / 100;
+
+          return {
+            id: item.id,
+            data_venda: item.pdv.created_at,
+            tipo_venda: item.pdv.modelo_documento === 65 ? 'NFC-e' : 'Venda',
+            cliente: item.pdv.nome_cliente || 'Consumidor Final',
+            produto: item.nome_produto,
+            quantidade: item.quantidade,
+            valor_unitario: item.valor_unitario,
+            valor_total: item.valor_total_item,
+            nome_vendedor: nomeVendedor,
+            percentual_comissao: percentualComissao,
+            valor_comissao: valorComissao
+          };
+        })
+        .filter(Boolean); // Remove valores null
 
       setDadosComissoes(comissoes);
+      console.log('Comissões calculadas:', comissoes.length, 'registros');
+
     } catch (error) {
       console.error('Erro ao gerar relatório de comissões:', error);
     } finally {
@@ -450,7 +549,7 @@ const RelatoriosPage: React.FC = () => {
       </h3>
       <div className="space-y-4">
         {/* Primeira linha de filtros */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className={`grid grid-cols-1 gap-4 ${activeSection === 'comissoes' ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Data Início
@@ -501,6 +600,26 @@ const RelatoriosPage: React.FC = () => {
               <option value="vendas">Vendas (sem NFC-e)</option>
             </select>
           </div>
+          {/* Filtro de vendedor - apenas para comissões */}
+          {activeSection === 'comissoes' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Vendedor
+              </label>
+              <select
+                value={vendedorSelecionado}
+                onChange={(e) => setVendedorSelecionado(e.target.value)}
+                className="w-full px-3 py-2 bg-background-dark border border-gray-700 rounded-lg text-white focus:border-primary-500 focus:outline-none"
+              >
+                <option value="">Todos os vendedores</option>
+                {vendedores.map((vendedor) => (
+                  <option key={vendedor.usuario_id} value={vendedor.usuario_id}>
+                    {vendedor.usuarios?.nome || 'Vendedor sem nome'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Segunda linha - Filtros de dados e botão */}
@@ -669,7 +788,7 @@ const RelatoriosPage: React.FC = () => {
                       {incluirProdutos && (
                         <td className="px-4 py-3 text-sm text-gray-300">
                           <div className="max-w-xs">
-                            {venda.pdv_itens && venda.pdv_itens.length > 0 ? (
+                            {venda.pdv_itens && venda.pdv_itens.length > 0 && (
                               venda.pdv_itens.map((item: any, itemIndex: number) => (
                                 <div key={itemIndex} className="text-xs mb-1 p-1 bg-gray-800/30 rounded">
                                   <div className="font-medium text-white">{item.nome_produto || 'Produto sem nome'}</div>
@@ -683,8 +802,6 @@ const RelatoriosPage: React.FC = () => {
                                   )}
                                 </div>
                               ))
-                            ) : (
-                              <span className="text-gray-500 text-xs">Nenhum produto encontrado</span>
                             )}
                           </div>
                         </td>
@@ -692,7 +809,7 @@ const RelatoriosPage: React.FC = () => {
                       {incluirAdicionais && (
                         <td className="px-4 py-3 text-sm text-gray-300">
                           <div className="max-w-xs">
-                            {venda.pdv_itens_adicionais && venda.pdv_itens_adicionais.length > 0 ? (
+                            {venda.pdv_itens_adicionais && venda.pdv_itens_adicionais.length > 0 && (
                               venda.pdv_itens_adicionais.map((adicional: any, addIndex: number) => (
                                 <div key={addIndex} className="text-xs mb-1 p-1 bg-blue-800/20 rounded">
                                   <div className="font-medium text-blue-300">{adicional.nome_adicional}</div>
@@ -703,8 +820,6 @@ const RelatoriosPage: React.FC = () => {
                                   </div>
                                 </div>
                               ))
-                            ) : (
-                              <span className="text-gray-500 text-xs">Nenhum adicional encontrado</span>
                             )}
                           </div>
                         </td>
@@ -718,6 +833,90 @@ const RelatoriosPage: React.FC = () => {
                   );
                 })}
               </tbody>
+
+              {/* Footer com totalizadores */}
+              <tfoot className="bg-gray-800/50 border-t border-gray-700">
+                <tr>
+                  <td colSpan={incluirValor ? 4 : 3} className="px-4 py-3 text-sm font-semibold text-gray-300">
+                    TOTAIS:
+                  </td>
+                  {incluirProdutos && (
+                    <td className="px-4 py-3 text-sm text-gray-300">
+                      <div className="text-xs">
+                        {(() => {
+                          const totalProdutos = dadosVendas.reduce((acc, venda) => {
+                            const produtos = venda.pdv_itens || [];
+                            return acc + produtos.length;
+                          }, 0);
+
+                          const totalQuantidadeProdutos = dadosVendas.reduce((acc, venda) => {
+                            const produtos = venda.pdv_itens || [];
+                            return acc + produtos.reduce((sum, item) => sum + (parseFloat(item.quantidade) || 0), 0);
+                          }, 0);
+
+                          const totalValorProdutos = dadosVendas.reduce((acc, venda) => {
+                            const produtos = venda.pdv_itens || [];
+                            return acc + produtos.reduce((sum, item) => sum + (parseFloat(item.valor_total_item) || 0), 0);
+                          }, 0);
+
+                          return (
+                            <div className="space-y-1">
+                              <div className="font-semibold text-white">
+                                {totalProdutos} produto{totalProdutos !== 1 ? 's' : ''}
+                              </div>
+                              <div className="text-gray-400">
+                                Qtd: {totalQuantidadeProdutos.toFixed(3)}
+                              </div>
+                              <div className="text-green-400 font-medium">
+                                Total: R$ {totalValorProdutos.toFixed(2)}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </td>
+                  )}
+                  {incluirAdicionais && (
+                    <td className="px-4 py-3 text-sm text-gray-300">
+                      <div className="text-xs">
+                        {(() => {
+                          const totalAdicionais = dadosVendas.reduce((acc, venda) => {
+                            const adicionais = venda.pdv_itens_adicionais || [];
+                            return acc + adicionais.length;
+                          }, 0);
+
+                          const totalQuantidadeAdicionais = dadosVendas.reduce((acc, venda) => {
+                            const adicionais = venda.pdv_itens_adicionais || [];
+                            return acc + adicionais.reduce((sum, item) => sum + (parseFloat(item.quantidade) || 0), 0);
+                          }, 0);
+
+                          const totalValorAdicionais = dadosVendas.reduce((acc, venda) => {
+                            const adicionais = venda.pdv_itens_adicionais || [];
+                            return acc + adicionais.reduce((sum, item) => sum + (parseFloat(item.valor_total) || 0), 0);
+                          }, 0);
+
+                          return totalAdicionais > 0 ? (
+                            <div className="space-y-1">
+                              <div className="font-semibold text-blue-300">
+                                {totalAdicionais} adicional{totalAdicionais !== 1 ? 'is' : ''}
+                              </div>
+                              <div className="text-gray-400">
+                                Qtd: {totalQuantidadeAdicionais.toFixed(3)}
+                              </div>
+                              <div className="text-blue-400 font-medium">
+                                Total: R$ {totalValorAdicionais.toFixed(2)}
+                              </div>
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                    </td>
+                  )}
+                  <td className="px-4 py-3 text-sm text-gray-300">
+                    {/* Coluna Status Fiscal - vazia no footer */}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -766,10 +965,22 @@ const RelatoriosPage: React.FC = () => {
                     Tipo
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Cliente
+                    Produto
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Vendedor
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Valor Venda
+                    Qtd
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Valor Unit.
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Valor Total
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    % Comissão
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Valor Comissão
@@ -778,27 +989,37 @@ const RelatoriosPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {dadosComissoes.map((comissao, index) => {
-                  const tipoVenda = comissao.modelo_documento === 65 ? 'NFC-e' : 'Venda';
-
                   return (
                     <tr key={index} className="hover:bg-gray-800/30">
                       <td className="px-4 py-3 text-sm text-gray-300">
-                        {new Date(comissao.created_at).toLocaleDateString('pt-BR')}
+                        {new Date(comissao.data_venda).toLocaleDateString('pt-BR')}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          tipoVenda === 'NFC-e' ? 'bg-primary-500/10 text-primary-400' : 'bg-gray-500/10 text-gray-400'
+                          comissao.tipo_venda === 'NFC-e' ? 'bg-primary-500/10 text-primary-400' : 'bg-gray-500/10 text-gray-400'
                         }`}>
-                          {tipoVenda}
+                          {comissao.tipo_venda}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-300">
-                        {comissao.nome_cliente || 'Consumidor Final'}
+                        {comissao.produto}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-300">
+                        {comissao.nome_vendedor}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                        {comissao.quantidade?.toFixed(3) || '0,000'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                        R$ {comissao.valor_unitario?.toFixed(2) || '0,00'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-300 text-right">
                         R$ {comissao.valor_total?.toFixed(2) || '0,00'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-400 text-right font-semibold">
+                      <td className="px-4 py-3 text-sm text-blue-400 text-right">
+                        {comissao.percentual_comissao?.toFixed(1) || '0,0'}%
+                      </td>
+                      <td className="px-4 py-3 text-sm text-green-400 text-right font-semibold">
                         R$ {comissao.valor_comissao?.toFixed(2) || '0,00'}
                       </td>
                     </tr>
@@ -877,16 +1098,14 @@ const RelatoriosPage: React.FC = () => {
   return (
     <div className="flex min-h-[calc(100vh-120px)] gap-6">
       {/* Sidebar de Relatórios */}
-      <div className="w-80 bg-background-card rounded-lg border border-gray-800 p-4 flex flex-col overflow-hidden h-full">
+      <div className="w-40 bg-background-card rounded-lg border border-gray-800 p-4 flex flex-col overflow-hidden h-full">
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-white mb-2">Relatórios</h2>
-          <p className="text-gray-400 text-sm">Analise o desempenho do seu negócio</p>
         </div>
 
         <nav className="space-y-2 flex-1 overflow-y-auto custom-scrollbar">
           {/* Seção Vendas */}
           <div className="mb-4">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Análises</h3>
             <button
               onClick={() => handleSectionChange('vendas')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
