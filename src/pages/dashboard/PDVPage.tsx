@@ -5966,6 +5966,15 @@ const PDVPage: React.FC = () => {
         '50mm': tipoImpressao50mm
       });
 
+      // ✅ DEBUG: Verificar dados de impressão
+      console.log('📋 Dados de impressão NFC-e:', {
+        vendedor: dadosImpressao.vendedor,
+        vendedores: dadosImpressao.vendedores,
+        operador: dadosImpressao.operador,
+        pagamento: dadosImpressao.pagamento,
+        cliente: dadosImpressao.cliente
+      });
+
       // Função para formatar moeda
       const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {
@@ -5992,24 +6001,42 @@ const PDVPage: React.FC = () => {
             }
             body {
               font-family: 'Courier New', monospace;
-              font-size: 9px; /* Menor para 50mm */
-              font-weight: 500;
+              font-size: 10px; /* Aumentada de 9px para 10px para melhor legibilidade */
+              font-weight: 600; /* Aumentado de 500 para 600 para impressão mais forte */
               color: #000000;
-              text-shadow: 0.2px 0 0 currentColor;
-              line-height: 1.1; /* Mais compacto */
+              text-shadow: 0.5px 0 0 currentColor, 0 0.5px 0 currentColor; /* Text-shadow mais forte */
+              line-height: 1.1;
               letter-spacing: 0.1px;
-              margin: 5px; /* Margem reduzida */
-              max-width: 45mm; /* Largura máxima para 50mm */
+              margin: 3px;
+              max-width: 42mm;
+              -webkit-print-color-adjust: exact; /* Força cores na impressão */
+              print-color-adjust: exact;
             }
             .center { text-align: center; }
-            .bold { font-weight: 900; font-size: 10px; } /* Ligeiramente maior para destaque */
-            .linha { border-top: 1px dashed #000; margin: 3px 0; } /* Espaçamento reduzido */
-            .item { margin: 1px 0; } /* Espaçamento mínimo */
-            .item-linha { display: flex; justify-content: space-between; font-size: 8px; }
-            .chave { font-size: 7px; word-break: break-all; line-height: 1.0; } /* Muito compacto */
-            .empresa-info { font-size: 8px; line-height: 1.0; } /* Info da empresa compacta */
-            .qr-code { width: 80px !important; height: 80px !important; } /* QR Code menor */
-            .total-section { font-size: 10px; font-weight: 900; } /* Total destacado */
+            .bold { font-weight: 900; font-size: 11px; } /* Aumentado para melhor destaque */
+            .linha { border-top: 2px dashed #000; margin: 3px 0; } /* Linha mais grossa para 50mm */
+            .item { margin: 1px 0; }
+            .item-linha {
+              display: flex;
+              justify-content: space-between;
+              font-size: 9px; /* Aumentado de 8px para 9px */
+              font-weight: 600; /* Peso maior para melhor impressão */
+              word-wrap: break-word;
+            }
+            .chave {
+              font-size: 8px; /* Aumentado de 7px para 8px */
+              font-weight: 600;
+              word-break: break-all;
+              line-height: 1.1;
+            }
+            .empresa-info {
+              font-size: 9px; /* Aumentado de 8px para 9px */
+              font-weight: 600;
+              line-height: 1.1;
+            }
+            .qr-code { width: 80px !important; height: 80px !important; }
+            .total-section { font-size: 11px; font-weight: 900; } /* Aumentado para destaque */
+            .valor-monetario { white-space: nowrap; font-weight: 700; } /* Peso maior para valores */
           `;
         } else {
           // CSS padrão para impressão 80mm
@@ -6109,7 +6136,7 @@ const PDVPage: React.FC = () => {
               <div>${item.nome}</div>
               <div class="item-linha">
                 <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
-                <span>${formatCurrency(item.valor_total)}</span>
+                <span class="valor-monetario">${formatCurrency(item.valor_total)}</span>
               </div>
               ${(() => {
                 // ✅ NOVO: Mostrar adicionais identados abaixo do produto principal
@@ -6148,7 +6175,7 @@ const PDVPage: React.FC = () => {
 
           <div class="item-linha bold total-section" style="margin: 5px 0;">
             <span>TOTAL:</span>
-            <span>${formatCurrency(dadosImpressao.venda.valor_total)}</span>
+            <span class="valor-monetario">${formatCurrency(dadosImpressao.venda.valor_total)}</span>
           </div>
 
           ${dadosImpressao.pagamento ? `
@@ -6247,12 +6274,100 @@ const PDVPage: React.FC = () => {
   // Função auxiliar para gerar e imprimir cupom (reutilizada)
   const gerarEImprimirCupom = async (dadosImpressao: any) => {
     try {
+      // ✅ NOVO: Detectar tipo de impressão configurado
+      const tipoImpressao80mm = pdvConfig?.tipo_impressao_80mm ?? true;
+      const tipoImpressao50mm = pdvConfig?.tipo_impressao_50mm ?? false;
+
+      console.log('🖨️ Cupom não fiscal - Tipo de impressão detectado:', {
+        '80mm': tipoImpressao80mm,
+        '50mm': tipoImpressao50mm
+      });
+
+      // ✅ DEBUG: Verificar dados de impressão cupom
+      console.log('📋 Dados de impressão cupom:', {
+        vendedor: dadosImpressao.vendedor,
+        vendedores: dadosImpressao.vendedores,
+        operador: dadosImpressao.operador,
+        pagamento: dadosImpressao.pagamento,
+        cliente: dadosImpressao.cliente
+      });
+
       // Função para formatar moeda
       const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {
           style: 'currency',
           currency: 'BRL'
         }).format(value);
+      };
+
+      // ✅ NOVO: Gerar CSS responsivo baseado no tipo de impressão (reutilizando a mesma função)
+      const gerarCSSImpressaoCupom = () => {
+        if (tipoImpressao50mm) {
+          // CSS otimizado para impressão 50mm (compacta)
+          return `
+            @media print {
+              @page { margin: 0; size: 50mm auto; }
+              body { margin: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 10px; /* Aumentada de 9px para 10px para melhor legibilidade */
+              font-weight: 600; /* Aumentado de 500 para 600 para impressão mais forte */
+              color: #000000;
+              text-shadow: 0.5px 0 0 currentColor, 0 0.5px 0 currentColor; /* Text-shadow mais forte */
+              line-height: 1.1;
+              letter-spacing: 0.1px;
+              margin: 3px;
+              max-width: 42mm;
+              -webkit-print-color-adjust: exact; /* Força cores na impressão */
+              print-color-adjust: exact;
+            }
+            .center { text-align: center; }
+            .bold { font-weight: 900; font-size: 11px; } /* Aumentado para melhor destaque */
+            .linha { border-top: 2px dashed #000; margin: 3px 0; } /* Linha mais grossa para 50mm */
+            .item { margin: 1px 0; }
+            .item-linha {
+              display: flex;
+              justify-content: space-between;
+              font-size: 9px; /* Aumentado de 8px para 9px */
+              font-weight: 600; /* Peso maior para melhor impressão */
+              word-wrap: break-word;
+            }
+            .empresa-info {
+              font-size: 9px; /* Aumentado de 8px para 9px */
+              font-weight: 600;
+              line-height: 1.1;
+            }
+            .total-section { font-size: 11px; font-weight: 900; } /* Aumentado para destaque */
+            .valor-monetario { white-space: nowrap; font-weight: 700; } /* Peso maior para valores */
+          `;
+        } else {
+          // CSS padrão para impressão 80mm
+          return `
+            @media print {
+              @page { margin: 0; size: 80mm auto; }
+              body { margin: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              font-weight: 500;
+              color: #000000;
+              text-shadow: 0.3px 0 0 currentColor;
+              line-height: 1.2;
+              letter-spacing: 0.2px;
+              margin: 10px;
+              max-width: 75mm; /* Largura máxima para 80mm */
+            }
+            .center { text-align: center; }
+            .bold { font-weight: 900; }
+            .linha { border-top: 1px dashed #000; margin: 5px 0; }
+            .item { margin: 2px 0; }
+            .item-linha { display: flex; justify-content: space-between; }
+            .empresa-info { font-size: 12px; }
+            .total-section { font-size: 14px; }
+          `;
+        }
       };
 
       // Criar HTML formatado para impressão
@@ -6263,29 +6378,11 @@ const PDVPage: React.FC = () => {
           <meta charset="UTF-8">
           <title>Cupom - Venda ${dadosImpressao.venda.numero}</title>
           <style>
-            @media print {
-              @page { margin: 0; }
-              body { margin: 0; }
-            }
-            body {
-              font-family: 'Courier New', monospace;
-              font-size: 12px;
-              font-weight: 500; /* Medium - peso intermediário */
-              color: #000000; /* Preto absoluto para máximo contraste */
-              text-shadow: 0.3px 0 0 currentColor; /* Simula peso ligeiramente maior - técnica para impressão térmica */
-              line-height: 1.2;
-              letter-spacing: 0.2px; /* Leve espaçamento para melhor legibilidade */
-              margin: 10px;
-            }
-            .center { text-align: center; }
-            .bold { font-weight: 900; } /* Extra bold para manter diferenciação clara */
-            .linha { border-top: 1px dashed #000; margin: 5px 0; }
-            .item { margin: 2px 0; }
-            .item-linha { display: flex; justify-content: space-between; }
+            ${gerarCSSImpressaoCupom()}
           </style>
         </head>
         <body>
-          <div class="center">
+          <div class="center empresa-info">
             ${pdvConfig?.mostrar_razao_social_cupom_finalizar ? `<div class="bold">${dadosImpressao.empresa.razao_social}</div>` : ''}
             ${dadosImpressao.empresa.nome_fantasia ? `<div class="bold">${dadosImpressao.empresa.nome_fantasia}</div>` : ''}
             <div>CNPJ: ${dadosImpressao.empresa.cnpj}</div>
@@ -6352,7 +6449,7 @@ const PDVPage: React.FC = () => {
               <div>${item.nome}</div>
               <div class="item-linha">
                 <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
-                <span>${formatCurrency(item.valor_total)}</span>
+                <span class="valor-monetario">${formatCurrency(item.valor_total)}</span>
               </div>
               ${(() => {
                 // ✅ NOVO: Mostrar adicionais identados abaixo do produto principal
@@ -6389,9 +6486,9 @@ const PDVPage: React.FC = () => {
             </div>
           ` : ''}
 
-          <div class="item-linha bold" style="font-size: 14px; margin: 5px 0;">
+          <div class="item-linha bold total-section" style="margin: 5px 0;">
             <span>TOTAL:</span>
-            <span>${formatCurrency(dadosImpressao.venda.valor_total)}</span>
+            <span class="valor-monetario">${formatCurrency(dadosImpressao.venda.valor_total)}</span>
           </div>
 
           ${dadosImpressao.pagamento ? `
