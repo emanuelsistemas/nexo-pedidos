@@ -6312,7 +6312,7 @@ const PDVPage: React.FC = () => {
 
       console.log('📦 FRONTEND: Itens carregados:', itensData.length);
 
-      // Buscar dados do vendedor se existir
+      // Buscar dados do vendedor principal se existir
       let vendedorData = null;
       if (venda.usuario_id) {
         const { data: vendedorInfo } = await supabase
@@ -6326,6 +6326,40 @@ const PDVPage: React.FC = () => {
             id: vendedorInfo.id,
             nome: vendedorInfo.nome
           };
+        }
+      }
+
+      // ✅ NOVO: Buscar todos os vendedores da venda (do campo vendedores_ids)
+      let vendedoresData = [];
+      if (venda.vendedores_ids && Array.isArray(venda.vendedores_ids) && venda.vendedores_ids.length > 0) {
+        const { data: vendedoresInfo } = await supabase
+          .from('usuarios')
+          .select('id, nome')
+          .in('id', venda.vendedores_ids);
+
+        if (vendedoresInfo && vendedoresInfo.length > 0) {
+          vendedoresData = vendedoresInfo.map(v => ({
+            id: v.id,
+            nome: v.nome
+          }));
+        }
+      }
+
+      // ✅ NOVO: Buscar vendedores dos itens individuais
+      const vendedoresItens = new Map();
+      for (const item of itensData) {
+        if (item.vendedor_id) {
+          if (!vendedoresItens.has(item.vendedor_id)) {
+            const { data: vendedorItem } = await supabase
+              .from('usuarios')
+              .select('id, nome')
+              .eq('id', item.vendedor_id)
+              .single();
+
+            if (vendedorItem) {
+              vendedoresItens.set(item.vendedor_id, vendedorItem.nome);
+            }
+          }
         }
       }
 
@@ -6365,13 +6399,16 @@ const PDVPage: React.FC = () => {
           nome_cliente: venda.nome_cliente,
           documento_cliente: venda.documento_cliente
         },
-        vendedor: vendedorData, // Incluir dados do vendedor
+        vendedor: vendedorData, // Incluir dados do vendedor principal
+        vendedores: vendedoresData, // ✅ NOVO: Incluir todos os vendedores da venda
         itens: itensData.map(item => ({
           codigo: item.codigo_produto || 'N/A',
           nome: item.nome_produto,
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
-          valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario)
+          valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario),
+          vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
+          vendedor_nome: vendedoresItens.get(item.vendedor_id) || null // ✅ NOVO: Nome do vendedor do item
         })),
         timestamp: new Date().toISOString(),
         tipo: 'nfce' // Identificar que é NFC-e
@@ -6421,7 +6458,7 @@ const PDVPage: React.FC = () => {
 
       console.log('📦 FRONTEND: Itens carregados:', itensData.length);
 
-      // Buscar dados do vendedor se existir
+      // Buscar dados do vendedor principal se existir
       let vendedorData = null;
       if (venda.usuario_id) {
         const { data: vendedorInfo } = await supabase
@@ -6435,6 +6472,40 @@ const PDVPage: React.FC = () => {
             id: vendedorInfo.id,
             nome: vendedorInfo.nome
           };
+        }
+      }
+
+      // ✅ NOVO: Buscar todos os vendedores da venda (do campo vendedores_ids)
+      let vendedoresDataCupom = [];
+      if (venda.vendedores_ids && Array.isArray(venda.vendedores_ids) && venda.vendedores_ids.length > 0) {
+        const { data: vendedoresInfo } = await supabase
+          .from('usuarios')
+          .select('id, nome')
+          .in('id', venda.vendedores_ids);
+
+        if (vendedoresInfo && vendedoresInfo.length > 0) {
+          vendedoresDataCupom = vendedoresInfo.map(v => ({
+            id: v.id,
+            nome: v.nome
+          }));
+        }
+      }
+
+      // ✅ NOVO: Buscar vendedores dos itens individuais
+      const vendedoresItensCupom = new Map();
+      for (const item of itensData) {
+        if (item.vendedor_id) {
+          if (!vendedoresItensCupom.has(item.vendedor_id)) {
+            const { data: vendedorItem } = await supabase
+              .from('usuarios')
+              .select('id, nome')
+              .eq('id', item.vendedor_id)
+              .single();
+
+            if (vendedorItem) {
+              vendedoresItensCupom.set(item.vendedor_id, vendedorItem.nome);
+            }
+          }
         }
       }
 
@@ -6466,13 +6537,16 @@ const PDVPage: React.FC = () => {
           nome_cliente: venda.nome_cliente,
           documento_cliente: venda.documento_cliente
         },
-        vendedor: vendedorData, // Incluir dados do vendedor
+        vendedor: vendedorData, // Incluir dados do vendedor principal
+        vendedores: vendedoresDataCupom, // ✅ NOVO: Incluir todos os vendedores da venda
         itens: itensData.map(item => ({
           codigo: item.codigo_produto || 'N/A',
           nome: item.nome_produto,
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
-          valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario)
+          valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario),
+          vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
+          vendedor_nome: vendedoresItensCupom.get(item.vendedor_id) || null // ✅ NOVO: Nome do vendedor do item
         })),
         timestamp: new Date().toISOString()
       };
