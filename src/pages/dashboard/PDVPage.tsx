@@ -190,6 +190,12 @@ const PDVPage: React.FC = () => {
   const [numeroNfceModalItens, setNumeroNfceModalItens] = useState<string>('');
   const [loadingProximoNumero, setLoadingProximoNumero] = useState(false);
 
+  // ✅ NOVO: Estados para seletor de unidade de medida
+  const [showSeletorUnidadeModal, setShowSeletorUnidadeModal] = useState(false);
+  const [itemParaEditarUnidade, setItemParaEditarUnidade] = useState<any>(null);
+  const [unidadesMedida, setUnidadesMedida] = useState<any[]>([]);
+  const [loadingUnidades, setLoadingUnidades] = useState(false);
+
   // Estados para filtros avançados
   const [showFiltrosVendas, setShowFiltrosVendas] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState<'todas' | 'canceladas' | 'finalizadas' | 'pedidos'>('todas');
@@ -2786,6 +2792,142 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Função para atualizar dados fiscais dos produtos com informações do cadastro
+  const handleAtualizarDadosProdutos = async () => {
+    if (itensNfceEdicao.length === 0) {
+      toast.warning('Nenhum produto para atualizar');
+      return;
+    }
+
+    try {
+      toast.info('Atualizando dados dos produtos...');
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Buscar dados atualizados dos produtos no cadastro
+      const produtoIds = itensNfceEdicao
+        .filter(item => item.produto_id) // Apenas produtos que têm ID (vieram do cadastro)
+        .map(item => item.produto_id);
+
+      if (produtoIds.length === 0) {
+        toast.warning('Nenhum produto vinculado ao cadastro para atualizar');
+        return;
+      }
+
+      const { data: produtosCadastro, error } = await supabase
+        .from('produtos')
+        .select(`
+          id,
+          codigo,
+          codigo_barras,
+          nome,
+          preco,
+          ncm,
+          cfop,
+          origem_produto,
+          situacao_tributaria,
+          cst_icms,
+          csosn_icms,
+          cst_pis,
+          cst_cofins,
+          cst_ipi,
+          aliquota_icms,
+          aliquota_pis,
+          aliquota_cofins,
+          aliquota_ipi,
+          cest,
+          margem_st,
+          peso_liquido,
+          unidade_medida_id,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome
+          )
+        `)
+        .in('id', produtoIds)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .eq('deletado', false);
+
+      if (error) throw error;
+
+      if (!produtosCadastro || produtosCadastro.length === 0) {
+        toast.warning('Nenhum produto encontrado no cadastro');
+        return;
+      }
+
+      // Atualizar itens com dados do cadastro
+      const itensAtualizados = itensNfceEdicao.map(item => {
+        const produtoCadastro = produtosCadastro.find(p => p.id === item.produto_id);
+
+        if (produtoCadastro) {
+          return {
+            ...item,
+            // ✅ ATUALIZAR TODOS OS DADOS FISCAIS DO CADASTRO:
+            ncm_editavel: produtoCadastro.ncm || item.ncm_editavel,
+            cfop_editavel: produtoCadastro.cfop || item.cfop_editavel,
+            cest_editavel: produtoCadastro.cest || item.cest_editavel,
+            margem_st_editavel: produtoCadastro.margem_st ?? item.margem_st_editavel,
+            aliquota_icms_editavel: produtoCadastro.aliquota_icms ?? item.aliquota_icms_editavel,
+            cst_editavel: produtoCadastro.cst_icms || item.cst_editavel,
+            csosn_editavel: produtoCadastro.csosn_icms || item.csosn_editavel,
+            origem_produto_editavel: produtoCadastro.origem_produto ?? item.origem_produto_editavel,
+
+            // Atualizar dados do produto também
+            produto: {
+              ...item.produto,
+              ncm: produtoCadastro.ncm || item.produto?.ncm,
+              cfop: produtoCadastro.cfop || item.produto?.cfop,
+              codigo_barras: produtoCadastro.codigo_barras || item.produto?.codigo_barras,
+              unidade_medida_id: produtoCadastro.unidade_medida_id || item.produto?.unidade_medida_id,
+              unidade_medida: produtoCadastro.unidade_medida || item.produto?.unidade_medida,
+              origem_produto: produtoCadastro.origem_produto ?? item.produto?.origem_produto,
+              situacao_tributaria: produtoCadastro.situacao_tributaria || item.produto?.situacao_tributaria,
+              cst_icms: produtoCadastro.cst_icms || item.produto?.cst_icms,
+              csosn_icms: produtoCadastro.csosn_icms || item.produto?.csosn_icms,
+              aliquota_icms: produtoCadastro.aliquota_icms ?? item.produto?.aliquota_icms,
+              cst_pis: produtoCadastro.cst_pis || item.produto?.cst_pis,
+              cst_cofins: produtoCadastro.cst_cofins || item.produto?.cst_cofins,
+              aliquota_pis: produtoCadastro.aliquota_pis ?? item.produto?.aliquota_pis,
+              aliquota_cofins: produtoCadastro.aliquota_cofins ?? item.produto?.aliquota_cofins,
+              cest: produtoCadastro.cest || item.produto?.cest,
+              margem_st: produtoCadastro.margem_st ?? item.produto?.margem_st
+            }
+          };
+        }
+
+        return item; // Manter item inalterado se não encontrado no cadastro
+      });
+
+      // Aplicar atualizações
+      setItensNfceEdicao(itensAtualizados);
+
+      const produtosAtualizadosCount = produtosCadastro.length;
+      toast.success(`${produtosAtualizadosCount} produto(s) atualizado(s) com dados do cadastro`);
+
+      console.log('✅ Produtos atualizados:', {
+        total: itensNfceEdicao.length,
+        atualizados: produtosAtualizadosCount,
+        produtosCadastro
+      });
+
+    } catch (error: any) {
+      console.error('Erro ao atualizar dados dos produtos:', error);
+      toast.error(`Erro ao atualizar produtos: ${error.message}`);
+    }
+  };
+
   // ✅ NOVA: Função para reprocessar NFC-e
   const reprocessarNfce = async () => {
     if (!vendaParaEditarNfce) return;
@@ -2844,8 +2986,11 @@ const PDVPage: React.FC = () => {
 
         console.log(`🔍 REPROCESSAMENTO - Item ${item.nome_produto}:`, {
           produto_unidade_medida: item.produto?.unidade_medida,
+          produto_unidade_medida_id: item.produto?.unidade_medida_id,
+          produto_unidade_medida_sigla: item.produto?.unidade_medida?.sigla,
           item_unidade: item.unidade,
-          unidade_final: unidadeCalculada
+          unidade_final_sigla: unidadeCalculada,
+          unidade_id_enviado: item.produto?.unidade_medida_id
         });
 
         return {
@@ -2853,7 +2998,7 @@ const PDVPage: React.FC = () => {
           descricao: item.nome_produto,
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
-          unidade: unidadeCalculada,
+          unidade: item.produto?.unidade_medida?.sigla, // ✅ CORREÇÃO: Usar sigla como string (igual venda normal)
           ncm: item.ncm_editavel || '00000000', // ✅ CORREÇÃO: Usar NCM editável
           cfop: item.cfop_editavel,
           cst_icms: item.regime_tributario === 1 ? undefined : item.cst_editavel, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
@@ -2863,6 +3008,7 @@ const PDVPage: React.FC = () => {
       });
 
       console.log('📋 REPROCESSAMENTO - Itens preparados:', itensAtualizados);
+      console.log('📋 REPROCESSAMENTO - Primeiro item detalhado:', JSON.stringify(itensAtualizados[0], null, 2));
 
       // Buscar dados da empresa e ambiente
       const { data: userData } = await supabase.auth.getUser();
@@ -3015,6 +3161,88 @@ const PDVPage: React.FC = () => {
       'RO': 11, 'RR': 14, 'SC': 42, 'SP': 35, 'SE': 28, 'TO': 27
     };
     return codigosUF[estado] || 35;
+  };
+
+  // ✅ NOVA: Função para carregar unidades de medida da empresa
+  const loadUnidadesMedida = async () => {
+    try {
+      setLoadingUnidades(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data: unidades, error } = await supabase
+        .from('unidade_medida')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('nome');
+
+      if (error) {
+        console.error('Erro ao carregar unidades de medida:', error);
+        toast.error('Erro ao carregar unidades de medida');
+        return;
+      }
+
+      setUnidadesMedida(unidades || []);
+    } catch (error) {
+      console.error('Erro ao carregar unidades de medida:', error);
+      toast.error('Erro ao carregar unidades de medida');
+    } finally {
+      setLoadingUnidades(false);
+    }
+  };
+
+  // ✅ NOVA: Função para atualizar unidade de medida do produto
+  const atualizarUnidadeProduto = async (unidadeSelecionada: any) => {
+    if (!itemParaEditarUnidade) return;
+
+    try {
+      // Atualizar produto na base de dados
+      const { error: updateError } = await supabase
+        .from('produtos')
+        .update({ unidade_medida_id: unidadeSelecionada.id })
+        .eq('id', itemParaEditarUnidade.produto_id);
+
+      if (updateError) {
+        console.error('Erro ao atualizar unidade do produto:', updateError);
+        toast.error('Erro ao atualizar unidade do produto');
+        return;
+      }
+
+      // Atualizar item na lista local
+      setItensNfceEdicao(prev => prev.map(item =>
+        item.id === itemParaEditarUnidade.id
+          ? {
+              ...item,
+              produto: {
+                ...item.produto,
+                unidade_medida_id: unidadeSelecionada.id,
+                unidade_medida: {
+                  id: unidadeSelecionada.id,
+                  sigla: unidadeSelecionada.sigla,
+                  nome: unidadeSelecionada.nome
+                }
+              }
+            }
+          : item
+      ));
+
+      toast.success(`Unidade atualizada para "${unidadeSelecionada.sigla}" com sucesso!`);
+      setShowSeletorUnidadeModal(false);
+      setItemParaEditarUnidade(null);
+
+    } catch (error) {
+      console.error('Erro ao atualizar unidade do produto:', error);
+      toast.error('Erro ao atualizar unidade do produto');
+    }
   };
 
   // Função para gerar o link público do pedido
@@ -7188,6 +7416,13 @@ const PDVPage: React.FC = () => {
       }
     };
   }, [showPedidosModal]);
+
+  // ✅ NOVO: useEffect para carregar unidades de medida quando modal abrir
+  useEffect(() => {
+    if (showSeletorUnidadeModal) {
+      loadUnidadesMedida();
+    }
+  }, [showSeletorUnidadeModal]);
 
   if (isLoading) {
     return (
@@ -13320,7 +13555,22 @@ const PDVPage: React.FC = () => {
                 ) : (
                   <div className="space-y-4">
                     <div className="bg-gray-800/30 rounded-lg p-4">
-                      <h4 className="text-lg font-medium text-white mb-4">Itens da Venda</h4>
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-medium text-white">Itens da Venda</h4>
+                        <button
+                          onClick={handleAtualizarDadosProdutos}
+                          className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                          title="Atualizar dados fiscais dos produtos com informações do cadastro"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                            <path d="M21 3v5h-5"/>
+                            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                            <path d="M3 21v-5h5"/>
+                          </svg>
+                          Atualizar dados dos produtos
+                        </button>
+                      </div>
                       <p className="text-gray-400 text-sm mb-4">
                         Revise e corrija os dados fiscais dos produtos. Clique no ícone de lápis para editar os campos CFOP, NCM, CEST, Margem ST, Alíquota, CST ou CSOSN.
                       </p>
@@ -13353,9 +13603,25 @@ const PDVPage: React.FC = () => {
                                 <td className="py-3 px-2 text-gray-300">{item.produto?.codigo_barras || '-'}</td>
                                 <td className="py-3 px-2 text-white">{item.nome_produto}</td>
                                 <td className="py-3 px-2 text-gray-300">
-                                  {item.produto?.unidade_medida?.sigla || item.unidade || (
-                                    <span className="text-red-400 font-medium">SEM UNIDADE</span>
-                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <span>
+                                      {item.produto?.unidade_medida?.sigla || item.unidade || (
+                                        <span className="text-red-400 font-medium">SEM UNIDADE</span>
+                                      )}
+                                    </span>
+                                    <button
+                                      onClick={() => {
+                                        setItemParaEditarUnidade(item);
+                                        setShowSeletorUnidadeModal(true);
+                                      }}
+                                      className="text-blue-400 hover:text-blue-300 transition-colors"
+                                      title="Selecionar unidade de medida"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </td>
                                 <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
 
@@ -13738,6 +14004,89 @@ const PDVPage: React.FC = () => {
                     )}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Seleção de Unidade de Medida */}
+      <AnimatePresence>
+        {showSeletorUnidadeModal && itemParaEditarUnidade && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setShowSeletorUnidadeModal(false);
+              setItemParaEditarUnidade(null);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Selecionar Unidade de Medida</h3>
+                  <p className="text-gray-400 text-sm">
+                    Produto: {itemParaEditarUnidade.nome_produto}
+                  </p>
+                </div>
+              </div>
+
+              {loadingUnidades ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="ml-2 text-gray-400">Carregando unidades...</span>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {unidadesMedida.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4">
+                      Nenhuma unidade de medida cadastrada
+                    </p>
+                  ) : (
+                    unidadesMedida.map((unidade) => (
+                      <button
+                        key={unidade.id}
+                        onClick={() => atualizarUnidadeProduto(unidade)}
+                        className="w-full text-left p-3 bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors border border-gray-600/50 hover:border-blue-500/50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-white font-medium">{unidade.sigla}</span>
+                            <span className="text-gray-400 ml-2">- {unidade.nome}</span>
+                          </div>
+                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowSeletorUnidadeModal(false);
+                    setItemParaEditarUnidade(null);
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
               </div>
             </motion.div>
           </motion.div>
