@@ -1893,7 +1893,7 @@ const PDVPage: React.FC = () => {
           desconto_prazo_id,
           desconto_valor_id,
           usuario_id,
-          cliente:clientes(id, nome, telefone, documento), // ✅ CORREÇÃO: Incluir campo documento para preenchimento automático da Nota Fiscal Paulista
+          cliente:clientes(id, nome, telefone, documento),
           pedidos_itens(
             id,
             quantidade,
@@ -2089,6 +2089,7 @@ const PDVPage: React.FC = () => {
           protocolo_cancelamento,
           empresa_id,
           usuario_id,
+          vendedores_ids,
           tentativa_nfce,
           status_fiscal,
           erro_fiscal,
@@ -2151,11 +2152,13 @@ const PDVPage: React.FC = () => {
 
 
 
-      // Buscar informações dos usuários (vendedores e quem cancelou)
+      // Buscar informações dos usuários (operadores, vendedores e quem cancelou)
       const usuariosIds = [
         ...new Set([
           ...vendasData.map(v => v.usuario_id).filter(Boolean),
-          ...vendasData.map(v => v.cancelada_por_usuario_id).filter(Boolean)
+          ...vendasData.map(v => v.cancelada_por_usuario_id).filter(Boolean),
+          // Adicionar vendedores das vendas
+          ...vendasData.flatMap(v => v.vendedores_ids || []).filter(Boolean)
         ])
       ];
 
@@ -2205,6 +2208,11 @@ const PDVPage: React.FC = () => {
           }
         }
 
+        // Processar vendedores da venda
+        const vendedoresVenda = venda.vendedores_ids && Array.isArray(venda.vendedores_ids)
+          ? venda.vendedores_ids.map(vendedorId => usuariosMap.get(vendedorId)).filter(Boolean)
+          : [];
+
         return {
           ...venda,
           numero_venda: venda.numero_venda || venda.id, // Usar numero_venda ou ID como fallback
@@ -2224,8 +2232,10 @@ const PDVPage: React.FC = () => {
             documento: venda.documento_cliente,
             telefone: venda.telefone_cliente
           } : null,
-          // Dados do usuário que fez a venda
+          // Dados do usuário que fez a venda (operador)
           usuario_venda: venda.usuario_id ? usuariosMap.get(venda.usuario_id) : null,
+          // Dados dos vendedores da venda
+          vendedores_venda: vendedoresVenda,
           // Dados do usuário que cancelou (se aplicável)
           usuario_cancelamento: venda.cancelada_por_usuario_id ? usuariosMap.get(venda.cancelada_por_usuario_id) : null,
           status: venda.status_venda || 'finalizada'
@@ -2429,6 +2439,8 @@ const PDVPage: React.FC = () => {
           origem_item,
           pedido_origem_numero,
           observacao_item,
+          vendedor_id,
+          vendedor_nome,
           cfop,
           cst_icms,
           csosn_icms,
@@ -2821,7 +2833,7 @@ const PDVPage: React.FC = () => {
         descricao: item.nome_produto,
         quantidade: item.quantidade,
         valor_unitario: item.valor_unitario,
-        unidade: item.produto?.unidade_medida?.sigla || 'UN',
+        unidade: item.produto?.unidade_medida?.sigla || 'UN', // ✅ CORREÇÃO: Garantir que sempre tenha uma unidade
         ncm: item.ncm_editavel || '00000000', // ✅ CORREÇÃO: Usar NCM editável
         cfop: item.cfop_editavel,
         cst_icms: item.regime_tributario === 1 ? undefined : item.cst_editavel, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
@@ -4640,7 +4652,7 @@ const PDVPage: React.FC = () => {
           descricao: item.nome_produto,
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
-          unidade: item.produto?.unidade_medida?.sigla || 'UN',
+          unidade: item.produto?.unidade_medida?.sigla || 'UN', // ✅ CORREÇÃO: Garantir que sempre tenha uma unidade
           ncm: item.ncm_editavel || item.produto?.ncm || '00000000',
           cfop: item.cfop_editavel || item.cfop || '5102',
           cst_icms: empresaData.regime_tributario === 1 ? undefined : (item.cst_editavel || item.cst_icms || '00'),
@@ -5152,6 +5164,9 @@ const PDVPage: React.FC = () => {
           origem_item: item.pedido_origem_numero ? 'pedido_importado' : 'manual',
           pedido_origem_id: item.pedido_origem_id || null,
           pedido_origem_numero: item.pedido_origem_numero || null,
+          // ✅ NOVO: Incluir dados do vendedor do item
+          vendedor_id: item.vendedor_id || null,
+          vendedor_nome: item.vendedor_nome || null,
           observacao_item: item.observacao || null
         };
       });
@@ -5461,7 +5476,7 @@ const PDVPage: React.FC = () => {
               descricao: item.produto.nome,
               quantidade: item.quantidade,
               valor_unitario: item.produto.preco,
-              unidade: item.produto.unidade_medida?.sigla, // Unidade real do produto (SEM FALLBACK)
+              unidade: item.produto.unidade_medida?.sigla || 'UN', // ✅ CORREÇÃO: Garantir que sempre tenha uma unidade
               ncm: item.produto.ncm, // NCM real do produto (SEM FALLBACK)
               cfop: item.produto.cfop, // CFOP real do produto (SEM FALLBACK)
               codigo_barras: item.produto.codigo_barras, // Código de barras real (SEM FALLBACK)
@@ -7416,6 +7431,15 @@ const PDVPage: React.FC = () => {
                                           <span>{item.produto.codigo_barras}</span>
                                         </div>
                                       )}
+                                      {/* ✅ NOVO: Mostrar valor unitário quando tem adicionais */}
+                                      {item.adicionais && item.adicionais.length > 0 && (
+                                        <div className="flex items-center gap-1 text-primary-400">
+                                          <span>•</span>
+                                          <span>{formatCurrency(item.produto.preco)} x {item.quantidade}</span>
+                                          <span>•</span>
+                                          <span>{item.produto.unidade_medida?.sigla || 'UN'}</span>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {/* ✅ NOVO: Exibir informações de desconto como no sistema de pedidos */}
@@ -7426,6 +7450,7 @@ const PDVPage: React.FC = () => {
                                           <span className="text-gray-400 line-through">{formatCurrency(item.produto.preco)}</span>
                                           <span className="text-primary-400 ml-2">{formatCurrency(calcularPrecoModalQuantidade(item.produto, item.quantidade))}</span>
                                           <span className="text-gray-400"> x {item.quantidade} = {formatCurrency(item.subtotal)}</span>
+                                          <span className="text-primary-400"> • {item.produto.unidade_medida?.sigla || 'UN'}</span>
                                         </p>
                                         {/* Texto explicativo do desconto */}
                                         <p className="text-xs text-green-400">
@@ -10875,6 +10900,14 @@ const PDVPage: React.FC = () => {
                               Operador: {venda.usuario_venda.nome}
                             </div>
                           )}
+                          {/* Informações dos Vendedores */}
+                          {venda.vendedores_venda && venda.vendedores_venda.length > 0 && (
+                            <div className="text-xs text-gray-500 truncate">
+                              Vendedor{venda.vendedores_venda.length > 1 ? 'es' : ''}: {
+                                venda.vendedores_venda.map(v => v.nome).join(', ')
+                              }
+                            </div>
+                          )}
                         </div>
 
                         {/* Resumo dos Itens */}
@@ -11449,6 +11482,7 @@ const PDVPage: React.FC = () => {
                                   {itensVenda[0]?.regime_tributario === 1 ? 'CSOSN' : 'CST'}
                                 </th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Unidade</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Vendedor</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -11807,6 +11841,11 @@ const PDVPage: React.FC = () => {
 
                                   {/* Unidade */}
                                   <td className="py-3 px-2 text-gray-300">{item.produto?.unidade_medida?.sigla || 'UN'}</td>
+
+                                  {/* Vendedor */}
+                                  <td className="py-3 px-2 text-gray-300">
+                                    {item.vendedor_nome || '-'}
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -11837,6 +11876,9 @@ const PDVPage: React.FC = () => {
                             </div>
                             {item.codigo_produto && (
                               <p className="text-xs text-gray-400">Código: {item.codigo_produto}</p>
+                            )}
+                            {item.vendedor_nome && (
+                              <p className="text-xs text-green-400">Vendedor: {item.vendedor_nome}</p>
                             )}
                             {item.descricao_produto && (
                               <p className="text-xs text-gray-500 mt-1">{item.descricao_produto}</p>
