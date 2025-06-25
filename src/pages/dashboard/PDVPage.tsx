@@ -5957,6 +5957,15 @@ const PDVPage: React.FC = () => {
   // Função auxiliar para gerar e imprimir cupom da NFC-e
   const gerarEImprimirCupomNfce = async (dadosImpressao: any) => {
     try {
+      // ✅ NOVO: Detectar tipo de impressão configurado
+      const tipoImpressao80mm = pdvConfig?.tipo_impressao_80mm ?? true;
+      const tipoImpressao50mm = pdvConfig?.tipo_impressao_50mm ?? false;
+
+      console.log('🖨️ Tipo de impressão detectado:', {
+        '80mm': tipoImpressao80mm,
+        '50mm': tipoImpressao50mm
+      });
+
       // Função para formatar moeda
       const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('pt-BR', {

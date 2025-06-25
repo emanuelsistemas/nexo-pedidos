@@ -249,7 +249,9 @@ const ConfiguracoesPage: React.FC = () => {
     rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
     mostrar_razao_social_cupom_finalizar: false,
     mostrar_endereco_cupom_finalizar: false,
-    mostrar_operador_cupom_finalizar: false
+    mostrar_operador_cupom_finalizar: false,
+    tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
+    tipo_impressao_50mm: false  // ✅ NOVO: 50mm desabilitado
   });
 
   // Estado para controlar as abas do PDV
@@ -2481,7 +2483,9 @@ const ConfiguracoesPage: React.FC = () => {
           rodape_personalizado: config.rodape_personalizado || 'Obrigado pela preferencia volte sempre!',
           mostrar_razao_social_cupom_finalizar: config.mostrar_razao_social_cupom_finalizar || false,
           mostrar_endereco_cupom_finalizar: config.mostrar_endereco_cupom_finalizar || false,
-          mostrar_operador_cupom_finalizar: config.mostrar_operador_cupom_finalizar || false
+          mostrar_operador_cupom_finalizar: config.mostrar_operador_cupom_finalizar || false,
+          tipo_impressao_80mm: config.tipo_impressao_80mm !== undefined ? config.tipo_impressao_80mm : true,  // ✅ NOVO
+          tipo_impressao_50mm: config.tipo_impressao_50mm !== undefined ? config.tipo_impressao_50mm : false  // ✅ NOVO
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2516,7 +2520,9 @@ const ConfiguracoesPage: React.FC = () => {
           rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
           mostrar_razao_social_cupom_finalizar: false,
           mostrar_endereco_cupom_finalizar: false,
-          mostrar_operador_cupom_finalizar: false
+          mostrar_operador_cupom_finalizar: false,
+          tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
+          tipo_impressao_50mm: false  // ✅ NOVO: 50mm desabilitado
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2553,7 +2559,9 @@ const ConfiguracoesPage: React.FC = () => {
         rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
         mostrar_razao_social_cupom_finalizar: false,
         mostrar_endereco_cupom_finalizar: false,
-        mostrar_operador_cupom_finalizar: false
+        mostrar_operador_cupom_finalizar: false,
+        tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
+        tipo_impressao_50mm: false  // ✅ NOVO: 50mm desabilitado
       });
 
       // Atualizar também o estado separado do rodapé
@@ -2802,7 +2810,9 @@ const ConfiguracoesPage: React.FC = () => {
         rodape_personalizado: pdvConfig.rodape_personalizado,
         mostrar_razao_social_cupom_finalizar: field === 'mostrar_razao_social_cupom_finalizar' ? value : pdvConfig.mostrar_razao_social_cupom_finalizar,
         mostrar_endereco_cupom_finalizar: field === 'mostrar_endereco_cupom_finalizar' ? value : pdvConfig.mostrar_endereco_cupom_finalizar,
-        mostrar_operador_cupom_finalizar: field === 'mostrar_operador_cupom_finalizar' ? value : pdvConfig.mostrar_operador_cupom_finalizar
+        mostrar_operador_cupom_finalizar: field === 'mostrar_operador_cupom_finalizar' ? value : pdvConfig.mostrar_operador_cupom_finalizar,
+        tipo_impressao_80mm: field === 'tipo_impressao_80mm' ? value : pdvConfig.tipo_impressao_80mm,  // ✅ NOVO
+        tipo_impressao_50mm: field === 'tipo_impressao_50mm' ? value : pdvConfig.tipo_impressao_50mm   // ✅ NOVO
       };
 
       if (existingConfig) {
@@ -2866,6 +2876,78 @@ const ConfiguracoesPage: React.FC = () => {
       // Reverter o estado local em caso de erro
       setPdvConfig(prev => ({ ...prev, [field]: !value }));
       showMessage('Erro ao salvar configuração: ' + error.message, 'error');
+    }
+  };
+
+  // ✅ NOVA: Função para lidar com tipos de impressão (apenas um pode estar ativo)
+  const handleTipoImpressaoChange = async (tipo: 'tipo_impressao_80mm' | 'tipo_impressao_50mm', value: boolean) => {
+    if (!value) return; // Não permitir desativar sem ativar outro
+
+    try {
+      // Atualizar o estado local primeiro - apenas um tipo pode estar ativo
+      const novoConfig = {
+        ...pdvConfig,
+        tipo_impressao_80mm: tipo === 'tipo_impressao_80mm' ? true : false,
+        tipo_impressao_50mm: tipo === 'tipo_impressao_50mm' ? true : false
+      };
+
+      setPdvConfig(novoConfig);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada');
+      }
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('pdv_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      const configData = {
+        empresa_id: usuarioData.empresa_id,
+        ...novoConfig
+      };
+
+      if (existingConfig) {
+        const { error } = await supabase
+          .from('pdv_config')
+          .update({
+            tipo_impressao_80mm: novoConfig.tipo_impressao_80mm,
+            tipo_impressao_50mm: novoConfig.tipo_impressao_50mm
+          })
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('pdv_config')
+          .insert([configData]);
+
+        if (error) throw error;
+      }
+
+      showMessage('success', `Tipo de impressão ${tipo === 'tipo_impressao_80mm' ? '80mm' : '50mm'} ativado com sucesso!`);
+
+    } catch (error: any) {
+      console.error('Erro ao salvar tipo de impressão:', error);
+      showMessage('error', 'Erro ao salvar tipo de impressão: ' + error.message);
+      // Reverter o estado em caso de erro
+      setPdvConfig(prev => ({
+        ...prev,
+        tipo_impressao_80mm: tipo === 'tipo_impressao_80mm' ? false : prev.tipo_impressao_80mm,
+        tipo_impressao_50mm: tipo === 'tipo_impressao_50mm' ? false : prev.tipo_impressao_50mm
+      }));
     }
   };
 
@@ -4130,8 +4212,60 @@ const ConfiguracoesPage: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Configurações do Cupom "Finalizar com Impressão" */}
+                    {/* ✅ NOVO: Tipos de Impressão */}
                     <div className="space-y-6">
+                      <div>
+                        <h4 className="text-lg font-medium text-white mb-4">
+                          Tipos de Impressão
+                        </h4>
+                        <p className="text-sm text-gray-400 mb-4">
+                          Selecione o tipo de impressão padrão para cupons e documentos fiscais.
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Impressão 80mm */}
+                          <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors border-2 border-transparent data-[checked=true]:border-primary-500">
+                            <input
+                              type="radio"
+                              name="tipo_impressao"
+                              checked={pdvConfig.tipo_impressao_80mm}
+                              onChange={(e) => handleTipoImpressaoChange('tipo_impressao_80mm', e.target.checked)}
+                              className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            />
+                            <div>
+                              <h5 className="text-white font-medium flex items-center gap-2">
+                                <Receipt size={16} className="text-green-400" />
+                                Impressão 80mm (Padrão)
+                              </h5>
+                              <p className="text-sm text-gray-400 mt-1">
+                                Formato padrão para impressoras térmicas de 80mm. Ideal para a maioria dos estabelecimentos.
+                              </p>
+                            </div>
+                          </label>
+
+                          {/* Impressão 50mm */}
+                          <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors border-2 border-transparent data-[checked=true]:border-primary-500">
+                            <input
+                              type="radio"
+                              name="tipo_impressao"
+                              checked={pdvConfig.tipo_impressao_50mm}
+                              onChange={(e) => handleTipoImpressaoChange('tipo_impressao_50mm', e.target.checked)}
+                              className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            />
+                            <div>
+                              <h5 className="text-white font-medium flex items-center gap-2">
+                                <Receipt size={16} className="text-blue-400" />
+                                Impressão 50mm (Compacta)
+                              </h5>
+                              <p className="text-sm text-gray-400 mt-1">
+                                Formato compacto para impressoras menores. Ideal para espaços reduzidos.
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Configurações do Cupom "Finalizar com Impressão" */}
                       <div>
                         <h4 className="text-lg font-medium text-white mb-4">
                           Configurações do Cupom "Finalizar com Impressão"

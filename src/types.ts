@@ -134,6 +134,11 @@ export interface PDVConfig {
   ocultar_nfce_producao?: boolean;
   ocultar_producao?: boolean;
   rodape_personalizado?: string;
+  mostrar_razao_social_cupom_finalizar?: boolean;
+  mostrar_endereco_cupom_finalizar?: boolean;
+  mostrar_operador_cupom_finalizar?: boolean;
+  tipo_impressao_80mm?: boolean;
+  tipo_impressao_50mm?: boolean;
   created_at?: string;
   updated_at?: string;
 }

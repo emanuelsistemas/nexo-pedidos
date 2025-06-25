@@ -180,6 +180,47 @@ const FormCadastro: React.FC = () => {
           console.error('Erro ao criar configuração de conexão:', conexaoConfigError);
         }
 
+        // Criar configuração PDV padrão
+        const { error: pdvConfigError } = await supabase
+          .from('pdv_config')
+          .insert([{
+            empresa_id: empresaData.id,
+            comandas: false,
+            mesas: false,
+            vendedor: false,
+            exibe_foto_item: false,
+            seleciona_clientes: false,
+            controla_caixa: false,
+            agrupa_itens: false,
+            delivery: false,
+            cardapio_digital: false,
+            delivery_chat_ia: false,
+            baixa_estoque_pdv: false,
+            venda_codigo_barras: false,
+            forca_venda_fiscal_cartao: false,
+            observacao_no_item: false,
+            desconto_no_item: false,
+            editar_nome_produto: false,
+            fiado: false,
+            vendas_itens_multiplicacao: false,
+            ocultar_finalizar_com_impressao: false,
+            ocultar_finalizar_sem_impressao: false,
+            ocultar_nfce_com_impressao: false,
+            ocultar_nfce_sem_impressao: false,
+            ocultar_nfce_producao: false,
+            ocultar_producao: false,
+            rodape_personalizado: 'Obrigado pela preferencia volte sempre!',
+            mostrar_razao_social_cupom_finalizar: false,
+            mostrar_endereco_cupom_finalizar: false,
+            mostrar_operador_cupom_finalizar: false,
+            tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
+            tipo_impressao_50mm: false  // ✅ NOVO: 50mm desabilitado
+          }]);
+
+        if (pdvConfigError) {
+          console.error('Erro ao criar configuração PDV:', pdvConfigError);
+        }
+
       } catch (configTablesError) {
         console.error('Erro ao criar tabelas de configuração padrão:', configTablesError);
         // Não bloquear o cadastro se falhar ao criar essas configurações
