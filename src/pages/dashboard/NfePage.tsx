@@ -2278,6 +2278,19 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           informacaoAdicionalReal = nfeSalva.informacoes_adicionais || '';
         }
 
+        // ✅ CORREÇÃO: Carregar chaves de referência do JSON dados_nfe
+        let chavesRefReais = [];
+        if (nfeSalva.dados_nfe) {
+          try {
+            const dadosNfeJson = typeof nfeSalva.dados_nfe === 'string'
+              ? JSON.parse(nfeSalva.dados_nfe)
+              : nfeSalva.dados_nfe;
+            chavesRefReais = dadosNfeJson?.chaves_ref || [];
+          } catch (error) {
+            console.error('Erro ao carregar chaves de referência:', error);
+          }
+        }
+
         dadosReaisNfe = {
           // Dados da identificação REAIS
           identificacao: {
@@ -2324,6 +2337,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
             valor_total: nfeSalva.valor_total,
             valor_desconto: nfeSalva.valor_desconto || 0
           },
+          // ✅ NOVO: Chaves de referência REAIS
+          chaves_ref: chavesRefReais,
           // Dados da empresa (já carregados)
           empresa: nfeData.empresa
         };

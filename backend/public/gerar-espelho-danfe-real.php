@@ -255,8 +255,9 @@ function criarXMLEspelho($nfeData, $empresa_id) {
         $produtos = $nfeData['produtos'] ?? [];
         $totais = $nfeData['totais'] ?? [];
 
-        // ✅ CORREÇÃO: Buscar informações adicionais do JSON dados_nfe quando disponível
+        // ✅ CORREÇÃO: Buscar informações adicionais e chaves de referência
         $infoAdicional = '';
+        $chavesRef = $nfeData['chaves_ref'] ?? [];
 
         // 1. Primeiro tentar do campo identificacao (dados do formulário atual)
         if (!empty($identificacao['informacao_adicional'])) {
@@ -271,12 +272,32 @@ function criarXMLEspelho($nfeData, $empresa_id) {
             $infoAdicional = 'DOCUMENTO AUXILIAR PARA CONFERENCIA - NAO POSSUI VALOR FISCAL';
         }
 
+        // ✅ NOVO: Adicionar chaves de referência às informações adicionais
+        if (!empty($chavesRef)) {
+            $chavesTexto = "\n\nDOCUMENTOS FISCAIS REFERENCIADOS:";
+            foreach ($chavesRef as $index => $chaveRef) {
+                $chave = $chaveRef['chave'] ?? '';
+                $chaveFormatada = $chaveRef['chave_formatada'] ?? '';
+                if (!empty($chave)) {
+                    $chavesTexto .= "\nNFe: " . ($chaveFormatada ?: $chave);
+                }
+            }
+            $infoAdicional .= $chavesTexto;
+        }
+
         // Debug completo
         $debugInfoFile = __DIR__ . "/../storage/debug_info_adicional.txt";
         $debugContent = "=== DEBUG INFORMAÇÕES ADICIONAIS ===\n";
         $debugContent .= "Info Adicional Final: '" . $infoAdicional . "'\n";
         $debugContent .= "Campo Singular (informacao_adicional): '" . ($identificacao['informacao_adicional'] ?? 'VAZIO') . "'\n";
         $debugContent .= "Campo Plural (informacoes_adicionais): '" . ($identificacao['informacoes_adicionais'] ?? 'VAZIO') . "'\n";
+        $debugContent .= "Chaves de Referência: " . count($chavesRef) . " encontrada(s)\n";
+        if (!empty($chavesRef)) {
+            foreach ($chavesRef as $index => $chave) {
+                $debugContent .= "  Chave " . ($index + 1) . ": " . ($chave['chave'] ?? 'VAZIO') . "\n";
+                $debugContent .= "  Formatada: " . ($chave['chave_formatada'] ?? 'VAZIO') . "\n";
+            }
+        }
         $debugContent .= "Todos os campos de identificação:\n";
         $debugContent .= json_encode($identificacao, JSON_PRETTY_PRINT) . "\n";
         $debugContent .= "=== FIM DEBUG ===\n";
@@ -456,17 +477,17 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                     <PIS>
                         <PISAliq>
                             <CST>01</CST>
-                            <vBC>0.00</vBC>
-                            <pPIS>0.00</pPIS>
-                            <vPIS>0.00</vPIS>
+                            <vBC>' . number_format($valorProduto, 2, '.', '') . '</vBC>
+                            <pPIS>1.65</pPIS>
+                            <vPIS>' . number_format(($valorProduto * 1.65) / 100, 2, '.', '') . '</vPIS>
                         </PISAliq>
                     </PIS>
                     <COFINS>
                         <COFINSAliq>
                             <CST>01</CST>
-                            <vBC>0.00</vBC>
-                            <pCOFINS>0.00</pCOFINS>
-                            <vCOFINS>0.00</vCOFINS>
+                            <vBC>' . number_format($valorProduto, 2, '.', '') . '</vBC>
+                            <pCOFINS>7.60</pCOFINS>
+                            <vCOFINS>' . number_format(($valorProduto * 7.60) / 100, 2, '.', '') . '</vCOFINS>
                         </COFINSAliq>
                     </COFINS>
                 </imposto>
@@ -474,15 +495,31 @@ function criarXMLEspelho($nfeData, $empresa_id) {
             }
         }
 
-        // Totais
+        // ✅ CALCULAR TOTAIS AUTOMATICAMENTE
         $valorProdutos = $totais['valor_produtos'] ?? 0;
         $valorTotal = $totais['valor_total'] ?? $valorProdutos;
+
+        // Calcular totais de impostos baseado nos produtos
+        $totalBaseICMS = 0;
+        $totalICMS = 0;
+        $totalPIS = 0;
+        $totalCOFINS = 0;
+
+        foreach ($produtos as $produto) {
+            $valorProduto = $produto['valor_total'] ?? 0;
+            $aliquotaIcms = $produto['aliquota_icms'] ?? 18;
+
+            $totalBaseICMS += $valorProduto;
+            $totalICMS += ($valorProduto * $aliquotaIcms) / 100;
+            $totalPIS += ($valorProduto * 1.65) / 100;
+            $totalCOFINS += ($valorProduto * 7.60) / 100;
+        }
 
         $xml .= '
             <total>
                 <ICMSTot>
-                    <vBC>0.00</vBC>
-                    <vICMS>0.00</vICMS>
+                    <vBC>' . number_format($totalBaseICMS, 2, '.', '') . '</vBC>
+                    <vICMS>' . number_format($totalICMS, 2, '.', '') . '</vICMS>
                     <vICMSDeson>0.00</vICMSDeson>
                     <vFCP>0.00</vFCP>
                     <vBCST>0.00</vBCST>
@@ -496,8 +533,8 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                     <vII>0.00</vII>
                     <vIPI>0.00</vIPI>
                     <vIPIDevol>0.00</vIPIDevol>
-                    <vPIS>0.00</vPIS>
-                    <vCOFINS>0.00</vCOFINS>
+                    <vPIS>' . number_format($totalPIS, 2, '.', '') . '</vPIS>
+                    <vCOFINS>' . number_format($totalCOFINS, 2, '.', '') . '</vCOFINS>
                     <vOutro>0.00</vOutro>
                     <vNF>' . number_format($valorTotal, 2, '.', '') . '</vNF>
                 </ICMSTot>
