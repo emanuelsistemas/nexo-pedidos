@@ -2199,7 +2199,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
     setRascunhoId(null);
   };
 
-  // ✅ FUNÇÃO PARA GERAR ESPELHO DANFE DA NFE
+  // ✅ FUNÇÃO PARA GERAR ESPELHO DANFE DA NFE - SEM FALLBACKS
   const handleGerarEspelho = async () => {
     try {
       showToast('Gerando espelho DANFE...', 'info');
@@ -2217,14 +2217,114 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
         return;
       }
 
-      // Preparar dados da NFe para o espelho DANFE
+      let dadosReaisNfe;
+
+      // ✅ BUSCAR DADOS REAIS DA NFE SALVA (SEM FALLBACKS)
+      // Tentar buscar dados reais se há qualquer indicação de NFe salva
+      const nfeId = rascunhoId || nfeData.id || nfeData.nfe_id;
+
+      console.log('🔍 VERIFICANDO CONDIÇÕES:');
+      console.log('- isEditingRascunho:', isEditingRascunho);
+      console.log('- rascunhoId:', rascunhoId);
+      console.log('- nfeData.id:', nfeData.id);
+      console.log('- nfeId final:', nfeId);
+
+      if (nfeId) {
+        console.log('🔍 Buscando dados reais da NFe salva (ID:', nfeId, ')');
+
+        // Buscar dados completos da NFe salva
+        const { data: nfeSalva, error: nfeError } = await supabase
+          .from('pdv')
+          .select('*')
+          .eq('id', nfeId)
+          .single();
+
+        if (nfeError || !nfeSalva) {
+          throw new Error('NFe salva não encontrada');
+        }
+
+        console.log('📋 DADOS NFE SALVA:', nfeSalva);
+
+        // Buscar itens reais da NFe salva
+        const { data: itensReais, error: itensError } = await supabase
+          .from('pdv_itens')
+          .select('*')
+          .eq('pdv_id', nfeId);
+
+        if (itensError) {
+          throw new Error('Erro ao buscar itens da NFe salva');
+        }
+
+        console.log('📦 ITENS REAIS:', itensReais);
+
+        // ✅ USAR DADOS REAIS DA TABELA PDV (SEM FALLBACKS)
+        dadosReaisNfe = {
+          // Dados da identificação REAIS
+          identificacao: {
+            modelo: nfeSalva.modelo_documento || 55,
+            serie: nfeSalva.serie_documento,
+            numero: nfeSalva.numero_documento,
+            natureza_operacao: nfeSalva.natureza_operacao,
+            data_emissao: nfeSalva.data_emissao_nfe || nfeSalva.created_at,
+            chave_nfe: nfeSalva.chave_nfe,
+            protocolo: nfeSalva.protocolo_nfe,
+            informacao_adicional: nfeSalva.informacoes_adicionais || ''
+          },
+          // Dados do destinatário REAIS
+          destinatario: {
+            nome: nfeSalva.nome_cliente,
+            documento: nfeSalva.documento_cliente,
+            tipo_documento: nfeSalva.tipo_documento_cliente,
+            // ✅ ADICIONAR ENDEREÇO REAL SE EXISTIR
+            endereco: nfeSalva.endereco_cliente,
+            telefone: nfeSalva.telefone_cliente,
+            email: nfeSalva.email_cliente
+          },
+          // Produtos REAIS da tabela pdv_itens
+          produtos: itensReais?.map(item => ({
+            codigo: item.codigo_produto,
+            descricao: item.nome_produto,
+            quantidade: item.quantidade,
+            valor_unitario: item.valor_unitario,
+            valor_total: item.valor_total_item,
+            ncm: item.ncm,
+            cfop: item.cfop,
+            unidade: item.unidade,
+            ean: item.ean || 'SEM GTIN',
+            cst: item.cst,
+            csosn: item.csosn,
+            origem: item.origem,
+            aliquota_icms: item.aliquota_icms,
+            valor_icms: item.valor_icms,
+            base_calculo_icms: item.base_calculo_icms
+          })) || [],
+          // Totais REAIS
+          totais: {
+            valor_produtos: nfeSalva.valor_subtotal || nfeSalva.valor_total,
+            valor_total: nfeSalva.valor_total,
+            valor_desconto: nfeSalva.valor_desconto || 0
+          },
+          // Dados da empresa (já carregados)
+          empresa: nfeData.empresa
+        };
+
+        console.log('✅ Dados reais da NFe carregados:', dadosReaisNfe);
+      } else {
+        // Se não é rascunho salvo, usar dados do formulário
+        dadosReaisNfe = nfeData;
+        console.log('⚠️ Usando dados do formulário (não é rascunho):', dadosReaisNfe);
+      }
+
+      // Preparar dados para o espelho DANFE
       const dadosEspelho = {
         empresa_id: usuarioData.empresa_id,
-        dados_nfe: nfeData
+        dados_nfe: dadosReaisNfe
       };
 
-      // Chamar endpoint que já funciona para gerar espelho DANFE
-      const response = await fetch('/backend/public/gerar-espelho-danfe.php', {
+      console.log('🚀 ENVIANDO PARA BACKEND:', dadosEspelho);
+
+      // Chamar endpoint simples para gerar espelho HTML
+      const response = await fetch('/backend/public/gerar-espelho-nfe.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2239,15 +2339,20 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       const result = await response.json();
 
       if (!result.sucesso) {
-        throw new Error(result.erro || 'Erro ao gerar espelho DANFE');
+        throw new Error(result.erro || 'Erro ao gerar espelho HTML');
       }
 
-      // Abrir o PDF do espelho DANFE em nova aba usando o endpoint que já funciona
-      const espelhoUrl = `/backend/public/download-arquivo.php?type=espelho&empresa_id=${usuarioData.empresa_id}&action=view`;
+      console.log('✅ Espelho gerado:', result);
+
+      // Extrair nome do arquivo do caminho retornado
+      const nomeArquivo = result.arquivo;
+
+      // Usar endpoint seguro para visualizar o espelho
+      const espelhoUrl = `/backend/public/visualizar-espelho.php?empresa_id=${usuarioData.empresa_id}&arquivo=${nomeArquivo}`;
 
       setTimeout(() => {
         window.open(espelhoUrl, '_blank');
-        showToast('Espelho DANFE gerado e aberto em nova aba', 'success');
+        showToast('Espelho HTML gerado e aberto em nova aba', 'success');
       }, 500);
 
     } catch (error) {
@@ -5080,14 +5185,17 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
                 )}
               </Button>
               <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  className={`${nfeEmitida ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 text-xs py-1.5`}
-                  onClick={handleGerarEspelho}
-                >
-                  <Download size={12} />
-                  Espelho
-                </Button>
+                {/* Botão ESPELHO - Só aparece se a NFe estiver salva (rascunho ou emitida) */}
+                {(isEditingRascunho || rascunhoId || nfeEmitida) && (
+                  <Button
+                    variant="secondary"
+                    className={`${nfeEmitida ? 'flex-1' : 'w-full'} flex items-center justify-center gap-1 text-xs py-1.5`}
+                    onClick={handleGerarEspelho}
+                  >
+                    <Download size={12} />
+                    Espelho
+                  </Button>
+                )}
                 {nfeEmitida && (
                   <Button variant="secondary" className="flex-1 flex items-center justify-center gap-1 text-xs py-1.5">
                     <Copy size={12} />
