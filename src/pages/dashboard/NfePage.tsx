@@ -2323,8 +2323,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
 
       console.log('🚀 ENVIANDO PARA BACKEND:', dadosEspelho);
 
-      // Chamar endpoint simples para gerar espelho HTML
-      const response = await fetch('/backend/public/gerar-espelho-nfe.php', {
+      // Chamar endpoint inteligente para gerar DANFE real ou espelho simples
+      const response = await fetch('/backend/public/gerar-espelho-danfe-real.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
