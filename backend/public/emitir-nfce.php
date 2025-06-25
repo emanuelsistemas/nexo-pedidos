@@ -102,7 +102,7 @@ function buscarDadosFiscaisProduto($codigoProduto, $empresaId) {
     $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
     $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
 
-    $url = $supabaseUrl . "/rest/v1/produtos?empresa_id=eq.{$empresaId}&codigo=eq.{$codigoProduto}&select=codigo,cst_pis,aliquota_pis,cst_cofins,aliquota_cofins,cst_icms,csosn_icms,aliquota_icms,origem_produto";
+    $url = $supabaseUrl . "/rest/v1/produtos?empresa_id=eq.{$empresaId}&codigo=eq.{$codigoProduto}&select=codigo,cst_pis,aliquota_pis,cst_cofins,aliquota_cofins,cst_icms,csosn_icms,aliquota_icms,origem_produto,margem_st,cest";
 
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
@@ -1062,11 +1062,55 @@ try {
                 'regime' => $regimeTributario
             ]);
 
-            // Para CSOSN 500 (ST), adicionar campos específicos se necessário
+            // Para CSOSN 500 (ST), adicionar campos específicos obrigatórios
             if ($std->CSOSN === '500') {
-                // CSOSN 500 = ICMS por substituição tributária
+                // ✅ CSOSN 500 - ICMS cobrado anteriormente por ST - USANDO DADOS REAIS
+                // Conforme Manual NFe - campos obrigatórios: vBCSTRet, pST, vICMSSTRet
+
                 logDetalhado('127.2', "Produto {$nItem} - CSOSN 500 (Substituição Tributária)", [
                     'csosn' => $std->CSOSN
+                ]);
+
+                // ✅ USAR DADOS REAIS DO PRODUTO (SEM FALLBACKS)
+                $margemST = (float)($produtoFiscal['margem_st'] ?? 0);
+                $aliquotaICMS = (float)($produtoFiscal['aliquota_icms'] ?? 0);
+                $valorBase = (float)($produto['valor_total'] ?? 0);
+
+                // Detectar nome do produto usando a mesma lógica da NFe
+                $nomeProduto = '';
+                if (isset($produto['descricao'])) {
+                    $nomeProduto = $produto['descricao'];
+                } elseif (isset($produto['nome'])) {
+                    $nomeProduto = $produto['nome'];
+                } elseif (isset($produto['name'])) {
+                    $nomeProduto = $produto['name'];
+                } elseif (isset($produto['produto'])) {
+                    $nomeProduto = $produto['produto'];
+                } else {
+                    $nomeProduto = 'Produto sem nome';
+                }
+
+                // Validar se dados ST estão configurados
+                if (!$margemST || !$aliquotaICMS) {
+                    throw new Exception("Produto '{$nomeProduto}' com CSOSN 500 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                }
+
+                // ✅ CÁLCULO BASEADO NOS DADOS REAIS DO PRODUTO
+                $baseSTCalculada = $valorBase * (1 + ($margemST / 100));
+                $valorSTRetido = round($baseSTCalculada * ($aliquotaICMS / 100), 2);
+
+                // ✅ CAMPOS OBRIGATÓRIOS PARA CSOSN 500
+                $std->vBCSTRet = $baseSTCalculada;  // Base de cálculo do ST retido
+                $std->pST = $aliquotaICMS;          // Alíquota do ST
+                $std->vICMSSTRet = $valorSTRetido;  // Valor do ST retido
+
+                logDetalhado('127.3', "CSOSN 500 - CÁLCULO COM DADOS REAIS", [
+                    'produto' => $nomeProduto,
+                    'preco_base' => $valorBase,
+                    'margem_st' => $margemST,
+                    'base_st_calculada' => $baseSTCalculada,
+                    'aliquota_icms' => $aliquotaICMS,
+                    'valor_st_retido' => $valorSTRetido
                 ]);
             }
 
@@ -1103,6 +1147,47 @@ try {
                     'cst' => $std->CST,
                     'aliquota' => $aliquotaICMS,
                     'valor_icms' => $std->vICMS
+                ]);
+            } elseif ($std->CST === '60') {
+                // ✅ CST 60 - ICMS cobrado anteriormente por ST - CALCULAR DINAMICAMENTE
+                $margemST = (float)($produtoFiscal['margem_st'] ?? 0);
+                $aliquotaICMS = (float)($produtoFiscal['aliquota_icms'] ?? 0);
+
+                // Detectar nome do produto usando a mesma lógica da NFe
+                $nomeProduto = '';
+                if (isset($produto['descricao'])) {
+                    $nomeProduto = $produto['descricao'];
+                } elseif (isset($produto['nome'])) {
+                    $nomeProduto = $produto['nome'];
+                } elseif (isset($produto['name'])) {
+                    $nomeProduto = $produto['name'];
+                } elseif (isset($produto['produto'])) {
+                    $nomeProduto = $produto['produto'];
+                } else {
+                    $nomeProduto = 'Produto sem nome';
+                }
+
+                // Validar se dados ST estão configurados
+                if (!$margemST || !$aliquotaICMS) {
+                    throw new Exception("Produto '{$nomeProduto}' com CST 60 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                }
+
+                // ✅ CÁLCULO BASEADO NOS DADOS REAIS DO PRODUTO
+                $baseSTCalculada = $valorBase * (1 + ($margemST / 100));
+                $valorSTRetido = round($baseSTCalculada * ($aliquotaICMS / 100), 2);
+
+                // ✅ CAMPOS OBRIGATÓRIOS PARA CST 60
+                $std->vBCSTRet = $baseSTCalculada;  // Base de cálculo do ST retido
+                $std->pST = $aliquotaICMS;          // Alíquota do ST
+                $std->vICMSSTRet = $valorSTRetido;  // Valor do ST retido
+
+                logDetalhado('127.7', "CST 60 - CÁLCULO COM DADOS REAIS", [
+                    'produto' => $nomeProduto,
+                    'preco_base' => $valorBase,
+                    'margem_st' => $margemST,
+                    'base_st_calculada' => $baseSTCalculada,
+                    'aliquota_icms' => $aliquotaICMS,
+                    'valor_st_retido' => $valorSTRetido
                 ]);
             } else {
                 // Outras operações (isentas, não tributadas, etc.)
