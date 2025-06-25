@@ -371,27 +371,42 @@ function gerarRelatorioMesCompletoMultiAmbiente($empresaId, $ano, $mes, $tipos, 
         $relatorio .= "=== AMBIENTE: " . strtoupper($ambiente) . " ===\n\n";
 
         foreach ($tipos as $tipo) {
-            $tipoPath = "{$basePath}/{$tipo}/{$ano}/{$mes}";
+            // Buscar arquivos considerando a estrutura de pastas por modelo
+            $xmlFilesFiltrados = [];
+            $totalTipo = 0;
+            $totalValorTipo = 0;
 
-            if (is_dir($tipoPath)) {
-                $xmlFiles = glob("{$tipoPath}/*.xml");
-                $totalTipo = 0;
-                $totalValorTipo = 0;
-
-                // Filtrar por modelo se especificado
-                $xmlFilesFiltrados = [];
-                foreach ($xmlFiles as $xmlFile) {
-                    if ($modelo !== 'todos') {
-                        $modeloXML = extrairModeloXML($xmlFile);
-                        if ($modeloXML !== $modelo) {
-                            continue;
-                        }
-                    }
-                    $xmlFilesFiltrados[] = $xmlFile;
-                    $totalTipo++;
+            if ($modelo === '55') {
+                $tipoPath = "{$basePath}/55/{$tipo}/{$ano}/{$mes}";
+                if (is_dir($tipoPath)) {
+                    $xmlFiles = glob("{$tipoPath}/*.xml");
+                    $xmlFilesFiltrados = $xmlFiles;
+                    $totalTipo = count($xmlFiles);
                 }
+            } elseif ($modelo === '65') {
+                $tipoPath = "{$basePath}/65/{$tipo}/{$ano}/{$mes}";
+                if (is_dir($tipoPath)) {
+                    $xmlFiles = glob("{$tipoPath}/*.xml");
+                    $xmlFilesFiltrados = $xmlFiles;
+                    $totalTipo = count($xmlFiles);
+                }
+            } else {
+                // Para 'todos', buscar em ambas as pastas
+                $caminhos = [
+                    "{$basePath}/55/{$tipo}/{$ano}/{$mes}",
+                    "{$basePath}/65/{$tipo}/{$ano}/{$mes}"
+                ];
 
-                $totalGeralArquivos += $totalTipo;
+                foreach ($caminhos as $tipoPath) {
+                    if (is_dir($tipoPath)) {
+                        $xmlFiles = glob("{$tipoPath}/*.xml");
+                        $xmlFilesFiltrados = array_merge($xmlFilesFiltrados, $xmlFiles);
+                        $totalTipo += count($xmlFiles);
+                    }
+                }
+            }
+
+            $totalGeralArquivos += $totalTipo;
 
                 $relatorio .= "--- {$tipo} ---\n";
                 $relatorio .= "Total: {$totalTipo} arquivos\n";
@@ -444,7 +459,6 @@ function gerarRelatorioMesCompletoMultiAmbiente($empresaId, $ano, $mes, $tipos, 
                 }
 
                 $relatorio .= "\n";
-            }
         }
         $relatorio .= "\n";
     }
