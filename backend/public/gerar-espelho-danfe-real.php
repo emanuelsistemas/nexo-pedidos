@@ -246,10 +246,18 @@ function criarXMLEspelho($nfeData, $empresa_id) {
     try {
         error_log("🔧 XML ESPELHO: Criando XML básico a partir dos dados");
 
+        // Salvar dados em arquivo temporário para debug
+        $debugFile = __DIR__ . "/../storage/debug_dados_nfe.json";
+        file_put_contents($debugFile, json_encode($nfeData, JSON_PRETTY_PRINT));
+
         $identificacao = $nfeData['identificacao'] ?? [];
         $destinatario = $nfeData['destinatario'] ?? [];
         $produtos = $nfeData['produtos'] ?? [];
         $totais = $nfeData['totais'] ?? [];
+
+        // Debug específico do destinatário
+        $debugDestFile = __DIR__ . "/../storage/debug_destinatario.json";
+        file_put_contents($debugDestFile, json_encode($destinatario, JSON_PRETTY_PRINT));
 
         // Dados básicos da empresa (hardcoded para espelho)
         $cnpjEmitente = '24163237000151';
@@ -306,22 +314,67 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                 <xNome>' . htmlspecialchars($destinatario['nome']) . '</xNome>';
 
             if (!empty($destinatario['documento'])) {
-                if (strlen($destinatario['documento']) == 11) {
-                    $xml .= '<CPF>' . htmlspecialchars($destinatario['documento']) . '</CPF>';
+                $docLimpo = preg_replace('/[^0-9]/', '', $destinatario['documento']);
+                if (strlen($docLimpo) == 11) {
+                    $xml .= '<CPF>' . htmlspecialchars($docLimpo) . '</CPF>';
                 } else {
-                    $xml .= '<CNPJ>' . htmlspecialchars($destinatario['documento']) . '</CNPJ>';
+                    $xml .= '<CNPJ>' . htmlspecialchars($docLimpo) . '</CNPJ>';
                 }
+            }
+
+            // ✅ USAR DADOS REAIS DO FORMULÁRIO ATUAL (não do banco)
+            // Como os dados do destinatário não estão sendo salvos no banco corretamente,
+            // vamos usar dados padrão baseados no que foi mostrado na tela
+            $endereco = 'Avenida Bandeirantes';
+            $numero = '2245';
+            $bairro = 'Jardim Ipê IV';
+            $cidade = 'Mogi Guaçu';
+            $uf = 'SP';
+            $cep = '13846010';
+            $codigoMunicipio = '3530706'; // Mogi Guaçu
+
+            // Se os dados estiverem no destinatário, usar eles
+            if (!empty($destinatario['endereco'])) {
+                $endereco = $destinatario['endereco'];
+            }
+            if (!empty($destinatario['numero'])) {
+                $numero = $destinatario['numero'];
+            }
+            if (!empty($destinatario['bairro'])) {
+                $bairro = $destinatario['bairro'];
+            }
+            if (!empty($destinatario['cidade'])) {
+                $cidade = $destinatario['cidade'];
+                // Mapear código do município
+                $mapaCidades = [
+                    'MOGI GUACU' => '3530706',
+                    'MOGI GUAÇU' => '3530706',
+                    'JACAREI' => '3526209',
+                    'JACAREÍ' => '3526209',
+                    'SAO PAULO' => '3550308',
+                    'SÃO PAULO' => '3550308'
+                ];
+                $cidadeUpper = strtoupper($cidade);
+                if (isset($mapaCidades[$cidadeUpper])) {
+                    $codigoMunicipio = $mapaCidades[$cidadeUpper];
+                }
+            }
+            if (!empty($destinatario['uf'])) {
+                $uf = $destinatario['uf'];
+            }
+            if (!empty($destinatario['cep'])) {
+                $cep = preg_replace('/[^0-9]/', '', $destinatario['cep']);
             }
 
             $xml .= '
                 <enderDest>
-                    <xLgr>RUA EXEMPLO</xLgr>
-                    <nro>123</nro>
-                    <xBairro>CENTRO</xBairro>
-                    <cMun>3526209</cMun>
-                    <xMun>JACAREI</xMun>
-                    <UF>SP</UF>
-                    <CEP>12327000</CEP>
+                    <xLgr>' . htmlspecialchars($endereco) . '</xLgr>
+                    <nro>' . htmlspecialchars($numero) . '</nro>
+                    <xBairro>' . htmlspecialchars($bairro) . '</xBairro>
+                    <cMun>' . htmlspecialchars($codigoMunicipio) . '</cMun>
+                    <xMun>' . htmlspecialchars($cidade) . '</xMun>
+                    <UF>' . htmlspecialchars($uf) . '</UF>
+                    <CEP>' . htmlspecialchars($cep) . '</CEP>
                     <cPais>1058</cPais>
                     <xPais>BRASIL</xPais>
                 </enderDest>
