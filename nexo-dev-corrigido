@@ -1,0 +1,202 @@
+#!/bin/bash
+
+# ╔══════════════════════════════════════════════════════════════╗
+# ║                🔥 NEXO PEDIDOS - DEV                        ║
+# ║              Build e Deploy para Desenvolvimento            ║
+# ╚══════════════════════════════════════════════════════════════╝
+
+# Configurações
+PROJECT_DIR="/root/nexo-pedidos"
+LOG_FILE="/var/log/nexo-dev.log"
+TIMESTAMP=$(date '+%d/%m/%Y %H:%M:%S')
+
+# Função de log
+log() {
+    echo "[$TIMESTAMP] $1" | tee -a "$LOG_FILE"
+}
+
+# Função para exibir header
+show_header() {
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║                🔥 NEXO PEDIDOS - DEV                        ║"
+    echo "║              Build e Deploy para Desenvolvimento            ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+}
+
+# Função para verificar se está na branch dev
+check_branch() {
+    cd "$PROJECT_DIR"
+    CURRENT_BRANCH=$(git branch --show-current)
+    
+    if [ "$CURRENT_BRANCH" != "dev" ]; then
+        echo "⚠️  ATENÇÃO: Você não está na branch 'dev'"
+        echo "   Branch atual: $CURRENT_BRANCH"
+        echo "   Recomendado: git checkout dev"
+        echo ""
+        read -p "Continuar mesmo assim? (y/N): " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "❌ Deploy cancelado"
+            exit 1
+        fi
+    fi
+}
+
+# Função principal
+main() {
+    show_header
+    
+    log "🔥 Iniciando deploy para DESENVOLVIMENTO"
+    
+    # Verificar se o diretório do projeto existe
+    if [ ! -d "$PROJECT_DIR" ]; then
+        echo "❌ Erro: Diretório do projeto não encontrado: $PROJECT_DIR"
+        exit 1
+    fi
+    
+    cd "$PROJECT_DIR"
+    log "📁 Diretório do projeto: $PROJECT_DIR"
+    
+    # Verificar branch
+    check_branch
+    
+    # Verificar dependências
+    log "🔍 Verificando dependências..."
+    if [ ! -d "node_modules" ]; then
+        log "📦 Instalando dependências do frontend..."
+        npm install
+        if [ $? -ne 0 ]; then
+            echo "❌ Erro ao instalar dependências do frontend"
+            exit 1
+        fi
+    else
+        log "✅ Dependências do frontend já instaladas"
+    fi
+    
+    # Verificar dependências do backend
+    if [ ! -d "backend/vendor" ]; then
+        log "📦 Instalando dependências do backend..."
+        cd backend && composer install && cd ..
+        if [ $? -ne 0 ]; then
+            echo "❌ Erro ao instalar dependências do backend"
+            exit 1
+        fi
+    else
+        log "✅ Dependências do backend já instaladas"
+    fi
+    
+    # Verificar arquivo .env
+    if [ ! -f ".env" ]; then
+        echo "❌ Arquivo .env não encontrado"
+        echo "   Copie o arquivo .env.example e configure suas credenciais"
+        exit 1
+    fi
+    log "✅ Arquivo .env encontrado"
+    
+    # ✅ CORRIGIDO: Criar apenas estrutura básica de diretórios
+    log "📁 Criando estrutura básica de diretórios..."
+    mkdir -p backend/storage/{certificados,logs,pdf,xml,espelhos}
+    
+    # ❌ REMOVIDO: Não criar pastas 55 e 65 na raiz
+    # mkdir -p backend/storage/pdf/{55,65}  # PROBLEMA: Criava na raiz!
+    # mkdir -p backend/storage/xml/{55,65}  # PROBLEMA: Criava na raiz!
+    
+    log "✅ Estrutura básica criada (sem pastas 55/65 na raiz)"
+    
+    # Build do frontend
+    log "🔨 Gerando build do frontend para DESENVOLVIMENTO..."
+    npm run build
+    if [ $? -ne 0 ]; then
+        echo "❌ Erro no build do frontend"
+        exit 1
+    fi
+    log "✅ Build gerado com sucesso em /dist"
+    
+    # Configurar permissões
+    log "🔐 Configurando permissões..."
+    sudo chown -R www-data:www-data backend/storage/
+    sudo chmod -R 755 backend/storage/
+    sudo chown -R www-data:www-data dist/
+    sudo chmod -R 755 dist/
+    
+    # Verificar configuração Nginx
+    log "🌐 Verificando configuração Nginx..."
+    if [ -f "/etc/nginx/sites-available/nexo-pedidos" ]; then
+        log "✅ Configuração Nginx encontrada"
+    else
+        echo "⚠️  Configuração Nginx não encontrada"
+        echo "   Execute a configuração inicial do Nginx"
+    fi
+    
+    # Verificar serviços
+    log "🔧 Verificando serviços..."
+    
+    # PHP-FPM
+    if systemctl is-active --quiet php8.3-fpm; then
+        log "✅ PHP-FPM está rodando"
+    else
+        log "⚠️ PHP-FPM não está rodando"
+        echo "ℹ️ Execute: sudo systemctl start php8.3-fpm"
+    fi
+    
+    # Nginx
+    if systemctl is-active --quiet nginx; then
+        log "✅ Nginx está rodando"
+    else
+        log "⚠️ Nginx não está rodando"
+        echo "ℹ️ Execute: sudo systemctl start nginx"
+    fi
+    
+    # Recarregar Nginx
+    log "🔄 Recarregando configuração Nginx..."
+    sudo systemctl reload nginx
+    
+    # Testar endpoints
+    log "🧪 Testando endpoints..."
+    
+    # Teste frontend
+    if curl -s -f "http://nexodev.emasoftware.app" > /dev/null; then
+        log "✅ Frontend acessível em http://nexodev.emasoftware.app"
+    else
+        log "⚠️ Frontend pode não estar acessível"
+    fi
+    
+    # Teste backend
+    if curl -s -f "http://nexodev.emasoftware.app/backend/public/status-nfe.php" > /dev/null; then
+        log "✅ Backend acessível"
+    else
+        log "⚠️ Backend pode não estar acessível"
+    fi
+    
+    # Finalização
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║                ✅ DEPLOY DEV CONCLUÍDO                      ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "🎯 AMBIENTE DE DESENVOLVIMENTO:"
+    echo "   • URL: http://nexodev.emasoftware.app"
+    echo "   • Branch: dev"
+    echo "   • Build: Estático otimizado"
+    echo "   • Logs: $LOG_FILE"
+    echo ""
+    echo "🔧 COMANDOS ÚTEIS:"
+    echo "   • Rebuild: nexo-dev"
+    echo "   • Logs Nginx: sudo tail -f /var/log/nginx/nexo-dev-error.log"
+    echo "   • Status: sudo systemctl status nginx php8.3-fpm"
+    echo ""
+    echo "📊 ENDPOINTS:"
+    echo "   • Frontend: http://nexodev.emasoftware.app"
+    echo "   • API Status: http://nexodev.emasoftware.app/backend/public/status-nfe.php"
+    echo "   • Logs API: http://nexodev.emasoftware.app/backend/public/logs.php"
+    echo ""
+    echo "🚀 Ambiente de desenvolvimento pronto!"
+    echo ""
+    
+    log "🔥 Deploy para DESENVOLVIMENTO concluído com sucesso"
+}
+
+# Executar função principal
+main "$@"

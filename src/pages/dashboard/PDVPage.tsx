@@ -187,6 +187,8 @@ const PDVPage: React.FC = () => {
   const [tipoDocumentoModalItens, setTipoDocumentoModalItens] = useState<'cpf' | 'cnpj'>('cpf');
   const [erroValidacaoModalItens, setErroValidacaoModalItens] = useState('');
   const [emitindoNfceModalItens, setEmitindoNfceModalItens] = useState(false);
+  const [numeroNfceModalItens, setNumeroNfceModalItens] = useState<string>('');
+  const [loadingProximoNumero, setLoadingProximoNumero] = useState(false);
 
   // Estados para filtros avançados
   const [showFiltrosVendas, setShowFiltrosVendas] = useState(false);
@@ -4430,9 +4432,36 @@ const PDVPage: React.FC = () => {
 
       console.log('✅ Usando itens já carregados com dados fiscais:', itensVenda);
 
-      // Gerar próximo número da NFC-e
-      const proximoNumero = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
-      const serieUsuario = usuarioData.serie_nfce || 1;
+      // ✅ NOVO: Usar número editável do modal ou gerar próximo número
+      let proximoNumero: number;
+      if (numeroNfceModalItens && parseInt(numeroNfceModalItens) > 0) {
+        proximoNumero = parseInt(numeroNfceModalItens);
+        console.log('🔢 MODAL: Usando número editado pelo usuário:', proximoNumero);
+      } else {
+        // Buscar dados do usuário para gerar próximo número
+        const { data: userDataLocal } = await supabase.auth.getUser();
+        if (!userDataLocal.user) throw new Error('Usuário não autenticado');
+
+        const { data: usuarioDataLocal } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userDataLocal.user.id)
+          .single();
+
+        if (!usuarioDataLocal?.empresa_id) throw new Error('Empresa não encontrada');
+
+        proximoNumero = await gerarProximoNumeroNFCe(usuarioDataLocal.empresa_id);
+        console.log('🔢 MODAL: Usando próximo número automático:', proximoNumero);
+      }
+
+      // Buscar série do usuário
+      const { data: usuarioDataSerie } = await supabase
+        .from('usuarios')
+        .select('serie_nfce')
+        .eq('id', userData.user.id)
+        .single();
+
+      const serieUsuario = usuarioDataSerie?.serie_nfce || 1;
 
       // Preparar dados da NFC-e
       const getCodigoUF = (estado: string): number => {
@@ -4545,12 +4574,8 @@ const PDVPage: React.FC = () => {
 
       toast.success('NFC-e emitida com sucesso!');
 
-      // Limpar campos
-      setCpfCnpjModalItens('');
-      setErroValidacaoModalItens('');
-
-      // Fechar modal e recarregar vendas
-      setShowItensVendaModal(false);
+      // Fechar modal, limpar campos e recarregar vendas
+      fecharModalItens();
       loadVendas();
 
     } catch (error: any) {
@@ -4636,6 +4661,61 @@ const PDVPage: React.FC = () => {
       const fallbackNumero = `PDV-${Date.now()}`;
       console.log('🔄 FRONTEND: Usando fallback por erro:', fallbackNumero);
       return fallbackNumero;
+    }
+  };
+
+  // ✅ NOVO: Função para limpar campos do modal de itens
+  const limparCamposModalItens = () => {
+    setCpfCnpjModalItens('');
+    setTipoDocumentoModalItens('cpf');
+    setErroValidacaoModalItens('');
+    setNumeroNfceModalItens('');
+    setEmitindoNfceModalItens(false);
+  };
+
+  // ✅ NOVO: Função para fechar modal de itens
+  const fecharModalItens = () => {
+    setShowItensVendaModal(false);
+    limparCamposModalItens();
+  };
+
+  // ✅ NOVO: Função para carregar próximo número da NFC-e no modal de itens
+  const carregarProximoNumeroNfceModal = async () => {
+    console.log('🔢 MODAL: Iniciando carregamento do próximo número...');
+
+    try {
+      setLoadingProximoNumero(true);
+
+      // Buscar dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.log('❌ MODAL: Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        console.log('❌ MODAL: Empresa ID não encontrado');
+        return;
+      }
+
+      console.log('🔢 MODAL: Carregando próximo número NFC-e para empresa:', usuarioData.empresa_id);
+
+      const proximoNumero = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
+      setNumeroNfceModalItens(proximoNumero.toString());
+      console.log('✅ MODAL: Próximo número carregado e definido:', proximoNumero);
+    } catch (error) {
+      console.error('❌ MODAL: Erro ao carregar próximo número:', error);
+      setNumeroNfceModalItens('1'); // Fallback
+      console.log('🔄 MODAL: Usando fallback número 1');
+    } finally {
+      setLoadingProximoNumero(false);
+      console.log('🔢 MODAL: Loading finalizado');
     }
   };
 
@@ -10689,10 +10769,17 @@ const PDVPage: React.FC = () => {
                         {/* Botões de Ação */}
                         <div className="flex flex-col gap-2 mt-auto">
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               setVendaParaExibirItens(venda);
                               setShowItensVendaModal(true);
                               carregarItensVenda(venda.id);
+                              // ✅ NOVO: Carregar próximo número da NFC-e se for venda sem NFC-e
+                              if (!venda.tentativa_nfce && venda.status_venda === 'finalizada') {
+                                // Aguardar um pouco para garantir que o modal abriu
+                                setTimeout(() => {
+                                  carregarProximoNumeroNfceModal();
+                                }, 100);
+                              }
                             }}
                             className="w-full px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded text-xs transition-colors font-medium border border-blue-600/30 hover:border-blue-600/50"
                           >
@@ -10916,7 +11003,7 @@ const PDVPage: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            onClick={() => setShowItensVendaModal(false)}
+            onClick={fecharModalItens}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -10937,7 +11024,7 @@ const PDVPage: React.FC = () => {
                     </p>
                   </div>
                   <button
-                    onClick={() => setShowItensVendaModal(false)}
+                    onClick={fecharModalItens}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     <X size={20} />
@@ -10956,7 +11043,7 @@ const PDVPage: React.FC = () => {
                       <h4 className="text-green-400 font-medium">Emitir NFC-e</h4>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                       {/* Tipo de Documento */}
                       <div>
                         <label className="block text-green-300 text-xs font-medium mb-2">
@@ -11022,6 +11109,29 @@ const PDVPage: React.FC = () => {
                             <span>{erroValidacaoModalItens}</span>
                           </div>
                         )}
+                      </div>
+
+                      {/* ✅ NOVO: Campo Número da NFC-e */}
+                      <div>
+                        <label className="block text-green-300 text-xs font-medium mb-1">
+                          Número da NFC-e
+                        </label>
+                        <div className="text-xs text-gray-400 mb-1">
+                          Será usado na emissão da NFC-e
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={numeroNfceModalItens}
+                            onChange={(e) => setNumeroNfceModalItens(e.target.value)}
+                            placeholder="Próximo número"
+                            min="1"
+                            className="flex-1 bg-gray-800/50 border border-gray-700 rounded py-1.5 px-2 text-sm text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20 transition-colors"
+                          />
+                          {loadingProximoNumero && (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-400"></div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Botão Emitir */}
