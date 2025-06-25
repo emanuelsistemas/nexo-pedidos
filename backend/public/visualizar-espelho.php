@@ -20,8 +20,8 @@ try {
         throw new Exception('empresa_id inválido');
     }
     
-    // ✅ VALIDAR NOME DO ARQUIVO (apenas arquivos de espelho)
-    if (!preg_match('/^espelho_nfe_[a-f0-9\-_]+\.html$/i', $arquivo)) {
+    // ✅ VALIDAR NOME DO ARQUIVO (arquivos de espelho e DANFE)
+    if (!preg_match('/^(espelho_nfe_|espelho_simples_|danfe_real_)[a-f0-9\-_]+\.(html|pdf)$/i', $arquivo)) {
         throw new Exception('Nome de arquivo inválido');
     }
     
@@ -46,18 +46,30 @@ try {
         throw new Exception('Acesso negado');
     }
     
-    // ✅ LER E SERVIR O ARQUIVO HTML
-    $conteudoHtml = file_get_contents($caminhoEspelho);
-    
-    if ($conteudoHtml === false) {
-        throw new Exception('Erro ao ler arquivo');
+    // ✅ DETECTAR TIPO DE ARQUIVO E SERVIR ADEQUADAMENTE
+    $extensao = strtolower(pathinfo($arquivo, PATHINFO_EXTENSION));
+
+    if ($extensao === 'pdf') {
+        // ✅ SERVIR PDF
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="' . basename($arquivo) . '"');
+        header('Content-Length: ' . filesize($caminhoEspelho));
+
+        readfile($caminhoEspelho);
+
+    } else {
+        // ✅ SERVIR HTML
+        $conteudoHtml = file_get_contents($caminhoEspelho);
+
+        if ($conteudoHtml === false) {
+            throw new Exception('Erro ao ler arquivo');
+        }
+
+        echo $conteudoHtml;
     }
-    
+
     // ✅ LOG DE ACESSO
     error_log("👁️ ESPELHO - Visualizando: {$arquivo} para empresa: {$empresa_id}");
-    
-    // ✅ SERVIR O HTML
-    echo $conteudoHtml;
     
 } catch (Exception $e) {
     // ✅ LOG DE ERRO
