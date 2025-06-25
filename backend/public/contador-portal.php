@@ -98,83 +98,107 @@ function buscarEmpresa($input) {
 function listarEstrutura($input) {
     try {
         $empresaId = $input['empresa_id'] ?? '';
-        
+        $filtroAmbiente = $input['ambiente'] ?? 'todos';
+        $filtroModelo = $input['modelo'] ?? 'todos';
+
         if (empty($empresaId)) {
             throw new Exception('ID da empresa não informado');
         }
         
-        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
-        $modelo = '55'; // NFe por padrão, futuramente será dinâmico para NFCe
-        $xmlPath = "../storage/xml/empresa_{$empresaId}/producao/{$modelo}";
+        // PORTAL DO CONTADOR: BUSCAR EM PRODUÇÃO E HOMOLOGAÇÃO
+        $basePath = "../storage/xml/empresa_{$empresaId}";
 
-        if (!is_dir($xmlPath)) {
-            throw new Exception('Pasta de XMLs de PRODUÇÃO não encontrada');
+        if (!is_dir($basePath)) {
+            throw new Exception('Pasta de XMLs não encontrada para esta empresa');
         }
 
         $estrutura = [];
         $tipos = ['Autorizados', 'Cancelados', 'CCe'];
 
+        // Definir ambientes a buscar baseado no filtro
+        $ambientes = [];
+        if ($filtroAmbiente === 'todos') {
+            $ambientes = ['producao', 'homologacao'];
+        } else {
+            $ambientes = [$filtroAmbiente];
+        }
+
+        // Definir modelos a buscar baseado no filtro
+        $modelos = [];
+        if ($filtroModelo === 'todos') {
+            $modelos = ['55', '65'];
+        } else {
+            $modelos = [$filtroModelo];
+        }
+
         foreach ($tipos as $tipo) {
-            $tipoPath = "{$xmlPath}/{$tipo}";
-            
-            if (is_dir($tipoPath)) {
-                $anos = [];
-                
-                // Listar anos
-                $anosDir = scandir($tipoPath);
-                foreach ($anosDir as $ano) {
-                    if ($ano === '.' || $ano === '..' || !is_dir("{$tipoPath}/{$ano}")) {
-                        continue;
-                    }
-                    
-                    $meses = [];
-                    
-                    // Listar meses
-                    $mesesDir = scandir("{$tipoPath}/{$ano}");
-                    foreach ($mesesDir as $mes) {
-                        if ($mes === '.' || $mes === '..' || !is_dir("{$tipoPath}/{$ano}/{$mes}")) {
-                            continue;
+            $anosConsolidados = [];
+
+            // Buscar em todos os ambientes e modelos especificados
+            foreach ($ambientes as $ambiente) {
+                foreach ($modelos as $modelo) {
+                    $tipoPath = "{$basePath}/{$ambiente}/{$modelo}/{$tipo}";
+
+                    if (is_dir($tipoPath)) {
+                        $anos = [];
+
+                        // Listar anos
+                        $anosDir = scandir($tipoPath);
+                        foreach ($anosDir as $ano) {
+                            if ($ano === '.' || $ano === '..' || !is_dir("{$tipoPath}/{$ano}")) {
+                                continue;
+                            }
+
+                            $meses = [];
+
+                            // Listar meses
+                            $mesesDir = scandir("{$tipoPath}/{$ano}");
+                            foreach ($mesesDir as $mes) {
+                                if ($mes === '.' || $mes === '..' || !is_dir("{$tipoPath}/{$ano}/{$mes}")) {
+                                    continue;
+                                }
+
+                                // Contar arquivos XML no mês
+                                $arquivos = glob("{$tipoPath}/{$ano}/{$mes}/*.xml");
+                                $totalArquivos = count($arquivos);
+
+                                if ($totalArquivos > 0) {
+                                    $meses[] = [
+                                        'mes' => $mes,
+                                        'nome_mes' => getNomeMes($mes),
+                                        'total_arquivos' => $totalArquivos,
+                                        'path' => "{$tipoPath}/{$ano}/{$mes}"
+                                    ];
+                                }
+                            }
+
+                            if (!empty($meses)) {
+                                // Ordenar meses
+                                usort($meses, function($a, $b) {
+                                    return (int)$a['mes'] - (int)$b['mes'];
+                                });
+
+                                $anos[] = [
+                                    'ano' => $ano,
+                                    'meses' => $meses,
+                                    'total_arquivos' => array_sum(array_column($meses, 'total_arquivos'))
+                                ];
+                            }
                         }
-                        
-                        // Contar arquivos XML no mês
-                        $arquivos = glob("{$tipoPath}/{$ano}/{$mes}/*.xml");
-                        $totalArquivos = count($arquivos);
-                        
-                        if ($totalArquivos > 0) {
-                            $meses[] = [
-                                'mes' => $mes,
-                                'nome_mes' => getNomeMes($mes),
-                                'total_arquivos' => $totalArquivos,
-                                'path' => "{$tipoPath}/{$ano}/{$mes}"
+
+                        if (!empty($anos)) {
+                            // Ordenar anos (mais recente primeiro)
+                            usort($anos, function($a, $b) {
+                                return (int)$b['ano'] - (int)$a['ano'];
+                            });
+
+                            $estrutura[$tipo] = [
+                                'tipo' => $tipo,
+                                'anos' => $anos,
+                                'total_arquivos' => array_sum(array_column($anos, 'total_arquivos'))
                             ];
                         }
                     }
-                    
-                    if (!empty($meses)) {
-                        // Ordenar meses
-                        usort($meses, function($a, $b) {
-                            return (int)$a['mes'] - (int)$b['mes'];
-                        });
-                        
-                        $anos[] = [
-                            'ano' => $ano,
-                            'meses' => $meses,
-                            'total_arquivos' => array_sum(array_column($meses, 'total_arquivos'))
-                        ];
-                    }
-                }
-                
-                if (!empty($anos)) {
-                    // Ordenar anos (mais recente primeiro)
-                    usort($anos, function($a, $b) {
-                        return (int)$b['ano'] - (int)$a['ano'];
-                    });
-                    
-                    $estrutura[$tipo] = [
-                        'tipo' => $tipo,
-                        'anos' => $anos,
-                        'total_arquivos' => array_sum(array_column($anos, 'total_arquivos'))
-                    ];
                 }
             }
         }

@@ -44,11 +44,12 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
   const [downloadingZip, setDownloadingZip] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [filtroModelo, setFiltroModelo] = useState<'todos' | '55' | '65'>('todos');
+  const [filtroAmbiente, setFiltroAmbiente] = useState<'todos' | 'producao' | 'homologacao'>('todos');
   const [dropdownAberto, setDropdownAberto] = useState(false);
 
   useEffect(() => {
     carregarEstrutura();
-  }, [empresaData, filtroModelo]);
+  }, [empresaData, filtroModelo, filtroAmbiente]);
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {
@@ -68,40 +69,128 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
       setIsLoading(true);
       setError('');
 
-      // Nova estrutura: Ano → Mês → [Todos os tipos juntos] com filtro por modelo
-      const estruturaCompleta = {
-        '2025': {
-          ano: '2025',
-          meses: [
-            {
-              mes: '06',
-              nome_mes: 'Junho',
-              tipos: {
-                'Autorizados': { modelo55: 11, modelo65: 0 },
-                'Cancelados': { modelo55: 10, modelo65: 0 },
-                'CCe': { modelo55: 2, modelo65: 0 }
-              },
-              total_arquivos: 23,
-              path: `/storage/xml/empresa_${empresaData.id}/2025/06`
-            }
-          ],
-          total_arquivos: 23
-        }
-      };
+      // Fazer chamada real para a API do contador
+      const response = await fetch('/backend/public/contador-portal.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'listar_estrutura',
+          empresa_id: empresaData.id,
+          ambiente: filtroAmbiente,
+          modelo: filtroModelo
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.message || 'Erro ao carregar estrutura');
+      }
+
+      // Converter estrutura da API para o formato esperado pelo componente
+      const estruturaConvertida = converterEstruturaAPI(result.data);
 
       // Aplicar filtro por modelo
-      const estruturaFiltrada = aplicarFiltroModelo(estruturaCompleta, filtroModelo);
+      const estruturaFiltrada = aplicarFiltroModelo(estruturaConvertida, filtroModelo);
       setEstrutura(estruturaFiltrada);
 
-      // Expandir automaticamente o ano
-      setExpandedYears({ '2025': true });
+      // Expandir automaticamente o primeiro ano disponível
+      const primeiroAno = Object.keys(estruturaFiltrada)[0];
+      if (primeiroAno) {
+        setExpandedYears({ [primeiroAno]: true });
+      }
 
     } catch (error) {
       console.error('Erro ao carregar estrutura:', error);
-      setError('Erro ao processar estrutura de arquivos');
+      setError(error instanceof Error ? error.message : 'Erro ao processar estrutura de arquivos');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  /**
+   * Converte a estrutura retornada pela API para o formato esperado pelo componente
+   */
+  const converterEstruturaAPI = (dadosAPI: any): Record<string, EstruturaAno> => {
+    console.log('🔍 Dados recebidos da API:', dadosAPI);
+
+    const estruturaConvertida: Record<string, EstruturaAno> = {};
+
+    // Se não há dados, retorna estrutura vazia
+    if (!dadosAPI || Object.keys(dadosAPI).length === 0) {
+      console.log('❌ Nenhum dado recebido da API');
+      return estruturaConvertida;
+    }
+
+    // Processar cada tipo (Autorizados, Cancelados, CCe)
+    Object.keys(dadosAPI).forEach(tipo => {
+      const tipoData = dadosAPI[tipo];
+      console.log(`📁 Processando tipo: ${tipo}`, tipoData);
+
+      if (tipoData && tipoData.anos) {
+        tipoData.anos.forEach((anoData: any) => {
+          const ano = anoData.ano;
+          console.log(`📅 Processando ano: ${ano}`, anoData);
+
+          // Inicializar ano se não existe
+          if (!estruturaConvertida[ano]) {
+            estruturaConvertida[ano] = {
+              ano: ano,
+              meses: [],
+              total_arquivos: 0
+            };
+          }
+
+          // Processar meses do ano
+          anoData.meses.forEach((mesData: any) => {
+            console.log(`📆 Processando mês: ${mesData.mes}`, mesData);
+
+            const mesExistente = estruturaConvertida[ano].meses.find(m => m.mes === mesData.mes);
+
+            if (mesExistente) {
+              // Atualizar mês existente
+              (mesExistente.tipos as any)[tipo] = mesData.total_arquivos;
+              mesExistente.total_arquivos += mesData.total_arquivos;
+              console.log(`✅ Mês ${mesData.mes} atualizado:`, mesExistente);
+            } else {
+              // Criar novo mês
+              const novoMes = {
+                mes: mesData.mes,
+                nome_mes: mesData.nome_mes,
+                tipos: {
+                  Autorizados: tipo === 'Autorizados' ? mesData.total_arquivos : 0,
+                  Cancelados: tipo === 'Cancelados' ? mesData.total_arquivos : 0,
+                  CCe: tipo === 'CCe' ? mesData.total_arquivos : 0
+                },
+                total_arquivos: mesData.total_arquivos,
+                path: mesData.path || `/storage/xml/empresa_${empresaData.id}/${ano}/${mesData.mes}`
+              };
+              estruturaConvertida[ano].meses.push(novoMes);
+              console.log(`✅ Novo mês ${mesData.mes} criado:`, novoMes);
+            }
+          });
+
+          // Recalcular total do ano
+          estruturaConvertida[ano].total_arquivos = estruturaConvertida[ano].meses.reduce(
+            (total, mes) => total + mes.total_arquivos, 0
+          );
+        });
+      }
+    });
+
+    // Ordenar meses dentro de cada ano
+    Object.keys(estruturaConvertida).forEach(ano => {
+      estruturaConvertida[ano].meses.sort((a, b) => parseInt(a.mes) - parseInt(b.mes));
+    });
+
+    console.log('🎯 Estrutura final convertida:', estruturaConvertida);
+    return estruturaConvertida;
   };
 
   const toggleYear = (ano: string) => {
@@ -270,18 +359,27 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
   };
 
   const getFiltroTexto = () => {
-    switch (filtroModelo) {
-      case 'todos': return 'Todos os Modelos';
-      case '55': return 'NFe Modelo 55';
-      case '65': return 'NFe Modelo 65';
-      default: return 'Todos os Modelos';
-    }
+    const modelo = filtroModelo === '55' ? 'NFe Modelo 55' :
+                   filtroModelo === '65' ? 'NFC-e Modelo 65' :
+                   'Todos os Modelos';
+
+    const ambiente = filtroAmbiente === 'producao' ? 'Produção' :
+                     filtroAmbiente === 'homologacao' ? 'Homologação' :
+                     'Todos os Ambientes';
+
+    return `${modelo} • ${ambiente}`;
   };
 
-  const getFiltroOpcoes = () => [
+  const getFiltroModeloOpcoes = () => [
     { value: 'todos', label: 'Todos os Modelos', disponivel: true },
     { value: '55', label: 'NFe Modelo 55', disponivel: true },
-    { value: '65', label: 'NFe Modelo 65', disponivel: false }
+    { value: '65', label: 'NFC-e Modelo 65', disponivel: true }
+  ];
+
+  const getFiltroAmbienteOpcoes = () => [
+    { value: 'todos', label: 'Todos os Ambientes', disponivel: true },
+    { value: 'producao', label: 'Produção', disponivel: true },
+    { value: 'homologacao', label: 'Homologação', disponivel: true }
   ];
 
   if (isLoading) {
@@ -310,34 +408,17 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
 
   const anosDisponiveis = Object.keys(estrutura);
 
-  if (anosDisponiveis.length === 0) {
-    return (
-      <div className="bg-background-card rounded-lg border border-gray-800 p-8">
-        <div className="text-center">
-          <FolderOpen className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">Nenhum arquivo encontrado</h3>
-          <p className="text-gray-400">
-            Não foram encontrados arquivos XML para esta empresa.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-background-card rounded-lg border border-gray-800 p-6">
-      <div className="flex items-center justify-between mb-6">
+  // Componente de filtro que sempre aparece
+  const renderFiltros = () => (
+    <div className="bg-background-card rounded-lg border border-gray-800 p-4 mb-6">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <FolderOpen className="w-6 h-6 text-accent-500" />
+          <Filter className="w-5 h-5 text-accent-500" />
           <div>
-            <h3 className="text-lg font-semibold text-white">Arquivos XML</h3>
+            <h3 className="text-lg font-semibold text-white">Filtros de Busca</h3>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-gray-400">Exibindo:</span>
               <span className="text-accent-400 font-medium">{getFiltroTexto()}</span>
-              <span className="text-gray-500">•</span>
-              <span className="text-gray-400">
-                {anosDisponiveis.reduce((total, ano) => total + estrutura[ano].total_arquivos, 0)} arquivos
-              </span>
             </div>
           </div>
         </div>
@@ -351,44 +432,110 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
             className="flex items-center gap-2"
           >
             <Filter className="w-4 h-4" />
-            Filtrar
+            Alterar Filtros
             <ChevronDown className={`w-4 h-4 transition-transform ${dropdownAberto ? 'rotate-180' : ''}`} />
           </Button>
 
           {dropdownAberto && (
-            <div className="absolute right-0 top-full mt-2 w-48 bg-background-card border border-gray-700 rounded-lg shadow-lg z-10">
-              {getFiltroOpcoes().map((opcao) => (
-                <button
-                  key={opcao.value}
-                  onClick={() => {
-                    if (opcao.disponivel) {
+            <div className="absolute right-0 top-full mt-2 w-56 bg-background-card border border-gray-700 rounded-lg shadow-lg z-10">
+              {/* Seção Modelo */}
+              <div className="p-3 border-b border-gray-700">
+                <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
+                  Modelo do Documento
+                </div>
+                {getFiltroModeloOpcoes().map((opcao) => (
+                  <button
+                    key={opcao.value}
+                    onClick={() => {
                       setFiltroModelo(opcao.value as 'todos' | '55' | '65');
-                      setDropdownAberto(false);
-                    } else {
-                      alert('NFe modelo 65 ainda não implementado. Funcionalidade em desenvolvimento.');
-                    }
-                  }}
-                  disabled={!opcao.disponivel}
-                  className={`w-full text-left px-4 py-3 text-sm transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                    filtroModelo === opcao.value
-                      ? 'bg-primary-500/20 text-primary-400 font-medium'
-                      : opcao.disponivel
-                      ? 'text-gray-300 hover:bg-gray-800/50'
-                      : 'text-gray-500 cursor-not-allowed'
-                  }`}
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm rounded transition-colors mb-1 last:mb-0 ${
+                      filtroModelo === opcao.value
+                        ? 'bg-primary-500/20 text-primary-400 font-medium'
+                        : 'text-gray-300 hover:bg-gray-800/50'
+                    }`}
+                  >
+                    {opcao.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Seção Ambiente */}
+              <div className="p-3">
+                <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
+                  Ambiente
+                </div>
+                {getFiltroAmbienteOpcoes().map((opcao) => (
+                  <button
+                    key={opcao.value}
+                    onClick={() => {
+                      setFiltroAmbiente(opcao.value as 'todos' | 'producao' | 'homologacao');
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm rounded transition-colors mb-1 last:mb-0 ${
+                      filtroAmbiente === opcao.value
+                        ? 'bg-accent-500/20 text-accent-400 font-medium'
+                        : 'text-gray-300 hover:bg-gray-800/50'
+                    }`}
+                  >
+                    {opcao.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Botão Fechar */}
+              <div className="p-3 border-t border-gray-700">
+                <button
+                  onClick={() => setDropdownAberto(false)}
+                  className="w-full px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors"
                 >
-                  <div className="flex items-center justify-between">
-                    <span>{opcao.label}</span>
-                    {!opcao.disponivel && (
-                      <span className="text-xs text-gray-500">(Em breve)</span>
-                    )}
-                  </div>
+                  Fechar
                 </button>
-              ))}
+              </div>
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+
+  if (anosDisponiveis.length === 0) {
+    return (
+      <div className="space-y-6">
+        {renderFiltros()}
+        <div className="bg-background-card rounded-lg border border-gray-800 p-8">
+          <div className="text-center">
+            <FolderOpen className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">Nenhum arquivo encontrado</h3>
+            <p className="text-gray-400">
+              Não foram encontrados arquivos XML para esta empresa com os filtros selecionados.
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Tente alterar os filtros de modelo ou ambiente acima.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {renderFiltros()}
+
+      <div className="bg-background-card rounded-lg border border-gray-800 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <FolderOpen className="w-6 h-6 text-accent-500" />
+            <div>
+              <h3 className="text-lg font-semibold text-white">Arquivos XML</h3>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-400">
+                  {anosDisponiveis.reduce((total, ano) => total + estrutura[ano].total_arquivos, 0)} arquivos encontrados
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
 
       <div className="space-y-4">
         {anosDisponiveis.map((ano) => {
@@ -486,6 +633,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
             </motion.div>
           );
         })}
+      </div>
       </div>
     </div>
   );
