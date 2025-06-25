@@ -6,7 +6,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 header('Access-Control-Allow-Headers: Content-Type');
 
-// ✅ ENDPOINT PARA GERAR ESPELHO DANFE USANDO BIBLIOTECA SPED-DA
+// ✅ ENDPOINT PARA GERAR ESPELHO DANFE EM PDF USANDO BIBLIOTECA SPED-DA
 
 try {
     // Verificar método
@@ -29,121 +29,421 @@ try {
 
     $empresa_id = $data['empresa_id'];
     $nfeData = $data['dados_nfe'] ?? [];
+    $forcarPDF = $data['forcar_pdf'] ?? true; // Novo parâmetro para forçar PDF
 
-    error_log("🔍 DANFE REAL - Dados recebidos: " . json_encode($nfeData));
+    error_log("🔍 ESPELHO DANFE - Dados recebidos para empresa: {$empresa_id}");
 
-    // ✅ VERIFICAR SE TEM XML SALVO PARA GERAR DANFE REAL
+    // ✅ PRIORIDADE 1: VERIFICAR SE TEM XML SALVO PARA GERAR DANFE REAL
     $chaveNfe = $nfeData['identificacao']['chave_nfe'] ?? null;
-    
+
     if ($chaveNfe && $chaveNfe !== 'A GERAR') {
-        // Tentar encontrar XML salvo
+        // Buscar XML em múltiplos locais possíveis
         $possiveisCaminhos = [
-            __DIR__ . "/../storage/xml/empresa_{$empresa_id}/" . date('Y/m') . "/{$chaveNfe}.xml",
             __DIR__ . "/../storage/xml55/empresa_{$empresa_id}/" . date('Y/m') . "/{$chaveNfe}.xml",
-            __DIR__ . "/../storage/xml/homologacao/55/empresa_{$empresa_id}/" . date('Y/m') . "/{$chaveNfe}.xml"
+            __DIR__ . "/../storage/xml/empresa_{$empresa_id}/" . date('Y/m') . "/{$chaveNfe}.xml",
+            __DIR__ . "/../storage/xml/homologacao/55/empresa_{$empresa_id}/" . date('Y/m') . "/{$chaveNfe}.xml",
+            __DIR__ . "/../storage/xml/producao/55/empresa_{$empresa_id}/" . date('Y/m') . "/{$chaveNfe}.xml"
         ];
-        
+
+        // Buscar também em outros meses se não encontrar no mês atual
+        for ($i = 1; $i <= 3; $i++) {
+            $dataAnterior = date('Y/m', strtotime("-{$i} month"));
+            $possiveisCaminhos[] = __DIR__ . "/../storage/xml55/empresa_{$empresa_id}/{$dataAnterior}/{$chaveNfe}.xml";
+            $possiveisCaminhos[] = __DIR__ . "/../storage/xml/empresa_{$empresa_id}/{$dataAnterior}/{$chaveNfe}.xml";
+        }
+
         $xmlEncontrado = null;
         foreach ($possiveisCaminhos as $caminho) {
             if (file_exists($caminho)) {
                 $xmlEncontrado = $caminho;
+                error_log("✅ ESPELHO DANFE: XML encontrado: {$xmlEncontrado}");
                 break;
             }
         }
-        
+
         if ($xmlEncontrado) {
-            error_log("✅ DANFE REAL: XML encontrado: {$xmlEncontrado}");
             return gerarDANFEReal($xmlEncontrado, $empresa_id, $chaveNfe);
         } else {
-            error_log("⚠️ DANFE REAL: XML não encontrado para chave: {$chaveNfe}");
+            error_log("⚠️ ESPELHO DANFE: XML não encontrado para chave: {$chaveNfe}");
         }
     }
 
-    // ✅ SE NÃO TEM XML, GERAR ESPELHO SIMPLES COM DADOS DO FORMULÁRIO
-    error_log("📝 DANFE REAL: Gerando espelho simples com dados do formulário");
-    return gerarEspelhoSimples($nfeData, $empresa_id);
+    // ✅ PRIORIDADE 2: GERAR PDF A PARTIR DOS DADOS DO FORMULÁRIO
+    if ($forcarPDF) {
+        error_log("📄 ESPELHO DANFE: Gerando PDF a partir dos dados do formulário");
+        return gerarPDFDados($nfeData, $empresa_id);
+    } else {
+        error_log("📝 ESPELHO DANFE: Gerando HTML simples com dados do formulário");
+        return gerarEspelhoSimples($nfeData, $empresa_id);
+    }
 
 } catch (Exception $e) {
-    error_log("❌ DANFE REAL - Erro: " . $e->getMessage());
-    
+    error_log("❌ ESPELHO DANFE - Erro: " . $e->getMessage());
+
     echo json_encode([
         'sucesso' => false,
-        'erro' => $e->getMessage()
+        'erro' => $e->getMessage(),
+        'detalhes' => $e->getTraceAsString()
     ]);
 }
 
 function gerarDANFEReal($xmlPath, $empresa_id, $chave) {
     try {
         error_log("🎨 DANFE REAL: Iniciando geração com biblioteca sped-da");
-        
+
         // Verificar se a classe existe
         if (!class_exists('\NFePHP\DA\NFe\Danfe')) {
             throw new Exception('Biblioteca sped-da não encontrada');
         }
-        
+
         // Ler XML
         $xmlContent = file_get_contents($xmlPath);
         if (!$xmlContent) {
             throw new Exception('Erro ao ler XML');
         }
-        
+
         error_log("✅ DANFE REAL: XML carregado (" . strlen($xmlContent) . " bytes)");
-        
+
         // Criar instância Danfe
         $danfe = new \NFePHP\DA\NFe\Danfe($xmlContent);
         $danfe->debugMode(false);
         $danfe->creditsIntegratorFooter('Sistema Nexo PDV');
-        
+
         error_log("✅ DANFE REAL: Instância Danfe criada");
-        
+
         // Gerar PDF
         $pdfContent = $danfe->render();
-        
+
         if (empty($pdfContent)) {
             throw new Exception('PDF gerado está vazio');
         }
-        
+
         error_log("✅ DANFE REAL: PDF gerado (" . strlen($pdfContent) . " bytes)");
-        
+
         // Salvar PDF
         $diretorioEspelhos = __DIR__ . "/../storage/espelhos/{$empresa_id}/homologacao/55/";
-        
+
         if (!is_dir($diretorioEspelhos)) {
             mkdir($diretorioEspelhos, 0755, true);
         }
-        
+
         // Limpar arquivos antigos
         $arquivosAntigos = glob($diretorioEspelhos . "danfe_real_*.pdf");
         foreach ($arquivosAntigos as $arquivo) {
             unlink($arquivo);
         }
-        
+
         // Salvar novo arquivo
         $timestamp = date('YmdHis');
         $empresaIdLimpo = str_replace('-', '', $empresa_id);
         $nomeArquivo = "danfe_real_{$empresaIdLimpo}_{$timestamp}.pdf";
         $caminhoCompleto = $diretorioEspelhos . $nomeArquivo;
-        
+
         if (file_put_contents($caminhoCompleto, $pdfContent) === false) {
             throw new Exception('Erro ao salvar PDF');
         }
-        
+
         error_log("✅ DANFE REAL: PDF salvo: {$caminhoCompleto}");
-        
+
         // Retornar sucesso
         echo json_encode([
             'sucesso' => true,
             'arquivo' => $nomeArquivo,
             'caminho' => "storage/espelhos/{$empresa_id}/homologacao/55/{$nomeArquivo}",
-            'mensagem' => 'DANFE real gerado com sucesso',
+            'mensagem' => 'DANFE real gerado com sucesso a partir do XML',
             'tipo' => 'pdf',
-            'metodo' => 'biblioteca_sped_da'
+            'metodo' => 'xml_sped_da',
+            'tamanho' => strlen($pdfContent)
         ]);
-        
+
         return true;
-        
+
     } catch (Exception $e) {
         error_log("❌ DANFE REAL: Erro na geração: " . $e->getMessage());
+        throw $e;
+    }
+}
+
+function gerarPDFDados($nfeData, $empresa_id) {
+    try {
+        error_log("📄 PDF DADOS: Iniciando geração PDF a partir dos dados do formulário");
+
+        // Verificar se a classe existe
+        if (!class_exists('\NFePHP\DA\NFe\Danfe')) {
+            throw new Exception('Biblioteca sped-da não encontrada');
+        }
+
+        // Criar XML básico a partir dos dados do formulário
+        $xmlEspelho = criarXMLEspelho($nfeData, $empresa_id);
+
+        if (empty($xmlEspelho)) {
+            throw new Exception('Erro ao criar XML a partir dos dados');
+        }
+
+        error_log("✅ PDF DADOS: XML criado (" . strlen($xmlEspelho) . " bytes)");
+
+        // Criar instância Danfe
+        $danfe = new \NFePHP\DA\NFe\Danfe($xmlEspelho);
+        $danfe->debugMode(false);
+        $danfe->creditsIntegratorFooter('Sistema Nexo PDV - Espelho');
+
+        error_log("✅ PDF DADOS: Instância Danfe criada");
+
+        // Gerar PDF
+        $pdfContent = $danfe->render();
+
+        if (empty($pdfContent)) {
+            throw new Exception('PDF gerado está vazio');
+        }
+
+        error_log("✅ PDF DADOS: PDF gerado (" . strlen($pdfContent) . " bytes)");
+
+        // Salvar PDF
+        $diretorioEspelhos = __DIR__ . "/../storage/espelhos/{$empresa_id}/homologacao/55/";
+
+        if (!is_dir($diretorioEspelhos)) {
+            mkdir($diretorioEspelhos, 0755, true);
+        }
+
+        // Limpar arquivos antigos
+        $arquivosAntigos = glob($diretorioEspelhos . "espelho_pdf_*.pdf");
+        foreach ($arquivosAntigos as $arquivo) {
+            unlink($arquivo);
+        }
+
+        // Salvar novo arquivo
+        $timestamp = date('YmdHis');
+        $empresaIdLimpo = str_replace('-', '', $empresa_id);
+        $nomeArquivo = "espelho_pdf_{$empresaIdLimpo}_{$timestamp}.pdf";
+        $caminhoCompleto = $diretorioEspelhos . $nomeArquivo;
+
+        if (file_put_contents($caminhoCompleto, $pdfContent) === false) {
+            throw new Exception('Erro ao salvar PDF');
+        }
+
+        error_log("✅ PDF DADOS: PDF salvo: {$caminhoCompleto}");
+
+        // Retornar sucesso
+        echo json_encode([
+            'sucesso' => true,
+            'arquivo' => $nomeArquivo,
+            'caminho' => "storage/espelhos/{$empresa_id}/homologacao/55/{$nomeArquivo}",
+            'mensagem' => 'Espelho PDF gerado com sucesso a partir dos dados',
+            'tipo' => 'pdf',
+            'metodo' => 'dados_sped_da',
+            'tamanho' => strlen($pdfContent)
+        ]);
+
+        return true;
+
+    } catch (Exception $e) {
+        error_log("❌ PDF DADOS: Erro na geração: " . $e->getMessage());
+        throw $e;
+    }
+}
+
+function criarXMLEspelho($nfeData, $empresa_id) {
+    try {
+        error_log("🔧 XML ESPELHO: Criando XML básico a partir dos dados");
+
+        $identificacao = $nfeData['identificacao'] ?? [];
+        $destinatario = $nfeData['destinatario'] ?? [];
+        $produtos = $nfeData['produtos'] ?? [];
+        $totais = $nfeData['totais'] ?? [];
+
+        // Dados básicos da empresa (hardcoded para espelho)
+        $cnpjEmitente = '24163237000151';
+        $razaoSocial = 'EMANUEL LUIS PEREIRA SOUZA VALESIS INFORMATICA';
+        $nomeFantasia = 'VALESIS INFORMATICA';
+
+        // Criar XML básico para espelho
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+    <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
+        <infNFe Id="NFe35250624163237000151550010000000011448846933" versao="4.00">
+            <ide>
+                <cUF>35</cUF>
+                <cNF>44884693</cNF>
+                <natOp>' . htmlspecialchars($identificacao['natureza_operacao'] ?? 'Venda de Mercadoria') . '</natOp>
+                <mod>55</mod>
+                <serie>' . htmlspecialchars($identificacao['serie'] ?? '1') . '</serie>
+                <nNF>' . htmlspecialchars($identificacao['numero'] ?? '1') . '</nNF>
+                <dhEmi>' . date('c') . '</dhEmi>
+                <tpNF>1</tpNF>
+                <idDest>1</idDest>
+                <cMunFG>3526209</cMunFG>
+                <tpImp>1</tpImp>
+                <tpEmis>1</tpEmis>
+                <cDV>3</cDV>
+                <tpAmb>2</tpAmb>
+                <finNFe>' . htmlspecialchars($identificacao['finalidade'] ?? '1') . '</finNFe>
+                <indFinal>1</indFinal>
+                <indPres>1</indPres>
+            </ide>
+            <emit>
+                <CNPJ>' . $cnpjEmitente . '</CNPJ>
+                <xNome>' . htmlspecialchars($razaoSocial) . '</xNome>
+                <xFant>' . htmlspecialchars($nomeFantasia) . '</xFant>
+                <enderEmit>
+                    <xLgr>SANTA TEREZINHA</xLgr>
+                    <nro>123</nro>
+                    <xBairro>CENTRO</xBairro>
+                    <cMun>3526209</cMun>
+                    <xMun>JACAREI</xMun>
+                    <UF>SP</UF>
+                    <CEP>12327000</CEP>
+                    <cPais>1058</cPais>
+                    <xPais>BRASIL</xPais>
+                </enderEmit>
+                <IE>123456789</IE>
+                <CRT>3</CRT>
+            </emit>';
+
+        // Adicionar destinatário se existir
+        if (!empty($destinatario['nome'])) {
+            $xml .= '
+            <dest>
+                <xNome>' . htmlspecialchars($destinatario['nome']) . '</xNome>';
+
+            if (!empty($destinatario['documento'])) {
+                if (strlen($destinatario['documento']) == 11) {
+                    $xml .= '<CPF>' . htmlspecialchars($destinatario['documento']) . '</CPF>';
+                } else {
+                    $xml .= '<CNPJ>' . htmlspecialchars($destinatario['documento']) . '</CNPJ>';
+                }
+            }
+
+            $xml .= '
+                <enderDest>
+                    <xLgr>RUA EXEMPLO</xLgr>
+                    <nro>123</nro>
+                    <xBairro>CENTRO</xBairro>
+                    <cMun>3526209</cMun>
+                    <xMun>JACAREI</xMun>
+                    <UF>SP</UF>
+                    <CEP>12327000</CEP>
+                    <cPais>1058</cPais>
+                    <xPais>BRASIL</xPais>
+                </enderDest>
+                <indIEDest>9</indIEDest>
+            </dest>';
+        }
+
+        // Adicionar produtos
+        if (!empty($produtos)) {
+            foreach ($produtos as $index => $produto) {
+                $nItem = $index + 1;
+                $xml .= '
+            <det nItem="' . $nItem . '">
+                <prod>
+                    <cProd>' . htmlspecialchars($produto['codigo'] ?? $nItem) . '</cProd>
+                    <cEAN>SEM GTIN</cEAN>
+                    <xProd>' . htmlspecialchars($produto['descricao'] ?? 'Produto') . '</xProd>
+                    <NCM>00000000</NCM>
+                    <CFOP>5102</CFOP>
+                    <uCom>UN</uCom>
+                    <qCom>' . number_format($produto['quantidade'] ?? 1, 4, '.', '') . '</qCom>
+                    <vUnCom>' . number_format($produto['valor_unitario'] ?? 0, 2, '.', '') . '</vUnCom>
+                    <vProd>' . number_format($produto['valor_total'] ?? 0, 2, '.', '') . '</vProd>
+                    <cEANTrib>SEM GTIN</cEANTrib>
+                    <uTrib>UN</uTrib>
+                    <qTrib>' . number_format($produto['quantidade'] ?? 1, 4, '.', '') . '</qTrib>
+                    <vUnTrib>' . number_format($produto['valor_unitario'] ?? 0, 2, '.', '') . '</vUnTrib>
+                    <indTot>1</indTot>
+                </prod>
+                <imposto>
+                    <ICMS>
+                        <ICMS00>
+                            <orig>0</orig>
+                            <CST>00</CST>
+                            <modBC>0</modBC>
+                            <vBC>0.00</vBC>
+                            <pICMS>0.00</pICMS>
+                            <vICMS>0.00</vICMS>
+                        </ICMS00>
+                    </ICMS>
+                    <PIS>
+                        <PISAliq>
+                            <CST>01</CST>
+                            <vBC>0.00</vBC>
+                            <pPIS>0.00</pPIS>
+                            <vPIS>0.00</vPIS>
+                        </PISAliq>
+                    </PIS>
+                    <COFINS>
+                        <COFINSAliq>
+                            <CST>01</CST>
+                            <vBC>0.00</vBC>
+                            <pCOFINS>0.00</pCOFINS>
+                            <vCOFINS>0.00</vCOFINS>
+                        </COFINSAliq>
+                    </COFINS>
+                </imposto>
+            </det>';
+            }
+        }
+
+        // Totais
+        $valorProdutos = $totais['valor_produtos'] ?? 0;
+        $valorTotal = $totais['valor_total'] ?? $valorProdutos;
+
+        $xml .= '
+            <total>
+                <ICMSTot>
+                    <vBC>0.00</vBC>
+                    <vICMS>0.00</vICMS>
+                    <vICMSDeson>0.00</vICMSDeson>
+                    <vFCP>0.00</vFCP>
+                    <vBCST>0.00</vBCST>
+                    <vST>0.00</vST>
+                    <vFCPST>0.00</vFCPST>
+                    <vFCPSTRet>0.00</vFCPSTRet>
+                    <vProd>' . number_format($valorProdutos, 2, '.', '') . '</vProd>
+                    <vFrete>0.00</vFrete>
+                    <vSeg>0.00</vSeg>
+                    <vDesc>0.00</vDesc>
+                    <vII>0.00</vII>
+                    <vIPI>0.00</vIPI>
+                    <vIPIDevol>0.00</vIPIDevol>
+                    <vPIS>0.00</vPIS>
+                    <vCOFINS>0.00</vCOFINS>
+                    <vOutro>0.00</vOutro>
+                    <vNF>' . number_format($valorTotal, 2, '.', '') . '</vNF>
+                </ICMSTot>
+            </total>
+            <transp>
+                <modFrete>9</modFrete>
+            </transp>
+            <pag>
+                <detPag>
+                    <tPag>01</tPag>
+                    <vPag>' . number_format($valorTotal, 2, '.', '') . '</vPag>
+                </detPag>
+            </pag>
+            <infAdic>
+                <infCpl>DOCUMENTO AUXILIAR PARA CONFERENCIA - NAO POSSUI VALOR FISCAL</infCpl>
+            </infAdic>
+        </infNFe>
+    </NFe>
+    <protNFe versao="4.00">
+        <infProt>
+            <tpAmb>2</tpAmb>
+            <verAplic>SP_NFE_PL_009_V4</verAplic>
+            <chNFe>35250624163237000151550010000000011448846933</chNFe>
+            <dhRecbto>' . date('c') . '</dhRecbto>
+            <nProt>135250000000001</nProt>
+            <digVal>ESPELHO</digVal>
+            <cStat>100</cStat>
+            <xMotivo>Autorizado o uso da NF-e</xMotivo>
+        </infProt>
+    </protNFe>
+</nfeProc>';
+
+        error_log("✅ XML ESPELHO: XML criado com sucesso (" . strlen($xml) . " bytes)");
+        return $xml;
+
+    } catch (Exception $e) {
+        error_log("❌ XML ESPELHO: Erro na criação: " . $e->getMessage());
         throw $e;
     }
 }
@@ -151,7 +451,7 @@ function gerarDANFEReal($xmlPath, $empresa_id, $chave) {
 function gerarEspelhoSimples($nfeData, $empresa_id) {
     try {
         error_log("📝 ESPELHO SIMPLES: Gerando com dados do formulário");
-        
+
         $identificacao = $nfeData['identificacao'] ?? [];
         $destinatario = $nfeData['destinatario'] ?? [];
         $produtos = $nfeData['produtos'] ?? [];
@@ -299,13 +599,13 @@ function gerarEspelhoSimples($nfeData, $empresa_id) {
             'sucesso' => true,
             'arquivo' => $nomeArquivo,
             'caminho' => "storage/espelhos/{$empresa_id}/homologacao/55/{$nomeArquivo}",
-            'mensagem' => 'Espelho simples gerado com sucesso',
+            'mensagem' => 'Espelho HTML gerado com sucesso',
             'tipo' => 'html',
             'metodo' => 'formulario_dados'
         ]);
-        
+
         return true;
-        
+
     } catch (Exception $e) {
         error_log("❌ ESPELHO SIMPLES: Erro na geração: " . $e->getMessage());
         throw $e;

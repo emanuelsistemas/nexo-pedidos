@@ -21,7 +21,7 @@ try {
     }
     
     // ✅ VALIDAR NOME DO ARQUIVO (arquivos de espelho e DANFE)
-    if (!preg_match('/^(espelho_nfe_|espelho_simples_|danfe_real_)[a-f0-9\-_]+\.(html|pdf)$/i', $arquivo)) {
+    if (!preg_match('/^(espelho_nfe_|espelho_simples_|espelho_pdf_|danfe_real_)[a-f0-9\-_]+\.(html|pdf)$/i', $arquivo)) {
         throw new Exception('Nome de arquivo inválido');
     }
     
