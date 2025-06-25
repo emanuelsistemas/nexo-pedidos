@@ -656,12 +656,27 @@ try {
                 // Conforme Manual NFe - campos obrigatórios: vBCSTRet, pST, vICMSSTRet
 
                 // ✅ USAR DADOS REAIS DO PRODUTO (SEM FALLBACKS)
+                error_log("🔍 DEBUG CSOSN 500 - Produto: " . json_encode($produto));
                 $margemST = (float)$produto['margem_st'];
                 $aliquotaICMS = (float)$produto['aliquota_icms'];
 
+                // Detectar nome do produto usando a mesma lógica das linhas 488-502
+                $nomeProduto = '';
+                if (isset($produto['descricao'])) {
+                    $nomeProduto = $produto['descricao'];
+                } elseif (isset($produto['nome'])) {
+                    $nomeProduto = $produto['nome'];
+                } elseif (isset($produto['name'])) {
+                    $nomeProduto = $produto['name'];
+                } elseif (isset($produto['produto'])) {
+                    $nomeProduto = $produto['produto'];
+                } else {
+                    $nomeProduto = 'Produto sem nome';
+                }
+
                 // Validar se dados ST estão configurados
                 if (!$margemST || !$aliquotaICMS) {
-                    throw new Exception("Produto '{$produto['nome']}' com CSOSN 500 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                    throw new Exception("Produto '{$nomeProduto}' com CSOSN 500 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
                 }
 
                 // ✅ CÁLCULO BASEADO NOS DADOS REAIS DO PRODUTO
@@ -701,10 +716,11 @@ try {
                 // ✅ CAMPOS DE ST PARA CSOSN 201/202/203 - DADOS REAIS
                 $margemST = (float)$produto['margem_st'];
                 $aliquotaICMS = (float)$produto['aliquota_icms'];
+                $nomeProduto = $produto['nome'];
 
                 // Validar se dados ST estão configurados
                 if (!$margemST || !$aliquotaICMS) {
-                    throw new Exception("Produto '{$produto['nome']}' com CSOSN {$csosn} deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                    throw new Exception("Produto '{$nomeProduto}' com CSOSN {$csosn} deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
                 }
 
                 $std->modBCST = 4; // 4=Margem Valor Agregado (%)
@@ -751,10 +767,11 @@ try {
                     // ✅ CST 10 - Tributada e com cobrança do ICMS por ST - DADOS REAIS
                     $margemST = (float)$produto['margem_st'];
                     $aliquotaICMS = (float)$produto['aliquota_icms'];
+                    $nomeProduto = $produto['nome'];
 
                     // Validar se dados ST estão configurados
                     if (!$margemST || !$aliquotaICMS) {
-                        throw new Exception("Produto '{$produto['nome']}' com CST 10 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                        throw new Exception("Produto '{$nomeProduto}' com CST 10 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
                     }
 
                     $std->modBCST = 4; // 4=Margem Valor Agregado (%)
@@ -770,10 +787,11 @@ try {
                 // ✅ CST 60 - ICMS cobrado anteriormente por ST - CALCULAR DINAMICAMENTE
                 $margemST = (float)$produto['margem_st'];
                 $aliquotaICMS = (float)$produto['aliquota_icms'];
+                $nomeProduto = $produto['nome'];
 
                 // Validar se dados ST estão configurados
                 if (!$margemST || !$aliquotaICMS) {
-                    throw new Exception("Produto '{$produto['nome']}' com CST 60 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
+                    throw new Exception("Produto '{$nomeProduto}' com CST 60 deve ter margem_st e aliquota_icms configurados. Margem: {$margemST}%, Alíquota: {$aliquotaICMS}%");
                 }
 
                 // ✅ CALCULAR DINAMICAMENTE (sem campos valor_st_retido/base_st_retido)

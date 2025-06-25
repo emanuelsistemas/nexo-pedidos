@@ -202,6 +202,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
           aliquota_ipi,
           valor_ipi,
           cest,
+          margem_st,
           peso_liquido,
           unidade_medida:unidade_medida_id (
             id,
