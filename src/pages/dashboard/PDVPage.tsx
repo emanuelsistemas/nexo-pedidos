@@ -2438,6 +2438,9 @@ const PDVPage: React.FC = () => {
             codigo_barras,
             nome,
             ncm,
+            cest,
+            margem_st,
+            aliquota_icms,
             unidade_medida_id,
             unidade_medida:unidade_medida(
               id,
@@ -2468,11 +2471,17 @@ const PDVPage: React.FC = () => {
         cst_editavel: item.cst_icms || '00',
         csosn_editavel: item.csosn_icms || '102',
         ncm_editavel: item.produto?.ncm || '00000000',
+        cest_editavel: item.produto?.cest || '',
+        margem_st_editavel: item.produto?.margem_st || '',
+        aliquota_icms_editavel: item.produto?.aliquota_icms || '',
         regime_tributario: regimeTributario,
         editando_cfop: false,
         editando_cst: false,
         editando_csosn: false,
-        editando_ncm: false
+        editando_ncm: false,
+        editando_cest: false,
+        editando_margem_st: false,
+        editando_aliquota_icms: false
       }));
 
       setItensVenda(itensProcessados);
@@ -2633,6 +2642,125 @@ const PDVPage: React.FC = () => {
         ? { ...item, [`editando_${campo}`]: false }
         : item
     ));
+  };
+
+  // ✅ NOVO: Função para atualizar dados fiscais dos produtos da NFC-e com informações do cadastro
+  const handleAtualizarDadosProdutosNfce = async () => {
+    if (itensVenda.length === 0) {
+      toast.warning('Nenhum produto para atualizar');
+      return;
+    }
+
+    try {
+      toast.info('Atualizando dados dos produtos...');
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Buscar dados atualizados dos produtos no cadastro
+      const produtoIds = itensVenda
+        .filter(item => item.produto_id) // Apenas produtos que têm ID (vieram do cadastro)
+        .map(item => item.produto_id);
+
+      if (produtoIds.length === 0) {
+        toast.warning('Nenhum produto vinculado ao cadastro para atualizar');
+        return;
+      }
+
+      const { data: produtosCadastro, error } = await supabase
+        .from('produtos')
+        .select(`
+          id,
+          codigo,
+          codigo_barras,
+          nome,
+          preco,
+          ncm,
+          cfop,
+          origem_produto,
+          situacao_tributaria,
+          cst_icms,
+          csosn_icms,
+          cst_pis,
+          cst_cofins,
+          cst_ipi,
+          aliquota_icms,
+          aliquota_pis,
+          aliquota_cofins,
+          aliquota_ipi,
+          cest,
+          margem_st,
+          peso_liquido,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome
+          )
+        `)
+        .in('id', produtoIds)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .eq('deletado', false);
+
+      if (error) throw error;
+
+      if (!produtosCadastro || produtosCadastro.length === 0) {
+        toast.warning('Nenhum produto encontrado no cadastro');
+        return;
+      }
+
+      // Atualizar itens com dados do cadastro
+      const itensAtualizados = itensVenda.map(item => {
+        const produtoCadastro = produtosCadastro.find(p => p.id === item.produto_id);
+
+        if (produtoCadastro) {
+          return {
+            ...item,
+            // ✅ ATUALIZAR TODOS OS DADOS FISCAIS DO CADASTRO:
+            ncm_editavel: produtoCadastro.ncm || item.ncm_editavel,
+            cfop_editavel: produtoCadastro.cfop || item.cfop_editavel,
+            cest_editavel: produtoCadastro.cest || item.cest_editavel,
+            margem_st_editavel: produtoCadastro.margem_st || item.margem_st_editavel,
+            aliquota_icms_editavel: produtoCadastro.aliquota_icms || item.aliquota_icms_editavel,
+
+            // ICMS
+            cst_editavel: produtoCadastro.cst_icms || item.cst_editavel,
+            csosn_editavel: produtoCadastro.csosn_icms || item.csosn_editavel,
+
+            // Atualizar também preço se necessário
+            valor_unitario: produtoCadastro.preco || item.valor_unitario,
+            valor_total_item: (produtoCadastro.preco || item.valor_unitario) * item.quantidade
+          };
+        }
+
+        return item; // Manter item inalterado se não encontrado no cadastro
+      });
+
+      // Aplicar atualizações
+      setItensVenda(itensAtualizados);
+
+      const produtosAtualizadosCount = produtosCadastro.length;
+      toast.success(`${produtosAtualizadosCount} produto(s) atualizado(s) com dados do cadastro`);
+
+      console.log('✅ Produtos NFC-e atualizados:', {
+        total: itensVenda.length,
+        atualizados: produtosAtualizadosCount,
+        produtosCadastro
+      });
+
+    } catch (error: any) {
+      console.error('Erro ao atualizar dados dos produtos NFC-e:', error);
+      toast.error(`Erro ao atualizar produtos: ${error.message}`);
+    }
   };
 
   // ✅ NOVA: Função para reprocessar NFC-e
@@ -4615,6 +4743,12 @@ const PDVPage: React.FC = () => {
     return pdvConfig?.forca_venda_fiscal_cartao && temPagamentoCartao();
   };
 
+  // ✅ NOVO: Função para obter o texto do tipo de impressão configurado
+  const obterTextoTipoImpressao = (): string => {
+    const usarImpressao50mm = pdvConfig?.tipo_impressao_50mm === true && pdvConfig?.tipo_impressao_80mm === false;
+    return usarImpressao50mm ? '50mm' : '80mm';
+  };
+
   // Função para gerar número sequencial da venda
   const gerarNumeroVenda = async (empresaId: string): Promise<string> => {
     try {
@@ -5605,7 +5739,14 @@ const PDVPage: React.FC = () => {
               valor_total: valorTotal,
               valor_subtotal: valorSubtotal,
               valor_desconto: valorDesconto,
-              chave_nfe: vendaAtualizada?.chave_nfe || null
+              chave_nfe: vendaAtualizada?.chave_nfe || null,
+              numero_nfe: vendaAtualizada?.numero_documento || null,
+              serie_nfe: vendaAtualizada?.serie_documento || '001',
+              protocolo_nfe: vendaAtualizada?.protocolo_nfe || null,
+              data_emissao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+              hora_emissao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
+              data_autorizacao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+              hora_autorizacao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR')
             },
             empresa: {
               razao_social: empresaData.razao_social,
@@ -5619,7 +5760,10 @@ const PDVPage: React.FC = () => {
               cep: empresaData.cep,
               telefone: empresaData.telefone
             },
-            cliente: clienteData || {},
+            cliente: {
+              ...clienteData,
+              documento_cliente: vendaAtualizada?.documento_cliente || clienteData?.documento_cliente || null
+            },
             vendedor: vendedorSelecionado || null, // Incluir dados do vendedor principal
             vendedores: (() => {
               // Coletar todos os vendedores únicos do carrinho
@@ -5893,7 +6037,14 @@ const PDVPage: React.FC = () => {
           valor_total: venda.valor_total,
           valor_subtotal: venda.valor_subtotal || venda.valor_total,
           valor_desconto: venda.valor_desconto || 0,
-          chave_nfe: venda.chave_nfe
+          chave_nfe: venda.chave_nfe,
+          numero_nfe: venda.numero_documento || null,
+          serie_nfe: venda.serie_documento || '001',
+          protocolo_nfe: venda.protocolo_nfe || null,
+          data_emissao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+          hora_emissao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
+          data_autorizacao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+          hora_autorizacao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR')
         },
         empresa: {
           razao_social: empresaData.razao_social,
@@ -6070,9 +6221,21 @@ const PDVPage: React.FC = () => {
           '$1 $2 $3 $4 $5 $6 $7 $8 $9 $10 $11');
       };
 
+      // ✅ CORREÇÃO: Determinar tipo de impressão baseado na configuração
+      const usarImpressao50mm = pdvConfig?.tipo_impressao_50mm === true && pdvConfig?.tipo_impressao_80mm === false;
+
+      console.log('🖨️ Configuração de impressão NFC-e:', {
+        'config_50mm': pdvConfig?.tipo_impressao_50mm,
+        'config_80mm': pdvConfig?.tipo_impressao_80mm,
+        'usar_50mm': usarImpressao50mm,
+        'pdvConfig_completo': pdvConfig
+      });
+
+      console.log('🖨️ TIPO DE IMPRESSÃO DETECTADO:', usarImpressao50mm ? '50MM' : '80MM');
+
       // ✅ NOVO: Gerar CSS responsivo baseado no tipo de impressão
       const gerarCSSImpressao = () => {
-        if (tipoImpressao50mm) {
+        if (usarImpressao50mm) {
           // CSS otimizado para impressão 50mm (compacta)
           return `
             @media print {
@@ -6119,22 +6282,25 @@ const PDVPage: React.FC = () => {
             .valor-monetario { white-space: nowrap; font-weight: 700; } /* Peso maior para valores */
           `;
         } else {
-          // CSS padrão para impressão 80mm
+          // CSS padrão para impressão 80mm - LARGURA COMPLETA
           return `
             @media print {
               @page { margin: 0; size: 80mm auto; }
-              body { margin: 0; }
+              body { margin: 0; width: 80mm; }
             }
             body {
               font-family: 'Courier New', monospace;
-              font-size: 12px;
+              font-size: 14px;
               font-weight: 500;
               color: #000000;
               text-shadow: 0.3px 0 0 currentColor;
-              line-height: 1.2;
+              line-height: 1.3;
               letter-spacing: 0.2px;
-              margin: 10px;
-              max-width: 75mm; /* Largura máxima para 80mm */
+              margin: 8px;
+              width: 80mm !important;
+              max-width: 80mm !important;
+              min-width: 80mm !important;
+              box-sizing: border-box;
             }
             .center { text-align: center; }
             .bold { font-weight: 900; }
@@ -6303,15 +6469,36 @@ const PDVPage: React.FC = () => {
 
             ${dadosImpressao.venda.chave_nfe ? `
               <div style="margin: 10px 0;">
-                <div>Consulte pela chave de acesso em:</div>
-                <div style="font-size: 10px;">www.nfce.fazenda.gov.br</div>
+                <div>Consulte pela Chave de Acesso em:</div>
+                <div style="font-size: 10px;">https://www.homologacao.nfce.fazenda.sp.gov.br/NFCeConsultaPublica</div>
+
+                ${dadosImpressao.cliente?.documento_cliente ? `
+                  <div style="margin: 5px 0;">
+                    <div class="bold">CONSUMIDOR - ${dadosImpressao.cliente.documento_cliente.length === 11 ? 'CPF' : 'CNPJ'} ${dadosImpressao.cliente.documento_cliente.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4').replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')}</div>
+                    <div>NFC-e n. ${dadosImpressao.venda.numero_nfe || 'N/A'} Série ${dadosImpressao.venda.serie_nfe || '001'} ${dadosImpressao.venda.data_emissao || new Date().toLocaleDateString('pt-BR')} ${dadosImpressao.venda.hora_emissao || new Date().toLocaleTimeString('pt-BR')}</div>
+                  </div>
+                ` : `
+                  <div style="margin: 5px 0;">
+                    <div>NFC-e n. ${dadosImpressao.venda.numero_nfe || 'N/A'} Série ${dadosImpressao.venda.serie_nfe || '001'} ${dadosImpressao.venda.data_emissao || new Date().toLocaleDateString('pt-BR')} ${dadosImpressao.venda.hora_emissao || new Date().toLocaleTimeString('pt-BR')}</div>
+                  </div>
+                `}
+
+                ${dadosImpressao.venda.protocolo_nfe ? `
+                  <div style="margin: 5px 0;">
+                    <div>Protocolo de Autorização: ${dadosImpressao.venda.protocolo_nfe}</div>
+                    <div>Data de Autorização: ${dadosImpressao.venda.data_autorizacao || new Date().toLocaleDateString('pt-BR')} ${dadosImpressao.venda.hora_autorizacao || new Date().toLocaleTimeString('pt-BR')}</div>
+                  </div>
+                ` : ''}
+
                 <div style="margin: 5px 0;">
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=${tipoImpressao50mm ? '80x80' : '120x120'}&data=${encodeURIComponent(dadosImpressao.venda.chave_nfe)}"
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=${usarImpressao50mm ? '80x80' : '120x120'}&data=${encodeURIComponent(dadosImpressao.venda.chave_nfe)}"
                        alt="QR Code NFC-e"
                        class="qr-code"
                        style="margin: 5px auto; display: block;">
                 </div>
-                <div style="font-size: 10px;">Escaneie o QR Code para consultar a NFC-e</div>
+
+                <div style="font-size: 10px;">Tributos Totais Incidentes (Lei Federal 12.741/2012): R$ ----</div>
+                <div style="font-size: 10px;">NFC-e emitida pelo Sistema Nexo PDV</div>
               </div>
             ` : ''}
           </div>
@@ -6354,14 +6541,17 @@ const PDVPage: React.FC = () => {
   // Função auxiliar para gerar e imprimir cupom (reutilizada)
   const gerarEImprimirCupom = async (dadosImpressao: any) => {
     try {
-      // ✅ NOVO: Detectar tipo de impressão configurado
-      const tipoImpressao80mm = pdvConfig?.tipo_impressao_80mm ?? true;
-      const tipoImpressao50mm = pdvConfig?.tipo_impressao_50mm ?? false;
+      // ✅ CORREÇÃO: Determinar tipo de impressão baseado na configuração
+      const usarImpressao50mm = pdvConfig?.tipo_impressao_50mm === true && pdvConfig?.tipo_impressao_80mm === false;
 
-      console.log('🖨️ Cupom não fiscal - Tipo de impressão detectado:', {
-        '80mm': tipoImpressao80mm,
-        '50mm': tipoImpressao50mm
+      console.log('🖨️ Cupom não fiscal - Configuração de impressão:', {
+        'config_50mm': pdvConfig?.tipo_impressao_50mm,
+        'config_80mm': pdvConfig?.tipo_impressao_80mm,
+        'usar_50mm': usarImpressao50mm,
+        'pdvConfig_completo': pdvConfig
       });
+
+      console.log('🖨️ CUPOM NÃO FISCAL - TIPO DE IMPRESSÃO DETECTADO:', usarImpressao50mm ? '50MM' : '80MM');
 
       // ✅ DEBUG: Verificar dados de impressão cupom
       console.log('📋 Dados de impressão cupom:', {
@@ -6382,7 +6572,7 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Gerar CSS responsivo baseado no tipo de impressão (reutilizando a mesma função)
       const gerarCSSImpressaoCupom = () => {
-        if (tipoImpressao50mm) {
+        if (usarImpressao50mm) {
           // CSS otimizado para impressão 50mm (compacta)
           return `
             @media print {
@@ -6422,22 +6612,25 @@ const PDVPage: React.FC = () => {
             .valor-monetario { white-space: nowrap; font-weight: 700; } /* Peso maior para valores */
           `;
         } else {
-          // CSS padrão para impressão 80mm
+          // CSS padrão para impressão 80mm - LARGURA COMPLETA
           return `
             @media print {
               @page { margin: 0; size: 80mm auto; }
-              body { margin: 0; }
+              body { margin: 0; width: 80mm; }
             }
             body {
               font-family: 'Courier New', monospace;
-              font-size: 12px;
+              font-size: 14px;
               font-weight: 500;
               color: #000000;
               text-shadow: 0.3px 0 0 currentColor;
-              line-height: 1.2;
+              line-height: 1.3;
               letter-spacing: 0.2px;
-              margin: 10px;
-              max-width: 75mm; /* Largura máxima para 80mm */
+              margin: 8px;
+              width: 80mm !important;
+              max-width: 80mm !important;
+              min-width: 80mm !important;
+              box-sizing: border-box;
             }
             .center { text-align: center; }
             .bold { font-weight: 900; }
@@ -8739,7 +8932,7 @@ const PDVPage: React.FC = () => {
                             : 'bg-green-900/20 hover:bg-green-800/30 text-green-300 border-green-800/30'
                         }`}
                       >
-                        Finalizar com Impressão
+                        Finalizar com Impressão ({obterTextoTipoImpressao()})
                       </button>
                     )}
 
@@ -8791,7 +8984,7 @@ const PDVPage: React.FC = () => {
                           : 'bg-blue-900/20 hover:bg-blue-800/30 text-blue-300 border-blue-800/30'
                       }`}
                     >
-                      <div>NFC-e com Impressão</div>
+                      <div>NFC-e com Impressão ({obterTextoTipoImpressao()})</div>
                       {isDocumentoInvalido() && (
                         <div className="text-xs text-gray-400 mt-0.5">
                           CPF/CNPJ inválido
@@ -10842,7 +11035,7 @@ const PDVPage: React.FC = () => {
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                               </svg>
-                              Reimprimir Cupom
+                              Reimprimir Cupom ({obterTextoTipoImpressao()})
                             </button>
                           )}
                         </div>
@@ -11184,14 +11377,31 @@ const PDVPage: React.FC = () => {
                     {/* ✅ NOVO: Tabela de itens com dados fiscais editáveis (apenas para vendas sem NFC-e) */}
                     {!vendaParaExibirItens.tentativa_nfce && vendaParaExibirItens.status_venda === 'finalizada' && (
                       <div className="bg-gray-800/30 rounded-lg p-4 mb-4">
-                        <h4 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          Dados Fiscais (Editáveis para NFC-e)
-                        </h4>
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-lg font-medium text-white flex items-center gap-2">
+                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Dados Fiscais (Editáveis para NFC-e)
+                          </h4>
+                          {itensVenda.length > 0 && (
+                            <button
+                              onClick={handleAtualizarDadosProdutosNfce}
+                              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                              title="Atualizar dados fiscais dos produtos com informações do cadastro"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                                <path d="M21 3v5h-5"/>
+                                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                                <path d="M3 21v-5h5"/>
+                              </svg>
+                              Atualizar dados dos produtos
+                            </button>
+                          )}
+                        </div>
                         <p className="text-gray-400 text-sm mb-4">
-                          Revise e corrija os dados fiscais dos produtos. Clique no ícone de lápis para editar os campos CFOP, NCM, CST ou CSOSN.
+                          Revise e corrija os dados fiscais dos produtos. Clique no ícone de lápis para editar os campos CFOP, NCM, CEST, Margem, Aliquota, CST ou CSOSN.
                         </p>
 
                         <div className="overflow-x-auto">
@@ -11205,6 +11415,9 @@ const PDVPage: React.FC = () => {
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Preço</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">NCM</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CFOP</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CEST</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Margem</th>
+                                <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Aliquota</th>
                                 <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">
                                   {itensVenda[0]?.regime_tributario === 1 ? 'CSOSN' : 'CST'}
                                 </th>
@@ -11306,6 +11519,159 @@ const PDVPage: React.FC = () => {
                                           <span className="text-white">{item.cfop_editavel || '-'}</span>
                                           <button
                                             onClick={() => habilitarEdicaoCampoModalItens(index, 'cfop')}
+                                            className="text-gray-400 hover:text-white"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* CEST */}
+                                  <td className="py-3 px-2">
+                                    <div className="flex items-center gap-2">
+                                      {item.editando_cest ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="text"
+                                            value={item.cest_editavel}
+                                            onChange={(e) => {
+                                              const novoValor = e.target.value.replace(/\D/g, ''); // Só números
+                                              setItensVenda(prev => prev.map((it, idx) =>
+                                                idx === index ? { ...it, cest_editavel: novoValor } : it
+                                              ));
+                                            }}
+                                            className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                            maxLength={7}
+                                            placeholder="0000000"
+                                          />
+                                          <button
+                                            onClick={() => salvarEdicaoCampoModalItens(index, 'cest', item.cest_editavel)}
+                                            className="text-green-400 hover:text-green-300"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => cancelarEdicaoCampoModalItens(index, 'cest')}
+                                            className="text-red-400 hover:text-red-300"
+                                          >
+                                            <X size={16} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-white font-mono text-sm">{item.cest_editavel || '-'}</span>
+                                          <button
+                                            onClick={() => habilitarEdicaoCampoModalItens(index, 'cest')}
+                                            className="text-gray-400 hover:text-white"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* Margem ST */}
+                                  <td className="py-3 px-2">
+                                    <div className="flex items-center gap-2">
+                                      {item.editando_margem_st ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            value={item.margem_st_editavel}
+                                            onChange={(e) => {
+                                              const novoValor = e.target.value;
+                                              setItensVenda(prev => prev.map((it, idx) =>
+                                                idx === index ? { ...it, margem_st_editavel: novoValor } : it
+                                              ));
+                                            }}
+                                            className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                            step="0.01"
+                                            min="0"
+                                            max="100"
+                                            placeholder="0.00"
+                                          />
+                                          <span className="text-gray-400 text-xs">%</span>
+                                          <button
+                                            onClick={() => salvarEdicaoCampoModalItens(index, 'margem_st', item.margem_st_editavel)}
+                                            className="text-green-400 hover:text-green-300"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => cancelarEdicaoCampoModalItens(index, 'margem_st')}
+                                            className="text-red-400 hover:text-red-300"
+                                          >
+                                            <X size={16} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-white">{item.margem_st_editavel ? `${item.margem_st_editavel}%` : '-'}</span>
+                                          <button
+                                            onClick={() => habilitarEdicaoCampoModalItens(index, 'margem_st')}
+                                            className="text-gray-400 hover:text-white"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+
+                                  {/* Aliquota ICMS */}
+                                  <td className="py-3 px-2">
+                                    <div className="flex items-center gap-2">
+                                      {item.editando_aliquota_icms ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            value={item.aliquota_icms_editavel}
+                                            onChange={(e) => {
+                                              const novoValor = e.target.value;
+                                              setItensVenda(prev => prev.map((it, idx) =>
+                                                idx === index ? { ...it, aliquota_icms_editavel: novoValor } : it
+                                              ));
+                                            }}
+                                            className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                                            step="0.01"
+                                            min="0"
+                                            max="100"
+                                            placeholder="0.00"
+                                          />
+                                          <span className="text-gray-400 text-xs">%</span>
+                                          <button
+                                            onClick={() => salvarEdicaoCampoModalItens(index, 'aliquota_icms', item.aliquota_icms_editavel)}
+                                            className="text-green-400 hover:text-green-300"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => cancelarEdicaoCampoModalItens(index, 'aliquota_icms')}
+                                            className="text-red-400 hover:text-red-300"
+                                          >
+                                            <X size={16} />
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-white">{item.aliquota_icms_editavel ? `${item.aliquota_icms_editavel}%` : '-'}</span>
+                                          <button
+                                            onClick={() => habilitarEdicaoCampoModalItens(index, 'aliquota_icms')}
                                             className="text-gray-400 hover:text-white"
                                           >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -12486,7 +12852,7 @@ const PDVPage: React.FC = () => {
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                       </svg>
-                      Imprimir Cupom
+                      Imprimir Cupom ({obterTextoTipoImpressao()})
                     </button>
 
                     {/* Botão Finalizar sem Impressão */}
