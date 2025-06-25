@@ -140,16 +140,12 @@ function listarEstrutura($input) {
                     $tipoPath = "{$basePath}/{$ambiente}/{$modelo}/{$tipo}";
 
                     if (is_dir($tipoPath)) {
-                        $anos = [];
-
                         // Listar anos
                         $anosDir = scandir($tipoPath);
                         foreach ($anosDir as $ano) {
                             if ($ano === '.' || $ano === '..' || !is_dir("{$tipoPath}/{$ano}")) {
                                 continue;
                             }
-
-                            $meses = [];
 
                             // Listar meses
                             $mesesDir = scandir("{$tipoPath}/{$ano}");
@@ -163,42 +159,74 @@ function listarEstrutura($input) {
                                 $totalArquivos = count($arquivos);
 
                                 if ($totalArquivos > 0) {
-                                    $meses[] = [
-                                        'mes' => $mes,
-                                        'nome_mes' => getNomeMes($mes),
-                                        'total_arquivos' => $totalArquivos,
-                                        'path' => "{$tipoPath}/{$ano}/{$mes}"
-                                    ];
+                                    // Consolidar dados por ano/mês
+                                    $chaveAnoMes = "{$ano}-{$mes}";
+
+                                    if (!isset($anosConsolidados[$chaveAnoMes])) {
+                                        $anosConsolidados[$chaveAnoMes] = [
+                                            'ano' => $ano,
+                                            'mes' => $mes,
+                                            'nome_mes' => getNomeMes($mes),
+                                            'total_arquivos' => 0,
+                                            'paths' => []
+                                        ];
+                                    }
+
+                                    $anosConsolidados[$chaveAnoMes]['total_arquivos'] += $totalArquivos;
+                                    $anosConsolidados[$chaveAnoMes]['paths'][] = "{$tipoPath}/{$ano}/{$mes}";
                                 }
                             }
-
-                            if (!empty($meses)) {
-                                // Ordenar meses
-                                usort($meses, function($a, $b) {
-                                    return (int)$a['mes'] - (int)$b['mes'];
-                                });
-
-                                $anos[] = [
-                                    'ano' => $ano,
-                                    'meses' => $meses,
-                                    'total_arquivos' => array_sum(array_column($meses, 'total_arquivos'))
-                                ];
-                            }
-                        }
-
-                        if (!empty($anos)) {
-                            // Ordenar anos (mais recente primeiro)
-                            usort($anos, function($a, $b) {
-                                return (int)$b['ano'] - (int)$a['ano'];
-                            });
-
-                            $estrutura[$tipo] = [
-                                'tipo' => $tipo,
-                                'anos' => $anos,
-                                'total_arquivos' => array_sum(array_column($anos, 'total_arquivos'))
-                            ];
                         }
                     }
+                }
+            }
+
+            // Converter dados consolidados para estrutura final
+            if (!empty($anosConsolidados)) {
+                $anosFinais = [];
+                $anosMeses = [];
+
+                // Agrupar por ano
+                foreach ($anosConsolidados as $dadosConsolidados) {
+                    $ano = $dadosConsolidados['ano'];
+
+                    if (!isset($anosMeses[$ano])) {
+                        $anosMeses[$ano] = [];
+                    }
+
+                    $anosMeses[$ano][] = [
+                        'mes' => $dadosConsolidados['mes'],
+                        'nome_mes' => $dadosConsolidados['nome_mes'],
+                        'total_arquivos' => $dadosConsolidados['total_arquivos'],
+                        'path' => $dadosConsolidados['paths'][0] // Usar o primeiro path como referência
+                    ];
+                }
+
+                // Criar estrutura final por ano
+                foreach ($anosMeses as $ano => $meses) {
+                    // Ordenar meses
+                    usort($meses, function($a, $b) {
+                        return (int)$a['mes'] - (int)$b['mes'];
+                    });
+
+                    $anosFinais[] = [
+                        'ano' => $ano,
+                        'meses' => $meses,
+                        'total_arquivos' => array_sum(array_column($meses, 'total_arquivos'))
+                    ];
+                }
+
+                if (!empty($anosFinais)) {
+                    // Ordenar anos (mais recente primeiro)
+                    usort($anosFinais, function($a, $b) {
+                        return (int)$b['ano'] - (int)$a['ano'];
+                    });
+
+                    $estrutura[$tipo] = [
+                        'tipo' => $tipo,
+                        'anos' => $anosFinais,
+                        'total_arquivos' => array_sum(array_column($anosFinais, 'total_arquivos'))
+                    ];
                 }
             }
         }

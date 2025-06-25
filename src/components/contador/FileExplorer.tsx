@@ -96,12 +96,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
       // Converter estrutura da API para o formato esperado pelo componente
       const estruturaConvertida = converterEstruturaAPI(result.data);
 
-      // Aplicar filtro por modelo
-      const estruturaFiltrada = aplicarFiltroModelo(estruturaConvertida, filtroModelo);
-      setEstrutura(estruturaFiltrada);
+      // Como a API já filtra por modelo, não precisamos aplicar filtro adicional
+      setEstrutura(estruturaConvertida);
 
       // Expandir automaticamente o primeiro ano disponível
-      const primeiroAno = Object.keys(estruturaFiltrada)[0];
+      const primeiroAno = Object.keys(estruturaConvertida)[0];
       if (primeiroAno) {
         setExpandedYears({ [primeiroAno]: true });
       }
@@ -118,25 +117,20 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
    * Converte a estrutura retornada pela API para o formato esperado pelo componente
    */
   const converterEstruturaAPI = (dadosAPI: any): Record<string, EstruturaAno> => {
-    console.log('🔍 Dados recebidos da API:', dadosAPI);
-
     const estruturaConvertida: Record<string, EstruturaAno> = {};
 
     // Se não há dados, retorna estrutura vazia
     if (!dadosAPI || Object.keys(dadosAPI).length === 0) {
-      console.log('❌ Nenhum dado recebido da API');
       return estruturaConvertida;
     }
 
     // Processar cada tipo (Autorizados, Cancelados, CCe)
     Object.keys(dadosAPI).forEach(tipo => {
       const tipoData = dadosAPI[tipo];
-      console.log(`📁 Processando tipo: ${tipo}`, tipoData);
 
       if (tipoData && tipoData.anos) {
         tipoData.anos.forEach((anoData: any) => {
           const ano = anoData.ano;
-          console.log(`📅 Processando ano: ${ano}`, anoData);
 
           // Inicializar ano se não existe
           if (!estruturaConvertida[ano]) {
@@ -149,15 +143,15 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
 
           // Processar meses do ano
           anoData.meses.forEach((mesData: any) => {
-            console.log(`📆 Processando mês: ${mesData.mes}`, mesData);
-
             const mesExistente = estruturaConvertida[ano].meses.find(m => m.mes === mesData.mes);
 
             if (mesExistente) {
               // Atualizar mês existente
               (mesExistente.tipos as any)[tipo] = mesData.total_arquivos;
-              mesExistente.total_arquivos += mesData.total_arquivos;
-              console.log(`✅ Mês ${mesData.mes} atualizado:`, mesExistente);
+              mesExistente.total_arquivos =
+                (mesExistente.tipos.Autorizados || 0) +
+                (mesExistente.tipos.Cancelados || 0) +
+                (mesExistente.tipos.CCe || 0);
             } else {
               // Criar novo mês
               const novoMes = {
@@ -172,7 +166,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
                 path: mesData.path || `/storage/xml/empresa_${empresaData.id}/${ano}/${mesData.mes}`
               };
               estruturaConvertida[ano].meses.push(novoMes);
-              console.log(`✅ Novo mês ${mesData.mes} criado:`, novoMes);
             }
           });
 
@@ -189,7 +182,6 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
       estruturaConvertida[ano].meses.sort((a, b) => parseInt(a.mes) - parseInt(b.mes));
     });
 
-    console.log('🎯 Estrutura final convertida:', estruturaConvertida);
     return estruturaConvertida;
   };
 

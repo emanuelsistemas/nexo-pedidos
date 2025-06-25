@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Search, FileText, Download, Calendar, FolderOpen, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, FileText, Download, Calendar, FolderOpen, AlertCircle, Clock, ChevronDown } from 'lucide-react';
 import Logo from '../../components/comum/Logo';
 import Button from '../../components/comum/Button';
 import FileExplorer from '../../components/contador/FileExplorer';
@@ -10,6 +10,62 @@ const ContadorPortalPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [empresaData, setEmpresaData] = useState<any>(null);
   const [error, setError] = useState('');
+  const [historicoCnpjs, setHistoricoCnpjs] = useState<string[]>([]);
+  const [showHistorico, setShowHistorico] = useState(false);
+
+  // Carregar histórico do localStorage ao inicializar
+  useEffect(() => {
+    const historicoSalvo = localStorage.getItem('contador_cnpjs_historico');
+    if (historicoSalvo) {
+      try {
+        const cnpjs = JSON.parse(historicoSalvo);
+        setHistoricoCnpjs(Array.isArray(cnpjs) ? cnpjs : []);
+      } catch (error) {
+        console.error('Erro ao carregar histórico de CNPJs:', error);
+        setHistoricoCnpjs([]);
+      }
+    }
+  }, []);
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showHistorico && !target.closest('.relative')) {
+        setShowHistorico(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showHistorico]);
+
+  // Função para salvar CNPJ no histórico
+  const salvarCnpjNoHistorico = (cnpjFormatado: string) => {
+    const cnpjLimpo = cnpjFormatado.replace(/\D/g, '');
+
+    // Não salvar CNPJs inválidos
+    if (cnpjLimpo.length !== 14) return;
+
+    const novoHistorico = [cnpjFormatado, ...historicoCnpjs.filter(c => c !== cnpjFormatado)].slice(0, 5); // Manter apenas os 5 mais recentes
+
+    setHistoricoCnpjs(novoHistorico);
+    localStorage.setItem('contador_cnpjs_historico', JSON.stringify(novoHistorico));
+  };
+
+  // Função para selecionar CNPJ do histórico
+  const selecionarCnpjHistorico = (cnpjSelecionado: string) => {
+    setCnpj(cnpjSelecionado);
+    setShowHistorico(false);
+    setError('');
+  };
+
+  // Função para limpar histórico
+  const limparHistorico = () => {
+    setHistoricoCnpjs([]);
+    localStorage.removeItem('contador_cnpjs_historico');
+    setShowHistorico(false);
+  };
 
   // Função para formatar CNPJ
   const formatCNPJ = (value: string) => {
@@ -78,19 +134,23 @@ const ContadorPortalPage: React.FC = () => {
     setError('');
 
     try {
-      // Mapeamento direto CNPJ -> ID da empresa (dados que já conhecemos)
+      // Mapeamento direto CNPJ -> ID da empresa (dados reais do sistema)
       const empresas: Record<string, any> = {
         '24163237000151': {
           id: 'acd26a4f-7220-405e-9c96-faffb7e6480e',
-          nome: 'Empresa Teste',
+          nome: 'EMANUEL LUIS PEREIRA SOUZA VALESIS INFORMATICA',
           cnpj: '24163237000151',
-          razao_social: 'Empresa Teste LTDA',
-          nome_fantasia: 'Empresa Teste'
+          razao_social: 'EMANUEL LUIS PEREIRA SOUZA VALESIS INFORMATICA',
+          nome_fantasia: 'DISTRIBUIDORA EXEMPLO',
+          inscricao_estadual: '392188360119',
+          segmento: 'Bar'
         }
       };
 
       if (empresas[cnpjNumbers]) {
         setEmpresaData(empresas[cnpjNumbers]);
+        // Salvar CNPJ no histórico quando a busca for bem-sucedida
+        salvarCnpjNoHistorico(cnpj);
       } else {
         setError('Empresa não encontrada');
         setEmpresaData(null);
@@ -152,19 +212,68 @@ const ContadorPortalPage: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    CNPJ da Empresa
-                  </label>
-                  <input
-                    type="text"
-                    value={cnpj}
-                    onChange={handleCnpjChange}
-                    onKeyPress={handleKeyPress}
-                    placeholder="00.000.000/0000-00"
-                    maxLength={18}
-                    className="w-full bg-background-input border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all duration-300"
-                  />
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-300">
+                      CNPJ da Empresa
+                    </label>
+                    {historicoCnpjs.length > 0 && (
+                      <button
+                        onClick={() => setShowHistorico(!showHistorico)}
+                        className="flex items-center gap-1 text-xs text-gray-400 hover:text-accent-400 transition-colors"
+                      >
+                        <Clock className="w-3 h-3" />
+                        Histórico
+                        <ChevronDown className={`w-3 h-3 transition-transform ${showHistorico ? 'rotate-180' : ''}`} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={cnpj}
+                      onChange={handleCnpjChange}
+                      onKeyPress={handleKeyPress}
+                      placeholder="00.000.000/0000-00"
+                      maxLength={18}
+                      className="w-full bg-background-input border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-all duration-300"
+                    />
+
+                    {/* Dropdown do Histórico */}
+                    <AnimatePresence>
+                      {showHistorico && historicoCnpjs.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute top-full left-0 right-0 mt-1 bg-background-card border border-gray-700 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto"
+                        >
+                          <div className="p-2">
+                            <div className="flex items-center justify-between px-3 py-2 text-xs text-gray-400 border-b border-gray-700">
+                              <span>CNPJs Pesquisados Recentemente</span>
+                              <button
+                                onClick={limparHistorico}
+                                className="text-red-400 hover:text-red-300 transition-colors"
+                              >
+                                Limpar
+                              </button>
+                            </div>
+                            {historicoCnpjs.map((cnpjHistorico, index) => (
+                              <button
+                                key={index}
+                                onClick={() => selecionarCnpjHistorico(cnpjHistorico)}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800/50 rounded transition-colors flex items-center gap-2"
+                              >
+                                <Clock className="w-4 h-4 text-gray-500" />
+                                {cnpjHistorico}
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
 
                 {error && (
@@ -232,11 +341,11 @@ const ContadorPortalPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-white">
-                    {empresaData.nome_fantasia || empresaData.razao_social}
+                    {empresaData.razao_social}
                   </h2>
                   <p className="text-gray-400">CNPJ: {formatCNPJ(empresaData.cnpj)}</p>
-                  {empresaData.razao_social && empresaData.nome_fantasia && (
-                    <p className="text-sm text-gray-500">{empresaData.razao_social}</p>
+                  {empresaData.nome_fantasia && (
+                    <p className="text-sm text-gray-500">{empresaData.nome_fantasia}</p>
                   )}
                 </div>
                 <Button
