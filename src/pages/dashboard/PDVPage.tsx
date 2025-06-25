@@ -5981,6 +5981,67 @@ const PDVPage: React.FC = () => {
           '$1 $2 $3 $4 $5 $6 $7 $8 $9 $10 $11');
       };
 
+      // ✅ NOVO: Gerar CSS responsivo baseado no tipo de impressão
+      const gerarCSSImpressao = () => {
+        if (tipoImpressao50mm) {
+          // CSS otimizado para impressão 50mm (compacta)
+          return `
+            @media print {
+              @page { margin: 0; size: 50mm auto; }
+              body { margin: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 9px; /* Menor para 50mm */
+              font-weight: 500;
+              color: #000000;
+              text-shadow: 0.2px 0 0 currentColor;
+              line-height: 1.1; /* Mais compacto */
+              letter-spacing: 0.1px;
+              margin: 5px; /* Margem reduzida */
+              max-width: 45mm; /* Largura máxima para 50mm */
+            }
+            .center { text-align: center; }
+            .bold { font-weight: 900; font-size: 10px; } /* Ligeiramente maior para destaque */
+            .linha { border-top: 1px dashed #000; margin: 3px 0; } /* Espaçamento reduzido */
+            .item { margin: 1px 0; } /* Espaçamento mínimo */
+            .item-linha { display: flex; justify-content: space-between; font-size: 8px; }
+            .chave { font-size: 7px; word-break: break-all; line-height: 1.0; } /* Muito compacto */
+            .empresa-info { font-size: 8px; line-height: 1.0; } /* Info da empresa compacta */
+            .qr-code { width: 80px !important; height: 80px !important; } /* QR Code menor */
+            .total-section { font-size: 10px; font-weight: 900; } /* Total destacado */
+          `;
+        } else {
+          // CSS padrão para impressão 80mm
+          return `
+            @media print {
+              @page { margin: 0; size: 80mm auto; }
+              body { margin: 0; }
+            }
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              font-weight: 500;
+              color: #000000;
+              text-shadow: 0.3px 0 0 currentColor;
+              line-height: 1.2;
+              letter-spacing: 0.2px;
+              margin: 10px;
+              max-width: 75mm; /* Largura máxima para 80mm */
+            }
+            .center { text-align: center; }
+            .bold { font-weight: 900; }
+            .linha { border-top: 1px dashed #000; margin: 5px 0; }
+            .item { margin: 2px 0; }
+            .item-linha { display: flex; justify-content: space-between; }
+            .chave { font-size: 10px; word-break: break-all; }
+            .empresa-info { font-size: 12px; }
+            .qr-code { width: 120px !important; height: 120px !important; }
+            .total-section { font-size: 14px; }
+          `;
+        }
+      };
+
       // Criar HTML formatado para impressão da NFC-e
       const htmlCupomNfce = `
         <!DOCTYPE html>
@@ -5989,30 +6050,11 @@ const PDVPage: React.FC = () => {
           <meta charset="UTF-8">
           <title>NFC-e - ${dadosImpressao.venda.numero}</title>
           <style>
-            @media print {
-              @page { margin: 0; }
-              body { margin: 0; }
-            }
-            body {
-              font-family: 'Courier New', monospace;
-              font-size: 12px;
-              font-weight: 500; /* Medium - peso intermediário */
-              color: #000000; /* Preto absoluto para máximo contraste */
-              text-shadow: 0.3px 0 0 currentColor; /* Simula peso ligeiramente maior - técnica para impressão térmica */
-              line-height: 1.2;
-              letter-spacing: 0.2px; /* Leve espaçamento para melhor legibilidade */
-              margin: 10px;
-            }
-            .center { text-align: center; }
-            .bold { font-weight: 900; } /* Extra bold para manter diferenciação clara */
-            .linha { border-top: 1px dashed #000; margin: 5px 0; }
-            .item { margin: 2px 0; }
-            .item-linha { display: flex; justify-content: space-between; }
-            .chave { font-size: 10px; word-break: break-all; }
+            ${gerarCSSImpressao()}
           </style>
         </head>
         <body>
-          <div class="center">
+          <div class="center empresa-info">
             <div class="bold">${dadosImpressao.empresa.razao_social}</div>
             ${dadosImpressao.empresa.nome_fantasia ? `<div>${dadosImpressao.empresa.nome_fantasia}</div>` : ''}
             <div>CNPJ: ${dadosImpressao.empresa.cnpj}</div>
@@ -6104,7 +6146,7 @@ const PDVPage: React.FC = () => {
             </div>
           ` : ''}
 
-          <div class="item-linha bold" style="font-size: 14px; margin: 5px 0;">
+          <div class="item-linha bold total-section" style="margin: 5px 0;">
             <span>TOTAL:</span>
             <span>${formatCurrency(dadosImpressao.venda.valor_total)}</span>
           </div>
@@ -6157,9 +6199,10 @@ const PDVPage: React.FC = () => {
                 <div>Consulte pela chave de acesso em:</div>
                 <div style="font-size: 10px;">www.nfce.fazenda.gov.br</div>
                 <div style="margin: 5px 0;">
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(dadosImpressao.venda.chave_nfe)}"
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=${tipoImpressao50mm ? '80x80' : '120x120'}&data=${encodeURIComponent(dadosImpressao.venda.chave_nfe)}"
                        alt="QR Code NFC-e"
-                       style="width: 120px; height: 120px; margin: 5px auto; display: block;">
+                       class="qr-code"
+                       style="margin: 5px auto; display: block;">
                 </div>
                 <div style="font-size: 10px;">Escaneie o QR Code para consultar a NFC-e</div>
               </div>
