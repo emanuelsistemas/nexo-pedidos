@@ -285,6 +285,16 @@ function criarXMLEspelho($nfeData, $empresa_id) {
             $infoAdicional .= $chavesTexto;
         }
 
+        // ✅ NOVO: Adicionar intermediador às informações adicionais (conforme NT 2020.006)
+        $intermediador = $nfeData['intermediador'] ?? [];
+        if (!empty($intermediador['nome']) && !empty($intermediador['cnpj'])) {
+            $cnpjFormatado = preg_replace('/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/', '$1.$2.$3/$4-$5', $intermediador['cnpj']);
+            $intermediadorTexto = "\n\nINTERMEDIADOR DA TRANSACAO:";
+            $intermediadorTexto .= "\nNome: " . $intermediador['nome'];
+            $intermediadorTexto .= "\nCNPJ: " . $cnpjFormatado;
+            $infoAdicional .= $intermediadorTexto;
+        }
+
         // Debug completo
         $debugInfoFile = __DIR__ . "/../storage/debug_info_adicional.txt";
         $debugContent = "=== DEBUG INFORMAÇÕES ADICIONAIS ===\n";

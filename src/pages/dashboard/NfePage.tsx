@@ -2278,16 +2278,18 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           informacaoAdicionalReal = nfeSalva.informacoes_adicionais || '';
         }
 
-        // ✅ CORREÇÃO: Carregar chaves de referência do JSON dados_nfe
+        // ✅ CORREÇÃO: Carregar chaves de referência e intermediador do JSON dados_nfe
         let chavesRefReais = [];
+        let intermediadorReal = {};
         if (nfeSalva.dados_nfe) {
           try {
             const dadosNfeJson = typeof nfeSalva.dados_nfe === 'string'
               ? JSON.parse(nfeSalva.dados_nfe)
               : nfeSalva.dados_nfe;
             chavesRefReais = dadosNfeJson?.chaves_ref || [];
+            intermediadorReal = dadosNfeJson?.intermediador || {};
           } catch (error) {
-            console.error('Erro ao carregar chaves de referência:', error);
+            console.error('Erro ao carregar dados do JSON:', error);
           }
         }
 
@@ -2339,6 +2341,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           },
           // ✅ NOVO: Chaves de referência REAIS
           chaves_ref: chavesRefReais,
+          // ✅ NOVO: Intermediador REAL
+          intermediador: intermediadorReal,
           // Dados da empresa (já carregados)
           empresa: nfeData.empresa
         };
