@@ -53,54 +53,83 @@ function downloadMesCompleto($input) {
         $ano = $input['ano'] ?? '';
         $mes = $input['mes'] ?? '';
         $modelo = $input['modelo'] ?? 'todos';
+        $ambiente = $input['ambiente'] ?? 'todos';
 
         if (empty($empresaId) || empty($ano) || empty($mes)) {
             throw new Exception('Parâmetros obrigatórios não informados');
         }
 
-        // PORTAL DO CONTADOR: APENAS ARQUIVOS DE PRODUÇÃO
-        $basePath = "../storage/xml/empresa_{$empresaId}/producao";
-
-        if (!is_dir($basePath)) {
-            throw new Exception('Pasta de PRODUÇÃO da empresa não encontrada');
+        // Determinar ambiente(s) para busca
+        $ambientes = [];
+        if ($ambiente === 'todos') {
+            $ambientes = ['producao', 'homologacao'];
+        } else {
+            $ambientes = [$ambiente];
         }
 
-        // Criar nome do arquivo ZIP
-        $nomeEmpresa = sanitizeFilename("Empresa_{$empresaId}");
-        $nomeMes = getNomeMes($mes);
-        $sufixoModelo = $modelo === 'todos' ? '' : "_NFe{$modelo}";
-        $zipFilename = "{$nomeEmpresa}_{$ano}_{$nomeMes}{$sufixoModelo}.zip";
+        // Buscar arquivos em todos os ambientes especificados
+        $totalArquivos = 0;
+        $tipos = ['Autorizados', 'Cancelados', 'CCe'];
 
         // Criar ZIP temporário
         $tempZipPath = sys_get_temp_dir() . '/' . uniqid('contador_') . '.zip';
-
         $zip = new ZipArchive();
         if ($zip->open($tempZipPath, ZipArchive::CREATE) !== TRUE) {
             throw new Exception('Erro ao criar arquivo ZIP');
         }
 
-        $totalArquivos = 0;
-        $tipos = ['Autorizados', 'Cancelados', 'CCe'];
+        foreach ($ambientes as $amb) {
+            $basePath = "../storage/xml/empresa_{$empresaId}/{$amb}";
 
-        // Adicionar arquivos de cada tipo
-        foreach ($tipos as $tipo) {
-            $tipoPath = "{$basePath}/{$tipo}/{$ano}/{$mes}";
+            if (!is_dir($basePath)) {
+                continue; // Pular se o ambiente não existir
+            }
 
-            if (is_dir($tipoPath)) {
-                $xmlFiles = glob("{$tipoPath}/*.xml");
+            // Adicionar arquivos de cada tipo
+            foreach ($tipos as $tipo) {
+                // Para NFe modelo 55, buscar na pasta 55/
+                if ($modelo === '55') {
+                    $tipoPath = "{$basePath}/55/{$tipo}/{$ano}/{$mes}";
+                } elseif ($modelo === '65') {
+                    $tipoPath = "{$basePath}/65/{$tipo}/{$ano}/{$mes}";
+                } else {
+                    // Para 'todos', buscar em ambas as pastas
+                    $caminhos = [
+                        "{$basePath}/55/{$tipo}/{$ano}/{$mes}",
+                        "{$basePath}/65/{$tipo}/{$ano}/{$mes}"
+                    ];
 
-                foreach ($xmlFiles as $xmlFile) {
-                    // Filtrar por modelo se especificado
-                    if ($modelo !== 'todos') {
-                        $modeloXML = extrairModeloXML($xmlFile);
-                        if ($modeloXML !== $modelo) {
-                            continue; // Pular este arquivo
+                    foreach ($caminhos as $tipoPath) {
+                        if (is_dir($tipoPath)) {
+                            $xmlFiles = glob("{$tipoPath}/*.xml");
+
+                            foreach ($xmlFiles as $xmlFile) {
+                                $modeloArquivo = strpos($tipoPath, '/55/') !== false ? '55' : '65';
+                                $filename = "{$amb}/{$modeloArquivo}/{$tipo}/" . basename($xmlFile);
+                                $zip->addFile($xmlFile, $filename);
+                                $totalArquivos++;
+                            }
                         }
                     }
+                    continue; // Pular o processamento individual abaixo
+                }
 
-                    $filename = "{$tipo}/" . basename($xmlFile);
-                    $zip->addFile($xmlFile, $filename);
-                    $totalArquivos++;
+                if (is_dir($tipoPath)) {
+                    $xmlFiles = glob("{$tipoPath}/*.xml");
+
+                    foreach ($xmlFiles as $xmlFile) {
+                        // Filtrar por modelo se especificado
+                        if ($modelo !== 'todos') {
+                            $modeloXML = extrairModeloXML($xmlFile);
+                            if ($modeloXML !== $modelo) {
+                                continue; // Pular este arquivo
+                            }
+                        }
+
+                        $filename = "{$amb}/{$modelo}/{$tipo}/" . basename($xmlFile);
+                        $zip->addFile($xmlFile, $filename);
+                        $totalArquivos++;
+                    }
                 }
             }
         }
@@ -109,8 +138,15 @@ function downloadMesCompleto($input) {
             throw new Exception('Nenhum arquivo XML encontrado para este período');
         }
 
+        // Criar nome do arquivo ZIP
+        $nomeEmpresa = sanitizeFilename("Empresa_{$empresaId}");
+        $nomeMes = getNomeMes($mes);
+        $sufixoModelo = $modelo === 'todos' ? '' : "_NFe{$modelo}";
+        $sufixoAmbiente = $ambiente === 'todos' ? '' : "_{$ambiente}";
+        $zipFilename = "{$nomeEmpresa}_{$ano}_{$nomeMes}{$sufixoModelo}{$sufixoAmbiente}.zip";
+
         // Adicionar relatório de resumo
-        $relatorio = gerarRelatorioMesCompleto($basePath, $ano, $mes, $tipos, $modelo);
+        $relatorio = gerarRelatorioMesCompletoMultiAmbiente($empresaId, $ano, $mes, $tipos, $modelo, $ambientes);
         $sufixoRelatorio = $modelo === 'todos' ? '' : "_NFe{$modelo}";
         $zip->addFromString('RELATORIO_' . strtoupper($nomeMes) . '_' . $ano . $sufixoRelatorio . '.txt', $relatorio);
 
@@ -305,6 +341,125 @@ function downloadAno($input) {
             'message' => $e->getMessage()
         ]);
     }
+}
+
+/**
+ * Gera relatório de resumo para um mês completo (múltiplos ambientes)
+ */
+function gerarRelatorioMesCompletoMultiAmbiente($empresaId, $ano, $mes, $tipos, $modelo = 'todos', $ambientes = ['producao']) {
+    $nomeMes = getNomeMes($mes);
+    $totalGeralArquivos = 0;
+    $totalGeralValor = 0;
+
+    $tituloModelo = $modelo === 'todos' ? 'COMPLETO' : "NFe MODELO {$modelo}";
+    $tituloAmbiente = count($ambientes) > 1 ? 'TODOS OS AMBIENTES' : strtoupper($ambientes[0]);
+    $relatorio = "RELATÓRIO {$tituloModelo} DE XMLs - {$tituloAmbiente}\n";
+    $relatorio .= "Período: {$nomeMes}/{$ano}\n";
+    if ($modelo !== 'todos') {
+        $relatorio .= "Filtro: NFe Modelo {$modelo}\n";
+    }
+    $relatorio .= "Data de geração: " . date('d/m/Y H:i:s') . "\n";
+    $relatorio .= str_repeat("=", 80) . "\n\n";
+
+    foreach ($ambientes as $ambiente) {
+        $basePath = "../storage/xml/empresa_{$empresaId}/{$ambiente}";
+
+        if (!is_dir($basePath)) {
+            continue;
+        }
+
+        $relatorio .= "=== AMBIENTE: " . strtoupper($ambiente) . " ===\n\n";
+
+        foreach ($tipos as $tipo) {
+            $tipoPath = "{$basePath}/{$tipo}/{$ano}/{$mes}";
+
+            if (is_dir($tipoPath)) {
+                $xmlFiles = glob("{$tipoPath}/*.xml");
+                $totalTipo = 0;
+                $totalValorTipo = 0;
+
+                // Filtrar por modelo se especificado
+                $xmlFilesFiltrados = [];
+                foreach ($xmlFiles as $xmlFile) {
+                    if ($modelo !== 'todos') {
+                        $modeloXML = extrairModeloXML($xmlFile);
+                        if ($modeloXML !== $modelo) {
+                            continue;
+                        }
+                    }
+                    $xmlFilesFiltrados[] = $xmlFile;
+                    $totalTipo++;
+                }
+
+                $totalGeralArquivos += $totalTipo;
+
+                $relatorio .= "--- {$tipo} ---\n";
+                $relatorio .= "Total: {$totalTipo} arquivos\n";
+
+                if ($totalTipo > 0) {
+                    $relatorio .= sprintf("%-12s %-40s %-15s %-12s %s\n",
+                        "Número", "Arquivo", "Valor (R$)", "Tamanho", "Data"
+                    );
+                    $relatorio .= str_repeat("-", 80) . "\n";
+
+                    foreach ($xmlFilesFiltrados as $xmlFile) {
+                        $filename = basename($xmlFile);
+                        $size = filesize($xmlFile);
+                        $date = date('d/m/Y H:i:s', filemtime($xmlFile));
+
+                        // Extrair dados do XML
+                        $dadosXML = extrairDadosXML($xmlFile);
+                        $numeroNFe = $dadosXML['numero'] ?? 'N/A';
+                        $valorNFe = $dadosXML['valor'] ?? 0;
+
+                        // Somar valor apenas para Autorizados (NFe válidas)
+                        if ($tipo === 'Autorizados') {
+                            $totalValorTipo += $valorNFe;
+                        }
+
+                        $relatorio .= sprintf("%-12s %-40s R$ %-11s %-12s %s\n",
+                            $numeroNFe,
+                            $filename,
+                            number_format($valorNFe, 2, ',', '.'),
+                            formatBytes($size),
+                            $date
+                        );
+                    }
+
+                    $relatorio .= str_repeat("-", 80) . "\n";
+
+                    // Mostrar total do tipo apenas para Autorizados
+                    if ($tipo === 'Autorizados' && $totalValorTipo > 0) {
+                        $relatorio .= sprintf("TOTAL %s: %d arquivos - R$ %s\n",
+                            $tipo,
+                            $totalTipo,
+                            number_format($totalValorTipo, 2, ',', '.')
+                        );
+                        $totalGeralValor += $totalValorTipo;
+                    } else {
+                        $relatorio .= sprintf("TOTAL %s: %d arquivos\n", $tipo, $totalTipo);
+                    }
+                } else {
+                    $relatorio .= "  Nenhum arquivo encontrado\n";
+                }
+
+                $relatorio .= "\n";
+            }
+        }
+        $relatorio .= "\n";
+    }
+
+    $relatorio .= str_repeat("=", 80) . "\n";
+    $relatorio .= sprintf("RESUMO GERAL:\n");
+    $relatorio .= sprintf("Total de arquivos: %d\n", $totalGeralArquivos);
+    if ($totalGeralValor > 0) {
+        $relatorio .= sprintf("Valor total das NFe Autorizadas: R$ %s\n",
+            number_format($totalGeralValor, 2, ',', '.')
+        );
+    }
+    $relatorio .= str_repeat("=", 80) . "\n";
+
+    return $relatorio;
 }
 
 /**

@@ -209,7 +209,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({ empresaData }) => {
           empresa_id: empresaData.id,
           ano,
           mes,
-          modelo: filtroModelo
+          modelo: filtroModelo,
+          ambiente: filtroAmbiente
         })
       });
 
