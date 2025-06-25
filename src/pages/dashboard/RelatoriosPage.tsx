@@ -9,6 +9,7 @@ const RelatoriosPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const [activeSection, setActiveSection] = useState<'vendas' | 'comissoes'>('vendas');
   const [loading, setLoading] = useState(false);
+  const [loadingInicial, setLoadingInicial] = useState(true);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
   // Estados para filtros
@@ -26,37 +27,82 @@ const RelatoriosPage: React.FC = () => {
   const [ambienteAtual, setAmbienteAtual] = useState<string>('');
 
   useEffect(() => {
-    withSessionCheck(async (user) => {
+    const carregarDadosIniciais = async () => {
       try {
+        console.log('=== CARREGANDO DADOS INICIAIS ===');
+
+        // Usar abordagem direta do Supabase em vez do withSessionCheck
+        const { data: session, error: sessionError } = await supabase.auth.getSession();
+
+        console.log('Sessão obtida:', { session: session?.session, error: sessionError });
+
+        if (sessionError) {
+          console.error('Erro ao obter sessão:', sessionError);
+          return;
+        }
+
+        if (!session?.session?.user) {
+          console.error('Usuário não encontrado na sessão');
+          return;
+        }
+
+        const user = session.session.user;
+        console.log('Usuário da sessão:', user);
+        console.log('Buscando dados do usuário ID:', user.id);
+
         // Buscar dados do usuário e empresa
-        const { data: userData } = await supabase
+        const { data: userData, error: userError } = await supabase
           .from('usuarios')
           .select('empresa_id')
           .eq('id', user.id)
           .single();
 
+        console.log('Resultado da consulta usuários:', { userData, userError });
+
+        if (userError) {
+          console.error('Erro ao buscar dados do usuário:', userError);
+          return;
+        }
+
         if (userData?.empresa_id) {
+          console.log('✅ Empresa ID encontrado:', userData.empresa_id);
           setEmpresaId(userData.empresa_id);
           await carregarAmbienteAtual(userData.empresa_id);
+        } else {
+          console.error('❌ Empresa ID não encontrado para o usuário');
         }
       } catch (error) {
         console.error('Erro ao carregar dados iniciais:', error);
+      } finally {
+        setLoadingInicial(false);
       }
-    });
+    };
+
+    carregarDadosIniciais();
   }, []);
 
   const carregarAmbienteAtual = async (empresaId: string) => {
     try {
+      console.log('Carregando ambiente para empresa:', empresaId);
+
       const { data, error } = await supabase
         .from('nfe_config')
         .select('ambiente')
         .eq('empresa_id', empresaId)
         .single();
 
-      if (error) throw error;
+      console.log('Resultado da consulta nfe_config:', { data, error });
+
+      if (error) {
+        console.warn('Erro ao buscar configuração NFe:', error);
+        setAmbienteAtual('2'); // Default para homologação
+        return;
+      }
 
       // Converter de 'homologacao'/'producao' para '2'/'1'
-      setAmbienteAtual(data?.ambiente === 'producao' ? '1' : '2');
+      const ambienteConvertido = data?.ambiente === 'producao' ? '1' : '2';
+      console.log('Ambiente convertido:', ambienteConvertido);
+      setAmbienteAtual(ambienteConvertido);
     } catch (error) {
       console.error('Erro ao carregar ambiente atual:', error);
       setAmbienteAtual('2'); // Default para homologação
@@ -67,33 +113,93 @@ const RelatoriosPage: React.FC = () => {
     setActiveSection(section);
   };
 
+  const testarAutenticacao = async () => {
+    try {
+      console.log('=== TESTE DE AUTENTICAÇÃO ===');
+
+      // Testar sessão do Supabase
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      console.log('Sessão Supabase:', { session: session?.session, error: sessionError });
+
+      if (session?.session?.user) {
+        const user = session.session.user;
+        console.log('Usuário da sessão:', user);
+
+        // Testar consulta na tabela usuarios
+        const { data: userData, error: userError } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('id', user.id);
+
+        console.log('Consulta tabela usuarios:', { userData, userError });
+
+        if (userData && userData.length > 0) {
+          console.log('✅ Usuário encontrado na tabela usuarios');
+          console.log('Dados do usuário:', userData[0]);
+        } else {
+          console.log('❌ Usuário não encontrado na tabela usuarios');
+        }
+      } else {
+        console.log('❌ Usuário não encontrado na sessão');
+      }
+    } catch (error) {
+      console.error('Erro no teste de autenticação:', error);
+    }
+  };
+
   const gerarRelatorioVendas = async () => {
-    if (!empresaId) return;
+    console.log('=== INICIANDO GERAÇÃO DE RELATÓRIO ===');
+    console.log('Empresa ID:', empresaId);
+    console.log('Estado atual:', { empresaId, loading });
+
+    if (!empresaId) {
+      console.error('❌ Empresa ID não definido - não é possível gerar relatório');
+      alert('Erro: Empresa não identificada. Tente recarregar a página.');
+      return;
+    }
 
     setLoading(true);
     try {
-      console.log('Gerando relatório para empresa:', empresaId);
-      console.log('Filtros:', { dataInicio, dataFim, ambiente, tipoVenda, incluirValor, incluirProdutos, incluirAdicionais });
+      console.log('Filtros aplicados:', { dataInicio, dataFim, ambiente, tipoVenda, incluirValor, incluirProdutos, incluirAdicionais });
 
       // Primeiro, vamos verificar se há dados na tabela PDV
+      console.log('Testando conexão com tabela PDV...');
       const { data: testData, error: testError } = await supabase
         .from('pdv')
-        .select('id, status_venda, created_at, total')
+        .select('id, created_at, valor_total, nome_cliente, status_venda, modelo_documento, status_fiscal')
         .eq('empresa_id', empresaId)
-        .limit(5);
+        .limit(10);
 
-      console.log('Dados de teste na tabela PDV:', { testData, testError });
+      console.log('Resultado do teste PDV:', {
+        totalRegistros: testData?.length || 0,
+        dados: testData,
+        erro: testError
+      });
 
-      // Começar com consulta simples para testar
-      let selectFields = `*`;
+      if (testError) {
+        console.error('Erro na consulta de teste:', testError);
+        throw testError;
+      }
 
-      console.log('Select fields:', selectFields);
+      // Usar consulta simples primeiro para PDV
+      console.log('Executando consulta principal do PDV...');
 
       let query = supabase
         .from('pdv')
-        .select(selectFields)
+        .select(`
+          id,
+          created_at,
+          valor_total,
+          nome_cliente,
+          status_venda,
+          status_fiscal,
+          modelo_documento,
+          numero_venda,
+          data_venda
+        `)
         .eq('empresa_id', empresaId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50); // Limitar para teste
 
       // Aplicar filtros
       if (dataInicio) {
@@ -149,7 +255,85 @@ const RelatoriosPage: React.FC = () => {
         }
       }
 
-      setDadosVendas(dadosFiltrados);
+      // Buscar produtos e adicionais separadamente se necessário
+      if (dadosFiltrados.length > 0 && (incluirProdutos || incluirAdicionais)) {
+        console.log('Buscando produtos e adicionais...');
+
+        const pdvIds = dadosFiltrados.map(venda => venda.id);
+
+        // Buscar produtos se solicitado
+        let produtosPorPdv = {};
+        if (incluirProdutos) {
+          console.log('Buscando produtos para PDVs:', pdvIds);
+          const { data: produtosData, error: produtosError } = await supabase
+            .from('pdv_itens')
+            .select(`
+              id,
+              pdv_id,
+              nome_produto,
+              quantidade,
+              valor_unitario,
+              valor_total_item,
+              codigo_produto
+            `)
+            .in('pdv_id', pdvIds)
+            .eq('empresa_id', empresaId);
+
+          console.log('Produtos encontrados:', { produtosData, produtosError });
+
+          if (produtosData && !produtosError) {
+            produtosPorPdv = produtosData.reduce((acc, produto) => {
+              if (!acc[produto.pdv_id]) acc[produto.pdv_id] = [];
+              acc[produto.pdv_id].push(produto);
+              return acc;
+            }, {});
+          }
+        }
+
+        // Buscar adicionais se solicitado
+        let adicionaisPorPdv = {};
+        if (incluirAdicionais) {
+          console.log('Buscando adicionais para PDVs:', pdvIds);
+          const { data: adicionaisData, error: adicionaisError } = await supabase
+            .from('pdv_itens_adicionais')
+            .select(`
+              id,
+              pdv_item_id,
+              nome_adicional,
+              quantidade,
+              valor_unitario,
+              valor_total,
+              pdv_itens!inner(pdv_id)
+            `)
+            .eq('empresa_id', empresaId);
+
+          console.log('Adicionais encontrados:', { adicionaisData, adicionaisError });
+
+          if (adicionaisData && !adicionaisError) {
+            adicionaisPorPdv = adicionaisData.reduce((acc, adicional) => {
+              const pdvId = adicional.pdv_itens?.pdv_id;
+              if (pdvId) {
+                if (!acc[pdvId]) acc[pdvId] = [];
+                acc[pdvId].push(adicional);
+              }
+              return acc;
+            }, {});
+          }
+        }
+
+        // Combinar dados
+        const vendasComDetalhes = dadosFiltrados.map(venda => ({
+          ...venda,
+          pdv_itens: produtosPorPdv[venda.id] || [],
+          pdv_itens_adicionais: adicionaisPorPdv[venda.id] || []
+        }));
+
+        console.log('Vendas com detalhes:', vendasComDetalhes);
+        setDadosVendas(vendasComDetalhes);
+      } else {
+        setDadosVendas(dadosFiltrados);
+      }
+
       console.log('Dados carregados:', dadosFiltrados.length, 'registros');
 
       if (dadosFiltrados.length === 0) {
@@ -175,11 +359,15 @@ const RelatoriosPage: React.FC = () => {
       let query = supabase
         .from('pdv')
         .select(`
-          *,
-          usuarios(nome)
+          id,
+          created_at,
+          valor_total,
+          nome_cliente,
+          status_venda,
+          status_fiscal,
+          modelo_documento
         `)
         .eq('empresa_id', empresaId)
-        .eq('status', 'finalizada')
         .order('created_at', { ascending: false });
 
       // Aplicar filtros
@@ -227,7 +415,7 @@ const RelatoriosPage: React.FC = () => {
       // Por enquanto, comissões serão 0 até implementarmos o sistema de vendedores
       const comissoes = dadosFiltrados.map(venda => ({
         ...venda,
-        valor_comissao: 0
+        valor_comissao: (venda.valor_total * 0.05) || 0 // 5% de comissão exemplo
       }));
 
       setDadosComissoes(comissoes);
@@ -452,7 +640,7 @@ const RelatoriosPage: React.FC = () => {
                       case 'cancelada':
                         return 'Cancelada';
                       case 'nao_fiscal':
-                        return 'Não Fiscal';
+                        return 'Venda';
                       default:
                         return status;
                     }
@@ -475,48 +663,48 @@ const RelatoriosPage: React.FC = () => {
                       </td>
                       {incluirValor && (
                         <td className="px-4 py-3 text-sm text-gray-300 text-right">
-                          R$ {venda.total?.toFixed(2) || '0,00'}
+                          R$ {venda.valor_total?.toFixed(2) || '0,00'}
                         </td>
                       )}
                       {incluirProdutos && (
                         <td className="px-4 py-3 text-sm text-gray-300">
                           <div className="max-w-xs">
-                            {venda.pdv_itens?.map((item: any, itemIndex: number) => (
-                              <div key={itemIndex} className="text-xs mb-1">
-                                <span className="font-medium">{item.nome_produto}</span>
-                                <span className="text-gray-400 ml-1">
-                                  (Qtd: {item.quantidade} - R$ {item.valor_total_item?.toFixed(2)})
-                                </span>
-                              </div>
-                            )) || <span className="text-gray-500">Nenhum produto</span>}
+                            {venda.pdv_itens && venda.pdv_itens.length > 0 ? (
+                              venda.pdv_itens.map((item: any, itemIndex: number) => (
+                                <div key={itemIndex} className="text-xs mb-1 p-1 bg-gray-800/30 rounded">
+                                  <div className="font-medium text-white">{item.nome_produto || 'Produto sem nome'}</div>
+                                  <div className="text-gray-400">
+                                    Qtd: {item.quantidade || 0} |
+                                    Unit: R$ {item.valor_unitario?.toFixed(2) || '0,00'} |
+                                    Total: R$ {item.valor_total_item?.toFixed(2) || '0,00'}
+                                  </div>
+                                  {item.codigo_produto && (
+                                    <div className="text-gray-500 text-xs">Cód: {item.codigo_produto}</div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-gray-500 text-xs">Nenhum produto encontrado</span>
+                            )}
                           </div>
                         </td>
                       )}
                       {incluirAdicionais && (
                         <td className="px-4 py-3 text-sm text-gray-300">
                           <div className="max-w-xs">
-                            {venda.pdv_itens?.flatMap((item: any) =>
-                              item.pdv_itens_adicionais?.map((adicional: any, addIndex: number) => (
-                                <div key={addIndex} className="text-xs mb-1">
-                                  <span className="font-medium">{adicional.nome_adicional}</span>
-                                  <span className="text-gray-400 ml-1">
-                                    (Qtd: {adicional.quantidade} - R$ {adicional.valor_total?.toFixed(2)})
-                                  </span>
-                                </div>
-                              )) || []
-                            ).length > 0 ? (
-                              venda.pdv_itens?.flatMap((item: any) =>
-                                item.pdv_itens_adicionais?.map((adicional: any, addIndex: number) => (
-                                  <div key={addIndex} className="text-xs mb-1">
-                                    <span className="font-medium">{adicional.nome_adicional}</span>
-                                    <span className="text-gray-400 ml-1">
-                                      (Qtd: {adicional.quantidade} - R$ {adicional.valor_total?.toFixed(2)})
-                                    </span>
+                            {venda.pdv_itens_adicionais && venda.pdv_itens_adicionais.length > 0 ? (
+                              venda.pdv_itens_adicionais.map((adicional: any, addIndex: number) => (
+                                <div key={addIndex} className="text-xs mb-1 p-1 bg-blue-800/20 rounded">
+                                  <div className="font-medium text-blue-300">{adicional.nome_adicional}</div>
+                                  <div className="text-gray-400">
+                                    Qtd: {adicional.quantidade || 0} |
+                                    Unit: R$ {adicional.valor_unitario?.toFixed(2) || '0,00'} |
+                                    Total: R$ {adicional.valor_total?.toFixed(2) || '0,00'}
                                   </div>
-                                )) || []
-                              )
+                                </div>
+                              ))
                             ) : (
-                              <span className="text-gray-500">Nenhum adicional</span>
+                              <span className="text-gray-500 text-xs">Nenhum adicional encontrado</span>
                             )}
                           </div>
                         </td>
@@ -608,7 +796,7 @@ const RelatoriosPage: React.FC = () => {
                         {comissao.nome_cliente || 'Consumidor Final'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-300 text-right">
-                        R$ {comissao.total?.toFixed(2) || '0,00'}
+                        R$ {comissao.valor_total?.toFixed(2) || '0,00'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-400 text-right font-semibold">
                         R$ {comissao.valor_comissao?.toFixed(2) || '0,00'}
@@ -630,6 +818,61 @@ const RelatoriosPage: React.FC = () => {
       )}
     </div>
   );
+
+  // Mostrar loading inicial
+  if (loadingInicial) {
+    return (
+      <div className="flex min-h-[calc(100vh-120px)] items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Carregando dados da empresa...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar erro se não conseguiu carregar empresa
+  if (!empresaId) {
+    return (
+      <div className="flex min-h-[calc(100vh-120px)] items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-white mb-2">Erro ao carregar dados</h2>
+          <p className="text-gray-400 mb-4">Não foi possível identificar sua empresa.</p>
+
+          <div className="bg-gray-800 rounded-lg p-4 mb-4 text-left">
+            <h3 className="text-sm font-semibold text-white mb-2">Debug Info:</h3>
+            <p className="text-xs text-gray-400">
+              • Abra o Console (F12) para ver logs detalhados<br/>
+              • Verifique se você está logado corretamente<br/>
+              • Empresa ID: {empresaId || 'undefined'}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              onClick={testarAutenticacao}
+              className="w-full px-4 py-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-600 font-semibold"
+            >
+              🔍 Testar Autenticação (Ver Console)
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600"
+            >
+              Recarregar Página
+            </button>
+            <button
+              onClick={() => window.location.href = '/dashboard'}
+              className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+            >
+              Voltar ao Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-120px)] gap-6">
