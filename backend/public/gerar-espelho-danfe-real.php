@@ -254,6 +254,7 @@ function criarXMLEspelho($nfeData, $empresa_id) {
         $destinatario = $nfeData['destinatario'] ?? [];
         $produtos = $nfeData['produtos'] ?? [];
         $totais = $nfeData['totais'] ?? [];
+        $transportadora = $nfeData['transportadora'] ?? [];
 
         // ✅ CORREÇÃO: Buscar informações adicionais e chaves de referência
         $infoAdicional = '';
@@ -317,27 +318,42 @@ function criarXMLEspelho($nfeData, $empresa_id) {
         $debugDestFile = __DIR__ . "/../storage/debug_destinatario.json";
         file_put_contents($debugDestFile, json_encode($destinatario, JSON_PRETTY_PRINT));
 
-        // Dados básicos da empresa (hardcoded para espelho)
-        $cnpjEmitente = '24163237000151';
-        $razaoSocial = 'EMANUEL LUIS PEREIRA SOUZA VALESIS INFORMATICA';
-        $nomeFantasia = 'VALESIS INFORMATICA';
+        // ✅ CORREÇÃO: Buscar dados reais da empresa em vez de hardcoded
+        $empresa = $nfeData['empresa'] ?? [];
+        $cnpjEmitente = preg_replace('/[^0-9]/', '', $empresa['cnpj'] ?? '24163237000151');
+        $razaoSocial = $empresa['name'] ?? 'EMANUEL LUIS PEREIRA SOUZA VALESIS INFORMATICA';
+        $nomeFantasia = $empresa['nome_fantasia'] ?? 'DISTRIBUIDORA EXEMPLO';
+        $inscricaoEstadual = $empresa['inscricao_estadual'] ?? '392188360119';
+
+        // ✅ GERAR CÓDIGOS DINÂMICOS PARA ESPELHO (SEM HARDCODED)
+        $codigoNumerico = str_pad(rand(10000000, 99999999), 8, '0', STR_PAD_LEFT);
+        $numeroNfe = str_pad($identificacao['numero'] ?? '1', 9, '0', STR_PAD_LEFT);
+        $serieNfe = str_pad($identificacao['serie'] ?? '1', 3, '0', STR_PAD_LEFT);
+
+        // Gerar chave NFe dinâmica para espelho
+        $uf = '35'; // SP
+        $aamm = date('ym');
+        $modelo = '55';
+        $chaveBase = $uf . $aamm . $cnpjEmitente . $modelo . $serieNfe . $numeroNfe;
+        $digitoVerificador = rand(0, 9);
+        $chaveNfe = $chaveBase . $codigoNumerico . $digitoVerificador;
 
         // Criar XML básico para espelho
         $xml = '<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
     <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
-        <infNFe Id="NFe35250624163237000151550010000000011448846933" versao="4.00">
+        <infNFe Id="NFe' . $chaveNfe . '" versao="4.00">
             <ide>
                 <cUF>35</cUF>
-                <cNF>44884693</cNF>
+                <cNF>' . $codigoNumerico . '</cNF>
                 <natOp>' . htmlspecialchars($identificacao['natureza_operacao'] ?? 'Venda de Mercadoria') . '</natOp>
                 <mod>55</mod>
-                <serie>' . htmlspecialchars($identificacao['serie'] ?? '1') . '</serie>
-                <nNF>' . htmlspecialchars($identificacao['numero'] ?? '1') . '</nNF>
-                <dhEmi>' . date('c') . '</dhEmi>
+                <serie>' . $serieNfe . '</serie>
+                <nNF>' . $numeroNfe . '</nNF>
+                <dhEmi>' . ($identificacao['data_emissao'] ? date('c', strtotime($identificacao['data_emissao'])) : date('c')) . '</dhEmi>
                 <tpNF>1</tpNF>
                 <idDest>1</idDest>
-                <cMunFG>3526209</cMunFG>
+                <cMunFG>' . htmlspecialchars($empresa['codigo_municipio'] ?? '3524402') . '</cMunFG>
                 <tpImp>1</tpImp>
                 <tpEmis>1</tpEmis>
                 <cDV>3</cDV>
@@ -351,17 +367,17 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                 <xNome>' . htmlspecialchars($razaoSocial) . '</xNome>
                 <xFant>' . htmlspecialchars($nomeFantasia) . '</xFant>
                 <enderEmit>
-                    <xLgr>SANTA TEREZINHA</xLgr>
-                    <nro>123</nro>
-                    <xBairro>CENTRO</xBairro>
-                    <cMun>3526209</cMun>
-                    <xMun>JACAREI</xMun>
-                    <UF>SP</UF>
-                    <CEP>12327000</CEP>
+                    <xLgr>' . htmlspecialchars($empresa['address'] ?? 'SANTA TEREZINHA') . '</xLgr>
+                    <nro>' . htmlspecialchars($empresa['numero_endereco'] ?? '531') . '</nro>
+                    <xBairro>' . htmlspecialchars($empresa['bairro'] ?? 'JARDIM BELA VISTA') . '</xBairro>
+                    <cMun>' . htmlspecialchars($empresa['codigo_municipio'] ?? '3524402') . '</cMun>
+                    <xMun>' . htmlspecialchars($empresa['city'] ?? 'JACAREI') . '</xMun>
+                    <UF>' . htmlspecialchars($empresa['uf'] ?? 'SP') . '</UF>
+                    <CEP>' . preg_replace('/[^0-9]/', '', $empresa['zip_code'] ?? '12309010') . '</CEP>
                     <cPais>1058</cPais>
                     <xPais>BRASIL</xPais>
                 </enderEmit>
-                <IE>123456789</IE>
+                <IE>' . htmlspecialchars($inscricaoEstadual) . '</IE>
                 <CRT>3</CRT>
             </emit>';
 
@@ -407,8 +423,8 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                 $mapaCidades = [
                     'MOGI GUACU' => '3530706',
                     'MOGI GUAÇU' => '3530706',
-                    'JACAREI' => '3526209',
-                    'JACAREÍ' => '3526209',
+                    'JACAREI' => '3524402',
+                    'JACAREÍ' => '3524402',
                     'SAO PAULO' => '3550308',
                     'SÃO PAULO' => '3550308'
                 ];
@@ -550,7 +566,106 @@ function criarXMLEspelho($nfeData, $empresa_id) {
                 </ICMSTot>
             </total>
             <transp>
-                <modFrete>9</modFrete>
+                <modFrete>' . htmlspecialchars($transportadora['modalidade_frete'] ?? '9') . '</modFrete>';
+
+        // ✅ NOVO: Adicionar dados da transportadora quando informada
+        if (!empty($transportadora['transportadora_nome']) && ($transportadora['modalidade_frete'] ?? '9') !== '9') {
+            $xml .= '
+                <transporta>';
+
+            // CNPJ ou CPF da transportadora
+            $documento = preg_replace('/[^0-9]/', '', $transportadora['transportadora_documento'] ?? '');
+            if (strlen($documento) == 14) {
+                $xml .= '
+                    <CNPJ>' . $documento . '</CNPJ>';
+            } elseif (strlen($documento) == 11) {
+                $xml .= '
+                    <CPF>' . $documento . '</CPF>';
+            }
+
+            $xml .= '
+                    <xNome>' . htmlspecialchars($transportadora['transportadora_nome']) . '</xNome>';
+
+            if (!empty($transportadora['transportadora_ie'])) {
+                $xml .= '
+                    <IE>' . htmlspecialchars($transportadora['transportadora_ie']) . '</IE>';
+            }
+
+            if (!empty($transportadora['transportadora_endereco'])) {
+                $xml .= '
+                    <xEnder>' . htmlspecialchars($transportadora['transportadora_endereco']) . '</xEnder>';
+            }
+
+            if (!empty($transportadora['transportadora_cidade'])) {
+                $xml .= '
+                    <xMun>' . htmlspecialchars($transportadora['transportadora_cidade']) . '</xMun>';
+            }
+
+            if (!empty($transportadora['transportadora_uf'])) {
+                $xml .= '
+                    <UF>' . htmlspecialchars($transportadora['transportadora_uf']) . '</UF>';
+            }
+
+            $xml .= '
+                </transporta>';
+        }
+
+        // ✅ NOVO: Adicionar dados do veículo quando informados
+        if (!empty($transportadora['veiculo_placa'])) {
+            $xml .= '
+                <veicTransp>
+                    <placa>' . htmlspecialchars($transportadora['veiculo_placa']) . '</placa>';
+
+            if (!empty($transportadora['veiculo_uf'])) {
+                $xml .= '
+                    <UF>' . htmlspecialchars($transportadora['veiculo_uf']) . '</UF>';
+            }
+
+            if (!empty($transportadora['veiculo_rntc'])) {
+                $xml .= '
+                    <RNTC>' . htmlspecialchars($transportadora['veiculo_rntc']) . '</RNTC>';
+            }
+
+            $xml .= '
+                </veicTransp>';
+        }
+
+        // ✅ NOVO: Adicionar dados dos volumes quando informados
+        if (!empty($transportadora['volumes_quantidade'])) {
+            $xml .= '
+                <vol>
+                    <qVol>' . htmlspecialchars($transportadora['volumes_quantidade']) . '</qVol>';
+
+            if (!empty($transportadora['volumes_especie'])) {
+                $xml .= '
+                    <esp>' . htmlspecialchars($transportadora['volumes_especie']) . '</esp>';
+            }
+
+            if (!empty($transportadora['volumes_marca'])) {
+                $xml .= '
+                    <marca>' . htmlspecialchars($transportadora['volumes_marca']) . '</marca>';
+            }
+
+            if (!empty($transportadora['volumes_numeracao'])) {
+                $xml .= '
+                    <nVol>' . htmlspecialchars($transportadora['volumes_numeracao']) . '</nVol>';
+            }
+
+            if (!empty($transportadora['volumes_peso_liquido'])) {
+                $xml .= '
+                    <pesoL>' . number_format((float)$transportadora['volumes_peso_liquido'], 3, '.', '') . '</pesoL>';
+            }
+
+            if (!empty($transportadora['volumes_peso_bruto'])) {
+                $xml .= '
+                    <pesoB>' . number_format((float)$transportadora['volumes_peso_bruto'], 3, '.', '') . '</pesoB>';
+            }
+
+            $xml .= '
+                </vol>';
+        }
+
+        $xml .= '
             </transp>
             <pag>
                 <detPag>
@@ -567,9 +682,9 @@ function criarXMLEspelho($nfeData, $empresa_id) {
         <infProt>
             <tpAmb>2</tpAmb>
             <verAplic>SP_NFE_PL_009_V4</verAplic>
-            <chNFe>35250624163237000151550010000000011448846933</chNFe>
-            <dhRecbto>' . date('c') . '</dhRecbto>
-            <nProt>135250000000001</nProt>
+            <chNFe>' . $chaveNfe . '</chNFe>
+            <dhRecbto>' . ($identificacao['data_emissao'] ? date('c', strtotime($identificacao['data_emissao'])) : date('c')) . '</dhRecbto>
+            <nProt>1' . $uf . date('y') . str_pad(rand(100000000, 999999999), 9, '0', STR_PAD_LEFT) . '</nProt>
             <digVal>ESPELHO</digVal>
             <cStat>100</cStat>
             <xMotivo>Autorizado o uso da NF-e</xMotivo>
@@ -628,10 +743,11 @@ function gerarEspelhoSimples($nfeData, $empresa_id) {
         
         <div class="section">
             <div class="section-title">DADOS DO EMITENTE</div>
-            <div class="field"><span class="field-label">Razão Social:</span> EMANUEL LUIS PEREIRA SOUZA VALESIS INFORMATICA</div>
-            <div class="field"><span class="field-label">CNPJ:</span> 24.163.237/0001-51</div>
-            <div class="field"><span class="field-label">Endereço:</span> SANTA TEREZINHA</div>
-            <div class="field"><span class="field-label">Cidade/UF:</span> JACAREI/SP</div>
+            <div class="field"><span class="field-label">Razão Social:</span> ' . htmlspecialchars($razaoSocial) . '</div>
+            <div class="field"><span class="field-label">CNPJ:</span> ' . preg_replace('/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/', '$1.$2.$3/$4-$5', $cnpjEmitente) . '</div>
+            <div class="field"><span class="field-label">Endereço:</span> ' . htmlspecialchars($empresa['address'] ?? 'SANTA TEREZINHA') . ', ' . htmlspecialchars($empresa['numero_endereco'] ?? '531') . '</div>
+            <div class="field"><span class="field-label">Cidade/UF:</span> ' . htmlspecialchars($empresa['city'] ?? 'JACAREI') . '/' . htmlspecialchars($empresa['uf'] ?? 'SP') . '</div>
+            <div class="field"><span class="field-label">IE:</span> ' . htmlspecialchars($inscricaoEstadual) . '</div>
         </div>
         
         <div class="section">

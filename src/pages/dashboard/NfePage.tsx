@@ -2278,9 +2278,10 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           informacaoAdicionalReal = nfeSalva.informacoes_adicionais || '';
         }
 
-        // ✅ CORREÇÃO: Carregar chaves de referência e intermediador do JSON dados_nfe
+        // ✅ CORREÇÃO: Carregar chaves de referência, intermediador e transportadora do JSON dados_nfe
         let chavesRefReais = [];
         let intermediadorReal = {};
+        let transportadoraReal = {};
         if (nfeSalva.dados_nfe) {
           try {
             const dadosNfeJson = typeof nfeSalva.dados_nfe === 'string'
@@ -2288,6 +2289,7 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
               : nfeSalva.dados_nfe;
             chavesRefReais = dadosNfeJson?.chaves_ref || [];
             intermediadorReal = dadosNfeJson?.intermediador || {};
+            transportadoraReal = dadosNfeJson?.transportadora || {};
           } catch (error) {
             console.error('Erro ao carregar dados do JSON:', error);
           }
@@ -2343,6 +2345,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
           chaves_ref: chavesRefReais,
           // ✅ NOVO: Intermediador REAL
           intermediador: intermediadorReal,
+          // ✅ NOVO: Transportadora REAL
+          transportadora: transportadoraReal,
           // Dados da empresa (já carregados)
           empresa: nfeData.empresa
         };
@@ -3606,9 +3610,8 @@ const NfeForm: React.FC<{ onBack: () => void; onSave: () => void; isViewMode?: b
       const payload = {
         ambiente: ambienteNFe === 'producao' ? 1 : 2, // 1=Produção, 2=Homologação
         empresa: {
-          ...nfeData.empresa,
-          // ✅ TESTE: Forçar IE claramente inválida para testar validação SEFAZ
-          inscricao_estadual: '111111111' // IE inválida para teste
+          ...nfeData.empresa
+          // ✅ CORREÇÃO: Usar IE real da empresa (sem fallback de teste)
         },
         cliente: {
           documento: nfeData.destinatario.documento,
