@@ -6415,6 +6415,13 @@ const PDVPage: React.FC = () => {
       };
 
       console.log('🖨️ FRONTEND: Dados preparados para reimpressão da NFC-e');
+      console.log('🧑‍💼 DEBUG VENDEDORES NFC-e:', {
+        vendedor_principal: vendedorData,
+        vendedores_array: vendedoresData,
+        vendedores_ids_venda: venda.vendedores_ids,
+        vendedores_itens_map: Array.from(vendedoresItens.entries()),
+        primeiro_item: dadosImpressaoNfce.itens[0]
+      });
 
       // Gerar e imprimir cupom da NFC-e
       await gerarEImprimirCupomNfce(dadosImpressaoNfce);
@@ -6659,35 +6666,118 @@ const PDVPage: React.FC = () => {
             .valor-monetario { white-space: nowrap; font-weight: 700; } /* Peso maior para valores */
           `;
         } else {
-          // CSS padrão para impressão 80mm - LARGURA COMPLETA
+          // CSS para impressão 80mm - PREVINE SCALING DO NAVEGADOR
           return `
             @media print {
-              @page { margin: 0; size: 80mm auto; }
-              body { margin: 0; width: 80mm; }
+              @page {
+                margin: 0;
+                size: 3.15in auto; /* 80mm = 3.15 polegadas - mais compatível */
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              html {
+                width: 3.15in !important; /* 80mm em polegadas */
+                margin: 0 !important;
+                padding: 0 !important;
+                font-size: 12pt !important; /* Tamanho em pontos para impressão */
+              }
+              body {
+                margin: 0 !important;
+                padding: 0.1in !important; /* Padding em polegadas */
+                width: 3.15in !important;
+                min-width: 3.15in !important;
+                max-width: 3.15in !important;
+                transform: scale(1) !important;
+                transform-origin: top left !important;
+                zoom: 1 !important;
+                -webkit-transform: scale(1) !important;
+                -moz-transform: scale(1) !important;
+                -ms-transform: scale(1) !important;
+                -o-transform: scale(1) !important;
+              }
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                box-sizing: border-box !important;
+                max-width: none !important; /* Previne redimensionamento automático */
+                overflow: visible !important;
+              }
+            }
+            @media screen {
+              body {
+                width: 3.15in !important; /* 80mm em polegadas para tela */
+                min-width: 3.15in !important;
+                max-width: 3.15in !important;
+              }
+            }
+            html, body {
+              width: 3.15in !important; /* 80mm = 3.15 polegadas */
+              max-width: 3.15in !important;
+              min-width: 3.15in !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              box-sizing: border-box !important;
+              zoom: 1 !important;
+              transform: none !important;
+              -webkit-text-size-adjust: 100% !important; /* Previne ajuste automático */
+              -ms-text-size-adjust: 100% !important;
             }
             body {
               font-family: 'Courier New', monospace;
-              font-size: 14px;
-              font-weight: 500;
+              font-size: 12px; /* Fonte original */
+              font-weight: 500; /* Peso original */
               color: #000000;
-              text-shadow: 0.3px 0 0 currentColor;
-              line-height: 1.3;
-              letter-spacing: 0.2px;
-              margin: 8px;
-              width: 80mm !important;
-              max-width: 80mm !important;
-              min-width: 80mm !important;
-              box-sizing: border-box;
+              text-shadow: 0.3px 0 0 currentColor; /* Text-shadow original */
+              line-height: 1.2;
+              letter-spacing: 0.2px; /* Espaçamento original */
+              padding: 0.1in !important; /* Padding em polegadas - MANTÉM */
+              width: 3.15in !important;
+              max-width: 3.15in !important;
+              min-width: 3.15in !important;
+              box-sizing: border-box !important;
+              overflow-x: hidden !important;
+              background: white !important;
+              word-wrap: break-word !important;
+              -webkit-text-size-adjust: none !important; /* Força tamanho fixo - MANTÉM */
+              -moz-text-size-adjust: none !important;
+              -ms-text-size-adjust: none !important;
             }
-            .center { text-align: center; }
-            .bold { font-weight: 900; }
-            .linha { border-top: 1px dashed #000; margin: 5px 0; }
-            .item { margin: 2px 0; }
-            .item-linha { display: flex; justify-content: space-between; }
-            .chave { font-size: 10px; word-break: break-all; }
-            .empresa-info { font-size: 12px; }
-            .qr-code { width: 120px !important; height: 120px !important; }
-            .total-section { font-size: 14px; }
+            .center {
+              text-align: center;
+            }
+            .bold {
+              font-weight: 900; /* Peso original */
+            }
+            .linha {
+              border-top: 1px dashed #000; /* Linha original */
+              margin: 5px 0; /* Margem original */
+            }
+            .item {
+              margin: 2px 0; /* Margem original */
+            }
+            .item-linha {
+              display: flex;
+              justify-content: space-between;
+            }
+            .chave {
+              font-size: 10px; /* Tamanho original */
+              word-break: break-all;
+            }
+            .empresa-info {
+              font-size: 12px; /* Tamanho original */
+            }
+            .qr-code {
+              width: 120px !important; /* QR Code original */
+              height: 120px !important;
+            }
+            .total-section {
+              font-size: 14px; /* Tamanho original */
+            }
+            .valor-monetario {
+              white-space: nowrap;
+              font-weight: 700; /* Peso original */
+            }
           `;
         }
       };
@@ -6989,33 +7079,110 @@ const PDVPage: React.FC = () => {
             .valor-monetario { white-space: nowrap; font-weight: 700; } /* Peso maior para valores */
           `;
         } else {
-          // CSS padrão para impressão 80mm - LARGURA COMPLETA
+          // CSS para impressão 80mm - PREVINE SCALING DO NAVEGADOR
           return `
             @media print {
-              @page { margin: 0; size: 80mm auto; }
-              body { margin: 0; width: 80mm; }
+              @page {
+                margin: 0;
+                size: 3.15in auto; /* 80mm = 3.15 polegadas - mais compatível */
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              html {
+                width: 3.15in !important; /* 80mm em polegadas */
+                margin: 0 !important;
+                padding: 0 !important;
+                font-size: 12pt !important; /* Tamanho em pontos para impressão */
+              }
+              body {
+                margin: 0 !important;
+                padding: 0.1in !important; /* Padding em polegadas */
+                width: 3.15in !important;
+                min-width: 3.15in !important;
+                max-width: 3.15in !important;
+                transform: scale(1) !important;
+                transform-origin: top left !important;
+                zoom: 1 !important;
+                -webkit-transform: scale(1) !important;
+                -moz-transform: scale(1) !important;
+                -ms-transform: scale(1) !important;
+                -o-transform: scale(1) !important;
+              }
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+                box-sizing: border-box !important;
+                max-width: none !important; /* Previne redimensionamento automático */
+                overflow: visible !important;
+              }
+            }
+            @media screen {
+              body {
+                width: 3.15in !important; /* 80mm em polegadas para tela */
+                min-width: 3.15in !important;
+                max-width: 3.15in !important;
+              }
+            }
+            html, body {
+              width: 3.15in !important; /* 80mm = 3.15 polegadas */
+              max-width: 3.15in !important;
+              min-width: 3.15in !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              box-sizing: border-box !important;
+              zoom: 1 !important;
+              transform: none !important;
+              -webkit-text-size-adjust: 100% !important; /* Previne ajuste automático */
+              -ms-text-size-adjust: 100% !important;
             }
             body {
               font-family: 'Courier New', monospace;
-              font-size: 14px;
-              font-weight: 500;
+              font-size: 12px; /* Fonte original */
+              font-weight: 500; /* Peso original */
               color: #000000;
-              text-shadow: 0.3px 0 0 currentColor;
-              line-height: 1.3;
-              letter-spacing: 0.2px;
-              margin: 8px;
-              width: 80mm !important;
-              max-width: 80mm !important;
-              min-width: 80mm !important;
-              box-sizing: border-box;
+              text-shadow: 0.3px 0 0 currentColor; /* Text-shadow original */
+              line-height: 1.2;
+              letter-spacing: 0.2px; /* Espaçamento original */
+              padding: 0.1in !important; /* Padding em polegadas - MANTÉM */
+              width: 3.15in !important;
+              max-width: 3.15in !important;
+              min-width: 3.15in !important;
+              box-sizing: border-box !important;
+              overflow-x: hidden !important;
+              background: white !important;
+              word-wrap: break-word !important;
+              -webkit-text-size-adjust: none !important; /* Força tamanho fixo - MANTÉM */
+              -moz-text-size-adjust: none !important;
+              -ms-text-size-adjust: none !important;
             }
-            .center { text-align: center; }
-            .bold { font-weight: 900; }
-            .linha { border-top: 1px dashed #000; margin: 5px 0; }
-            .item { margin: 2px 0; }
-            .item-linha { display: flex; justify-content: space-between; }
-            .empresa-info { font-size: 12px; }
-            .total-section { font-size: 14px; }
+            .center {
+              text-align: center;
+            }
+            .bold {
+              font-weight: 900; /* Peso original */
+            }
+            .linha {
+              border-top: 1px dashed #000; /* Linha original */
+              margin: 5px 0; /* Margem original */
+            }
+            .item {
+              margin: 2px 0; /* Margem original */
+            }
+            .item-linha {
+              display: flex;
+              justify-content: space-between;
+            }
+            .empresa-info {
+              font-size: 12px; /* Tamanho original */
+            }
+            .total-section {
+              font-size: 14px; /* Tamanho original */
+            }
+            .valor-monetario {
+              white-space: nowrap;
+              font-weight: 700; /* Peso original */
+            }
           `;
         }
       };
