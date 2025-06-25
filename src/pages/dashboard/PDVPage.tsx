@@ -725,6 +725,11 @@ const PDVPage: React.FC = () => {
               preco,
               unidade_medida_id,
               grupo_id,
+              unidade_medida:unidade_medida_id (
+                id,
+                sigla,
+                nome
+              ),
               produto_fotos(url, principal)
             )
           )
@@ -1916,6 +1921,11 @@ const PDVPage: React.FC = () => {
               cst_icms,
               cst_pis,
               cst_cofins,
+              unidade_medida:unidade_medida_id (
+                id,
+                sigla,
+                nome
+              ),
               produto_fotos(url, principal)
             )
           )
@@ -2444,6 +2454,7 @@ const PDVPage: React.FC = () => {
           cfop,
           cst_icms,
           csosn_icms,
+          unidade,
           produto:produtos(
             id,
             codigo,
@@ -2828,18 +2839,30 @@ const PDVPage: React.FC = () => {
       toast.success('Modificações salvas! Iniciando retransmissão...');
 
       // Preparar dados atualizados dos itens
-      const itensAtualizados = itensNfceEdicao.map(item => ({
-        codigo: item.produto?.codigo || item.codigo_produto,
-        descricao: item.nome_produto,
-        quantidade: item.quantidade,
-        valor_unitario: item.valor_unitario,
-        unidade: item.produto?.unidade_medida?.sigla || 'UN', // ✅ CORREÇÃO: Garantir que sempre tenha uma unidade
-        ncm: item.ncm_editavel || '00000000', // ✅ CORREÇÃO: Usar NCM editável
-        cfop: item.cfop_editavel,
-        cst_icms: item.regime_tributario === 1 ? undefined : item.cst_editavel, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
-        csosn_icms: item.regime_tributario === 1 ? item.csosn_editavel : undefined, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
-        codigo_barras: item.produto?.codigo_barras
-      }));
+      const itensAtualizados = itensNfceEdicao.map(item => {
+        const unidadeCalculada = item.produto?.unidade_medida?.sigla || item.unidade || 'UN';
+
+        console.log(`🔍 REPROCESSAMENTO - Item ${item.nome_produto}:`, {
+          produto_unidade_medida: item.produto?.unidade_medida,
+          item_unidade: item.unidade,
+          unidade_final: unidadeCalculada
+        });
+
+        return {
+          codigo: item.produto?.codigo || item.codigo_produto,
+          descricao: item.nome_produto,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          unidade: unidadeCalculada,
+          ncm: item.ncm_editavel || '00000000', // ✅ CORREÇÃO: Usar NCM editável
+          cfop: item.cfop_editavel,
+          cst_icms: item.regime_tributario === 1 ? undefined : item.cst_editavel, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
+          csosn_icms: item.regime_tributario === 1 ? item.csosn_editavel : undefined, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
+          codigo_barras: item.produto?.codigo_barras
+        };
+      });
+
+      console.log('📋 REPROCESSAMENTO - Itens preparados:', itensAtualizados);
 
       // Buscar dados da empresa e ambiente
       const { data: userData } = await supabase.auth.getUser();
@@ -4652,7 +4675,7 @@ const PDVPage: React.FC = () => {
           descricao: item.nome_produto,
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
-          unidade: item.produto?.unidade_medida?.sigla || 'UN', // ✅ CORREÇÃO: Garantir que sempre tenha uma unidade
+          unidade: item.produto?.unidade_medida?.sigla, // ❌ SEM FALLBACK: Deve dar erro se não tiver unidade configurada
           ncm: item.ncm_editavel || item.produto?.ncm || '00000000',
           cfop: item.cfop_editavel || item.cfop || '5102',
           cst_icms: empresaData.regime_tributario === 1 ? undefined : (item.cst_editavel || item.cst_icms || '00'),
@@ -5476,7 +5499,7 @@ const PDVPage: React.FC = () => {
               descricao: item.produto.nome,
               quantidade: item.quantidade,
               valor_unitario: item.produto.preco,
-              unidade: item.produto.unidade_medida?.sigla || 'UN', // ✅ CORREÇÃO: Garantir que sempre tenha uma unidade
+              unidade: item.produto.unidade_medida?.sigla, // ❌ SEM FALLBACK: Deve dar erro se não tiver unidade configurada
               ncm: item.produto.ncm, // NCM real do produto (SEM FALLBACK)
               cfop: item.produto.cfop, // CFOP real do produto (SEM FALLBACK)
               codigo_barras: item.produto.codigo_barras, // Código de barras real (SEM FALLBACK)
@@ -5487,6 +5510,16 @@ const PDVPage: React.FC = () => {
           console.log('📋 FRONTEND: Dados NFC-e preparados:', nfceData);
           console.log('📦 FRONTEND: Total de produtos:', nfceData.produtos.length);
           console.log('👤 FRONTEND: Destinatário:', nfceData.destinatario);
+
+          // ✅ DEBUG: Verificar unidade de medida de cada produto
+          nfceData.produtos.forEach((produto, index) => {
+            console.log(`🔍 PRODUTO ${index + 1}:`, {
+              codigo: produto.codigo,
+              descricao: produto.descricao,
+              unidade: produto.unidade,
+              unidade_medida_original: carrinho[index]?.produto?.unidade_medida
+            });
+          });
 
           setEtapaProcessamento('Emitindo NFC-e na SEFAZ...');
 
@@ -7071,6 +7104,11 @@ const PDVPage: React.FC = () => {
                           valor_desconto,
                           unidade_medida_id,
                           grupo_id,
+                          unidade_medida:unidade_medida_id (
+                            id,
+                            sigla,
+                            nome
+                          ),
                           produto_fotos(url, principal)
                         )
                       )
@@ -13314,7 +13352,11 @@ const PDVPage: React.FC = () => {
                                 <td className="py-3 px-2 text-gray-300">{item.produto?.codigo || item.codigo_produto}</td>
                                 <td className="py-3 px-2 text-gray-300">{item.produto?.codigo_barras || '-'}</td>
                                 <td className="py-3 px-2 text-white">{item.nome_produto}</td>
-                                <td className="py-3 px-2 text-gray-300">{item.produto?.unidade_medida?.sigla || 'UN'}</td>
+                                <td className="py-3 px-2 text-gray-300">
+                                  {item.produto?.unidade_medida?.sigla || item.unidade || (
+                                    <span className="text-red-400 font-medium">SEM UNIDADE</span>
+                                  )}
+                                </td>
                                 <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
 
                                 {/* NCM */}
