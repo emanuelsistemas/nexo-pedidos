@@ -6460,38 +6460,37 @@ const PDVPage: React.FC = () => {
         }
       }
 
-      // ✅ NOVO: Buscar dados de pagamento da venda
-      console.log('💳 FRONTEND: Buscando dados de pagamento para venda:', venda.id);
-      const { data: pagamentosData, error: pagamentosError } = await supabase
-        .from('vendas_pdv_pagamentos')
-        .select('*')
-        .eq('venda_id', venda.id)
-        .eq('empresa_id', usuarioData.empresa_id);
+      // ✅ NOVO: Usar dados de pagamento da própria venda (salvos na tabela pdv)
+      console.log('💳 FRONTEND: Dados de pagamento da venda:', {
+        tipo_pagamento: venda.tipo_pagamento,
+        forma_pagamento_id: venda.forma_pagamento_id,
+        formas_pagamento: venda.formas_pagamento,
+        valor_pago: venda.valor_pago,
+        valor_troco: venda.valor_troco
+      });
 
       let dadosPagamento = null;
-      if (pagamentosData && pagamentosData.length > 0) {
-        console.log('💳 FRONTEND: Pagamentos encontrados:', pagamentosData);
 
-        if (pagamentosData.length === 1) {
+      // Os dados de pagamento estão salvos diretamente na tabela pdv
+      if (venda.tipo_pagamento) {
+        if (venda.tipo_pagamento === 'vista' && venda.forma_pagamento_id) {
           // Pagamento à vista
           dadosPagamento = {
             tipo_pagamento: 'vista',
-            forma_pagamento_id: pagamentosData[0].forma_pagamento_id,
-            valor_pago: pagamentosData[0].valor,
-            valor_troco: pagamentosData[0].valor_troco || 0
+            forma_pagamento_id: venda.forma_pagamento_id,
+            valor_pago: venda.valor_pago || venda.valor_total,
+            valor_troco: venda.valor_troco || 0
           };
-        } else {
-          // Pagamentos parciais
+        } else if (venda.tipo_pagamento === 'parcial' && venda.formas_pagamento) {
+          // Pagamento parcial (múltiplas formas)
           dadosPagamento = {
             tipo_pagamento: 'parcial',
-            formas_pagamento: pagamentosData.map(pag => ({
-              forma: pag.forma_pagamento_id,
-              valor: pag.valor
-            })),
-            valor_pago: pagamentosData.reduce((total, pag) => total + pag.valor, 0),
-            valor_troco: pagamentosData.reduce((total, pag) => total + (pag.valor_troco || 0), 0)
+            formas_pagamento: venda.formas_pagamento,
+            valor_pago: venda.valor_pago || venda.valor_total,
+            valor_troco: venda.valor_troco || 0
           };
         }
+        console.log('💳 FRONTEND: Dados de pagamento preparados:', dadosPagamento);
       } else {
         console.log('⚠️ FRONTEND: Nenhum pagamento encontrado para a venda');
       }
@@ -6650,38 +6649,37 @@ const PDVPage: React.FC = () => {
         }
       }
 
-      // ✅ NOVO: Buscar dados de pagamento da venda
-      console.log('💳 FRONTEND: Buscando dados de pagamento para cupom não fiscal:', venda.id);
-      const { data: pagamentosDataCupom, error: pagamentosErrorCupom } = await supabase
-        .from('vendas_pdv_pagamentos')
-        .select('*')
-        .eq('venda_id', venda.id)
-        .eq('empresa_id', usuarioData.empresa_id);
+      // ✅ NOVO: Usar dados de pagamento da própria venda (salvos na tabela pdv)
+      console.log('💳 FRONTEND: Dados de pagamento para cupom não fiscal:', {
+        tipo_pagamento: venda.tipo_pagamento,
+        forma_pagamento_id: venda.forma_pagamento_id,
+        formas_pagamento: venda.formas_pagamento,
+        valor_pago: venda.valor_pago,
+        valor_troco: venda.valor_troco
+      });
 
       let dadosPagamentoCupom = null;
-      if (pagamentosDataCupom && pagamentosDataCupom.length > 0) {
-        console.log('💳 FRONTEND: Pagamentos encontrados para cupom:', pagamentosDataCupom);
 
-        if (pagamentosDataCupom.length === 1) {
+      // Os dados de pagamento estão salvos diretamente na tabela pdv
+      if (venda.tipo_pagamento) {
+        if (venda.tipo_pagamento === 'vista' && venda.forma_pagamento_id) {
           // Pagamento à vista
           dadosPagamentoCupom = {
             tipo_pagamento: 'vista',
-            forma_pagamento_id: pagamentosDataCupom[0].forma_pagamento_id,
-            valor_pago: pagamentosDataCupom[0].valor,
-            valor_troco: pagamentosDataCupom[0].valor_troco || 0
+            forma_pagamento_id: venda.forma_pagamento_id,
+            valor_pago: venda.valor_pago || venda.valor_total,
+            valor_troco: venda.valor_troco || 0
           };
-        } else {
-          // Pagamentos parciais
+        } else if (venda.tipo_pagamento === 'parcial' && venda.formas_pagamento) {
+          // Pagamento parcial (múltiplas formas)
           dadosPagamentoCupom = {
             tipo_pagamento: 'parcial',
-            formas_pagamento: pagamentosDataCupom.map(pag => ({
-              forma: pag.forma_pagamento_id,
-              valor: pag.valor
-            })),
-            valor_pago: pagamentosDataCupom.reduce((total, pag) => total + pag.valor, 0),
-            valor_troco: pagamentosDataCupom.reduce((total, pag) => total + (pag.valor_troco || 0), 0)
+            formas_pagamento: venda.formas_pagamento,
+            valor_pago: venda.valor_pago || venda.valor_total,
+            valor_troco: venda.valor_troco || 0
           };
         }
+        console.log('💳 FRONTEND: Dados de pagamento preparados para cupom:', dadosPagamentoCupom);
       } else {
         console.log('⚠️ FRONTEND: Nenhum pagamento encontrado para o cupom não fiscal');
       }
@@ -7072,7 +7070,7 @@ const PDVPage: React.FC = () => {
             <span class="valor-monetario">${formatCurrency(dadosImpressao.venda.valor_total)}</span>
           </div>
 
-          ${dadosImpressao.pagamento ? `
+          ${dadosImpressao.pagamento && dadosImpressao.pagamento.tipo_pagamento ? `
             ${dadosImpressao.pagamento.tipo_pagamento === 'vista' && dadosImpressao.pagamento.forma_pagamento_id ? `
               ${(() => {
                 const forma = formasPagamento.find(f => f.id === dadosImpressao.pagamento.forma_pagamento_id);
@@ -7095,7 +7093,7 @@ const PDVPage: React.FC = () => {
                 ` : '';
               }).join('')}
             ` : ''}
-            ${dadosImpressao.pagamento.valor_troco > 0 ? `
+            ${dadosImpressao.pagamento.valor_troco && dadosImpressao.pagamento.valor_troco > 0 ? `
               <div class="item-linha bold" style="margin-top: 3px;">
                 <span>TROCO:</span>
                 <span>${formatCurrency(dadosImpressao.pagamento.valor_troco)}</span>
@@ -7526,7 +7524,7 @@ const PDVPage: React.FC = () => {
             <span class="valor-monetario">${formatCurrency(dadosImpressao.venda.valor_total)}</span>
           </div>
 
-          ${dadosImpressao.pagamento ? `
+          ${dadosImpressao.pagamento && dadosImpressao.pagamento.tipo_pagamento ? `
             ${dadosImpressao.pagamento.tipo_pagamento === 'vista' && dadosImpressao.pagamento.forma_pagamento_id ? `
               ${(() => {
                 const forma = formasPagamento.find(f => f.id === dadosImpressao.pagamento.forma_pagamento_id);
@@ -7549,7 +7547,7 @@ const PDVPage: React.FC = () => {
                 ` : '';
               }).join('')}
             ` : ''}
-            ${dadosImpressao.pagamento.valor_troco > 0 ? `
+            ${dadosImpressao.pagamento.valor_troco && dadosImpressao.pagamento.valor_troco > 0 ? `
               <div class="item-linha bold" style="margin-top: 3px;">
                 <span>TROCO:</span>
                 <span>${formatCurrency(dadosImpressao.pagamento.valor_troco)}</span>
