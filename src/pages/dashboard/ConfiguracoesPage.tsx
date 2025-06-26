@@ -239,6 +239,7 @@ const ConfiguracoesPage: React.FC = () => {
     desconto_no_item: false,
     editar_nome_produto: false,
     fiado: false,
+    desconto_no_total: false,
     vendas_itens_multiplicacao: false,
     ocultar_finalizar_com_impressao: false,
     ocultar_finalizar_sem_impressao: false,
@@ -2510,6 +2511,7 @@ const ConfiguracoesPage: React.FC = () => {
           desconto_no_item: false,
           editar_nome_produto: false,
           fiado: false,
+          desconto_no_total: false,
           vendas_itens_multiplicacao: false,
           ocultar_finalizar_com_impressao: false,
           ocultar_finalizar_sem_impressao: false,
@@ -2798,6 +2800,7 @@ const ConfiguracoesPage: React.FC = () => {
         forca_venda_fiscal_cartao: field === 'forca_venda_fiscal_cartao' ? value : pdvConfig.forca_venda_fiscal_cartao,
         observacao_no_item: field === 'observacao_no_item' ? value : pdvConfig.observacao_no_item,
         desconto_no_item: field === 'desconto_no_item' ? value : pdvConfig.desconto_no_item,
+        desconto_no_total: field === 'desconto_no_total' ? value : pdvConfig.desconto_no_total,
         editar_nome_produto: field === 'editar_nome_produto' ? value : pdvConfig.editar_nome_produto,
         fiado: field === 'fiado' ? value : pdvConfig.fiado,
         vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : pdvConfig.vendas_itens_multiplicacao,
@@ -2859,6 +2862,7 @@ const ConfiguracoesPage: React.FC = () => {
         desconto_no_item: 'Desconto no Item',
         editar_nome_produto: 'Editar nome do produto na venda',
         fiado: 'Fiado',
+        desconto_no_total: 'Desconto no Total da Venda',
         vendas_itens_multiplicacao: 'Vendas de Itens por Multiplicação',
         ocultar_finalizar_com_impressao: 'Ocultar "Finalizar com Impressão"',
         ocultar_finalizar_sem_impressao: 'Ocultar "Finalizar sem Impressão"',
@@ -4060,6 +4064,22 @@ const ConfiguracoesPage: React.FC = () => {
                           <h4 className="text-white font-medium">Desconto no Item</h4>
                           <p className="text-sm text-gray-400 mt-1">
                             Permite aplicar desconto individual em cada item durante a venda no PDV.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.desconto_no_total}
+                          onChange={(e) => handlePdvConfigChange('desconto_no_total', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Desconto no Total da Venda</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Habilita botão para aplicar desconto no valor total da venda no PDV.
                           </p>
                         </div>
                       </label>

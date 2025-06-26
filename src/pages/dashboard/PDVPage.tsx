@@ -167,6 +167,46 @@ const PDVPage: React.FC = () => {
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
   const [showMovimentosModal, setShowMovimentosModal] = useState(false);
+  const [showDescontoTotalModal, setShowDescontoTotalModal] = useState(false);
+  const [descontoTotal, setDescontoTotal] = useState(0);
+  const [tipoDescontoTotal, setTipoDescontoTotal] = useState<'percentual' | 'valor'>('percentual');
+  const [descontoGlobal, setDescontoGlobal] = useState(0);
+
+  // Função para aplicar desconto no total
+  const aplicarDescontoTotal = () => {
+    if (descontoTotal <= 0) {
+      toast.error('Digite um valor de desconto válido');
+      return;
+    }
+
+    const totalAtual = carrinho.reduce((total, item) => total + item.subtotal, 0);
+
+    if (tipoDescontoTotal === 'percentual') {
+      if (descontoTotal > 100) {
+        toast.error('Desconto percentual não pode ser maior que 100%');
+        return;
+      }
+      const valorDesconto = (totalAtual * descontoTotal) / 100;
+      setDescontoGlobal(valorDesconto);
+      toast.success(`Desconto de ${descontoTotal}% aplicado (${formatCurrency(valorDesconto)})`);
+    } else {
+      if (descontoTotal >= totalAtual) {
+        toast.error('Desconto em valor não pode ser maior ou igual ao total da venda');
+        return;
+      }
+      setDescontoGlobal(descontoTotal);
+      toast.success(`Desconto de ${formatCurrency(descontoTotal)} aplicado`);
+    }
+
+    setShowDescontoTotalModal(false);
+    setDescontoTotal(0);
+  };
+
+  // Função para remover desconto global
+  const removerDescontoGlobal = () => {
+    setDescontoGlobal(0);
+    toast.info('Desconto no total removido');
+  };
 
   // Estados para o modal de movimentos
   const [vendas, setVendas] = useState<any[]>([]);
@@ -496,6 +536,7 @@ const PDVPage: React.FC = () => {
     // Limpar descontos
     setDescontosCliente({ prazo: [], valor: [] });
     setDescontoPrazoSelecionado(null);
+    setDescontoGlobal(0);
 
     // Resetar tipo de pagamento
     setTipoPagamento('vista');
@@ -1073,6 +1114,19 @@ const PDVPage: React.FC = () => {
       }
     },
     {
+      id: 'desconto-total',
+      icon: Percent,
+      label: 'Desconto no Total',
+      color: 'orange',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowDescontoTotalModal(true);
+      }
+    },
+    {
       id: 'movimentos',
       icon: ArrowUpDown,
       label: 'Movimentos',
@@ -1128,6 +1182,10 @@ const PDVPage: React.FC = () => {
       // Se for o item 'fiados', só mostrar se a configuração estiver habilitada
       if (item.id === 'fiados') {
         return pdvConfig?.fiado === true;
+      }
+      // Se for o item 'desconto-total', só mostrar se a configuração estiver habilitada E houver itens no carrinho
+      if (item.id === 'desconto-total') {
+        return pdvConfig?.desconto_no_total === true && carrinho.length > 0;
       }
       // Se for um dos itens de controle de caixa, só mostrar se a configuração estiver habilitada
       if (['sangria', 'suprimento', 'pagamentos'].includes(item.id)) {
@@ -4088,9 +4146,44 @@ const PDVPage: React.FC = () => {
     return carrinho.reduce((total, item) => total + item.subtotal, 0);
   };
 
+  // Função para calcular total de descontos nos itens
+  const calcularDescontoItens = () => {
+    return carrinho.reduce((totalDesconto, item) => {
+      let descontoItem = 0;
+
+      // 1. Desconto por quantidade mínima
+      if (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0)) {
+        const precoOriginal = item.produto.preco;
+        const precoComDesconto = calcularPrecoModalQuantidade(item.produto, item.quantidade);
+        const descontoPorQuantidade = (precoOriginal - precoComDesconto) * item.quantidade;
+        descontoItem += descontoPorQuantidade;
+      }
+
+      // 2. Desconto por promoção
+      if (item.produto.promocao) {
+        const precoOriginal = item.produto.preco;
+        const precoPromocional = item.produto.preco_promocional || 0;
+        const descontoPromocao = (precoOriginal - precoPromocional) * item.quantidade;
+        descontoItem += descontoPromocao;
+      }
+
+      // 3. Desconto manual aplicado no item
+      if (item.desconto) {
+        descontoItem += item.desconto.valorDesconto * item.quantidade;
+      }
+
+      return totalDesconto + descontoItem;
+    }, 0);
+  };
+
   // Função para calcular total com desconto aplicado (para uso em pagamentos)
   const calcularTotalComDesconto = () => {
     let subtotal = calcularTotal();
+
+    // Aplicar desconto global (desconto no total) primeiro
+    if (descontoGlobal > 0) {
+      subtotal = subtotal - descontoGlobal;
+    }
 
     // Aplicar desconto por prazo se selecionado
     if (descontoPrazoSelecionado) {
@@ -9271,17 +9364,38 @@ const PDVPage: React.FC = () => {
 
                     return (
                       <>
-                        {/* Subtotal - Compacto */}
+                        {/* Itens - Primeiro */}
+                        <div className="flex justify-between items-center text-xs mb-1.5">
+                          <span className="text-white">Itens:</span>
+                          <span className="text-white">{carrinho.reduce((total, item) => total + item.quantidade, 0)}</span>
+                        </div>
+
+                        {/* Subtotal - Segundo */}
                         <div className="flex justify-between items-center text-xs mb-1.5">
                           <span className="text-white">Subtotal:</span>
                           <span className="text-white">{formatCurrency(subtotal)}</span>
                         </div>
 
-                        {/* Itens - Compacto */}
-                        <div className="flex justify-between items-center text-xs mb-1.5">
-                          <span className="text-white">Itens:</span>
-                          <span className="text-white">{carrinho.reduce((total, item) => total + item.quantidade, 0)}</span>
-                        </div>
+                        {/* Área de Descontos - Só aparece se alguma configuração estiver habilitada */}
+                        {(pdvConfig?.desconto_no_item || pdvConfig?.desconto_no_total) && (
+                          <>
+                            {/* Desconto no Item - Só aparece se configuração estiver habilitada */}
+                            {pdvConfig?.desconto_no_item && (
+                              <div className="flex justify-between items-center text-xs mb-1.5">
+                                <span className="text-orange-400">Desconto no Item:</span>
+                                <span className="text-orange-400">-{formatCurrency(calcularDescontoItens())}</span>
+                              </div>
+                            )}
+
+                            {/* Desconto no Total - Só aparece se configuração estiver habilitada E desconto aplicado */}
+                            {pdvConfig?.desconto_no_total && descontoGlobal > 0 && (
+                              <div className="flex justify-between items-center text-xs mb-1.5">
+                                <span className="text-red-400">Desconto no Total:</span>
+                                <span className="text-red-400">-{formatCurrency(descontoGlobal)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
 
                         {/* Desconto por Prazo (se aplicável) - Compacto */}
                         {descontoPrazo && (
@@ -14673,6 +14787,148 @@ const PDVPage: React.FC = () => {
                   className="flex-1 bg-primary-500 hover:bg-primary-600 text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Adicionar ao Carrinho
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Desconto no Total */}
+      <AnimatePresence>
+        {showDescontoTotalModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDescontoTotalModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg p-6 w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Percent size={24} className="text-orange-400" />
+                  Desconto no Total
+                </h3>
+                <button
+                  onClick={() => setShowDescontoTotalModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Tipo de desconto */}
+                <div>
+                  <label className="text-sm font-medium text-white mb-2 block">
+                    Tipo de Desconto
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setTipoDescontoTotal('percentual')}
+                      className={`py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                        tipoDescontoTotal === 'percentual'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Percentual (%)
+                    </button>
+                    <button
+                      onClick={() => setTipoDescontoTotal('valor')}
+                      className={`py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                        tipoDescontoTotal === 'valor'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Valor (R$)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Valor do desconto */}
+                <div>
+                  <label className="text-sm font-medium text-white mb-2 block">
+                    {tipoDescontoTotal === 'percentual' ? 'Percentual de Desconto' : 'Valor do Desconto'}
+                  </label>
+                  <input
+                    type="number"
+                    value={descontoTotal}
+                    onChange={(e) => setDescontoTotal(parseFloat(e.target.value) || 0)}
+                    placeholder={tipoDescontoTotal === 'percentual' ? 'Ex: 10' : 'Ex: 50.00'}
+                    min="0"
+                    max={tipoDescontoTotal === 'percentual' ? '100' : undefined}
+                    step={tipoDescontoTotal === 'percentual' ? '1' : '0.01'}
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 focus:ring-orange-500/20 focus:border-orange-500"
+                    autoFocus
+                  />
+                  {tipoDescontoTotal === 'percentual' && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Máximo: 100%
+                    </p>
+                  )}
+                </div>
+
+                {/* Informações do total */}
+                <div className="bg-gray-800/30 rounded-lg p-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-400">Total atual:</span>
+                    <span className="text-white font-medium">
+                      {formatCurrency(carrinho.reduce((total, item) => total + item.subtotal, 0))}
+                    </span>
+                  </div>
+                  {descontoTotal > 0 && (
+                    <>
+                      <div className="flex justify-between items-center text-sm mt-1">
+                        <span className="text-orange-400">Desconto:</span>
+                        <span className="text-orange-400">
+                          -{formatCurrency(
+                            tipoDescontoTotal === 'percentual'
+                              ? (carrinho.reduce((total, item) => total + item.subtotal, 0) * descontoTotal) / 100
+                              : descontoTotal
+                          )}
+                        </span>
+                      </div>
+                      <div className="border-t border-gray-700 mt-2 pt-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-white font-medium">Total com desconto:</span>
+                          <span className="text-green-400 font-bold">
+                            {formatCurrency(
+                              carrinho.reduce((total, item) => total + item.subtotal, 0) -
+                              (tipoDescontoTotal === 'percentual'
+                                ? (carrinho.reduce((total, item) => total + item.subtotal, 0) * descontoTotal) / 100
+                                : descontoTotal)
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowDescontoTotalModal(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={aplicarDescontoTotal}
+                  disabled={descontoTotal <= 0}
+                  className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Aplicar Desconto
                 </button>
               </div>
             </motion.div>
