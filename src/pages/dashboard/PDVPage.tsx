@@ -6363,6 +6363,42 @@ const PDVPage: React.FC = () => {
         }
       }
 
+      // ✅ NOVO: Buscar dados de pagamento da venda
+      console.log('💳 FRONTEND: Buscando dados de pagamento para venda:', venda.id);
+      const { data: pagamentosData, error: pagamentosError } = await supabase
+        .from('vendas_pdv_pagamentos')
+        .select('*')
+        .eq('venda_id', venda.id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      let dadosPagamento = null;
+      if (pagamentosData && pagamentosData.length > 0) {
+        console.log('💳 FRONTEND: Pagamentos encontrados:', pagamentosData);
+
+        if (pagamentosData.length === 1) {
+          // Pagamento à vista
+          dadosPagamento = {
+            tipo_pagamento: 'vista',
+            forma_pagamento_id: pagamentosData[0].forma_pagamento_id,
+            valor_pago: pagamentosData[0].valor,
+            valor_troco: pagamentosData[0].valor_troco || 0
+          };
+        } else {
+          // Pagamentos parciais
+          dadosPagamento = {
+            tipo_pagamento: 'parcial',
+            formas_pagamento: pagamentosData.map(pag => ({
+              forma: pag.forma_pagamento_id,
+              valor: pag.valor
+            })),
+            valor_pago: pagamentosData.reduce((total, pag) => total + pag.valor, 0),
+            valor_troco: pagamentosData.reduce((total, pag) => total + (pag.valor_troco || 0), 0)
+          };
+        }
+      } else {
+        console.log('⚠️ FRONTEND: Nenhum pagamento encontrado para a venda');
+      }
+
       // Preparar dados para impressão da NFC-e
       const dadosImpressaoNfce = {
         venda: {
@@ -6410,6 +6446,7 @@ const PDVPage: React.FC = () => {
           vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
           vendedor_nome: vendedoresItens.get(item.vendedor_id) || null // ✅ NOVO: Nome do vendedor do item
         })),
+        pagamento: dadosPagamento, // ✅ NOVO: Incluir dados de pagamento
         timestamp: new Date().toISOString(),
         tipo: 'nfce' // Identificar que é NFC-e
       };
@@ -6516,6 +6553,42 @@ const PDVPage: React.FC = () => {
         }
       }
 
+      // ✅ NOVO: Buscar dados de pagamento da venda
+      console.log('💳 FRONTEND: Buscando dados de pagamento para cupom não fiscal:', venda.id);
+      const { data: pagamentosDataCupom, error: pagamentosErrorCupom } = await supabase
+        .from('vendas_pdv_pagamentos')
+        .select('*')
+        .eq('venda_id', venda.id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      let dadosPagamentoCupom = null;
+      if (pagamentosDataCupom && pagamentosDataCupom.length > 0) {
+        console.log('💳 FRONTEND: Pagamentos encontrados para cupom:', pagamentosDataCupom);
+
+        if (pagamentosDataCupom.length === 1) {
+          // Pagamento à vista
+          dadosPagamentoCupom = {
+            tipo_pagamento: 'vista',
+            forma_pagamento_id: pagamentosDataCupom[0].forma_pagamento_id,
+            valor_pago: pagamentosDataCupom[0].valor,
+            valor_troco: pagamentosDataCupom[0].valor_troco || 0
+          };
+        } else {
+          // Pagamentos parciais
+          dadosPagamentoCupom = {
+            tipo_pagamento: 'parcial',
+            formas_pagamento: pagamentosDataCupom.map(pag => ({
+              forma: pag.forma_pagamento_id,
+              valor: pag.valor
+            })),
+            valor_pago: pagamentosDataCupom.reduce((total, pag) => total + pag.valor, 0),
+            valor_troco: pagamentosDataCupom.reduce((total, pag) => total + (pag.valor_troco || 0), 0)
+          };
+        }
+      } else {
+        console.log('⚠️ FRONTEND: Nenhum pagamento encontrado para o cupom não fiscal');
+      }
+
       // Preparar dados para impressão
       const dadosImpressao = {
         venda: {
@@ -6555,6 +6628,7 @@ const PDVPage: React.FC = () => {
           vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
           vendedor_nome: vendedoresItensCupom.get(item.vendedor_id) || null // ✅ NOVO: Nome do vendedor do item
         })),
+        pagamento: dadosPagamentoCupom, // ✅ NOVO: Incluir dados de pagamento
         timestamp: new Date().toISOString()
       };
 
@@ -6588,6 +6662,16 @@ const PDVPage: React.FC = () => {
         operador: dadosImpressao.operador,
         pagamento: dadosImpressao.pagamento,
         cliente: dadosImpressao.cliente
+      });
+
+      // ✅ DEBUG ESPECÍFICO: Verificar dados de pagamento
+      console.log('💳 DEBUG PAGAMENTO NFC-e:', {
+        'dadosImpressao.pagamento existe?': !!dadosImpressao.pagamento,
+        'dadosImpressao.pagamento': dadosImpressao.pagamento,
+        'tipo_pagamento': dadosImpressao.pagamento?.tipo_pagamento,
+        'forma_pagamento_id': dadosImpressao.pagamento?.forma_pagamento_id,
+        'formas_pagamento': dadosImpressao.pagamento?.formas_pagamento,
+        'formasPagamento array': formasPagamento
       });
 
       // Função para formatar moeda
@@ -6865,7 +6949,7 @@ const PDVPage: React.FC = () => {
                 // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
                 let vendedorHtml = '';
                 if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
-                  vendedorHtml = `<div style="font-size: 10px; color: #666; margin-top: 2px;">Vendedor: ${item.vendedor_nome}</div>`;
+                  vendedorHtml = `<div style="font-size: 10px; color: #000; margin-top: 2px; font-weight: 900;"><strong>Vendedor: ${item.vendedor_nome}</strong></div>`;
                 }
 
                 return adicionaisHtml + vendedorHtml;
@@ -7027,6 +7111,16 @@ const PDVPage: React.FC = () => {
         operador: dadosImpressao.operador,
         pagamento: dadosImpressao.pagamento,
         cliente: dadosImpressao.cliente
+      });
+
+      // ✅ DEBUG ESPECÍFICO: Verificar dados de pagamento
+      console.log('💳 DEBUG PAGAMENTO CUPOM:', {
+        'dadosImpressao.pagamento existe?': !!dadosImpressao.pagamento,
+        'dadosImpressao.pagamento': dadosImpressao.pagamento,
+        'tipo_pagamento': dadosImpressao.pagamento?.tipo_pagamento,
+        'forma_pagamento_id': dadosImpressao.pagamento?.forma_pagamento_id,
+        'formas_pagamento': dadosImpressao.pagamento?.formas_pagamento,
+        'formasPagamento array': formasPagamento
       });
 
       // Função para formatar moeda
@@ -7283,7 +7377,7 @@ const PDVPage: React.FC = () => {
                 // Mostrar vendedor do item apenas se há múltiplos vendedores na venda
                 let vendedorHtml = '';
                 if (dadosImpressao.vendedores && dadosImpressao.vendedores.length > 1 && item.vendedor_nome) {
-                  vendedorHtml = `<div style="font-size: 10px; color: #666; margin-top: 2px;">Vendedor: ${item.vendedor_nome}</div>`;
+                  vendedorHtml = `<div style="font-size: 10px; color: #000; margin-top: 2px; font-weight: 900;"><strong>Vendedor: ${item.vendedor_nome}</strong></div>`;
                 }
 
                 return adicionaisHtml + vendedorHtml;

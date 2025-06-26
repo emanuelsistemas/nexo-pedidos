@@ -428,8 +428,7 @@ const RelatoriosPage: React.FC = () => {
             nome_cliente
           )
         `)
-        .eq('pdv.empresa_id', empresaId)
-        .order('pdv.created_at', { ascending: false });
+        .eq('pdv.empresa_id', empresaId);
 
       // Aplicar filtro por vendedor se selecionado
       if (vendedorSelecionado) {
@@ -456,6 +455,13 @@ const RelatoriosPage: React.FC = () => {
       if (error) throw error;
 
       let dadosFiltrados = data || [];
+
+      // Ordenar os dados por data de criação do PDV (mais recente primeiro)
+      dadosFiltrados.sort((a, b) => {
+        const dateA = new Date(a.pdv.created_at);
+        const dateB = new Date(b.pdv.created_at);
+        return dateB.getTime() - dateA.getTime();
+      });
 
       // Filtrar por ambiente no frontend
       if (ambiente) {
@@ -489,12 +495,15 @@ const RelatoriosPage: React.FC = () => {
 
           let percentualComissao = 0;
           let nomeVendedor = item.vendedor_nome || vendedorConfig.usuarios?.nome || 'Vendedor sem nome';
+          let tipoComissao = '';
 
           if (vendedorConfig.tipo_comissao === 'grupos') {
             // Para comissão por grupos, usar 5% como exemplo
             percentualComissao = 5;
+            tipoComissao = 'Grupos';
           } else {
             percentualComissao = parseFloat(vendedorConfig.percentual_comissao) || 0;
+            tipoComissao = 'Total da Venda';
           }
 
           const valorComissao = (item.valor_total_item * percentualComissao) / 100;
@@ -509,6 +518,7 @@ const RelatoriosPage: React.FC = () => {
             valor_unitario: item.valor_unitario,
             valor_total: item.valor_total_item,
             nome_vendedor: nomeVendedor,
+            tipo_comissao: tipoComissao,
             percentual_comissao: percentualComissao,
             valor_comissao: valorComissao
           };
@@ -955,34 +965,49 @@ const RelatoriosPage: React.FC = () => {
       {dadosComissoes.length > 0 && (
         <div className="bg-background-card rounded-lg border border-gray-800 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-20" />  {/* Data */}
+                <col className="w-16" />  {/* Tipo */}
+                <col className="w-32" />  {/* Produto */}
+                <col className="w-24" />  {/* Vendedor */}
+                <col className="w-28" />  {/* Tipo de Comissão */}
+                <col className="w-16" />  {/* Qtd */}
+                <col className="w-20" />  {/* Valor Unit. */}
+                <col className="w-20" />  {/* Valor Total */}
+                <col className="w-20" />  {/* % Comissão */}
+                <col className="w-24" />  {/* Valor Comissão */}
+              </colgroup>
               <thead className="bg-gray-800/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Data
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Tipo
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Produto
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Vendedor
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Tipo de Comissão
+                  </th>
+                  <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Qtd
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Valor Unit.
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Valor Total
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                     % Comissão
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Valor Comissão
                   </th>
                 </tr>
@@ -991,41 +1016,106 @@ const RelatoriosPage: React.FC = () => {
                 {dadosComissoes.map((comissao, index) => {
                   return (
                     <tr key={index} className="hover:bg-gray-800/30">
-                      <td className="px-4 py-3 text-sm text-gray-300">
+                      <td className="px-2 py-3 text-sm text-gray-300 truncate">
                         {new Date(comissao.data_venda).toLocaleDateString('pt-BR')}
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      <td className="px-2 py-3 text-sm">
+                        <span className={`inline-flex px-1 py-1 text-xs font-semibold rounded-full ${
                           comissao.tipo_venda === 'NFC-e' ? 'bg-primary-500/10 text-primary-400' : 'bg-gray-500/10 text-gray-400'
                         }`}>
                           {comissao.tipo_venda}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-300">
+                      <td className="px-2 py-3 text-sm text-gray-300 truncate" title={comissao.produto}>
                         {comissao.produto}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-300">
+                      <td className="px-2 py-3 text-sm text-gray-300 truncate" title={comissao.nome_vendedor}>
                         {comissao.nome_vendedor}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                      <td className="px-2 py-3 text-sm">
+                        <span className={`inline-flex px-1 py-1 text-xs font-semibold rounded-full ${
+                          comissao.tipo_comissao === 'Grupos' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'
+                        }`}>
+                          {comissao.tipo_comissao}
+                        </span>
+                      </td>
+                      <td className="px-2 py-3 text-sm text-gray-300 text-right">
                         {comissao.quantidade?.toFixed(3) || '0,000'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                      <td className="px-2 py-3 text-sm text-gray-300 text-right">
                         R$ {comissao.valor_unitario?.toFixed(2) || '0,00'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-300 text-right">
+                      <td className="px-2 py-3 text-sm text-gray-300 text-right">
                         R$ {comissao.valor_total?.toFixed(2) || '0,00'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-blue-400 text-right">
+                      <td className="px-2 py-3 text-sm text-blue-400 text-right">
                         {comissao.percentual_comissao?.toFixed(1) || '0,0'}%
                       </td>
-                      <td className="px-4 py-3 text-sm text-green-400 text-right font-semibold">
+                      <td className="px-2 py-3 text-sm text-green-400 text-right font-semibold">
                         R$ {comissao.valor_comissao?.toFixed(2) || '0,00'}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
+
+              {/* Footer com totalizadores */}
+              <tfoot className="bg-gray-800/50 border-t border-gray-700">
+                <tr>
+                  <td colSpan={5} className="px-2 py-3 text-sm font-semibold text-gray-300">
+                    TOTAIS:
+                  </td>
+                  <td className="px-2 py-3 text-sm text-gray-300 text-right">
+                    <div className="font-semibold text-white">
+                      {(() => {
+                        const totalQuantidade = dadosComissoes.reduce((acc, comissao) => {
+                          return acc + (parseFloat(comissao.quantidade) || 0);
+                        }, 0);
+                        return totalQuantidade.toFixed(3);
+                      })()}
+                    </div>
+                  </td>
+                  <td className="px-2 py-3 text-sm text-gray-300 text-right">
+                    <div className="font-semibold text-white">
+                      R$ {(() => {
+                        const totalValorUnitario = dadosComissoes.reduce((acc, comissao) => {
+                          return acc + (parseFloat(comissao.valor_unitario) || 0);
+                        }, 0);
+                        return totalValorUnitario.toFixed(2);
+                      })()}
+                    </div>
+                  </td>
+                  <td className="px-2 py-3 text-sm text-gray-300 text-right">
+                    <div className="font-semibold text-green-400">
+                      R$ {(() => {
+                        const totalValorTotal = dadosComissoes.reduce((acc, comissao) => {
+                          return acc + (parseFloat(comissao.valor_total) || 0);
+                        }, 0);
+                        return totalValorTotal.toFixed(2);
+                      })()}
+                    </div>
+                  </td>
+                  <td className="px-2 py-3 text-sm text-gray-300 text-right">
+                    <div className="font-semibold text-blue-400">
+                      {(() => {
+                        const percentualMedio = dadosComissoes.length > 0 ?
+                          dadosComissoes.reduce((acc, comissao) => acc + comissao.percentual_comissao, 0) / dadosComissoes.length : 0;
+                        return percentualMedio.toFixed(1) + '%';
+                      })()}
+                    </div>
+                  </td>
+                  <td className="px-2 py-3 text-sm text-gray-300 text-right">
+                    <div className="font-semibold text-primary-400">
+                      R$ {(() => {
+                        const totalComissao = dadosComissoes.reduce((acc, comissao) => {
+                          return acc + (parseFloat(comissao.valor_comissao) || 0);
+                        }, 0);
+                        return totalComissao.toFixed(2);
+                      })()}
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
