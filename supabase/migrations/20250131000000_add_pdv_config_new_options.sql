@@ -42,6 +42,13 @@ ADD COLUMN IF NOT EXISTS fiado BOOLEAN DEFAULT FALSE;
 ALTER TABLE pdv_config
 ADD COLUMN IF NOT EXISTS desconto_no_total BOOLEAN DEFAULT FALSE;
 
+-- Campos para armazenar valores de desconto detalhados na tabela pdv
+ALTER TABLE pdv
+ADD COLUMN IF NOT EXISTS valor_desconto_itens NUMERIC DEFAULT 0;
+
+ALTER TABLE pdv
+ADD COLUMN IF NOT EXISTS valor_desconto_total NUMERIC DEFAULT 0;
+
 -- Comentários para documentação
 COMMENT ON COLUMN pdv_config.observacao_no_item IS 'Permite adicionar observações personalizadas aos itens durante a venda no PDV';
 COMMENT ON COLUMN pdv_config.desconto_no_item IS 'Permite aplicar desconto individual em cada item durante a venda no PDV';

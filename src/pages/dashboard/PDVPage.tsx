@@ -4146,34 +4146,32 @@ const PDVPage: React.FC = () => {
     return carrinho.reduce((total, item) => total + item.subtotal, 0);
   };
 
+  // Função para calcular subtotal SEM descontos (preço original)
+  const calcularSubtotalSemDescontos = () => {
+    return carrinho.reduce((total, item) => {
+      const precoOriginal = item.produto.preco * item.quantidade;
+      return total + precoOriginal;
+    }, 0);
+  };
+
   // Função para calcular total de descontos nos itens
   const calcularDescontoItens = () => {
-    return carrinho.reduce((totalDesconto, item) => {
-      let descontoItem = 0;
+    const total = carrinho.reduce((totalDesconto, item) => {
+      // Calcular o preço original total (sem nenhum desconto)
+      const precoOriginalUnitario = item.produto.preco;
+      const totalOriginal = precoOriginalUnitario * item.quantidade;
 
-      // 1. Desconto por quantidade mínima
-      if (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0)) {
-        const precoOriginal = item.produto.preco;
-        const precoComDesconto = calcularPrecoModalQuantidade(item.produto, item.quantidade);
-        const descontoPorQuantidade = (precoOriginal - precoComDesconto) * item.quantidade;
-        descontoItem += descontoPorQuantidade;
-      }
+      // O subtotal já considera todos os descontos aplicados
+      const totalComDesconto = item.subtotal;
 
-      // 2. Desconto por promoção
-      if (item.produto.promocao) {
-        const precoOriginal = item.produto.preco;
-        const precoPromocional = item.produto.preco_promocional || 0;
-        const descontoPromocao = (precoOriginal - precoPromocional) * item.quantidade;
-        descontoItem += descontoPromocao;
-      }
+      // A diferença é o desconto total aplicado no item
+      const descontoItem = totalOriginal - totalComDesconto;
 
-      // 3. Desconto manual aplicado no item
-      if (item.desconto) {
-        descontoItem += item.desconto.valorDesconto * item.quantidade;
-      }
-
-      return totalDesconto + descontoItem;
+      return totalDesconto + Math.max(0, descontoItem); // Garantir que não seja negativo
     }, 0);
+
+    // Arredondar para 2 casas decimais para evitar problemas de precisão
+    return Math.round(total * 100) / 100;
   };
 
   // Função para calcular total com desconto aplicado (para uso em pagamentos)
@@ -5439,6 +5437,10 @@ const PDVPage: React.FC = () => {
       const vendedoresIds = Array.from(vendedoresUnicos.keys());
       console.log('🧑‍💼 FRONTEND: Vendedores coletados:', Array.from(vendedoresUnicos.values()));
 
+      // ✅ NOVO: Calcular valores de desconto detalhados (com arredondamento para 2 casas decimais)
+      const valorDescontoItens = Math.round(calcularDescontoItens() * 100) / 100;
+      const valorDescontoTotal = Math.round(descontoGlobal * 100) / 100;
+
       const vendaData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
@@ -5448,6 +5450,8 @@ const PDVPage: React.FC = () => {
         status_venda: 'finalizada',
         valor_subtotal: valorSubtotal,
         valor_desconto: valorDesconto,
+        valor_desconto_itens: valorDescontoItens, // ✅ NOVO: Desconto nos itens
+        valor_desconto_total: valorDescontoTotal, // ✅ NOVO: Desconto no total
         valor_total: valorTotal,
         desconto_prazo_id: descontoPrazoSelecionado,
         pedidos_importados: pedidosImportados.length > 0 ? pedidosImportados.map(p => p.id) : null,
@@ -7099,6 +7103,32 @@ const PDVPage: React.FC = () => {
             ` : ''}
           ` : ''}
 
+          ${(() => {
+            // ✅ NOVO: Exibir descontos detalhados se existirem
+            const descontoItens = dadosImpressao.venda.valor_desconto_itens || 0;
+            const descontoTotal = dadosImpressao.venda.valor_desconto_total || 0;
+
+            if (descontoItens > 0 || descontoTotal > 0) {
+              return `
+                <div class="linha"></div>
+                <div class="center bold" style="font-size: 11px;">DETALHAMENTO DOS DESCONTOS</div>
+                ${descontoItens > 0 ? `
+                  <div class="item-linha" style="font-size: 11px;">
+                    <span>Desconto nos Itens:</span>
+                    <span>-${formatCurrency(descontoItens)}</span>
+                  </div>
+                ` : ''}
+                ${descontoTotal > 0 ? `
+                  <div class="item-linha" style="font-size: 11px;">
+                    <span>Desconto no Total:</span>
+                    <span>-${formatCurrency(descontoTotal)}</span>
+                  </div>
+                ` : ''}
+              `;
+            }
+            return '';
+          })()}
+
           <div class="linha"></div>
 
           <div class="center">
@@ -7526,6 +7556,32 @@ const PDVPage: React.FC = () => {
               </div>
             ` : ''}
           ` : ''}
+
+          ${(() => {
+            // ✅ NOVO: Exibir descontos detalhados se existirem
+            const descontoItens = dadosImpressao.venda.valor_desconto_itens || 0;
+            const descontoTotal = dadosImpressao.venda.valor_desconto_total || 0;
+
+            if (descontoItens > 0 || descontoTotal > 0) {
+              return `
+                <div class="linha"></div>
+                <div class="center bold" style="font-size: 11px;">DETALHAMENTO DOS DESCONTOS</div>
+                ${descontoItens > 0 ? `
+                  <div class="item-linha" style="font-size: 11px;">
+                    <span>Desconto nos Itens:</span>
+                    <span>-${formatCurrency(descontoItens)}</span>
+                  </div>
+                ` : ''}
+                ${descontoTotal > 0 ? `
+                  <div class="item-linha" style="font-size: 11px;">
+                    <span>Desconto no Total:</span>
+                    <span>-${formatCurrency(descontoTotal)}</span>
+                  </div>
+                ` : ''}
+              `;
+            }
+            return '';
+          })()}
 
           <div class="linha"></div>
 
@@ -9338,10 +9394,11 @@ const PDVPage: React.FC = () => {
                 {/* Resumo da Venda - sempre presente - Compacto */}
                 <div className="bg-gray-800/50 rounded p-2.5 mb-1">
                   {(() => {
-                    const subtotal = calcularTotal();
+                    const subtotalSemDescontos = calcularSubtotalSemDescontos(); // Subtotal sem descontos
+                    const subtotal = calcularTotal(); // Total com descontos nos itens
                     const totalFinal = calcularTotalComDesconto();
 
-                    // Calcular desconto por prazo se selecionado
+                    // Calcular desconto por prazo se selecionado (baseado no subtotal com descontos nos itens)
                     let descontoPrazo = null;
                     if (descontoPrazoSelecionado) {
                       const desconto = descontosCliente.prazo.find(d => d.id === descontoPrazoSelecionado);
@@ -9370,10 +9427,10 @@ const PDVPage: React.FC = () => {
                           <span className="text-white">{carrinho.reduce((total, item) => total + item.quantidade, 0)}</span>
                         </div>
 
-                        {/* Subtotal - Segundo */}
+                        {/* Subtotal - Segundo (sem descontos) */}
                         <div className="flex justify-between items-center text-xs mb-1.5">
                           <span className="text-white">Subtotal:</span>
-                          <span className="text-white">{formatCurrency(subtotal)}</span>
+                          <span className="text-white">{formatCurrency(subtotalSemDescontos)}</span>
                         </div>
 
                         {/* Área de Descontos - Só aparece se alguma configuração estiver habilitada */}
@@ -12673,6 +12730,96 @@ const PDVPage: React.FC = () => {
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* ✅ NOVO: Seção de Totais da Venda */}
+                {!loadingItensVenda && itensVenda.length > 0 && (
+                  <div className="mt-6 p-4 bg-gray-800/30 rounded-lg">
+                    <h4 className="text-lg font-medium text-white mb-4">Resumo da Venda</h4>
+
+                    {(() => {
+                      // Calcular subtotal sem descontos (preço original)
+                      const subtotalSemDescontos = itensVenda.reduce((total, item) => {
+                        // Usar valor_subtotal que já vem do banco (preço original * quantidade)
+                        return total + (item.valor_subtotal || 0);
+                      }, 0);
+
+                      // Calcular total com descontos aplicados nos itens
+                      const totalComDescontosItens = itensVenda.reduce((total, item) => {
+                        return total + (item.valor_total_item || 0);
+                      }, 0);
+
+                      // Usar os valores de desconto que já vêm da venda, ou calcular dinamicamente
+                      let descontoItens = vendaParaExibirItens.valor_desconto_itens || 0;
+                      let descontoTotal = vendaParaExibirItens.valor_desconto_total || 0;
+                      const descontoPrazo = vendaParaExibirItens.valor_desconto || 0;
+
+                      // ✅ NOVO: Para vendas antigas, calcular descontos dinamicamente
+                      if (descontoItens === 0 && descontoTotal === 0) {
+                        // Calcular desconto nos itens (diferença entre subtotal original e total com desconto)
+                        descontoItens = Math.max(0, subtotalSemDescontos - totalComDescontosItens);
+
+                        // Calcular desconto no total (diferença entre total dos itens e valor final da venda)
+                        const valorFinalVenda = vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final || 0;
+                        const totalAposDescontoItens = totalComDescontosItens - descontoPrazo; // Remover desconto por prazo
+                        descontoTotal = Math.max(0, totalAposDescontoItens - valorFinalVenda);
+                      }
+
+                      return (
+                        <div className="space-y-2">
+                          {/* Itens */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-white">Itens:</span>
+                            <span className="text-white">{itensVenda.reduce((total, item) => total + item.quantidade, 0)}</span>
+                          </div>
+
+                          {/* Subtotal */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-white">Subtotal:</span>
+                            <span className="text-white">{formatCurrency(subtotalSemDescontos)}</span>
+                          </div>
+
+                          {/* Área de Descontos */}
+                          {(descontoItens > 0 || descontoTotal > 0 || descontoPrazo > 0) && (
+                            <>
+                              {/* Desconto no Item */}
+                              {descontoItens > 0 && (
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-orange-400">Desconto no Item:</span>
+                                  <span className="text-orange-400">-{formatCurrency(descontoItens)}</span>
+                                </div>
+                              )}
+
+                              {/* Desconto no Total */}
+                              {descontoTotal > 0 && (
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-red-400">Desconto no Total:</span>
+                                  <span className="text-red-400">-{formatCurrency(descontoTotal)}</span>
+                                </div>
+                              )}
+
+                              {/* Desconto por Prazo/Valor */}
+                              {descontoPrazo > 0 && (
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-yellow-400">Desconto por Prazo:</span>
+                                  <span className="text-yellow-400">-{formatCurrency(descontoPrazo)}</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+
+                          {/* Linha separadora */}
+                          <div className="border-t border-gray-700 my-3"></div>
+
+                          {/* Total da Venda */}
+                          <div className="flex justify-between items-center text-lg font-bold">
+                            <span className="text-white">Total da Venda:</span>
+                            <span className="text-primary-400">{formatCurrency(vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final)}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
