@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt, DollarSign } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
@@ -257,7 +257,7 @@ const ConfiguracoesPage: React.FC = () => {
   });
 
   // Estado para controlar as abas do PDV
-  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes'>('geral');
+  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto'>('geral');
 
   // Estado para rodapé personalizado das impressões
   const [rodapePersonalizado, setRodapePersonalizado] = useState('Obrigado pela preferencia volte sempre!');
@@ -3838,6 +3838,16 @@ const ConfiguracoesPage: React.FC = () => {
                   >
                     Impressões
                   </button>
+                  <button
+                    onClick={() => setPdvActiveTab('venda-sem-produto')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      pdvActiveTab === 'venda-sem-produto'
+                        ? 'border-primary-500 text-primary-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    Venda sem Produto
+                  </button>
                 </nav>
               </div>
 
@@ -4102,22 +4112,6 @@ const ConfiguracoesPage: React.FC = () => {
                           <h4 className="text-white font-medium">Fiado</h4>
                           <p className="text-sm text-gray-400 mt-1">
                             Habilita a opção de venda fiado no PDV.
-                          </p>
-                        </div>
-                      </label>
-
-                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={pdvConfig.venda_sem_produto}
-                          onChange={(e) => handlePdvConfigChange('venda_sem_produto', e.target.checked)}
-                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                          style={{ borderRadius: '50%' }}
-                        />
-                        <div>
-                          <h4 className="text-white font-medium">Venda sem produto</h4>
-                          <p className="text-sm text-gray-400 mt-1">
-                            Habilita botão para realizar vendas sem produtos específicos, permitindo lançamento de valores diretos.
                           </p>
                         </div>
                       </label>
@@ -4397,6 +4391,82 @@ const ConfiguracoesPage: React.FC = () => {
                       >
                         {isLoading ? 'Salvando...' : 'Salvar'}
                       </Button>
+                    </div>
+                  </div>
+                )}
+
+                {pdvActiveTab === 'venda-sem-produto' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <DollarSign size={18} className="text-green-400" />
+                        Configurações de Venda sem Produto
+                      </h3>
+                      <p className="text-sm text-gray-400 mb-6">
+                        Configure as opções para vendas sem produtos específicos, permitindo lançamento de valores diretos no PDV.
+                      </p>
+                    </div>
+
+                    {/* Opção principal de habilitar/desabilitar */}
+                    <div className="grid grid-cols-1 gap-4">
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.venda_sem_produto}
+                          onChange={(e) => handlePdvConfigChange('venda_sem_produto', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Habilitar Venda sem Produto</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Quando ativado, exibe o botão "Venda sem Produto" (F0) no PDV, permitindo adicionar itens sem produtos específicos ao carrinho.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Informações sobre o funcionamento */}
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                      <h4 className="text-blue-400 font-medium mb-2 flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                        Como Funciona
+                      </h4>
+                      <div className="space-y-2 text-sm text-blue-300">
+                        <p>• <strong>Tecla de atalho:</strong> F0 (primeira opção do menu PDV)</p>
+                        <p>• <strong>Campos obrigatórios:</strong> Descrição e valor</p>
+                        <p>• <strong>Casos de uso:</strong> Serviços, consultorias, taxas especiais, produtos únicos</p>
+                        <p>• <strong>Integração:</strong> Funciona com todas as formas de pagamento e relatórios</p>
+                      </div>
+                    </div>
+
+                    {/* Status atual */}
+                    <div className={`border rounded-lg p-4 ${
+                      pdvConfig.venda_sem_produto
+                        ? 'bg-green-500/10 border-green-500/20'
+                        : 'bg-gray-500/10 border-gray-500/20'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {pdvConfig.venda_sem_produto ? (
+                          <>
+                            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                            <span className="text-green-400 font-medium">Funcionalidade Ativa</span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                            <span className="text-gray-400 font-medium">Funcionalidade Desativada</span>
+                          </>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        {pdvConfig.venda_sem_produto
+                          ? 'O botão "Venda sem Produto" está visível no PDV e pode ser acessado via tecla F0.'
+                          : 'O botão "Venda sem Produto" está oculto no PDV. Ative a opção acima para habilitá-lo.'
+                        }
+                      </p>
                     </div>
                   </div>
                 )}

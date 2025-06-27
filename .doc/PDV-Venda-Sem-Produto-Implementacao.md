@@ -11,8 +11,10 @@ Implementada funcionalidade **"Venda sem Produto"** no PDV que permite realizar 
 - ✅ Migração executada: `ALTER TABLE pdv_config ADD COLUMN IF NOT EXISTS venda_sem_produto BOOLEAN DEFAULT FALSE;`
 
 ### **2. Interface de Configuração**
-- ✅ Nova opção na aba "Geral" das configurações PDV
-- ✅ Checkbox "Venda sem produto" com descrição explicativa
+- ✅ Nova aba dedicada "Venda sem Produto" nas configurações PDV
+- ✅ Checkbox "Habilitar Venda sem Produto" com descrição explicativa
+- ✅ Informações detalhadas sobre funcionamento e casos de uso
+- ✅ Status visual da funcionalidade (ativa/desativada)
 - ✅ Habilitação em tempo real (seguindo padrão das outras configurações)
 
 ### **3. Menu PDV**
@@ -52,7 +54,9 @@ export interface PDVConfig {
 - Estado inicial: venda_sem_produto: false
 - Carregamento das configurações
 - Salvamento no banco
-- Interface visual na aba "Geral"
+- Nova aba dedicada "Venda sem Produto"
+- Interface visual completa com status e informações
+- Tipo de aba atualizado: 'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto'
 ```
 
 #### **4. PDV Principal**
