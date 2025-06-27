@@ -1337,7 +1337,12 @@ const PDVPage: React.FC = () => {
     };
   }, []);
 
-
+  // ✅ NOVO: Recarregar formas de pagamento quando configuração PDV mudar
+  useEffect(() => {
+    if (pdvConfig !== null) { // Só executa depois que pdvConfig foi carregado
+      loadFormasPagamento();
+    }
+  }, [pdvConfig?.fiado]); // Recarrega quando a configuração de fiado mudar
 
   // Atualizar data e hora a cada segundo
   useEffect(() => {
@@ -1872,11 +1877,20 @@ const PDVPage: React.FC = () => {
         .order('ordem');
 
       if (error) throw error;
-      setFormasPagamento(data || []);
+
+      // ✅ NOVO: Filtrar "Fiado" baseado na configuração PDV
+      let formasFiltradas = data || [];
+      if (!pdvConfig?.fiado) {
+        formasFiltradas = formasFiltradas.filter(forma =>
+          forma.nome?.toLowerCase() !== 'fiado'
+        );
+      }
+
+      setFormasPagamento(formasFiltradas);
 
       // Selecionar a primeira forma de pagamento como padrão
-      if (data && data.length > 0) {
-        setFormaPagamentoSelecionada(data[0].id);
+      if (formasFiltradas && formasFiltradas.length > 0) {
+        setFormaPagamentoSelecionada(formasFiltradas[0].id);
       }
     } catch (error) {
       console.error('Erro ao carregar formas de pagamento:', error);
