@@ -1181,7 +1181,7 @@ const PDVPage: React.FC = () => {
       }
       // Se for o item 'fiados', só mostrar se a configuração estiver habilitada
       if (item.id === 'fiados') {
-        return pdvConfig?.fiado === true;
+        return pdvConfig?.fiado === true; // ✅ CORRIGIDO: Usar configuração PDV
       }
       // Se for o item 'desconto-total', só mostrar se a configuração estiver habilitada E houver itens no carrinho
       if (item.id === 'desconto-total') {
@@ -8600,6 +8600,12 @@ const PDVPage: React.FC = () => {
                       const IconComponent = item.icon;
                       const originalIndex = menuStartIndex + index;
                       const teclaAtalho = `F${originalIndex + 1}`;
+
+                      // ✅ NOVO: Ocultar botões "Pedidos" e "Movimentos" quando há itens no carrinho
+                      if (carrinho.length > 0 && (item.id === 'pedidos' || item.id === 'movimentos')) {
+                        return null;
+                      }
+
                       return (
                         <button
                           key={item.id}
@@ -10097,7 +10103,7 @@ const PDVPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className={`grid gap-3 ${pdvConfig?.fiado ? 'grid-cols-2' : 'grid-cols-3'}`}>
                   <button className="bg-green-500/20 border border-green-500/30 text-green-400 p-4 rounded-lg hover:bg-green-500/30 transition-colors flex flex-col items-center gap-2">
                     <DollarSign size={24} />
                     <span className="font-medium">Dinheiro</span>
@@ -10110,10 +10116,13 @@ const PDVPage: React.FC = () => {
                     <Calculator size={24} />
                     <span className="font-medium">PIX</span>
                   </button>
-                  <button className="bg-orange-500/20 border border-orange-500/30 text-orange-400 p-4 rounded-lg hover:bg-orange-500/30 transition-colors flex flex-col items-center gap-2">
-                    <Receipt size={24} />
-                    <span className="font-medium">Fiado</span>
-                  </button>
+                  {/* ✅ NOVO: Botão Fiado controlado pela configuração PDV */}
+                  {pdvConfig?.fiado && (
+                    <button className="bg-orange-500/20 border border-orange-500/30 text-orange-400 p-4 rounded-lg hover:bg-orange-500/30 transition-colors flex flex-col items-center gap-2">
+                      <Receipt size={24} />
+                      <span className="font-medium">Fiado</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -12781,10 +12790,11 @@ const PDVPage: React.FC = () => {
                     <h4 className="text-lg font-medium text-white mb-4">Resumo da Venda</h4>
 
                     {(() => {
-                      // Calcular subtotal sem descontos (preço original)
+                      // Calcular subtotal sem descontos (preço original * quantidade)
                       const subtotalSemDescontos = itensVenda.reduce((total, item) => {
-                        // Usar valor_subtotal que já vem do banco (preço original * quantidade)
-                        return total + (item.valor_subtotal || 0);
+                        // ✅ CORRIGIDO: Usar valor_unitario * quantidade para garantir o valor original
+                        const valorOriginal = item.valor_unitario * item.quantidade;
+                        return total + valorOriginal;
                       }, 0);
 
                       // Calcular total com descontos aplicados nos itens
@@ -15037,7 +15047,6 @@ const PDVPage: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowDescontoTotalModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
