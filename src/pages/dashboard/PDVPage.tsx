@@ -3801,12 +3801,22 @@ const PDVPage: React.FC = () => {
 
   // Função final para adicionar venda sem produto ao carrinho
   const adicionarVendaSemProdutoFinal = (nome: string, preco: number, quantidade: number = 1) => {
-    const novoItem = {
-      id: Date.now().toString(),
+    // Criar um produto fictício para manter compatibilidade com o sistema
+    const produtoFicticio = {
+      id: `venda-sem-produto-${Date.now()}`,
       nome: nome.trim(),
       preco: preco,
+      codigo: 'VENDA-SEM-PRODUTO',
+      grupo_id: '',
+      promocao: false
+    };
+
+    const novoItem: ItemCarrinho = {
+      id: `${produtoFicticio.id}-${Date.now()}-${Math.random()}`,
+      produto: produtoFicticio,
       quantidade: quantidade,
       subtotal: preco * quantidade,
+      temOpcoesAdicionais: false,
       vendaSemProduto: true,
       vendedor_id: vendedorSelecionado?.id,
       vendedor_nome: vendedorSelecionado?.nome
