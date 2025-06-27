@@ -2170,7 +2170,13 @@ const PDVPage: React.FC = () => {
           modelo_documento,
           numero_documento,
           chave_nfe,
-          protocolo_nfe
+          protocolo_nfe,
+          tipo_pagamento,
+          forma_pagamento_id,
+          formas_pagamento,
+          valor_pago,
+          valor_troco,
+          parcelas
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .or('modelo_documento.is.null,modelo_documento.eq.65'); // ✅ Mostrar apenas vendas PDV (null) e NFC-e (65) - excluir NFe (55)
