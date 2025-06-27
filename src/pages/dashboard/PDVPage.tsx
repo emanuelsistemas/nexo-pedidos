@@ -12832,6 +12832,37 @@ const PDVPage: React.FC = () => {
                             <span className="text-primary-400">{formatCurrency(vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final)}</span>
                           </div>
 
+                          {/* ✅ NOVO: Vendedores da Venda */}
+                          {(() => {
+                            // Buscar vendedores únicos dos itens
+                            const vendedoresUnicos = new Map();
+
+                            itensVenda.forEach(item => {
+                              if (item.vendedor_id && item.vendedor_nome) {
+                                vendedoresUnicos.set(item.vendedor_id, item.vendedor_nome);
+                              }
+                            });
+
+                            const vendedoresArray = Array.from(vendedoresUnicos.values());
+
+                            if (vendedoresArray.length > 0) {
+                              return (
+                                <>
+                                  {/* Linha separadora */}
+                                  <div className="border-t border-gray-700 my-3"></div>
+
+                                  <div className="text-sm font-medium text-gray-300 mb-2">
+                                    Vendedor{vendedoresArray.length > 1 ? 'es' : ''} da Venda:
+                                  </div>
+                                  <div className="text-sm text-white">
+                                    {vendedoresArray.join(', ')}
+                                  </div>
+                                </>
+                              );
+                            }
+                            return null;
+                          })()}
+
                           {/* ✅ NOVO: Formas de Pagamento */}
                           {(vendaParaExibirItens.tipo_pagamento || vendaParaExibirItens.forma_pagamento_id || vendaParaExibirItens.formas_pagamento) && (
                             <>
