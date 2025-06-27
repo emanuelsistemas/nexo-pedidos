@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt, DollarSign } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt, DollarSign, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
@@ -253,7 +253,17 @@ const ConfiguracoesPage: React.FC = () => {
     mostrar_operador_cupom_finalizar: false,
     tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
     tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
-    venda_sem_produto: false
+    venda_sem_produto: false,
+    venda_sem_produto_ncm: '22021000',
+    venda_sem_produto_cfop: '5102',
+    venda_sem_produto_origem: 0,
+    venda_sem_produto_situacao_tributaria: 'tributado_integral',
+    venda_sem_produto_cest: '',
+    venda_sem_produto_margem_st: null,
+    venda_sem_produto_aliquota_icms: 18.0,
+    venda_sem_produto_aliquota_pis: 1.65,
+    venda_sem_produto_aliquota_cofins: 7.6,
+    venda_sem_produto_peso_liquido: 0
   });
 
   // Estado para controlar as abas do PDV
@@ -337,6 +347,47 @@ const ConfiguracoesPage: React.FC = () => {
     validationResult: { isValid: true, errors: [] }
   });
 
+  // Estados para venda sem produto - validação NCM
+  const [vendaSemProdutoNcmValidacao, setVendaSemProdutoNcmValidacao] = useState<{
+    validando: boolean;
+    valido: boolean | null;
+    descricao: string;
+    erro: string;
+  }>({
+    validando: false,
+    valido: null,
+    descricao: '',
+    erro: ''
+  });
+
+  // Estados para dropdown CFOP
+  const [vendaSemProdutoCfopDropdownOpen, setVendaSemProdutoCfopDropdownOpen] = useState(false);
+  const [vendaSemProdutoCfopSearchTerm, setVendaSemProdutoCfopSearchTerm] = useState('');
+
+  // Estados para controle de alterações nas configurações fiscais
+  const [configFiscalAlterada, setConfigFiscalAlterada] = useState(false);
+  const [salvandoConfigFiscal, setSalvandoConfigFiscal] = useState(false);
+
+  // Estados para validação de campos obrigatórios ST
+  const [errosValidacaoST, setErrosValidacaoST] = useState({
+    cest: '',
+    margem_st: ''
+  });
+
+  // Estado local para configurações fiscais (não salvas ainda)
+  const [configFiscalLocal, setConfigFiscalLocal] = useState({
+    venda_sem_produto_ncm: '22021000',
+    venda_sem_produto_cfop: '5102',
+    venda_sem_produto_origem: 0,
+    venda_sem_produto_situacao_tributaria: 'tributado_integral',
+    venda_sem_produto_cest: '',
+    venda_sem_produto_margem_st: null,
+    venda_sem_produto_aliquota_icms: 18.0,
+    venda_sem_produto_aliquota_pis: 1.65,
+    venda_sem_produto_aliquota_cofins: 7.6,
+    venda_sem_produto_peso_liquido: 0
+  });
+
   useEffect(() => {
     const loadDataWithLoading = async () => {
       await loadData();
@@ -350,6 +401,35 @@ const ConfiguracoesPage: React.FC = () => {
 
     loadDataWithLoading();
   }, [activeSection]);
+
+  // useEffect para sincronizar configurações fiscais locais com dados carregados
+  useEffect(() => {
+    if (pdvConfig) {
+      setConfigFiscalLocal({
+        venda_sem_produto_ncm: pdvConfig.venda_sem_produto_ncm || '22021000',
+        venda_sem_produto_cfop: pdvConfig.venda_sem_produto_cfop || '5102',
+        venda_sem_produto_origem: pdvConfig.venda_sem_produto_origem !== undefined ? pdvConfig.venda_sem_produto_origem : 0,
+        venda_sem_produto_situacao_tributaria: pdvConfig.venda_sem_produto_situacao_tributaria || 'tributado_integral',
+        venda_sem_produto_cest: pdvConfig.venda_sem_produto_cest || '',
+        venda_sem_produto_margem_st: pdvConfig.venda_sem_produto_margem_st || null,
+        venda_sem_produto_aliquota_icms: pdvConfig.venda_sem_produto_aliquota_icms !== undefined ? pdvConfig.venda_sem_produto_aliquota_icms : 18.0,
+        venda_sem_produto_aliquota_pis: pdvConfig.venda_sem_produto_aliquota_pis !== undefined ? pdvConfig.venda_sem_produto_aliquota_pis : 1.65,
+        venda_sem_produto_aliquota_cofins: pdvConfig.venda_sem_produto_aliquota_cofins !== undefined ? pdvConfig.venda_sem_produto_aliquota_cofins : 7.6,
+        venda_sem_produto_peso_liquido: pdvConfig.venda_sem_produto_peso_liquido !== undefined ? pdvConfig.venda_sem_produto_peso_liquido : 0
+      });
+      // Reset do estado de alteração quando dados são carregados
+      setConfigFiscalAlterada(false);
+      // Reset dos erros de validação
+      setErrosValidacaoST({ cest: '', margem_st: '' });
+    }
+  }, [pdvConfig]);
+
+  // useEffect para validar campos ST quando situação tributária mudar
+  useEffect(() => {
+    if (configFiscalLocal.venda_sem_produto_situacao_tributaria) {
+      validarCamposST();
+    }
+  }, [configFiscalLocal.venda_sem_produto_situacao_tributaria, configFiscalLocal.venda_sem_produto_cest, configFiscalLocal.venda_sem_produto_margem_st]);
 
   const loadData = async () => {
     await withSessionCheck(async () => {
@@ -2488,7 +2568,17 @@ const ConfiguracoesPage: React.FC = () => {
           mostrar_operador_cupom_finalizar: config.mostrar_operador_cupom_finalizar || false,
           tipo_impressao_80mm: config.tipo_impressao_80mm !== undefined ? config.tipo_impressao_80mm : true,  // ✅ NOVO
           tipo_impressao_50mm: config.tipo_impressao_50mm !== undefined ? config.tipo_impressao_50mm : false,  // ✅ NOVO
-          venda_sem_produto: config.venda_sem_produto || false
+          venda_sem_produto: config.venda_sem_produto || false,
+          venda_sem_produto_ncm: config.venda_sem_produto_ncm || '22021000',
+          venda_sem_produto_cfop: config.venda_sem_produto_cfop || '5102',
+          venda_sem_produto_origem: config.venda_sem_produto_origem !== undefined ? config.venda_sem_produto_origem : 0,
+          venda_sem_produto_situacao_tributaria: config.venda_sem_produto_situacao_tributaria || 'tributado_integral',
+          venda_sem_produto_cest: config.venda_sem_produto_cest || '',
+          venda_sem_produto_margem_st: config.venda_sem_produto_margem_st || null,
+          venda_sem_produto_aliquota_icms: config.venda_sem_produto_aliquota_icms !== undefined ? config.venda_sem_produto_aliquota_icms : 18.0,
+          venda_sem_produto_aliquota_pis: config.venda_sem_produto_aliquota_pis !== undefined ? config.venda_sem_produto_aliquota_pis : 1.65,
+          venda_sem_produto_aliquota_cofins: config.venda_sem_produto_aliquota_cofins !== undefined ? config.venda_sem_produto_aliquota_cofins : 7.6,
+          venda_sem_produto_peso_liquido: config.venda_sem_produto_peso_liquido !== undefined ? config.venda_sem_produto_peso_liquido : 0
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2527,7 +2617,17 @@ const ConfiguracoesPage: React.FC = () => {
           mostrar_operador_cupom_finalizar: false,
           tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
           tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
-          venda_sem_produto: false
+          venda_sem_produto: false,
+          venda_sem_produto_ncm: '22021000',
+          venda_sem_produto_cfop: '5102',
+          venda_sem_produto_origem: 0,
+          venda_sem_produto_situacao_tributaria: 'tributado_integral',
+          venda_sem_produto_cest: '',
+          venda_sem_produto_margem_st: null,
+          venda_sem_produto_aliquota_icms: 18.0,
+          venda_sem_produto_aliquota_pis: 1.65,
+          venda_sem_produto_aliquota_cofins: 7.6,
+          venda_sem_produto_peso_liquido: 0
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2567,7 +2667,17 @@ const ConfiguracoesPage: React.FC = () => {
         mostrar_operador_cupom_finalizar: false,
         tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
         tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
-        venda_sem_produto: false
+        venda_sem_produto: false,
+        venda_sem_produto_ncm: '22021000',
+        venda_sem_produto_cfop: '5102',
+        venda_sem_produto_origem: 0,
+        venda_sem_produto_situacao_tributaria: 'tributado_integral',
+        venda_sem_produto_cest: '',
+        venda_sem_produto_margem_st: null,
+        venda_sem_produto_aliquota_icms: 18.0,
+        venda_sem_produto_aliquota_pis: 1.65,
+        venda_sem_produto_aliquota_cofins: 7.6,
+        venda_sem_produto_peso_liquido: 0
       });
 
       // Atualizar também o estado separado do rodapé
@@ -2808,6 +2918,16 @@ const ConfiguracoesPage: React.FC = () => {
         editar_nome_produto: field === 'editar_nome_produto' ? value : pdvConfig.editar_nome_produto,
         fiado: field === 'fiado' ? value : pdvConfig.fiado,
         venda_sem_produto: field === 'venda_sem_produto' ? value : pdvConfig.venda_sem_produto,
+        venda_sem_produto_ncm: field === 'venda_sem_produto_ncm' ? value : pdvConfig.venda_sem_produto_ncm,
+        venda_sem_produto_cfop: field === 'venda_sem_produto_cfop' ? value : pdvConfig.venda_sem_produto_cfop,
+        venda_sem_produto_origem: field === 'venda_sem_produto_origem' ? value : pdvConfig.venda_sem_produto_origem,
+        venda_sem_produto_situacao_tributaria: field === 'venda_sem_produto_situacao_tributaria' ? value : pdvConfig.venda_sem_produto_situacao_tributaria,
+        venda_sem_produto_cest: field === 'venda_sem_produto_cest' ? value : pdvConfig.venda_sem_produto_cest,
+        venda_sem_produto_margem_st: field === 'venda_sem_produto_margem_st' ? value : pdvConfig.venda_sem_produto_margem_st,
+        venda_sem_produto_aliquota_icms: field === 'venda_sem_produto_aliquota_icms' ? value : pdvConfig.venda_sem_produto_aliquota_icms,
+        venda_sem_produto_aliquota_pis: field === 'venda_sem_produto_aliquota_pis' ? value : pdvConfig.venda_sem_produto_aliquota_pis,
+        venda_sem_produto_aliquota_cofins: field === 'venda_sem_produto_aliquota_cofins' ? value : pdvConfig.venda_sem_produto_aliquota_cofins,
+        venda_sem_produto_peso_liquido: field === 'venda_sem_produto_peso_liquido' ? value : pdvConfig.venda_sem_produto_peso_liquido,
         vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : pdvConfig.vendas_itens_multiplicacao,
         ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
         ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
@@ -2868,6 +2988,16 @@ const ConfiguracoesPage: React.FC = () => {
         editar_nome_produto: 'Editar nome do produto na venda',
         fiado: 'Fiado',
         venda_sem_produto: 'Venda sem produto',
+        venda_sem_produto_ncm: 'NCM para Venda sem produto',
+        venda_sem_produto_cfop: 'CFOP para Venda sem produto',
+        venda_sem_produto_origem: 'Origem para Venda sem produto',
+        venda_sem_produto_situacao_tributaria: 'Situação Tributária para Venda sem produto',
+        venda_sem_produto_cest: 'CEST para Venda sem produto',
+        venda_sem_produto_margem_st: 'Margem ST para Venda sem produto',
+        venda_sem_produto_aliquota_icms: 'Alíquota ICMS para Venda sem produto',
+        venda_sem_produto_aliquota_pis: 'Alíquota PIS para Venda sem produto',
+        venda_sem_produto_aliquota_cofins: 'Alíquota COFINS para Venda sem produto',
+        venda_sem_produto_peso_liquido: 'Peso Líquido para Venda sem produto',
         desconto_no_total: 'Desconto no Total da Venda',
         vendas_itens_multiplicacao: 'Vendas de Itens por Multiplicação',
         ocultar_finalizar_com_impressao: 'Ocultar "Finalizar com Impressão"',
@@ -3018,6 +3148,320 @@ const ConfiguracoesPage: React.FC = () => {
       showMessage('error', 'Erro ao salvar rodapé personalizado: ' + error.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Função para aplicar máscara no NCM (0000.00.00)
+  const aplicarMascaraNCMVendaSemProduto = (valor: string) => {
+    // Remove tudo que não é número
+    const apenasNumeros = valor.replace(/\D/g, '');
+
+    // Aplica a máscara 0000.00.00
+    if (apenasNumeros.length <= 4) {
+      return apenasNumeros;
+    } else if (apenasNumeros.length <= 6) {
+      return `${apenasNumeros.slice(0, 4)}.${apenasNumeros.slice(4)}`;
+    } else {
+      return `${apenasNumeros.slice(0, 4)}.${apenasNumeros.slice(4, 6)}.${apenasNumeros.slice(6, 8)}`;
+    }
+  };
+
+  // Função para validar NCM para venda sem produto
+  const validarNCMVendaSemProduto = async (codigo: string) => {
+    if (!codigo || codigo.length !== 8) {
+      setVendaSemProdutoNcmValidacao({
+        validando: false,
+        valido: null,
+        descricao: '',
+        erro: ''
+      });
+      return;
+    }
+
+    setVendaSemProdutoNcmValidacao(prev => ({ ...prev, validando: true }));
+
+    try {
+      // Primeiro, buscar na tabela local
+      const { data: ncmLocal, error: errorLocal } = await supabase
+        .from('ncm')
+        .select('codigo_ncm, descricao_ncm')
+        .eq('codigo_ncm', codigo)
+        .limit(1);
+
+      if (!errorLocal && ncmLocal && ncmLocal.length > 0) {
+        const ncmInfo = ncmLocal[0];
+        setVendaSemProdutoNcmValidacao({
+          validando: false,
+          valido: true,
+          descricao: ncmInfo.descricao_ncm || '',
+          erro: ''
+        });
+        return;
+      }
+
+      // Se não encontrou na tabela local, buscar na BrasilAPI
+      const response = await fetch(`https://brasilapi.com.br/api/ncm/v1/${codigo}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setVendaSemProdutoNcmValidacao({
+          validando: false,
+          valido: true,
+          descricao: data.descricao || '',
+          erro: ''
+        });
+      } else {
+        setVendaSemProdutoNcmValidacao({
+          validando: false,
+          valido: false,
+          descricao: '',
+          erro: 'NCM não encontrado na base de dados'
+        });
+      }
+    } catch (error) {
+      setVendaSemProdutoNcmValidacao({
+        validando: false,
+        valido: false,
+        descricao: '',
+        erro: 'Erro ao validar NCM. Verifique sua conexão.'
+      });
+    }
+  };
+
+  // Lista de CFOPs disponíveis
+  const cfopsDisponiveis = [
+    { codigo: '5102', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros' },
+    { codigo: '5101', descricao: 'Venda de produção do estabelecimento' },
+    { codigo: '5405', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros (ST)' },
+    { codigo: '5401', descricao: 'Venda de produção do estabelecimento (ST)' },
+    { codigo: '5403', descricao: 'Venda com substituição tributária' },
+    { codigo: '5103', descricao: 'Venda de produção do estabelecimento, quando não especificado nos códigos anteriores' },
+    { codigo: '5104', descricao: 'Venda de mercadoria adquirida ou recebida de terceiros, quando não especificado nos códigos anteriores' }
+  ];
+
+  // Função para filtrar CFOPs baseada na pesquisa
+  const filtrarCfopsVendaSemProduto = () => {
+    if (!vendaSemProdutoCfopSearchTerm.trim()) {
+      return cfopsDisponiveis;
+    }
+
+    const termo = vendaSemProdutoCfopSearchTerm.toLowerCase();
+    return cfopsDisponiveis.filter(cfop =>
+      cfop.codigo.includes(termo) ||
+      cfop.descricao.toLowerCase().includes(termo)
+    );
+  };
+
+  // Função para selecionar um CFOP
+  const selecionarCfopVendaSemProduto = (cfop: { codigo: string; descricao: string }) => {
+    handlePdvConfigChangeFiscal('venda_sem_produto_cfop', cfop.codigo);
+    setVendaSemProdutoCfopDropdownOpen(false);
+    setVendaSemProdutoCfopSearchTerm('');
+
+    // Atualizar situação tributária baseada no CFOP
+    atualizarSituacaoTributariaVendaSemProduto(cfop.codigo);
+  };
+
+  // Função para detectar se a empresa é Simples Nacional
+  const isEmpresaSimplesNacional = () => {
+    return empresa?.regime_tributario === 1; // 1 = Simples Nacional
+  };
+
+  // Função para atualizar situação tributária baseada no CFOP
+  const atualizarSituacaoTributariaVendaSemProduto = (cfop: string) => {
+    const isSimples = isEmpresaSimplesNacional();
+
+    if (cfop === '5405' || cfop === '5401') {
+      // CFOPs de Substituição Tributária
+      if (isSimples) {
+        handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'st'); // CSOSN 500
+      } else {
+        handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'st'); // CST 60
+      }
+    } else if (cfop === '5102' || cfop === '5101') {
+      // CFOPs normais
+      if (isSimples) {
+        handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'tributado_integral'); // CSOSN 102
+      } else {
+        handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'tributado_integral'); // CST 00
+      }
+    } else {
+      // Outros CFOPs - manter tributado integral como padrão
+      handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', 'tributado_integral');
+    }
+  };
+
+  // Função para obter as opções de situação tributária baseada no regime
+  const getOpcoesSituacaoTributariaVendaSemProduto = () => {
+    const isSimples = isEmpresaSimplesNacional();
+
+    if (isSimples) {
+      // Opções CSOSN para Simples Nacional
+      return [
+        { value: 'tributado_integral', label: '102 - Tributada sem permissão de crédito', codigo: '102' },
+        { value: 'st', label: '500 - ICMS por substituição tributária', codigo: '500' },
+        { value: 'isenta', label: '300 - Imune', codigo: '300' },
+        { value: 'nao_tributada', label: '400 - Não tributada pelo Simples Nacional', codigo: '400' }
+      ];
+    } else {
+      // Opções CST para Regime Normal
+      return [
+        { value: 'tributado_integral', label: '00 - Tributada integralmente', codigo: '00' },
+        { value: 'st', label: '60 - ICMS cobrado por substituição tributária', codigo: '60' },
+        { value: 'isenta', label: '40 - Isenta', codigo: '40' },
+        { value: 'nao_tributada', label: '41 - Não tributada', codigo: '41' }
+      ];
+    }
+  };
+
+  // Função para verificar se deve mostrar campos ST (CEST e Margem)
+  const deveMostrarCamposST = () => {
+    return configFiscalLocal.venda_sem_produto_situacao_tributaria === 'st';
+  };
+
+  // Função para validar campos obrigatórios ST
+  const validarCamposST = () => {
+    const erros = { cest: '', margem_st: '' };
+    let temErros = false;
+
+    if (deveMostrarCamposST()) {
+      // Validar CEST
+      const cest = configFiscalLocal.venda_sem_produto_cest?.trim();
+      if (!cest || cest.length < 7) {
+        erros.cest = 'CEST é obrigatório para ST (7 dígitos)';
+        temErros = true;
+      }
+
+      // Validar Margem ST
+      const margemST = configFiscalLocal.venda_sem_produto_margem_st;
+      if (!margemST || margemST <= 0) {
+        erros.margem_st = 'Margem ST é obrigatória e deve ser maior que 0';
+        temErros = true;
+      }
+    }
+
+    setErrosValidacaoST(erros);
+    return !temErros;
+  };
+
+  // Função para detectar alterações nos campos fiscais (apenas local, não salva)
+  const handlePdvConfigChangeFiscal = (field: string, value: any) => {
+    // Lista de campos fiscais
+    const camposFiscais = [
+      'venda_sem_produto_ncm',
+      'venda_sem_produto_cfop',
+      'venda_sem_produto_origem',
+      'venda_sem_produto_situacao_tributaria',
+      'venda_sem_produto_cest',
+      'venda_sem_produto_margem_st',
+      'venda_sem_produto_aliquota_icms',
+      'venda_sem_produto_aliquota_pis',
+      'venda_sem_produto_aliquota_cofins',
+      'venda_sem_produto_peso_liquido'
+    ];
+
+    // Se for um campo fiscal, atualizar apenas o estado local
+    if (camposFiscais.includes(field)) {
+      setConfigFiscalLocal(prev => ({
+        ...prev,
+        [field]: value
+      }));
+      setConfigFiscalAlterada(true);
+
+      // Validar campos ST em tempo real se for alteração relevante
+      if (field === 'venda_sem_produto_situacao_tributaria' ||
+          field === 'venda_sem_produto_cest' ||
+          field === 'venda_sem_produto_margem_st') {
+        // Usar setTimeout para validar após o estado ser atualizado
+        setTimeout(() => {
+          validarCamposST();
+        }, 0);
+      }
+    } else {
+      // Se não for campo fiscal, usar a função normal
+      handlePdvConfigChange(field, value);
+    }
+  };
+
+  // Função para salvar configurações fiscais
+  const salvarConfigFiscal = async () => {
+    try {
+      // Validar campos obrigatórios antes de salvar
+      if (!validarCamposST()) {
+        showMessage('error', 'Preencha todos os campos obrigatórios para Substituição Tributária');
+        return;
+      }
+
+      setSalvandoConfigFiscal(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada');
+      }
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('pdv_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      // Usar dados do estado local (não salvos ainda)
+      const configFiscalData = {
+        venda_sem_produto_ncm: configFiscalLocal.venda_sem_produto_ncm,
+        venda_sem_produto_cfop: configFiscalLocal.venda_sem_produto_cfop,
+        venda_sem_produto_origem: configFiscalLocal.venda_sem_produto_origem,
+        venda_sem_produto_situacao_tributaria: configFiscalLocal.venda_sem_produto_situacao_tributaria,
+        venda_sem_produto_cest: configFiscalLocal.venda_sem_produto_cest,
+        venda_sem_produto_margem_st: configFiscalLocal.venda_sem_produto_margem_st,
+        venda_sem_produto_aliquota_icms: configFiscalLocal.venda_sem_produto_aliquota_icms,
+        venda_sem_produto_aliquota_pis: configFiscalLocal.venda_sem_produto_aliquota_pis,
+        venda_sem_produto_aliquota_cofins: configFiscalLocal.venda_sem_produto_aliquota_cofins,
+        venda_sem_produto_peso_liquido: configFiscalLocal.venda_sem_produto_peso_liquido
+      };
+
+      if (existingConfig) {
+        const { error } = await supabase
+          .from('pdv_config')
+          .update(configFiscalData)
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('pdv_config')
+          .insert([{
+            empresa_id: usuarioData.empresa_id,
+            ...pdvConfig,
+            ...configFiscalData
+          }]);
+
+        if (error) throw error;
+      }
+
+      // Sincronizar estado principal com dados salvos
+      setPdvConfig(prev => ({
+        ...prev,
+        ...configFiscalData
+      }));
+
+      setConfigFiscalAlterada(false);
+      showMessage('success', 'Configurações fiscais salvas com sucesso!');
+
+    } catch (error) {
+      console.error('Erro ao salvar configurações fiscais:', error);
+      showMessage('error', 'Erro ao salvar configurações fiscais');
+    } finally {
+      setSalvandoConfigFiscal(false);
     }
   };
 
@@ -4426,22 +4870,6 @@ const ConfiguracoesPage: React.FC = () => {
                       </label>
                     </div>
 
-                    {/* Informações sobre o funcionamento */}
-                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                      <h4 className="text-blue-400 font-medium mb-2 flex items-center gap-2">
-                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                        Como Funciona
-                      </h4>
-                      <div className="space-y-2 text-sm text-blue-300">
-                        <p>• <strong>Tecla de atalho:</strong> F0 (primeira opção do menu PDV)</p>
-                        <p>• <strong>Campos obrigatórios:</strong> Descrição e valor</p>
-                        <p>• <strong>Casos de uso:</strong> Serviços, consultorias, taxas especiais, produtos únicos</p>
-                        <p>• <strong>Integração:</strong> Funciona com todas as formas de pagamento e relatórios</p>
-                      </div>
-                    </div>
-
                     {/* Status atual */}
                     <div className={`border rounded-lg p-4 ${
                       pdvConfig.venda_sem_produto
@@ -4468,6 +4896,431 @@ const ConfiguracoesPage: React.FC = () => {
                         }
                       </p>
                     </div>
+
+                    {/* Seção de Impostos */}
+                    {pdvConfig.venda_sem_produto && (
+                      <div className="border-t border-gray-800 pt-6">
+                        <div className="mb-6">
+                          <h4 className="text-lg font-medium text-white mb-2 flex items-center gap-2">
+                            <Receipt size={18} className="text-blue-400" />
+                            Configurações Fiscais
+                          </h4>
+                          <p className="text-sm text-gray-400">
+                            Configure os dados fiscais que serão aplicados automaticamente aos itens de venda sem produto.
+                          </p>
+                        </div>
+
+                        <div className="space-y-6">
+                          {/* NCM */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              NCM (Nomenclatura Comum do Mercosul) <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={aplicarMascaraNCMVendaSemProduto(configFiscalLocal.venda_sem_produto_ncm || '')}
+                                onChange={(e) => {
+                                  // Remover máscara e permitir apenas números, limitando a 8 dígitos
+                                  const apenasNumeros = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_ncm', apenasNumeros);
+
+                                  // Validar NCM se tiver 8 dígitos
+                                  if (apenasNumeros.length === 8) {
+                                    validarNCMVendaSemProduto(apenasNumeros);
+                                  } else {
+                                    setVendaSemProdutoNcmValidacao({
+                                      validando: false,
+                                      valido: null,
+                                      descricao: '',
+                                      erro: ''
+                                    });
+                                  }
+                                }}
+                                className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 pr-10 text-white focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
+                                  vendaSemProdutoNcmValidacao.valido === true
+                                    ? 'border-green-500 focus:border-green-500'
+                                    : vendaSemProdutoNcmValidacao.valido === false
+                                    ? 'border-red-500 focus:border-red-500'
+                                    : 'border-gray-700 focus:border-primary-500'
+                                }`}
+                                placeholder="0000.00.00"
+                                maxLength={10} // Considerando a máscara
+                              />
+
+                              {/* Ícone de status */}
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                {vendaSemProdutoNcmValidacao.validando ? (
+                                  <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
+                                ) : vendaSemProdutoNcmValidacao.valido === true ? (
+                                  <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                                    <Check size={10} className="text-white" />
+                                  </div>
+                                ) : vendaSemProdutoNcmValidacao.valido === false ? (
+                                  <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                                    <X size={10} className="text-white" />
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            {/* Feedback de validação */}
+                            {vendaSemProdutoNcmValidacao.valido === true && vendaSemProdutoNcmValidacao.descricao && (
+                              <div className="mt-2 p-2 bg-green-500/10 border border-green-500/20 rounded text-sm text-green-400">
+                                ✅ <strong>NCM válido:</strong> {vendaSemProdutoNcmValidacao.descricao}
+                              </div>
+                            )}
+
+                            {vendaSemProdutoNcmValidacao.valido === false && vendaSemProdutoNcmValidacao.erro && (
+                              <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-sm text-red-400">
+                                ❌ <strong>Erro:</strong> {vendaSemProdutoNcmValidacao.erro}
+                              </div>
+                            )}
+
+                            <p className="text-xs text-gray-500 mt-1">
+                              Padrão: 22021000 (Bebidas alcoólicas). Digite 8 dígitos para validação automática.
+                            </p>
+                          </div>
+
+                          {/* CFOP */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              CFOP (Código Fiscal de Operações e Prestações) <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative cfop-dropdown">
+                              {/* Campo de exibição do CFOP selecionado */}
+                              <div
+                                onClick={() => setVendaSemProdutoCfopDropdownOpen(!vendaSemProdutoCfopDropdownOpen)}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white cursor-pointer focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 flex items-center justify-between"
+                              >
+                                <span className="truncate">
+                                  {configFiscalLocal.venda_sem_produto_cfop ? (
+                                    <>
+                                      {configFiscalLocal.venda_sem_produto_cfop} - {cfopsDisponiveis.find(c => c.codigo === configFiscalLocal.venda_sem_produto_cfop)?.descricao || 'CFOP selecionado'}
+                                    </>
+                                  ) : (
+                                    'Selecione um CFOP'
+                                  )}
+                                </span>
+                                <ChevronDown
+                                  size={16}
+                                  className={`transition-transform ${vendaSemProdutoCfopDropdownOpen ? 'rotate-180' : ''}`}
+                                />
+                              </div>
+
+                              {/* Dropdown de CFOPs */}
+                              {vendaSemProdutoCfopDropdownOpen && (
+                                <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                  {/* Campo de pesquisa */}
+                                  <div className="p-2 border-b border-gray-700">
+                                    <input
+                                      type="text"
+                                      placeholder="Pesquisar CFOP..."
+                                      value={vendaSemProdutoCfopSearchTerm}
+                                      onChange={(e) => setVendaSemProdutoCfopSearchTerm(e.target.value)}
+                                      className="w-full bg-gray-700 border border-gray-600 rounded py-1 px-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+
+                                  {/* Lista de CFOPs */}
+                                  <div className="max-h-48 overflow-y-auto">
+                                    {filtrarCfopsVendaSemProduto().map((cfop) => (
+                                      <div
+                                        key={cfop.codigo}
+                                        onClick={() => selecionarCfopVendaSemProduto(cfop)}
+                                        className="p-2 hover:bg-gray-700 cursor-pointer text-sm border-b border-gray-700/50 last:border-b-0"
+                                      >
+                                        <div className="font-medium text-white">{cfop.codigo}</div>
+                                        <div className="text-gray-400 text-xs truncate">{cfop.descricao}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Padrão: 5102 (Venda de mercadoria adquirida ou recebida de terceiros)
+                            </p>
+                          </div>
+
+                          {/* Origem */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              Origem do Produto <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={configFiscalLocal.venda_sem_produto_origem || 0}
+                              onChange={(e) => handlePdvConfigChangeFiscal('venda_sem_produto_origem', parseInt(e.target.value))}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            >
+                              <option value={0} title="0 - Nacional, exceto as indicadas nos códigos 3, 4, 5 e 8">
+                                0 - Nacional (padrão)
+                              </option>
+                              <option value={1} title="1 - Estrangeira - Importação direta, exceto a indicada no código 6">
+                                1 - Estrangeira - Importação direta
+                              </option>
+                              <option value={2} title="2 - Estrangeira - Adquirida no mercado interno, exceto a indicada no código 7">
+                                2 - Estrangeira - Mercado interno
+                              </option>
+                              <option value={3} title="3 - Nacional, mercadoria ou bem com Conteúdo de Importação superior a 40% e inferior ou igual a 70%">
+                                3 - Nacional - Conteúdo importação 40-70%
+                              </option>
+                              <option value={4} title="4 - Nacional, cuja produção tenha sido feita em conformidade com os processos produtivos básicos">
+                                4 - Nacional - Processos produtivos básicos
+                              </option>
+                              <option value={5} title="5 - Nacional, mercadoria ou bem com Conteúdo de Importação inferior ou igual a 40%">
+                                5 - Nacional - Conteúdo importação ≤40%
+                              </option>
+                              <option value={6} title="6 - Estrangeira - Importação direta, sem similar nacional, constante em lista da CAMEX e gás natural">
+                                6 - Estrangeira - Sem similar nacional
+                              </option>
+                              <option value={7} title="7 - Estrangeira - Adquirida no mercado interno, sem similar nacional, constante lista CAMEX e gás natural">
+                                7 - Estrangeira - Mercado interno sem similar
+                              </option>
+                              <option value={8} title="8 - Nacional, mercadoria ou bem com Conteúdo de Importação superior a 70%">
+                                8 - Nacional - Conteúdo importação &gt;70%
+                              </option>
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Passe o mouse sobre as opções para ver a descrição completa
+                            </p>
+                          </div>
+
+                          {/* Situação Tributária */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              Situação Tributária <span className="text-red-500">*</span>
+                            </label>
+                            <select
+                              value={configFiscalLocal.venda_sem_produto_situacao_tributaria || 'tributado_integral'}
+                              onChange={(e) => handlePdvConfigChangeFiscal('venda_sem_produto_situacao_tributaria', e.target.value)}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            >
+                              {getOpcoesSituacaoTributariaVendaSemProduto().map((opcao) => (
+                                <option key={opcao.value} value={opcao.value}>
+                                  {opcao.label}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {isEmpresaSimplesNacional()
+                                ? 'Códigos CSOSN para Simples Nacional/MEI'
+                                : 'Códigos CST para Regime Normal'
+                              }. Sugerido automaticamente pelo CFOP.
+                            </p>
+                          </div>
+
+                          {/* CEST - Só aparece para ST */}
+                          {deveMostrarCamposST() && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                CEST (Código Especificador ST) <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={configFiscalLocal.venda_sem_produto_cest || ''}
+                                onChange={(e) => {
+                                  // Aplicar máscara CEST (00.000.00)
+                                  let valor = e.target.value.replace(/\D/g, '').slice(0, 7);
+                                  if (valor.length > 2) {
+                                    valor = valor.slice(0, 2) + '.' + valor.slice(2);
+                                  }
+                                  if (valor.length > 6) {
+                                    valor = valor.slice(0, 6) + '.' + valor.slice(6);
+                                  }
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_cest', valor);
+                                }}
+                                className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 ${
+                                  errosValidacaoST.cest
+                                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                                    : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                                }`}
+                                placeholder="00.000.00"
+                                maxLength={9} // Considerando a máscara
+                              />
+
+                              {/* Mensagem de erro */}
+                              {errosValidacaoST.cest && (
+                                <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {errosValidacaoST.cest}
+                                </p>
+                              )}
+
+                              <p className="text-xs text-gray-500 mt-1">
+                                Obrigatório para situação tributária com Substituição Tributária. Ex: 12.345.67
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Margem ST - Só aparece para ST */}
+                          {deveMostrarCamposST() && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Margem ST (%) <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                value={configFiscalLocal.venda_sem_produto_margem_st || ''}
+                                onChange={(e) => {
+                                  const valor = e.target.value ? parseFloat(e.target.value) : null;
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_margem_st', valor);
+                                }}
+                                className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 ${
+                                  errosValidacaoST.margem_st
+                                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                                    : 'border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                                }`}
+                                placeholder="Ex: 30.0"
+                              />
+
+                              {/* Mensagem de erro */}
+                              {errosValidacaoST.margem_st && (
+                                <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {errosValidacaoST.margem_st}
+                                </p>
+                              )}
+
+                              <p className="text-xs text-gray-500 mt-1">
+                                Margem de Valor Agregado para ST. Consulte seu contador para o valor correto.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Alíquotas */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* Alíquota ICMS */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Alíquota ICMS (%)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                value={configFiscalLocal.venda_sem_produto_aliquota_icms || ''}
+                                onChange={(e) => {
+                                  const valor = e.target.value ? parseFloat(e.target.value) : 18.0;
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_aliquota_icms', valor);
+                                }}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                placeholder="18.0"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                {configFiscalLocal.venda_sem_produto_cfop === '5102' && (
+                                  <span className="text-yellow-400">💡 CFOP 5102 sugere alíquota ICMS de 18% (pode variar por estado - ajuste conforme necessário)</span>
+                                )}
+                              </p>
+                            </div>
+
+                            {/* Alíquota PIS */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Alíquota PIS (%)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                value={configFiscalLocal.venda_sem_produto_aliquota_pis || ''}
+                                onChange={(e) => {
+                                  const valor = e.target.value ? parseFloat(e.target.value) : 1.65;
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_aliquota_pis', valor);
+                                }}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                placeholder="1.65"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Padrão: 1,65% (Regime Normal)
+                              </p>
+                            </div>
+
+                            {/* Alíquota COFINS */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Alíquota COFINS (%)
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                value={configFiscalLocal.venda_sem_produto_aliquota_cofins || ''}
+                                onChange={(e) => {
+                                  const valor = e.target.value ? parseFloat(e.target.value) : 7.6;
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_aliquota_cofins', valor);
+                                }}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                placeholder="7.6"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Padrão: 7,6% (Regime Normal)
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Peso Líquido */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              Peso Líquido (kg)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.001"
+                              min="0"
+                              value={configFiscalLocal.venda_sem_produto_peso_liquido || ''}
+                              onChange={(e) => {
+                                const valor = e.target.value ? parseFloat(e.target.value) : 0;
+                                handlePdvConfigChangeFiscal('venda_sem_produto_peso_liquido', valor);
+                              }}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="0"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Peso líquido do produto em quilogramas. Padrão: 0 (para serviços ou produtos sem peso específico)
+                            </p>
+                          </div>
+
+                          {/* Botão Salvar Configurações Fiscais */}
+                          <div className="flex justify-end pt-4 border-t border-gray-800">
+                            <button
+                              onClick={salvarConfigFiscal}
+                              disabled={!configFiscalAlterada || salvandoConfigFiscal || (errosValidacaoST.cest || errosValidacaoST.margem_st)}
+                              className={`px-6 py-2 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+                                configFiscalAlterada && !salvandoConfigFiscal && !errosValidacaoST.cest && !errosValidacaoST.margem_st
+                                  ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-lg hover:shadow-xl'
+                                  : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                              }`}
+                            >
+                              {salvandoConfigFiscal ? (
+                                <>
+                                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                  Salvando...
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  {configFiscalAlterada ? 'Salvar Configurações' : 'Configurações Salvas'}
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

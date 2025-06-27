@@ -141,6 +141,16 @@ export interface PDVConfig {
   tipo_impressao_80mm?: boolean;
   tipo_impressao_50mm?: boolean;
   venda_sem_produto?: boolean;
+  venda_sem_produto_ncm?: string;
+  venda_sem_produto_cfop?: string;
+  venda_sem_produto_origem?: number;
+  venda_sem_produto_situacao_tributaria?: string;
+  venda_sem_produto_cest?: string;
+  venda_sem_produto_margem_st?: number;
+  venda_sem_produto_aliquota_icms?: number;
+  venda_sem_produto_aliquota_pis?: number;
+  venda_sem_produto_aliquota_cofins?: number;
+  venda_sem_produto_peso_liquido?: number;
   created_at?: string;
   updated_at?: string;
 }

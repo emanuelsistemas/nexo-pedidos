@@ -53,6 +53,37 @@ ADD COLUMN IF NOT EXISTS valor_desconto_total NUMERIC DEFAULT 0;
 ALTER TABLE pdv_config
 ADD COLUMN IF NOT EXISTS venda_sem_produto BOOLEAN DEFAULT FALSE;
 
+-- Campos fiscais para venda sem produto
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_ncm VARCHAR(8) DEFAULT '22021000';
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_cfop VARCHAR(4) DEFAULT '5102';
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_origem INTEGER DEFAULT 0;
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_situacao_tributaria VARCHAR(50) DEFAULT 'tributado_integral';
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_cest VARCHAR(7) DEFAULT '';
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_margem_st NUMERIC DEFAULT NULL;
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_aliquota_icms NUMERIC DEFAULT 18.0;
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_aliquota_pis NUMERIC DEFAULT 1.65;
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_aliquota_cofins NUMERIC DEFAULT 7.6;
+
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto_peso_liquido NUMERIC DEFAULT 0;
+
 -- Comentários para documentação
 COMMENT ON COLUMN pdv_config.observacao_no_item IS 'Permite adicionar observações personalizadas aos itens durante a venda no PDV';
 COMMENT ON COLUMN pdv_config.desconto_no_item IS 'Permite aplicar desconto individual em cada item durante a venda no PDV';

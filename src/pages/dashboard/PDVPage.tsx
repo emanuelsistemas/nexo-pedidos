@@ -11392,7 +11392,7 @@ const PDVPage: React.FC = () => {
                     type="text"
                     value={descricaoVendaSemProduto}
                     onChange={(e) => setDescricaoVendaSemProduto(e.target.value)}
-                    placeholder="Ex: Serviço de consultoria"
+                    placeholder="COCA COLA"
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>

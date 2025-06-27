@@ -8,13 +8,21 @@ Implementada funcionalidade **"Venda sem Produto"** no PDV que permite realizar 
 
 ### **1. Banco de Dados**
 - ✅ Campo `venda_sem_produto` adicionado na tabela `pdv_config` (BOOLEAN DEFAULT FALSE)
-- ✅ Migração executada: `ALTER TABLE pdv_config ADD COLUMN IF NOT EXISTS venda_sem_produto BOOLEAN DEFAULT FALSE;`
+- ✅ Campo `venda_sem_produto_ncm` (VARCHAR(8) DEFAULT '22021000')
+- ✅ Campo `venda_sem_produto_cfop` (VARCHAR(4) DEFAULT '5102')
+- ✅ Campo `venda_sem_produto_origem` (INTEGER DEFAULT 0)
+- ✅ **NOVO**: Campo `venda_sem_produto_situacao_tributaria` (VARCHAR(50) DEFAULT 'tributado_integral')
+- ✅ **NOVO**: Campo `venda_sem_produto_cest` (VARCHAR(7) DEFAULT '')
+- ✅ **NOVO**: Campo `venda_sem_produto_margem_st` (NUMERIC DEFAULT NULL)
+- ✅ Migrações executadas com valores padrão configurados
 
 ### **2. Interface de Configuração**
 - ✅ Nova aba dedicada "Venda sem Produto" nas configurações PDV
 - ✅ Checkbox "Habilitar Venda sem Produto" com descrição explicativa
 - ✅ Informações detalhadas sobre funcionamento e casos de uso
 - ✅ Status visual da funcionalidade (ativa/desativada)
+- ✅ **NOVO**: Seção completa de configurações fiscais
+- ✅ **NOVO**: Campos NCM, CFOP e Origem com validações
 - ✅ Habilitação em tempo real (seguindo padrão das outras configurações)
 
 ### **3. Menu PDV**
@@ -28,6 +36,18 @@ Implementada funcionalidade **"Venda sem Produto"** no PDV que permite realizar 
 - ✅ Validação de campos obrigatórios
 - ✅ Adição automática ao carrinho
 - ✅ Feedback visual com toast notifications
+
+### **5. Configurações Fiscais Completas (NOVO)**
+- ✅ **Campo NCM**: Validação automática via API local e BrasilAPI
+- ✅ **Campo CFOP**: Dropdown pesquisável com CFOPs mais utilizados
+- ✅ **Campo Origem**: Select com todas as 9 opções oficiais (0-8)
+- ✅ **Campo Situação Tributária**: Baseado no regime da empresa (Simples/Normal)
+- ✅ **Campo CEST**: Só aparece para situação tributária ST (com máscara)
+- ✅ **Campo Margem ST**: Só aparece para situação tributária ST
+- ✅ **Validação em tempo real**: NCM com máscara e feedback visual
+- ✅ **Valores padrão**: NCM 22021000, CFOP 5102, Origem 0, Situação Tributado Integral
+- ✅ **Interface condicional**: Só aparece quando funcionalidade está ativa
+- ✅ **Lógica automática**: CFOP sugere situação tributária automaticamente
 
 ## 📊 Estrutura Técnica
 
