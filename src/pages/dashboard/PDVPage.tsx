@@ -2152,6 +2152,8 @@ const PDVPage: React.FC = () => {
           valor_total,
           valor_subtotal,
           valor_desconto,
+          valor_desconto_itens,
+          valor_desconto_total,
           valor_acrescimo,
           nome_cliente,
           documento_cliente,
@@ -11761,7 +11763,7 @@ const PDVPage: React.FC = () => {
                                 <div key={index} className="flex justify-between text-xs">
                                   <span className="text-gray-300 truncate flex-1 mr-2">
                                     {pagamento.forma_pagamento}
-                                    {pagamento.parcelas > 1 && ` (${pagamento.parcelas}x)`}
+                                    {pagamento.parcelas && pagamento.parcelas > 1 && ` (${pagamento.parcelas}x)`}
                                   </span>
                                   <span className="text-white flex-shrink-0">{formatCurrency(pagamento.valor)}</span>
                                 </div>
@@ -12829,6 +12831,52 @@ const PDVPage: React.FC = () => {
                             <span className="text-white">Total da Venda:</span>
                             <span className="text-primary-400">{formatCurrency(vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final)}</span>
                           </div>
+
+                          {/* ✅ NOVO: Formas de Pagamento */}
+                          {(vendaParaExibirItens.tipo_pagamento || vendaParaExibirItens.forma_pagamento_id || vendaParaExibirItens.formas_pagamento) && (
+                            <>
+                              {/* Linha separadora */}
+                              <div className="border-t border-gray-700 my-3"></div>
+
+                              <div className="text-sm font-medium text-gray-300 mb-2">Formas de Pagamento:</div>
+
+                              {/* Pagamento à vista */}
+                              {vendaParaExibirItens.tipo_pagamento === 'vista' && vendaParaExibirItens.forma_pagamento_id && (
+                                <div className="flex justify-between items-center text-sm">
+                                  <span className="text-gray-300">
+                                    {(() => {
+                                      const forma = formasPagamento.find(f => f.id === vendaParaExibirItens.forma_pagamento_id);
+                                      return forma ? forma.nome : 'Forma de Pagamento';
+                                    })()}:
+                                  </span>
+                                  <span className="text-white">{formatCurrency(vendaParaExibirItens.valor_pago || vendaParaExibirItens.valor_total)}</span>
+                                </div>
+                              )}
+
+                              {/* Pagamento parcial */}
+                              {vendaParaExibirItens.tipo_pagamento === 'parcial' && vendaParaExibirItens.formas_pagamento && (
+                                <>
+                                  {vendaParaExibirItens.formas_pagamento.map((pag: any, index: number) => {
+                                    const forma = formasPagamento.find(f => f.id === pag.forma);
+                                    return (
+                                      <div key={index} className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-300">{forma ? forma.nome : 'Forma de Pagamento'}:</span>
+                                        <span className="text-white">{formatCurrency(pag.valor)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </>
+                              )}
+
+                              {/* Troco */}
+                              {vendaParaExibirItens.valor_troco && vendaParaExibirItens.valor_troco > 0 && (
+                                <div className="flex justify-between items-center text-sm font-medium">
+                                  <span className="text-green-400">TROCO:</span>
+                                  <span className="text-green-400">{formatCurrency(vendaParaExibirItens.valor_troco)}</span>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       );
                     })()}
