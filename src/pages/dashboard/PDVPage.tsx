@@ -15129,7 +15129,7 @@ const PDVPage: React.FC = () => {
 
       {/* ✅ NOVO: Modal de Quantidade */}
       <AnimatePresence>
-        {showQuantidadeModal && produtoParaQuantidade && (
+        {showQuantidadeModal && (produtoParaQuantidade || vendaSemProdutoAguardando) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -15154,12 +15154,20 @@ const PDVPage: React.FC = () => {
 
               {/* Informações do produto */}
               <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
-                <h4 className="text-white font-medium mb-2">{produtoParaQuantidade.nome}</h4>
+                <h4 className="text-white font-medium mb-2">
+                  {vendaSemProdutoAguardando ? vendaSemProdutoAguardando.nome : produtoParaQuantidade?.nome}
+                </h4>
                 <div className="text-sm text-gray-400 space-y-1">
-                  <p>Código: {produtoParaQuantidade.codigo}</p>
+                  {vendaSemProdutoAguardando ? (
+                    <p>Venda sem produto</p>
+                  ) : (
+                    <p>Código: {produtoParaQuantidade?.codigo}</p>
+                  )}
 
                   {/* ✅ NOVO: Exibir informações de preço com desconto */}
-                  {produtoParaQuantidade.promocao ? (
+                  {vendaSemProdutoAguardando ? (
+                    <p>Preço: {formatCurrency(vendaSemProdutoAguardando.preco)}</p>
+                  ) : produtoParaQuantidade?.promocao ? (
                     <div>
                       <p>
                         <span className="line-through">{formatCurrency(produtoParaQuantidade.preco)}</span>
@@ -15168,11 +15176,11 @@ const PDVPage: React.FC = () => {
                       <p className="text-xs text-green-400">Produto em promoção</p>
                     </div>
                   ) : (
-                    <p>Preço: {formatCurrency(calcularPrecoFinal(produtoParaQuantidade))}</p>
+                    <p>Preço: {formatCurrency(calcularPrecoFinal(produtoParaQuantidade!))}</p>
                   )}
 
                   {/* ✅ NOVO: Informações de desconto por quantidade */}
-                  {produtoParaQuantidade.desconto_quantidade && produtoParaQuantidade.quantidade_minima && (
+                  {!vendaSemProdutoAguardando && produtoParaQuantidade?.desconto_quantidade && produtoParaQuantidade?.quantidade_minima && (
                     <div className="text-xs text-green-400 mt-2">
                       Desconto para {produtoParaQuantidade.quantidade_minima}+ unidades:
                       {produtoParaQuantidade.tipo_desconto_quantidade === 'percentual'
@@ -15191,7 +15199,7 @@ const PDVPage: React.FC = () => {
                     Quantidade
                   </label>
                   {/* ✅ NOVO: Indicação de quantidade mínima para desconto */}
-                  {produtoParaQuantidade.desconto_quantidade && produtoParaQuantidade.quantidade_minima && (
+                  {!vendaSemProdutoAguardando && produtoParaQuantidade?.desconto_quantidade && produtoParaQuantidade?.quantidade_minima && (
                     <span className="text-xs text-gray-400">
                       Mín. {produtoParaQuantidade.quantidade_minima} para desconto
                     </span>
@@ -15217,17 +15225,19 @@ const PDVPage: React.FC = () => {
                       }}
                       min="1"
                       className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white text-center focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
-                        produtoParaQuantidade.desconto_quantidade &&
-                        produtoParaQuantidade.quantidade_minima &&
-                        quantidadeModal >= produtoParaQuantidade.quantidade_minima
+                        !vendaSemProdutoAguardando &&
+                        produtoParaQuantidade?.desconto_quantidade &&
+                        produtoParaQuantidade?.quantidade_minima &&
+                        quantidadeModal >= produtoParaQuantidade?.quantidade_minima
                           ? 'border-green-500 focus:border-green-500'
                           : 'border-gray-700 focus:border-primary-500'
                       }`}
                     />
                     {/* ✅ NOVO: Indicador de desconto aplicado */}
-                    {produtoParaQuantidade.desconto_quantidade &&
-                     produtoParaQuantidade.quantidade_minima &&
-                     quantidadeModal >= produtoParaQuantidade.quantidade_minima && (
+                    {!vendaSemProdutoAguardando &&
+                     produtoParaQuantidade?.desconto_quantidade &&
+                     produtoParaQuantidade?.quantidade_minima &&
+                     quantidadeModal >= produtoParaQuantidade?.quantidade_minima && (
                       <div className="absolute right-2 top-1/2 -translate-y-1/2">
                         <span className="text-xs text-green-400 font-medium">
                           Desconto aplicado!
@@ -15248,28 +15258,35 @@ const PDVPage: React.FC = () => {
               {/* Total */}
               <div className="bg-primary-500/10 border border-primary-500/30 rounded-lg p-3 mb-6">
                 {/* ✅ NOVO: Mostrar cálculo detalhado quando há desconto */}
-                {(produtoParaQuantidade.promocao ||
-                  (produtoParaQuantidade.desconto_quantidade &&
-                   produtoParaQuantidade.quantidade_minima &&
-                   quantidadeModal >= produtoParaQuantidade.quantidade_minima)) ? (
+                {vendaSemProdutoAguardando ? (
+                  <div className="flex justify-between items-center">
+                    <span className="text-primary-300 font-medium">Total:</span>
+                    <span className="text-primary-300 font-bold text-lg">
+                      {formatCurrency(vendaSemProdutoAguardando.preco * quantidadeModal)}
+                    </span>
+                  </div>
+                ) : (produtoParaQuantidade?.promocao ||
+                  (produtoParaQuantidade?.desconto_quantidade &&
+                   produtoParaQuantidade?.quantidade_minima &&
+                   quantidadeModal >= produtoParaQuantidade?.quantidade_minima)) ? (
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-gray-400">Preço original:</span>
                       <span className="text-gray-400 line-through">
-                        {formatCurrency(produtoParaQuantidade.preco)} x {quantidadeModal}
+                        {formatCurrency(produtoParaQuantidade!.preco)} x {quantidadeModal}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-green-400">Preço com desconto:</span>
                       <span className="text-green-400">
-                        {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade, quantidadeModal))} x {quantidadeModal}
+                        {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade!, quantidadeModal))} x {quantidadeModal}
                       </span>
                     </div>
                     <div className="border-t border-primary-500/30 pt-2">
                       <div className="flex justify-between items-center">
                         <span className="text-primary-300 font-medium">Total:</span>
                         <span className="text-primary-300 font-bold text-lg">
-                          {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade, quantidadeModal) * quantidadeModal)}
+                          {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade!, quantidadeModal) * quantidadeModal)}
                         </span>
                       </div>
                     </div>
@@ -15278,7 +15295,7 @@ const PDVPage: React.FC = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-primary-300 font-medium">Total:</span>
                     <span className="text-primary-300 font-bold text-lg">
-                      {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade, quantidadeModal) * quantidadeModal)}
+                      {formatCurrency(calcularPrecoModalQuantidade(produtoParaQuantidade!, quantidadeModal) * quantidadeModal)}
                     </span>
                   </div>
                 )}
