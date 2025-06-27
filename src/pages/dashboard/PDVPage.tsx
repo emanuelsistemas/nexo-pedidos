@@ -12747,6 +12747,34 @@ const PDVPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* ✅ NOVO: Seção de Vendedores da Venda */}
+                {!loadingItensVenda && itensVenda.length > 0 && (() => {
+                  // Buscar vendedores únicos dos itens
+                  const vendedoresUnicos = new Map();
+
+                  itensVenda.forEach(item => {
+                    if (item.vendedor_id && item.vendedor_nome) {
+                      vendedoresUnicos.set(item.vendedor_id, item.vendedor_nome);
+                    }
+                  });
+
+                  const vendedoresArray = Array.from(vendedoresUnicos.values());
+
+                  if (vendedoresArray.length > 0) {
+                    return (
+                      <div className="mt-6 p-4 bg-gray-800/30 rounded-lg">
+                        <h4 className="text-lg font-medium text-white mb-4">
+                          Vendedor{vendedoresArray.length > 1 ? 'es' : ''} da Venda
+                        </h4>
+                        <div className="text-white">
+                          {vendedoresArray.join(', ')}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 {/* ✅ NOVO: Seção de Totais da Venda */}
                 {!loadingItensVenda && itensVenda.length > 0 && (
                   <div className="mt-6 p-4 bg-gray-800/30 rounded-lg">
@@ -12831,37 +12859,6 @@ const PDVPage: React.FC = () => {
                             <span className="text-white">Total da Venda:</span>
                             <span className="text-primary-400">{formatCurrency(vendaParaExibirItens.valor_total || vendaParaExibirItens.valor_final)}</span>
                           </div>
-
-                          {/* ✅ NOVO: Vendedores da Venda */}
-                          {(() => {
-                            // Buscar vendedores únicos dos itens
-                            const vendedoresUnicos = new Map();
-
-                            itensVenda.forEach(item => {
-                              if (item.vendedor_id && item.vendedor_nome) {
-                                vendedoresUnicos.set(item.vendedor_id, item.vendedor_nome);
-                              }
-                            });
-
-                            const vendedoresArray = Array.from(vendedoresUnicos.values());
-
-                            if (vendedoresArray.length > 0) {
-                              return (
-                                <>
-                                  {/* Linha separadora */}
-                                  <div className="border-t border-gray-700 my-3"></div>
-
-                                  <div className="text-sm font-medium text-gray-300 mb-2">
-                                    Vendedor{vendedoresArray.length > 1 ? 'es' : ''} da Venda:
-                                  </div>
-                                  <div className="text-sm text-white">
-                                    {vendedoresArray.join(', ')}
-                                  </div>
-                                </>
-                              );
-                            }
-                            return null;
-                          })()}
 
                           {/* ✅ NOVO: Formas de Pagamento */}
                           {(vendaParaExibirItens.tipo_pagamento || vendaParaExibirItens.forma_pagamento_id || vendaParaExibirItens.formas_pagamento) && (
