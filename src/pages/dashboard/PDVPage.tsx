@@ -397,6 +397,9 @@ const PDVPage: React.FC = () => {
   const [produtoAguardandoVendedor, setProdutoAguardandoVendedor] = useState<Produto | null>(null);
   const [quantidadeAguardandoVendedor, setQuantidadeAguardandoVendedor] = useState<number>(1); // ✅ NOVO: Para armazenar quantidade do modal
 
+  // Estados para venda sem produto aguardando vendedor/quantidade
+  const [vendaSemProdutoAguardando, setVendaSemProdutoAguardando] = useState<{nome: string, preco: number} | null>(null);
+
   // Estados para modal de quantidade (vendas_itens_multiplicacao)
   const [showQuantidadeModal, setShowQuantidadeModal] = useState(false);
   const [produtoParaQuantidade, setProdutoParaQuantidade] = useState<Produto | null>(null);
@@ -3703,6 +3706,24 @@ const PDVPage: React.FC = () => {
         }
       }
     }
+
+    // Se há uma venda sem produto aguardando, verificar o fluxo
+    if (vendaSemProdutoAguardando) {
+      setAguardandoSelecaoVendedor(false);
+
+      // ✅ FLUXO SEQUENCIAL: Se quantidade = 0, significa que deve abrir modal de quantidade
+      if (quantidadeAguardandoVendedor === 0 && pdvConfig?.vendas_itens_multiplicacao) {
+        // Abrir modal de quantidade após selecionar vendedor
+        setQuantidadeModal(1);
+        setShowQuantidadeModal(true);
+        // Não limpar vendaSemProdutoAguardando ainda, será usado no modal de quantidade
+      } else {
+        // Adicionar venda sem produto diretamente com vendedor selecionado
+        adicionarVendaSemProdutoFinal(vendaSemProdutoAguardando.nome, vendaSemProdutoAguardando.preco, quantidadeAguardandoVendedor > 0 ? quantidadeAguardandoVendedor : 1);
+        setVendaSemProdutoAguardando(null);
+        setQuantidadeAguardandoVendedor(1);
+      }
+    }
   };
 
   const cancelarSelecaoVendedor = () => {
@@ -3710,18 +3731,28 @@ const PDVPage: React.FC = () => {
     setAguardandoSelecaoVendedor(false);
     setProdutoAguardandoVendedor(null);
     setQuantidadeAguardandoVendedor(1); // ✅ NOVO: Limpar também a quantidade salva
+    setVendaSemProdutoAguardando(null); // Limpar venda sem produto aguardando
   };
 
   // ✅ NOVO: Funções para modal de quantidade
   const confirmarQuantidade = () => {
-    if (!produtoParaQuantidade || quantidadeModal <= 0) return;
+    // Verificar se é venda sem produto ou produto normal
+    if (vendaSemProdutoAguardando) {
+      if (quantidadeModal <= 0) return;
 
-    // ✅ FLUXO SEQUENCIAL: Se chegou aqui, o vendedor já foi selecionado (se necessário)
-    // Adicionar produto com vendedor (se houver) e quantidade definida
-    if (vendedorSelecionado) {
-      adicionarProdutoComVendedor(produtoParaQuantidade, vendedorSelecionado, quantidadeModal);
+      // Adicionar venda sem produto com quantidade definida
+      adicionarVendaSemProdutoFinal(vendaSemProdutoAguardando.nome, vendaSemProdutoAguardando.preco, quantidadeModal);
+      setVendaSemProdutoAguardando(null);
     } else {
-      adicionarAoCarrinho(produtoParaQuantidade, quantidadeModal);
+      if (!produtoParaQuantidade || quantidadeModal <= 0) return;
+
+      // ✅ FLUXO SEQUENCIAL: Se chegou aqui, o vendedor já foi selecionado (se necessário)
+      // Adicionar produto com vendedor (se houver) e quantidade definida
+      if (vendedorSelecionado) {
+        adicionarProdutoComVendedor(produtoParaQuantidade, vendedorSelecionado, quantidadeModal);
+      } else {
+        adicionarAoCarrinho(produtoParaQuantidade, quantidadeModal);
+      }
     }
 
     // Fechar modal de quantidade e limpar estados
@@ -3739,6 +3770,50 @@ const PDVPage: React.FC = () => {
     setShowQuantidadeModal(false);
     setProdutoParaQuantidade(null);
     setQuantidadeModal(1);
+    setVendaSemProdutoAguardando(null); // Limpar venda sem produto aguardando
+  };
+
+  // Função para adicionar venda sem produto com verificações de vendedor e quantidade
+  const adicionarVendaSemProdutoComVerificacoes = (nome: string, preco: number) => {
+    // ✅ VERIFICAR: Se é o primeiro item no carrinho e precisa selecionar vendedor
+    if (carrinho.length === 0 && pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
+      setVendaSemProdutoAguardando({ nome, preco });
+      setAguardandoSelecaoVendedor(true);
+      setShowVendedorModal(true);
+      // Se também tem multiplicação ativa, salvar para usar no fluxo sequencial
+      if (pdvConfig?.vendas_itens_multiplicacao) {
+        setQuantidadeAguardandoVendedor(0); // 0 indica que deve abrir modal de quantidade depois
+      }
+      return;
+    }
+
+    // ✅ VERIFICAR: Se é o primeiro item e precisa selecionar quantidade
+    if (carrinho.length === 0 && pdvConfig?.vendas_itens_multiplicacao) {
+      setVendaSemProdutoAguardando({ nome, preco });
+      setQuantidadeModal(1);
+      setShowQuantidadeModal(true);
+      return;
+    }
+
+    // Se chegou aqui, pode adicionar diretamente
+    adicionarVendaSemProdutoFinal(nome, preco, 1);
+  };
+
+  // Função final para adicionar venda sem produto ao carrinho
+  const adicionarVendaSemProdutoFinal = (nome: string, preco: number, quantidade: number = 1) => {
+    const novoItem = {
+      id: Date.now().toString(),
+      nome: nome.trim(),
+      preco: preco,
+      quantidade: quantidade,
+      subtotal: preco * quantidade,
+      vendaSemProduto: true,
+      vendedor_id: vendedorSelecionado?.id,
+      vendedor_nome: vendedorSelecionado?.nome
+    };
+
+    setCarrinho(prev => [...prev, novoItem]);
+    toast.success('Item adicionado ao carrinho!');
   };
 
   const aumentarQuantidade = () => {
@@ -11449,21 +11524,11 @@ const PDVPage: React.FC = () => {
                         e.preventDefault();
                         // Verificar se os campos estão preenchidos antes de adicionar
                         if (descricaoVendaSemProduto.trim() && valorVendaSemProduto && parseFloat(valorVendaSemProduto) > 0) {
-                          // Executar a mesma lógica do botão "Adicionar"
-                          const novoItem = {
-                            id: Date.now().toString(),
-                            nome: descricaoVendaSemProduto.trim(),
-                            preco: parseFloat(valorVendaSemProduto),
-                            quantidade: 1,
-                            subtotal: parseFloat(valorVendaSemProduto),
-                            vendaSemProduto: true
-                          };
-
-                          setCarrinho(prev => [...prev, novoItem]);
+                          // Usar a nova função que verifica vendedor e quantidade
+                          adicionarVendaSemProdutoComVerificacoes(descricaoVendaSemProduto.trim(), parseFloat(valorVendaSemProduto));
                           setDescricaoVendaSemProduto('');
                           setValorVendaSemProduto('');
                           setShowVendaSemProdutoModal(false);
-                          toast.success('Item adicionado ao carrinho!');
                         } else {
                           toast.error('Preencha todos os campos corretamente');
                         }
@@ -11484,22 +11549,11 @@ const PDVPage: React.FC = () => {
                   <button
                     onClick={() => {
                       if (descricaoVendaSemProduto.trim() && valorVendaSemProduto && parseFloat(valorVendaSemProduto) > 0) {
-                        // Adicionar item sem produto ao carrinho
-                        const novoItem = {
-                          id: `venda-sem-produto-${Date.now()}`,
-                          produto_id: null,
-                          nome: descricaoVendaSemProduto.trim(),
-                          preco: parseFloat(valorVendaSemProduto),
-                          quantidade: 1,
-                          subtotal: parseFloat(valorVendaSemProduto),
-                          vendaSemProduto: true
-                        };
-
-                        setCarrinho(prev => [...prev, novoItem]);
+                        // Usar a nova função que verifica vendedor e quantidade
+                        adicionarVendaSemProdutoComVerificacoes(descricaoVendaSemProduto.trim(), parseFloat(valorVendaSemProduto));
                         setDescricaoVendaSemProduto('');
                         setValorVendaSemProduto('');
                         setShowVendaSemProdutoModal(false);
-                        toast.success('Item adicionado ao carrinho!');
                       } else {
                         toast.error('Preencha todos os campos corretamente');
                       }
