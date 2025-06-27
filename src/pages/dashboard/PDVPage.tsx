@@ -6049,7 +6049,9 @@ const PDVPage: React.FC = () => {
               data: new Date().toLocaleString('pt-BR'),
               valor_total: valorTotal,
               valor_subtotal: valorSubtotal,
-              valor_desconto: valorDesconto
+              valor_desconto: valorDesconto,
+              valor_desconto_itens: Math.round(calcularDescontoItens() * 100) / 100,
+              valor_desconto_total: Math.round(descontoGlobal * 100) / 100
             },
             empresa: {
               razao_social: empresaData.razao_social,
@@ -6145,6 +6147,8 @@ const PDVPage: React.FC = () => {
               valor_total: valorTotal,
               valor_subtotal: valorSubtotal,
               valor_desconto: valorDesconto,
+              valor_desconto_itens: Math.round(calcularDescontoItens() * 100) / 100,
+              valor_desconto_total: Math.round(descontoGlobal * 100) / 100,
               chave_nfe: vendaAtualizada?.chave_nfe || null,
               numero_nfe: vendaAtualizada?.numero_documento || null,
               serie_nfe: vendaAtualizada?.serie_documento || '001',
@@ -6512,6 +6516,8 @@ const PDVPage: React.FC = () => {
           valor_total: venda.valor_total,
           valor_subtotal: venda.valor_subtotal || venda.valor_total,
           valor_desconto: venda.valor_desconto || 0,
+          valor_desconto_itens: venda.valor_desconto_itens || 0,
+          valor_desconto_total: venda.valor_desconto_total || 0,
           chave_nfe: venda.chave_nfe,
           numero_nfe: venda.numero_documento || null,
           serie_nfe: venda.serie_documento || '001',
@@ -6700,7 +6706,9 @@ const PDVPage: React.FC = () => {
                 new Date().toLocaleString('pt-BR'),
           valor_total: venda.valor_total,
           valor_subtotal: venda.valor_subtotal || venda.valor_total,
-          valor_desconto: venda.valor_desconto || 0
+          valor_desconto: venda.valor_desconto || 0,
+          valor_desconto_itens: venda.valor_desconto_itens || 0,
+          valor_desconto_total: venda.valor_desconto_total || 0
         },
         empresa: {
           razao_social: empresaData.razao_social,
@@ -7108,24 +7116,24 @@ const PDVPage: React.FC = () => {
           ` : ''}
 
           ${(() => {
-            // ✅ NOVO: Exibir descontos detalhados se existirem
+            // ✅ EXIBIR DESCONTOS DETALHADOS APÓS FORMAS DE PAGAMENTO
             const descontoItens = dadosImpressao.venda.valor_desconto_itens || 0;
             const descontoTotal = dadosImpressao.venda.valor_desconto_total || 0;
 
             if (descontoItens > 0 || descontoTotal > 0) {
               return `
                 <div class="linha"></div>
-                <div class="center bold" style="font-size: 11px;">DETALHAMENTO DOS DESCONTOS</div>
+                <div class="center bold" style="font-size: 12px; margin: 5px 0;">DETALHAMENTO DOS DESCONTOS</div>
                 ${descontoItens > 0 ? `
                   <div class="item-linha" style="font-size: 11px;">
                     <span>Desconto nos Itens:</span>
-                    <span>-${formatCurrency(descontoItens)}</span>
+                    <span class="bold">-${formatCurrency(descontoItens)}</span>
                   </div>
                 ` : ''}
                 ${descontoTotal > 0 ? `
                   <div class="item-linha" style="font-size: 11px;">
                     <span>Desconto no Total:</span>
-                    <span>-${formatCurrency(descontoTotal)}</span>
+                    <span class="bold">-${formatCurrency(descontoTotal)}</span>
                   </div>
                 ` : ''}
               `;
@@ -7562,24 +7570,24 @@ const PDVPage: React.FC = () => {
           ` : ''}
 
           ${(() => {
-            // ✅ NOVO: Exibir descontos detalhados se existirem
+            // ✅ EXIBIR DESCONTOS DETALHADOS APÓS FORMAS DE PAGAMENTO
             const descontoItens = dadosImpressao.venda.valor_desconto_itens || 0;
             const descontoTotal = dadosImpressao.venda.valor_desconto_total || 0;
 
             if (descontoItens > 0 || descontoTotal > 0) {
               return `
                 <div class="linha"></div>
-                <div class="center bold" style="font-size: 11px;">DETALHAMENTO DOS DESCONTOS</div>
+                <div class="center bold" style="font-size: 12px; margin: 5px 0;">DETALHAMENTO DOS DESCONTOS</div>
                 ${descontoItens > 0 ? `
                   <div class="item-linha" style="font-size: 11px;">
                     <span>Desconto nos Itens:</span>
-                    <span>-${formatCurrency(descontoItens)}</span>
+                    <span class="bold">-${formatCurrency(descontoItens)}</span>
                   </div>
                 ` : ''}
                 ${descontoTotal > 0 ? `
                   <div class="item-linha" style="font-size: 11px;">
                     <span>Desconto no Total:</span>
-                    <span>-${formatCurrency(descontoTotal)}</span>
+                    <span class="bold">-${formatCurrency(descontoTotal)}</span>
                   </div>
                 ` : ''}
               `;
