@@ -213,6 +213,7 @@ const FormCadastro: React.FC = () => {
             venda_sem_produto_aliquota_pis: 1.65,
             venda_sem_produto_aliquota_cofins: 7.6,
             venda_sem_produto_peso_liquido: 0,
+            venda_sem_produto_nome_padrao: 'Diversos',
             desconto_no_total: false,
             vendas_itens_multiplicacao: false,
             ocultar_finalizar_com_impressao: false,

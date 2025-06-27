@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt, DollarSign, ChevronDown } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt, DollarSign, ChevronDown, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
@@ -374,6 +374,9 @@ const ConfiguracoesPage: React.FC = () => {
     margem_st: ''
   });
 
+  // Estado local para descrição padrão (não salva em tempo real)
+  const [nomePadraoLocal, setNomePadraoLocal] = useState('Diversos');
+
   // Estado local para configurações fiscais (não salvas ainda)
   const [configFiscalLocal, setConfigFiscalLocal] = useState({
     venda_sem_produto_ncm: '22021000',
@@ -430,6 +433,13 @@ const ConfiguracoesPage: React.FC = () => {
       validarCamposST();
     }
   }, [configFiscalLocal.venda_sem_produto_situacao_tributaria, configFiscalLocal.venda_sem_produto_cest, configFiscalLocal.venda_sem_produto_margem_st]);
+
+  // useEffect para sincronizar nome padrão local com dados carregados
+  useEffect(() => {
+    if (pdvConfig?.venda_sem_produto_nome_padrao) {
+      setNomePadraoLocal(pdvConfig.venda_sem_produto_nome_padrao);
+    }
+  }, [pdvConfig?.venda_sem_produto_nome_padrao]);
 
   const loadData = async () => {
     await withSessionCheck(async () => {
@@ -4896,6 +4906,80 @@ const ConfiguracoesPage: React.FC = () => {
                         }
                       </p>
                     </div>
+
+                    {/* Descrição padrão do produto */}
+                    {pdvConfig.venda_sem_produto && (
+                      <div className="border border-gray-700 rounded-lg p-4">
+                        <div className="mb-4">
+                          <h4 className="text-white font-medium mb-2 flex items-center gap-2">
+                            <FileText size={16} className="text-blue-400" />
+                            Descrição padrão do Produto
+                          </h4>
+                          <p className="text-sm text-gray-400">
+                            Nome que aparecerá como placeholder no campo de descrição do modal "Venda sem Produto".
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={nomePadraoLocal}
+                              onChange={(e) => setNomePadraoLocal(e.target.value)}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="Ex: Diversos, Serviços, Produtos..."
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              // Salvar apenas este campo específico
+                              const salvarNomePadrao = async () => {
+                                try {
+                                  // Obter dados do usuário autenticado
+                                  const { data: userData } = await supabase.auth.getUser();
+                                  if (!userData.user) throw new Error('Usuário não autenticado');
+
+                                  const { data: usuarioData } = await supabase
+                                    .from('usuarios')
+                                    .select('empresa_id')
+                                    .eq('id', userData.user.id)
+                                    .single();
+
+                                  if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+                                  const { error } = await supabase
+                                    .from('pdv_config')
+                                    .update({
+                                      venda_sem_produto_nome_padrao: nomePadraoLocal || 'Diversos'
+                                    })
+                                    .eq('empresa_id', usuarioData.empresa_id);
+
+                                  if (error) throw error;
+
+                                  // Atualizar o estado principal após salvar
+                                  setPdvConfig(prev => ({
+                                    ...prev,
+                                    venda_sem_produto_nome_padrao: nomePadraoLocal || 'Diversos'
+                                  }));
+
+                                  showMessage('success', 'Descrição padrão salva com sucesso!');
+                                } catch (error) {
+                                  console.error('Erro ao salvar descrição padrão:', error);
+                                  showMessage('error', 'Erro ao salvar descrição padrão');
+                                }
+                              };
+                              salvarNomePadrao();
+                            }}
+                            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Salvar
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Seção de Impostos */}
                     {pdvConfig.venda_sem_produto && (

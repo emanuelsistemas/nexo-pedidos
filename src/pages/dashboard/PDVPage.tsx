@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -169,6 +169,7 @@ const PDVPage: React.FC = () => {
   const [showVendaSemProdutoModal, setShowVendaSemProdutoModal] = useState(false);
   const [valorVendaSemProduto, setValorVendaSemProduto] = useState('');
   const [descricaoVendaSemProduto, setDescricaoVendaSemProduto] = useState('');
+  const valorVendaSemProdutoRef = useRef<HTMLInputElement>(null);
   const [showMovimentosModal, setShowMovimentosModal] = useState(false);
   const [showDescontoTotalModal, setShowDescontoTotalModal] = useState(false);
   const [descontoTotal, setDescontoTotal] = useState(0);
@@ -952,6 +953,9 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
+        // Preencher o campo com o valor padrão configurado
+        setDescricaoVendaSemProduto(pdvConfig?.venda_sem_produto_nome_padrao || 'Diversos');
+        setValorVendaSemProduto(''); // Limpar o valor para nova entrada
         setShowVendaSemProdutoModal(true);
       }
     },
@@ -4004,7 +4008,9 @@ const PDVPage: React.FC = () => {
     // Atualizar o nome do produto no carrinho
     setCarrinho(prev => prev.map(item =>
       item.id === itemId
-        ? { ...item, produto: { ...item.produto, nome: nomeEditando.trim() } }
+        ? item.vendaSemProduto
+          ? { ...item, nome: nomeEditando.trim() }
+          : { ...item, produto: { ...item.produto, nome: nomeEditando.trim() } }
         : item
     ));
 
@@ -7964,6 +7970,16 @@ const PDVPage: React.FC = () => {
     }
   }, [showSeletorUnidadeModal]);
 
+  // useEffect para focar no campo valor quando modal de venda sem produto abrir
+  useEffect(() => {
+    if (showVendaSemProdutoModal && valorVendaSemProdutoRef.current) {
+      // Usar setTimeout para garantir que o modal esteja renderizado
+      setTimeout(() => {
+        valorVendaSemProdutoRef.current?.focus();
+      }, 100);
+    }
+  }, [showVendaSemProdutoModal]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -8157,10 +8173,12 @@ const PDVPage: React.FC = () => {
 
                           {/* Foto do Produto - Compacta */}
                           <div
-                            className="w-12 h-12 lg:w-10 lg:h-10 bg-gray-900 rounded overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity relative self-start"
-                            onClick={(e) => abrirGaleria(item.produto, e)}
+                            className={`w-12 h-12 lg:w-10 lg:h-10 bg-gray-900 rounded overflow-hidden flex-shrink-0 relative self-start ${
+                              !item.vendaSemProduto ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''
+                            }`}
+                            onClick={!item.vendaSemProduto ? (e) => abrirGaleria(item.produto, e) : undefined}
                           >
-                            {getFotoPrincipal(item.produto) ? (
+                            {!item.vendaSemProduto && getFotoPrincipal(item.produto) ? (
                               <img
                                 src={getFotoPrincipal(item.produto)!.url}
                                 alt={item.produto.nome}
@@ -8168,12 +8186,16 @@ const PDVPage: React.FC = () => {
                               />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
-                                <Package size={14} className="text-gray-700" />
+                                {item.vendaSemProduto ? (
+                                  <DollarSign size={14} className="text-green-400" />
+                                ) : (
+                                  <Package size={14} className="text-gray-700" />
+                                )}
                               </div>
                             )}
 
                             {/* Indicador de múltiplas fotos - Compacto */}
-                            {item.produto.produto_fotos && item.produto.produto_fotos.length > 1 && (
+                            {!item.vendaSemProduto && item.produto.produto_fotos && item.produto.produto_fotos.length > 1 && (
                               <div className="absolute top-0.5 left-0.5 bg-black/60 text-white text-xs px-1 py-0.5 rounded">
                                 {item.produto.produto_fotos.length}
                               </div>
@@ -8223,10 +8245,10 @@ const PDVPage: React.FC = () => {
                                         </div>
                                       ) : (
                                         <div className="flex items-center gap-1">
-                                          <h4 className="text-white font-medium text-sm line-clamp-1">{item.produto.nome}</h4>
+                                          <h4 className="text-white font-medium text-sm line-clamp-1">{item.vendaSemProduto ? item.nome : item.produto.nome}</h4>
                                           {pdvConfig?.editar_nome_produto && (
                                             <button
-                                              onClick={() => iniciarEdicaoNome(item.id, item.produto.nome)}
+                                              onClick={() => iniciarEdicaoNome(item.id, item.vendaSemProduto ? item.nome : item.produto.nome)}
                                               className="text-gray-500 hover:text-gray-300 transition-colors opacity-60 hover:opacity-100 flex-shrink-0"
                                               title="Editar nome do produto"
                                             >
@@ -8237,15 +8259,22 @@ const PDVPage: React.FC = () => {
                                       )}
                                     </div>
                                     <div className="flex items-center gap-2 text-xs text-gray-400">
-                                      <span>Código {item.produto.codigo}</span>
-                                      {item.produto.codigo_barras && item.produto.codigo_barras.trim() !== '' && (
-                                        <div className="flex items-center gap-1">
-                                          <QrCode size={10} className="text-gray-500" />
-                                          <span>{item.produto.codigo_barras}</span>
-                                        </div>
+                                      {!item.vendaSemProduto && (
+                                        <>
+                                          <span>Código {item.produto.codigo}</span>
+                                          {item.produto.codigo_barras && item.produto.codigo_barras.trim() !== '' && (
+                                            <div className="flex items-center gap-1">
+                                              <QrCode size={10} className="text-gray-500" />
+                                              <span>{item.produto.codigo_barras}</span>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                      {item.vendaSemProduto && (
+                                        <span className="text-green-400">Venda sem produto</span>
                                       )}
                                       {/* ✅ NOVO: Mostrar valor unitário quando tem adicionais */}
-                                      {item.adicionais && item.adicionais.length > 0 && (
+                                      {!item.vendaSemProduto && item.adicionais && item.adicionais.length > 0 && (
                                         <div className="flex items-center gap-1 text-primary-400">
                                           <span>•</span>
                                           <span>{formatCurrency(item.produto.preco)} x {item.quantidade}</span>
@@ -8256,7 +8285,7 @@ const PDVPage: React.FC = () => {
                                     </div>
 
                                     {/* ✅ NOVO: Exibir informações de desconto como no sistema de pedidos */}
-                                    {(item.produto.promocao || (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0))) && (
+                                    {!item.vendaSemProduto && (item.produto.promocao || (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0))) && (
                                       <div className="mt-1">
                                         {/* Preço com desconto no formato: preço_original x quantidade = subtotal */}
                                         <p className="text-sm">
@@ -8338,7 +8367,7 @@ const PDVPage: React.FC = () => {
                                 </button>
 
                                 {/* Botões de desconto - desktop - Compactos */}
-                                {pdvConfig?.desconto_no_item && !item.desconto && (
+                                {!item.vendaSemProduto && pdvConfig?.desconto_no_item && !item.desconto && (
                                   <button
                                     onClick={() => abrirModalDesconto(item.id)}
                                     className="w-6 h-6 bg-yellow-600/20 hover:bg-yellow-600/40 rounded-full flex items-center justify-center text-yellow-200 transition-colors"
@@ -8348,7 +8377,7 @@ const PDVPage: React.FC = () => {
                                   </button>
                                 )}
 
-                                {pdvConfig?.desconto_no_item && item.desconto && (
+                                {!item.vendaSemProduto && pdvConfig?.desconto_no_item && item.desconto && (
                                   <button
                                     onClick={() => removerDesconto(item.id)}
                                     className="w-6 h-6 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center text-white transition-colors"
@@ -8359,7 +8388,7 @@ const PDVPage: React.FC = () => {
                                 )}
 
                                 {/* Botão para opções adicionais - desktop - Compacto */}
-                                {item.temOpcoesAdicionais && (
+                                {!item.vendaSemProduto && item.temOpcoesAdicionais && (
                                   <button
                                     onClick={() => abrirOpcoesAdicionais(item)}
                                     className="w-6 h-6 bg-purple-600/20 hover:bg-purple-600/40 rounded-full flex items-center justify-center text-purple-200 transition-colors"
@@ -11392,7 +11421,14 @@ const PDVPage: React.FC = () => {
                     type="text"
                     value={descricaoVendaSemProduto}
                     onChange={(e) => setDescricaoVendaSemProduto(e.target.value)}
-                    placeholder="COCA COLA"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // Focar no campo valor quando pressionar Enter na descrição
+                        valorVendaSemProdutoRef.current?.focus();
+                      }
+                    }}
+                    placeholder="Digite a descrição do produto..."
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>
@@ -11402,11 +11438,37 @@ const PDVPage: React.FC = () => {
                     Valor (R$)
                   </label>
                   <input
+                    ref={valorVendaSemProdutoRef}
                     type="number"
                     step="0.01"
                     min="0"
                     value={valorVendaSemProduto}
                     onChange={(e) => setValorVendaSemProduto(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // Verificar se os campos estão preenchidos antes de adicionar
+                        if (descricaoVendaSemProduto.trim() && valorVendaSemProduto && parseFloat(valorVendaSemProduto) > 0) {
+                          // Executar a mesma lógica do botão "Adicionar"
+                          const novoItem = {
+                            id: Date.now().toString(),
+                            nome: descricaoVendaSemProduto.trim(),
+                            preco: parseFloat(valorVendaSemProduto),
+                            quantidade: 1,
+                            subtotal: parseFloat(valorVendaSemProduto),
+                            vendaSemProduto: true
+                          };
+
+                          setCarrinho(prev => [...prev, novoItem]);
+                          setDescricaoVendaSemProduto('');
+                          setValorVendaSemProduto('');
+                          setShowVendaSemProdutoModal(false);
+                          toast.success('Item adicionado ao carrinho!');
+                        } else {
+                          toast.error('Preencha todos os campos corretamente');
+                        }
+                      }
+                    }}
                     placeholder="0,00"
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
