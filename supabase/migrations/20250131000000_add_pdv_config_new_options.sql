@@ -49,6 +49,10 @@ ADD COLUMN IF NOT EXISTS valor_desconto_itens NUMERIC DEFAULT 0;
 ALTER TABLE pdv
 ADD COLUMN IF NOT EXISTS valor_desconto_total NUMERIC DEFAULT 0;
 
+-- Campo para habilitar venda sem produto
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS venda_sem_produto BOOLEAN DEFAULT FALSE;
+
 -- Comentários para documentação
 COMMENT ON COLUMN pdv_config.observacao_no_item IS 'Permite adicionar observações personalizadas aos itens durante a venda no PDV';
 COMMENT ON COLUMN pdv_config.desconto_no_item IS 'Permite aplicar desconto individual em cada item durante a venda no PDV';

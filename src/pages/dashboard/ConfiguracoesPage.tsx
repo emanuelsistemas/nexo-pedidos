@@ -252,7 +252,8 @@ const ConfiguracoesPage: React.FC = () => {
     mostrar_endereco_cupom_finalizar: false,
     mostrar_operador_cupom_finalizar: false,
     tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
-    tipo_impressao_50mm: false  // ✅ NOVO: 50mm desabilitado
+    tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
+    venda_sem_produto: false
   });
 
   // Estado para controlar as abas do PDV
@@ -2486,7 +2487,8 @@ const ConfiguracoesPage: React.FC = () => {
           mostrar_endereco_cupom_finalizar: config.mostrar_endereco_cupom_finalizar || false,
           mostrar_operador_cupom_finalizar: config.mostrar_operador_cupom_finalizar || false,
           tipo_impressao_80mm: config.tipo_impressao_80mm !== undefined ? config.tipo_impressao_80mm : true,  // ✅ NOVO
-          tipo_impressao_50mm: config.tipo_impressao_50mm !== undefined ? config.tipo_impressao_50mm : false  // ✅ NOVO
+          tipo_impressao_50mm: config.tipo_impressao_50mm !== undefined ? config.tipo_impressao_50mm : false,  // ✅ NOVO
+          venda_sem_produto: config.venda_sem_produto || false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2524,7 +2526,8 @@ const ConfiguracoesPage: React.FC = () => {
           mostrar_endereco_cupom_finalizar: false,
           mostrar_operador_cupom_finalizar: false,
           tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
-          tipo_impressao_50mm: false  // ✅ NOVO: 50mm desabilitado
+          tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
+          venda_sem_produto: false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2563,7 +2566,8 @@ const ConfiguracoesPage: React.FC = () => {
         mostrar_endereco_cupom_finalizar: false,
         mostrar_operador_cupom_finalizar: false,
         tipo_impressao_80mm: true,  // ✅ NOVO: 80mm como padrão
-        tipo_impressao_50mm: false  // ✅ NOVO: 50mm desabilitado
+        tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
+        venda_sem_produto: false
       });
 
       // Atualizar também o estado separado do rodapé
@@ -2803,6 +2807,7 @@ const ConfiguracoesPage: React.FC = () => {
         desconto_no_total: field === 'desconto_no_total' ? value : pdvConfig.desconto_no_total,
         editar_nome_produto: field === 'editar_nome_produto' ? value : pdvConfig.editar_nome_produto,
         fiado: field === 'fiado' ? value : pdvConfig.fiado,
+        venda_sem_produto: field === 'venda_sem_produto' ? value : pdvConfig.venda_sem_produto,
         vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : pdvConfig.vendas_itens_multiplicacao,
         ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
         ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
@@ -2862,6 +2867,7 @@ const ConfiguracoesPage: React.FC = () => {
         desconto_no_item: 'Desconto no Item',
         editar_nome_produto: 'Editar nome do produto na venda',
         fiado: 'Fiado',
+        venda_sem_produto: 'Venda sem produto',
         desconto_no_total: 'Desconto no Total da Venda',
         vendas_itens_multiplicacao: 'Vendas de Itens por Multiplicação',
         ocultar_finalizar_com_impressao: 'Ocultar "Finalizar com Impressão"',
@@ -4096,6 +4102,22 @@ const ConfiguracoesPage: React.FC = () => {
                           <h4 className="text-white font-medium">Fiado</h4>
                           <p className="text-sm text-gray-400 mt-1">
                             Habilita a opção de venda fiado no PDV.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.venda_sem_produto}
+                          onChange={(e) => handlePdvConfigChange('venda_sem_produto', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Venda sem produto</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Habilita botão para realizar vendas sem produtos específicos, permitindo lançamento de valores diretos.
                           </p>
                         </div>
                       </label>

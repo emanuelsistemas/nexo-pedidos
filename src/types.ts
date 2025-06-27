@@ -140,6 +140,7 @@ export interface PDVConfig {
   mostrar_operador_cupom_finalizar?: boolean;
   tipo_impressao_80mm?: boolean;
   tipo_impressao_50mm?: boolean;
+  venda_sem_produto?: boolean;
   created_at?: string;
   updated_at?: string;
 }

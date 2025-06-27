@@ -166,6 +166,9 @@ const PDVPage: React.FC = () => {
   const [showSuprimentoModal, setShowSuprimentoModal] = useState(false);
   const [showPagamentosModal, setShowPagamentosModal] = useState(false);
   const [showFiadosModal, setShowFiadosModal] = useState(false);
+  const [showVendaSemProdutoModal, setShowVendaSemProdutoModal] = useState(false);
+  const [valorVendaSemProduto, setValorVendaSemProduto] = useState('');
+  const [descricaoVendaSemProduto, setDescricaoVendaSemProduto] = useState('');
   const [showMovimentosModal, setShowMovimentosModal] = useState(false);
   const [showDescontoTotalModal, setShowDescontoTotalModal] = useState(false);
   const [descontoTotal, setDescontoTotal] = useState(0);
@@ -940,6 +943,19 @@ const PDVPage: React.FC = () => {
   // Definir todos os itens do menu PDV
   const allMenuPDVItems = [
     {
+      id: 'venda-sem-produto',
+      icon: DollarSign,
+      label: 'Venda sem Produto',
+      color: 'green',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowVendaSemProdutoModal(true);
+      }
+    },
+    {
       id: 'produtos',
       icon: Package,
       label: 'Produtos',
@@ -1183,6 +1199,10 @@ const PDVPage: React.FC = () => {
       if (item.id === 'fiados') {
         return pdvConfig?.fiado === true; // ✅ CORRIGIDO: Usar configuração PDV
       }
+      // Se for o item 'venda-sem-produto', só mostrar se a configuração estiver habilitada
+      if (item.id === 'venda-sem-produto') {
+        return pdvConfig?.venda_sem_produto === true;
+      }
       // Se for o item 'desconto-total', só mostrar se a configuração estiver habilitada E houver itens no carrinho
       if (item.id === 'desconto-total') {
         return pdvConfig?.desconto_no_total === true && carrinho.length > 0;
@@ -1371,12 +1391,19 @@ const PDVPage: React.FC = () => {
   // Listener global para captura de código de barras, F1-F9 e ESC
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      // Capturar teclas F1-F9 para atalhos do menu PDV
+      // Capturar teclas F0-F9 para atalhos do menu PDV
       if (event.key.startsWith('F') && event.key.length <= 3) {
         const fNumber = parseInt(event.key.substring(1));
-        if (fNumber >= 1 && fNumber <= 9) {
+        if (fNumber >= 0 && fNumber <= 9) {
           event.preventDefault();
-          const menuIndex = fNumber - 1;
+          let menuIndex;
+          if (fNumber === 0) {
+            // F0 = primeiro item (índice 0)
+            menuIndex = 0;
+          } else {
+            // F1-F9 = índices 1-9
+            menuIndex = fNumber;
+          }
           if (menuPDVItems[menuIndex]) {
             menuPDVItems[menuIndex].onClick();
           }
@@ -8613,7 +8640,7 @@ const PDVPage: React.FC = () => {
                     {menuPDVItems.slice(menuStartIndex, menuStartIndex + visibleMenuItems).map((item, index) => {
                       const IconComponent = item.icon;
                       const originalIndex = menuStartIndex + index;
-                      const teclaAtalho = `F${originalIndex + 1}`;
+                      const teclaAtalho = originalIndex === 0 ? 'F0' : `F${originalIndex}`;
 
                       // ✅ NOVO: Ocultar botões "Pedidos" e "Movimentos" quando há itens no carrinho
                       if (carrinho.length > 0 && (item.id === 'pedidos' || item.id === 'movimentos')) {
@@ -11322,6 +11349,104 @@ const PDVPage: React.FC = () => {
                 <div className="text-center py-8">
                   <Clock size={48} className="mx-auto mb-4 text-gray-500" />
                   <p className="text-gray-400">Nenhuma venda fiada registrada</p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Venda sem Produto */}
+      <AnimatePresence>
+        {showVendaSemProdutoModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowVendaSemProdutoModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card border border-gray-800 rounded-lg p-6 w-full max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Venda sem Produto</h3>
+                <button
+                  onClick={() => setShowVendaSemProdutoModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Descrição
+                  </label>
+                  <input
+                    type="text"
+                    value={descricaoVendaSemProduto}
+                    onChange={(e) => setDescricaoVendaSemProduto(e.target.value)}
+                    placeholder="Ex: Serviço de consultoria"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Valor (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={valorVendaSemProduto}
+                    onChange={(e) => setValorVendaSemProduto(e.target.value)}
+                    placeholder="0,00"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setShowVendaSemProdutoModal(false)}
+                    className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (descricaoVendaSemProduto.trim() && valorVendaSemProduto && parseFloat(valorVendaSemProduto) > 0) {
+                        // Adicionar item sem produto ao carrinho
+                        const novoItem = {
+                          id: `venda-sem-produto-${Date.now()}`,
+                          produto_id: null,
+                          nome: descricaoVendaSemProduto.trim(),
+                          preco: parseFloat(valorVendaSemProduto),
+                          quantidade: 1,
+                          subtotal: parseFloat(valorVendaSemProduto),
+                          vendaSemProduto: true
+                        };
+
+                        setCarrinho(prev => [...prev, novoItem]);
+                        setDescricaoVendaSemProduto('');
+                        setValorVendaSemProduto('');
+                        setShowVendaSemProdutoModal(false);
+                        toast.success('Item adicionado ao carrinho!');
+                      } else {
+                        toast.error('Preencha todos os campos corretamente');
+                      }
+                    }}
+                    disabled={!descricaoVendaSemProduto.trim() || !valorVendaSemProduto || parseFloat(valorVendaSemProduto) <= 0}
+                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                  >
+                    Adicionar
+                  </button>
                 </div>
               </div>
             </motion.div>
