@@ -5367,11 +5367,11 @@ const PDVPage: React.FC = () => {
     try {
       console.log('🔢 FRONTEND: Gerando próximo número NFC-e para empresa:', empresaId);
 
-      // Buscar o último número de NFC-e da empresa (modelo 65)
-      console.log('🔍 FRONTEND: Consultando último número NFC-e no banco...');
+      // ✅ CORREÇÃO: Buscar o último número de NFC-e da empresa (modelo 65) incluindo pendentes
+      console.log('🔍 FRONTEND: Consultando último número NFC-e no banco (incluindo pendentes)...');
       const { data, error } = await supabase
         .from('pdv')
-        .select('numero_documento')
+        .select('numero_documento, status_fiscal')
         .eq('empresa_id', empresaId)
         .eq('modelo_documento', 65) // NFC-e modelo 65
         .not('numero_documento', 'is', null)
@@ -5392,7 +5392,7 @@ const PDVPage: React.FC = () => {
       let proximoNumero = 1;
       if (data && data.length > 0 && data[0].numero_documento) {
         proximoNumero = data[0].numero_documento + 1;
-        console.log(`📊 FRONTEND: Último número NFC-e encontrado: ${data[0].numero_documento}`);
+        console.log(`📊 FRONTEND: Último número NFC-e encontrado: ${data[0].numero_documento} (status: ${data[0].status_fiscal})`);
         console.log(`➕ FRONTEND: Incrementando para: ${proximoNumero}`);
       } else {
         console.log('📊 FRONTEND: Nenhum registro NFC-e encontrado, iniciando do número 1');
