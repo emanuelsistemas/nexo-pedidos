@@ -177,6 +177,7 @@ function buscarConfiguracoesFiscaisVendaSemProduto($empresaId) {
     logDetalhado('VENDA_SEM_PRODUTO_SUCCESS', "Configurações fiscais de venda sem produto carregadas", [
         'empresa_id' => $empresaId,
         'situacao_tributaria' => $situacaoTributaria,
+        'cfop_configurado' => $config['venda_sem_produto_cfop'] ?? 'NULL',
         'dados_fiscais' => $dadosFiscais
     ]);
 

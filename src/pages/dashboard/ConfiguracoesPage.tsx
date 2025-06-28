@@ -5203,17 +5203,31 @@ const ConfiguracoesPage: React.FC = () => {
                               </label>
                               <input
                                 type="text"
-                                value={configFiscalLocal.venda_sem_produto_cest || ''}
+                                value={(() => {
+                                  // Aplicar máscara para exibição
+                                  const valor = configFiscalLocal.venda_sem_produto_cest || '';
+                                  if (valor.length <= 2) return valor;
+                                  if (valor.length <= 5) return valor.slice(0, 2) + '.' + valor.slice(2);
+                                  return valor.slice(0, 2) + '.' + valor.slice(2, 5) + '.' + valor.slice(5);
+                                })()}
                                 onChange={(e) => {
-                                  // Aplicar máscara CEST (00.000.00)
-                                  let valor = e.target.value.replace(/\D/g, '').slice(0, 7);
-                                  if (valor.length > 2) {
-                                    valor = valor.slice(0, 2) + '.' + valor.slice(2);
+                                  // Aplicar máscara CEST (00.000.00) apenas para exibição
+                                  let valorNumerico = e.target.value.replace(/\D/g, '').slice(0, 7);
+                                  let valorComMascara = valorNumerico;
+
+                                  // Aplicar máscara visual
+                                  if (valorNumerico.length > 2) {
+                                    valorComMascara = valorNumerico.slice(0, 2) + '.' + valorNumerico.slice(2);
                                   }
-                                  if (valor.length > 6) {
-                                    valor = valor.slice(0, 6) + '.' + valor.slice(6);
+                                  if (valorNumerico.length > 5) {
+                                    valorComMascara = valorComMascara.slice(0, 6) + '.' + valorComMascara.slice(6);
                                   }
-                                  handlePdvConfigChangeFiscal('venda_sem_produto_cest', valor);
+
+                                  // Salvar apenas números (sem máscara)
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_cest', valorNumerico);
+
+                                  // Atualizar o campo visual com máscara
+                                  e.target.value = valorComMascara;
                                 }}
                                 className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-1 ${
                                   errosValidacaoST.cest

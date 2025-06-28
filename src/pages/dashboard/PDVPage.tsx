@@ -3814,7 +3814,7 @@ const PDVPage: React.FC = () => {
       unidade_medida: 'UN', // ✅ UNIDADE FIXA para NFC-e (obrigatória)
       // ✅ DADOS FISCAIS das configurações PDV para NFC-e (igual venda normal)
       ncm: pdvConfig?.venda_sem_produto_ncm || '22021000', // NCM padrão para bebidas
-      cfop: pdvConfig?.venda_sem_produto_cfop || '5102', // CFOP padrão para venda
+      cfop: pdvConfig?.venda_sem_produto_cfop === '5405' ? '5102' : (pdvConfig?.venda_sem_produto_cfop || '5102'), // ✅ CORREÇÃO: 5405 não é válido para Simples Nacional
       codigo_barras: null // Venda sem produto não tem código de barras
     };
 
