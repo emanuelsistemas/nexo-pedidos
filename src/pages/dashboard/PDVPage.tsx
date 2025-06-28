@@ -3810,7 +3810,12 @@ const PDVPage: React.FC = () => {
       preco: preco,
       codigo: '999999', // ✅ CÓDIGO FIXO RESERVADO para venda sem produto (6 chars < 60 limite SEFAZ)
       grupo_id: '',
-      promocao: false
+      promocao: false,
+      unidade_medida: 'UN', // ✅ UNIDADE FIXA para NFC-e (obrigatória)
+      // ✅ DADOS FISCAIS das configurações PDV para NFC-e (igual venda normal)
+      ncm: pdvConfig?.venda_sem_produto_ncm || '22021000', // NCM padrão para bebidas
+      cfop: pdvConfig?.venda_sem_produto_cfop || '5102', // CFOP padrão para venda
+      codigo_barras: null // Venda sem produto não tem código de barras
     };
 
     const novoItem: ItemCarrinho = {
@@ -5993,7 +5998,8 @@ const PDVPage: React.FC = () => {
               descricao: item.produto.nome,
               quantidade: item.quantidade,
               valor_unitario: item.produto.preco,
-              unidade: item.produto.unidade_medida?.sigla, // ❌ SEM FALLBACK: Deve dar erro se não tiver unidade configurada
+              // ✅ CORREÇÃO: Para venda sem produto, usar unidade_medida diretamente
+              unidade: item.vendaSemProduto ? item.produto.unidade_medida : item.produto.unidade_medida?.sigla,
               ncm: item.produto.ncm, // NCM real do produto (SEM FALLBACK)
               cfop: item.produto.cfop, // CFOP real do produto (SEM FALLBACK)
               codigo_barras: item.produto.codigo_barras, // Código de barras real (SEM FALLBACK)
