@@ -2327,6 +2327,12 @@ const ProdutosPage: React.FC = () => {
       return;
     }
 
+    // ✅ VALIDAÇÃO: Bloquear código reservado 999999 para venda sem produto
+    if (novoProduto.codigo === '999999') {
+      showMessage('error', 'Código 999999 é reservado para "Venda sem Produto" e não pode ser usado em produtos cadastrados');
+      return;
+    }
+
     // 🛡️ VALIDAÇÃO NFe - PREVENÇÃO NA ORIGEM
     // Validar nome do produto
     const nomeValidation = validarNomeProduto(novoProduto.nome || '');
@@ -3856,7 +3862,15 @@ const ProdutosPage: React.FC = () => {
                           <input
                             type="text"
                             value={novoProduto.codigo}
-                            onChange={(e) => setNovoProduto({ ...novoProduto, codigo: e.target.value })}
+                            onChange={(e) => {
+                              const valor = e.target.value;
+                              // ✅ VALIDAÇÃO: Bloquear código reservado 999999 para venda sem produto
+                              if (valor === '999999') {
+                                showMessage('error', 'Código 999999 é reservado para "Venda sem Produto" e não pode ser usado em produtos cadastrados');
+                                return;
+                              }
+                              setNovoProduto({ ...novoProduto, codigo: valor });
+                            }}
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                             placeholder="Código do produto"
                             required

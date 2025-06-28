@@ -118,6 +118,8 @@ interface ItemCarrinho {
   observacao?: string; // Observação adicional do produto
   vendedor_id?: string; // ID do vendedor responsável por este item
   vendedor_nome?: string; // Nome do vendedor responsável por este item
+  vendaSemProduto?: boolean; // ✅ Indica se é um item de venda sem produto
+  nome?: string; // ✅ Nome personalizado para venda sem produto
 }
 
 interface Cliente {
@@ -3806,7 +3808,7 @@ const PDVPage: React.FC = () => {
       id: `venda-sem-produto-${Date.now()}`,
       nome: nome.trim(),
       preco: preco,
-      codigo: 'VENDA-SEM-PRODUTO',
+      codigo: '999999', // ✅ CÓDIGO FIXO RESERVADO para venda sem produto (6 chars < 60 limite SEFAZ)
       grupo_id: '',
       promocao: false
     };
@@ -3818,6 +3820,7 @@ const PDVPage: React.FC = () => {
       subtotal: preco * quantidade,
       temOpcoesAdicionais: false,
       vendaSemProduto: true,
+      nome: nome.trim(), // ✅ Nome personalizado para venda sem produto
       vendedor_id: vendedorSelecionado?.id,
       vendedor_nome: vendedorSelecionado?.nome
     };
@@ -4654,7 +4657,14 @@ const PDVPage: React.FC = () => {
         setEtapaProcessamento('Verificando baixa de estoque...');
 
         // Agrupar itens do carrinho por produto para calcular quantidade total esperada
+        // ✅ EXCEÇÃO: Filtrar produtos de venda sem produto (código 999999)
         const produtosAgrupados = carrinho.reduce((acc, item) => {
+          // Pular produtos de venda sem produto
+          if (item.vendaSemProduto || item.produto.codigo === '999999') {
+            console.log(`⏭️ FRONTEND: Pulando verificação de estoque - Venda sem produto: ${item.produto.nome}`);
+            return acc;
+          }
+
           const produtoId = item.produto.id;
           if (!acc[produtoId]) {
             acc[produtoId] = {
@@ -5632,11 +5642,14 @@ const PDVPage: React.FC = () => {
       const itensParaInserir = carrinho.map(item => {
         const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
 
+        // ✅ CORREÇÃO: Para venda sem produto, produto_id deve ser null
+        const produtoId = item.vendaSemProduto ? null : item.produto.id;
+
         return {
           empresa_id: usuarioData.empresa_id,
           usuario_id: userData.user.id,
           pdv_id: vendaId,
-          produto_id: item.produto.id,
+          produto_id: produtoId,
           codigo_produto: item.produto.codigo,
           nome_produto: item.produto.nome,
           descricao_produto: item.produto.descricao,
@@ -5680,13 +5693,23 @@ const PDVPage: React.FC = () => {
         setEtapaProcessamento('Salvando opções adicionais...');
 
         for (const [index, item] of itensComAdicionais.entries()) {
-          // ✅ CORREÇÃO: Buscar item usando índice para evitar duplicatas
-          const { data: itemInserido } = await supabase
+          // ✅ CORREÇÃO: Buscar item considerando venda sem produto
+          const produtoId = item.vendaSemProduto ? null : item.produto.id;
+
+          let query = supabase
             .from('pdv_itens')
             .select('id')
             .eq('pdv_id', vendaId)
-            .eq('produto_id', item.produto.id)
-            .eq('codigo_produto', item.produto.codigo)
+            .eq('codigo_produto', item.produto.codigo);
+
+          // Adicionar filtro de produto_id apenas se não for venda sem produto
+          if (!item.vendaSemProduto) {
+            query = query.eq('produto_id', produtoId);
+          } else {
+            query = query.is('produto_id', null);
+          }
+
+          const { data: itemInserido } = await query
             .limit(1)
             .maybeSingle();
 
@@ -5727,6 +5750,12 @@ const PDVPage: React.FC = () => {
         console.log('🔄 FRONTEND: Itens do carrinho:', carrinho.length);
 
         for (const item of carrinho) {
+          // ✅ EXCEÇÃO: Pular controle de estoque para venda sem produto (código 999999)
+          if (item.vendaSemProduto || item.produto.codigo === '999999') {
+            console.log(`⏭️ FRONTEND: Pulando controle de estoque - Venda sem produto: ${item.produto.nome}`);
+            continue;
+          }
+
           console.log(`🔄 FRONTEND: Baixando estoque - Produto: ${item.produto.nome}, Quantidade: ${item.quantidade}`);
 
           const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {

@@ -97,10 +97,102 @@ function buscarConfiguracaoPDV($empresaId) {
     return $config;
 }
 
+// ✅ NOVA FUNÇÃO: Buscar configurações fiscais para venda sem produto (código 999999)
+function buscarConfiguracoesFiscaisVendaSemProduto($empresaId) {
+    $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
+    $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
+
+    $url = $supabaseUrl . "/rest/v1/pdv_config?empresa_id=eq.{$empresaId}&select=venda_sem_produto_ncm,venda_sem_produto_cfop,venda_sem_produto_origem,venda_sem_produto_situacao_tributaria,venda_sem_produto_cest,venda_sem_produto_margem_st,venda_sem_produto_aliquota_icms,venda_sem_produto_aliquota_pis,venda_sem_produto_aliquota_cofins";
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'apikey: ' . $supabaseKey,
+        'Authorization: Bearer ' . $supabaseKey,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        logDetalhado('VENDA_SEM_PRODUTO_ERROR', "Erro ao buscar configurações fiscais de venda sem produto", [
+            'empresa_id' => $empresaId,
+            'http_code' => $httpCode,
+            'response' => $response
+        ]);
+        return null;
+    }
+
+    $data = json_decode($response, true);
+    if (empty($data)) {
+        logDetalhado('VENDA_SEM_PRODUTO_NOT_FOUND', "Configurações fiscais de venda sem produto não encontradas", ['empresa_id' => $empresaId]);
+        return null;
+    }
+
+    $config = $data[0];
+
+    // ✅ MAPEAR configurações PDV para formato esperado pelo sistema fiscal
+    $dadosFiscais = [
+        'codigo' => '999999',
+        'origem_produto' => (int)($config['venda_sem_produto_origem'] ?? 0),
+        'margem_st' => (float)($config['venda_sem_produto_margem_st'] ?? 0),
+        'cest' => $config['venda_sem_produto_cest'] ?? '',
+        'aliquota_icms' => (float)($config['venda_sem_produto_aliquota_icms'] ?? 18.0),
+        'aliquota_pis' => (float)($config['venda_sem_produto_aliquota_pis'] ?? 1.65),
+        'aliquota_cofins' => (float)($config['venda_sem_produto_aliquota_cofins'] ?? 7.6),
+        'cst_pis' => '01', // Operação tributável (base de cálculo = valor da operação)
+        'cst_cofins' => '01', // Operação tributável (base de cálculo = valor da operação)
+    ];
+
+    // ✅ MAPEAR situação tributária para CST/CSOSN corretos
+    $situacaoTributaria = $config['venda_sem_produto_situacao_tributaria'] ?? 'tributado_integral';
+
+    switch ($situacaoTributaria) {
+        case 'tributado_integral':
+            $dadosFiscais['cst_icms'] = '00';      // Regime Normal
+            $dadosFiscais['csosn_icms'] = '102';   // Simples Nacional
+            break;
+        case 'tributado_st':
+            $dadosFiscais['cst_icms'] = '60';      // Regime Normal - ICMS cobrado anteriormente por ST
+            $dadosFiscais['csosn_icms'] = '500';   // Simples Nacional - ICMS cobrado anteriormente por ST
+            break;
+        case 'isento':
+            $dadosFiscais['cst_icms'] = '40';      // Regime Normal - Isenta
+            $dadosFiscais['csosn_icms'] = '300';   // Simples Nacional - Imune
+            break;
+        case 'nao_tributado':
+            $dadosFiscais['cst_icms'] = '41';      // Regime Normal - Não tributada
+            $dadosFiscais['csosn_icms'] = '400';   // Simples Nacional - Não tributada
+            break;
+        default:
+            $dadosFiscais['cst_icms'] = '00';      // Fallback seguro
+            $dadosFiscais['csosn_icms'] = '102';   // Fallback seguro
+    }
+
+    logDetalhado('VENDA_SEM_PRODUTO_SUCCESS', "Configurações fiscais de venda sem produto carregadas", [
+        'empresa_id' => $empresaId,
+        'situacao_tributaria' => $situacaoTributaria,
+        'dados_fiscais' => $dadosFiscais
+    ]);
+
+    return $dadosFiscais;
+}
+
 // Função para buscar dados fiscais REAIS do produto (LEI DOS DADOS REAIS)
 function buscarDadosFiscaisProduto($codigoProduto, $empresaId) {
     $supabaseUrl = 'https://xsrirnfwsjeovekwtluz.supabase.co';
     $supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzcmlybmZ3c2plb3Zla3d0bHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY2NjQ5OTcsImV4cCI6MjA2MjI0MDk5N30.SrIEj_akvD9x-tltfpV3K4hQSKtPjJ_tQ4FFhPwiIy4';
+
+    // ✅ CÓDIGO ESPECIAL: 999999 = Venda sem Produto - usar configurações PDV
+    if ($codigoProduto === '999999') {
+        logDetalhado('VENDA_SEM_PRODUTO', "Código 999999 detectado - buscando configurações fiscais do PDV", ['empresa_id' => $empresaId]);
+        return buscarConfiguracoesFiscaisVendaSemProduto($empresaId);
+    }
 
     $url = $supabaseUrl . "/rest/v1/produtos?empresa_id=eq.{$empresaId}&codigo=eq.{$codigoProduto}&select=codigo,cst_pis,aliquota_pis,cst_cofins,aliquota_cofins,cst_icms,csosn_icms,aliquota_icms,origem_produto,margem_st,cest";
 
