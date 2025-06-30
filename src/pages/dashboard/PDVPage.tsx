@@ -2664,6 +2664,23 @@ const PDVPage: React.FC = () => {
 
       const regimeTributario = empresaData?.regime_tributario || 3; // Default: Simples Nacional
 
+      // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
+      const { data: pdvConfigData } = await supabase
+        .from('pdv_config')
+        .select(`
+          venda_sem_produto_ncm,
+          venda_sem_produto_cfop,
+          venda_sem_produto_origem,
+          venda_sem_produto_situacao_tributaria,
+          venda_sem_produto_cest,
+          venda_sem_produto_margem_st,
+          venda_sem_produto_aliquota_icms
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      const configVendaSemProduto = pdvConfigData || {};
+
       // Carregar itens da venda com dados básicos dos produtos
       const { data: itensData, error: itensError } = await supabase
         .from('pdv_itens')
@@ -2678,15 +2695,21 @@ const PDVPage: React.FC = () => {
           cfop,
           cst_icms,
           csosn_icms,
+          ncm,
+          cest,
+          margem_st,
+          aliquota_icms,
+          origem_produto,
+          aliquota_pis,
+          aliquota_cofins,
+          cst_pis,
+          cst_cofins,
+          unidade,
           produto:produtos(
             id,
             codigo,
             codigo_barras,
             nome,
-            ncm,
-            cest,
-            margem_st,
-            aliquota_icms,
             unidade_medida_id
           )
         `)
@@ -2705,10 +2728,10 @@ const PDVPage: React.FC = () => {
         cfop_editavel: item.cfop || '5102', // CFOP da venda ou padrão
         cst_editavel: item.cst_icms || '00', // CST da venda ou padrão
         csosn_editavel: item.csosn_icms || '102', // CSOSN da venda ou padrão
-        ncm_editavel: item.produto?.ncm || '00000000', // ✅ NOVO: NCM editável
-        cest_editavel: item.produto?.cest || '', // ✅ NOVO: CEST editável
-        margem_st_editavel: item.produto?.margem_st || '0', // ✅ NOVO: Margem ST editável
-        aliquota_icms_editavel: item.produto?.aliquota_icms || '0', // ✅ NOVO: Alíquota ICMS editável
+        ncm_editavel: item.ncm || '00000000', // ✅ CORREÇÃO: NCM da pdv_itens
+        cest_editavel: item.cest || '', // ✅ CORREÇÃO: CEST da pdv_itens
+        margem_st_editavel: item.margem_st || '0', // ✅ CORREÇÃO: Margem ST da pdv_itens
+        aliquota_icms_editavel: item.aliquota_icms || '0', // ✅ CORREÇÃO: Alíquota ICMS da pdv_itens
         regime_tributario: regimeTributario, // ✅ NOVO: Regime real da empresa
         editando_cfop: false,
         editando_cst: false,
@@ -2930,63 +2953,143 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
-      // Buscar dados atualizados dos produtos no cadastro
+      // ✅ CORREÇÃO: Verificar se há produtos para atualizar (normais ou 999999)
       const produtoIds = itensNfceEdicao
-        .filter(item => item.produto_id) // Apenas produtos que têm ID (vieram do cadastro)
+        .filter(item => item.produto_id) // Produtos normais que têm ID
         .map(item => item.produto_id);
 
-      if (produtoIds.length === 0) {
-        toast.warning('Nenhum produto vinculado ao cadastro para atualizar');
+      const temProduto999999 = itensNfceEdicao.some(item => item.codigo_produto === '999999');
+
+      if (produtoIds.length === 0 && !temProduto999999) {
+        toast.warning('Nenhum produto para atualizar');
         return;
       }
 
-      const { data: produtosCadastro, error } = await supabase
-        .from('produtos')
-        .select(`
-          id,
-          codigo,
-          codigo_barras,
-          nome,
-          preco,
-          ncm,
-          cfop,
-          origem_produto,
-          situacao_tributaria,
-          cst_icms,
-          csosn_icms,
-          cst_pis,
-          cst_cofins,
-          cst_ipi,
-          aliquota_icms,
-          aliquota_pis,
-          aliquota_cofins,
-          aliquota_ipi,
-          cest,
-          margem_st,
-          peso_liquido,
-          unidade_medida_id,
-          unidade_medida:unidade_medida_id (
+      // ✅ BUSCAR DADOS DOS PRODUTOS NORMAIS (se houver)
+      let produtosCadastro = [];
+      if (produtoIds.length > 0) {
+        const { data: produtosData, error: produtosError } = await supabase
+          .from('produtos')
+          .select(`
             id,
-            sigla,
-            nome
-          )
-        `)
-        .in('id', produtoIds)
-        .eq('empresa_id', usuarioData.empresa_id)
-        .eq('ativo', true)
-        .eq('deletado', false);
+            codigo,
+            codigo_barras,
+            nome,
+            preco,
+            ncm,
+            cfop,
+            origem_produto,
+            situacao_tributaria,
+            cst_icms,
+            csosn_icms,
+            cst_pis,
+            cst_cofins,
+            cst_ipi,
+            aliquota_icms,
+            aliquota_pis,
+            aliquota_cofins,
+            aliquota_ipi,
+            cest,
+            margem_st,
+            peso_liquido,
+            unidade_medida_id,
+            unidade_medida:unidade_medida_id (
+              id,
+              sigla,
+              nome
+            )
+          `)
+          .in('id', produtoIds)
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('ativo', true)
+          .eq('deletado', false);
 
-      if (error) throw error;
+        if (produtosError) throw produtosError;
+        produtosCadastro = produtosData || [];
+      }
 
-      if (!produtosCadastro || produtosCadastro.length === 0) {
-        toast.warning('Nenhum produto encontrado no cadastro');
+      // ✅ BUSCAR CONFIGURAÇÃO PDV PARA PRODUTO 999999 (se houver)
+      let configVendaSemProduto = null;
+      if (temProduto999999) {
+        const { data: pdvConfigData, error: pdvConfigError } = await supabase
+          .from('pdv_config')
+          .select(`
+            venda_sem_produto_ncm,
+            venda_sem_produto_cfop,
+            venda_sem_produto_origem,
+            venda_sem_produto_situacao_tributaria,
+            venda_sem_produto_cest,
+            venda_sem_produto_margem_st,
+            venda_sem_produto_aliquota_icms,
+            venda_sem_produto_aliquota_pis,
+            venda_sem_produto_aliquota_cofins
+          `)
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        if (pdvConfigError) {
+          console.warn('Erro ao buscar configuração PDV:', pdvConfigError);
+        } else {
+          configVendaSemProduto = pdvConfigData;
+        }
+      }
+
+      // ✅ CORREÇÃO: Verificar se há dados para atualizar
+      if (produtosCadastro.length === 0 && !configVendaSemProduto) {
+        toast.warning('Nenhum dado encontrado para atualizar');
         return;
       }
 
-      // Atualizar itens com dados do cadastro
-      const itensAtualizados = itensNfceEdicao.map(item => {
-        const produtoCadastro = produtosCadastro.find(p => p.id === item.produto_id);
+      // ✅ BUSCAR REGIME TRIBUTÁRIO PARA MAPEAR CST/CSOSN DO PRODUTO 999999
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('regime_tributario')
+        .eq('id', usuarioData.empresa_id)
+        .single();
 
+      const regimeTributario = empresaData?.regime_tributario || 1;
+
+      // Atualizar itens com dados do cadastro OU configuração PDV
+      const itensAtualizados = itensNfceEdicao.map(item => {
+        // ✅ PRODUTO 999999: Usar configuração PDV
+        if (item.codigo_produto === '999999' && configVendaSemProduto) {
+          console.log('🔄 Atualizando produto 999999 com configuração PDV:', configVendaSemProduto);
+
+          // Mapear situação tributária para CST/CSOSN
+          const situacaoTributaria = configVendaSemProduto.venda_sem_produto_situacao_tributaria || 'tributado_integral';
+          let cstIcms = null;
+          let csosnIcms = null;
+
+          if (regimeTributario === 1) { // Simples Nacional
+            switch (situacaoTributaria) {
+              case 'tributado_integral': csosnIcms = '102'; break;
+              case 'tributado_st': csosnIcms = '500'; break;
+              default: csosnIcms = '102';
+            }
+          } else { // Lucro Real/Presumido
+            switch (situacaoTributaria) {
+              case 'tributado_integral': cstIcms = '00'; break;
+              case 'tributado_st': cstIcms = '60'; break;
+              default: cstIcms = '00';
+            }
+          }
+
+          return {
+            ...item,
+            // ✅ ATUALIZAR COM DADOS DA CONFIGURAÇÃO PDV:
+            ncm_editavel: configVendaSemProduto.venda_sem_produto_ncm || '22021000',
+            cfop_editavel: configVendaSemProduto.venda_sem_produto_cfop || '5102',
+            cest_editavel: configVendaSemProduto.venda_sem_produto_cest || '',
+            margem_st_editavel: configVendaSemProduto.venda_sem_produto_margem_st || '0',
+            aliquota_icms_editavel: configVendaSemProduto.venda_sem_produto_aliquota_icms || '18',
+            cst_editavel: cstIcms || item.cst_editavel,
+            csosn_editavel: csosnIcms || item.csosn_editavel,
+            origem_produto_editavel: configVendaSemProduto.venda_sem_produto_origem || 0
+          };
+        }
+
+        // ✅ PRODUTOS NORMAIS: Usar dados do cadastro
+        const produtoCadastro = produtosCadastro.find(p => p.id === item.produto_id);
         if (produtoCadastro) {
           return {
             ...item,
@@ -3029,13 +3132,29 @@ const PDVPage: React.FC = () => {
       // Aplicar atualizações
       setItensNfceEdicao(itensAtualizados);
 
-      const produtosAtualizadosCount = produtosCadastro.length;
-      toast.success(`${produtosAtualizadosCount} produto(s) atualizado(s) com dados do cadastro`);
+      // ✅ CORREÇÃO: Contar produtos normais e 999999 atualizados
+      const produtosNormaisCount = produtosCadastro.length;
+      const produtos999999Count = temProduto999999 && configVendaSemProduto ? 1 : 0;
+      const totalAtualizados = produtosNormaisCount + produtos999999Count;
+
+      let mensagem = '';
+      if (produtosNormaisCount > 0 && produtos999999Count > 0) {
+        mensagem = `${produtosNormaisCount} produto(s) atualizado(s) do cadastro + ${produtos999999Count} venda sem produto da configuração PDV`;
+      } else if (produtosNormaisCount > 0) {
+        mensagem = `${produtosNormaisCount} produto(s) atualizado(s) com dados do cadastro`;
+      } else if (produtos999999Count > 0) {
+        mensagem = `${produtos999999Count} venda sem produto atualizada com configuração PDV`;
+      }
+
+      toast.success(mensagem);
 
       console.log('✅ Produtos atualizados:', {
         total: itensNfceEdicao.length,
-        atualizados: produtosAtualizadosCount,
-        produtosCadastro
+        produtos_normais: produtosNormaisCount,
+        produtos_999999: produtos999999Count,
+        total_atualizados: totalAtualizados,
+        produtosCadastro,
+        configVendaSemProduto
       });
 
     } catch (error: any) {
@@ -3098,23 +3217,29 @@ const PDVPage: React.FC = () => {
 
       // Preparar dados atualizados dos itens
       const itensAtualizados = itensNfceEdicao.map(item => {
-        const unidadeCalculada = item.produto?.unidade_medida?.sigla || item.unidade || 'UN';
+        const codigoProduto = item.produto?.codigo || item.codigo_produto;
+
+        // ✅ CORREÇÃO: Fallback 'UN' APENAS para produto 999999 (venda sem produto)
+        const unidadeCalculada = codigoProduto === '999999'
+          ? 'UN' // ✅ Produto 999999 sempre usa 'UN' fixo
+          : item.produto?.unidade_medida?.sigla; // ✅ Outros produtos usam dados reais (pode ser null se não tiver)
 
         console.log(`🔍 REPROCESSAMENTO - Item ${item.nome_produto}:`, {
+          codigo_produto: codigoProduto,
+          eh_venda_sem_produto: codigoProduto === '999999',
           produto_unidade_medida: item.produto?.unidade_medida,
-          produto_unidade_medida_id: item.produto?.unidade_medida_id,
           produto_unidade_medida_sigla: item.produto?.unidade_medida?.sigla,
           item_unidade: item.unidade,
-          unidade_final_sigla: unidadeCalculada,
-          unidade_id_enviado: item.produto?.unidade_medida_id
+          unidade_final_calculada: unidadeCalculada,
+          fallback_aplicado: codigoProduto === '999999' ? 'SIM (UN fixo)' : 'NÃO (dados reais)'
         });
 
         return {
-          codigo: item.produto?.codigo || item.codigo_produto,
+          codigo: codigoProduto,
           descricao: item.nome_produto,
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
-          unidade: item.produto?.unidade_medida?.sigla, // ✅ CORREÇÃO: Usar sigla como string (igual venda normal)
+          unidade: unidadeCalculada, // ✅ CORREÇÃO: 'UN' só para 999999, dados reais para outros
           ncm: item.ncm_editavel || '00000000', // ✅ CORREÇÃO: Usar NCM editável
           cfop: item.cfop_editavel,
           cst_icms: item.regime_tributario === 1 ? undefined : item.cst_editavel, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
@@ -5486,6 +5611,16 @@ const PDVPage: React.FC = () => {
         return;
       }
 
+      // ✅ CORREÇÃO: Buscar regime tributário da empresa
+      setEtapaProcessamento('Buscando dados da empresa...');
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('regime_tributario')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      const regimeTributario = empresaData?.regime_tributario || 1; // Default: Simples Nacional
+
       // Gerar número da venda
       setEtapaProcessamento('Gerando número da venda...');
       const numeroVenda = await gerarNumeroVenda(usuarioData.empresa_id);
@@ -5668,6 +5803,28 @@ const PDVPage: React.FC = () => {
       const vendaId = vendaInserida.id;
       setVendaProcessadaId(vendaId);
 
+      // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
+      let configVendaSemProduto = null;
+      if (carrinho.some(item => item.produto.codigo === '999999')) {
+        console.log('🔍 FRONTEND: Produto 999999 detectado, buscando configurações PDV...');
+        const { data: pdvConfigData } = await supabase
+          .from('pdv_config')
+          .select(`
+            venda_sem_produto_ncm,
+            venda_sem_produto_cfop,
+            venda_sem_produto_origem,
+            venda_sem_produto_situacao_tributaria,
+            venda_sem_produto_cest,
+            venda_sem_produto_margem_st,
+            venda_sem_produto_aliquota_icms
+          `)
+          .eq('empresa_id', usuarioData.empresa_id)
+          .single();
+
+        configVendaSemProduto = pdvConfigData;
+        console.log('📋 FRONTEND: Configurações PDV carregadas:', configVendaSemProduto);
+      }
+
       // Preparar itens para inserção
       setEtapaProcessamento('Preparando itens da venda...');
       const itensParaInserir = carrinho.map(item => {
@@ -5675,6 +5832,73 @@ const PDVPage: React.FC = () => {
 
         // ✅ CORREÇÃO: Para venda sem produto, produto_id deve ser null
         const produtoId = item.vendaSemProduto ? null : item.produto.id;
+
+        // ✅ CORREÇÃO: Dados fiscais - usar configuração PDV para produto 999999
+        let dadosFiscais = {};
+        if (item.produto.codigo === '999999' && configVendaSemProduto) {
+          console.log(`🔍 FRONTEND: Aplicando dados fiscais PDV para item ${item.produto.nome}`);
+
+          // Mapear situação tributária para códigos CST/CSOSN
+          const situacaoTributaria = configVendaSemProduto.venda_sem_produto_situacao_tributaria || 'tributado_integral';
+          let cstIcms = null;
+          let csosnIcms = null;
+
+          if (regimeTributario === 1) { // Simples Nacional
+            switch (situacaoTributaria) {
+              case 'tributado_integral':
+                csosnIcms = '102';
+                break;
+              case 'tributado_st':
+                csosnIcms = '500';
+                break;
+              default:
+                csosnIcms = '102';
+            }
+          } else { // Lucro Real/Presumido
+            switch (situacaoTributaria) {
+              case 'tributado_integral':
+                cstIcms = '00';
+                break;
+              case 'tributado_st':
+                cstIcms = '60';
+                break;
+              default:
+                cstIcms = '00';
+            }
+          }
+
+          dadosFiscais = {
+            // ✅ CORREÇÃO: Todos os campos fiscais que existem na tabela pdv_itens
+            ncm: configVendaSemProduto.venda_sem_produto_ncm || '22021000',
+            cfop: configVendaSemProduto.venda_sem_produto_cfop || '5102',
+            origem_produto: configVendaSemProduto.venda_sem_produto_origem || 0,
+            cst_icms: cstIcms,
+            csosn_icms: csosnIcms,
+            cest: configVendaSemProduto.venda_sem_produto_cest || null,
+            margem_st: configVendaSemProduto.venda_sem_produto_margem_st || null,
+            aliquota_icms: configVendaSemProduto.venda_sem_produto_aliquota_icms || 18.0,
+            aliquota_pis: configVendaSemProduto.venda_sem_produto_aliquota_pis || 1.65,
+            aliquota_cofins: configVendaSemProduto.venda_sem_produto_aliquota_cofins || 7.6,
+            cst_pis: '01', // Operação tributável
+            cst_cofins: '01' // Operação tributável
+          };
+        } else {
+          // ✅ Dados fiscais do produto normal - todos os campos da tabela pdv_itens
+          dadosFiscais = {
+            ncm: item.produto.ncm || null,
+            cfop: item.produto.cfop || null,
+            origem_produto: item.produto.origem_produto || null,
+            cst_icms: item.produto.cst_icms || null,
+            csosn_icms: item.produto.csosn_icms || null,
+            cest: item.produto.cest || null,
+            margem_st: item.produto.margem_st || null,
+            aliquota_icms: item.produto.aliquota_icms || null,
+            aliquota_pis: item.produto.aliquota_pis || null,
+            aliquota_cofins: item.produto.aliquota_cofins || null,
+            cst_pis: item.produto.cst_pis || null,
+            cst_cofins: item.produto.cst_cofins || null
+          };
+        }
 
         return {
           empresa_id: usuarioData.empresa_id,
@@ -5699,7 +5923,9 @@ const PDVPage: React.FC = () => {
           // ✅ NOVO: Incluir dados do vendedor do item
           vendedor_id: item.vendedor_id || null,
           vendedor_nome: item.vendedor_nome || null,
-          observacao_item: item.observacao || null
+          observacao_item: item.observacao || null,
+          // ✅ CORREÇÃO: Incluir dados fiscais
+          ...dadosFiscais
         };
       });
 
@@ -14626,7 +14852,7 @@ const PDVPage: React.FC = () => {
                                 <td className="py-3 px-2 text-gray-300">
                                   <div className="flex items-center gap-2">
                                     <span>
-                                      {item.produto?.unidade_medida?.sigla || item.unidade || (
+                                      {item.unidade || item.produto?.unidade_medida?.sigla || (
                                         <span className="text-red-400 font-medium">SEM UNIDADE</span>
                                       )}
                                     </span>
