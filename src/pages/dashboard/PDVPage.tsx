@@ -2221,6 +2221,7 @@ const PDVPage: React.FC = () => {
           erro_fiscal,
           modelo_documento,
           numero_documento,
+          serie_documento,
           chave_nfe,
           protocolo_nfe,
           tipo_pagamento,
@@ -6672,7 +6673,7 @@ const PDVPage: React.FC = () => {
               valor_desconto_total: Math.round(descontoGlobal * 100) / 100,
               chave_nfe: vendaAtualizada?.chave_nfe || null,
               numero_nfe: vendaAtualizada?.numero_documento || null,
-              serie_nfe: vendaAtualizada?.serie_documento || serieDocumentoReservado,
+              serie_nfe: serieDocumentoReservado, // ✅ CORREÇÃO: Usar série do modal que já está correta
               protocolo_nfe: vendaAtualizada?.protocolo_nfe || null,
               data_emissao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
               hora_emissao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
@@ -12278,7 +12279,10 @@ const PDVPage: React.FC = () => {
                             {/* ✅ Tag NFC-e - Quando tentou emitir NFC-e */}
                             {venda.tentativa_nfce && (
                               <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs font-medium rounded-full border border-purple-500/30">
-                                {venda.numero_documento ? `NFC-e #${venda.numero_documento}` : 'NFC-e'}
+                                {venda.numero_documento ?
+                                  `NFC-e #${venda.numero_documento} Série ${venda.serie_documento || '1'}`
+                                  : 'NFC-e'
+                                }
                               </span>
                             )}
 
