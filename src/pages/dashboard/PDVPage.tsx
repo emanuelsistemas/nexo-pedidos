@@ -3134,7 +3134,37 @@ const PDVPage: React.FC = () => {
         return item; // Manter item inalterado se não encontrado no cadastro
       });
 
-      // Aplicar atualizações
+      // ✅ NOVO: Salvar alterações na tabela pdv_itens
+      console.log('💾 SALVANDO: Atualizações na tabela pdv_itens...');
+
+      for (const item of itensAtualizados) {
+        const updateData = {
+          cfop: item.cfop_editavel,
+          cst_icms: item.regime_tributario === 1 ? null : item.cst_editavel,
+          csosn_icms: item.regime_tributario === 1 ? item.csosn_editavel : null,
+          ncm: item.ncm_editavel || '00000000',
+          cest: item.cest_editavel || null,
+          margem_st: item.margem_st_editavel ? parseFloat(item.margem_st_editavel.toString().replace(',', '.')) : null,
+          aliquota_icms: item.aliquota_icms_editavel ? parseFloat(item.aliquota_icms_editavel.toString().replace(',', '.')) : null,
+          origem_produto: item.origem_produto_editavel || 0
+        };
+
+        console.log(`💾 SALVANDO: Item ${item.nome_produto}:`, updateData);
+
+        const { error: updateError } = await supabase
+          .from('pdv_itens')
+          .update(updateData)
+          .eq('id', item.id);
+
+        if (updateError) {
+          console.error('❌ ERRO ao salvar item:', updateError);
+          throw new Error(`Erro ao salvar item ${item.nome_produto}: ${updateError.message}`);
+        }
+      }
+
+      console.log('✅ SALVAMENTO: Todos os itens foram salvos na tabela pdv_itens');
+
+      // Aplicar atualizações na interface
       setItensNfceEdicao(itensAtualizados);
 
       // ✅ CORREÇÃO: Contar produtos normais e 999999 atualizados
@@ -3144,11 +3174,11 @@ const PDVPage: React.FC = () => {
 
       let mensagem = '';
       if (produtosNormaisCount > 0 && produtos999999Count > 0) {
-        mensagem = `${produtosNormaisCount} produto(s) atualizado(s) do cadastro + ${produtos999999Count} venda sem produto da configuração PDV`;
+        mensagem = `${produtosNormaisCount} produto(s) atualizado(s) do cadastro + ${produtos999999Count} venda sem produto da configuração PDV e salvos na base de dados`;
       } else if (produtosNormaisCount > 0) {
-        mensagem = `${produtosNormaisCount} produto(s) atualizado(s) com dados do cadastro`;
+        mensagem = `${produtosNormaisCount} produto(s) atualizado(s) com dados do cadastro e salvos na base de dados`;
       } else if (produtos999999Count > 0) {
-        mensagem = `${produtos999999Count} venda sem produto atualizada com configuração PDV`;
+        mensagem = `${produtos999999Count} venda sem produto atualizada com configuração PDV e salva na base de dados`;
       }
 
       toast.success(mensagem);
@@ -3182,22 +3212,34 @@ const PDVPage: React.FC = () => {
         produto: item.nome_produto,
         cfop: item.cfop_editavel,
         cst: item.cst_editavel,
-        csosn: item.csosn_editavel
+        csosn: item.csosn_editavel,
+        ncm: item.ncm_editavel,
+        cest: item.cest_editavel,
+        margem_st: item.margem_st_editavel,
+        aliquota_icms: item.aliquota_icms_editavel
       })));
 
       for (const item of itensNfceEdicao) {
+        const updateData = {
+          cfop: item.cfop_editavel,
+          cst_icms: item.regime_tributario === 1 ? null : item.cst_editavel, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
+          csosn_icms: item.regime_tributario === 1 ? item.csosn_editavel : null, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
+          ncm: item.ncm_editavel || '00000000', // ✅ NOVO: Salvar NCM editado
+          cest: item.cest_editavel || null, // ✅ NOVO: Salvar CEST editado
+          margem_st: item.margem_st_editavel ? parseFloat(item.margem_st_editavel.replace(',', '.')) : null, // ✅ NOVO: Salvar Margem ST editada
+          aliquota_icms: item.aliquota_icms_editavel ? parseFloat(item.aliquota_icms_editavel.replace(',', '.')) : null // ✅ NOVO: Salvar Alíquota ICMS editada
+        };
+
+        console.log(`💾 FRONTEND: Salvando item ${item.nome_produto}:`, updateData);
+
         const { error: updateError } = await supabase
           .from('pdv_itens')
-          .update({
-            cfop: item.cfop_editavel,
-            cst_icms: item.regime_tributario === 1 ? null : item.cst_editavel, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
-            csosn_icms: item.regime_tributario === 1 ? item.csosn_editavel : null // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
-          })
+          .update(updateData)
           .eq('id', item.id);
 
         if (updateError) {
           console.error('Erro ao atualizar item:', updateError);
-          throw new Error(`Erro ao salvar modificações do item ${item.nome_produto}`);
+          throw new Error(`Erro ao salvar modificações do item ${item.nome_produto}: ${updateError.message}`);
         }
       }
 
@@ -3336,25 +3378,70 @@ const PDVPage: React.FC = () => {
         produtos: itensAtualizados
       };
 
+      // ✅ NOVO: Validações antes do envio
+      console.log('🔍 REPROCESSAMENTO - Validando dados obrigatórios...');
+
+      // Validar dados da empresa
+      if (!empresaData.razao_social) throw new Error('Razão social da empresa não encontrada');
+      if (!empresaData.documento) throw new Error('CNPJ da empresa não encontrado');
+      if (!empresaData.estado) throw new Error('Estado da empresa não encontrado');
+
+      // Validar itens
+      if (!itensAtualizados || itensAtualizados.length === 0) {
+        throw new Error('Nenhum item encontrado para reprocessamento');
+      }
+
+      // Validar cada item
+      for (const item of itensAtualizados) {
+        if (!item.codigo) throw new Error(`Código do produto não encontrado: ${item.descricao}`);
+        if (!item.descricao) throw new Error(`Descrição do produto não encontrada: ${item.codigo}`);
+        if (!item.quantidade || item.quantidade <= 0) throw new Error(`Quantidade inválida para produto: ${item.descricao}`);
+        if (!item.valor_unitario || item.valor_unitario <= 0) throw new Error(`Valor unitário inválido para produto: ${item.descricao}`);
+        if (!item.unidade) throw new Error(`Unidade de medida não encontrada para produto: ${item.descricao}`);
+        if (!item.ncm) throw new Error(`NCM não encontrado para produto: ${item.descricao}`);
+        if (!item.cfop) throw new Error(`CFOP não encontrado para produto: ${item.descricao}`);
+      }
+
+      console.log('✅ REPROCESSAMENTO - Validações concluídas com sucesso');
+
+      // ✅ NOVO: Log detalhado dos dados antes do envio
+      const requestPayload = {
+        empresa_id: usuarioData.empresa_id,
+        nfce_data: nfceData
+      };
+
+      console.log('📡 REPROCESSAMENTO - Payload completo:', JSON.stringify(requestPayload, null, 2));
+      console.log('📡 REPROCESSAMENTO - Empresa ID:', usuarioData.empresa_id);
+      console.log('📡 REPROCESSAMENTO - Dados da empresa:', empresaData);
+      console.log('📡 REPROCESSAMENTO - Config NFe:', nfeConfigData);
+      console.log('📡 REPROCESSAMENTO - Venda para editar:', vendaParaEditarNfce);
+
       // Enviar para reprocessamento
       const response = await fetch('/backend/public/emitir-nfce.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          empresa_id: usuarioData.empresa_id,
-          nfce_data: nfceData
-        })
+        body: JSON.stringify(requestPayload)
       });
 
       if (!response.ok) {
         const errorResponse = await response.text();
+        console.error('❌ ERRO HTTP COMPLETO:', {
+          status: response.status,
+          statusText: response.statusText,
+          responseBody: errorResponse,
+          url: response.url
+        });
+
         try {
           const errorJson = JSON.parse(errorResponse);
-          throw new Error(errorJson.error || 'Erro no reprocessamento');
-        } catch {
-          throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
+          console.error('❌ ERRO JSON PARSEADO:', errorJson);
+          throw new Error(errorJson.error || errorJson.message || 'Erro no reprocessamento');
+        } catch (parseError) {
+          console.error('❌ ERRO AO PARSEAR JSON:', parseError);
+          console.error('❌ RESPOSTA RAW:', errorResponse);
+          throw new Error(`Erro HTTP ${response.status}: ${errorResponse || response.statusText}`);
         }
       }
 
