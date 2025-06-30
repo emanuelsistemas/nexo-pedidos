@@ -3137,6 +3137,14 @@ const PDVPage: React.FC = () => {
       // ✅ NOVO: Salvar alterações na tabela pdv_itens
       console.log('💾 SALVANDO: Atualizações na tabela pdv_itens...');
 
+      // ✅ CORREÇÃO: Função auxiliar para converter valores com segurança
+      const parseValue = (value: any) => {
+        if (value === null || value === undefined || value === '') return null;
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') return parseFloat(value.replace(',', '.'));
+        return null;
+      };
+
       for (const item of itensAtualizados) {
         const updateData = {
           cfop: item.cfop_editavel,
@@ -3144,8 +3152,8 @@ const PDVPage: React.FC = () => {
           csosn_icms: item.regime_tributario === 1 ? item.csosn_editavel : null,
           ncm: item.ncm_editavel || '00000000',
           cest: item.cest_editavel || null,
-          margem_st: item.margem_st_editavel ? parseFloat(item.margem_st_editavel.toString().replace(',', '.')) : null,
-          aliquota_icms: item.aliquota_icms_editavel ? parseFloat(item.aliquota_icms_editavel.toString().replace(',', '.')) : null,
+          margem_st: parseValue(item.margem_st_editavel), // ✅ CORREÇÃO: Conversão segura
+          aliquota_icms: parseValue(item.aliquota_icms_editavel), // ✅ CORREÇÃO: Conversão segura
           origem_produto: item.origem_produto_editavel || 0
         };
 
@@ -3220,14 +3228,22 @@ const PDVPage: React.FC = () => {
       })));
 
       for (const item of itensNfceEdicao) {
+        // ✅ CORREÇÃO: Função auxiliar para converter valores com segurança
+        const parseValue = (value: any) => {
+          if (value === null || value === undefined || value === '') return null;
+          if (typeof value === 'number') return value;
+          if (typeof value === 'string') return parseFloat(value.replace(',', '.'));
+          return null;
+        };
+
         const updateData = {
           cfop: item.cfop_editavel,
           cst_icms: item.regime_tributario === 1 ? null : item.cst_editavel, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
           csosn_icms: item.regime_tributario === 1 ? item.csosn_editavel : null, // ✅ CORREÇÃO: 1 = Simples Nacional (CSOSN)
           ncm: item.ncm_editavel || '00000000', // ✅ NOVO: Salvar NCM editado
           cest: item.cest_editavel || null, // ✅ NOVO: Salvar CEST editado
-          margem_st: item.margem_st_editavel ? parseFloat(item.margem_st_editavel.replace(',', '.')) : null, // ✅ NOVO: Salvar Margem ST editada
-          aliquota_icms: item.aliquota_icms_editavel ? parseFloat(item.aliquota_icms_editavel.replace(',', '.')) : null // ✅ NOVO: Salvar Alíquota ICMS editada
+          margem_st: parseValue(item.margem_st_editavel), // ✅ CORREÇÃO: Conversão segura
+          aliquota_icms: parseValue(item.aliquota_icms_editavel) // ✅ CORREÇÃO: Conversão segura
         };
 
         console.log(`💾 FRONTEND: Salvando item ${item.nome_produto}:`, updateData);
