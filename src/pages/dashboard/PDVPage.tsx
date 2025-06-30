@@ -3262,6 +3262,32 @@ const PDVPage: React.FC = () => {
 
     } catch (error: any) {
       console.error('Erro no reprocessamento:', error);
+
+      // ✅ CORREÇÃO: Atualizar erro fiscal no banco quando reprocessamento falha
+      try {
+        const { error: updateError } = await supabase
+          .from('pdv')
+          .update({
+            status_fiscal: 'pendente',
+            erro_fiscal: error.message // ✅ Atualizar com o novo erro
+          })
+          .eq('id', vendaParaEditarNfce.id);
+
+        if (updateError) {
+          console.error('Erro ao atualizar erro fiscal:', updateError);
+        } else {
+          console.log('✅ FRONTEND: Erro fiscal atualizado no banco');
+
+          // ✅ CORREÇÃO: Atualizar o erro no estado local para refletir no modal
+          setVendaParaEditarNfce(prev => ({
+            ...prev,
+            erro_fiscal: error.message
+          }));
+        }
+      } catch (updateError) {
+        console.error('Erro ao salvar erro fiscal:', updateError);
+      }
+
       toast.error(`Erro no reprocessamento: ${error.message}`);
     } finally {
       setReprocessandoNfce(false);
@@ -5185,7 +5211,7 @@ const PDVPage: React.FC = () => {
       const updateData: any = {
         modelo_documento: 65,
         numero_documento: proximoNumero,
-        serie_documento: serieUsuario,
+        serie_documento: serieDocumentoReservado,
         chave_nfe: result.data.chave,
         protocolo_nfe: result.data.protocolo,
         status_fiscal: 'autorizada',
@@ -5617,7 +5643,7 @@ const PDVPage: React.FC = () => {
         // ✅ NOVO: Salvar dados fiscais já no início
         modelo_documento: tipoFinalizacao.startsWith('nfce_') ? 65 : null,
         numero_documento: numeroDocumentoNfce,
-        serie_documento: tipoFinalizacao.startsWith('nfce_') ? 1 : null,
+        serie_documento: tipoFinalizacao.startsWith('nfce_') ? serieDocumentoReservado : null,
         ...clienteData,
         ...pagamentoData
       };
@@ -6320,7 +6346,7 @@ const PDVPage: React.FC = () => {
               valor_desconto_total: Math.round(descontoGlobal * 100) / 100,
               chave_nfe: vendaAtualizada?.chave_nfe || null,
               numero_nfe: vendaAtualizada?.numero_documento || null,
-              serie_nfe: vendaAtualizada?.serie_documento || '001',
+              serie_nfe: vendaAtualizada?.serie_documento || serieDocumentoReservado,
               protocolo_nfe: vendaAtualizada?.protocolo_nfe || null,
               data_emissao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
               hora_emissao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
@@ -6689,7 +6715,7 @@ const PDVPage: React.FC = () => {
           valor_desconto_total: venda.valor_desconto_total || 0,
           chave_nfe: venda.chave_nfe,
           numero_nfe: venda.numero_documento || null,
-          serie_nfe: venda.serie_documento || '001',
+          serie_nfe: venda.serie_documento || '001', // ✅ CORREÇÃO: Manter fallback aqui pois não temos acesso ao usuário
           protocolo_nfe: venda.protocolo_nfe || null,
           data_emissao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
           hora_emissao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
@@ -7330,11 +7356,11 @@ const PDVPage: React.FC = () => {
                 ${dadosImpressao.cliente?.documento_cliente ? `
                   <div style="margin: 5px 0;">
                     <div class="bold">CONSUMIDOR - ${dadosImpressao.cliente.documento_cliente.length === 11 ? 'CPF' : 'CNPJ'} ${dadosImpressao.cliente.documento_cliente.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4').replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')}</div>
-                    <div>NFC-e n. ${dadosImpressao.venda.numero_nfe || 'N/A'} Série ${dadosImpressao.venda.serie_nfe || '001'} ${dadosImpressao.venda.data_emissao || new Date().toLocaleDateString('pt-BR')} ${dadosImpressao.venda.hora_emissao || new Date().toLocaleTimeString('pt-BR')}</div>
+                    <div>NFC-e n. ${dadosImpressao.venda.numero_nfe || 'N/A'} Série ${String(dadosImpressao.venda.serie_nfe || '001').padStart(3, '0')} ${dadosImpressao.venda.data_emissao || new Date().toLocaleDateString('pt-BR')} ${dadosImpressao.venda.hora_emissao || new Date().toLocaleTimeString('pt-BR')}</div>
                   </div>
                 ` : `
                   <div style="margin: 5px 0;">
-                    <div>NFC-e n. ${dadosImpressao.venda.numero_nfe || 'N/A'} Série ${dadosImpressao.venda.serie_nfe || '001'} ${dadosImpressao.venda.data_emissao || new Date().toLocaleDateString('pt-BR')} ${dadosImpressao.venda.hora_emissao || new Date().toLocaleTimeString('pt-BR')}</div>
+                    <div>NFC-e n. ${dadosImpressao.venda.numero_nfe || 'N/A'} Série ${String(dadosImpressao.venda.serie_nfe || '001').padStart(3, '0')} ${dadosImpressao.venda.data_emissao || new Date().toLocaleDateString('pt-BR')} ${dadosImpressao.venda.hora_emissao || new Date().toLocaleTimeString('pt-BR')}</div>
                   </div>
                 `}
 
