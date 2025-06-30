@@ -2619,7 +2619,7 @@ const PDVPage: React.FC = () => {
         sequencia: index + 1,
         cfop_editavel: item.cfop || '5102', // CFOP da pdv_itens
         cst_editavel: item.cst_icms || '00', // CST da pdv_itens
-        csosn_editavel: item.csosn_icms || '102', // CSOSN da pdv_itens
+        csosn_editavel: item.csosn_icms, // ✅ SEM FALLBACK: CSOSN real da pdv_itens
         ncm_editavel: item.ncm || '00000000', // ✅ CORREÇÃO: NCM da pdv_itens
         cest_editavel: item.cest || '', // ✅ CORREÇÃO: CEST da pdv_itens
         margem_st_editavel: item.margem_st || '0', // ✅ CORREÇÃO: Margem ST da pdv_itens
@@ -2732,7 +2732,7 @@ const PDVPage: React.FC = () => {
         sequencia: index + 1,
         cfop_editavel: item.cfop || '5102', // CFOP da venda ou padrão
         cst_editavel: item.cst_icms || '00', // CST da venda ou padrão
-        csosn_editavel: item.csosn_icms || '102', // CSOSN da venda ou padrão
+        csosn_editavel: item.csosn_icms, // ✅ SEM FALLBACK: CSOSN real da pdv_itens
         ncm_editavel: item.ncm || '00000000', // ✅ CORREÇÃO: NCM da pdv_itens
         cest_editavel: item.cest || '', // ✅ CORREÇÃO: CEST da pdv_itens
         margem_st_editavel: item.margem_st || '0', // ✅ CORREÇÃO: Margem ST da pdv_itens
@@ -5412,7 +5412,7 @@ const PDVPage: React.FC = () => {
           ncm: item.ncm_editavel || item.produto?.ncm || '00000000',
           cfop: item.cfop_editavel || item.cfop || '5102',
           cst_icms: empresaData.regime_tributario === 1 ? undefined : (item.cst_editavel || item.cst_icms || '00'),
-          csosn_icms: empresaData.regime_tributario === 1 ? (item.csosn_editavel || item.csosn_icms || '102') : undefined,
+          csosn_icms: empresaData.regime_tributario === 1 ? (item.csosn_editavel || item.csosn_icms) : undefined, // ✅ SEM FALLBACK
           codigo_barras: item.produto?.codigo_barras
         }))
       };
@@ -13395,8 +13395,8 @@ const PDVPage: React.FC = () => {
                                 <td className="py-3 px-2">
                                   <span className="text-white">
                                     {item.regime_tributario === 1
-                                      ? (item.csosn_editavel || '102')
-                                      : (item.cst_editavel || '00')
+                                      ? item.csosn_editavel // ✅ SEM FALLBACK: CSOSN real
+                                      : item.cst_editavel // ✅ SEM FALLBACK: CST real
                                     }
                                   </span>
                                 </td>
