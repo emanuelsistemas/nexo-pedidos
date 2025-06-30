@@ -5924,7 +5924,12 @@ const PDVPage: React.FC = () => {
             venda_sem_produto_situacao_tributaria,
             venda_sem_produto_cest,
             venda_sem_produto_margem_st,
-            venda_sem_produto_aliquota_icms
+            venda_sem_produto_aliquota_icms,
+            venda_sem_produto_aliquota_pis,
+            venda_sem_produto_aliquota_cofins,
+            venda_sem_produto_peso_liquido,
+            venda_sem_produto_cst,
+            venda_sem_produto_csosn
           `)
           .eq('empresa_id', usuarioData.empresa_id)
           .single();
@@ -5945,50 +5950,37 @@ const PDVPage: React.FC = () => {
         let dadosFiscais = {};
         if (item.produto.codigo === '999999' && configVendaSemProduto) {
           console.log(`🔍 FRONTEND: Aplicando dados fiscais PDV para item ${item.produto.nome}`);
+          console.log(`📋 FRONTEND: Configuração completa PDV:`, configVendaSemProduto);
 
           // Mapear situação tributária para códigos CST/CSOSN
-          const situacaoTributaria = configVendaSemProduto.venda_sem_produto_situacao_tributaria || 'tributado_integral';
-          let cstIcms = null;
-          let csosnIcms = null;
+          const situacaoTributaria = configVendaSemProduto.venda_sem_produto_situacao_tributaria;
+          console.log(`🎯 FRONTEND: Situação tributária configurada: "${situacaoTributaria}"`);
 
-          if (regimeTributario === 1) { // Simples Nacional
-            switch (situacaoTributaria) {
-              case 'tributado_integral':
-                csosnIcms = '102';
-                break;
-              case 'tributado_st':
-                csosnIcms = '500';
-                break;
-              default:
-                csosnIcms = '102';
-            }
-          } else { // Lucro Real/Presumido
-            switch (situacaoTributaria) {
-              case 'tributado_integral':
-                cstIcms = '00';
-                break;
-              case 'tributado_st':
-                cstIcms = '60';
-                break;
-              default:
-                cstIcms = '00';
-            }
-          }
+          // ✅ CORREÇÃO: Usar campos CST/CSOSN diretos da configuração PDV (SEM MAPEAMENTO)
+          const cstIcms = configVendaSemProduto.venda_sem_produto_cst;
+          const csosnIcms = configVendaSemProduto.venda_sem_produto_csosn;
+
+          console.log(`✅ FRONTEND: Usando CST/CSOSN diretos da configuração PDV:`, {
+            cst_icms_configurado: cstIcms,
+            csosn_icms_configurado: csosnIcms,
+            regime_tributario: regimeTributario,
+            situacao_tributaria_ignorada: situacaoTributaria
+          });
 
           dadosFiscais = {
-            // ✅ CORREÇÃO: Todos os campos fiscais que existem na tabela pdv_itens
-            ncm: configVendaSemProduto.venda_sem_produto_ncm || '22021000',
-            cfop: configVendaSemProduto.venda_sem_produto_cfop || '5102',
-            origem_produto: configVendaSemProduto.venda_sem_produto_origem || 0,
-            cst_icms: cstIcms,
-            csosn_icms: csosnIcms,
-            cest: configVendaSemProduto.venda_sem_produto_cest || null,
-            margem_st: configVendaSemProduto.venda_sem_produto_margem_st || null,
-            aliquota_icms: configVendaSemProduto.venda_sem_produto_aliquota_icms || 18.0,
-            aliquota_pis: configVendaSemProduto.venda_sem_produto_aliquota_pis || 1.65,
-            aliquota_cofins: configVendaSemProduto.venda_sem_produto_aliquota_cofins || 7.6,
-            cst_pis: '01', // Operação tributável
-            cst_cofins: '01' // Operação tributável
+            // ✅ SEM FALLBACK: Usar dados diretos da configuração PDV
+            ncm: configVendaSemProduto.venda_sem_produto_ncm,
+            cfop: configVendaSemProduto.venda_sem_produto_cfop,
+            origem_produto: configVendaSemProduto.venda_sem_produto_origem,
+            cst_icms: configVendaSemProduto.venda_sem_produto_cst,
+            csosn_icms: configVendaSemProduto.venda_sem_produto_csosn,
+            cest: configVendaSemProduto.venda_sem_produto_cest,
+            margem_st: configVendaSemProduto.venda_sem_produto_margem_st,
+            aliquota_icms: configVendaSemProduto.venda_sem_produto_aliquota_icms,
+            aliquota_pis: configVendaSemProduto.venda_sem_produto_aliquota_pis,
+            aliquota_cofins: configVendaSemProduto.venda_sem_produto_aliquota_cofins,
+            cst_pis: configVendaSemProduto.venda_sem_produto_cst_pis,
+            cst_cofins: configVendaSemProduto.venda_sem_produto_cst_cofins
           };
         } else {
           // ✅ Dados fiscais do produto normal - todos os campos da tabela pdv_itens

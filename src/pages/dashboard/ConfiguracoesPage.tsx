@@ -388,7 +388,9 @@ const ConfiguracoesPage: React.FC = () => {
     venda_sem_produto_aliquota_icms: 18.0,
     venda_sem_produto_aliquota_pis: 1.65,
     venda_sem_produto_aliquota_cofins: 7.6,
-    venda_sem_produto_peso_liquido: 0
+    venda_sem_produto_peso_liquido: 0,
+    venda_sem_produto_cst: '',
+    venda_sem_produto_csosn: ''
   });
 
   useEffect(() => {
@@ -418,7 +420,9 @@ const ConfiguracoesPage: React.FC = () => {
         venda_sem_produto_aliquota_icms: pdvConfig.venda_sem_produto_aliquota_icms !== undefined ? pdvConfig.venda_sem_produto_aliquota_icms : 18.0,
         venda_sem_produto_aliquota_pis: pdvConfig.venda_sem_produto_aliquota_pis !== undefined ? pdvConfig.venda_sem_produto_aliquota_pis : 1.65,
         venda_sem_produto_aliquota_cofins: pdvConfig.venda_sem_produto_aliquota_cofins !== undefined ? pdvConfig.venda_sem_produto_aliquota_cofins : 7.6,
-        venda_sem_produto_peso_liquido: pdvConfig.venda_sem_produto_peso_liquido !== undefined ? pdvConfig.venda_sem_produto_peso_liquido : 0
+        venda_sem_produto_peso_liquido: pdvConfig.venda_sem_produto_peso_liquido !== undefined ? pdvConfig.venda_sem_produto_peso_liquido : 0,
+        venda_sem_produto_cst: pdvConfig.venda_sem_produto_cst || '',
+        venda_sem_produto_csosn: pdvConfig.venda_sem_produto_csosn || ''
       });
       // Reset do estado de alteração quando dados são carregados
       setConfigFiscalAlterada(false);
@@ -3367,7 +3371,9 @@ const ConfiguracoesPage: React.FC = () => {
       'venda_sem_produto_aliquota_icms',
       'venda_sem_produto_aliquota_pis',
       'venda_sem_produto_aliquota_cofins',
-      'venda_sem_produto_peso_liquido'
+      'venda_sem_produto_peso_liquido',
+      'venda_sem_produto_cst',
+      'venda_sem_produto_csosn'
     ];
 
     // Se for um campo fiscal, atualizar apenas o estado local
@@ -3436,7 +3442,9 @@ const ConfiguracoesPage: React.FC = () => {
         venda_sem_produto_aliquota_icms: configFiscalLocal.venda_sem_produto_aliquota_icms,
         venda_sem_produto_aliquota_pis: configFiscalLocal.venda_sem_produto_aliquota_pis,
         venda_sem_produto_aliquota_cofins: configFiscalLocal.venda_sem_produto_aliquota_cofins,
-        venda_sem_produto_peso_liquido: configFiscalLocal.venda_sem_produto_peso_liquido
+        venda_sem_produto_peso_liquido: configFiscalLocal.venda_sem_produto_peso_liquido,
+        venda_sem_produto_cst: configFiscalLocal.venda_sem_produto_cst,
+        venda_sem_produto_csosn: configFiscalLocal.venda_sem_produto_csosn
       };
 
       if (existingConfig) {
@@ -5194,6 +5202,49 @@ const ConfiguracoesPage: React.FC = () => {
                               }. Sugerido automaticamente pelo CFOP.
                             </p>
                           </div>
+
+                          {/* CST/CSOSN Diretos */}
+                          {isEmpresaSimplesNacional() ? (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                CSOSN (Código de Situação da Operação - Simples Nacional) <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={configFiscalLocal.venda_sem_produto_csosn || ''}
+                                onChange={(e) => {
+                                  const valor = e.target.value.replace(/\D/g, '').slice(0, 3);
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_csosn', valor);
+                                }}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                placeholder="Ex: 102, 500"
+                                maxLength={3}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Código CSOSN específico para venda sem produto. Ex: 102 (Tributada sem permissão), 500 (ICMS cobrado por ST).
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                CST (Código de Situação Tributária - Regime Normal) <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={configFiscalLocal.venda_sem_produto_cst || ''}
+                                onChange={(e) => {
+                                  const valor = e.target.value.replace(/\D/g, '').slice(0, 2);
+                                  handlePdvConfigChangeFiscal('venda_sem_produto_cst', valor);
+                                }}
+                                className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                placeholder="Ex: 00, 60"
+                                maxLength={2}
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Código CST específico para venda sem produto. Ex: 00 (Tributada integralmente), 60 (ICMS cobrado por ST).
+                              </p>
+                            </div>
+                          )}
 
                           {/* CEST - Só aparece para ST */}
                           {deveMostrarCamposST() && (

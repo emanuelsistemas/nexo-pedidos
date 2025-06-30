@@ -151,6 +151,8 @@ export interface PDVConfig {
   venda_sem_produto_aliquota_pis?: number;
   venda_sem_produto_aliquota_cofins?: number;
   venda_sem_produto_peso_liquido?: number;
+  venda_sem_produto_cst?: string;
+  venda_sem_produto_csosn?: string;
   created_at?: string;
   updated_at?: string;
 }
