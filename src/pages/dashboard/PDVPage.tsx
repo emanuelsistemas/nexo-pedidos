@@ -2551,7 +2551,7 @@ const PDVPage: React.FC = () => {
 
       const regimeTributario = empresaData?.regime_tributario || 1;
 
-      // Carregar itens da venda com dados fiscais completos
+      // ✅ CORREÇÃO: Carregar itens da venda com dados fiscais da tabela pdv_itens (igual ao modal Editar NFCe)
       const { data: itensData, error: itensError } = await supabase
         .from('pdv_itens')
         .select(`
@@ -2576,16 +2576,21 @@ const PDVPage: React.FC = () => {
           cfop,
           cst_icms,
           csosn_icms,
+          ncm,
+          cest,
+          margem_st,
+          aliquota_icms,
+          origem_produto,
+          aliquota_pis,
+          aliquota_cofins,
+          cst_pis,
+          cst_cofins,
           unidade,
           produto:produtos(
             id,
             codigo,
             codigo_barras,
             nome,
-            ncm,
-            cest,
-            margem_st,
-            aliquota_icms,
             unidade_medida_id,
             unidade_medida:unidade_medida(
               id,
@@ -2608,17 +2613,17 @@ const PDVPage: React.FC = () => {
         throw itensError;
       }
 
-      // ✅ NOVO: Processar itens com campos editáveis para NFC-e
+      // ✅ CORREÇÃO: Processar itens usando dados fiscais da tabela pdv_itens (igual ao modal Editar NFCe)
       const itensProcessados = (itensData || []).map((item, index) => ({
         ...item,
         sequencia: index + 1,
-        cfop_editavel: item.cfop || '5102',
-        cst_editavel: item.cst_icms || '00',
-        csosn_editavel: item.csosn_icms || '102',
-        ncm_editavel: item.produto?.ncm || '00000000',
-        cest_editavel: item.produto?.cest || '',
-        margem_st_editavel: item.produto?.margem_st || '',
-        aliquota_icms_editavel: item.produto?.aliquota_icms || '',
+        cfop_editavel: item.cfop || '5102', // CFOP da pdv_itens
+        cst_editavel: item.cst_icms || '00', // CST da pdv_itens
+        csosn_editavel: item.csosn_icms || '102', // CSOSN da pdv_itens
+        ncm_editavel: item.ncm || '00000000', // ✅ CORREÇÃO: NCM da pdv_itens
+        cest_editavel: item.cest || '', // ✅ CORREÇÃO: CEST da pdv_itens
+        margem_st_editavel: item.margem_st || '0', // ✅ CORREÇÃO: Margem ST da pdv_itens
+        aliquota_icms_editavel: item.aliquota_icms || '0', // ✅ CORREÇÃO: Alíquota ICMS da pdv_itens
         regime_tributario: regimeTributario,
         editando_cfop: false,
         editando_cst: false,
@@ -13209,102 +13214,181 @@ const PDVPage: React.FC = () => {
                       </div>
                     )}
 
-                    {/* ✅ Listagem tradicional para vendas que já têm NFC-e ou não são finalizadas */}
-                    {(vendaParaExibirItens.tentativa_nfce || vendaParaExibirItens.status_venda !== 'finalizada') && itensVenda.map((item, index) => (
-                      <div
-                        key={item.id}
-                        className="bg-gray-800/50 rounded-lg border border-gray-700 p-4"
-                      >
-                        {/* Cabeçalho do Item */}
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs bg-primary-500/20 text-primary-400 px-2 py-1 rounded-full font-medium">
-                                #{index + 1}
-                              </span>
-                              <h4 className="text-white font-medium">{item.nome_produto}</h4>
-                              {item.origem_item === 'pedido_importado' && (
-                                <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
-                                  Pedido #{item.pedido_origem_numero}
-                                </span>
-                              )}
-                            </div>
-                            {item.codigo_produto && (
-                              <p className="text-xs text-gray-400">Código: {item.codigo_produto}</p>
-                            )}
-                            {item.vendedor_nome && (
-                              <p className="text-xs text-green-400">Vendedor: {item.vendedor_nome}</p>
-                            )}
-                            {item.descricao_produto && (
-                              <p className="text-xs text-gray-500 mt-1">{item.descricao_produto}</p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Informações do Item */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                          <div>
-                            <span className="text-xs text-gray-400">Quantidade:</span>
-                            <p className="text-white font-medium">{item.quantidade}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-gray-400">Valor Unitário:</span>
-                            <p className="text-white font-medium">{formatCurrency(item.valor_unitario)}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-gray-400">Subtotal:</span>
-                            <p className="text-white font-medium">{formatCurrency(item.valor_subtotal)}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-gray-400">Total:</span>
-                            <p className="text-primary-400 font-bold">{formatCurrency(item.valor_total_item)}</p>
-                          </div>
-                        </div>
-
-
-
-                        {/* Desconto no Item */}
-                        {item.tem_desconto && (
-                          <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-                            <div className="text-xs text-red-400 font-medium mb-1">Desconto Aplicado</div>
-                            <div className="text-xs text-gray-300">
-                              {item.tipo_desconto === 'percentual'
-                                ? `${item.percentual_desconto}% de desconto`
-                                : `Desconto de ${formatCurrency(item.valor_desconto_aplicado)}`
-                              }
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Observação do Item */}
-                        {item.observacao_item && (
-                          <div className="mb-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                            <div className="text-xs text-yellow-400 font-medium mb-1">Observação</div>
-                            <div className="text-xs text-gray-300 italic">{item.observacao_item}</div>
-                          </div>
-                        )}
-
-                        {/* Opções Adicionais */}
-                        {item.pdv_itens_adicionais && item.pdv_itens_adicionais.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-gray-700">
-                            <div className="text-xs text-gray-400 font-medium mb-2">Opções Adicionais:</div>
-                            <div className="space-y-2">
-                              {item.pdv_itens_adicionais.map((adicional: any) => (
-                                <div key={adicional.id} className="flex justify-between items-center bg-gray-700/30 rounded-lg p-2">
-                                  <div>
-                                    <span className="text-sm text-white">{adicional.nome_adicional}</span>
-                                    <span className="text-xs text-gray-400 ml-2">({adicional.quantidade}x)</span>
-                                  </div>
-                                  <div className="text-sm text-primary-400 font-medium">
-                                    {formatCurrency(adicional.valor_total)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                    {/* ✅ NOVO: Tabela detalhada de itens com dados fiscais (igual ao modal Editar NFCe) */}
+                    <div className="bg-gray-800/30 rounded-lg p-4 mb-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-medium text-white flex items-center gap-2">
+                          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Dados dos Itens
+                        </h4>
                       </div>
-                    ))}
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-700">
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Item</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Código</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Cód. Barras</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Nome</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Unidade</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Qtde</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Preço</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Total</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">NCM</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CEST</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Margem</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">Alíquota</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">CFOP</th>
+                              <th className="text-left py-3 px-2 text-gray-400 font-medium text-sm">
+                                {itensVenda[0]?.regime_tributario === 1 ? 'CSOSN' : 'CST'}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {itensVenda.map((item, index) => (
+                              <tr key={item.id} className="border-b border-gray-800/50">
+                                <td className="py-3 px-2 text-white font-medium">{item.sequencia}</td>
+                                <td className="py-3 px-2 text-gray-300">{item.produto?.codigo || item.codigo_produto}</td>
+                                <td className="py-3 px-2 text-gray-300">{item.produto?.codigo_barras || '-'}</td>
+                                <td className="py-3 px-2 text-white">{item.nome_produto}</td>
+                                <td className="py-3 px-2 text-gray-300">
+                                  {item.unidade || item.produto?.unidade_medida?.sigla || (
+                                    <span className="text-red-400 font-medium">SEM UNIDADE</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-2 text-white">{item.quantidade}</td>
+                                <td className="py-3 px-2 text-white">{formatCurrency(item.valor_unitario)}</td>
+                                <td className="py-3 px-2 text-primary-400 font-medium">{formatCurrency(item.valor_total_item)}</td>
+
+                                {/* NCM */}
+                                <td className="py-3 px-2">
+                                  <span className="text-white font-mono text-sm">{item.ncm_editavel || '00000000'}</span>
+                                </td>
+
+                                {/* CEST */}
+                                <td className="py-3 px-2">
+                                  <span className="text-white font-mono text-sm">{item.cest_editavel || '-'}</span>
+                                </td>
+
+                                {/* Margem ST */}
+                                <td className="py-3 px-2">
+                                  <span className="text-white text-sm">{item.margem_st_editavel || '0'}%</span>
+                                </td>
+
+                                {/* Alíquota ICMS */}
+                                <td className="py-3 px-2">
+                                  <span className="text-white text-sm">{item.aliquota_icms_editavel || '0'}%</span>
+                                </td>
+
+                                {/* CFOP */}
+                                <td className="py-3 px-2">
+                                  <span className="text-white font-mono text-sm">{item.cfop_editavel || '5102'}</span>
+                                </td>
+
+                                {/* CST/CSOSN */}
+                                <td className="py-3 px-2">
+                                  <span className="text-white">
+                                    {item.regime_tributario === 1
+                                      ? (item.csosn_editavel || '102')
+                                      : (item.cst_editavel || '00')
+                                    }
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* ✅ NOVO: Seção de informações adicionais dos itens */}
+                      {itensVenda.some(item =>
+                        item.tem_desconto ||
+                        item.observacao_item ||
+                        item.vendedor_nome ||
+                        (item.pdv_itens_adicionais && item.pdv_itens_adicionais.length > 0)
+                      ) && (
+                        <div className="mt-6 pt-4 border-t border-gray-700">
+                          <h5 className="text-md font-medium text-white mb-4">Informações Adicionais dos Itens</h5>
+                          <div className="space-y-4">
+                            {itensVenda.map((item, index) => {
+                              const hasAdditionalInfo = item.tem_desconto ||
+                                                      item.observacao_item ||
+                                                      item.vendedor_nome ||
+                                                      (item.pdv_itens_adicionais && item.pdv_itens_adicionais.length > 0);
+
+                              if (!hasAdditionalInfo) return null;
+
+                              return (
+                                <div key={item.id} className="bg-gray-700/30 rounded-lg p-3">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs bg-primary-500/20 text-primary-400 px-2 py-1 rounded-full font-medium">
+                                      #{index + 1}
+                                    </span>
+                                    <span className="text-white font-medium">{item.nome_produto}</span>
+                                    {item.origem_item === 'pedido_importado' && (
+                                      <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                                        Pedido #{item.pedido_origem_numero}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Vendedor */}
+                                  {item.vendedor_nome && (
+                                    <div className="mb-2">
+                                      <span className="text-xs text-green-400">Vendedor: {item.vendedor_nome}</span>
+                                    </div>
+                                  )}
+
+                                  {/* Desconto no Item */}
+                                  {item.tem_desconto && (
+                                    <div className="mb-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                      <div className="text-xs text-red-400 font-medium mb-1">Desconto Aplicado</div>
+                                      <div className="text-xs text-gray-300">
+                                        {item.tipo_desconto === 'percentual'
+                                          ? `${item.percentual_desconto}% de desconto`
+                                          : `Desconto de ${formatCurrency(item.valor_desconto_aplicado)}`
+                                        }
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Observação do Item */}
+                                  {item.observacao_item && (
+                                    <div className="mb-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                      <div className="text-xs text-yellow-400 font-medium mb-1">Observação</div>
+                                      <div className="text-xs text-gray-300 italic">{item.observacao_item}</div>
+                                    </div>
+                                  )}
+
+                                  {/* Opções Adicionais */}
+                                  {item.pdv_itens_adicionais && item.pdv_itens_adicionais.length > 0 && (
+                                    <div className="mt-2">
+                                      <div className="text-xs text-gray-400 font-medium mb-2">Opções Adicionais:</div>
+                                      <div className="space-y-1">
+                                        {item.pdv_itens_adicionais.map((adicional: any) => (
+                                          <div key={adicional.id} className="flex justify-between items-center bg-gray-600/30 rounded p-2">
+                                            <div>
+                                              <span className="text-sm text-white">{adicional.nome_adicional}</span>
+                                              <span className="text-xs text-gray-400 ml-2">({adicional.quantidade}x)</span>
+                                            </div>
+                                            <div className="text-sm text-primary-400 font-medium">
+                                              {formatCurrency(adicional.valor_total)}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
