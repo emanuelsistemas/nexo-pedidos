@@ -383,6 +383,9 @@ const PDVPage: React.FC = () => {
   const [isEditingVenda, setIsEditingVenda] = useState(false);
   const [criandoVenda, setCriandoVenda] = useState(false); // ✅ Estado para evitar criações duplicadas
 
+  // ✅ NOVO: Estados para modal de salvar venda
+  const [showSalvarVendaModal, setShowSalvarVendaModal] = useState(false);
+
   // Estados para modal de opções adicionais
   const [showOpcoesAdicionaisModal, setShowOpcoesAdicionaisModal] = useState(false);
   const [produtoParaAdicionais, setProdutoParaAdicionais] = useState<Produto | null>(null);
@@ -1558,13 +1561,13 @@ const PDVPage: React.FC = () => {
 
     if (produto) {
       adicionarAoCarrinho(produto);
-      toast.success(`${produto.nome} adicionado ao carrinho!`);
+      // ✅ REMOVIDO: Toast removido para não confundir com outros processos
     } else {
       // Se não encontrou por código de barras, tentar por código normal
       const produtoPorCodigo = produtos.find(p => p.codigo === codigo);
       if (produtoPorCodigo) {
         adicionarAoCarrinho(produtoPorCodigo);
-        toast.success(`${produtoPorCodigo.nome} adicionado ao carrinho!`);
+        // ✅ REMOVIDO: Toast removido para não confundir com outros processos
       } else {
         toast.error(`Produto não encontrado para o código: ${codigo}`);
       }
@@ -4300,7 +4303,7 @@ const PDVPage: React.FC = () => {
     };
 
     setCarrinho(prev => [...prev, novoItem]);
-    toast.success('Item adicionado ao carrinho!');
+    // ✅ REMOVIDO: Toast removido para não confundir com outros processos
   };
 
   const aumentarQuantidade = () => {
@@ -4408,6 +4411,16 @@ const PDVPage: React.FC = () => {
 
     // Atualizar carrinho removendo o item
     const novoCarrinho = carrinho.filter(item => item.id !== itemId);
+
+    // ✅ NOVO: Se é o último item e há venda em andamento, mostrar modal especial
+    if (novoCarrinho.length === 0 && vendaEmAndamento) {
+      console.log('🔍 Último item removido com venda em andamento - mostrando modal especial');
+      setShowConfirmModal(false);
+      setItemParaRemover(null);
+      setShowSalvarVendaModal(true); // Mostrar modal especial
+      return; // Não remover ainda, deixar o modal decidir
+    }
+
     setCarrinho(novoCarrinho);
 
     // Se o carrinho ficou vazio, limpar área lateral
@@ -4424,6 +4437,12 @@ const PDVPage: React.FC = () => {
       setTipoDocumento('cpf');
       setErroValidacao('');
       limparPagamentosParciaisSilencioso();
+
+      // ✅ NOVO: Limpar venda em andamento se não há mais itens
+      if (vendaEmAndamento) {
+        setVendaEmAndamento(null);
+        setIsEditingVenda(false);
+      }
     }
 
     setShowConfirmModal(false);
@@ -6123,6 +6142,110 @@ const PDVPage: React.FC = () => {
 
     } catch (error) {
       console.error('❌ Erro ao salvar item na venda em andamento:', error);
+      return false;
+    }
+  };
+
+  // ✅ NOVA: Função para salvar venda em andamento e limpar PDV (similar ao rascunho NFe)
+  const salvarVendaEmAndamento = async (): Promise<boolean> => {
+    try {
+      if (!vendaEmAndamento) {
+        console.error('❌ Nenhuma venda em andamento para salvar');
+        return false;
+      }
+
+      console.log('💾 SALVANDO venda em andamento:', vendaEmAndamento.numero_venda);
+
+      // A venda já está salva na tabela pdv com status 'aberta'
+      // Os itens já estão salvos na tabela pdv_itens
+      // Apenas precisamos confirmar que está tudo salvo e limpar o PDV
+
+      const numeroVendaSalva = vendaEmAndamento.numero_venda;
+
+      // ✅ NOVO: Limpar PDV para permitir nova venda
+      console.log('🧹 Limpando PDV após salvar venda...');
+
+      // Limpar estados da venda em andamento
+      setVendaEmAndamento(null);
+      setIsEditingVenda(false);
+
+      // Limpar carrinho e todos os estados
+      setCarrinho([]);
+      setClienteSelecionado(null);
+      setVendedorSelecionado(null);
+      setDescontoPrazoSelecionado(null);
+      setDescontoGlobal(0);
+      setObservacaoVenda('');
+      setPedidosImportados([]);
+      setDescontosCliente({ prazo: [], valor: [] });
+
+      // Limpar dados de finalização
+      setCpfCnpjNota('');
+      setClienteEncontrado(null);
+      setTipoDocumento('cpf');
+      setErroValidacao('');
+      limparPagamentosParciaisSilencioso();
+
+      // Limpar estados do PDV
+      clearPDVState();
+
+      toast.success(`Venda ${numeroVendaSalva} salva com sucesso! PDV liberado para nova venda.`);
+      console.log('✅ Venda salva e PDV limpo:', numeroVendaSalva);
+
+      return true;
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar venda:', error);
+      toast.error('Erro ao salvar venda. Tente novamente.');
+      return false;
+    }
+  };
+
+  // ✅ NOVA: Função para deletar venda em andamento completamente
+  const deletarVendaEmAndamento = async (): Promise<boolean> => {
+    try {
+      if (!vendaEmAndamento) {
+        console.error('❌ Nenhuma venda em andamento para deletar');
+        return false;
+      }
+
+      console.log('🗑️ DELETANDO venda em andamento:', vendaEmAndamento.numero_venda);
+
+      // 1. Deletar itens da venda
+      const { error: itensError } = await supabase
+        .from('pdv_itens')
+        .delete()
+        .eq('pdv_id', vendaEmAndamento.id);
+
+      if (itensError) {
+        console.error('❌ Erro ao deletar itens da venda:', itensError);
+        throw new Error('Erro ao deletar itens da venda');
+      }
+
+      // 2. Deletar a venda
+      const { error: vendaError } = await supabase
+        .from('pdv')
+        .delete()
+        .eq('id', vendaEmAndamento.id);
+
+      if (vendaError) {
+        console.error('❌ Erro ao deletar venda:', vendaError);
+        throw new Error('Erro ao deletar venda');
+      }
+
+      // 3. Limpar estados
+      setVendaEmAndamento(null);
+      setIsEditingVenda(false);
+      setCarrinho([]);
+
+      toast.success(`Venda ${vendaEmAndamento.numero_venda} deletada com sucesso!`);
+      console.log('✅ Venda deletada:', vendaEmAndamento.numero_venda);
+
+      return true;
+
+    } catch (error) {
+      console.error('❌ Erro ao deletar venda:', error);
+      toast.error('Erro ao deletar venda. Tente novamente.');
       return false;
     }
   };
@@ -10220,7 +10343,7 @@ const PDVPage: React.FC = () => {
                   {/* ✅ NOVO: Exibir numeração reservada da venda em andamento */}
                   {vendaEmAndamento && (
                     <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3">
-                      <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center justify-between text-sm mb-2">
                         <div className="text-blue-300 font-medium">
                           📋 Venda: {vendaEmAndamento.numero_venda}
                         </div>
@@ -10229,6 +10352,15 @@ const PDVPage: React.FC = () => {
                             🧾 NFC-e #{vendaEmAndamento.numero_nfce_reservado} Série {vendaEmAndamento.serie_usuario}
                           </div>
                         )}
+                      </div>
+                      {/* ✅ NOVO: Botão Salvar Venda */}
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => setShowSalvarVendaModal(true)}
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                        >
+                          💾 Salvar Venda
+                        </button>
                       </div>
                     </div>
                   )}
@@ -10394,7 +10526,7 @@ const PDVPage: React.FC = () => {
                   {/* ✅ NOVO: Exibir numeração reservada da venda em andamento */}
                   {vendaEmAndamento && (
                     <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3">
-                      <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center justify-between text-sm mb-2">
                         <div className="text-blue-300 font-medium">
                           📋 Venda: {vendaEmAndamento.numero_venda}
                         </div>
@@ -10403,6 +10535,15 @@ const PDVPage: React.FC = () => {
                             🧾 NFC-e #{vendaEmAndamento.numero_nfce_reservado} Série {vendaEmAndamento.serie_usuario}
                           </div>
                         )}
+                      </div>
+                      {/* ✅ NOVO: Botão Salvar Venda */}
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => setShowSalvarVendaModal(true)}
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                        >
+                          💾 Salvar Venda
+                        </button>
                       </div>
                     </div>
                   )}
@@ -15358,13 +15499,13 @@ const PDVPage: React.FC = () => {
               playSuccessSound();
             }
 
-            // Toast de confirmação
-            const totalAdicionais = adicionaisSelecionados.length;
-            if (totalAdicionais > 0) {
-              toast.success(`Produto adicionado com ${totalAdicionais} ${totalAdicionais === 1 ? 'adicional' : 'adicionais'}!`);
-            } else {
-              toast.success('Produto adicionado ao carrinho!');
-            }
+            // ✅ REMOVIDO: Toasts removidos para não confundir com outros processos
+            // const totalAdicionais = adicionaisSelecionados.length;
+            // if (totalAdicionais > 0) {
+            //   toast.success(`Produto adicionado com ${totalAdicionais} ${totalAdicionais === 1 ? 'adicional' : 'adicionais'}!`);
+            // } else {
+            //   toast.success('Produto adicionado ao carrinho!');
+            // }
           }}
         />
       )}
@@ -16547,6 +16688,80 @@ const PDVPage: React.FC = () => {
                   className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Aplicar Desconto
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Salvar/Deletar Venda */}
+      <AnimatePresence>
+        {showSalvarVendaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowSalvarVendaModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Venda em Andamento</h3>
+                <button
+                  onClick={() => setShowSalvarVendaModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-gray-300 mb-3">
+                  O que deseja fazer com esta venda?
+                </p>
+                {vendaEmAndamento && (
+                  <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3">
+                    <div className="text-blue-300 font-medium text-sm">
+                      📋 {vendaEmAndamento.numero_venda}
+                    </div>
+                    {vendaEmAndamento.numero_nfce_reservado && vendaEmAndamento.serie_usuario && (
+                      <div className="text-blue-400 text-sm">
+                        🧾 NFC-e #{vendaEmAndamento.numero_nfce_reservado} Série {vendaEmAndamento.serie_usuario}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    const sucesso = await salvarVendaEmAndamento();
+                    if (sucesso) {
+                      setShowSalvarVendaModal(false);
+                    }
+                  }}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  💾 Salvar
+                </button>
+                <button
+                  onClick={async () => {
+                    const sucesso = await deletarVendaEmAndamento();
+                    if (sucesso) {
+                      setShowSalvarVendaModal(false);
+                    }
+                  }}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  🗑️ Deletar Venda
                 </button>
               </div>
             </motion.div>
