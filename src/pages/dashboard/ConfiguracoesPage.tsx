@@ -241,6 +241,7 @@ const ConfiguracoesPage: React.FC = () => {
     fiado: false,
     desconto_no_total: false,
     vendas_itens_multiplicacao: false,
+    exibir_dados_fiscais_venda: false,
     ocultar_finalizar_com_impressao: false,
     ocultar_finalizar_sem_impressao: false,
     ocultar_nfce_com_impressao: false,
@@ -4615,6 +4616,22 @@ const ConfiguracoesPage: React.FC = () => {
                           <h4 className="text-white font-medium">Vendas de Itens por Multiplicação</h4>
                           <p className="text-sm text-gray-400 mt-1">
                             Habilita a funcionalidade de venda de produtos usando multiplicação de quantidade no PDV.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.exibir_dados_fiscais_venda}
+                          onChange={(e) => handlePdvConfigChange('exibir_dados_fiscais_venda', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Exibir dados Fiscais na Venda</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Mostra informações fiscais detalhadas (NCM, CFOP, CST/CSOSN, CEST, etc.) abaixo de cada item no carrinho do PDV para debug e conferência.
                           </p>
                         </div>
                       </label>

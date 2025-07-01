@@ -9,6 +9,12 @@ ADD COLUMN IF NOT EXISTS venda_sem_produto_cst VARCHAR(2) DEFAULT NULL;
 ALTER TABLE pdv_config
 ADD COLUMN IF NOT EXISTS venda_sem_produto_csosn VARCHAR(3) DEFAULT NULL;
 
+-- Adicionar campo para exibir dados fiscais na venda (debug)
+-- Data: 2025-07-01
+-- Descrição: Campo para habilitar exibição de dados fiscais no carrinho do PDV
+ALTER TABLE pdv_config
+ADD COLUMN IF NOT EXISTS exibir_dados_fiscais_venda BOOLEAN DEFAULT FALSE;
+
 -- Comentários para documentação
 COMMENT ON COLUMN pdv_config.venda_sem_produto_cst IS 'CST (Código de Situação Tributária) para venda sem produto - usado quando empresa está no Regime Normal';
 COMMENT ON COLUMN pdv_config.venda_sem_produto_csosn IS 'CSOSN (Código de Situação da Operação no Simples Nacional) para venda sem produto - usado quando empresa está no Simples Nacional';

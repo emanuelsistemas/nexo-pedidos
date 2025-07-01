@@ -159,6 +159,7 @@ const PDVPage: React.FC = () => {
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [produtosEstoque, setProdutosEstoque] = useState<Record<string, EstoqueProduto>>({});
   const [pdvConfig, setPdvConfig] = useState<any>(null);
+  const [empresaData, setEmpresaData] = useState<any>(null);
 
   // Estados para os modais do menu PDV
   const [showPedidosModal, setShowPedidosModal] = useState(false);
@@ -1690,7 +1691,8 @@ const PDVPage: React.FC = () => {
           loadEstoque(),
           loadPdvConfig(),
           loadFormasPagamento(),
-          loadVendedores()
+          loadVendedores(),
+          loadEmpresaData()
         ]);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -1902,6 +1904,32 @@ const PDVPage: React.FC = () => {
     } else {
       setPdvConfig(data);
     }
+  };
+
+  const loadEmpresaData = async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+
+    const { data: usuarioData } = await supabase
+      .from('usuarios')
+      .select('empresa_id')
+      .eq('id', userData.user.id)
+      .single();
+
+    if (!usuarioData?.empresa_id) return;
+
+    const { data, error } = await supabase
+      .from('empresas')
+      .select('regime_tributario')
+      .eq('id', usuarioData.empresa_id)
+      .single();
+
+    if (error) {
+      console.error('Erro ao carregar dados da empresa:', error);
+      return;
+    }
+
+    setEmpresaData(data);
   };
 
   const loadFormasPagamento = async () => {
@@ -4462,6 +4490,37 @@ const PDVPage: React.FC = () => {
   const cancelarEdicaoObservacao = () => {
     setItemEditandoObservacao(null);
     setObservacaoEditando('');
+  };
+
+  // ✅ NOVA: Função para obter dados fiscais do item para debug
+  const obterDadosFiscaisItem = (item: ItemCarrinho) => {
+    if (item.vendaSemProduto) {
+      // Para venda sem produto, usar configurações PDV
+      return {
+        ncm: pdvConfig?.venda_sem_produto_ncm || '22021000',
+        cfop: pdvConfig?.venda_sem_produto_cfop || '5405',
+        cst: pdvConfig?.venda_sem_produto_cst || '60',
+        csosn: pdvConfig?.venda_sem_produto_csosn || '500',
+        cest: pdvConfig?.venda_sem_produto_cest || '0300600',
+        margem_st: pdvConfig?.venda_sem_produto_margem_st || 30,
+        aliquota_icms: pdvConfig?.venda_sem_produto_aliquota_icms || 18,
+        aliquota_pis: pdvConfig?.venda_sem_produto_aliquota_pis || 1.65,
+        aliquota_cofins: pdvConfig?.venda_sem_produto_aliquota_cofins || 7.6
+      };
+    } else {
+      // Para produtos normais, usar dados do produto
+      return {
+        ncm: item.produto.ncm || '00000000',
+        cfop: item.produto.cfop || '5102',
+        cst: item.produto.cst_icms || '00',
+        csosn: item.produto.csosn_icms || '102',
+        cest: item.produto.cest || '',
+        margem_st: item.produto.margem_st || 0,
+        aliquota_icms: item.produto.aliquota_icms || 18,
+        aliquota_pis: item.produto.aliquota_pis || 1.65,
+        aliquota_cofins: item.produto.aliquota_cofins || 7.6
+      };
+    }
   };
 
   const confirmarOpcoesAdicionais = (itensSelecionados: Array<{
@@ -9053,6 +9112,73 @@ const PDVPage: React.FC = () => {
                                       </button>
                                     </div>
                                   )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* ✅ NOVA: Seção de Dados Fiscais - Debug */}
+                            {pdvConfig?.exibir_dados_fiscais_venda && (
+                              <div className={`${(item.adicionais && item.adicionais.length > 0) || item.observacao ? 'mt-3' : 'mt-3 pt-3 border-t border-gray-700/50'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-orange-500/10 border border-orange-500/30 rounded-full text-sm text-orange-300 font-medium">
+                                    <span>Dados Fiscais</span>
+                                  </div>
+                                </div>
+                                <div className="bg-gray-800/30 rounded-lg p-3">
+                                  {(() => {
+                                    const dadosFiscais = obterDadosFiscaisItem(item);
+                                    const regimeTributario = empresaData?.regime_tributario || 1; // 1 = Simples Nacional
+                                    const isSimples = regimeTributario === 1;
+                                    const isST = isSimples ? dadosFiscais.csosn === '500' : dadosFiscais.cst === '60';
+
+                                    return (
+                                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 text-xs">
+                                        <div>
+                                          <span className="text-gray-400">NCM:</span>
+                                          <div className="text-white font-mono">{dadosFiscais.ncm}</div>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">CFOP:</span>
+                                          <div className="text-white font-mono">{dadosFiscais.cfop}</div>
+                                        </div>
+                                        {isSimples ? (
+                                          <div>
+                                            <span className="text-gray-400">CSOSN:</span>
+                                            <div className="text-white font-mono">{dadosFiscais.csosn}</div>
+                                          </div>
+                                        ) : (
+                                          <div>
+                                            <span className="text-gray-400">CST:</span>
+                                            <div className="text-white font-mono">{dadosFiscais.cst}</div>
+                                          </div>
+                                        )}
+                                        {isST && dadosFiscais.cest && (
+                                          <div>
+                                            <span className="text-gray-400">CEST:</span>
+                                            <div className="text-white font-mono">{dadosFiscais.cest}</div>
+                                          </div>
+                                        )}
+                                        {isST && dadosFiscais.margem_st > 0 && (
+                                          <div>
+                                            <span className="text-gray-400">Margem:</span>
+                                            <div className="text-white font-mono">{dadosFiscais.margem_st}%</div>
+                                          </div>
+                                        )}
+                                        <div>
+                                          <span className="text-gray-400">Alíquota:</span>
+                                          <div className="text-white font-mono">{dadosFiscais.aliquota_icms}%</div>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">PIS:</span>
+                                          <div className="text-white font-mono">{dadosFiscais.aliquota_pis}%</div>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">COFINS:</span>
+                                          <div className="text-white font-mono">{dadosFiscais.aliquota_cofins}%</div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             )}

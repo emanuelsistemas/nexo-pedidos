@@ -218,6 +218,7 @@ const FormCadastro: React.FC = () => {
             venda_sem_produto_csosn: '500',
             desconto_no_total: false,
             vendas_itens_multiplicacao: false,
+            exibir_dados_fiscais_venda: false,
             ocultar_finalizar_com_impressao: false,
             ocultar_finalizar_sem_impressao: false,
             ocultar_nfce_com_impressao: false,
