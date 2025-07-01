@@ -9124,7 +9124,12 @@ const PDVPage: React.FC = () => {
                                     <span>Dados Fiscais</span>
                                   </div>
                                 </div>
-                                <div className="bg-gray-800/30 rounded-lg p-3">
+                                {/* ✅ NOVO: Container expandido que ocupa toda a largura disponível */}
+                                <div className={`bg-gray-800/30 rounded-lg p-3 ${
+                                  item.adicionais && item.adicionais.length > 0
+                                    ? '-mr-2 lg:-mr-16' // Com adicionais: expansão moderada
+                                    : '-mr-2 lg:-mr-20' // Sem adicionais: expansão máxima
+                                }`}>
                                   {(() => {
                                     const dadosFiscais = obterDadosFiscaisItem(item);
                                     const regimeTributario = empresaData?.regime_tributario || 1; // 1 = Simples Nacional
@@ -9132,7 +9137,7 @@ const PDVPage: React.FC = () => {
                                     const isST = isSimples ? dadosFiscais.csosn === '500' : dadosFiscais.cst === '60';
 
                                     return (
-                                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 text-xs">
+                                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
                                         <div>
                                           <span className="text-gray-400">NCM:</span>
                                           <div className="text-white font-mono">{dadosFiscais.ncm}</div>
@@ -9152,18 +9157,6 @@ const PDVPage: React.FC = () => {
                                             <div className="text-white font-mono">{dadosFiscais.cst}</div>
                                           </div>
                                         )}
-                                        {isST && dadosFiscais.cest && (
-                                          <div>
-                                            <span className="text-gray-400">CEST:</span>
-                                            <div className="text-white font-mono">{dadosFiscais.cest}</div>
-                                          </div>
-                                        )}
-                                        {isST && dadosFiscais.margem_st > 0 && (
-                                          <div>
-                                            <span className="text-gray-400">Margem:</span>
-                                            <div className="text-white font-mono">{dadosFiscais.margem_st}%</div>
-                                          </div>
-                                        )}
                                         <div>
                                           <span className="text-gray-400">Alíquota:</span>
                                           <div className="text-white font-mono">{dadosFiscais.aliquota_icms}%</div>
@@ -9176,6 +9169,18 @@ const PDVPage: React.FC = () => {
                                           <span className="text-gray-400">COFINS:</span>
                                           <div className="text-white font-mono">{dadosFiscais.aliquota_cofins}%</div>
                                         </div>
+                                        {isST && dadosFiscais.cest && (
+                                          <div>
+                                            <span className="text-gray-400">CEST:</span>
+                                            <div className="text-white font-mono">{dadosFiscais.cest}</div>
+                                          </div>
+                                        )}
+                                        {isST && dadosFiscais.margem_st > 0 && (
+                                          <div>
+                                            <span className="text-gray-400">Margem:</span>
+                                            <div className="text-white font-mono">{dadosFiscais.margem_st}%</div>
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })()}
