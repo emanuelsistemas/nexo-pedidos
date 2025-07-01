@@ -255,15 +255,18 @@ const ConfiguracoesPage: React.FC = () => {
     tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
     venda_sem_produto: false,
     venda_sem_produto_ncm: '22021000',
-    venda_sem_produto_cfop: '5102',
+    venda_sem_produto_cfop: '5405',
     venda_sem_produto_origem: 0,
-    venda_sem_produto_situacao_tributaria: 'tributado_integral',
-    venda_sem_produto_cest: '',
-    venda_sem_produto_margem_st: null,
+    venda_sem_produto_situacao_tributaria: 'st',
+    venda_sem_produto_cest: '0300600',
+    venda_sem_produto_margem_st: 30,
     venda_sem_produto_aliquota_icms: 18.0,
     venda_sem_produto_aliquota_pis: 1.65,
     venda_sem_produto_aliquota_cofins: 7.6,
-    venda_sem_produto_peso_liquido: 0
+    venda_sem_produto_peso_liquido: 0,
+    venda_sem_produto_nome_padrao: 'Diversos',
+    venda_sem_produto_cst: '60',
+    venda_sem_produto_csosn: '500'
   });
 
   // Estado para controlar as abas do PDV
@@ -380,17 +383,17 @@ const ConfiguracoesPage: React.FC = () => {
   // Estado local para configurações fiscais (não salvas ainda)
   const [configFiscalLocal, setConfigFiscalLocal] = useState({
     venda_sem_produto_ncm: '22021000',
-    venda_sem_produto_cfop: '5102',
+    venda_sem_produto_cfop: '5405',
     venda_sem_produto_origem: 0,
-    venda_sem_produto_situacao_tributaria: 'tributado_integral',
-    venda_sem_produto_cest: '',
-    venda_sem_produto_margem_st: null,
+    venda_sem_produto_situacao_tributaria: 'st',
+    venda_sem_produto_cest: '0300600',
+    venda_sem_produto_margem_st: 30,
     venda_sem_produto_aliquota_icms: 18.0,
     venda_sem_produto_aliquota_pis: 1.65,
     venda_sem_produto_aliquota_cofins: 7.6,
     venda_sem_produto_peso_liquido: 0,
-    venda_sem_produto_cst: '',
-    venda_sem_produto_csosn: ''
+    venda_sem_produto_cst: '60',
+    venda_sem_produto_csosn: '500'
   });
 
   useEffect(() => {
@@ -2633,15 +2636,18 @@ const ConfiguracoesPage: React.FC = () => {
           tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
           venda_sem_produto: false,
           venda_sem_produto_ncm: '22021000',
-          venda_sem_produto_cfop: '5102',
+          venda_sem_produto_cfop: '5405',
           venda_sem_produto_origem: 0,
-          venda_sem_produto_situacao_tributaria: 'tributado_integral',
-          venda_sem_produto_cest: '',
-          venda_sem_produto_margem_st: null,
+          venda_sem_produto_situacao_tributaria: 'st',
+          venda_sem_produto_cest: '0300600',
+          venda_sem_produto_margem_st: 30,
           venda_sem_produto_aliquota_icms: 18.0,
           venda_sem_produto_aliquota_pis: 1.65,
           venda_sem_produto_aliquota_cofins: 7.6,
-          venda_sem_produto_peso_liquido: 0
+          venda_sem_produto_peso_liquido: 0,
+          venda_sem_produto_nome_padrao: 'Diversos',
+          venda_sem_produto_cst: '60',
+          venda_sem_produto_csosn: '500'
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2683,15 +2689,18 @@ const ConfiguracoesPage: React.FC = () => {
         tipo_impressao_50mm: false,  // ✅ NOVO: 50mm desabilitado
         venda_sem_produto: false,
         venda_sem_produto_ncm: '22021000',
-        venda_sem_produto_cfop: '5102',
+        venda_sem_produto_cfop: '5405',
         venda_sem_produto_origem: 0,
-        venda_sem_produto_situacao_tributaria: 'tributado_integral',
-        venda_sem_produto_cest: '',
-        venda_sem_produto_margem_st: null,
+        venda_sem_produto_situacao_tributaria: 'st',
+        venda_sem_produto_cest: '0300600',
+        venda_sem_produto_margem_st: 30,
         venda_sem_produto_aliquota_icms: 18.0,
         venda_sem_produto_aliquota_pis: 1.65,
         venda_sem_produto_aliquota_cofins: 7.6,
-        venda_sem_produto_peso_liquido: 0
+        venda_sem_produto_peso_liquido: 0,
+        venda_sem_produto_nome_padrao: 'Diversos',
+        venda_sem_produto_cst: '60',
+        venda_sem_produto_csosn: '500'
       });
 
       // Atualizar também o estado separado do rodapé

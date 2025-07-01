@@ -2716,7 +2716,16 @@ const PDVPage: React.FC = () => {
             codigo,
             codigo_barras,
             nome,
-            unidade_medida_id
+            unidade_medida_id,
+            cest,
+            ncm,
+            cfop,
+            origem_produto,
+            situacao_tributaria,
+            cst_icms,
+            csosn_icms,
+            aliquota_icms,
+            margem_st
           )
         `)
         .eq('pdv_id', vendaId)
@@ -2728,25 +2737,45 @@ const PDVPage: React.FC = () => {
       }
 
       // Processar itens para edição com campos editáveis
-      const itensProcessados = (itensData || []).map((item, index) => ({
-        ...item,
-        sequencia: index + 1,
-        cfop_editavel: item.cfop || '5102', // CFOP da venda ou padrão
-        cst_editavel: item.cst_icms || '00', // CST da venda ou padrão
-        csosn_editavel: item.csosn_icms, // ✅ SEM FALLBACK: CSOSN real da pdv_itens
-        ncm_editavel: item.ncm || '00000000', // ✅ CORREÇÃO: NCM da pdv_itens
-        cest_editavel: item.cest || '', // ✅ CORREÇÃO: CEST da pdv_itens
-        margem_st_editavel: item.margem_st || '0', // ✅ CORREÇÃO: Margem ST da pdv_itens
-        aliquota_icms_editavel: item.aliquota_icms || '0', // ✅ CORREÇÃO: Alíquota ICMS da pdv_itens
-        regime_tributario: regimeTributario, // ✅ NOVO: Regime real da empresa
-        editando_cfop: false,
-        editando_cst: false,
-        editando_csosn: false,
-        editando_ncm: false, // ✅ NOVO: Estado de edição do NCM
-        editando_cest: false, // ✅ NOVO: Estado de edição do CEST
-        editando_margem_st: false, // ✅ NOVO: Estado de edição da Margem ST
-        editando_aliquota_icms: false // ✅ NOVO: Estado de edição da Alíquota ICMS
-      }));
+      const itensProcessados = (itensData || []).map((item, index) => {
+        // ✅ CORREÇÃO: Para item 999999, usar configuração PDV; para produtos normais, usar dados do produto
+        const isVendaSemProduto = item.codigo_produto === '999999';
+
+        return {
+          ...item,
+          sequencia: index + 1,
+          // ✅ CORREÇÃO: Priorizar dados do produto para itens normais, pdv_itens para 999999
+          cfop_editavel: isVendaSemProduto
+            ? (item.cfop || configVendaSemProduto.venda_sem_produto_cfop || '5102')
+            : (item.produto?.cfop || item.cfop || '5102'),
+          cst_editavel: isVendaSemProduto
+            ? (item.cst_icms || '00')
+            : (item.produto?.cst_icms || item.cst_icms || '00'),
+          csosn_editavel: isVendaSemProduto
+            ? (item.csosn_icms)
+            : (item.produto?.csosn_icms || item.csosn_icms),
+          ncm_editavel: isVendaSemProduto
+            ? (item.ncm || configVendaSemProduto.venda_sem_produto_ncm || '22021000')
+            : (item.produto?.ncm || item.ncm || '00000000'),
+          cest_editavel: isVendaSemProduto
+            ? (item.cest || configVendaSemProduto.venda_sem_produto_cest || '')
+            : (item.produto?.cest || item.cest || ''), // ✅ CORREÇÃO: Priorizar CEST do produto
+          margem_st_editavel: isVendaSemProduto
+            ? (item.margem_st || configVendaSemProduto.venda_sem_produto_margem_st || '0')
+            : (item.produto?.margem_st || item.margem_st || '0'),
+          aliquota_icms_editavel: isVendaSemProduto
+            ? (item.aliquota_icms || configVendaSemProduto.venda_sem_produto_aliquota_icms || '18')
+            : (item.produto?.aliquota_icms || item.aliquota_icms || '0'),
+          regime_tributario: regimeTributario, // ✅ NOVO: Regime real da empresa
+          editando_cfop: false,
+          editando_cst: false,
+          editando_csosn: false,
+          editando_ncm: false, // ✅ NOVO: Estado de edição do NCM
+          editando_cest: false, // ✅ NOVO: Estado de edição do CEST
+          editando_margem_st: false, // ✅ NOVO: Estado de edição da Margem ST
+          editando_aliquota_icms: false // ✅ NOVO: Estado de edição da Alíquota ICMS
+        };
+      });
 
       console.log('✅ Itens carregados para edição NFC-e:', itensProcessados);
       console.log('✅ Regime tributário da empresa:', regimeTributario);
