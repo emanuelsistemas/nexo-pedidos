@@ -1434,6 +1434,29 @@ const PDVPage: React.FC = () => {
     garantirVendaEmAndamento();
   }, [carrinho.length, vendaEmAndamento, criandoVenda]); // Monitora mudanças no carrinho
 
+  // ✅ NOVO: useEffect para salvar itens quando venda em andamento é criada
+  useEffect(() => {
+    const salvarItensExistentes = async () => {
+      if (vendaEmAndamento && carrinho.length > 0) {
+        console.log('🔍 USEEFFECT: Venda criada, salvando itens existentes no carrinho...');
+
+        for (const item of carrinho) {
+          console.log('🔍 Salvando item:', item.produto.nome);
+          const itemSalvo = await salvarItemNaVendaEmAndamento(item);
+          if (itemSalvo) {
+            console.log('✅ Item salvo:', item.produto.nome);
+          } else {
+            console.error('❌ Erro ao salvar item:', item.produto.nome);
+          }
+        }
+
+        console.log('✅ USEEFFECT: Todos os itens do carrinho foram salvos');
+      }
+    };
+
+    salvarItensExistentes();
+  }, [vendaEmAndamento]); // Executa quando venda em andamento é criada
+
   // Estado para captura automática de código de barras
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
@@ -4056,6 +4079,15 @@ const PDVPage: React.FC = () => {
       });
     }
 
+    // ✅ NOVO: Aguardar criação da venda se necessário
+    let vendaParaSalvar = vendaEmAndamento;
+    if (isFirstItem && !vendaEmAndamento && !criandoVenda) {
+      console.log('🔍 Aguardando criação da venda para salvar item...');
+      // Aguardar um pouco para a venda ser criada
+      await new Promise(resolve => setTimeout(resolve, 100));
+      vendaParaSalvar = vendaEmAndamento;
+    }
+
     setCarrinho(prev => {
       // Verificar se deve agrupar itens baseado na configuração
       const deveAgrupar = pdvConfig?.agrupa_itens === true;
@@ -4085,8 +4117,33 @@ const PDVPage: React.FC = () => {
     });
 
     // ✅ NOVO: Salvar item na tabela pdv_itens se venda em andamento existe
-    if (vendaEmAndamento) {
-      await salvarItemNaVendaEmAndamento(novoItem);
+    if (vendaParaSalvar) {
+      console.log('🔍 Salvando item na venda em andamento:', {
+        vendaParaSalvar,
+        novoItem: {
+          id: novoItem.id,
+          produto: novoItem.produto.nome,
+          quantidade: novoItem.quantidade,
+          subtotal: novoItem.subtotal
+        }
+      });
+
+      const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
+      console.log('🔍 Resultado do salvamento do item:', itemSalvo);
+
+      if (!itemSalvo) {
+        console.error('❌ ERRO: Falha ao salvar item na venda em andamento');
+        toast.error('Erro ao salvar item. Tente novamente.');
+      } else {
+        console.log('✅ Item salvo com sucesso na venda em andamento');
+      }
+    } else {
+      console.log('🔍 Não salvou item porque não há venda em andamento:', {
+        vendaEmAndamento: !!vendaEmAndamento,
+        vendaParaSalvar: !!vendaParaSalvar,
+        isFirstItem,
+        criandoVenda
+      });
     }
   };
 
@@ -5980,10 +6037,21 @@ const PDVPage: React.FC = () => {
   // ✅ NOVA: Função para salvar item na venda em andamento (adaptada do sistema de rascunhos NFe)
   const salvarItemNaVendaEmAndamento = async (item: ItemCarrinho): Promise<boolean> => {
     try {
+      console.log('🔍 INICIANDO salvamento do item na venda em andamento');
+      console.log('🔍 Item recebido:', {
+        id: item.id,
+        produto: item.produto?.nome,
+        quantidade: item.quantidade,
+        subtotal: item.subtotal,
+        vendaSemProduto: item.vendaSemProduto
+      });
+
       if (!vendaEmAndamento) {
         console.error('❌ Nenhuma venda em andamento para salvar item');
         return false;
       }
+
+      console.log('🔍 Venda em andamento encontrada:', vendaEmAndamento);
 
       // Obter dados do usuário
       const { data: userData } = await supabase.auth.getUser();
@@ -6004,6 +6072,7 @@ const PDVPage: React.FC = () => {
       }
 
       // Preparar dados do item (similar aos itens de rascunho NFe)
+      console.log('🔍 Preparando dados do item...');
       const itemData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
@@ -6014,25 +6083,41 @@ const PDVPage: React.FC = () => {
         descricao_produto: item.vendaSemProduto ? item.nome : item.produto.descricao,
         quantidade: item.quantidade,
         valor_unitario: item.vendaSemProduto ? item.preco : item.produto.preco,
+        valor_subtotal: item.subtotal, // ✅ Campo correto da tabela
         valor_total_item: item.subtotal,
         vendedor_id: item.vendedor_id || null,
         vendedor_nome: item.vendedor_nome || null,
-        // Campos específicos para venda sem produto
-        venda_sem_produto: item.vendaSemProduto || false,
-        observacao: item.observacao || null,
+        // ✅ CORREÇÃO: Campo correto é 'observacao_item' (não 'observacao')
+        observacao_item: item.observacao || null,
+        // ✅ Campos básicos obrigatórios
+        tem_desconto: false,
+        valor_desconto_item: 0,
+        valor_desconto_aplicado: 0,
         created_at: new Date().toISOString()
       };
 
+      console.log('🔍 Dados do item preparados:', itemData);
+
       // Inserir item na tabela pdv_itens
-      const { error: itemError } = await supabase
+      console.log('🔍 Inserindo item na tabela pdv_itens...');
+      const { data: itemInserido, error: itemError } = await supabase
         .from('pdv_itens')
-        .insert(itemData);
+        .insert(itemData)
+        .select('id, nome_produto, quantidade, valor_total_item')
+        .single();
 
       if (itemError) {
         console.error('❌ Erro ao salvar item na venda em andamento:', itemError);
+        console.error('❌ Detalhes do erro:', {
+          message: itemError.message,
+          details: itemError.details,
+          hint: itemError.hint,
+          code: itemError.code
+        });
         return false;
       }
 
+      console.log('✅ Item inserido com sucesso:', itemInserido);
       console.log('✅ Item salvo na venda em andamento:', itemData.nome_produto);
       return true;
 
