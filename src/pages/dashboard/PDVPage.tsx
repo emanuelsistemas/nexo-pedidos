@@ -372,6 +372,17 @@ const PDVPage: React.FC = () => {
   // Estado para desconto por prazo selecionado (importado do pedido)
   const [descontoPrazoSelecionado, setDescontoPrazoSelecionado] = useState<string | null>(null);
 
+  // ✅ NOVO: Estados para venda em andamento (adaptado do sistema de rascunhos NFe)
+  const [vendaEmAndamento, setVendaEmAndamento] = useState<{
+    id: string;
+    numero_venda: string;
+    numero_nfce_reservado: number | null;
+    serie_usuario: number | null;
+    status_venda: 'aberta' | 'finalizada';
+  } | null>(null);
+  const [isEditingVenda, setIsEditingVenda] = useState(false);
+  const [criandoVenda, setCriandoVenda] = useState(false); // ✅ Estado para evitar criações duplicadas
+
   // Estados para modal de opções adicionais
   const [showOpcoesAdicionaisModal, setShowOpcoesAdicionaisModal] = useState(false);
   const [produtoParaAdicionais, setProdutoParaAdicionais] = useState<Produto | null>(null);
@@ -1394,6 +1405,35 @@ const PDVPage: React.FC = () => {
     }
   }, [filtroStatus, filtroNfce, filtroDataInicio, filtroDataFim, filtroNumeroVenda, filtroNumeroPedido, showMovimentosModal]); // ✅ NOVO: Incluir filtroNfce
 
+  // ✅ NOVO: useEffect para garantir criação da venda quando há itens no carrinho
+  useEffect(() => {
+    const garantirVendaEmAndamento = async () => {
+      // Se há itens no carrinho mas não há venda em andamento e não está criando
+      if (carrinho.length > 0 && !vendaEmAndamento && !criandoVenda) {
+        console.log('🔍 USEEFFECT: Detectou carrinho com itens mas sem venda em andamento');
+        console.log('🔍 Estado atual:', {
+          carrinhoLength: carrinho.length,
+          vendaEmAndamento: !!vendaEmAndamento,
+          criandoVenda
+        });
+
+        setCriandoVenda(true);
+        console.log('🚀 USEEFFECT: Criando venda em andamento...');
+
+        const vendaCriada = await criarVendaEmAndamento();
+        if (vendaCriada) {
+          console.log('✅ USEEFFECT: Venda criada com sucesso');
+        } else {
+          console.error('❌ USEEFFECT: Falha ao criar venda');
+        }
+
+        setCriandoVenda(false);
+      }
+    };
+
+    garantirVendaEmAndamento();
+  }, [carrinho.length, vendaEmAndamento, criandoVenda]); // Monitora mudanças no carrinho
+
   // Estado para captura automática de código de barras
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
@@ -1737,9 +1777,20 @@ const PDVPage: React.FC = () => {
         estoque_inicial,
         ncm,
         cfop,
+        origem_produto,
+        situacao_tributaria,
         cst_icms,
+        csosn_icms,
         cst_pis,
         cst_cofins,
+        cst_ipi,
+        aliquota_icms,
+        aliquota_pis,
+        aliquota_cofins,
+        aliquota_ipi,
+        cest,
+        margem_st,
+        peso_liquido,
         grupo:grupos(nome),
         unidade_medida:unidade_medida_id (
           id,
@@ -3966,6 +4017,45 @@ const PDVPage: React.FC = () => {
       vendedor_nome: vendedorSelecionado?.nome
     };
 
+    // ✅ NOVO: Criar venda em andamento no primeiro item (adaptado do sistema de rascunhos NFe)
+    const isFirstItem = carrinho.length === 0;
+    console.log('🔍 DEBUG PRIMEIRO ITEM:', {
+      isFirstItem,
+      carrinhoLength: carrinho.length,
+      vendaEmAndamento: vendaEmAndamento,
+      produtoNome: produto.nome
+    });
+
+    if (isFirstItem && !vendaEmAndamento && !criandoVenda) {
+      console.log('🚀 PRIMEIRO ITEM: Criando venda em andamento...');
+      console.log('🔍 Estado antes da criação:', {
+        carrinho: carrinho.length,
+        vendaEmAndamento,
+        isEditingVenda,
+        criandoVenda
+      });
+
+      setCriandoVenda(true);
+      const vendaCriada = await criarVendaEmAndamento();
+      console.log('🔍 Resultado da criação:', vendaCriada);
+      setCriandoVenda(false);
+
+      if (!vendaCriada) {
+        console.error('❌ ERRO: Falha ao criar venda em andamento');
+        toast.error('Erro ao criar venda. Tente novamente.');
+        return;
+      }
+
+      console.log('✅ Venda em andamento criada com sucesso');
+    } else {
+      console.log('🔍 Não criou venda porque:', {
+        isFirstItem,
+        vendaEmAndamento: !!vendaEmAndamento,
+        criandoVenda,
+        motivo: !isFirstItem ? 'Não é primeiro item' : vendaEmAndamento ? 'Venda já existe' : 'Já está criando'
+      });
+    }
+
     setCarrinho(prev => {
       // Verificar se deve agrupar itens baseado na configuração
       const deveAgrupar = pdvConfig?.agrupa_itens === true;
@@ -3993,6 +4083,11 @@ const PDVPage: React.FC = () => {
         return [...prev, novoItem];
       }
     });
+
+    // ✅ NOVO: Salvar item na tabela pdv_itens se venda em andamento existe
+    if (vendaEmAndamento) {
+      await salvarItemNaVendaEmAndamento(novoItem);
+    }
   };
 
   // Funções para seleção de vendedor
@@ -4492,33 +4587,33 @@ const PDVPage: React.FC = () => {
     setObservacaoEditando('');
   };
 
-  // ✅ NOVA: Função para obter dados fiscais do item para debug
+  // ✅ CORREÇÃO: Função para obter dados fiscais do item (SEM FALLBACKS - Lei Fundamental #2)
   const obterDadosFiscaisItem = (item: ItemCarrinho) => {
     if (item.vendaSemProduto) {
-      // Para venda sem produto, usar configurações PDV
+      // Para venda sem produto, usar configurações PDV (SEM FALLBACKS)
       return {
-        ncm: pdvConfig?.venda_sem_produto_ncm || '22021000',
-        cfop: pdvConfig?.venda_sem_produto_cfop || '5405',
-        cst: pdvConfig?.venda_sem_produto_cst || '60',
-        csosn: pdvConfig?.venda_sem_produto_csosn || '500',
-        cest: pdvConfig?.venda_sem_produto_cest || '0300600',
-        margem_st: pdvConfig?.venda_sem_produto_margem_st || 30,
-        aliquota_icms: pdvConfig?.venda_sem_produto_aliquota_icms || 18,
-        aliquota_pis: pdvConfig?.venda_sem_produto_aliquota_pis || 1.65,
-        aliquota_cofins: pdvConfig?.venda_sem_produto_aliquota_cofins || 7.6
+        ncm: pdvConfig?.venda_sem_produto_ncm,
+        cfop: pdvConfig?.venda_sem_produto_cfop,
+        cst: pdvConfig?.venda_sem_produto_cst,
+        csosn: pdvConfig?.venda_sem_produto_csosn,
+        cest: pdvConfig?.venda_sem_produto_cest,
+        margem_st: pdvConfig?.venda_sem_produto_margem_st,
+        aliquota_icms: pdvConfig?.venda_sem_produto_aliquota_icms,
+        aliquota_pis: pdvConfig?.venda_sem_produto_aliquota_pis,
+        aliquota_cofins: pdvConfig?.venda_sem_produto_aliquota_cofins
       };
     } else {
-      // Para produtos normais, usar dados do produto
+      // Para produtos normais, usar dados reais do produto (SEM FALLBACKS)
       return {
-        ncm: item.produto.ncm || '00000000',
-        cfop: item.produto.cfop || '5102',
-        cst: item.produto.cst_icms || '00',
-        csosn: item.produto.csosn_icms || '102',
-        cest: item.produto.cest || '',
-        margem_st: item.produto.margem_st || 0,
-        aliquota_icms: item.produto.aliquota_icms || 18,
-        aliquota_pis: item.produto.aliquota_pis || 1.65,
-        aliquota_cofins: item.produto.aliquota_cofins || 7.6
+        ncm: item.produto.ncm,
+        cfop: item.produto.cfop,
+        cst: item.produto.cst_icms,
+        csosn: item.produto.csosn_icms, // ✅ CORREÇÃO: Agora vem da consulta corrigida
+        cest: item.produto.cest,
+        margem_st: item.produto.margem_st,
+        aliquota_icms: item.produto.aliquota_icms,
+        aliquota_pis: item.produto.aliquota_pis,
+        aliquota_cofins: item.produto.aliquota_cofins
       };
     }
   };
@@ -5757,6 +5852,196 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para criar venda em andamento no primeiro item (adaptada do sistema de rascunhos NFe)
+  const criarVendaEmAndamento = async (): Promise<boolean> => {
+    try {
+      console.log('🚀 INICIANDO CRIAÇÃO DE VENDA EM ANDAMENTO');
+      console.log('🔍 Estado atual:', {
+        carrinho: carrinho.length,
+        vendaEmAndamento,
+        isEditingVenda
+      });
+
+      // Obter dados do usuário
+      console.log('🔍 Obtendo dados do usuário...');
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error('❌ Erro ao obter usuário:', userError);
+        return false;
+      }
+      if (!userData.user) {
+        console.error('❌ Usuário não autenticado');
+        return false;
+      }
+      console.log('✅ Usuário autenticado:', userData.user.id);
+
+      console.log('🔍 Obtendo dados da empresa...');
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id, serie_nfce')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) {
+        console.error('❌ Erro ao obter dados do usuário:', usuarioError);
+        return false;
+      }
+
+      if (!usuarioData?.empresa_id) {
+        console.error('❌ Empresa não encontrada nos dados do usuário');
+        return false;
+      }
+
+      console.log('✅ Dados do usuário obtidos:', {
+        empresa_id: usuarioData.empresa_id,
+        serie_nfce: usuarioData.serie_nfce
+      });
+
+      // Gerar número da venda
+      const numeroVenda = `PDV-${Date.now()}`;
+      console.log('🔢 Número da venda gerado:', numeroVenda);
+
+      // Reservar número da NFC-e
+      console.log('🔍 Reservando número da NFC-e...');
+      const numeroNfceReservado = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
+      const serieUsuario = usuarioData.serie_nfce;
+
+      console.log('🔢 Números reservados:', {
+        numeroVenda,
+        numeroNfceReservado,
+        serieUsuario
+      });
+
+      // Preparar dados da venda em andamento (similar ao rascunho NFe)
+      const vendaData = {
+        empresa_id: usuarioData.empresa_id,
+        usuario_id: userData.user.id,
+        numero_venda: numeroVenda,
+        status_venda: 'aberta', // ✅ Status para venda em andamento
+        data_venda: new Date().toISOString(),
+        valor_total: 0, // Será atualizado conforme itens são adicionados
+        valor_subtotal: 0,
+        valor_desconto: 0,
+        valor_desconto_itens: 0,
+        valor_desconto_total: 0,
+        // ✅ Reservar numeração NFC-e desde o início
+        numero_documento: numeroNfceReservado,
+        serie_documento: serieUsuario,
+        modelo_documento: null, // Será definido na finalização (65 para NFC-e)
+        status_fiscal: 'nao_fiscal', // Inicial
+        tentativa_nfce: false, // Será definido na finalização
+        // Campos de auditoria
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Inserir venda na tabela pdv
+      console.log('🔍 Inserindo venda na tabela pdv...');
+      console.log('🔍 Dados da venda:', vendaData);
+
+      const { data: vendaInserida, error: vendaError } = await supabase
+        .from('pdv')
+        .insert(vendaData)
+        .select('id, numero_venda, numero_documento, serie_documento')
+        .single();
+
+      if (vendaError) {
+        console.error('❌ Erro ao criar venda em andamento:', vendaError);
+        console.error('❌ Detalhes do erro:', {
+          message: vendaError.message,
+          details: vendaError.details,
+          hint: vendaError.hint,
+          code: vendaError.code
+        });
+        return false;
+      }
+
+      console.log('✅ Venda inserida com sucesso:', vendaInserida);
+
+      // Atualizar estado da venda em andamento
+      setVendaEmAndamento({
+        id: vendaInserida.id,
+        numero_venda: vendaInserida.numero_venda,
+        numero_nfce_reservado: vendaInserida.numero_documento,
+        serie_usuario: vendaInserida.serie_documento,
+        status_venda: 'aberta'
+      });
+      setIsEditingVenda(true);
+
+      console.log('✅ Venda em andamento criada:', vendaInserida);
+      return true;
+
+    } catch (error) {
+      console.error('❌ Erro ao criar venda em andamento:', error);
+      return false;
+    }
+  };
+
+  // ✅ NOVA: Função para salvar item na venda em andamento (adaptada do sistema de rascunhos NFe)
+  const salvarItemNaVendaEmAndamento = async (item: ItemCarrinho): Promise<boolean> => {
+    try {
+      if (!vendaEmAndamento) {
+        console.error('❌ Nenhuma venda em andamento para salvar item');
+        return false;
+      }
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.error('❌ Usuário não autenticado');
+        return false;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        console.error('❌ Empresa não encontrada');
+        return false;
+      }
+
+      // Preparar dados do item (similar aos itens de rascunho NFe)
+      const itemData = {
+        empresa_id: usuarioData.empresa_id,
+        usuario_id: userData.user.id,
+        pdv_id: vendaEmAndamento.id,
+        produto_id: item.vendaSemProduto ? null : item.produto.id,
+        codigo_produto: item.vendaSemProduto ? '999999' : item.produto.codigo,
+        nome_produto: item.vendaSemProduto ? item.nome : item.produto.nome,
+        descricao_produto: item.vendaSemProduto ? item.nome : item.produto.descricao,
+        quantidade: item.quantidade,
+        valor_unitario: item.vendaSemProduto ? item.preco : item.produto.preco,
+        valor_total_item: item.subtotal,
+        vendedor_id: item.vendedor_id || null,
+        vendedor_nome: item.vendedor_nome || null,
+        // Campos específicos para venda sem produto
+        venda_sem_produto: item.vendaSemProduto || false,
+        observacao: item.observacao || null,
+        created_at: new Date().toISOString()
+      };
+
+      // Inserir item na tabela pdv_itens
+      const { error: itemError } = await supabase
+        .from('pdv_itens')
+        .insert(itemData);
+
+      if (itemError) {
+        console.error('❌ Erro ao salvar item na venda em andamento:', itemError);
+        return false;
+      }
+
+      console.log('✅ Item salvo na venda em andamento:', itemData.nome_produto);
+      return true;
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar item na venda em andamento:', error);
+      return false;
+    }
+  };
+
   // Função principal para finalizar e salvar a venda
   const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_impressao') => {
     const executionId = Date.now(); // ID único para esta execução
@@ -5912,16 +6197,27 @@ const PDVPage: React.FC = () => {
         console.log('🔢 FRONTEND: Número NFC-e reservado:', numeroDocumentoNfce);
         setNumeroDocumentoReservado(numeroDocumentoNfce); // ✅ Salvar no estado para mostrar no modal
 
-        // ✅ NOVO: Buscar série do usuário para mostrar no modal
-        const { data: usuarioSerieData } = await supabase
+        // ✅ CORREÇÃO: Buscar série do usuário (SEM FALLBACK - Lei Fundamental #2)
+        const { data: usuarioSerieData, error: serieError } = await supabase
           .from('usuarios')
           .select('serie_nfce')
           .eq('id', userData.user.id)
           .single();
 
-        const serieUsuario = usuarioSerieData?.serie_nfce || 1;
+        if (serieError) {
+          console.error('❌ ERRO ao buscar série do usuário:', serieError);
+          throw new Error('Erro ao buscar série do usuário');
+        }
+
+        if (!usuarioSerieData?.serie_nfce) {
+          console.error('❌ ERRO: Usuário não tem série NFC-e configurada');
+          throw new Error('Usuário não tem série NFC-e configurada. Configure nas Configurações > Usuários');
+        }
+
+        const serieUsuario = usuarioSerieData.serie_nfce; // ✅ SEM FALLBACK
         setSerieDocumentoReservado(serieUsuario); // ✅ Salvar série no estado para mostrar no modal
         console.log('🔢 FRONTEND: Série NFC-e do usuário:', serieUsuario);
+        console.log('🔢 FRONTEND: Dados completos da série:', usuarioSerieData);
       }
 
       // ✅ NOVO: Coletar todos os vendedores únicos do carrinho
@@ -5972,7 +6268,7 @@ const PDVPage: React.FC = () => {
         // ✅ NOVO: Marcar tentativa de NFC-e e salvar número reservado
         tentativa_nfce: tipoFinalizacao.startsWith('nfce_'),
         status_fiscal: tipoFinalizacao.startsWith('nfce_') ? 'processando' : 'nao_fiscal',
-        // ✅ NOVO: Salvar dados fiscais já no início
+        // ✅ CORREÇÃO: Salvar dados fiscais já no início (COM LOGS)
         modelo_documento: tipoFinalizacao.startsWith('nfce_') ? 65 : null,
         numero_documento: numeroDocumentoNfce,
         serie_documento: tipoFinalizacao.startsWith('nfce_') ? serieDocumentoReservado : null,
@@ -5980,16 +6276,65 @@ const PDVPage: React.FC = () => {
         ...pagamentoData
       };
 
-      // Inserir venda principal
-      setEtapaProcessamento('Salvando venda no banco de dados...');
-      const { data: vendaInserida, error: vendaError } = await supabase
-        .from('pdv')
-        .insert(vendaData)
-        .select('id')
-        .single();
+      // ✅ LOGS DETALHADOS: Verificar dados antes da inserção
+      console.log('🔍 DADOS DA VENDA ANTES DA INSERÇÃO:');
+      console.log('  - Tipo Finalização:', tipoFinalizacao);
+      console.log('  - Número Documento:', numeroDocumentoNfce);
+      console.log('  - Série Reservada (estado):', serieDocumentoReservado);
+      console.log('  - Série no vendaData:', vendaData.serie_documento);
+      console.log('  - Modelo Documento:', vendaData.modelo_documento);
+      console.log('  - Tentativa NFC-e:', vendaData.tentativa_nfce);
+
+      // ✅ NOVO: UPDATE ou INSERT baseado na venda em andamento (adaptado do sistema de rascunhos NFe)
+      let vendaInserida;
+      let vendaError;
+
+      if (vendaEmAndamento && isEditingVenda) {
+        // ✅ ATUALIZAR venda em andamento existente (similar ao rascunho NFe)
+        setEtapaProcessamento('Finalizando venda em andamento...');
+        console.log('🔄 ATUALIZANDO venda em andamento ID:', vendaEmAndamento.id);
+
+        const result = await supabase
+          .from('pdv')
+          .update({
+            ...vendaData,
+            status_venda: 'finalizada', // ✅ Mudar status para finalizada
+            finalizada_em: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', vendaEmAndamento.id)
+          .select('id, serie_documento, numero_documento, modelo_documento')
+          .single();
+
+        vendaInserida = result.data;
+        vendaError = result.error;
+
+        console.log('✅ VENDA EM ANDAMENTO ATUALIZADA:');
+      } else {
+        // ✅ CRIAR nova venda (fluxo original)
+        setEtapaProcessamento('Salvando venda no banco de dados...');
+        console.log('➕ CRIANDO nova venda');
+
+        const result = await supabase
+          .from('pdv')
+          .insert(vendaData)
+          .select('id, serie_documento, numero_documento, modelo_documento')
+          .single();
+
+        vendaInserida = result.data;
+        vendaError = result.error;
+
+        console.log('✅ NOVA VENDA CRIADA:');
+      }
+
+      // ✅ LOGS DETALHADOS: Verificar dados após operação
+      console.log('  - ID:', vendaInserida?.id);
+      console.log('  - Série Documento:', vendaInserida?.serie_documento);
+      console.log('  - Número Documento:', vendaInserida?.numero_documento);
+      console.log('  - Modelo Documento:', vendaInserida?.modelo_documento);
 
       if (vendaError) {
-        console.error('Erro ao inserir venda:', vendaError);
+        console.error('Erro ao salvar venda:', vendaError);
         setEtapaProcessamento('Erro ao salvar venda: ' + vendaError.message);
         await new Promise(resolve => setTimeout(resolve, 3000));
         setShowProcessandoVenda(false);
@@ -6872,6 +7217,10 @@ const PDVPage: React.FC = () => {
           valorTotal: valorTotal
         }
       }));
+
+      // ✅ NOVO: Limpar venda em andamento (adaptado do sistema de rascunhos NFe)
+      setVendaEmAndamento(null);
+      setIsEditingVenda(false);
 
       // Limpar todos os estados
       setCarrinho([]);
@@ -9124,12 +9473,8 @@ const PDVPage: React.FC = () => {
                                     <span>Dados Fiscais</span>
                                   </div>
                                 </div>
-                                {/* ✅ NOVO: Container expandido que ocupa toda a largura disponível */}
-                                <div className={`bg-gray-800/30 rounded-lg p-3 ${
-                                  item.adicionais && item.adicionais.length > 0
-                                    ? '-mr-2 lg:-mr-16' // Com adicionais: expansão moderada
-                                    : '-mr-2 lg:-mr-20' // Sem adicionais: expansão máxima
-                                }`}>
+                                {/* ✅ NOVO: Container simples e estável */}
+                                <div className="bg-gray-800/30 rounded-lg p-3 -mr-6">
                                   {(() => {
                                     const dadosFiscais = obterDadosFiscaisItem(item);
                                     const regimeTributario = empresaData?.regime_tributario || 1; // 1 = Simples Nacional
@@ -9787,6 +10132,22 @@ const PDVPage: React.FC = () => {
               {/* Seção de Pagamento quando NÃO há pedidos importados */}
               {pedidosImportados.length === 0 && (
                 <div className="space-y-3">
+                  {/* ✅ NOVO: Exibir numeração reservada da venda em andamento */}
+                  {vendaEmAndamento && (
+                    <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="text-blue-300 font-medium">
+                          📋 Venda: {vendaEmAndamento.numero_venda}
+                        </div>
+                        {vendaEmAndamento.numero_nfce_reservado && vendaEmAndamento.serie_usuario && (
+                          <div className="text-blue-400">
+                            🧾 NFC-e #{vendaEmAndamento.numero_nfce_reservado} Série {vendaEmAndamento.serie_usuario}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Tipo de Pagamento - Compacto */}
                   <div>
                     <label className="block text-sm font-medium text-white mb-1.5">
@@ -9945,6 +10306,22 @@ const PDVPage: React.FC = () => {
               {/* Seção de Pagamento quando HÁ pedidos importados */}
               {pedidosImportados.length > 0 && (
                 <div className="space-y-3">
+                  {/* ✅ NOVO: Exibir numeração reservada da venda em andamento */}
+                  {vendaEmAndamento && (
+                    <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="text-blue-300 font-medium">
+                          📋 Venda: {vendaEmAndamento.numero_venda}
+                        </div>
+                        {vendaEmAndamento.numero_nfce_reservado && vendaEmAndamento.serie_usuario && (
+                          <div className="text-blue-400">
+                            🧾 NFC-e #{vendaEmAndamento.numero_nfce_reservado} Série {vendaEmAndamento.serie_usuario}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Tipo de Pagamento - Compacto */}
                   <div>
                     <label className="block text-sm font-medium text-white mb-1.5">
@@ -12440,7 +12817,7 @@ const PDVPage: React.FC = () => {
                             {venda.tentativa_nfce && (
                               <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs font-medium rounded-full border border-purple-500/30">
                                 {venda.numero_documento ?
-                                  `NFC-e #${venda.numero_documento} Série ${venda.serie_documento || '1'}`
+                                  `NFC-e #${venda.numero_documento} Série ${venda.serie_documento}`
                                   : 'NFC-e'
                                 }
                               </span>
