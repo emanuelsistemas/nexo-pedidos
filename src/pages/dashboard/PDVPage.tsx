@@ -1262,6 +1262,10 @@ const PDVPage: React.FC = () => {
       if (item.id === 'salvar-venda') {
         return carrinho.length > 0; // Só mostra se carrinho tiver itens
       }
+      // ✅ CORREÇÃO: Ocultar "Pedidos" e "Movimentos" quando há itens no carrinho
+      if (item.id === 'pedidos' || item.id === 'movimentos') {
+        return carrinho.length === 0; // Só mostra se carrinho estiver vazio
+      }
       // Se for o item 'comandas', só mostrar se a configuração estiver habilitada
       if (item.id === 'comandas') {
         return pdvConfig?.comandas === true;
@@ -1368,6 +1372,12 @@ const PDVPage: React.FC = () => {
 
     return () => window.removeEventListener('resize', handleResize);
   }, [menuStartIndex, menuPDVItems.length, carrinho.length]); // Adicionar carrinho.length como dependência
+
+  // ✅ CORREÇÃO: Resetar menuStartIndex quando o carrinho muda para evitar inconsistências
+  useEffect(() => {
+    setMenuStartIndex(0); // Sempre voltar ao início quando o carrinho muda
+    console.log('🔄 Menu PDV resetado - Itens no carrinho:', carrinho.length, 'Total itens menu:', menuPDVItems.length);
+  }, [carrinho.length]); // Só quando a quantidade de itens no carrinho muda
 
   // useEffect para aplicar filtros quando os estados mudarem
   useEffect(() => {
@@ -10309,11 +10319,6 @@ const PDVPage: React.FC = () => {
                       const originalIndex = menuStartIndex + index;
                       const teclaAtalho = originalIndex === 0 ? 'F0' : `F${originalIndex}`;
 
-                      // ✅ NOVO: Ocultar botões "Pedidos" e "Movimentos" quando há itens no carrinho
-                      if (carrinho.length > 0 && (item.id === 'pedidos' || item.id === 'movimentos')) {
-                        return null;
-                      }
-
                       return (
                         <button
                           key={item.id}
@@ -10386,6 +10391,44 @@ const PDVPage: React.FC = () => {
           >
             {/* Conteúdo scrollável da área lateral */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+
+              {/* ✅ CORREÇÃO: Foto do Item - PRIMEIRA POSIÇÃO - Aparece se configuração habilitada */}
+              {pdvConfig?.exibe_foto_item && carrinho.length > 0 && (
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded p-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <Camera size={12} className="text-orange-400" />
+                      <div className="text-xs text-orange-400 font-medium">Foto do Item</div>
+                    </div>
+                    {/* Foto do último item adicionado */}
+                    {(() => {
+                      const ultimoItem = carrinho[carrinho.length - 1];
+                      const fotoItem = getFotoPrincipal(ultimoItem?.produto);
+                      return (
+                        <div className="space-y-1">
+                          <div className="text-white text-xs font-medium truncate">
+                            {ultimoItem?.produto.nome}
+                          </div>
+                          <div className="w-full h-20 bg-gray-900 rounded overflow-hidden">
+                            {fotoItem ? (
+                              <img
+                                src={fotoItem.url}
+                                alt={ultimoItem?.produto.nome}
+                                className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={(e) => abrirGaleria(ultimoItem?.produto, e)}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={16} className="text-gray-700" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
 
               {/* Cliente - Aparece se configuração habilitada OU se há pedidos importados */}
               {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
@@ -10510,43 +10553,7 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Foto do Item - Aparece se configuração habilitada */}
-              {pdvConfig?.exibe_foto_item && carrinho.length > 0 && (
-                <div className="bg-orange-500/10 border border-orange-500/30 rounded p-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1">
-                      <Camera size={12} className="text-orange-400" />
-                      <div className="text-xs text-orange-400 font-medium">Foto do Item</div>
-                    </div>
-                    {/* Foto do último item adicionado */}
-                    {(() => {
-                      const ultimoItem = carrinho[carrinho.length - 1];
-                      const fotoItem = getFotoPrincipal(ultimoItem?.produto);
-                      return (
-                        <div className="space-y-1">
-                          <div className="text-white text-xs font-medium truncate">
-                            {ultimoItem?.produto.nome}
-                          </div>
-                          <div className="w-full h-20 bg-gray-900 rounded overflow-hidden">
-                            {fotoItem ? (
-                              <img
-                                src={fotoItem.url}
-                                alt={ultimoItem?.produto.nome}
-                                className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
-                                onClick={(e) => abrirGaleria(ultimoItem?.produto, e)}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Package size={16} className="text-gray-700" />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
+
 
               {/* Opções de Faturamento - Descontos do Cliente */}
               {pedidosImportados.length === 0 && (descontosCliente.prazo.length > 0 || descontosCliente.valor.length > 0) && (
