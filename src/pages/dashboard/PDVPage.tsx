@@ -6884,19 +6884,101 @@ const PDVPage: React.FC = () => {
         };
       });
 
-      // Inserir itens
+      // ✅ NOVO: Verificar itens existentes e fazer UPDATE/INSERT conforme necessário
       setEtapaProcessamento('Salvando itens da venda...');
-      const { error: itensError } = await supabase
-        .from('pdv_itens')
-        .insert(itensParaInserir);
 
-      if (itensError) {
-        console.error('Erro ao inserir itens:', itensError);
-        setEtapaProcessamento('Erro ao salvar itens: ' + itensError.message);
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        setShowProcessandoVenda(false);
-        toast.error('Erro ao salvar itens: ' + itensError.message);
-        return;
+      if (vendaEmAndamento && isEditingVenda) {
+        // ✅ VENDA EM ANDAMENTO: Verificar itens existentes para UPDATE/INSERT
+        console.log('🔍 FRONTEND: Verificando itens existentes na venda em andamento...');
+
+        // Buscar itens já salvos na venda
+        const { data: itensExistentes, error: buscarError } = await supabase
+          .from('pdv_itens')
+          .select('id, codigo_produto, produto_id, quantidade, valor_total_item')
+          .eq('pdv_id', vendaEmAndamento.id);
+
+        if (buscarError) {
+          console.error('❌ Erro ao buscar itens existentes:', buscarError);
+          setEtapaProcessamento('Erro ao verificar itens: ' + buscarError.message);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          setShowProcessandoVenda(false);
+          toast.error('Erro ao verificar itens: ' + buscarError.message);
+          return;
+        }
+
+        console.log('📋 FRONTEND: Itens existentes encontrados:', itensExistentes?.length || 0);
+        console.log('📋 FRONTEND: Itens no carrinho:', carrinho.length);
+
+        // Processar cada item do carrinho
+        for (const [index, item] of carrinho.entries()) {
+          const itemData = itensParaInserir[index];
+
+          // Verificar se item já existe (por código do produto)
+          const itemExistente = itensExistentes?.find(existente =>
+            existente.codigo_produto === item.produto.codigo &&
+            (item.vendaSemProduto ? existente.produto_id === null : existente.produto_id === item.produto.id)
+          );
+
+          if (itemExistente) {
+            // ✅ ITEM EXISTE: Fazer UPDATE
+            console.log(`🔄 FRONTEND: Atualizando item existente: ${item.produto.nome}`);
+
+            const { error: updateError } = await supabase
+              .from('pdv_itens')
+              .update({
+                quantidade: itemData.quantidade,
+                valor_unitario: itemData.valor_unitario,
+                valor_total_item: itemData.valor_total_item,
+                desconto_item: itemData.desconto_item,
+                vendedor_id: itemData.vendedor_id,
+                vendedor_nome: itemData.vendedor_nome,
+                observacao_item: itemData.observacao_item,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', itemExistente.id);
+
+            if (updateError) {
+              console.error(`❌ Erro ao atualizar item ${item.produto.nome}:`, updateError);
+              throw new Error(`Erro ao atualizar item: ${updateError.message}`);
+            }
+
+            console.log(`✅ FRONTEND: Item atualizado: ${item.produto.nome}`);
+          } else {
+            // ✅ ITEM NÃO EXISTE: Fazer INSERT
+            console.log(`➕ FRONTEND: Inserindo novo item: ${item.produto.nome}`);
+
+            const { error: insertError } = await supabase
+              .from('pdv_itens')
+              .insert(itemData);
+
+            if (insertError) {
+              console.error(`❌ Erro ao inserir item ${item.produto.nome}:`, insertError);
+              throw new Error(`Erro ao inserir item: ${insertError.message}`);
+            }
+
+            console.log(`✅ FRONTEND: Item inserido: ${item.produto.nome}`);
+          }
+        }
+
+        console.log('✅ FRONTEND: Todos os itens processados com sucesso');
+      } else {
+        // ✅ VENDA NOVA: Inserir todos os itens normalmente
+        console.log('➕ FRONTEND: Inserindo todos os itens (venda nova)...');
+
+        const { error: itensError } = await supabase
+          .from('pdv_itens')
+          .insert(itensParaInserir);
+
+        if (itensError) {
+          console.error('❌ Erro ao inserir itens:', itensError);
+          setEtapaProcessamento('Erro ao salvar itens: ' + itensError.message);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          setShowProcessandoVenda(false);
+          toast.error('Erro ao salvar itens: ' + itensError.message);
+          return;
+        }
+
+        console.log('✅ FRONTEND: Todos os itens inseridos com sucesso');
       }
 
       // Inserir opções adicionais se existirem
