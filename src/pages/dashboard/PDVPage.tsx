@@ -386,6 +386,16 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: Estados para modal de salvar venda
   const [showSalvarVendaModal, setShowSalvarVendaModal] = useState(false);
 
+  // ✅ NOVO: Estados para vendas abertas (recuperar vendas salvas)
+  const [showVendasAbertasModal, setShowVendasAbertasModal] = useState(false);
+  const [vendasAbertas, setVendasAbertas] = useState<any[]>([]);
+  const [contadorVendasAbertas, setContadorVendasAbertas] = useState(0);
+  const [carregandoVendasAbertas, setCarregandoVendasAbertas] = useState(false);
+
+  // ✅ NOVO: Estados para observação da venda
+  const [observacaoVenda, setObservacaoVenda] = useState<string>('');
+  const [showObservacaoVendaModal, setShowObservacaoVendaModal] = useState(false);
+
   // Estados para modal de opções adicionais
   const [showOpcoesAdicionaisModal, setShowOpcoesAdicionaisModal] = useState(false);
   const [produtoParaAdicionais, setProdutoParaAdicionais] = useState<Produto | null>(null);
@@ -964,6 +974,21 @@ const PDVPage: React.FC = () => {
   // Definir todos os itens do menu PDV
   const allMenuPDVItems = [
     {
+      id: 'vendas-abertas',
+      icon: FileText,
+      label: 'Vendas Abertas',
+      color: 'blue',
+      count: contadorVendasAbertas,
+      onClick: async (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        await carregarVendasAbertas();
+        setShowVendasAbertasModal(true);
+      }
+    },
+    {
       id: 'venda-sem-produto',
       icon: DollarSign,
       label: 'Venda sem Produto',
@@ -1151,6 +1176,19 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
         setShowFiadosModal(true);
+      }
+    },
+    {
+      id: 'observacao-venda',
+      icon: MessageSquare,
+      label: 'Observação na Venda',
+      color: 'blue',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowObservacaoVendaModal(true);
       }
     },
     {
@@ -1459,6 +1497,11 @@ const PDVPage: React.FC = () => {
 
     salvarItensExistentes();
   }, [vendaEmAndamento]); // Executa quando venda em andamento é criada
+
+  // ✅ NOVO: useEffect para carregar vendas abertas ao montar o componente
+  useEffect(() => {
+    carregarVendasAbertas();
+  }, []); // Executa apenas uma vez ao montar
 
   // Estado para captura automática de código de barras
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
@@ -6000,6 +6043,7 @@ const PDVPage: React.FC = () => {
         valor_desconto: 0,
         valor_desconto_itens: 0,
         valor_desconto_total: 0,
+        observacao_venda: observacaoVenda || null, // ✅ NOVO: Incluir observação da venda
         // ✅ Reservar numeração NFC-e desde o início
         numero_documento: numeroNfceReservado,
         serie_documento: serieUsuario,
@@ -6175,7 +6219,6 @@ const PDVPage: React.FC = () => {
       setVendedorSelecionado(null);
       setDescontoPrazoSelecionado(null);
       setDescontoGlobal(0);
-      setObservacaoVenda('');
       setPedidosImportados([]);
       setDescontosCliente({ prazo: [], valor: [] });
 
@@ -6246,6 +6289,175 @@ const PDVPage: React.FC = () => {
     } catch (error) {
       console.error('❌ Erro ao deletar venda:', error);
       toast.error('Erro ao deletar venda. Tente novamente.');
+      return false;
+    }
+  };
+
+  // ✅ NOVA: Função para carregar vendas abertas (salvas)
+  const carregarVendasAbertas = async (): Promise<void> => {
+    try {
+      setCarregandoVendasAbertas(true);
+      console.log('🔍 Carregando vendas abertas...');
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.error('❌ Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        console.error('❌ Empresa não encontrada');
+        return;
+      }
+
+      // Buscar vendas abertas da empresa
+      const { data: vendas, error } = await supabase
+        .from('pdv')
+        .select(`
+          id,
+          numero_venda,
+          numero_documento,
+          serie_documento,
+          valor_total,
+          valor_subtotal,
+          created_at,
+          updated_at,
+          nome_cliente,
+          observacao_venda
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('status_venda', 'aberta')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Erro ao carregar vendas abertas:', error);
+        return;
+      }
+
+      // Para cada venda, buscar a quantidade de itens
+      const vendasComItens = await Promise.all(
+        (vendas || []).map(async (venda) => {
+          const { data: itens, error: itensError } = await supabase
+            .from('pdv_itens')
+            .select('id, nome_produto, quantidade, valor_total_item')
+            .eq('pdv_id', venda.id);
+
+          if (itensError) {
+            console.error('❌ Erro ao carregar itens da venda:', itensError);
+            return { ...venda, itens: [], totalItens: 0 };
+          }
+
+          return {
+            ...venda,
+            itens: itens || [],
+            totalItens: (itens || []).reduce((acc, item) => acc + item.quantidade, 0)
+          };
+        })
+      );
+
+      setVendasAbertas(vendasComItens);
+      setContadorVendasAbertas(vendasComItens.length);
+      console.log('✅ Vendas abertas carregadas:', vendasComItens.length);
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar vendas abertas:', error);
+    } finally {
+      setCarregandoVendasAbertas(false);
+    }
+  };
+
+  // ✅ NOVA: Função para recuperar uma venda salva
+  const recuperarVendaSalva = async (vendaId: string): Promise<boolean> => {
+    try {
+      console.log('🔄 Recuperando venda salva:', vendaId);
+
+      // Buscar dados da venda
+      const { data: venda, error: vendaError } = await supabase
+        .from('pdv')
+        .select('*')
+        .eq('id', vendaId)
+        .single();
+
+      if (vendaError || !venda) {
+        console.error('❌ Erro ao buscar venda:', vendaError);
+        toast.error('Erro ao carregar venda');
+        return false;
+      }
+
+      // Buscar itens da venda
+      const { data: itens, error: itensError } = await supabase
+        .from('pdv_itens')
+        .select('*')
+        .eq('pdv_id', vendaId)
+        .order('created_at');
+
+      if (itensError) {
+        console.error('❌ Erro ao buscar itens da venda:', itensError);
+        toast.error('Erro ao carregar itens da venda');
+        return false;
+      }
+
+      // Converter itens para formato do carrinho
+      const itensCarrinho = (itens || []).map(item => ({
+        id: item.id,
+        produto: {
+          id: item.produto_id || '',
+          nome: item.nome_produto,
+          codigo: item.codigo_produto,
+          preco: item.valor_unitario,
+          descricao: item.descricao_produto || ''
+        },
+        quantidade: item.quantidade,
+        subtotal: item.valor_total_item,
+        vendaSemProduto: item.codigo_produto === '999999',
+        nome: item.codigo_produto === '999999' ? item.nome_produto : undefined,
+        preco: item.codigo_produto === '999999' ? item.valor_unitario : undefined,
+        vendedor_id: item.vendedor_id,
+        vendedor_nome: item.vendedor_nome,
+        observacao: item.observacao_item,
+        temOpcoesAdicionais: false
+      }));
+
+      // Restaurar estado da venda em andamento
+      setVendaEmAndamento({
+        id: venda.id,
+        numero_venda: venda.numero_venda,
+        numero_nfce_reservado: venda.numero_documento,
+        serie_usuario: venda.serie_documento,
+        status_venda: 'aberta'
+      });
+      setIsEditingVenda(true);
+
+      // Restaurar carrinho
+      setCarrinho(itensCarrinho);
+
+      // Restaurar outros dados se existirem
+      if (venda.nome_cliente) {
+        // Aqui poderia restaurar dados do cliente se necessário
+      }
+      if (venda.observacao_venda) {
+        setObservacaoVenda(venda.observacao_venda);
+      }
+
+      // Fechar modal e atualizar contador
+      setShowVendasAbertasModal(false);
+      await carregarVendasAbertas(); // Atualizar lista
+
+      toast.success(`Venda ${venda.numero_venda} recuperada com sucesso!`);
+      console.log('✅ Venda recuperada:', venda.numero_venda);
+
+      return true;
+
+    } catch (error) {
+      console.error('❌ Erro ao recuperar venda:', error);
+      toast.error('Erro ao recuperar venda');
       return false;
     }
   };
@@ -6472,6 +6684,7 @@ const PDVPage: React.FC = () => {
         valor_total: valorTotal,
         desconto_prazo_id: descontoPrazoSelecionado,
         pedidos_importados: pedidosImportados.length > 0 ? pedidosImportados.map(p => p.id) : null,
+        observacao_venda: observacaoVenda || null, // ✅ NOVO: Incluir observação da venda
         finalizada_em: new Date().toISOString(),
         // ✅ NOVO: Marcar tentativa de NFC-e e salvar número reservado
         tentativa_nfce: tipoFinalizacao.startsWith('nfce_'),
@@ -16762,6 +16975,210 @@ const PDVPage: React.FC = () => {
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
                 >
                   🗑️ Deletar Venda
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Vendas Abertas */}
+      <AnimatePresence>
+        {showVendasAbertasModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowVendasAbertasModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-4xl max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <FileText size={24} className="text-blue-400" />
+                  <h3 className="text-xl font-semibold text-white">Vendas Abertas</h3>
+                  {contadorVendasAbertas > 0 && (
+                    <span className="bg-blue-600 text-white px-2 py-1 rounded-full text-sm font-medium">
+                      {contadorVendasAbertas}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowVendasAbertasModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto max-h-[60vh]">
+                {carregandoVendasAbertas ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-gray-400">Carregando vendas...</div>
+                  </div>
+                ) : vendasAbertas.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                    <FileText size={48} className="mb-4 opacity-50" />
+                    <p className="text-lg font-medium">Nenhuma venda em aberto</p>
+                    <p className="text-sm">Todas as vendas foram finalizadas</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {vendasAbertas.map((venda) => (
+                      <div
+                        key={venda.id}
+                        className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:bg-gray-800/70 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-4 mb-2">
+                              <div className="text-white font-medium">
+                                📋 {venda.numero_venda}
+                              </div>
+                              {venda.numero_documento && venda.serie_documento && (
+                                <div className="text-blue-400 text-sm">
+                                  🧾 NFC-e #{venda.numero_documento} Série {venda.serie_documento}
+                                </div>
+                              )}
+                              <div className="text-gray-400 text-sm">
+                                {new Date(venda.created_at).toLocaleString('pt-BR')}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-6 text-sm text-gray-300">
+                              <div>
+                                <span className="text-gray-400">Itens:</span> {venda.totalItens}
+                              </div>
+                              <div>
+                                <span className="text-gray-400">Total:</span> {formatCurrency(venda.valor_total || 0)}
+                              </div>
+                              {venda.nome_cliente && (
+                                <div>
+                                  <span className="text-gray-400">Cliente:</span> {venda.nome_cliente}
+                                </div>
+                              )}
+                            </div>
+
+                            {venda.itens && venda.itens.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-gray-700">
+                                <div className="text-xs text-gray-400 mb-2">Produtos:</div>
+                                <div className="space-y-1">
+                                  {venda.itens.slice(0, 3).map((item: any, index: number) => (
+                                    <div key={index} className="text-xs text-gray-300 flex justify-between">
+                                      <span>{item.nome_produto}</span>
+                                      <span>{item.quantidade}x {formatCurrency(item.valor_total_item)}</span>
+                                    </div>
+                                  ))}
+                                  {venda.itens.length > 3 && (
+                                    <div className="text-xs text-gray-400">
+                                      ... e mais {venda.itens.length - 3} item(s)
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="ml-4">
+                            <button
+                              onClick={() => recuperarVendaSalva(venda.id)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+                            >
+                              🔄 Recuperar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {vendasAbertas.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-gray-700 flex justify-between items-center">
+                  <div className="text-sm text-gray-400">
+                    {vendasAbertas.length} venda(s) em aberto
+                  </div>
+                  <button
+                    onClick={carregarVendasAbertas}
+                    className="text-blue-400 hover:text-blue-300 text-sm transition-colors"
+                  >
+                    🔄 Atualizar Lista
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Observação da Venda */}
+      <AnimatePresence>
+        {showObservacaoVendaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowObservacaoVendaModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <MessageSquare size={24} className="text-blue-400" />
+                  <h3 className="text-lg font-semibold text-white">Observação na Venda</h3>
+                </div>
+                <button
+                  onClick={() => setShowObservacaoVendaModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Observação (opcional)
+                </label>
+                <textarea
+                  value={observacaoVenda}
+                  onChange={(e) => setObservacaoVenda(e.target.value)}
+                  placeholder="Digite uma observação para esta venda..."
+                  rows={4}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+                <div className="text-xs text-gray-400 mt-1">
+                  Esta observação será salva junto com a venda
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowObservacaoVendaModal(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowObservacaoVendaModal(false);
+                    toast.success(observacaoVenda.trim() ? 'Observação salva!' : 'Observação removida!');
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Salvar
                 </button>
               </div>
             </motion.div>
