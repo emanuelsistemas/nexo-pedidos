@@ -6156,8 +6156,8 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      // Preparar dados do item (similar aos itens de rascunho NFe)
-      console.log('🔍 Preparando dados do item...');
+      // ✅ NOVO: Preparar dados completos do item incluindo imagem e dados de promoção
+      console.log('🔍 Preparando dados completos do item...');
       const itemData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
@@ -6174,6 +6174,12 @@ const PDVPage: React.FC = () => {
         vendedor_nome: item.vendedor_nome || null,
         // ✅ CORREÇÃO: Campo correto é 'observacao_item' (não 'observacao')
         observacao_item: item.observacao || null,
+        // ✅ NOVO: Dados completos do produto para recuperação
+        imagem_produto: item.vendaSemProduto ? null : (item.produto.imagem || null),
+        promocao_ativa: item.vendaSemProduto ? false : (item.produto.promocao_ativa || false),
+        preco_promocional: item.vendaSemProduto ? null : (item.produto.preco_promocional || null),
+        preco_original: item.vendaSemProduto ? null : (item.produto.preco || null),
+        desconto_maximo: item.vendaSemProduto ? null : (item.produto.desconto_maximo || null),
         // ✅ Campos básicos obrigatórios
         tem_desconto: false,
         valor_desconto_item: 0,
@@ -6413,10 +6419,14 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      // Buscar itens da venda
+      // ✅ NOVO: Buscar itens da venda com dados completos já salvos
       const { data: itens, error: itensError } = await supabase
         .from('pdv_itens')
-        .select('*')
+        .select(`
+          *,
+          imagem_produto, promocao_ativa, preco_promocional,
+          preco_original, desconto_maximo
+        `)
         .eq('pdv_id', vendaId)
         .order('created_at');
 
@@ -6426,26 +6436,53 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      // Converter itens para formato do carrinho
-      const itensCarrinho = (itens || []).map(item => ({
-        id: item.id,
-        produto: {
+      // ✅ NOVO: Converter itens para formato do carrinho usando dados já salvos
+      const itensCarrinho = (itens || []).map(item => {
+        // Montar produto com dados salvos na pdv_itens
+        const produtoCompleto = {
           id: item.produto_id || '',
           nome: item.nome_produto,
           codigo: item.codigo_produto,
           preco: item.valor_unitario,
-          descricao: item.descricao_produto || ''
-        },
-        quantidade: item.quantidade,
-        subtotal: item.valor_total_item,
-        vendaSemProduto: item.codigo_produto === '999999',
-        nome: item.codigo_produto === '999999' ? item.nome_produto : undefined,
-        preco: item.codigo_produto === '999999' ? item.valor_unitario : undefined,
-        vendedor_id: item.vendedor_id,
-        vendedor_nome: item.vendedor_nome,
-        observacao: item.observacao_item,
-        temOpcoesAdicionais: false
-      }));
+          descricao: item.descricao_produto || '',
+          // ✅ NOVO: Usar dados salvos na pdv_itens
+          imagem: item.imagem_produto,
+          promocao_ativa: item.promocao_ativa || false,
+          preco_promocional: item.preco_promocional,
+          preco_original: item.preco_original,
+          desconto_maximo: item.desconto_maximo,
+          // Dados fiscais já estão salvos nos campos existentes
+          ncm: item.ncm,
+          cfop: item.cfop,
+          origem: item.origem_produto,
+          cst_icms: item.cst_icms,
+          csosn_icms: item.csosn_icms,
+          cst_pis: item.cst_pis,
+          cst_cofins: item.cst_cofins,
+          aliquota_icms: item.aliquota_icms,
+          aliquota_pis: item.aliquota_pis,
+          aliquota_cofins: item.aliquota_cofins,
+          cest: item.cest,
+          unidade_medida: item.unidade,
+          ean: item.ean
+        };
+
+        console.log('✅ RECUPERAÇÃO: Produto completo restaurado:', produtoCompleto.nome);
+
+        return {
+          id: item.id,
+          produto: produtoCompleto,
+          quantidade: item.quantidade,
+          subtotal: item.valor_total_item,
+          vendaSemProduto: item.codigo_produto === '999999',
+          nome: item.codigo_produto === '999999' ? item.nome_produto : undefined,
+          preco: item.codigo_produto === '999999' ? item.valor_unitario : undefined,
+          vendedor_id: item.vendedor_id,
+          vendedor_nome: item.vendedor_nome,
+          observacao: item.observacao_item,
+          temOpcoesAdicionais: false
+        };
+      });
 
       // Restaurar estado da venda em andamento
       setVendaEmAndamento({
