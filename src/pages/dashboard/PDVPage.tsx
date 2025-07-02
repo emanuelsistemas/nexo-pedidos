@@ -432,6 +432,7 @@ const PDVPage: React.FC = () => {
   const [showQuantidadeModal, setShowQuantidadeModal] = useState(false);
   const [produtoParaQuantidade, setProdutoParaQuantidade] = useState<Produto | null>(null);
   const [quantidadeModal, setQuantidadeModal] = useState(1);
+  const [quantidadeModalInput, setQuantidadeModalInput] = useState('1'); // Campo string para digitação
 
   // Funções para localStorage
   const savePDVState = () => {
@@ -1903,7 +1904,8 @@ const PDVPage: React.FC = () => {
         unidade_medida:unidade_medida_id (
           id,
           sigla,
-          nome
+          nome,
+          fracionado
         ),
         produto_fotos(url, principal)
       `)
@@ -4092,6 +4094,7 @@ const PDVPage: React.FC = () => {
     if (pdvConfig?.vendas_itens_multiplicacao && !quantidadePersonalizada && !searchTerm.includes('*')) {
       setProdutoParaQuantidade(produto);
       setQuantidadeModal(1);
+      setQuantidadeModalInput('1');
       setShowQuantidadeModal(true);
       return;
     }
@@ -4247,6 +4250,7 @@ const PDVPage: React.FC = () => {
         // Abrir modal de quantidade após selecionar vendedor
         setProdutoParaQuantidade(produtoAguardandoVendedor);
         setQuantidadeModal(1);
+        setQuantidadeModalInput('1');
         setShowQuantidadeModal(true);
         // Limpar produto aguardando vendedor mas manter vendedor selecionado
         setProdutoAguardandoVendedor(null);
@@ -4272,6 +4276,7 @@ const PDVPage: React.FC = () => {
       if (quantidadeAguardandoVendedor === 0 && pdvConfig?.vendas_itens_multiplicacao) {
         // Abrir modal de quantidade após selecionar vendedor
         setQuantidadeModal(1);
+        setQuantidadeModalInput('1');
         setShowQuantidadeModal(true);
         // Não limpar vendaSemProdutoAguardando ainda, será usado no modal de quantidade
       } else {
@@ -4316,6 +4321,7 @@ const PDVPage: React.FC = () => {
     setShowQuantidadeModal(false);
     setProdutoParaQuantidade(null);
     setQuantidadeModal(1);
+    setQuantidadeModalInput('1');
 
     // ✅ NOVO: Fechar também o modal de produtos se estiver aberto
     if (showAreaProdutos) {
@@ -4327,6 +4333,7 @@ const PDVPage: React.FC = () => {
     setShowQuantidadeModal(false);
     setProdutoParaQuantidade(null);
     setQuantidadeModal(1);
+    setQuantidadeModalInput('1');
     setVendaSemProdutoAguardando(null); // Limpar venda sem produto aguardando
   };
 
@@ -4348,6 +4355,7 @@ const PDVPage: React.FC = () => {
     if (carrinho.length === 0 && pdvConfig?.vendas_itens_multiplicacao) {
       setVendaSemProdutoAguardando({ nome, preco });
       setQuantidadeModal(1);
+      setQuantidadeModalInput('1');
       setShowQuantidadeModal(true);
       return;
     }
@@ -4390,11 +4398,47 @@ const PDVPage: React.FC = () => {
   };
 
   const aumentarQuantidade = () => {
-    setQuantidadeModal(prev => prev + 1);
+    // Verificar se a unidade de medida permite fracionamento
+    const isFracionado = produtoParaQuantidade?.unidade_medida?.fracionado || false;
+
+    if (isFracionado) {
+      // Para produtos fracionados, incrementar em 0.1 (100g, 100ml, etc.)
+      const novaQuantidade = Math.round((quantidadeModal + 0.1) * 1000) / 1000; // 3 casas decimais
+      setQuantidadeModal(novaQuantidade);
+      setQuantidadeModalInput(novaQuantidade.toFixed(3));
+    } else {
+      // Para produtos inteiros, incrementar em 1
+      const novaQuantidade = quantidadeModal + 1;
+      setQuantidadeModal(novaQuantidade);
+      setQuantidadeModalInput(novaQuantidade.toString());
+    }
   };
 
   const diminuirQuantidade = () => {
-    setQuantidadeModal(prev => Math.max(1, prev - 1));
+    // Verificar se a unidade de medida permite fracionamento
+    const isFracionado = produtoParaQuantidade?.unidade_medida?.fracionado || false;
+
+    if (isFracionado) {
+      // Para produtos fracionados, decrementar em 0.1, mínimo 0.1
+      const novaQuantidade = Math.max(0.1, Math.round((quantidadeModal - 0.1) * 1000) / 1000); // 3 casas decimais
+      setQuantidadeModal(novaQuantidade);
+      setQuantidadeModalInput(novaQuantidade.toFixed(3));
+    } else {
+      // Para produtos inteiros, decrementar em 1, mínimo 1
+      const novaQuantidade = Math.max(1, quantidadeModal - 1);
+      setQuantidadeModal(novaQuantidade);
+      setQuantidadeModalInput(novaQuantidade.toString());
+    }
+  };
+
+  // ✅ NOVO: Função para formatar quantidade baseada na unidade de medida
+  const formatarQuantidade = (quantidade: number, unidadeMedida?: any) => {
+    // Se a unidade de medida permite fracionamento, mostrar 3 casas decimais
+    if (unidadeMedida?.fracionado) {
+      return quantidade.toFixed(3);
+    }
+    // Se não permite fracionamento, mostrar como número inteiro
+    return quantidade.toString();
   };
 
   // ✅ NOVO: Função para calcular preço considerando desconto por quantidade no modal
@@ -9825,7 +9869,14 @@ const PDVPage: React.FC = () => {
                                         </div>
                                       ) : (
                                         <div className="flex items-center gap-1">
-                                          <h4 className="text-white font-medium text-sm line-clamp-1">{item.vendaSemProduto ? item.nome : item.produto.nome}</h4>
+                                          <h4 className="text-white font-medium text-sm line-clamp-1">
+                                            {item.vendaSemProduto ? item.nome : item.produto.nome}
+                                            {!item.vendaSemProduto && item.produto.unidade_medida?.sigla && (
+                                              <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
+                                                {item.produto.unidade_medida.sigla}
+                                              </span>
+                                            )}
+                                          </h4>
                                           {pdvConfig?.editar_nome_produto && (
                                             <button
                                               onClick={() => iniciarEdicaoNome(item.id, item.vendaSemProduto ? item.nome : item.produto.nome)}
@@ -9857,37 +9908,46 @@ const PDVPage: React.FC = () => {
                                       {!item.vendaSemProduto && item.adicionais && item.adicionais.length > 0 && (
                                         <div className="flex items-center gap-1 text-primary-400">
                                           <span>•</span>
-                                          <span>{formatCurrency(item.produto.preco)} x {item.quantidade}</span>
+                                          <span>{formatCurrency(item.produto.preco)} x {formatarQuantidade(item.quantidade, item.produto.unidade_medida)}</span>
                                           <span>•</span>
                                           <span>{item.produto.unidade_medida?.sigla || 'UN'}</span>
                                         </div>
                                       )}
                                     </div>
 
-                                    {/* ✅ NOVO: Exibir informações de desconto como no sistema de pedidos */}
-                                    {!item.vendaSemProduto && (item.produto.promocao || (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0))) && (
+                                    {/* ✅ CORREÇÃO: Sempre exibir valor unitário para todos os produtos */}
+                                    {!item.vendaSemProduto && (
                                       <div className="mt-1">
-                                        {/* Preço com desconto no formato: preço_original x quantidade = subtotal */}
+                                        {/* Valor unitário sempre visível */}
                                         <p className="text-sm">
-                                          <span className="text-gray-400 line-through">{formatCurrency(item.produto.preco)}</span>
-                                          <span className="text-primary-400 ml-2">{formatCurrency(calcularPrecoModalQuantidade(item.produto, item.quantidade))}</span>
-                                          <span className="text-gray-400"> x {item.quantidade} = {formatCurrency(item.subtotal)}</span>
-                                          <span className="text-primary-400"> • {item.produto.unidade_medida?.sigla || 'UN'}</span>
-                                        </p>
-                                        {/* Texto explicativo do desconto */}
-                                        <p className="text-xs text-green-400">
-                                          {item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0) ? (
+                                          {/* Se tem promoção ou desconto, mostrar preço riscado */}
+                                          {(item.produto.promocao || (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0))) ? (
                                             <>
-                                              Desconto por quantidade:
-                                              {item.produto.tipo_desconto_quantidade === 'percentual'
-                                                ? ` ${item.produto.percentual_desconto_quantidade}%`
-                                                : ` ${formatCurrency(item.produto.valor_desconto_quantidade || 0)}`
-                                              }
+                                              <span className="text-gray-400 line-through">{formatCurrency(item.produto.preco)}</span>
+                                              <span className="text-primary-400 ml-2">{formatCurrency(calcularPrecoModalQuantidade(item.produto, item.quantidade))}</span>
                                             </>
                                           ) : (
-                                            'Produto em promoção'
+                                            /* Se não tem promoção, mostrar preço normal */
+                                            <span className="text-gray-400">{formatCurrency(item.produto.preco)}</span>
                                           )}
                                         </p>
+
+                                        {/* Texto explicativo apenas para produtos com desconto/promoção */}
+                                        {(item.produto.promocao || (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0))) && (
+                                          <p className="text-xs text-green-400">
+                                            {item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0) ? (
+                                              <>
+                                                Desconto por quantidade:
+                                                {item.produto.tipo_desconto_quantidade === 'percentual'
+                                                  ? ` ${item.produto.percentual_desconto_quantidade}%`
+                                                  : ` ${formatCurrency(item.produto.valor_desconto_quantidade || 0)}`
+                                                }
+                                              </>
+                                            ) : (
+                                              'Produto em promoção'
+                                            )}
+                                          </p>
+                                        )}
                                       </div>
                                     )}
 
@@ -11942,7 +12002,7 @@ const PDVPage: React.FC = () => {
                     <div className="mt-3 p-3 bg-gray-800/50 rounded-lg">
                       <div className="text-white font-medium">{item.produto.nome}</div>
                       <div className="text-sm text-gray-400">
-                        Quantidade: {item.quantidade} | Total: {formatCurrency(item.subtotal)}
+                        Quantidade: {formatarQuantidade(item.quantidade, item.produto.unidade_medida)} | Total: {formatCurrency(item.subtotal)}
                       </div>
                     </div>
                   ) : null;
@@ -12023,7 +12083,7 @@ const PDVPage: React.FC = () => {
                         <div className="flex-1">
                           <div className="text-white font-medium text-sm">{item.produto.nome}</div>
                           <div className="text-xs text-gray-400">
-                            Qtd: {item.quantidade} × {formatCurrency(item.produto.preco)}
+                            Qtd: {formatarQuantidade(item.quantidade, item.produto.unidade_medida)} × {formatCurrency(item.produto.preco)}
                           </div>
                         </div>
                         <div className="text-primary-400 font-bold text-sm">
@@ -16869,9 +16929,17 @@ const PDVPage: React.FC = () => {
               {/* Campo de quantidade com botões + e - */}
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-3">
-                  <label className="text-sm font-medium text-white">
-                    Quantidade
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-white">
+                      Quantidade
+                    </label>
+                    {/* ✅ NOVO: Indicação se permite fracionamento */}
+                    {!vendaSemProdutoAguardando && produtoParaQuantidade?.unidade_medida?.fracionado && (
+                      <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded border border-green-500/30">
+                        Fracionado
+                      </span>
+                    )}
+                  </div>
                   {/* ✅ NOVO: Indicação de quantidade mínima para desconto */}
                   {!vendaSemProdutoAguardando && produtoParaQuantidade?.desconto_quantidade && produtoParaQuantidade?.quantidade_minima && (
                     <span className="text-xs text-gray-400">
@@ -16879,6 +16947,16 @@ const PDVPage: React.FC = () => {
                     </span>
                   )}
                 </div>
+
+                {/* ✅ NOVO: Explicação sobre fracionamento */}
+                {!vendaSemProdutoAguardando && produtoParaQuantidade?.unidade_medida && (
+                  <div className="mb-3 text-xs text-gray-400">
+                    {produtoParaQuantidade.unidade_medida.fracionado
+                      ? `Valores fracionados permitidos (ex: 2,500 ${produtoParaQuantidade.unidade_medida.sigla})`
+                      : `Apenas valores inteiros permitidos (ex: 5 ${produtoParaQuantidade.unidade_medida.sigla})`
+                    }
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
                   <button
                     onClick={diminuirQuantidade}
@@ -16889,15 +16967,57 @@ const PDVPage: React.FC = () => {
 
                   <div className="flex-1 relative">
                     <input
-                      type="number"
-                      value={quantidadeModal}
+                      type="text"
+                      value={quantidadeModalInput}
                       onChange={(e) => {
-                        const valor = parseInt(e.target.value);
-                        if (!isNaN(valor) && valor > 0) {
+                        // Verificar se a unidade de medida permite fracionamento
+                        const isFracionado = produtoParaQuantidade?.unidade_medida?.fracionado || false;
+
+                        // Permitir apenas números, vírgulas e pontos
+                        const valorDigitado = e.target.value.replace(/[^\d.,]/g, '');
+
+                        // Atualizar o campo de input sempre (permite digitação)
+                        setQuantidadeModalInput(valorDigitado);
+
+                        // Se o campo estiver vazio, definir quantidade como mínimo
+                        if (valorDigitado === '') {
+                          const minimo = isFracionado ? 0.1 : 1;
+                          setQuantidadeModal(minimo);
+                          return;
+                        }
+
+                        // Converter vírgula para ponto para processamento
+                        const valorLimpo = valorDigitado.replace(',', '.');
+
+                        // Se for um número válido, atualizar o estado
+                        if (!isNaN(parseFloat(valorLimpo))) {
+                          let valor = parseFloat(valorLimpo);
+
+                          // Se for fracionado, limitar a 3 casas decimais; se não, arredondar para inteiro
+                          if (isFracionado) {
+                            valor = Math.max(0.1, Math.round(valor * 1000) / 1000); // 3 casas decimais, mínimo 0.1
+                          } else {
+                            valor = Math.max(1, Math.floor(valor)); // Número inteiro, mínimo 1
+                          }
+
                           setQuantidadeModal(valor);
                         }
                       }}
-                      min="1"
+                      onBlur={() => {
+                        // Formatar o valor final quando sair do campo
+                        const isFracionado = produtoParaQuantidade?.unidade_medida?.fracionado || false;
+
+                        // Formatar o valor exibido
+                        const valorFormatado = isFracionado
+                          ? quantidadeModal.toFixed(3)
+                          : quantidadeModal.toString();
+
+                        setQuantidadeModalInput(valorFormatado);
+                      }}
+                      placeholder={(() => {
+                        const isFracionado = produtoParaQuantidade?.unidade_medida?.fracionado || false;
+                        return isFracionado ? "0,000" : "1";
+                      })()}
                       className={`w-full bg-gray-800/50 border rounded-lg py-2 px-3 text-white text-center focus:outline-none focus:ring-1 focus:ring-primary-500/20 ${
                         !vendaSemProdutoAguardando &&
                         produtoParaQuantidade?.desconto_quantidade &&
