@@ -7589,7 +7589,8 @@ const PDVPage: React.FC = () => {
               valor_subtotal: valorSubtotal,
               valor_desconto: valorDesconto,
               valor_desconto_itens: Math.round(calcularDescontoItens() * 100) / 100,
-              valor_desconto_total: Math.round(descontoGlobal * 100) / 100
+              valor_desconto_total: Math.round(descontoGlobal * 100) / 100,
+              observacao_venda: observacaoVenda || null // ✅ CORREÇÃO: Incluir observação da venda
             },
             empresa: {
               razao_social: empresaData.razao_social,
@@ -7694,7 +7695,8 @@ const PDVPage: React.FC = () => {
               data_emissao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
               hora_emissao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
               data_autorizacao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
-              hora_autorizacao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR')
+              hora_autorizacao: vendaAtualizada?.data_emissao_nfe ? new Date(vendaAtualizada.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
+              observacao_venda: observacaoVenda || null // ✅ CORREÇÃO: Incluir observação da venda
             },
             empresa: {
               razao_social: empresaData.razao_social,
@@ -8071,7 +8073,8 @@ const PDVPage: React.FC = () => {
           data_emissao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
           hora_emissao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
           data_autorizacao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
-          hora_autorizacao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR')
+          hora_autorizacao: venda.data_emissao_nfe ? new Date(venda.data_emissao_nfe).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR'),
+          observacao_venda: venda.observacao_venda || null // ✅ CORREÇÃO: Incluir observação da venda do banco
         },
         empresa: {
           razao_social: empresaData.razao_social,
@@ -8254,7 +8257,8 @@ const PDVPage: React.FC = () => {
           valor_subtotal: venda.valor_subtotal || venda.valor_total,
           valor_desconto: venda.valor_desconto || 0,
           valor_desconto_itens: venda.valor_desconto_itens || 0,
-          valor_desconto_total: venda.valor_desconto_total || 0
+          valor_desconto_total: venda.valor_desconto_total || 0,
+          observacao_venda: venda.observacao_venda || null // ✅ CORREÇÃO: Incluir observação da venda do banco
         },
         empresa: {
           razao_social: empresaData.razao_social,
@@ -8317,6 +8321,14 @@ const PDVPage: React.FC = () => {
         operador: dadosImpressao.operador,
         pagamento: dadosImpressao.pagamento,
         cliente: dadosImpressao.cliente
+      });
+
+      // ✅ DEBUG ESPECÍFICO: Verificar observação da venda
+      console.log('📝 DEBUG OBSERVAÇÃO NFC-e:', {
+        'dadosImpressao.venda.observacao_venda': dadosImpressao.venda.observacao_venda,
+        'observacao existe?': !!dadosImpressao.venda.observacao_venda,
+        'observacao trim?': dadosImpressao.venda.observacao_venda?.trim(),
+        'condição final': !!(dadosImpressao.venda.observacao_venda && dadosImpressao.venda.observacao_venda.trim())
       });
 
       // ✅ DEBUG ESPECÍFICO: Verificar dados de pagamento
@@ -8822,6 +8834,14 @@ const PDVPage: React.FC = () => {
         operador: dadosImpressao.operador,
         pagamento: dadosImpressao.pagamento,
         cliente: dadosImpressao.cliente
+      });
+
+      // ✅ DEBUG ESPECÍFICO: Verificar observação da venda
+      console.log('📝 DEBUG OBSERVAÇÃO CUPOM:', {
+        'dadosImpressao.venda.observacao_venda': dadosImpressao.venda.observacao_venda,
+        'observacao existe?': !!dadosImpressao.venda.observacao_venda,
+        'observacao trim?': dadosImpressao.venda.observacao_venda?.trim(),
+        'condição final': !!(dadosImpressao.venda.observacao_venda && dadosImpressao.venda.observacao_venda.trim())
       });
 
       // ✅ DEBUG ESPECÍFICO: Verificar dados de pagamento
