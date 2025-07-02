@@ -2406,7 +2406,8 @@ const PDVPage: React.FC = () => {
           formas_pagamento,
           valor_pago,
           valor_troco,
-          parcelas
+          parcelas,
+          observacao_venda
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .or('modelo_documento.is.null,modelo_documento.eq.65'); // ✅ Mostrar apenas vendas PDV (null) e NFC-e (65) - excluir NFe (55)
