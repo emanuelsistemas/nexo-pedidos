@@ -6176,10 +6176,10 @@ const PDVPage: React.FC = () => {
         observacao_item: item.observacao || null,
         // ✅ NOVO: Dados completos do produto para recuperação
         imagem_produto: item.vendaSemProduto ? null : (item.produto.imagem || null),
-        promocao_ativa: item.vendaSemProduto ? false : (item.produto.promocao_ativa || false),
+        promocao_ativa: item.vendaSemProduto ? false : (item.produto.promocao || false),
         preco_promocional: item.vendaSemProduto ? null : (item.produto.preco_promocional || null),
         preco_original: item.vendaSemProduto ? null : (item.produto.preco || null),
-        desconto_maximo: item.vendaSemProduto ? null : (item.produto.desconto_maximo || null),
+        desconto_maximo: item.vendaSemProduto ? null : (item.produto.valor_desconto || null),
         // ✅ Campos básicos obrigatórios
         tem_desconto: false,
         valor_desconto_item: 0,
@@ -6447,10 +6447,10 @@ const PDVPage: React.FC = () => {
           descricao: item.descricao_produto || '',
           // ✅ NOVO: Usar dados salvos na pdv_itens
           imagem: item.imagem_produto,
-          promocao_ativa: item.promocao_ativa || false,
+          promocao: item.promocao_ativa || false,
           preco_promocional: item.preco_promocional,
           preco_original: item.preco_original,
-          desconto_maximo: item.desconto_maximo,
+          valor_desconto: item.desconto_maximo,
           // Dados fiscais já estão salvos nos campos existentes
           ncm: item.ncm,
           cfop: item.cfop,
