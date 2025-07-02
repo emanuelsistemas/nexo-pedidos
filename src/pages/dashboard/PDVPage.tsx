@@ -6180,6 +6180,8 @@ const PDVPage: React.FC = () => {
         preco_promocional: item.vendaSemProduto ? null : (item.produto.preco_promocional || null),
         preco_original: item.vendaSemProduto ? null : (item.produto.preco || null),
         desconto_maximo: item.vendaSemProduto ? null : (item.produto.valor_desconto || null),
+        // ✅ NOVO: Salvar fotos do produto como JSON
+        produto_fotos_json: item.vendaSemProduto ? null : (item.produto.produto_fotos || null),
         // ✅ Campos básicos obrigatórios
         tem_desconto: false,
         valor_desconto_item: 0,
@@ -6425,7 +6427,7 @@ const PDVPage: React.FC = () => {
         .select(`
           *,
           imagem_produto, promocao_ativa, preco_promocional,
-          preco_original, desconto_maximo
+          preco_original, desconto_maximo, produto_fotos_json
         `)
         .eq('pdv_id', vendaId)
         .order('created_at');
@@ -6451,6 +6453,8 @@ const PDVPage: React.FC = () => {
           preco_promocional: item.preco_promocional,
           preco_original: item.preco_original,
           valor_desconto: item.desconto_maximo,
+          // ✅ NOVO: Restaurar fotos do produto
+          produto_fotos: item.produto_fotos_json || [],
           // Dados fiscais já estão salvos nos campos existentes
           ncm: item.ncm,
           cfop: item.cfop,
