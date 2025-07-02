@@ -10,6 +10,7 @@ interface UnidadeMedida {
   sigla: string;
   nome: string;
   empresa_id: string;
+  fracionado: boolean;
   created_at?: string;
 }
 
@@ -72,6 +73,7 @@ const UnidadeMedidaPage: React.FC = () => {
   const [formData, setFormData] = useState({
     sigla: '',
     nome: '',
+    fracionado: false,
   });
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
@@ -126,6 +128,7 @@ const UnidadeMedidaPage: React.FC = () => {
     setFormData({
       sigla: unidade.sigla,
       nome: unidade.nome,
+      fracionado: unidade.fracionado,
     });
     setShowSidebar(true);
   };
@@ -199,6 +202,7 @@ const UnidadeMedidaPage: React.FC = () => {
           .update({
             sigla: formData.sigla,
             nome: formData.nome,
+            fracionado: formData.fracionado,
           })
           .eq('id', editingUnidade.id);
 
@@ -206,7 +210,7 @@ const UnidadeMedidaPage: React.FC = () => {
 
         setUnidades(unidades.map(u =>
           u.id === editingUnidade.id
-            ? { ...u, sigla: formData.sigla, nome: formData.nome }
+            ? { ...u, sigla: formData.sigla, nome: formData.nome, fracionado: formData.fracionado }
             : u
         ));
 
@@ -217,6 +221,7 @@ const UnidadeMedidaPage: React.FC = () => {
           .insert({
             sigla: formData.sigla,
             nome: formData.nome,
+            fracionado: formData.fracionado,
             empresa_id: usuarioData.empresa_id,
           })
           .select();
@@ -231,7 +236,7 @@ const UnidadeMedidaPage: React.FC = () => {
       }
 
       setShowSidebar(false);
-      setFormData({ sigla: '', nome: '' });
+      setFormData({ sigla: '', nome: '', fracionado: false });
       setEditingUnidade(null);
     } catch (error: any) {
       console.error('Erro ao salvar unidade de medida:', error);
@@ -283,7 +288,7 @@ const UnidadeMedidaPage: React.FC = () => {
           variant="primary"
           onClick={() => {
             setEditingUnidade(null);
-            setFormData({ sigla: '', nome: '' });
+            setFormData({ sigla: '', nome: '', fracionado: false });
             setShowSidebar(true);
           }}
         >
@@ -306,8 +311,15 @@ const UnidadeMedidaPage: React.FC = () => {
                     <div className="p-2 rounded-lg bg-primary-500/10">
                       <Ruler size={20} className="text-primary-400" />
                     </div>
-                    <div>
-                      <h3 className="text-white font-medium">{unidade.sigla}</h3>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-white font-medium">{unidade.sigla}</h3>
+                        {unidade.fracionado && (
+                          <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
+                            Fracionado
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-400">{unidade.nome}</p>
                     </div>
                   </div>
@@ -346,7 +358,7 @@ const UnidadeMedidaPage: React.FC = () => {
                   className="mx-auto"
                   onClick={() => {
                     setEditingUnidade(null);
-                    setFormData({ sigla: '', nome: '' });
+                    setFormData({ sigla: '', nome: '', fracionado: false });
                     setShowSidebar(true);
                   }}
                 >
@@ -428,6 +440,27 @@ const UnidadeMedidaPage: React.FC = () => {
                         placeholder="Ex: Quilograma, Unidade, Caixa"
                         required
                       />
+                    </div>
+
+                    {/* Campo Fracionado */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="fracionado"
+                          checked={formData.fracionado}
+                          onChange={(e) => setFormData({ ...formData, fracionado: e.target.checked })}
+                          className="w-4 h-4 text-primary-600 bg-gray-800 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
+                        />
+                        <label htmlFor="fracionado" className="text-sm font-medium text-white">
+                          Fracionado
+                        </label>
+                      </div>
+                      <p className="text-xs text-gray-400 ml-7">
+                        ✅ <strong>Marque esta opção</strong> para unidades que permitem valores decimais/fracionados<br/>
+                        📦 <strong>Exemplos:</strong> KG (quilos), L (litros), M (metros), M² (metros quadrados)<br/>
+                        ❌ <strong>Deixe desmarcado</strong> para unidades inteiras como UN (unidades), PC (peças), CX (caixas)
+                      </p>
                     </div>
 
                     <div className="flex gap-4 pt-4">

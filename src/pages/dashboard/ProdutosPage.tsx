@@ -303,11 +303,17 @@ const ProdutosPage: React.FC = () => {
   // Estado para controlar quando o campo de estoque inicial está vazio
   const [estoqueInputVazio, setEstoqueInputVazio] = useState(false);
 
+  // Campo string para digitação do estoque inicial (permite vírgulas e pontos)
+  const [estoqueInicialInput, setEstoqueInicialInput] = useState('0');
+
+
+
   // Estado para controlar quando o campo de quantidade mínima está vazio
   const [quantidadeMinimaVazia, setQuantidadeMinimaVazia] = useState(false);
 
   // Estado para controlar quando o campo de estoque mínimo está vazio
   const [estoqueMinimoVazio, setEstoqueMinimoVazio] = useState(false);
+  const [estoqueMinimoTemp, setEstoqueMinimoTemp] = useState('');
 
   // Estado para controlar quando o formulário foi resetado
   const [formularioResetado, setFormularioResetado] = useState(false);
@@ -1493,6 +1499,7 @@ const ProdutosPage: React.FC = () => {
 
     // Inicializa o estado do campo de estoque inicial
     setEstoqueInputVazio(false);
+    setEstoqueInicialInput('0');
 
     // Resetar a flag de formulário resetado
     setFormularioResetado(false);
@@ -2973,6 +2980,7 @@ const ProdutosPage: React.FC = () => {
     setDescontoFormatado('0');
     setDescontoQuantidadeFormatado('10');
     setEstoqueInputVazio(false);
+    setEstoqueInicialInput('0');
     setQuantidadeMinimaVazia(false);
     setEstoqueMinimoVazio(false);
     setEditingProduto(null);
@@ -3939,11 +3947,11 @@ const ProdutosPage: React.FC = () => {
                                 onChange={(e) => {
                                   const novaUnidadeId = e.target.value;
                                   const novaUnidade = unidadesMedida.find(u => u.id === novaUnidadeId);
-                                  const isKG = novaUnidade?.sigla === 'KG';
+                                  const isFracionado = novaUnidade?.fracionado || false;
 
-                                  // Se não for KG e o estoque inicial for fracionado, arredondar para inteiro
+                                  // Se não for fracionado e o estoque inicial for decimal, arredondar para inteiro
                                   let novoEstoqueInicial = novoProduto.estoque_inicial || 0;
-                                  if (!isKG && novoEstoqueInicial % 1 !== 0) {
+                                  if (!isFracionado && novoEstoqueInicial % 1 !== 0) {
                                     novoEstoqueInicial = Math.floor(novoEstoqueInicial);
                                   }
 
@@ -3952,6 +3960,12 @@ const ProdutosPage: React.FC = () => {
                                     unidade_medida_id: novaUnidadeId,
                                     estoque_inicial: novoEstoqueInicial
                                   });
+
+                                  // Sincronizar o campo de input
+                                  const valorFormatado = isFracionado
+                                    ? novoEstoqueInicial.toFixed(3)
+                                    : novoEstoqueInicial.toString();
+                                  setEstoqueInicialInput(valorFormatado);
                                 }}
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 dark-select"
                                 required
@@ -4047,10 +4061,16 @@ const ProdutosPage: React.FC = () => {
                             </label>
                             <input
                               type="text" // Mudamos para text para permitir campo vazio
-                              value={novoProduto.estoque_inicial === 0 && estoqueInputVazio ? '' : novoProduto.estoque_inicial}
+                              value={estoqueInicialInput}
                               onChange={(e) => {
-                                // Se o campo estiver vazio
-                                if (e.target.value === '') {
+                                // Permitir apenas números, vírgulas e pontos
+                                const valorDigitado = e.target.value.replace(/[^\d.,]/g, '');
+
+                                // Atualizar o campo de input sempre (permite digitação de vírgulas e pontos)
+                                setEstoqueInicialInput(valorDigitado);
+
+                                // Se o campo estiver vazio, definir estoque como 0
+                                if (valorDigitado === '') {
                                   setEstoqueInputVazio(true);
                                   setNovoProduto({ ...novoProduto, estoque_inicial: 0 });
                                   return;
@@ -4058,31 +4078,43 @@ const ProdutosPage: React.FC = () => {
 
                                 setEstoqueInputVazio(false);
 
-                                // Remover caracteres não numéricos, exceto ponto e vírgula
-                                const valorLimpo = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                                // Converter vírgula para ponto para processamento
+                                const valorLimpo = valorDigitado.replace(',', '.');
 
-                                // Se não for um número válido, não atualiza
-                                if (isNaN(parseFloat(valorLimpo))) {
-                                  return;
+                                // Se for um número válido, atualizar o estado
+                                if (!isNaN(parseFloat(valorLimpo))) {
+                                  let valor = parseFloat(valorLimpo);
+
+                                  // Verificar se a unidade de medida permite fracionamento
+                                  const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+                                  const isFracionado = unidadeSelecionada?.fracionado || false;
+
+                                  // Se for fracionado, limitar a 3 casas decimais; se não, arredondar para inteiro
+                                  if (isFracionado) {
+                                    valor = Math.round(valor * 1000) / 1000; // 3 casas decimais
+                                  } else {
+                                    valor = Math.floor(valor); // Número inteiro
+                                  }
+
+                                  setNovoProduto({ ...novoProduto, estoque_inicial: valor >= 0 ? valor : 0 });
                                 }
-
-                                let valor = parseFloat(valorLimpo);
-
-                                // Verificar se a unidade de medida é KG
-                                const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
-                                const isKG = unidadeSelecionada?.sigla === 'KG';
-
-                                // Se não for KG, arredondar para número inteiro
-                                if (!isKG) {
-                                  valor = Math.floor(valor);
-                                }
-
-                                setNovoProduto({ ...novoProduto, estoque_inicial: valor >= 0 ? valor : 0 });
                               }}
                               onBlur={() => {
-                                // Se o campo estiver vazio ao perder o foco, define como 0
+                                // Formatar o valor final quando sair do campo
                                 if (estoqueInputVazio) {
                                   setEstoqueInputVazio(false);
+                                  setEstoqueInicialInput('0');
+                                } else {
+                                  // Verificar se a unidade permite fracionamento para formatar adequadamente
+                                  const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
+                                  const isFracionado = unidadeSelecionada?.fracionado || false;
+
+                                  // Formatar o valor exibido
+                                  const valorFormatado = isFracionado
+                                    ? novoProduto.estoque_inicial.toFixed(3)
+                                    : novoProduto.estoque_inicial.toString();
+
+                                  setEstoqueInicialInput(valorFormatado);
                                 }
                               }}
                               className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
@@ -4090,10 +4122,10 @@ const ProdutosPage: React.FC = () => {
                             />
                             <p className="text-xs text-gray-500 mt-1">
                               {(() => {
-                                // Verificar se a unidade de medida é KG
+                                // Verificar se a unidade de medida permite fracionamento
                                 const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
-                                return unidadeSelecionada?.sigla === 'KG'
-                                  ? "Valores fracionados permitidos para KG (ex: 0,5)"
+                                return unidadeSelecionada?.fracionado
+                                  ? "Valores fracionados permitidos (ex: 0,500 para 3 casas decimais)"
                                   : "Apenas valores inteiros permitidos para esta unidade";
                               })()}
                             </p>
@@ -4701,15 +4733,15 @@ const ProdutosPage: React.FC = () => {
                                         Quantidade Mínima
                                       </label>
                                       {(() => {
-                                        // Verificar se a unidade de medida é KG
+                                        // Verificar se a unidade de medida permite fracionamento
                                         const unidadeSelecionada = unidadesMedida.find(u => u.id === novoProduto.unidade_medida_id);
-                                        const isKG = unidadeSelecionada?.sigla === 'KG';
-                                        const placeholder = isKG ? "0,000" : "0";
+                                        const isFracionado = unidadeSelecionada?.fracionado || false;
+                                        const placeholder = isFracionado ? "0,000" : "0";
 
                                         return (
                                           <input
                                             type="text"
-                                            value={novoProduto.estoque_minimo === 0 && estoqueMinimoVazio ? '' : novoProduto.estoque_minimo}
+                                            value={novoProduto.estoque_minimo === 0 && estoqueMinimoVazio ? '' : String(novoProduto.estoque_minimo)}
                                             onChange={(e) => {
                                               // Se o campo estiver vazio
                                               if (e.target.value === '') {
@@ -4720,18 +4752,29 @@ const ProdutosPage: React.FC = () => {
 
                                               setEstoqueMinimoVazio(false);
 
-                                              // Remover caracteres não numéricos, exceto ponto e vírgula
-                                              const valorLimpo = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                                              // Permitir apenas números, vírgulas e pontos
+                                              const valorDigitado = e.target.value.replace(/[^\d.,]/g, '');
+
+                                              // Se o campo contém apenas vírgula ou ponto no final, permitir (ex: "2," ou "2.")
+                                              if (valorDigitado.endsWith(',') || valorDigitado.endsWith('.')) {
+                                                // Não processar ainda, apenas permitir a digitação
+                                                return;
+                                              }
+
+                                              // Converter vírgula para ponto para processamento
+                                              const valorLimpo = valorDigitado.replace(',', '.');
 
                                               // Se não for um número válido, não atualiza
-                                              if (isNaN(parseFloat(valorLimpo))) {
+                                              if (valorLimpo === '' || isNaN(parseFloat(valorLimpo))) {
                                                 return;
                                               }
 
                                               const valor = parseFloat(valorLimpo);
 
-                                              // Se não for KG e o valor for fracionado, arredondar para inteiro
-                                              const valorFinal = !isKG && valor % 1 !== 0 ? Math.floor(valor) : valor;
+                                              // Se for fracionado, limitar a 3 casas decimais; se não, arredondar para inteiro
+                                              const valorFinal = isFracionado
+                                                ? Math.round(valor * 1000) / 1000 // 3 casas decimais
+                                                : Math.floor(valor); // Número inteiro
 
                                               setNovoProduto({
                                                 ...novoProduto,
@@ -4750,7 +4793,7 @@ const ProdutosPage: React.FC = () => {
                                                 setEstoqueMinimoVazio(false);
                                               } else {
                                                 // Se tiver valor, formata para casas decimais adequadas
-                                                const casasDecimais = isKG ? 3 : 0;
+                                                const casasDecimais = isFracionado ? 3 : 0;
                                                 setNovoProduto({
                                                   ...novoProduto,
                                                   estoque_minimo: parseFloat(novoProduto.estoque_minimo.toFixed(casasDecimais))
@@ -4826,15 +4869,15 @@ const ProdutosPage: React.FC = () => {
                                       </label>
                                       {/* Verificar se a unidade de medida é KG para definir o placeholder adequado */}
                                       {(() => {
-                                        // Verificar se a unidade de medida é KG
+                                        // Verificar se a unidade de medida permite fracionamento
                                         const unidadeSelecionada = unidadesMedida.find(u => u.id === editingProduto?.unidade_medida_id);
-                                        const isKG = unidadeSelecionada?.sigla === 'KG';
-                                        const placeholder = isKG ? "0,000" : "0";
+                                        const isFracionado = unidadeSelecionada?.fracionado || false;
+                                        const placeholder = isFracionado ? "0,000" : "0";
 
                                         return (
                                           <input
                                             type="text"
-                                            value={novoMovimento.quantidade === 0 && quantidadeMovimentoVazia ? '' : novoMovimento.quantidade}
+                                            value={novoMovimento.quantidade === 0 && quantidadeMovimentoVazia ? '' : String(novoMovimento.quantidade)}
                                             onChange={(e) => {
                                               // Se o campo estiver vazio
                                               if (e.target.value === '') {
@@ -4848,18 +4891,29 @@ const ProdutosPage: React.FC = () => {
 
                                               setQuantidadeMovimentoVazia(false);
 
-                                              // Remover caracteres não numéricos, exceto ponto e vírgula
-                                              const valorLimpo = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                                              // Permitir apenas números, vírgulas e pontos
+                                              const valorDigitado = e.target.value.replace(/[^\d.,]/g, '');
+
+                                              // Se o campo contém apenas vírgula ou ponto no final, permitir (ex: "2," ou "2.")
+                                              if (valorDigitado.endsWith(',') || valorDigitado.endsWith('.')) {
+                                                // Não processar ainda, apenas permitir a digitação
+                                                return;
+                                              }
+
+                                              // Converter vírgula para ponto para processamento
+                                              const valorLimpo = valorDigitado.replace(',', '.');
 
                                               // Se não for um número válido, não atualiza
-                                              if (isNaN(parseFloat(valorLimpo))) {
+                                              if (valorLimpo === '' || isNaN(parseFloat(valorLimpo))) {
                                                 return;
                                               }
 
                                               const valor = parseFloat(valorLimpo);
 
-                                              // Se não for KG e o valor for fracionado, arredondar para inteiro
-                                              const valorFinal = !isKG && valor % 1 !== 0 ? Math.floor(valor) : valor;
+                                              // Se for fracionado, limitar a 3 casas decimais; se não, arredondar para inteiro
+                                              const valorFinal = isFracionado
+                                                ? Math.round(valor * 1000) / 1000 // 3 casas decimais
+                                                : Math.floor(valor); // Número inteiro
 
                                               setNovoMovimento({
                                                 ...novoMovimento,
@@ -4876,7 +4930,7 @@ const ProdutosPage: React.FC = () => {
                                               // Se o campo estiver vazio ao perder o foco, mantém vazio
                                               if (!quantidadeMovimentoVazia) {
                                                 // Se tiver valor, formata para casas decimais adequadas
-                                                const casasDecimais = isKG ? 3 : 0;
+                                                const casasDecimais = isFracionado ? 3 : 0;
                                                 setNovoMovimento({
                                                   ...novoMovimento,
                                                   quantidade: parseFloat(novoMovimento.quantidade.toFixed(casasDecimais))

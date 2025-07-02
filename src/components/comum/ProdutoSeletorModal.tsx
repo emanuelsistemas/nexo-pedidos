@@ -80,7 +80,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
   const [produtoEmVisualizacao, setProdutoEmVisualizacao] = useState<Produto | null>(null);
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [produtosEstoque, setProdutosEstoque] = useState<Record<string, { total: number, naoFaturado: number }>>({});
-  const [unidadesMedida, setUnidadesMedida] = useState<{id: string, sigla: string, nome: string}[]>([]);
+  const [unidadesMedida, setUnidadesMedida] = useState<{id: string, sigla: string, nome: string, fracionado: boolean}[]>([]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -251,7 +251,7 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
     try {
       const { data, error } = await supabase
         .from('unidade_medida')
-        .select('id, sigla, nome')
+        .select('id, sigla, nome, fracionado')
         .eq('empresa_id', empresaId)
         .order('nome');
 
@@ -349,8 +349,8 @@ const ProdutoSeletorModal: React.FC<ProdutoSeletorModalProps> = ({
 
   // Função para formatar o estoque baseado na unidade de medida
   const formatarEstoque = (valor: number, produto: Produto) => {
-    // Se for KG, mostrar 3 casas decimais, senão mostrar como número inteiro
-    if (produto.unidade_medida?.sigla === 'KG') {
+    // Se a unidade permitir fracionamento, mostrar 3 casas decimais, senão mostrar como número inteiro
+    if (produto.unidade_medida?.fracionado) {
       return valor.toFixed(3);
     } else {
       return Math.floor(valor).toString();
