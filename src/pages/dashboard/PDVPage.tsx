@@ -38,7 +38,8 @@ import {
   MessageSquare,
   Maximize2,
   Minimize2,
-  Camera
+  Camera,
+  Save
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -989,6 +990,19 @@ const PDVPage: React.FC = () => {
       }
     },
     {
+      id: 'salvar-venda',
+      icon: Save,
+      label: 'Salvar Venda',
+      color: 'green',
+      onClick: (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        setShowSalvarVendaModal(true);
+      }
+    },
+    {
       id: 'venda-sem-produto',
       icon: DollarSign,
       label: 'Venda sem Produto',
@@ -1237,6 +1251,14 @@ const PDVPage: React.FC = () => {
   // Função para filtrar itens do menu baseado nas configurações do PDV
   const getFilteredMenuItems = () => {
     return allMenuPDVItems.filter(item => {
+      // ✅ NOVO: Ocultar "Vendas Abertas" quando há itens no carrinho
+      if (item.id === 'vendas-abertas') {
+        return carrinho.length === 0; // Só mostra se carrinho estiver vazio
+      }
+      // ✅ NOVO: Mostrar "Salvar Venda" apenas quando há itens no carrinho
+      if (item.id === 'salvar-venda') {
+        return carrinho.length > 0; // Só mostra se carrinho tiver itens
+      }
       // Se for o item 'comandas', só mostrar se a configuração estiver habilitada
       if (item.id === 'comandas') {
         return pdvConfig?.comandas === true;
@@ -10638,7 +10660,7 @@ const PDVPage: React.FC = () => {
                   {/* ✅ NOVO: Exibir numeração reservada da venda em andamento */}
                   {vendaEmAndamento && (
                     <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3">
-                      <div className="flex items-center justify-between text-sm mb-2">
+                      <div className="flex items-center justify-between text-sm">
                         <div className="text-blue-300 font-medium">
                           📋 Venda: {vendaEmAndamento.numero_venda}
                         </div>
@@ -10647,15 +10669,6 @@ const PDVPage: React.FC = () => {
                             🧾 NFC-e #{vendaEmAndamento.numero_nfce_reservado} Série {vendaEmAndamento.serie_usuario}
                           </div>
                         )}
-                      </div>
-                      {/* ✅ NOVO: Botão Salvar Venda */}
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() => setShowSalvarVendaModal(true)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                        >
-                          💾 Salvar Venda
-                        </button>
                       </div>
                     </div>
                   )}
@@ -10821,7 +10834,7 @@ const PDVPage: React.FC = () => {
                   {/* ✅ NOVO: Exibir numeração reservada da venda em andamento */}
                   {vendaEmAndamento && (
                     <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-3">
-                      <div className="flex items-center justify-between text-sm mb-2">
+                      <div className="flex items-center justify-between text-sm">
                         <div className="text-blue-300 font-medium">
                           📋 Venda: {vendaEmAndamento.numero_venda}
                         </div>
@@ -10830,15 +10843,6 @@ const PDVPage: React.FC = () => {
                             🧾 NFC-e #{vendaEmAndamento.numero_nfce_reservado} Série {vendaEmAndamento.serie_usuario}
                           </div>
                         )}
-                      </div>
-                      {/* ✅ NOVO: Botão Salvar Venda */}
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() => setShowSalvarVendaModal(true)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                        >
-                          💾 Salvar Venda
-                        </button>
                       </div>
                     </div>
                   )}
