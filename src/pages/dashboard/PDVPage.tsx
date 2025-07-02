@@ -434,6 +434,10 @@ const PDVPage: React.FC = () => {
   const [quantidadeModal, setQuantidadeModal] = useState(1);
   const [quantidadeModalInput, setQuantidadeModalInput] = useState('1'); // Campo string para digitação
 
+  // Estados para edição de quantidade no carrinho
+  const [itemEditandoQuantidade, setItemEditandoQuantidade] = useState<string | null>(null);
+  const [quantidadeEditando, setQuantidadeEditando] = useState('');
+
   // Funções para localStorage
   const savePDVState = () => {
     try {
@@ -4439,6 +4443,55 @@ const PDVPage: React.FC = () => {
     }
     // Se não permite fracionamento, mostrar como número inteiro
     return quantidade.toString();
+  };
+
+  // ✅ NOVO: Função para iniciar edição de quantidade no carrinho
+  const iniciarEdicaoQuantidade = (itemId: string, quantidadeAtual: number, unidadeMedida?: any) => {
+    setItemEditandoQuantidade(itemId);
+    // Formatar a quantidade inicial baseada na unidade de medida
+    const quantidadeFormatada = formatarQuantidade(quantidadeAtual, unidadeMedida);
+    setQuantidadeEditando(quantidadeFormatada);
+  };
+
+  // ✅ NOVO: Função para finalizar edição de quantidade no carrinho
+  const finalizarEdicaoQuantidade = (itemId: string, unidadeMedida?: any) => {
+    if (quantidadeEditando.trim() === '') {
+      // Se campo vazio, cancelar edição
+      setItemEditandoQuantidade(null);
+      setQuantidadeEditando('');
+      return;
+    }
+
+    // Converter vírgula para ponto para processamento
+    const valorLimpo = quantidadeEditando.replace(',', '.');
+
+    if (!isNaN(parseFloat(valorLimpo))) {
+      let novaQuantidade = parseFloat(valorLimpo);
+
+      // Verificar se a unidade de medida permite fracionamento
+      const isFracionado = unidadeMedida?.fracionado || false;
+
+      if (isFracionado) {
+        // Para produtos fracionados, limitar a 3 casas decimais, mínimo 0.1
+        novaQuantidade = Math.max(0.1, Math.round(novaQuantidade * 1000) / 1000);
+      } else {
+        // Para produtos inteiros, arredondar para inteiro, mínimo 1
+        novaQuantidade = Math.max(1, Math.floor(novaQuantidade));
+      }
+
+      // Atualizar a quantidade do item
+      alterarQuantidade(itemId, novaQuantidade);
+    }
+
+    // Limpar estados de edição
+    setItemEditandoQuantidade(null);
+    setQuantidadeEditando('');
+  };
+
+  // ✅ NOVO: Função para cancelar edição de quantidade
+  const cancelarEdicaoQuantidade = () => {
+    setItemEditandoQuantidade(null);
+    setQuantidadeEditando('');
   };
 
   // ✅ NOVO: Função para calcular preço considerando desconto por quantidade no modal
@@ -9996,9 +10049,40 @@ const PDVPage: React.FC = () => {
                                 >
                                   <Minus size={10} />
                                 </button>
-                                <span className="text-white font-medium min-w-[1.2rem] text-center text-xs">
-                                  {item.quantidade}
-                                </span>
+                                {/* Campo editável de quantidade */}
+                                {itemEditandoQuantidade === item.id ? (
+                                  <input
+                                    type="text"
+                                    value={quantidadeEditando}
+                                    onChange={(e) => {
+                                      // Permitir apenas números, vírgulas e pontos
+                                      const valorDigitado = e.target.value.replace(/[^\d.,]/g, '');
+                                      setQuantidadeEditando(valorDigitado);
+                                    }}
+                                    onBlur={() => finalizarEdicaoQuantidade(item.id, item.produto?.unidade_medida)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        finalizarEdicaoQuantidade(item.id, item.produto?.unidade_medida);
+                                      } else if (e.key === 'Escape') {
+                                        cancelarEdicaoQuantidade();
+                                      }
+                                    }}
+                                    className="w-12 h-6 bg-gray-700 border border-gray-600 rounded text-white text-xs text-center focus:outline-none focus:border-primary-500"
+                                    autoFocus
+                                    placeholder={(() => {
+                                      const isFracionado = item.produto?.unidade_medida?.fracionado || false;
+                                      return isFracionado ? "0,000" : "1";
+                                    })()}
+                                  />
+                                ) : (
+                                  <span
+                                    className="text-white font-medium min-w-[1.2rem] text-center text-xs cursor-pointer hover:bg-gray-600/50 rounded px-1 py-0.5 transition-colors"
+                                    onClick={() => iniciarEdicaoQuantidade(item.id, item.quantidade, item.produto?.unidade_medida)}
+                                    title="Clique para editar a quantidade"
+                                  >
+                                    {formatarQuantidade(item.quantidade, item.produto?.unidade_medida)}
+                                  </span>
+                                )}
                                 <button
                                   onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
                                   className="w-6 h-6 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors"
@@ -10290,9 +10374,40 @@ const PDVPage: React.FC = () => {
                                 >
                                   <Minus size={14} />
                                 </button>
-                                <span className="text-white font-medium min-w-[2rem] text-center">
-                                  {item.quantidade}
-                                </span>
+                                {/* Campo editável de quantidade - mobile */}
+                                {itemEditandoQuantidade === item.id ? (
+                                  <input
+                                    type="text"
+                                    value={quantidadeEditando}
+                                    onChange={(e) => {
+                                      // Permitir apenas números, vírgulas e pontos
+                                      const valorDigitado = e.target.value.replace(/[^\d.,]/g, '');
+                                      setQuantidadeEditando(valorDigitado);
+                                    }}
+                                    onBlur={() => finalizarEdicaoQuantidade(item.id, item.produto?.unidade_medida)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        finalizarEdicaoQuantidade(item.id, item.produto?.unidade_medida);
+                                      } else if (e.key === 'Escape') {
+                                        cancelarEdicaoQuantidade();
+                                      }
+                                    }}
+                                    className="w-16 h-8 bg-gray-700 border border-gray-600 rounded text-white text-sm text-center focus:outline-none focus:border-primary-500"
+                                    autoFocus
+                                    placeholder={(() => {
+                                      const isFracionado = item.produto?.unidade_medida?.fracionado || false;
+                                      return isFracionado ? "0,000" : "1";
+                                    })()}
+                                  />
+                                ) : (
+                                  <span
+                                    className="text-white font-medium min-w-[2rem] text-center cursor-pointer hover:bg-gray-600/50 rounded px-2 py-1 transition-colors"
+                                    onClick={() => iniciarEdicaoQuantidade(item.id, item.quantidade, item.produto?.unidade_medida)}
+                                    title="Clique para editar a quantidade"
+                                  >
+                                    {formatarQuantidade(item.quantidade, item.produto?.unidade_medida)}
+                                  </span>
+                                )}
                                 <button
                                   onClick={() => alterarQuantidade(item.id, item.quantidade + 1)}
                                   className="w-8 h-8 bg-primary-500/30 hover:bg-primary-500/50 rounded-full flex items-center justify-center text-white transition-colors"
