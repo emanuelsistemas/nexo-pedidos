@@ -597,6 +597,9 @@ const PDVPage: React.FC = () => {
     setItemEditandoObservacao(null);
     setObservacaoEditando('');
 
+    // ✅ NOVO: Limpar observação da venda
+    setObservacaoVenda('');
+
     // Limpar localStorage
     clearPDVState();
 
@@ -1290,6 +1293,10 @@ const PDVPage: React.FC = () => {
       // Se for o item 'desconto-total', só mostrar se a configuração estiver habilitada E houver itens no carrinho
       if (item.id === 'desconto-total') {
         return pdvConfig?.desconto_no_total === true && carrinho.length > 0;
+      }
+      // ✅ NOVO: Se for o item 'observacao-venda', só mostrar se houver itens no carrinho
+      if (item.id === 'observacao-venda') {
+        return carrinho.length > 0;
       }
       // Se for um dos itens de controle de caixa, só mostrar se a configuração estiver habilitada
       if (['sangria', 'suprimento', 'pagamentos'].includes(item.id)) {
@@ -5050,6 +5057,9 @@ const PDVPage: React.FC = () => {
     setErroValidacao('');
     limparPagamentosParciaisSilencioso();
 
+    // ✅ NOVO: Limpar observação da venda
+    setObservacaoVenda('');
+
     // Fechar modal
     setShowLimparCarrinhoModal(false);
 
@@ -6258,6 +6268,9 @@ const PDVPage: React.FC = () => {
       setTipoDocumento('cpf');
       setErroValidacao('');
       limparPagamentosParciaisSilencioso();
+
+      // ✅ NOVO: Limpar observação da venda
+      setObservacaoVenda('');
 
       // Limpar estados do PDV
       clearPDVState();
@@ -7532,6 +7545,10 @@ const PDVPage: React.FC = () => {
           setTipoDocumento('cpf');
           setPedidosImportados([]);
           setDescontoPrazoSelecionado(null);
+
+          // ✅ NOVO: Limpar observação da venda
+          setObservacaoVenda('');
+
           clearPDVState();
 
           // ✅ NOVO: Atualizar contador de NFC-e pendentes
@@ -7799,6 +7816,10 @@ const PDVPage: React.FC = () => {
       setTipoDocumento('cpf');
       setPedidosImportados([]);
       setDescontoPrazoSelecionado(null);
+
+      // ✅ NOVO: Limpar observação da venda
+      setObservacaoVenda('');
+
       clearPDVState();
 
       // Recarregar estoque se necessário
@@ -8641,6 +8662,21 @@ const PDVPage: React.FC = () => {
           ` : ''}
 
           ${(() => {
+            // ✅ NOVO: EXIBIR OBSERVAÇÃO DA VENDA APÓS FORMAS DE PAGAMENTO
+            const observacaoVenda = dadosImpressao.venda.observacao_venda;
+            if (observacaoVenda && observacaoVenda.trim()) {
+              return `
+                <div class="linha"></div>
+                <div class="center bold" style="font-size: 12px; margin: 5px 0;">OBSERVAÇÃO</div>
+                <div class="center" style="font-size: 11px; margin: 3px 0; word-wrap: break-word;">
+                  ${observacaoVenda}
+                </div>
+              `;
+            }
+            return '';
+          })()}
+
+          ${(() => {
             // ✅ EXIBIR DESCONTOS DETALHADOS APÓS FORMAS DE PAGAMENTO
             const descontoItens = dadosImpressao.venda.valor_desconto_itens || 0;
             const descontoTotal = dadosImpressao.venda.valor_desconto_total || 0;
@@ -8661,6 +8697,21 @@ const PDVPage: React.FC = () => {
                     <span class="bold">-${formatCurrency(descontoTotal)}</span>
                   </div>
                 ` : ''}
+              `;
+            }
+            return '';
+          })()}
+
+          ${(() => {
+            // ✅ NOVO: EXIBIR OBSERVAÇÃO DA VENDA NA ÚLTIMA POSIÇÃO
+            const observacaoVenda = dadosImpressao.venda.observacao_venda;
+            if (observacaoVenda && observacaoVenda.trim()) {
+              return `
+                <div class="linha"></div>
+                <div class="center bold" style="font-size: 12px; margin: 5px 0;">OBSERVAÇÃO</div>
+                <div class="center" style="font-size: 11px; margin: 3px 0; word-wrap: break-word;">
+                  ${observacaoVenda}
+                </div>
               `;
             }
             return '';
@@ -9120,6 +9171,21 @@ const PDVPage: React.FC = () => {
             return '';
           })()}
 
+          ${(() => {
+            // ✅ NOVO: EXIBIR OBSERVAÇÃO DA VENDA NA ÚLTIMA POSIÇÃO
+            const observacaoVenda = dadosImpressao.venda.observacao_venda;
+            if (observacaoVenda && observacaoVenda.trim()) {
+              return `
+                <div class="linha"></div>
+                <div class="center bold" style="font-size: 12px; margin: 5px 0;">OBSERVAÇÃO</div>
+                <div class="center" style="font-size: 11px; margin: 3px 0; word-wrap: break-word;">
+                  ${observacaoVenda}
+                </div>
+              `;
+            }
+            return '';
+          })()}
+
           <div class="linha"></div>
 
           <div class="center">
@@ -9186,6 +9252,10 @@ const PDVPage: React.FC = () => {
       setTipoDocumento('cpf');
       setPedidosImportados([]);
       setDescontoPrazoSelecionado(null);
+
+      // ✅ NOVO: Limpar observação da venda
+      setObservacaoVenda('');
+
       clearPDVState(); // ✅ IMPORTANTE: Limpar localStorage
 
       // Reset estados específicos da impressão
@@ -9217,6 +9287,9 @@ const PDVPage: React.FC = () => {
     setTipoDocumento('cpf');
     setErroValidacao('');
     limparPagamentosParciaisSilencioso();
+
+    // ✅ NOVO: Limpar observação da venda
+    setObservacaoVenda('');
 
     // Limpar localStorage e fechar modal
     clearPDVState();
