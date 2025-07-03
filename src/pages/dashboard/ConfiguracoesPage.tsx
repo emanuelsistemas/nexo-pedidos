@@ -2834,8 +2834,15 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
-  // Função para salvar configurações de conexão
+  // ⚠️ FUNÇÃO DESABILITADA: Conexão em desenvolvimento - VERSÃO 2.0
   const handleConexaoConfigChange = async (field: string, value: boolean) => {
+    // 🚧 FUNCIONALIDADE COMPLETAMENTE BLOQUEADA - EM DESENVOLVIMENTO
+    console.log('🚫 BLOQUEADO: Tentativa de alterar configuração de conexão - funcionalidade em desenvolvimento');
+    showMessage('warning', '🚧 Funcionalidade em desenvolvimento - não disponível no momento');
+    alert('⚠️ ATENÇÃO: Esta funcionalidade está em desenvolvimento e não pode ser habilitada!');
+    return;
+
+    /* CÓDIGO ORIGINAL COMENTADO PARA BLOQUEAR FUNCIONALIDADE
     try {
       // Atualizar o estado local primeiro
       setConexaoConfig(prev => ({ ...prev, [field]: value }));
@@ -2893,6 +2900,7 @@ const ConfiguracoesPage: React.FC = () => {
       console.error('Erro ao salvar configuração de conexão:', error);
       showMessage('error', 'Erro ao salvar configuração: ' + error.message);
     }
+    */
   };
 
   const handlePdvConfigChange = async (field: string, value: boolean) => {
@@ -5589,6 +5597,9 @@ const ConfiguracoesPage: React.FC = () => {
         );
 
       case 'conexao':
+        // 🔍 DEBUG: Verificar se código está sendo executado
+        console.log('🔍 CONEXÃO PAGE RENDERIZADA - VERSÃO BLOQUEADA:', new Date().toISOString());
+
         return (
           <div>
             <div className="flex items-center justify-between mb-6">
@@ -5606,9 +5617,11 @@ const ConfiguracoesPage: React.FC = () => {
                       <span className="text-black text-sm font-bold">!</span>
                     </div>
                     <div>
-                      <h4 className="text-yellow-400 font-medium">Funcionalidade em Desenvolvimento</h4>
+                      <h4 className="text-yellow-400 font-medium">🚧 Funcionalidade em Desenvolvimento - v2.0</h4>
                       <p className="text-sm text-yellow-300/80 mt-1">
                         A integração com WhatsApp está sendo desenvolvida e não está disponível no momento.
+                        <br />
+                        <strong>CACHE BUST: {new Date().toISOString()}</strong>
                       </p>
                     </div>
                   </div>
