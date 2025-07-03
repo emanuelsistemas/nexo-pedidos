@@ -68,6 +68,11 @@ export interface ProdutoOpcao {
   opcao?: OpcaoAdicional;
 }
 
+export interface ItemSelecionado {
+  item: OpcaoAdicionalItem;
+  quantidade: number;
+}
+
 export interface TipoControleEstoqueConfig {
   id: string;
   empresa_id: string;
