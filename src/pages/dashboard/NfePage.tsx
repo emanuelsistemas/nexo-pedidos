@@ -6885,7 +6885,7 @@ const ProdutosSection: React.FC<{
                       valor_unitario: 0,
                       quantidade: 1,
                       valor_total: 0,
-                      cfop: '',
+                      cfop_geral: '',
                       cfop_devolucao: '',
                       cfop_entrada: ''
                     });
@@ -7134,8 +7134,8 @@ const ProdutosSection: React.FC<{
               <div>
                 <input
                   type="text"
-                  value={produtoForm.cfop || ''}
-                  onChange={(e) => updateProdutoForm('cfop', e.target.value)}
+                  value={produtoForm.cfop_geral || ''}
+                  onChange={(e) => updateProdutoForm('cfop_geral', e.target.value)}
                   placeholder="Ex: 5102"
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
                 />
