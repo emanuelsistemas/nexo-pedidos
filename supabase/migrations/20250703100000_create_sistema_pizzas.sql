@@ -1,11 +1,57 @@
 -- =====================================================
--- SISTEMA DE PIZZAS - CRIAÇÃO DAS TABELAS
+-- SISTEMA DE TABELA DE PREÇOS - CRIAÇÃO DAS TABELAS
 -- Data: 2025-07-03
--- Descrição: Implementa sistema completo para pizzarias
+-- Descrição: Implementa sistema de tabela de preços flexível
 -- =====================================================
 
 -- =====================================================
--- 1. TABELA: produto_variacoes
+-- 1. TABELA: tabela_preco_config
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS tabela_preco_config (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+
+  -- Configurações principais
+  trabalha_com_tabela_precos BOOLEAN DEFAULT FALSE,
+  trabalha_com_sabores BOOLEAN DEFAULT FALSE,
+
+  -- Controle
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- Constraint para garantir uma configuração por empresa
+  CONSTRAINT uk_tabela_preco_config_empresa UNIQUE (empresa_id)
+);
+
+-- =====================================================
+-- 2. TABELA: tabela_de_preco
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS tabela_de_preco (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+
+  -- Informações da tabela
+  nome VARCHAR(255) NOT NULL,
+  codigo VARCHAR(50),
+  descricao TEXT,
+  ativo BOOLEAN DEFAULT TRUE,
+
+  -- Configurações específicas para sabores (pizzarias)
+  quantidade_sabores INTEGER DEFAULT 1,
+  permite_meio_a_meio BOOLEAN DEFAULT FALSE,
+
+  -- Controle
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  deletado BOOLEAN DEFAULT FALSE,
+  deletado_em TIMESTAMPTZ,
+  deletado_por UUID REFERENCES usuarios(id)
+);
+
+-- =====================================================
+-- 3. TABELA: produto_variacoes (mantida para compatibilidade)
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS produto_variacoes (
@@ -87,6 +133,14 @@ CREATE TABLE IF NOT EXISTS pdv_itens_variacoes (
 -- 4. ÍNDICES PARA PERFORMANCE
 -- =====================================================
 
+-- Índices para tabela_preco_config
+CREATE INDEX idx_tabela_preco_config_empresa_id ON tabela_preco_config(empresa_id);
+
+-- Índices para tabela_de_preco
+CREATE INDEX idx_tabela_de_preco_empresa_id ON tabela_de_preco(empresa_id);
+CREATE INDEX idx_tabela_de_preco_ativo ON tabela_de_preco(ativo) WHERE ativo = TRUE;
+CREATE INDEX idx_tabela_de_preco_empresa_ativo ON tabela_de_preco(empresa_id, ativo) WHERE ativo = TRUE AND deletado = FALSE;
+
 -- Índices para produto_variacoes
 CREATE INDEX idx_produto_variacoes_empresa_id ON produto_variacoes(empresa_id);
 CREATE INDEX idx_produto_variacoes_produto_base_id ON produto_variacoes(produto_base_id);
@@ -107,17 +161,26 @@ CREATE INDEX idx_pdv_itens_variacoes_empresa_id ON pdv_itens_variacoes(empresa_i
 -- 5. CONSTRAINTS DE VALIDAÇÃO
 -- =====================================================
 
+-- Validações para tabela_de_preco
+ALTER TABLE tabela_de_preco
+ADD CONSTRAINT chk_tabela_de_preco_quantidade_sabores_positivo
+CHECK (quantidade_sabores > 0);
+
+ALTER TABLE tabela_de_preco
+ADD CONSTRAINT chk_tabela_de_preco_nome_nao_vazio
+CHECK (LENGTH(TRIM(nome)) > 0);
+
 -- Validações para produto_variacoes
-ALTER TABLE produto_variacoes 
-ADD CONSTRAINT chk_produto_variacoes_preco_positivo 
+ALTER TABLE produto_variacoes
+ADD CONSTRAINT chk_produto_variacoes_preco_positivo
 CHECK (preco >= 0);
 
-ALTER TABLE produto_variacoes 
-ADD CONSTRAINT chk_produto_variacoes_max_sabores_positivo 
+ALTER TABLE produto_variacoes
+ADD CONSTRAINT chk_produto_variacoes_max_sabores_positivo
 CHECK (max_sabores > 0);
 
-ALTER TABLE produto_variacoes 
-ADD CONSTRAINT chk_produto_variacoes_preco_sabor_adicional 
+ALTER TABLE produto_variacoes
+ADD CONSTRAINT chk_produto_variacoes_preco_sabor_adicional
 CHECK (preco_sabor_adicional >= 0);
 
 -- Validações para produto_variacoes_opcoes
@@ -133,9 +196,19 @@ CHECK (quantidade_maxima IS NULL OR quantidade_maxima >= quantidade_minima);
 -- 6. UNIQUE CONSTRAINTS
 -- =====================================================
 
+-- Nome único por empresa para tabela_de_preco
+ALTER TABLE tabela_de_preco
+ADD CONSTRAINT uk_tabela_de_preco_nome_empresa
+UNIQUE (empresa_id, nome);
+
+-- Código único por empresa para tabela_de_preco (se preenchido)
+CREATE UNIQUE INDEX uk_tabela_de_preco_codigo_empresa
+ON tabela_de_preco (empresa_id, codigo)
+WHERE codigo IS NOT NULL AND codigo != '';
+
 -- Código único por empresa
-ALTER TABLE produto_variacoes 
-ADD CONSTRAINT uk_produto_variacoes_codigo_empresa 
+ALTER TABLE produto_variacoes
+ADD CONSTRAINT uk_produto_variacoes_codigo_empresa
 UNIQUE (empresa_id, codigo);
 
 -- Evitar duplicação de opções por variação
@@ -146,6 +219,15 @@ UNIQUE (variacao_id, opcao_adicional_id);
 -- =====================================================
 -- 7. COMENTÁRIOS PARA DOCUMENTAÇÃO
 -- =====================================================
+
+COMMENT ON TABLE tabela_preco_config IS 'Configurações de tabela de preços por empresa';
+COMMENT ON COLUMN tabela_preco_config.trabalha_com_tabela_precos IS 'Se a empresa utiliza sistema de tabela de preços';
+COMMENT ON COLUMN tabela_preco_config.trabalha_com_sabores IS 'Se a empresa trabalha com sabores (pizzarias)';
+
+COMMENT ON TABLE tabela_de_preco IS 'Tabelas de preços criadas pela empresa (ex: Pizza Pequena, Atacado 10un)';
+COMMENT ON COLUMN tabela_de_preco.nome IS 'Nome da tabela (ex: Pizza Pequena, Atacado 10un)';
+COMMENT ON COLUMN tabela_de_preco.quantidade_sabores IS 'Quantidade máxima de sabores para esta tabela';
+COMMENT ON COLUMN tabela_de_preco.permite_meio_a_meio IS 'Se permite dividir em sabores diferentes';
 
 COMMENT ON TABLE produto_variacoes IS 'Variações de produtos (ex: Pizza Pequena, Pizza Média)';
 COMMENT ON COLUMN produto_variacoes.produto_base_id IS 'Referência ao produto base (ex: Pizza)';
@@ -198,8 +280,16 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE TRIGGER update_produto_variacoes_updated_at 
-BEFORE UPDATE ON produto_variacoes 
+CREATE TRIGGER update_tabela_preco_config_updated_at
+BEFORE UPDATE ON tabela_preco_config
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_tabela_de_preco_updated_at
+BEFORE UPDATE ON tabela_de_preco
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_produto_variacoes_updated_at
+BEFORE UPDATE ON produto_variacoes
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =====================================================
