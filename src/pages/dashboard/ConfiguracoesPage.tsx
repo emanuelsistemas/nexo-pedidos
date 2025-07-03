@@ -5545,6 +5545,167 @@ const ConfiguracoesPage: React.FC = () => {
                     )}
                   </div>
                 )}
+
+                {/* Nova aba: Cardápio Digital */}
+                {pdvActiveTab === 'cardapio-digital' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        Configurações do Cardápio Digital
+                      </h3>
+                      <p className="text-sm text-gray-400 mb-6">
+                        Configure as opções do cardápio digital para permitir que clientes façam pedidos via QR Code.
+                      </p>
+                    </div>
+
+                    {/* Status da funcionalidade */}
+                    <div className="bg-purple-900/20 border border-purple-600/30 rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                        <span className="text-purple-400 font-medium">Funcionalidade Ativa</span>
+                      </div>
+                      <p className="text-sm text-gray-400">
+                        O cardápio digital está habilitado e disponível para seus clientes. Configure as opções abaixo para personalizar a experiência.
+                      </p>
+                    </div>
+
+                    {/* Configurações do cardápio */}
+                    <div className="space-y-4">
+                      <h4 className="text-white font-medium">Configurações Gerais</h4>
+
+                      <div className="grid grid-cols-1 gap-4">
+                        <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="text-white font-medium">URL do Cardápio</h5>
+                            <button className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors">
+                              Copiar Link
+                            </button>
+                          </div>
+                          <div className="bg-gray-900/50 p-3 rounded border border-gray-600">
+                            <code className="text-purple-300 text-sm break-all">
+                              https://nexodev.emasoftware.app/cardapio/sua-empresa
+                            </code>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Compartilhe este link ou gere um QR Code para que clientes acessem seu cardápio digital.
+                          </p>
+                        </div>
+
+                        <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                          <h5 className="text-white font-medium mb-3">QR Code do Cardápio</h5>
+                          <div className="flex items-center gap-4">
+                            <div className="w-24 h-24 bg-white rounded-lg flex items-center justify-center">
+                              <div className="w-20 h-20 bg-gray-900 rounded grid grid-cols-8 gap-px p-1">
+                                {Array.from({ length: 64 }).map((_, i) => (
+                                  <div key={i} className={`${Math.random() > 0.5 ? 'bg-black' : 'bg-white'} rounded-sm`}></div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-gray-400 mb-3">
+                                Use este QR Code em seu estabelecimento para que clientes acessem o cardápio digital.
+                              </p>
+                              <div className="flex gap-2">
+                                <button className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors">
+                                  Baixar QR Code
+                                </button>
+                                <button className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors">
+                                  Imprimir
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Configurações avançadas */}
+                    <div className="space-y-4">
+                      <h4 className="text-white font-medium">Configurações Avançadas</h4>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                          <input
+                            type="checkbox"
+                            defaultChecked={true}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h5 className="text-white font-medium">Mostrar Preços</h5>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Exibe os preços dos produtos no cardápio digital.
+                            </p>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                          <input
+                            type="checkbox"
+                            defaultChecked={true}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h5 className="text-white font-medium">Permitir Pedidos</h5>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Permite que clientes façam pedidos diretamente pelo cardápio.
+                            </p>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                          <input
+                            type="checkbox"
+                            defaultChecked={false}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h5 className="text-white font-medium">Modo Escuro</h5>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Aplica tema escuro no cardápio digital.
+                            </p>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                          <input
+                            type="checkbox"
+                            defaultChecked={true}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h5 className="text-white font-medium">Mostrar Fotos</h5>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Exibe fotos dos produtos quando disponíveis.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Informações adicionais */}
+                    <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <h5 className="text-blue-400 font-medium mb-1">Como funciona</h5>
+                          <p className="text-sm text-blue-300/80">
+                            O cardápio digital sincroniza automaticamente com seus produtos cadastrados.
+                            Clientes podem visualizar produtos, fazer pedidos e entrar em contato diretamente pelo WhatsApp.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
