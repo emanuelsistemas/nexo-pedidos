@@ -1519,28 +1519,47 @@ const PDVPage: React.FC = () => {
     garantirVendaEmAndamento();
   }, [carrinho.length, vendaEmAndamento, criandoVenda]); // Monitora mudanças no carrinho
 
-  // ✅ NOVO: useEffect para salvar itens quando venda em andamento é criada
+  // ✅ CORREÇÃO: useEffect para salvar itens apenas quando venda NOVA é criada
   useEffect(() => {
     const salvarItensExistentes = async () => {
-      if (vendaEmAndamento && carrinho.length > 0) {
-        console.log('🔍 USEEFFECT: Venda criada, salvando itens existentes no carrinho...');
+      // ✅ CORREÇÃO: Só salvar se é venda nova (não recuperada) e tem itens sem pdv_item_id
+      if (vendaEmAndamento && carrinho.length > 0 && !isEditingVenda) {
+        console.log('🔍 USEEFFECT: Venda NOVA criada, salvando itens existentes no carrinho...');
 
-        for (const item of carrinho) {
-          console.log('🔍 Salvando item:', item.produto.nome);
-          const itemSalvo = await salvarItemNaVendaEmAndamento(item);
-          if (itemSalvo) {
-            console.log('✅ Item salvo:', item.produto.nome);
-          } else {
-            console.error('❌ Erro ao salvar item:', item.produto.nome);
+        // ✅ CORREÇÃO: Só salvar itens que não têm pdv_item_id (itens novos)
+        const itensNovos = carrinho.filter(item => !item.pdv_item_id);
+
+        if (itensNovos.length > 0) {
+          console.log(`🔍 USEEFFECT: Encontrados ${itensNovos.length} itens novos para salvar`);
+
+          for (const item of itensNovos) {
+            console.log('🔍 Salvando item novo:', item.produto.nome);
+            const itemSalvo = await salvarItemNaVendaEmAndamento(item);
+            if (itemSalvo) {
+              console.log('✅ Item novo salvo:', item.produto.nome);
+            } else {
+              console.error('❌ Erro ao salvar item novo:', item.produto.nome);
+            }
           }
-        }
 
-        console.log('✅ USEEFFECT: Todos os itens do carrinho foram salvos');
+          console.log('✅ USEEFFECT: Todos os itens novos foram salvos');
+        } else {
+          console.log('🔍 USEEFFECT: Nenhum item novo para salvar (todos têm pdv_item_id)');
+        }
+      } else {
+        console.log('🔍 USEEFFECT: Não salvando itens porque:', {
+          vendaEmAndamento: !!vendaEmAndamento,
+          carrinhoLength: carrinho.length,
+          isEditingVenda,
+          motivo: !vendaEmAndamento ? 'Sem venda em andamento' :
+                  carrinho.length === 0 ? 'Carrinho vazio' :
+                  isEditingVenda ? 'É venda recuperada' : 'Outro motivo'
+        });
       }
     };
 
     salvarItensExistentes();
-  }, [vendaEmAndamento]); // Executa quando venda em andamento é criada
+  }, [vendaEmAndamento, isEditingVenda]); // Executa quando venda em andamento é criada ou modo de edição muda
 
   // ✅ NOVO: useEffect para carregar vendas abertas ao montar o componente
   useEffect(() => {
@@ -4209,34 +4228,45 @@ const PDVPage: React.FC = () => {
       }
     });
 
-    // ✅ NOVO: Salvar item na tabela pdv_itens se venda em andamento existe
+    // ✅ CORREÇÃO: Salvar item na tabela pdv_itens se venda em andamento existe
     if (vendaParaSalvar) {
-      console.log('🔍 Salvando item na venda em andamento:', {
-        vendaParaSalvar,
+      console.log('🔍 DEBUG: Iniciando salvamento do item na venda em andamento:', {
+        vendaParaSalvar: {
+          id: vendaParaSalvar.id,
+          numero_venda: vendaParaSalvar.numero_venda
+        },
+        isEditingVenda,
         novoItem: {
           id: novoItem.id,
           produto: novoItem.produto.nome,
           quantidade: novoItem.quantidade,
-          subtotal: novoItem.subtotal
+          subtotal: novoItem.subtotal,
+          vendaSemProduto: novoItem.vendaSemProduto
         }
       });
 
+      // ✅ CORREÇÃO: Sempre salvar itens novos, independente se é venda nova ou recuperada
+      console.log('🔍 DEBUG: Chamando salvarItemNaVendaEmAndamento...');
       const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
-      console.log('🔍 Resultado do salvamento do item:', itemSalvo);
+      console.log('🔍 DEBUG: Resultado do salvamento do item:', itemSalvo);
 
       if (!itemSalvo) {
-        console.error('❌ ERRO: Falha ao salvar item na venda em andamento');
-        toast.error('Erro ao salvar item. Tente novamente.');
+        console.error('❌ ERRO CRÍTICO: Falha ao salvar item na venda em andamento');
+        toast.error('ERRO: Item não foi salvo! Verifique o console.');
       } else {
-        console.log('✅ Item salvo com sucesso na venda em andamento');
+        console.log('✅ SUCESSO: Item salvo com sucesso na venda em andamento');
       }
     } else {
-      console.log('🔍 Não salvou item porque não há venda em andamento:', {
+      console.error('❌ DEBUG: Não salvou item porque não há venda em andamento:', {
         vendaEmAndamento: !!vendaEmAndamento,
         vendaParaSalvar: !!vendaParaSalvar,
         isFirstItem,
-        criandoVenda
+        criandoVenda,
+        motivo: !vendaEmAndamento ? 'vendaEmAndamento é null' :
+                !vendaParaSalvar ? 'vendaParaSalvar é null' :
+                'Outro motivo'
       });
+      toast.error('ERRO: Venda em andamento não encontrada!');
     }
   };
 
@@ -6226,7 +6256,8 @@ const PDVPage: React.FC = () => {
         serie_usuario: vendaInserida.serie_documento,
         status_venda: 'aberta'
       });
-      setIsEditingVenda(true);
+      // ✅ CORREÇÃO: Venda NOVA deve ter isEditingVenda = false
+      setIsEditingVenda(false);
 
       console.log('✅ Venda em andamento criada:', vendaInserida);
       return true;
@@ -6318,18 +6349,31 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (itemError) {
-        console.error('❌ Erro ao salvar item na venda em andamento:', itemError);
-        console.error('❌ Detalhes do erro:', {
+        console.error('❌ ERRO CRÍTICO: Falha ao salvar item na venda em andamento:', itemError);
+        console.error('❌ Detalhes completos do erro:', {
           message: itemError.message,
           details: itemError.details,
           hint: itemError.hint,
-          code: itemError.code
+          code: itemError.code,
+          itemData: itemData
         });
+
+        // ✅ NOVO: Mostrar toast com erro específico
+        toast.error(`Erro ao salvar item: ${itemError.message}`);
         return false;
       }
 
-      console.log('✅ Item inserido com sucesso:', itemInserido);
-      console.log('✅ Item salvo na venda em andamento:', itemData.nome_produto);
+      if (!itemInserido) {
+        console.error('❌ ERRO: Item não foi inserido (resposta vazia)');
+        toast.error('Erro: Item não foi salvo no banco de dados');
+        return false;
+      }
+
+      console.log('✅ SUCESSO: Item inserido com sucesso:', itemInserido);
+      console.log('✅ SUCESSO: Item salvo na venda em andamento:', itemData.nome_produto);
+
+      // ✅ NOVO: Toast de confirmação para debug
+      toast.success(`Item ${itemData.nome_produto} salvo com sucesso!`);
       return true;
 
     } catch (error) {
@@ -6338,7 +6382,7 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  // ✅ NOVA: Função para salvar venda em andamento e limpar PDV (similar ao rascunho NFe)
+  // ✅ NOVA: Função para salvar venda em andamento e limpar PDV
   const salvarVendaEmAndamento = async (): Promise<boolean> => {
     try {
       if (!vendaEmAndamento) {
@@ -6346,45 +6390,59 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      console.log('💾 SALVANDO venda em andamento:', vendaEmAndamento.numero_venda);
+      console.log('💾 SALVANDO venda em andamento e limpando PDV:', vendaEmAndamento.numero_venda);
 
       // A venda já está salva na tabela pdv com status 'aberta'
       // Os itens já estão salvos na tabela pdv_itens
-      // Apenas precisamos confirmar que está tudo salvo e limpar o PDV
-
       const numeroVendaSalva = vendaEmAndamento.numero_venda;
 
-      // ✅ NOVO: Limpar PDV para permitir nova venda
-      console.log('🧹 Limpando PDV após salvar venda...');
+      // ✅ CORREÇÃO: Limpar PDV após salvar a venda
+      console.log('🧹 Limpando PDV após salvar venda:', numeroVendaSalva);
 
       // Limpar estados da venda em andamento
       setVendaEmAndamento(null);
       setIsEditingVenda(false);
 
-      // Limpar carrinho e todos os estados
+      // Limpar carrinho
       setCarrinho([]);
+
+      // Limpar cliente selecionado
       setClienteSelecionado(null);
+
+      // Limpar vendedor selecionado
       setVendedorSelecionado(null);
+
+      // Limpar pedidos importados
+      setPedidosImportados([]);
+
+      // Limpar descontos
+      setDescontosCliente({ prazo: [], valor: [] });
       setDescontoPrazoSelecionado(null);
       setDescontoGlobal(0);
-      setPedidosImportados([]);
-      setDescontosCliente({ prazo: [], valor: [] });
 
-      // Limpar dados de finalização
+      // Resetar tipo de pagamento
+      setTipoPagamento('vista');
+      setFormaPagamentoSelecionada(null);
+
+      // Limpar pagamentos parciais
+      setValorParcial('');
+      setPagamentosParciais([]);
+      setTrocoCalculado(0);
+
+      // Limpar dados da nota fiscal
       setCpfCnpjNota('');
       setClienteEncontrado(null);
       setTipoDocumento('cpf');
       setErroValidacao('');
-      limparPagamentosParciaisSilencioso();
 
-      // ✅ NOVO: Limpar observação da venda
+      // Limpar observação da venda
       setObservacaoVenda('');
 
-      // Limpar estados do PDV
+      // Limpar localStorage
       clearPDVState();
 
-      toast.success(`Venda ${numeroVendaSalva} salva com sucesso! PDV liberado para nova venda.`);
       console.log('✅ Venda salva e PDV limpo:', numeroVendaSalva);
+      toast.success(`Venda ${numeroVendaSalva} salva com sucesso! PDV limpo para nova venda.`);
 
       return true;
 
@@ -6427,13 +6485,55 @@ const PDVPage: React.FC = () => {
         throw new Error('Erro ao deletar venda');
       }
 
-      // 3. Limpar estados
+      const numeroVendaDeletada = vendaEmAndamento.numero_venda;
+
+      // 3. Limpar completamente o PDV
+      console.log('🧹 Limpando PDV após deletar venda:', numeroVendaDeletada);
+
+      // Limpar estados da venda em andamento
       setVendaEmAndamento(null);
       setIsEditingVenda(false);
+
+      // Limpar carrinho
       setCarrinho([]);
 
-      toast.success(`Venda ${vendaEmAndamento.numero_venda} deletada com sucesso!`);
-      console.log('✅ Venda deletada:', vendaEmAndamento.numero_venda);
+      // Limpar cliente selecionado
+      setClienteSelecionado(null);
+
+      // Limpar vendedor selecionado
+      setVendedorSelecionado(null);
+
+      // Limpar pedidos importados
+      setPedidosImportados([]);
+
+      // Limpar descontos
+      setDescontosCliente({ prazo: [], valor: [] });
+      setDescontoPrazoSelecionado(null);
+      setDescontoGlobal(0);
+
+      // Resetar tipo de pagamento
+      setTipoPagamento('vista');
+      setFormaPagamentoSelecionada(null);
+
+      // Limpar pagamentos parciais
+      setValorParcial('');
+      setPagamentosParciais([]);
+      setTrocoCalculado(0);
+
+      // Limpar dados da nota fiscal
+      setCpfCnpjNota('');
+      setClienteEncontrado(null);
+      setTipoDocumento('cpf');
+      setErroValidacao('');
+
+      // Limpar observação da venda
+      setObservacaoVenda('');
+
+      // Limpar localStorage
+      clearPDVState();
+
+      toast.success(`Venda ${numeroVendaDeletada} deletada com sucesso! PDV limpo para nova venda.`);
+      console.log('✅ Venda deletada e PDV limpo:', numeroVendaDeletada);
 
       return true;
 
@@ -6595,7 +6695,7 @@ const PDVPage: React.FC = () => {
         console.log('✅ RECUPERAÇÃO: Produto completo restaurado:', produtoCompleto.nome);
 
         return {
-          id: item.id,
+          id: `${Date.now()}-${Math.random()}`, // ✅ CORREÇÃO: Gerar novo ID único para evitar conflitos
           produto: produtoCompleto,
           quantidade: item.quantidade,
           subtotal: item.valor_total_item,
@@ -6605,7 +6705,9 @@ const PDVPage: React.FC = () => {
           vendedor_id: item.vendedor_id,
           vendedor_nome: item.vendedor_nome,
           observacao: item.observacao_item,
-          temOpcoesAdicionais: false
+          temOpcoesAdicionais: false,
+          // ✅ NOVO: Manter referência ao ID original do banco para futuras atualizações
+          pdv_item_id: item.id
         };
       });
 
@@ -7093,19 +7195,22 @@ const PDVPage: React.FC = () => {
         console.log('📋 FRONTEND: Itens existentes encontrados:', itensExistentes?.length || 0);
         console.log('📋 FRONTEND: Itens no carrinho:', carrinho.length);
 
-        // Processar cada item do carrinho
+        // ✅ CORREÇÃO: Processar cada item do carrinho individualmente
         for (const [index, item] of carrinho.entries()) {
           const itemData = itensParaInserir[index];
 
-          // Verificar se item já existe (por código do produto)
-          const itemExistente = itensExistentes?.find(existente =>
-            existente.codigo_produto === item.produto.codigo &&
-            (item.vendaSemProduto ? existente.produto_id === null : existente.produto_id === item.produto.id)
-          );
+          // ✅ CORREÇÃO: Verificar se item já existe usando pdv_item_id (se disponível)
+          let itemExistente = null;
+
+          if (item.pdv_item_id) {
+            // Item veio de venda recuperada - verificar se ainda existe no banco
+            itemExistente = itensExistentes?.find(existente => existente.id === item.pdv_item_id);
+            console.log(`🔍 FRONTEND: Item com pdv_item_id ${item.pdv_item_id} ${itemExistente ? 'encontrado' : 'não encontrado'} no banco`);
+          }
 
           if (itemExistente) {
-            // ✅ ITEM EXISTE: Fazer UPDATE
-            console.log(`🔄 FRONTEND: Atualizando item existente: ${item.produto.nome}`);
+            // ✅ ITEM EXISTE: Fazer UPDATE apenas se veio de venda recuperada
+            console.log(`🔄 FRONTEND: Atualizando item existente: ${item.produto.nome} (ID: ${itemExistente.id})`);
 
             const { error: updateError } = await supabase
               .from('pdv_itens')
@@ -7113,7 +7218,8 @@ const PDVPage: React.FC = () => {
                 quantidade: itemData.quantidade,
                 valor_unitario: itemData.valor_unitario,
                 valor_total_item: itemData.valor_total_item,
-                desconto_item: itemData.desconto_item,
+                tem_desconto: itemData.tem_desconto,
+                valor_desconto_aplicado: itemData.valor_desconto_aplicado,
                 vendedor_id: itemData.vendedor_id,
                 vendedor_nome: itemData.vendedor_nome,
                 observacao_item: itemData.observacao_item,
@@ -7128,7 +7234,7 @@ const PDVPage: React.FC = () => {
 
             console.log(`✅ FRONTEND: Item atualizado: ${item.produto.nome}`);
           } else {
-            // ✅ ITEM NÃO EXISTE: Fazer INSERT
+            // ✅ ITEM NÃO EXISTE OU É NOVO: Sempre fazer INSERT
             console.log(`➕ FRONTEND: Inserindo novo item: ${item.produto.nome}`);
 
             const { error: insertError } = await supabase
