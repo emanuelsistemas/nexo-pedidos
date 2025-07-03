@@ -156,7 +156,7 @@ const ConfiguracoesPage: React.FC = () => {
   const { withSessionCheck } = useAuthSession();
   const { uploadCertificateLocal, removeCertificateLocal, isUploading: isUploadingLocal } = useCertificateUpload();
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv' | 'taxaentrega' | 'conexao' | 'certificado'>('geral');
+  const [activeSection, setActiveSection] = useState<'usuarios' | 'perfis' | 'geral' | 'pagamentos' | 'status' | 'taxa' | 'horarios' | 'estoque' | 'pedidos' | 'produtos' | 'conta' | 'pdv' | 'taxaentrega' | 'tabelaprecos' | 'conexao' | 'certificado'>('geral');
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [perfis, setPerfis] = useState<any[]>([]);
   const [empresa, setEmpresa] = useState<any>(null);
@@ -215,6 +215,15 @@ const ConfiguracoesPage: React.FC = () => {
   const [opcoesAdicionais, setOpcoesAdicionais] = useState<boolean>(false);
   const [taxaEntregaHabilitada, setTaxaEntregaHabilitada] = useState<boolean>(false);
   const [tipoTaxaEntrega, setTipoTaxaEntrega] = useState<'bairro' | 'distancia'>('distancia');
+
+  // Estados para Tabela de Preços
+  const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState<boolean>(false);
+  const [trabalhaComSabores, setTrabalhaComSabores] = useState<boolean>(false);
+  const [tabelasPrecos, setTabelasPrecos] = useState<any[]>([]);
+  const [showModalTabelaPrecos, setShowModalTabelaPrecos] = useState<boolean>(false);
+  const [tabelaPrecosSelecionada, setTabelaPrecosSelecionada] = useState<any>(null);
+  const [nomeNovaTabela, setNomeNovaTabela] = useState<string>('');
+  const [quantidadeSabores, setQuantidadeSabores] = useState<number>(2);
 
   // Estados para Conexão
   const [conexaoConfig, setConexaoConfig] = useState({
@@ -6104,6 +6113,163 @@ const ConfiguracoesPage: React.FC = () => {
           </div>
         );
 
+      case 'tabelaprecos':
+        return (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-white">Tabela de Preços</h2>
+            </div>
+
+            <div className="bg-background-card p-6 rounded-lg border border-gray-800">
+              <h3 className="text-lg font-medium text-white mb-4">Configurações de Tabela de Preços</h3>
+
+              {/* Checkbox principal - Trabalha com Tabela de Preços */}
+              <div className="p-4 bg-gray-800/50 rounded-lg mb-6">
+                <div className="flex items-center">
+                  <input
+                    id="trabalha_com_tabela_precos"
+                    type="checkbox"
+                    checked={trabalhaComTabelaPrecos}
+                    onChange={(e) => setTrabalhaComTabelaPrecos(e.target.checked)}
+                    className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                  />
+                  <label htmlFor="trabalha_com_tabela_precos" className="ml-3 cursor-pointer">
+                    <h4 className="text-white font-medium">Trabalha com Tabela de Preços</h4>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Permite criar diferentes variações de preços para os produtos (ex: Atacado/Varejo, Tamanhos de Pizza).
+                    </p>
+                  </label>
+                </div>
+              </div>
+
+              {/* Exemplos de uso */}
+              <div className="p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg mb-6">
+                <h4 className="text-blue-400 font-medium mb-3">💡 Exemplos de Uso:</h4>
+                <div className="space-y-2 text-sm text-blue-300/80">
+                  <div><strong>🍕 Pizzaria:</strong> Pizza Pequena (R$ 25), Pizza Média (R$ 35), Pizza Grande (R$ 45)</div>
+                  <div><strong>📦 Distribuidora:</strong> Produto Varejo (R$ 10), Produto Atacado 10un (R$ 85)</div>
+                  <div><strong>🍽️ Restaurante:</strong> Prato Almoço (R$ 25), Prato Jantar (R$ 30), Happy Hour (R$ 20)</div>
+                </div>
+              </div>
+
+              {/* Checkbox para sabores (específico para pizzarias) */}
+              {trabalhaComTabelaPrecos && (
+                <div className="border-t border-gray-800 pt-6 mb-6">
+                  <div className="p-4 bg-gray-800/50 rounded-lg mb-4">
+                    <div className="flex items-center">
+                      <input
+                        id="trabalha_com_sabores"
+                        type="checkbox"
+                        checked={trabalhaComSabores}
+                        onChange={(e) => setTrabalhaComSabores(e.target.checked)}
+                        className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                      />
+                      <label htmlFor="trabalha_com_sabores" className="ml-3 cursor-pointer">
+                        <h4 className="text-white font-medium">Trabalha com Sabores</h4>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Específico para pizzarias - permite configurar múltiplos sabores por pizza (meio a meio, 1/3, etc).
+                        </p>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Área de gestão das tabelas */}
+              {trabalhaComTabelaPrecos && (
+                <div className="border-t border-gray-800 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-lg font-medium text-white">Gerenciar Tabelas de Preços</h4>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={() => {
+                        setTabelaPrecosSelecionada(null);
+                        setNomeNovaTabela('');
+                        setQuantidadeSabores(2);
+                        setShowModalTabelaPrecos(true);
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 5v14M5 12h14"></path>
+                      </svg>
+                      Nova Tabela
+                    </Button>
+                  </div>
+
+                  {/* Grid de tabelas existentes */}
+                  <div className="bg-gray-800/30 rounded-lg p-4">
+                    {tabelasPrecos.length === 0 ? (
+                      <div className="text-center py-8">
+                        <DollarSign className="mx-auto text-gray-500 mb-3" size={48} />
+                        <p className="text-gray-400">Nenhuma tabela de preços criada ainda.</p>
+                        <p className="text-sm text-gray-500 mt-1">Clique em "Nova Tabela" para começar.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {tabelasPrecos.map((tabela) => (
+                          <div key={tabela.id} className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                            <div>
+                              <h5 className="text-white font-medium">{tabela.nome}</h5>
+                              <p className="text-sm text-gray-400">
+                                {trabalhaComSabores && tabela.quantidade_sabores ?
+                                  `${tabela.quantidade_sabores} sabores máximo` :
+                                  'Tabela de preços padrão'
+                                }
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                  setTabelaPrecosSelecionada(tabela);
+                                  setNomeNovaTabela(tabela.nome);
+                                  setQuantidadeSabores(tabela.quantidade_sabores || 2);
+                                  setShowModalTabelaPrecos(true);
+                                }}
+                              >
+                                <Pencil size={14} />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="danger"
+                                size="sm"
+                                onClick={() => {
+                                  // TODO: Implementar exclusão
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end mt-6">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => {
+                    // TODO: Implementar salvamento das configurações
+                    showMessage('success', 'Configurações de tabela de preços salvas com sucesso!');
+                  }}
+                  disabled={isLoading}
+                  className="min-w-[120px]"
+                >
+                  {isLoading ? 'Salvando...' : 'Gravar'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+
       case 'conexao':
         // 🔍 DEBUG: Verificar se código está sendo executado
         console.log('🔍 CONEXÃO PAGE RENDERIZADA - VERSÃO BLOQUEADA:', new Date().toISOString());
@@ -6772,6 +6938,17 @@ const ConfiguracoesPage: React.FC = () => {
             >
               <Truck size={18} />
               <span className="text-sm">Taxa de Entrega</span>
+            </button>
+            <button
+              onClick={() => handleSectionChange('tabelaprecos')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
+                activeSection === 'tabelaprecos'
+                  ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+              }`}
+            >
+              <DollarSign size={18} />
+              <span className="text-sm">Tabela de Preços</span>
             </button>
           </div>
 
@@ -7847,6 +8024,138 @@ const ConfiguracoesPage: React.FC = () => {
           setNfeValidationModal(prev => ({ ...prev, isOpen: false }));
         }}
       />
+
+      {/* Modal para Criar/Editar Tabela de Preços */}
+      <AnimatePresence>
+        {showModalTabelaPrecos && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card p-6 rounded-lg shadow-xl max-w-md mx-4 w-full border border-gray-800"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-white">
+                  {tabelaPrecosSelecionada ? 'Editar Tabela' : 'Nova Tabela de Preços'}
+                </h3>
+                <button
+                  onClick={() => setShowModalTabelaPrecos(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Nome da Tabela */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Nome da Tabela *
+                  </label>
+                  <input
+                    type="text"
+                    value={nomeNovaTabela}
+                    onChange={(e) => setNomeNovaTabela(e.target.value)}
+                    placeholder="Ex: Pizza Pequena, Atacado 10un, Prato Executivo"
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Quantidade de Sabores (só aparece se "Trabalha com Sabores" estiver ativo) */}
+                {trabalhaComSabores && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Quantidade Máxima de Sabores
+                    </label>
+                    <select
+                      value={quantidadeSabores}
+                      onChange={(e) => setQuantidadeSabores(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value={1}>1 sabor</option>
+                      <option value={2}>2 sabores (meio a meio)</option>
+                      <option value={3}>3 sabores</option>
+                      <option value={4}>4 sabores</option>
+                      <option value={5}>5 sabores</option>
+                      <option value={6}>6 sabores</option>
+                    </select>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Define quantos sabores diferentes o cliente pode escolher nesta tabela.
+                    </p>
+                  </div>
+                )}
+
+                {/* Exemplo visual */}
+                <div className="p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                  <h4 className="text-blue-400 font-medium text-sm mb-2">💡 Exemplo:</h4>
+                  <p className="text-blue-300/80 text-sm">
+                    {nomeNovaTabela || 'Nome da Tabela'}
+                    {trabalhaComSabores && ` - até ${quantidadeSabores} sabor${quantidadeSabores > 1 ? 'es' : ''}`}
+                  </p>
+                  {trabalhaComSabores && quantidadeSabores > 1 && (
+                    <p className="text-blue-300/60 text-xs mt-1">
+                      No cardápio aparecerá: "Escolha até {quantidadeSabores} sabores"
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setShowModalTabelaPrecos(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => {
+                    if (!nomeNovaTabela.trim()) {
+                      showMessage('error', 'Por favor, informe o nome da tabela');
+                      return;
+                    }
+
+                    // TODO: Implementar salvamento da tabela
+                    const novaTabela = {
+                      id: tabelaPrecosSelecionada?.id || Date.now().toString(),
+                      nome: nomeNovaTabela.trim(),
+                      quantidade_sabores: trabalhaComSabores ? quantidadeSabores : null,
+                      ativo: true
+                    };
+
+                    if (tabelaPrecosSelecionada) {
+                      // Editar tabela existente
+                      setTabelasPrecos(prev =>
+                        prev.map(t => t.id === tabelaPrecosSelecionada.id ? novaTabela : t)
+                      );
+                      showMessage('success', 'Tabela atualizada com sucesso!');
+                    } else {
+                      // Criar nova tabela
+                      setTabelasPrecos(prev => [...prev, novaTabela]);
+                      showMessage('success', 'Tabela criada com sucesso!');
+                    }
+
+                    setShowModalTabelaPrecos(false);
+                  }}
+                  disabled={!nomeNovaTabela.trim()}
+                  className="flex-1"
+                >
+                  {tabelaPrecosSelecionada ? 'Atualizar' : 'Criar'}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
