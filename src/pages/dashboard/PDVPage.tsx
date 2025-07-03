@@ -580,7 +580,18 @@ const PDVPage: React.FC = () => {
 
     // Resetar tipo de pagamento
     setTipoPagamento('vista');
-    setFormaPagamentoSelecionada(null);
+
+    // ✅ CORREÇÃO: Resetar para "Dinheiro" como padrão ao invés de null
+    const dinheiro = formasPagamento.find(forma =>
+      forma.nome?.toLowerCase() === 'dinheiro'
+    );
+    if (dinheiro) {
+      setFormaPagamentoSelecionada(dinheiro.id);
+    } else if (formasPagamento.length > 0) {
+      setFormaPagamentoSelecionada(formasPagamento[0].id);
+    } else {
+      setFormaPagamentoSelecionada(null);
+    }
 
     // Limpar pagamentos parciais
     setValorParcial('');
@@ -2143,9 +2154,21 @@ const PDVPage: React.FC = () => {
 
       setFormasPagamento(formasFiltradas);
 
-      // Selecionar a primeira forma de pagamento como padrão
+      // ✅ CORREÇÃO: Selecionar "Dinheiro" como padrão, se não encontrar, usar a primeira
       if (formasFiltradas && formasFiltradas.length > 0) {
-        setFormaPagamentoSelecionada(formasFiltradas[0].id);
+        // Procurar por "Dinheiro" primeiro
+        const dinheiro = formasFiltradas.find(forma =>
+          forma.nome?.toLowerCase() === 'dinheiro'
+        );
+
+        if (dinheiro) {
+          console.log('✅ Dinheiro selecionado como forma de pagamento padrão');
+          setFormaPagamentoSelecionada(dinheiro.id);
+        } else {
+          // Se não encontrar "Dinheiro", usar a primeira forma disponível
+          console.log('⚠️ Dinheiro não encontrado, usando primeira forma de pagamento:', formasFiltradas[0].nome);
+          setFormaPagamentoSelecionada(formasFiltradas[0].id);
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar formas de pagamento:', error);
@@ -6586,7 +6609,18 @@ const PDVPage: React.FC = () => {
 
       // Resetar tipo de pagamento
       setTipoPagamento('vista');
-      setFormaPagamentoSelecionada(null);
+
+      // ✅ CORREÇÃO: Resetar para "Dinheiro" como padrão ao invés de null
+      const dinheiro = formasPagamento.find(forma =>
+        forma.nome?.toLowerCase() === 'dinheiro'
+      );
+      if (dinheiro) {
+        setFormaPagamentoSelecionada(dinheiro.id);
+      } else if (formasPagamento.length > 0) {
+        setFormaPagamentoSelecionada(formasPagamento[0].id);
+      } else {
+        setFormaPagamentoSelecionada(null);
+      }
 
       // Limpar pagamentos parciais
       setValorParcial('');
@@ -6677,7 +6711,18 @@ const PDVPage: React.FC = () => {
 
       // Resetar tipo de pagamento
       setTipoPagamento('vista');
-      setFormaPagamentoSelecionada(null);
+
+      // ✅ CORREÇÃO: Resetar para "Dinheiro" como padrão ao invés de null
+      const dinheiro = formasPagamento.find(forma =>
+        forma.nome?.toLowerCase() === 'dinheiro'
+      );
+      if (dinheiro) {
+        setFormaPagamentoSelecionada(dinheiro.id);
+      } else if (formasPagamento.length > 0) {
+        setFormaPagamentoSelecionada(formasPagamento[0].id);
+      } else {
+        setFormaPagamentoSelecionada(null);
+      }
 
       // Limpar pagamentos parciais
       setValorParcial('');
