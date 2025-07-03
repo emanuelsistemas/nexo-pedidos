@@ -50,6 +50,7 @@ import Sidebar from '../../components/dashboard/Sidebar';
 import { useSidebarStore } from '../../store/sidebarStore';
 import OpcoesAdicionaisModal from '../../components/pdv/OpcoesAdicionaisModal';
 import { useFullscreen } from '../../hooks/useFullscreen';
+import { salvarAdicionaisItem } from '../../utils/pdvAdicionaisUtils'; // ✅ NOVO: Import da função utilitária
 
 interface Produto {
   id: string;
@@ -6413,7 +6414,8 @@ const PDVPage: React.FC = () => {
         produto: item.produto?.nome,
         quantidade: item.quantidade,
         subtotal: item.subtotal,
-        vendaSemProduto: item.vendaSemProduto
+        vendaSemProduto: item.vendaSemProduto,
+        adicionais: item.adicionais?.length || 0 // ✅ NOVO: Log dos adicionais
       });
 
       if (!vendaEmAndamento) {
@@ -6508,6 +6510,39 @@ const PDVPage: React.FC = () => {
       console.log('✅ SUCESSO: Item inserido com sucesso:', itemInserido);
       console.log('✅ SUCESSO: Item salvo na venda em andamento:', itemData.nome_produto);
 
+      // ✅ NOVO: Salvar adicionais do item se existirem
+      if (item.adicionais && item.adicionais.length > 0) {
+        console.log('🔍 SALVANDO adicionais do item:', item.adicionais.length, 'adicionais encontrados');
+
+        // Converter adicionais do carrinho para o formato esperado pela função utilitária
+        const adicionaisFormatados = item.adicionais.map(adicional => ({
+          item: {
+            id: adicional.id,
+            nome: adicional.nome,
+            preco: adicional.preco,
+            opcao_id: '' // Este campo pode não ser necessário para adicionais do carrinho
+          },
+          quantidade: adicional.quantidade
+        }));
+
+        const sucessoAdicionais = await salvarAdicionaisItem(
+          itemInserido.id, // ID do item recém-criado
+          adicionaisFormatados, // Adicionais formatados
+          usuarioData.empresa_id,
+          userData.user.id
+        );
+
+        if (sucessoAdicionais) {
+          console.log('✅ SUCESSO: Adicionais salvos com sucesso para o item:', itemData.nome_produto);
+        } else {
+          console.error('❌ ERRO: Falha ao salvar adicionais do item:', itemData.nome_produto);
+          // Não falhar a operação inteira por causa dos adicionais, mas registrar o erro
+          toast.error(`Aviso: Adicionais do item ${itemData.nome_produto} não foram salvos`);
+        }
+      } else {
+        console.log('🔍 Item sem adicionais, prosseguindo...');
+      }
+
       // ✅ NOVO: Toast de confirmação para debug (removido para não poluir a interface)
       // toast.success(`Item ${itemData.nome_produto} salvo com sucesso!`);
       return itemInserido; // Retornar o item inserido com o ID
@@ -6584,6 +6619,39 @@ const PDVPage: React.FC = () => {
           console.error('❌ Erro ao atualizar item:', item.produto.nome, updateError);
           toast.error(`Erro ao atualizar item: ${item.produto.nome}`);
           return false;
+        }
+
+        // ✅ NOVO: Atualizar adicionais do item se existirem
+        if (item.adicionais && item.adicionais.length > 0) {
+          console.log('🔍 ATUALIZANDO adicionais do item existente:', item.produto.nome, item.adicionais.length, 'adicionais');
+
+          // Converter adicionais do carrinho para o formato esperado
+          const adicionaisFormatados = item.adicionais.map(adicional => ({
+            item: {
+              id: adicional.id,
+              nome: adicional.nome,
+              preco: adicional.preco,
+              opcao_id: ''
+            },
+            quantidade: adicional.quantidade
+          }));
+
+          // Importar função de atualização de adicionais
+          const { atualizarAdicionaisItem } = await import('../../utils/pdvAdicionaisUtils');
+
+          const sucessoAdicionais = await atualizarAdicionaisItem(
+            item.pdv_item_id!, // ID do item existente
+            adicionaisFormatados,
+            usuarioData.empresa_id,
+            userData.user.id
+          );
+
+          if (!sucessoAdicionais) {
+            console.error('❌ ERRO: Falha ao atualizar adicionais do item:', item.produto.nome);
+            toast.error(`Aviso: Adicionais do item ${item.produto.nome} não foram atualizados`);
+          } else {
+            console.log('✅ SUCESSO: Adicionais atualizados para o item:', item.produto.nome);
+          }
         }
 
           console.log('✅ Item atualizado:', item.produto.nome);
@@ -6932,7 +7000,7 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ NOVO: Converter itens para formato do carrinho usando dados já salvos
-      const itensCarrinho = (itens || []).map(item => {
+      const itensCarrinho = await Promise.all((itens || []).map(async (item) => {
         // Montar produto com dados salvos na pdv_itens
         const produtoCompleto = {
           id: item.produto_id || '',
@@ -6966,6 +7034,28 @@ const PDVPage: React.FC = () => {
 
         console.log('✅ RECUPERAÇÃO: Produto completo restaurado:', produtoCompleto.nome);
 
+        // ✅ NOVO: Carregar adicionais do item se existirem
+        let adicionaisItem = [];
+        try {
+          const { buscarAdicionaisItem } = await import('../../utils/pdvAdicionaisUtils');
+          const adicionaisCarregados = await buscarAdicionaisItem(item.id);
+
+          if (adicionaisCarregados && adicionaisCarregados.length > 0) {
+            console.log('✅ RECUPERAÇÃO: Adicionais carregados para o item:', produtoCompleto.nome, adicionaisCarregados.length);
+
+            // Converter para o formato do carrinho
+            adicionaisItem = adicionaisCarregados.map(adicional => ({
+              id: adicional.item.id,
+              nome: adicional.item.nome,
+              preco: adicional.item.preco,
+              quantidade: adicional.quantidade
+            }));
+          }
+        } catch (error) {
+          console.error('❌ Erro ao carregar adicionais do item:', produtoCompleto.nome, error);
+          // Não falhar a recuperação por causa dos adicionais
+        }
+
         return {
           id: `${Date.now()}-${Math.random()}`, // ✅ CORREÇÃO: Gerar novo ID único para evitar conflitos
           produto: produtoCompleto,
@@ -6978,10 +7068,12 @@ const PDVPage: React.FC = () => {
           vendedor_nome: item.vendedor_nome,
           observacao: item.observacao_item,
           temOpcoesAdicionais: false,
+          // ✅ NOVO: Incluir adicionais carregados
+          adicionais: adicionaisItem,
           // ✅ NOVO: Manter referência ao ID original do banco para futuras atualizações
           pdv_item_id: item.id
         };
-      });
+      }));
 
       // Restaurar estado da venda em andamento
       setVendaEmAndamento({
