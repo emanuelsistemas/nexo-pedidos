@@ -7239,14 +7239,19 @@ const PDVPage: React.FC = () => {
       console.log('  - Modelo Documento:', vendaData.modelo_documento);
       console.log('  - Tentativa NFC-e:', vendaData.tentativa_nfce);
 
-      // ✅ NOVO: UPDATE ou INSERT baseado na venda em andamento (adaptado do sistema de rascunhos NFe)
+      // ✅ CORREÇÃO: UPDATE ou INSERT baseado na venda em andamento
       let vendaInserida;
       let vendaError;
 
-      if (vendaEmAndamento && isEditingVenda) {
-        // ✅ ATUALIZAR venda em andamento existente (similar ao rascunho NFe)
+      if (vendaEmAndamento) {
+        // ✅ ATUALIZAR venda em andamento existente (sempre que há venda em andamento)
         setEtapaProcessamento('Finalizando venda em andamento...');
         console.log('🔄 ATUALIZANDO venda em andamento ID:', vendaEmAndamento.id);
+        console.log('🔍 Dados da venda em andamento:', {
+          id: vendaEmAndamento.id,
+          numero_venda: vendaEmAndamento.numero_venda,
+          status_atual: 'aberta'
+        });
 
         const result = await supabase
           .from('pdv')
@@ -7265,9 +7270,9 @@ const PDVPage: React.FC = () => {
 
         console.log('✅ VENDA EM ANDAMENTO ATUALIZADA:');
       } else {
-        // ✅ CRIAR nova venda (fluxo original)
+        // ✅ CRIAR nova venda (apenas se não há venda em andamento)
         setEtapaProcessamento('Salvando venda no banco de dados...');
-        console.log('➕ CRIANDO nova venda');
+        console.log('➕ CRIANDO nova venda (sem venda em andamento)');
 
         const result = await supabase
           .from('pdv')
@@ -7417,12 +7422,13 @@ const PDVPage: React.FC = () => {
         };
       });
 
-      // ✅ NOVO: Verificar itens existentes e fazer UPDATE/INSERT conforme necessário
+      // ✅ CORREÇÃO: Verificar itens existentes e fazer UPDATE/INSERT conforme necessário
       setEtapaProcessamento('Salvando itens da venda...');
 
-      if (vendaEmAndamento && isEditingVenda) {
-        // ✅ VENDA EM ANDAMENTO: Verificar itens existentes para UPDATE/INSERT
+      if (vendaEmAndamento) {
+        // ✅ VENDA EM ANDAMENTO: Sempre verificar itens existentes para UPDATE/INSERT
         console.log('🔍 FRONTEND: Verificando itens existentes na venda em andamento...');
+        console.log('🔍 FRONTEND: Venda em andamento ID:', vendaEmAndamento.id);
 
         // Buscar itens já salvos na venda
         const { data: itensExistentes, error: buscarError } = await supabase
@@ -7446,13 +7452,23 @@ const PDVPage: React.FC = () => {
         for (const [index, item] of carrinho.entries()) {
           const itemData = itensParaInserir[index];
 
-          // ✅ CORREÇÃO: Verificar se item já existe usando pdv_item_id (se disponível)
+          // ✅ CORREÇÃO: Verificar se item já existe no banco de dados
           let itemExistente = null;
 
           if (item.pdv_item_id) {
-            // Item veio de venda recuperada - verificar se ainda existe no banco
+            // Item tem pdv_item_id - verificar se ainda existe no banco
             itemExistente = itensExistentes?.find(existente => existente.id === item.pdv_item_id);
             console.log(`🔍 FRONTEND: Item com pdv_item_id ${item.pdv_item_id} ${itemExistente ? 'encontrado' : 'não encontrado'} no banco`);
+          } else {
+            // Item sem pdv_item_id - verificar se já existe por código/produto_id
+            if (item.vendaSemProduto) {
+              // Para venda sem produto, verificar por código 999999
+              itemExistente = itensExistentes?.find(existente => existente.codigo_produto === '999999');
+            } else {
+              // Para produto normal, verificar por produto_id
+              itemExistente = itensExistentes?.find(existente => existente.produto_id === item.produto.id);
+            }
+            console.log(`🔍 FRONTEND: Item sem pdv_item_id (${item.produto.nome}) ${itemExistente ? 'encontrado' : 'não encontrado'} no banco`);
           }
 
           if (itemExistente) {
