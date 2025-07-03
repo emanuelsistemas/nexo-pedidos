@@ -1504,7 +1504,7 @@ const PDVPage: React.FC = () => {
     }
   }, [filtroStatus, filtroNfce, filtroDataInicio, filtroDataFim, filtroNumeroVenda, filtroNumeroPedido, showMovimentosModal]); // ✅ NOVO: Incluir filtroNfce
 
-  // ✅ NOVO: useEffect para garantir criação da venda quando há itens no carrinho
+  // ✅ CORREÇÃO: useEffect para garantir criação da venda quando há itens no carrinho
   useEffect(() => {
     const garantirVendaEmAndamento = async () => {
       // Se há itens no carrinho mas não há venda em andamento e não está criando
@@ -1522,6 +1522,10 @@ const PDVPage: React.FC = () => {
         const vendaCriada = await criarVendaEmAndamento();
         if (vendaCriada) {
           console.log('✅ USEEFFECT: Venda criada com sucesso');
+
+          // ✅ CORREÇÃO: Aguardar um pouco para garantir que a transação foi commitada
+          await new Promise(resolve => setTimeout(resolve, 100));
+
         } else {
           console.error('❌ USEEFFECT: Falha ao criar venda');
         }
@@ -4235,15 +4239,39 @@ const PDVPage: React.FC = () => {
       setCriandoVenda(true);
       const vendaCriada = await criarVendaEmAndamento();
       console.log('🔍 Resultado da criação:', vendaCriada);
-      setCriandoVenda(false);
 
       if (!vendaCriada) {
+        setCriandoVenda(false);
         console.error('❌ ERRO: Falha ao criar venda em andamento');
         toast.error('Erro ao criar venda. Tente novamente.');
         return;
       }
 
+      // ✅ CORREÇÃO: Aguardar um pouco para garantir que a transação foi commitada
+      await new Promise(resolve => setTimeout(resolve, 200));
+      setCriandoVenda(false);
+
       console.log('✅ Venda em andamento criada com sucesso');
+    } else if (criandoVenda) {
+      // ✅ NOVO: Se está criando venda, aguardar até terminar
+      console.log('⏳ Aguardando criação da venda terminar...');
+      let tentativas = 0;
+      while (criandoVenda && tentativas < 50) { // Máximo 5 segundos
+        await new Promise(resolve => setTimeout(resolve, 100));
+        tentativas++;
+      }
+
+      if (criandoVenda) {
+        console.error('❌ TIMEOUT: Criação da venda demorou muito');
+        toast.error('Erro: Criação da venda demorou muito. Tente novamente.');
+        return;
+      }
+
+      if (!vendaEmAndamento) {
+        console.error('❌ ERRO: Venda não foi criada após aguardar');
+        toast.error('Erro: Venda não foi criada. Tente novamente.');
+        return;
+      }
     } else {
       console.log('🔍 Não criou venda porque:', {
         isFirstItem,
@@ -4528,6 +4556,7 @@ const PDVPage: React.FC = () => {
       temOpcoesAdicionais: false,
       vendaSemProduto: true,
       nome: nome.trim(), // ✅ Nome personalizado para venda sem produto
+      preco: preco, // ✅ CORREÇÃO: Adicionar campo preco para venda sem produto
       vendedor_id: vendedorSelecionado?.id,
       vendedor_nome: vendedorSelecionado?.nome
     };
