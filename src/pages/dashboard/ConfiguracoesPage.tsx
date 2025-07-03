@@ -283,6 +283,10 @@ const ConfiguracoesPage: React.FC = () => {
   // Estado para o QR Code do cardápio
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
 
+  // Estado para verificação de disponibilidade da URL
+  const [urlDisponivel, setUrlDisponivel] = useState<boolean | null>(null);
+  const [verificandoUrl, setVerificandoUrl] = useState(false);
+
   // Função para gerar QR Code
   const generateQRCode = async (url: string) => {
     try {
@@ -300,12 +304,67 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
+  // Função para verificar disponibilidade da URL
+  const verificarDisponibilidadeUrl = async (url: string) => {
+    if (!url.trim()) {
+      setUrlDisponivel(null);
+      return;
+    }
+
+    try {
+      setVerificandoUrl(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Verificar se já existe outra empresa usando essa URL
+      const { data: urlExistente, error: urlError } = await supabase
+        .from('pdv_config')
+        .select('empresa_id')
+        .eq('cardapio_url_personalizada', url.trim())
+        .neq('empresa_id', usuarioData.empresa_id);
+
+      if (urlError && urlError.code !== 'PGRST116') {
+        console.error('Erro ao verificar URL:', urlError);
+        setUrlDisponivel(null);
+        return;
+      }
+
+      setUrlDisponivel(!urlExistente || urlExistente.length === 0);
+    } catch (error) {
+      console.error('Erro ao verificar disponibilidade:', error);
+      setUrlDisponivel(null);
+    } finally {
+      setVerificandoUrl(false);
+    }
+  };
+
   // Gerar QR Code quando a URL personalizada mudar
   useEffect(() => {
     if (cardapioUrlPersonalizada.trim()) {
       const url = `https://nexo.emasoftware.app/cardapio/${cardapioUrlPersonalizada}`;
       generateQRCode(url);
     }
+  }, [cardapioUrlPersonalizada]);
+
+  // Verificar disponibilidade da URL com debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (cardapioUrlPersonalizada.trim()) {
+        verificarDisponibilidadeUrl(cardapioUrlPersonalizada);
+      }
+    }, 500); // Aguarda 500ms após parar de digitar
+
+    return () => clearTimeout(timeoutId);
   }, [cardapioUrlPersonalizada]);
   const [horarioForm, setHorarioForm] = useState({
     id: '',
@@ -3225,6 +3284,12 @@ const ConfiguracoesPage: React.FC = () => {
     try {
       setIsLoading(true);
 
+      // Validar se o campo não está vazio
+      if (!cardapioUrlPersonalizada.trim()) {
+        showMessage('error', 'Digite um nome para a URL do cardápio');
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -3239,7 +3304,25 @@ const ConfiguracoesPage: React.FC = () => {
         throw new Error('Empresa não encontrada');
       }
 
-      // Verificar se já existe uma configuração
+      // Verificar se já existe outra empresa usando essa URL personalizada
+      const { data: urlExistente, error: urlError } = await supabase
+        .from('pdv_config')
+        .select('empresa_id, cardapio_url_personalizada')
+        .eq('cardapio_url_personalizada', cardapioUrlPersonalizada.trim())
+        .neq('empresa_id', usuarioData.empresa_id) // Excluir a própria empresa
+        .single();
+
+      if (urlError && urlError.code !== 'PGRST116') { // PGRST116 = no rows returned (que é o que queremos)
+        console.error('Erro ao verificar URL:', urlError);
+        throw new Error('Erro ao verificar disponibilidade da URL');
+      }
+
+      if (urlExistente) {
+        showMessage('error', `O nome "${cardapioUrlPersonalizada}" já está sendo usado por outra empresa. Escolha um nome diferente.`);
+        return;
+      }
+
+      // Verificar se já existe uma configuração para esta empresa
       const { data: existingConfig } = await supabase
         .from('pdv_config')
         .select('id')
@@ -3249,13 +3332,13 @@ const ConfiguracoesPage: React.FC = () => {
       const configData = {
         empresa_id: usuarioData.empresa_id,
         ...pdvConfig,
-        cardapio_url_personalizada: cardapioUrlPersonalizada
+        cardapio_url_personalizada: cardapioUrlPersonalizada.trim()
       };
 
       if (existingConfig) {
         const { error } = await supabase
           .from('pdv_config')
-          .update({ cardapio_url_personalizada: cardapioUrlPersonalizada })
+          .update({ cardapio_url_personalizada: cardapioUrlPersonalizada.trim() })
           .eq('empresa_id', usuarioData.empresa_id);
 
         if (error) throw error;
@@ -3268,10 +3351,10 @@ const ConfiguracoesPage: React.FC = () => {
       }
 
       // Atualizar o estado local
-      setPdvConfig(prev => ({ ...prev, cardapio_url_personalizada: cardapioUrlPersonalizada }));
+      setPdvConfig(prev => ({ ...prev, cardapio_url_personalizada: cardapioUrlPersonalizada.trim() }));
 
       // Gerar QR Code com a nova URL
-      const url = `https://nexo.emasoftware.app/cardapio/${cardapioUrlPersonalizada}`;
+      const url = `https://nexo.emasoftware.app/cardapio/${cardapioUrlPersonalizada.trim()}`;
       await generateQRCode(url);
 
       showMessage('success', 'URL do cardápio salva com sucesso!');
@@ -5704,13 +5787,32 @@ const ConfiguracoesPage: React.FC = () => {
                                   className="flex-1 bg-transparent text-purple-300 border-none outline-none placeholder-gray-500"
                                   maxLength={50}
                                 />
+                                {verificandoUrl && (
+                                  <div className="w-4 h-4 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin"></div>
+                                )}
+                                {!verificandoUrl && urlDisponivel === true && cardapioUrlPersonalizada.trim() && (
+                                  <div className="flex items-center gap-1 text-green-500">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span className="text-xs">Disponível</span>
+                                  </div>
+                                )}
+                                {!verificandoUrl && urlDisponivel === false && cardapioUrlPersonalizada.trim() && (
+                                  <div className="flex items-center gap-1 text-red-500">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                    <span className="text-xs">Indisponível</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
 
                             <div className="flex gap-2">
                               <button
                                 onClick={handleSalvarCardapioUrl}
-                                disabled={isLoading || !cardapioUrlPersonalizada.trim()}
+                                disabled={isLoading || !cardapioUrlPersonalizada.trim() || urlDisponivel === false || verificandoUrl}
                                 className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors flex items-center gap-2"
                               >
                                 {isLoading ? (
@@ -5743,6 +5845,11 @@ const ConfiguracoesPage: React.FC = () => {
 
                           <p className="text-xs text-gray-500 mt-3">
                             Digite o nome da sua loja (apenas letras, números e hífens). Este será o link do seu cardápio digital.
+                            {urlDisponivel === false && (
+                              <span className="block text-red-400 mt-1">
+                                ⚠️ Este nome já está sendo usado por outra empresa. Escolha um nome diferente.
+                              </span>
+                            )}
                           </p>
                         </div>
 

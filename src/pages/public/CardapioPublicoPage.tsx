@@ -18,8 +18,10 @@ interface Empresa {
   id: string;
   razao_social: string;
   nome_fantasia: string;
-  telefone?: string;
+  whatsapp?: string;
   endereco?: string;
+  numero?: string;
+  bairro?: string;
   cidade?: string;
   estado?: string;
 }
@@ -74,7 +76,7 @@ const CardapioPublicoPage: React.FC = () => {
       // 2. Buscar dados da empresa
       const { data: empresaData, error: empresaError } = await supabase
         .from('empresas')
-        .select('id, razao_social, nome_fantasia, telefone, endereco, cidade, estado')
+        .select('id, razao_social, nome_fantasia, whatsapp, endereco, numero, bairro, cidade, estado')
         .eq('id', pdvConfigData.empresa_id)
         .single();
 
@@ -89,7 +91,7 @@ const CardapioPublicoPage: React.FC = () => {
       // 3. Buscar produtos ativos da empresa
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
-        .select('id, nome, descricao, preco, foto_url, grupo_id, ativo')
+        .select('id, nome, descricao, preco, grupo_id, ativo')
         .eq('empresa_id', pdvConfigData.empresa_id)
         .eq('ativo', true)
         .order('nome');
@@ -100,7 +102,23 @@ const CardapioPublicoPage: React.FC = () => {
         return;
       }
 
-      // 4. Buscar grupos dos produtos
+      // 4. Buscar fotos dos produtos
+      const produtosIds = produtosData?.map(p => p.id) || [];
+      let fotosData: any[] = [];
+
+      if (produtosIds.length > 0) {
+        const { data: fotosResult, error: fotosError } = await supabase
+          .from('produto_fotos')
+          .select('produto_id, url, principal')
+          .in('produto_id', produtosIds)
+          .eq('principal', true); // Buscar apenas a foto principal
+
+        if (!fotosError && fotosResult) {
+          fotosData = fotosResult;
+        }
+      }
+
+      // 5. Buscar grupos dos produtos
       const gruposIds = [...new Set(produtosData?.map(p => p.grupo_id).filter(Boolean))];
       let gruposData: any[] = [];
 
@@ -115,18 +133,20 @@ const CardapioPublicoPage: React.FC = () => {
         }
       }
 
-      // Processar produtos com nome do grupo
+      // Processar produtos com nome do grupo e foto
       const produtosProcessados = produtosData?.map(produto => {
         const grupo = gruposData.find(g => g.id === produto.grupo_id);
+        const foto = fotosData.find(f => f.produto_id === produto.id);
         return {
           ...produto,
-          grupo_nome: grupo?.nome || 'Sem categoria'
+          grupo_nome: grupo?.nome || 'Sem categoria',
+          foto_url: foto?.url || null
         };
       }) || [];
 
       setProdutos(produtosProcessados);
 
-      // 5. Definir grupos únicos
+      // 6. Definir grupos únicos
       const gruposUnicos = gruposData.map(grupo => ({
         id: grupo.id,
         nome: grupo.nome
@@ -154,14 +174,14 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const handlePedirWhatsApp = (produto: Produto) => {
-    if (!empresa?.telefone) {
-      showMessage('error', 'Telefone da empresa não disponível');
+    if (!empresa?.whatsapp) {
+      showMessage('error', 'WhatsApp da empresa não disponível');
       return;
     }
 
-    const telefone = empresa.telefone.replace(/\D/g, '');
+    const whatsapp = empresa.whatsapp.replace(/\D/g, '');
     const mensagem = `Olá! Gostaria de fazer um pedido:\n\n*${produto.nome}*\n${config.mostrar_precos ? `Preço: ${formatarPreco(produto.preco)}` : ''}`;
-    const url = `https://wa.me/55${telefone}?text=${encodeURIComponent(mensagem)}`;
+    const url = `https://wa.me/55${whatsapp}?text=${encodeURIComponent(mensagem)}`;
     window.open(url, '_blank');
   };
 
@@ -203,13 +223,15 @@ const CardapioPublicoPage: React.FC = () => {
             {empresa?.endereco && (
               <p className={`${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'} mb-2`}>
                 📍 {empresa.endereco}
+                {empresa.numero && `, ${empresa.numero}`}
+                {empresa.bairro && ` - ${empresa.bairro}`}
                 {empresa.cidade && `, ${empresa.cidade}`}
                 {empresa.estado && ` - ${empresa.estado}`}
               </p>
             )}
-            {empresa?.telefone && (
+            {empresa?.whatsapp && (
               <p className={`${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                📞 {empresa.telefone}
+                📞 {empresa.whatsapp}
               </p>
             )}
           </div>
@@ -294,7 +316,7 @@ const CardapioPublicoPage: React.FC = () => {
                           {formatarPreco(produto.preco)}
                         </span>
                       )}
-                      {config.permitir_pedidos && empresa?.telefone && (
+                      {config.permitir_pedidos && empresa?.whatsapp && (
                         <button
                           onClick={() => handlePedirWhatsApp(produto)}
                           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
