@@ -13,6 +13,13 @@ Este documento descreve a configuração de ambientes separados para garantir is
 
 ---
 
+## 🚨 **TROUBLESHOOTING**
+
+⚠️ **Problema comum**: Se após configurar os ambientes as mudanças não aparecem no desenvolvimento, consulte:
+📖 **[TROUBLESHOOTING_NGINX_AMBIENTES.md](./TROUBLESHOOTING_NGINX_AMBIENTES.md)**
+
+---
+
 ## 🏗️ **ESTRUTURA DOS AMBIENTES**
 
 ### **📁 AMBIENTE DE DESENVOLVIMENTO**
@@ -337,9 +344,14 @@ tail -f /var/log/nginx/nexo-dev-error.log    # Desenvolvimento
 tail -f /var/log/nginx/nexo-error.log        # Produção
 ```
 
+## 🔗 **DOCUMENTOS RELACIONADOS**
+
+- 📖 **[TROUBLESHOOTING_NGINX_AMBIENTES.md](./TROUBLESHOOTING_NGINX_AMBIENTES.md)** - Solução para problemas de configuração do Nginx
+- 🛠️ **[SCRIPTS_MANUTENCAO_AMBIENTES.md](./SCRIPTS_MANUTENCAO_AMBIENTES.md)** - Scripts de manutenção e deploy
+
 ---
 
 **📅 Última atualização:** 03/07/2025
 **👤 Responsável:** Emanuel Luis
-**🔧 Versão:** 1.0
+**🔧 Versão:** 1.1
 **📁 Scripts:** `/root/nexo-pedidos/scripts/`

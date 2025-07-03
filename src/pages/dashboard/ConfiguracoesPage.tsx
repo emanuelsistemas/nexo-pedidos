@@ -4337,37 +4337,47 @@ const ConfiguracoesPage: React.FC = () => {
                   <div className="space-y-6">
                     {/* Comandas e Mesas */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={pdvConfig.comandas}
-                          onChange={(e) => handlePdvConfigChange('comandas', e.target.checked)}
-                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                          style={{ borderRadius: '50%' }}
-                        />
-                        <div>
-                          <h4 className="text-white font-medium">Comandas</h4>
-                          <p className="text-sm text-gray-400 mt-1">
-                            Permite controlar vendas por comandas numeradas para organização de pedidos.
-                          </p>
-                        </div>
-                      </label>
+                      <div className="relative">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            disabled={true}
+                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h4 className="text-gray-400 font-medium">Comandas</h4>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Permite controlar vendas por comandas numeradas para organização de pedidos.
+                            </p>
+                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
+                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
+                            </div>
+                          </div>
+                        </label>
+                      </div>
 
-                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={pdvConfig.mesas}
-                          onChange={(e) => handlePdvConfigChange('mesas', e.target.checked)}
-                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                          style={{ borderRadius: '50%' }}
-                        />
-                        <div>
-                          <h4 className="text-white font-medium">Mesas</h4>
-                          <p className="text-sm text-gray-400 mt-1">
-                            Habilita o controle de mesas para restaurantes e estabelecimentos com atendimento no local.
-                          </p>
-                        </div>
-                      </label>
+                      <div className="relative">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            disabled={true}
+                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h4 className="text-gray-400 font-medium">Mesas</h4>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Habilita o controle de mesas para restaurantes e estabelecimentos com atendimento no local.
+                            </p>
+                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
+                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
+                            </div>
+                          </div>
+                        </label>
+                      </div>
                     </div>
 
                     {/* Outras configurações */}
@@ -4420,21 +4430,26 @@ const ConfiguracoesPage: React.FC = () => {
                         </div>
                       </label>
 
-                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={pdvConfig.controla_caixa}
-                          onChange={(e) => handlePdvConfigChange('controla_caixa', e.target.checked)}
-                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                          style={{ borderRadius: '50%' }}
-                        />
-                        <div>
-                          <h4 className="text-white font-medium">Controla Caixa</h4>
-                          <p className="text-sm text-gray-400 mt-1">
-                            Habilita controle de abertura e fechamento de caixa com relatórios financeiros.
-                          </p>
-                        </div>
-                      </label>
+                      <div className="relative">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            disabled={true}
+                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h4 className="text-gray-400 font-medium">Controla Caixa</h4>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Habilita controle de abertura e fechamento de caixa com relatórios financeiros.
+                            </p>
+                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
+                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
+                            </div>
+                          </div>
+                        </label>
+                      </div>
 
                       <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                         <input
@@ -4484,21 +4499,26 @@ const ConfiguracoesPage: React.FC = () => {
                         </div>
                       </label>
 
-                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={pdvConfig.delivery_chat_ia}
-                          onChange={(e) => handlePdvConfigChange('delivery_chat_ia', e.target.checked)}
-                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                          style={{ borderRadius: '50%' }}
-                        />
-                        <div>
-                          <h4 className="text-white font-medium">Delivery como chat IA</h4>
-                          <p className="text-sm text-gray-400 mt-1">
-                            Integra inteligência artificial para atendimento automatizado via chat.
-                          </p>
-                        </div>
-                      </label>
+                      <div className="relative">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            disabled={true}
+                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h4 className="text-gray-400 font-medium">Delivery como chat IA</h4>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Integra inteligência artificial para atendimento automatizado via chat.
+                            </p>
+                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
+                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
+                            </div>
+                          </div>
+                        </label>
+                      </div>
 
                       <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                         <input
@@ -4580,21 +4600,26 @@ const ConfiguracoesPage: React.FC = () => {
                         </div>
                       </label>
 
-                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={pdvConfig.fiado}
-                          onChange={(e) => handlePdvConfigChange('fiado', e.target.checked)}
-                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                          style={{ borderRadius: '50%' }}
-                        />
-                        <div>
-                          <h4 className="text-white font-medium">Fiado</h4>
-                          <p className="text-sm text-gray-400 mt-1">
-                            Habilita a opção de venda fiado no PDV.
-                          </p>
-                        </div>
-                      </label>
+                      <div className="relative">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={false}
+                            disabled={true}
+                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h4 className="text-gray-400 font-medium">Fiado</h4>
+                            <p className="text-sm text-gray-500 mt-1">
+                              Habilita a opção de venda fiado no PDV.
+                            </p>
+                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
+                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
+                            </div>
+                          </div>
+                        </label>
+                      </div>
 
                       <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                         <input
@@ -5620,8 +5645,6 @@ const ConfiguracoesPage: React.FC = () => {
                       <h4 className="text-yellow-400 font-medium">🚧 Funcionalidade em Desenvolvimento - v2.0</h4>
                       <p className="text-sm text-yellow-300/80 mt-1">
                         A integração com WhatsApp está sendo desenvolvida e não está disponível no momento.
-                        <br />
-                        <strong>CACHE BUST: {new Date().toISOString()}</strong>
                       </p>
                     </div>
                   </div>

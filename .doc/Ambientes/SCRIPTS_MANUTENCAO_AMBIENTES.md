@@ -9,6 +9,55 @@ Scripts e comandos automatizados para facilitar a manutenção dos ambientes de 
 
 ---
 
+## 🔍 **SCRIPT DE VERIFICAÇÃO DE AMBIENTES**
+
+### **📄 Arquivo: `/root/nexo-pedidos/.doc/Ambientes/verificar-ambientes.sh`**
+
+Script para verificar se os ambientes estão configurados corretamente e identificar problemas comuns.
+
+#### **🎯 Funcionalidades:**
+- ✅ Verifica arquivos JS servidos por cada ambiente
+- ✅ Compara se ambientes estão realmente separados
+- ✅ Verifica configuração do Nginx
+- ✅ Verifica diretórios e serviços
+- ✅ Fornece diagnóstico completo com cores
+
+#### **🚀 Como usar:**
+```bash
+# Executar verificação completa
+/root/nexo-pedidos/.doc/Ambientes/verificar-ambientes.sh
+
+# Ou navegar até o diretório
+cd /root/nexo-pedidos/.doc/Ambientes/
+./verificar-ambientes.sh
+```
+
+#### **📊 Exemplo de saída:**
+```
+🔍 VERIFICAÇÃO DE AMBIENTES - NEXO PEDIDOS
+==========================================
+
+📊 1. VERIFICANDO ARQUIVOS SERVIDOS
+-----------------------------------
+✅ DEV (nexodev): index-BaLvCqcn.js
+✅ PROD (nexo): index-Dini8DaF.js
+
+✅ RESULTADO: Ambientes estão SEPARADOS corretamente!
+
+📁 2. VERIFICANDO CONFIGURAÇÃO NGINX
+------------------------------------
+✅ Arquivo de configuração encontrado
+...
+```
+
+#### **🚨 Quando usar:**
+- Após configurar ambientes separados
+- Quando mudanças não aparecem no desenvolvimento
+- Para diagnóstico de problemas de cache/configuração
+- Como verificação de rotina
+
+---
+
 ## 🚀 **SCRIPT DE DEPLOY PARA PRODUÇÃO**
 
 ### **📄 Criar arquivo: `/root/scripts/deploy-producao.sh`**
@@ -390,8 +439,14 @@ cd /root/nexo-pedidos && npm cache clean --force
 cd /var/www/nexo-producao && sudo -u www-data npm cache clean --force
 ```
 
+## 🔗 **DOCUMENTOS RELACIONADOS**
+
+- 📖 **[CONFIGURACAO_AMBIENTES_SEPARADOS.md](./CONFIGURACAO_AMBIENTES_SEPARADOS.md)** - Configuração completa dos ambientes
+- 🚨 **[TROUBLESHOOTING_NGINX_AMBIENTES.md](./TROUBLESHOOTING_NGINX_AMBIENTES.md)** - Solução para problemas de configuração
+- 🔍 **[verificar-ambientes.sh](./verificar-ambientes.sh)** - Script de verificação automática
+
 ---
 
-**📅 Última atualização:** 03/07/2025  
-**👤 Responsável:** Emanuel Luis  
-**🔧 Versão:** 1.0
+**📅 Última atualização:** 03/07/2025
+**👤 Responsável:** Emanuel Luis
+**🔧 Versão:** 1.1
