@@ -298,6 +298,9 @@ const PDVPage: React.FC = () => {
   const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
   const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<string | null>(null);
 
+  // ✅ NOVO: Estado para ambiente NFe (homologação/produção)
+  const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
+
   // Estados para pagamentos parciais
   const [valorParcial, setValorParcial] = useState<string>('');
   const [pagamentosParciais, setPagamentosParciais] = useState<Array<{
@@ -1882,7 +1885,8 @@ const PDVPage: React.FC = () => {
           loadPdvConfig(),
           loadFormasPagamento(),
           loadVendedores(),
-          loadEmpresaData()
+          loadEmpresaData(),
+          loadNfeConfig() // ✅ NOVO: Carregar configuração NFe
         ]);
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -2225,6 +2229,38 @@ const PDVPage: React.FC = () => {
       setVendedores(vendedoresFiltrados);
     } catch (error) {
       console.error('Erro ao carregar vendedores:', error);
+    }
+  };
+
+  // ✅ NOVA: Função para carregar configuração NFe (ambiente)
+  const loadNfeConfig = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data: nfeConfigData } = await supabase
+        .from('nfe_config')
+        .select('ambiente')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (nfeConfigData) {
+        setAmbienteNFe(nfeConfigData.ambiente);
+      } else {
+        // Se não encontrou configuração, manter padrão homologação
+        setAmbienteNFe('homologacao');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configuração NFe:', error);
+      setAmbienteNFe('homologacao'); // Fallback para homologação
     }
   };
 
@@ -6293,6 +6329,8 @@ const PDVPage: React.FC = () => {
         modelo_documento: null, // Será definido na finalização (65 para NFC-e)
         status_fiscal: 'nao_fiscal', // Inicial
         tentativa_nfce: false, // Será definido na finalização
+        // ✅ NOVO: Incluir ambiente da empresa (homologação/produção)
+        ambiente: ambienteNFe, // Usar o ambiente carregado da configuração NFe
         // Campos de auditoria
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -10048,6 +10086,13 @@ const PDVPage: React.FC = () => {
               <Maximize2 size={16} className="group-hover:scale-110 transition-transform" />
             )}
           </button>
+
+          {/* ✅ NOVA: Tag de Homologação - só aparece quando ambiente é homologação */}
+          {ambienteNFe === 'homologacao' && (
+            <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full border bg-orange-500/10 text-orange-400 border-orange-500/20">
+              HOMOLOG.
+            </span>
+          )}
         </div>
         <div className="text-4xl font-bold text-primary-400">
           {formatCurrencyWithoutSymbol(calcularTotal())}
