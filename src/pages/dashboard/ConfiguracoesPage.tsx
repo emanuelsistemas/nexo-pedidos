@@ -5599,24 +5599,44 @@ const ConfiguracoesPage: React.FC = () => {
               <h3 className="text-lg font-medium text-white mb-4">Configurações de Conexão</h3>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg">
+                {/* ⚠️ AVISO: Funcionalidade em desenvolvimento */}
+                <div className="p-4 bg-yellow-900/20 border border-yellow-600/30 rounded-lg mb-4">
                   <div className="flex items-center gap-3">
-                    <MessageSquare className="text-green-400" size={20} />
+                    <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center">
+                      <span className="text-black text-sm font-bold">!</span>
+                    </div>
                     <div>
-                      <h4 className="text-white font-medium">Habilita Conexão com WhatsApp</h4>
-                      <p className="text-sm text-gray-400 mt-1">
-                        Permite integração com WhatsApp para comunicação com clientes.
+                      <h4 className="text-yellow-400 font-medium">Funcionalidade em Desenvolvimento</h4>
+                      <p className="text-sm text-yellow-300/80 mt-1">
+                        A integração com WhatsApp está sendo desenvolvida e não está disponível no momento.
                       </p>
                     </div>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-gray-800/30 rounded-lg opacity-60">
+                  <div className="flex items-center gap-3">
+                    <MessageSquare className="text-gray-500" size={20} />
+                    <div>
+                      <h4 className="text-gray-400 font-medium">Habilita Conexão com WhatsApp</h4>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Permite integração com WhatsApp para comunicação com clientes.
+                      </p>
+                      <p className="text-xs text-yellow-400 mt-2 font-medium">
+                        🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-not-allowed">
                     <input
                       type="checkbox"
-                      checked={conexaoConfig.habilita_conexao_whatsapp}
-                      onChange={(e) => handleConexaoConfigChange('habilita_conexao_whatsapp', e.target.checked)}
+                      checked={false}
+                      disabled={true}
                       className="sr-only peer"
                     />
-                    <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                    <div className="w-11 h-6 bg-gray-700 rounded-full relative">
+                      <div className="absolute top-[2px] left-[2px] bg-gray-500 rounded-full h-5 w-5 transition-all"></div>
+                    </div>
                   </label>
                 </div>
               </div>
