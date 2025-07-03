@@ -2508,7 +2508,8 @@ const PDVPage: React.FC = () => {
           valor_pago,
           valor_troco,
           parcelas,
-          observacao_venda
+          observacao_venda,
+          ambiente
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .or('modelo_documento.is.null,modelo_documento.eq.65'); // ✅ Mostrar apenas vendas PDV (null) e NFC-e (65) - excluir NFe (55)
@@ -6026,7 +6027,7 @@ const PDVPage: React.FC = () => {
       const updateData: any = {
         modelo_documento: 65,
         numero_documento: proximoNumero,
-        serie_documento: serieDocumentoReservado,
+        serie_documento: serieUsuario, // ✅ CORREÇÃO: Usar serieUsuario ao invés de serieDocumentoReservado
         chave_nfe: result.data.chave,
         protocolo_nfe: result.data.protocolo,
         status_fiscal: 'autorizada',
@@ -7253,13 +7254,17 @@ const PDVPage: React.FC = () => {
           status_atual: 'aberta'
         });
 
+        // ✅ CORREÇÃO: Para venda em andamento, não sobrescrever série/número que já estão corretos
+        const { serie_documento, numero_documento, ...vendaDataSemSerie } = vendaData;
+
         const result = await supabase
           .from('pdv')
           .update({
-            ...vendaData,
+            ...vendaDataSemSerie,
             status_venda: 'finalizada', // ✅ Mudar status para finalizada
             finalizada_em: new Date().toISOString(),
             updated_at: new Date().toISOString()
+            // ✅ NÃO incluir serie_documento e numero_documento - manter os que já estão no banco
           })
           .eq('id', vendaEmAndamento.id)
           .select('id, serie_documento, numero_documento, modelo_documento')
@@ -14062,8 +14067,8 @@ const PDVPage: React.FC = () => {
                               </span>
                             )}
 
-                            {/* ✅ NOVO: Tag Homologação - Só aparece quando venda é de homologação E empresa atual está em homologação E é NFC-e */}
-                            {venda.ambiente === 'homologacao' && ambienteNFe === 'homologacao' && venda.tentativa_nfce && (
+                            {/* ✅ CORREÇÃO: Tag Homologação - Aparece APENAS para NFC-e em homologação */}
+                            {venda.ambiente === 'homologacao' && venda.tentativa_nfce && (
                               <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs font-medium rounded-full border border-orange-500/30">
                                 HOMOLOG.
                               </span>
