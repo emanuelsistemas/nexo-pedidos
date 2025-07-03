@@ -4256,23 +4256,27 @@ const PDVPage: React.FC = () => {
           }
         });
 
-        // ✅ CORREÇÃO: Sempre salvar itens novos, independente se é venda nova ou recuperada
-        console.log('🔍 DEBUG: Chamando salvarItemNaVendaEmAndamento...');
-        const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
-        console.log('🔍 DEBUG: Resultado do salvamento do item:', itemSalvo);
+        // ✅ CORREÇÃO: Só salvar se não é venda recuperada (para evitar duplicação)
+        if (!isEditingVenda) {
+          console.log('🔍 DEBUG: Chamando salvarItemNaVendaEmAndamento...');
+          const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
+          console.log('🔍 DEBUG: Resultado do salvamento do item:', itemSalvo);
 
-        if (!itemSalvo) {
-          console.error('❌ ERRO CRÍTICO: Falha ao salvar item na venda em andamento');
-          toast.error('ERRO: Item não foi salvo! Verifique o console.');
+          if (!itemSalvo) {
+            console.error('❌ ERRO CRÍTICO: Falha ao salvar item na venda em andamento');
+            toast.error('ERRO: Item não foi salvo! Verifique o console.');
+          } else {
+            console.log('✅ SUCESSO: Item salvo com sucesso na venda em andamento');
+
+            // ✅ NOVO: Atualizar o item no carrinho com o pdv_item_id para evitar duplicação
+            setCarrinho(prev => prev.map(item =>
+              item.id === novoItem.id
+                ? { ...item, pdv_item_id: itemSalvo.id || 'salvo' }
+                : item
+            ));
+          }
         } else {
-          console.log('✅ SUCESSO: Item salvo com sucesso na venda em andamento');
-
-          // ✅ NOVO: Atualizar o item no carrinho com o pdv_item_id para evitar duplicação
-          setCarrinho(prev => prev.map(item =>
-            item.id === novoItem.id
-              ? { ...item, pdv_item_id: itemSalvo.id || 'salvo' }
-              : item
-          ));
+          console.log('🔍 DEBUG: Não salvando item porque é venda recuperada (itens já estão salvos)');
         }
       } else {
         console.error('❌ DEBUG: Não salvou item porque não há venda em andamento:', {
@@ -4283,26 +4287,28 @@ const PDVPage: React.FC = () => {
           motivo: 'Venda em andamento não encontrada após timeout'
         });
 
-        // ✅ NOVO: Tentar salvar novamente após mais tempo
-        setTimeout(async () => {
-          const vendaFinal = vendaEmAndamento;
-          if (vendaFinal) {
-            console.log('🔄 RETRY: Tentando salvar item novamente...');
-            const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
-            if (itemSalvo) {
-              console.log('✅ RETRY: Item salvo na segunda tentativa');
-              setCarrinho(prev => prev.map(item =>
-                item.id === novoItem.id
-                  ? { ...item, pdv_item_id: itemSalvo.id || 'salvo' }
-                  : item
-              ));
+        // ✅ NOVO: Tentar salvar novamente após mais tempo (só se não for venda recuperada)
+        if (!isEditingVenda) {
+          setTimeout(async () => {
+            const vendaFinal = vendaEmAndamento;
+            if (vendaFinal) {
+              console.log('🔄 RETRY: Tentando salvar item novamente...');
+              const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
+              if (itemSalvo) {
+                console.log('✅ RETRY: Item salvo na segunda tentativa');
+                setCarrinho(prev => prev.map(item =>
+                  item.id === novoItem.id
+                    ? { ...item, pdv_item_id: itemSalvo.id || 'salvo' }
+                    : item
+                ));
+              } else {
+                toast.error('ERRO: Item não foi salvo após múltiplas tentativas!');
+              }
             } else {
-              toast.error('ERRO: Item não foi salvo após múltiplas tentativas!');
+              toast.error('ERRO: Venda em andamento não encontrada!');
             }
-          } else {
-            toast.error('ERRO: Venda em andamento não encontrada!');
-          }
-        }, 500);
+          }, 500);
+        }
       }
     }, 100); // Aguardar 100ms para o estado ser atualizado
   };
@@ -6458,9 +6464,11 @@ const PDVPage: React.FC = () => {
         novos: itensNovos.length
       });
 
-      // ✅ ATUALIZAR itens existentes
-      for (const item of itensExistentes) {
-        console.log('🔄 Atualizando item existente:', item.produto.nome, 'ID:', item.pdv_item_id);
+      // ✅ ATUALIZAR itens existentes (que já foram salvos anteriormente)
+      if (itensExistentes.length > 0) {
+        console.log('🔄 Atualizando itens existentes...');
+        for (const item of itensExistentes) {
+          console.log('🔄 Atualizando item existente:', item.produto.nome, 'ID:', item.pdv_item_id);
 
         const dadosAtualizacao = {
           quantidade: item.quantidade,
@@ -6485,12 +6493,17 @@ const PDVPage: React.FC = () => {
           return false;
         }
 
-        console.log('✅ Item atualizado:', item.produto.nome);
+          console.log('✅ Item atualizado:', item.produto.nome);
+        }
+      } else {
+        console.log('ℹ️ Nenhum item existente para atualizar');
       }
 
-      // ✅ INSERIR itens novos
-      for (const item of itensNovos) {
-        console.log('➕ Inserindo item novo:', item.produto.nome);
+      // ✅ INSERIR itens novos (que ainda não foram salvos)
+      if (itensNovos.length > 0) {
+        console.log('➕ Inserindo itens novos...');
+        for (const item of itensNovos) {
+          console.log('➕ Inserindo item novo:', item.produto.nome);
 
         const itemSalvo = await salvarItemNaVendaEmAndamento(item);
         if (!itemSalvo) {
@@ -6505,7 +6518,10 @@ const PDVPage: React.FC = () => {
             : carrinhoItem
         ));
 
-        console.log('✅ Item novo inserido:', item.produto.nome);
+          console.log('✅ Item novo inserido:', item.produto.nome);
+        }
+      } else {
+        console.log('ℹ️ Nenhum item novo para inserir');
       }
 
       console.log('✅ Sincronização de itens concluída com sucesso');
