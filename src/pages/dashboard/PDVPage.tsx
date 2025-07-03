@@ -5057,9 +5057,27 @@ const PDVPage: React.FC = () => {
     setCarrinho(prev =>
       prev.map(item => {
         if (item.id === itemCarrinhoParaAdicionais) {
-          // Adicionar aos adicionais existentes ao invés de substituir
+          // ✅ CORREÇÃO: Agregar adicionais iguais ao invés de duplicar
           const adicionaisExistentes = item.adicionais || [];
-          const todosAdicionais = [...adicionaisExistentes, ...adicionaisFormatados];
+          const todosAdicionais = [...adicionaisExistentes];
+
+          // Processar cada novo adicional
+          adicionaisFormatados.forEach(novoAdicional => {
+            // Verificar se já existe um adicional com o mesmo ID
+            const adicionalExistenteIndex = todosAdicionais.findIndex(
+              existente => existente.id === novoAdicional.id
+            );
+
+            if (adicionalExistenteIndex >= 0) {
+              // ✅ ADICIONAL JÁ EXISTE: Somar a quantidade
+              console.log(`🔄 Agregando adicional existente: ${novoAdicional.nome} (${todosAdicionais[adicionalExistenteIndex].quantidade} + ${novoAdicional.quantidade})`);
+              todosAdicionais[adicionalExistenteIndex].quantidade += novoAdicional.quantidade;
+            } else {
+              // ✅ ADICIONAL NOVO: Adicionar à lista
+              console.log(`➕ Adicionando novo adicional: ${novoAdicional.nome} (qty: ${novoAdicional.quantidade})`);
+              todosAdicionais.push(novoAdicional);
+            }
+          });
 
           // Calcular valor total dos adicionais (existentes + novos)
           const valorAdicionais = todosAdicionais.reduce((total, adicional) =>
@@ -5069,6 +5087,8 @@ const PDVPage: React.FC = () => {
           // Calcular novo subtotal (produto + todos os adicionais) * quantidade
           const precoUnitario = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
           const novoSubtotal = (precoUnitario * item.quantidade) + valorAdicionais;
+
+          console.log(`✅ Adicionais atualizados para ${item.produto.nome}:`, todosAdicionais.map(a => `${a.nome}(${a.quantidade})`));
 
           return {
             ...item,
@@ -5613,10 +5633,12 @@ const PDVPage: React.FC = () => {
       // Verificar opções adicionais se existirem
       const itensComAdicionais = carrinho.filter(item => item.adicionais && item.adicionais.length > 0);
       if (itensComAdicionais.length > 0 && itensData && itensData.length > 0) {
+        // ✅ CORREÇÃO: Filtrar apenas adicionais não deletados
         const { data: adicionaisData, error: adicionaisError } = await supabase
           .from('pdv_itens_adicionais')
-          .select('id')
-          .in('pdv_item_id', itensData.map(item => item.id));
+          .select('id, pdv_item_id, nome_adicional')
+          .in('pdv_item_id', itensData.map(item => item.id))
+          .eq('deletado', false); // ✅ NOVO: Filtrar apenas não deletados
 
         if (adicionaisError) {
           console.error('Erro ao verificar adicionais:', adicionaisError);
@@ -5629,10 +5651,30 @@ const PDVPage: React.FC = () => {
 
         const totalAdicionaisInseridos = adicionaisData?.length || 0;
 
+        // ✅ LOGS DETALHADOS: Para debug
+        console.log('🔍 VERIFICAÇÃO DE ADICIONAIS:');
+        console.log('  - Itens com adicionais no carrinho:', itensComAdicionais.length);
+        console.log('  - Total adicionais esperados:', totalAdicionaisEsperados);
+        console.log('  - Total adicionais inseridos (não deletados):', totalAdicionaisInseridos);
+        console.log('  - Adicionais encontrados no banco:', adicionaisData?.map(a => `${a.nome_adicional} (item: ${a.pdv_item_id})`));
+
         if (totalAdicionaisInseridos !== totalAdicionaisEsperados) {
-          console.error(`Número de adicionais incorreto. Esperado: ${totalAdicionaisEsperados}, Inserido: ${totalAdicionaisInseridos}`);
+          console.error(`❌ Número de adicionais incorreto. Esperado: ${totalAdicionaisEsperados}, Inserido: ${totalAdicionaisInseridos}`);
+
+          // ✅ LOGS ADICIONAIS: Para debug detalhado
+          console.error('🔍 DETALHES DOS ITENS COM ADICIONAIS:');
+          itensComAdicionais.forEach((item, index) => {
+            console.error(`  Item ${index + 1}: ${item.produto.nome}`);
+            console.error(`    - Adicionais no carrinho: ${item.adicionais?.length || 0}`);
+            item.adicionais?.forEach((adicional, addIndex) => {
+              console.error(`      ${addIndex + 1}. ${adicional.nome} (qty: ${adicional.quantidade})`);
+            });
+          });
+
           return false;
         }
+
+        console.log('✅ Verificação de adicionais concluída com sucesso');
       }
 
       setEtapaProcessamento('Venda verificada com sucesso!');
@@ -7056,6 +7098,18 @@ const PDVPage: React.FC = () => {
           // Não falhar a recuperação por causa dos adicionais
         }
 
+        // ✅ NOVO: Verificar se o produto tem opções adicionais para mostrar o botão +
+        let temOpcoesAdicionais = false;
+        try {
+          if (item.produto_id) { // Só verificar se não for venda sem produto
+            temOpcoesAdicionais = await verificarOpcoesAdicionais(item.produto_id);
+            console.log('✅ RECUPERAÇÃO: Produto tem opções adicionais:', produtoCompleto.nome, temOpcoesAdicionais);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao verificar opções adicionais do item:', produtoCompleto.nome, error);
+          // Não falhar a recuperação por causa da verificação
+        }
+
         return {
           id: `${Date.now()}-${Math.random()}`, // ✅ CORREÇÃO: Gerar novo ID único para evitar conflitos
           produto: produtoCompleto,
@@ -7067,7 +7121,8 @@ const PDVPage: React.FC = () => {
           vendedor_id: item.vendedor_id,
           vendedor_nome: item.vendedor_nome,
           observacao: item.observacao_item,
-          temOpcoesAdicionais: false,
+          // ✅ CORREÇÃO: Usar a verificação real de opções adicionais
+          temOpcoesAdicionais: temOpcoesAdicionais,
           // ✅ NOVO: Incluir adicionais carregados
           adicionais: adicionaisItem,
           // ✅ NOVO: Manter referência ao ID original do banco para futuras atualizações
@@ -7655,10 +7710,11 @@ const PDVPage: React.FC = () => {
         console.log('✅ FRONTEND: Todos os itens inseridos com sucesso');
       }
 
-      // Inserir opções adicionais se existirem
+      // ✅ CORREÇÃO: Processar opções adicionais com verificação de duplicação
       const itensComAdicionais = carrinho.filter(item => item.adicionais && item.adicionais.length > 0);
       if (itensComAdicionais.length > 0) {
         setEtapaProcessamento('Salvando opções adicionais...');
+        console.log('🔍 FRONTEND: Processando adicionais para', itensComAdicionais.length, 'itens');
 
         for (const [index, item] of itensComAdicionais.entries()) {
           // ✅ CORREÇÃO: Buscar item considerando venda sem produto
@@ -7682,32 +7738,87 @@ const PDVPage: React.FC = () => {
             .maybeSingle();
 
           if (itemInserido && item.adicionais) {
-            const adicionaisParaInserir = item.adicionais.map(adicional => ({
-              empresa_id: usuarioData.empresa_id,
-              usuario_id: userData.user.id,
-              pdv_item_id: itemInserido.id,
-              item_adicional_id: adicional.id,
-              nome_adicional: adicional.nome,
-              quantidade: adicional.quantidade,
-              valor_unitario: adicional.preco,
-              valor_total: adicional.preco * adicional.quantidade,
-              origem_adicional: 'manual'
-            }));
+            console.log(`🔍 FRONTEND: Processando ${item.adicionais.length} adicionais para item: ${item.produto.nome} (ID: ${itemInserido.id})`);
 
-            const { error: adicionaisError } = await supabase
-              .from('pdv_itens_adicionais')
-              .insert(adicionaisParaInserir);
+            // ✅ CORREÇÃO: Abordagem simplificada - sempre remover e reinserir adicionais
+            if (vendaEmAndamento) {
+              // ✅ VENDA EM ANDAMENTO: Remover todos os adicionais antigos e inserir os novos
+              console.log(`🔄 FRONTEND: Removendo adicionais antigos e inserindo novos para: ${item.produto.nome}`);
 
-            if (adicionaisError) {
-              console.error('Erro ao inserir adicionais:', adicionaisError);
-              setEtapaProcessamento('Erro ao salvar adicionais: ' + adicionaisError.message);
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              setShowProcessandoVenda(false);
-              toast.error('Erro ao salvar adicionais: ' + adicionaisError.message);
-              return;
+              // 1. Marcar todos os adicionais antigos como deletados
+              const { error: deleteError } = await supabase
+                .from('pdv_itens_adicionais')
+                .update({
+                  deletado: true,
+                  deletado_em: new Date().toISOString(),
+                  deletado_por: userData.user.id
+                })
+                .eq('pdv_item_id', itemInserido.id)
+                .eq('deletado', false);
+
+              if (deleteError) {
+                console.error(`❌ Erro ao remover adicionais antigos:`, deleteError);
+                throw new Error(`Erro ao remover adicionais antigos: ${deleteError.message}`);
+              }
+
+              console.log(`✅ FRONTEND: Adicionais antigos removidos para: ${item.produto.nome}`);
+
+              // 2. Inserir todos os adicionais atuais do carrinho
+              if (item.adicionais && item.adicionais.length > 0) {
+                const adicionaisParaInserir = item.adicionais.map(adicional => ({
+                  empresa_id: usuarioData.empresa_id,
+                  usuario_id: userData.user.id,
+                  pdv_item_id: itemInserido.id,
+                  item_adicional_id: adicional.id,
+                  nome_adicional: adicional.nome,
+                  quantidade: adicional.quantidade,
+                  valor_unitario: adicional.preco,
+                  valor_total: adicional.preco * adicional.quantidade,
+                  origem_adicional: 'manual'
+                }));
+
+                const { error: insertError } = await supabase
+                  .from('pdv_itens_adicionais')
+                  .insert(adicionaisParaInserir);
+
+                if (insertError) {
+                  console.error(`❌ Erro ao inserir novos adicionais:`, insertError);
+                  throw new Error(`Erro ao inserir novos adicionais: ${insertError.message}`);
+                }
+
+                console.log(`✅ FRONTEND: ${adicionaisParaInserir.length} novos adicionais inseridos para: ${item.produto.nome}`);
+              }
+            } else {
+              // ✅ VENDA NOVA: Inserir todos os adicionais normalmente
+              console.log('➕ FRONTEND: Inserindo todos os adicionais (venda nova)...');
+
+              const adicionaisParaInserir = item.adicionais.map(adicional => ({
+                empresa_id: usuarioData.empresa_id,
+                usuario_id: userData.user.id,
+                pdv_item_id: itemInserido.id,
+                item_adicional_id: adicional.id,
+                nome_adicional: adicional.nome,
+                quantidade: adicional.quantidade,
+                valor_unitario: adicional.preco,
+                valor_total: adicional.preco * adicional.quantidade,
+                origem_adicional: 'manual'
+              }));
+
+              const { error: adicionaisError } = await supabase
+                .from('pdv_itens_adicionais')
+                .insert(adicionaisParaInserir);
+
+              if (adicionaisError) {
+                console.error('❌ Erro ao inserir adicionais:', adicionaisError);
+                throw new Error(`Erro ao inserir adicionais: ${adicionaisError.message}`);
+              }
+
+              console.log(`✅ FRONTEND: ${adicionaisParaInserir.length} adicionais inseridos para: ${item.produto.nome}`);
             }
           }
         }
+
+        console.log('✅ FRONTEND: Todos os adicionais processados com sucesso');
       }
 
       // Atualizar estoque se configurado para PDV
