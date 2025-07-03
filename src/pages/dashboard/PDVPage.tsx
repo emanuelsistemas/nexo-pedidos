@@ -1536,7 +1536,14 @@ const PDVPage: React.FC = () => {
             console.log('🔍 Salvando item novo:', item.produto.nome);
             const itemSalvo = await salvarItemNaVendaEmAndamento(item);
             if (itemSalvo) {
-              console.log('✅ Item novo salvo:', item.produto.nome);
+              console.log('✅ Item novo salvo:', item.produto.nome, 'ID:', itemSalvo.id);
+
+              // ✅ CORREÇÃO: Atualizar o item no carrinho com o pdv_item_id imediatamente
+              setCarrinho(prev => prev.map(carrinhoItem =>
+                carrinhoItem.id === item.id
+                  ? { ...carrinhoItem, pdv_item_id: itemSalvo.id }
+                  : carrinhoItem
+              ));
             } else {
               console.error('❌ Erro ao salvar item novo:', item.produto.nome);
             }
