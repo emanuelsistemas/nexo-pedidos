@@ -14045,6 +14045,13 @@ const PDVPage: React.FC = () => {
                                 NFC-e Cancelada
                               </span>
                             )}
+
+                            {/* ✅ NOVO: Tag Homologação - Só aparece quando venda é de homologação E empresa atual está em homologação E é NFC-e */}
+                            {venda.ambiente === 'homologacao' && ambienteNFe === 'homologacao' && venda.tentativa_nfce && (
+                              <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs font-medium rounded-full border border-orange-500/30">
+                                HOMOLOG.
+                              </span>
+                            )}
                           </div>
 
                           {/* Valor Total */}
