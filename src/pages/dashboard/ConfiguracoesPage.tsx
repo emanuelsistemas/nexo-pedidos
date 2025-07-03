@@ -2961,6 +2961,7 @@ const ConfiguracoesPage: React.FC = () => {
         venda_sem_produto_aliquota_cofins: field === 'venda_sem_produto_aliquota_cofins' ? value : pdvConfig.venda_sem_produto_aliquota_cofins,
         venda_sem_produto_peso_liquido: field === 'venda_sem_produto_peso_liquido' ? value : pdvConfig.venda_sem_produto_peso_liquido,
         vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : pdvConfig.vendas_itens_multiplicacao,
+        exibir_dados_fiscais_venda: field === 'exibir_dados_fiscais_venda' ? value : pdvConfig.exibir_dados_fiscais_venda,
         ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
         ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
         ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : pdvConfig.ocultar_nfce_com_impressao,
@@ -3009,7 +3010,7 @@ const ConfiguracoesPage: React.FC = () => {
         seleciona_clientes: 'Seleciona clientes',
         controla_caixa: 'Controla caixa',
         agrupa_itens: 'Agrupa itens',
-        delivery: 'Delivery',
+        delivery: 'Delivery Local',
         cardapio_digital: 'Cardápio digital',
         delivery_chat_ia: 'Delivery como chat IA',
         baixa_estoque_pdv: 'Baixa estoque na venda do PDV',
@@ -4328,6 +4329,19 @@ const ConfiguracoesPage: React.FC = () => {
                   >
                     Venda sem Produto
                   </button>
+                  {/* Aba Cardápio Digital - só aparece quando a opção estiver ativa */}
+                  {pdvConfig.cardapio_digital && (
+                    <button
+                      onClick={() => setPdvActiveTab('cardapio-digital')}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                        pdvActiveTab === 'cardapio-digital'
+                          ? 'border-primary-500 text-primary-400'
+                          : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                      }`}
+                    >
+                      Cardápio Digital
+                    </button>
+                  )}
                 </nav>
               </div>
 
@@ -4476,7 +4490,7 @@ const ConfiguracoesPage: React.FC = () => {
                           style={{ borderRadius: '50%' }}
                         />
                         <div>
-                          <h4 className="text-white font-medium">Delivery</h4>
+                          <h4 className="text-white font-medium">Delivery Local</h4>
                           <p className="text-sm text-gray-400 mt-1">
                             Habilita funcionalidades de entrega com controle de endereços e taxas.
                           </p>
