@@ -271,10 +271,13 @@ const ConfiguracoesPage: React.FC = () => {
   });
 
   // Estado para controlar as abas do PDV
-  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto'>('geral');
+  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto' | 'cardapio-digital'>('geral');
 
   // Estado para rodapé personalizado das impressões
   const [rodapePersonalizado, setRodapePersonalizado] = useState('Obrigado pela preferencia volte sempre!');
+
+  // Estado para URL personalizada do cardápio digital
+  const [cardapioUrlPersonalizada, setCardapioUrlPersonalizada] = useState('');
   const [horarioForm, setHorarioForm] = useState({
     id: '',
     dia_semana: '0',
@@ -2601,6 +2604,9 @@ const ConfiguracoesPage: React.FC = () => {
 
         // Atualizar também o estado separado do rodapé
         setRodapePersonalizado(config.rodape_personalizado || 'Obrigado pela preferencia volte sempre!');
+
+        // Atualizar também o estado separado da URL do cardápio
+        setCardapioUrlPersonalizada(config.cardapio_url_personalizada || '');
       } else {
         // Se não encontrou configuração, definir valores padrão
         setPdvConfig({
@@ -2962,6 +2968,7 @@ const ConfiguracoesPage: React.FC = () => {
         venda_sem_produto_peso_liquido: field === 'venda_sem_produto_peso_liquido' ? value : pdvConfig.venda_sem_produto_peso_liquido,
         vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : pdvConfig.vendas_itens_multiplicacao,
         exibir_dados_fiscais_venda: field === 'exibir_dados_fiscais_venda' ? value : pdvConfig.exibir_dados_fiscais_venda,
+        cardapio_url_personalizada: pdvConfig.cardapio_url_personalizada || '',
         ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
         ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
         ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : pdvConfig.ocultar_nfce_com_impressao,
@@ -3179,6 +3186,66 @@ const ConfiguracoesPage: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao salvar rodapé personalizado:', error);
       showMessage('error', 'Erro ao salvar rodapé personalizado: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Função para salvar a URL personalizada do cardápio
+  const handleSalvarCardapioUrl = async () => {
+    try {
+      setIsLoading(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada');
+      }
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('pdv_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      const configData = {
+        empresa_id: usuarioData.empresa_id,
+        ...pdvConfig,
+        cardapio_url_personalizada: cardapioUrlPersonalizada
+      };
+
+      if (existingConfig) {
+        const { error } = await supabase
+          .from('pdv_config')
+          .update({ cardapio_url_personalizada: cardapioUrlPersonalizada })
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('pdv_config')
+          .insert([configData]);
+
+        if (error) throw error;
+      }
+
+      // Atualizar o estado local
+      setPdvConfig(prev => ({ ...prev, cardapio_url_personalizada: cardapioUrlPersonalizada }));
+
+      showMessage('success', 'URL do cardápio salva com sucesso!');
+
+    } catch (error: any) {
+      console.error('Erro ao salvar URL do cardápio:', error);
+      showMessage('error', 'Erro ao salvar URL do cardápio: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -5580,17 +5647,69 @@ const ConfiguracoesPage: React.FC = () => {
                         <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
                           <div className="flex items-center justify-between mb-3">
                             <h5 className="text-white font-medium">URL do Cardápio</h5>
-                            <button className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors">
+                            <button
+                              onClick={() => {
+                                const url = `https://nexo.emasoftware.app/cardapio/${cardapioUrlPersonalizada || 'sua-loja'}`;
+                                navigator.clipboard.writeText(url);
+                                showMessage('success', 'Link copiado para a área de transferência!');
+                              }}
+                              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors"
+                            >
                               Copiar Link
                             </button>
                           </div>
-                          <div className="bg-gray-900/50 p-3 rounded border border-gray-600">
-                            <code className="text-purple-300 text-sm break-all">
-                              https://nexodev.emasoftware.app/cardapio/sua-empresa
-                            </code>
+
+                          <div className="space-y-3">
+                            <div className="bg-gray-900/50 p-3 rounded border border-gray-600">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-gray-400">https://nexo.emasoftware.app/cardapio/</span>
+                                <input
+                                  type="text"
+                                  value={cardapioUrlPersonalizada}
+                                  onChange={(e) => setCardapioUrlPersonalizada(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                                  placeholder="nome-da-sua-loja"
+                                  className="flex-1 bg-transparent text-purple-300 border-none outline-none placeholder-gray-500"
+                                  maxLength={50}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSalvarCardapioUrl}
+                                disabled={isLoading || !cardapioUrlPersonalizada.trim()}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+                              >
+                                {isLoading ? (
+                                  <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    Salvando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Salvar URL
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  const url = `https://nexo.emasoftware.app/cardapio/${cardapioUrlPersonalizada || 'sua-loja'}`;
+                                  window.open(url, '_blank');
+                                }}
+                                disabled={!cardapioUrlPersonalizada.trim()}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+                              >
+                                Visualizar
+                              </button>
+                            </div>
                           </div>
-                          <p className="text-xs text-gray-500 mt-2">
-                            Compartilhe este link ou gere um QR Code para que clientes acessem seu cardápio digital.
+
+                          <p className="text-xs text-gray-500 mt-3">
+                            Digite o nome da sua loja (apenas letras, números e hífens). Este será o link do seu cardápio digital.
                           </p>
                         </div>
 
