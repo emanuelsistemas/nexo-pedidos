@@ -57,49 +57,39 @@ const CardapioPublicoPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // 1. Buscar empresa pelo slug personalizado
+      // 1. Buscar configuração PDV pelo slug personalizado
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select(`
-          empresa_id,
-          cardapio_url_personalizada,
-          empresas (
-            id,
-            razao_social,
-            nome_fantasia,
-            telefone,
-            endereco,
-            cidade,
-            estado
-          )
-        `)
+        .select('empresa_id, cardapio_url_personalizada')
         .eq('cardapio_url_personalizada', slug)
         .eq('cardapio_digital', true)
         .single();
 
       if (configError || !pdvConfigData) {
+        console.error('Erro ao buscar configuração PDV:', configError);
         setError('Cardápio não encontrado ou não está disponível.');
         return;
       }
 
-      setEmpresa(pdvConfigData.empresas);
+      // 2. Buscar dados da empresa
+      const { data: empresaData, error: empresaError } = await supabase
+        .from('empresas')
+        .select('id, razao_social, nome_fantasia, telefone, endereco, cidade, estado')
+        .eq('id', pdvConfigData.empresa_id)
+        .single();
 
-      // 2. Buscar produtos ativos da empresa
+      if (empresaError || !empresaData) {
+        console.error('Erro ao buscar empresa:', empresaError);
+        setError('Dados da empresa não encontrados.');
+        return;
+      }
+
+      setEmpresa(empresaData);
+
+      // 3. Buscar produtos ativos da empresa
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
-        .select(`
-          id,
-          nome,
-          descricao,
-          preco,
-          foto_url,
-          grupo_id,
-          ativo,
-          grupos (
-            id,
-            nome
-          )
-        `)
+        .select('id, nome, descricao, preco, foto_url, grupo_id, ativo')
         .eq('empresa_id', pdvConfigData.empresa_id)
         .eq('ativo', true)
         .order('nome');
@@ -110,24 +100,37 @@ const CardapioPublicoPage: React.FC = () => {
         return;
       }
 
+      // 4. Buscar grupos dos produtos
+      const gruposIds = [...new Set(produtosData?.map(p => p.grupo_id).filter(Boolean))];
+      let gruposData: any[] = [];
+
+      if (gruposIds.length > 0) {
+        const { data: gruposResult, error: gruposError } = await supabase
+          .from('grupos')
+          .select('id, nome')
+          .in('id', gruposIds);
+
+        if (!gruposError && gruposResult) {
+          gruposData = gruposResult;
+        }
+      }
+
       // Processar produtos com nome do grupo
-      const produtosProcessados = produtosData?.map(produto => ({
-        ...produto,
-        grupo_nome: produto.grupos?.nome || 'Sem categoria'
-      })) || [];
+      const produtosProcessados = produtosData?.map(produto => {
+        const grupo = gruposData.find(g => g.id === produto.grupo_id);
+        return {
+          ...produto,
+          grupo_nome: grupo?.nome || 'Sem categoria'
+        };
+      }) || [];
 
       setProdutos(produtosProcessados);
 
-      // 3. Buscar grupos únicos
-      const gruposUnicos = Array.from(
-        new Set(produtosProcessados.map(p => p.grupo_id))
-      ).map(grupoId => {
-        const produto = produtosProcessados.find(p => p.grupo_id === grupoId);
-        return {
-          id: grupoId,
-          nome: produto?.grupo_nome || 'Sem categoria'
-        };
-      });
+      // 5. Definir grupos únicos
+      const gruposUnicos = gruposData.map(grupo => ({
+        id: grupo.id,
+        nome: grupo.nome
+      }));
 
       setGrupos(gruposUnicos);
 
