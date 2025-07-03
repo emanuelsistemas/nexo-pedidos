@@ -62,7 +62,7 @@ const CardapioPublicoPage: React.FC = () => {
       // 1. Buscar configuração PDV pelo slug personalizado
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select('empresa_id, cardapio_url_personalizada')
+        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio')
         .eq('cardapio_url_personalizada', slug)
         .eq('cardapio_digital', true)
         .single();
@@ -87,6 +87,12 @@ const CardapioPublicoPage: React.FC = () => {
       }
 
       setEmpresa(empresaData);
+
+      // Configurar tema baseado na configuração da empresa
+      setConfig(prev => ({
+        ...prev,
+        modo_escuro: pdvConfigData.modo_escuro_cardapio || false
+      }));
 
       // 3. Buscar produtos ativos da empresa
       const { data: produtosData, error: produtosError } = await supabase

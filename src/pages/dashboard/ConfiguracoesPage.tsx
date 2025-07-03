@@ -268,7 +268,8 @@ const ConfiguracoesPage: React.FC = () => {
     venda_sem_produto_peso_liquido: 0,
     venda_sem_produto_nome_padrao: 'Diversos',
     venda_sem_produto_cst: '60',
-    venda_sem_produto_csosn: '500'
+    venda_sem_produto_csosn: '500',
+    modo_escuro_cardapio: false
   });
 
   // Estado para controlar as abas do PDV
@@ -2687,7 +2688,8 @@ const ConfiguracoesPage: React.FC = () => {
           venda_sem_produto_aliquota_icms: config.venda_sem_produto_aliquota_icms !== undefined ? config.venda_sem_produto_aliquota_icms : 18.0,
           venda_sem_produto_aliquota_pis: config.venda_sem_produto_aliquota_pis !== undefined ? config.venda_sem_produto_aliquota_pis : 1.65,
           venda_sem_produto_aliquota_cofins: config.venda_sem_produto_aliquota_cofins !== undefined ? config.venda_sem_produto_aliquota_cofins : 7.6,
-          venda_sem_produto_peso_liquido: config.venda_sem_produto_peso_liquido !== undefined ? config.venda_sem_produto_peso_liquido : 0
+          venda_sem_produto_peso_liquido: config.venda_sem_produto_peso_liquido !== undefined ? config.venda_sem_produto_peso_liquido : 0,
+          modo_escuro_cardapio: config.modo_escuro_cardapio || false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2742,7 +2744,8 @@ const ConfiguracoesPage: React.FC = () => {
           venda_sem_produto_peso_liquido: 0,
           venda_sem_produto_nome_padrao: 'Diversos',
           venda_sem_produto_cst: '60',
-          venda_sem_produto_csosn: '500'
+          venda_sem_produto_csosn: '500',
+          modo_escuro_cardapio: false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -3057,6 +3060,7 @@ const ConfiguracoesPage: React.FC = () => {
         vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : pdvConfig.vendas_itens_multiplicacao,
         exibir_dados_fiscais_venda: field === 'exibir_dados_fiscais_venda' ? value : pdvConfig.exibir_dados_fiscais_venda,
         cardapio_url_personalizada: pdvConfig.cardapio_url_personalizada || '',
+        modo_escuro_cardapio: field === 'modo_escuro_cardapio' ? value : pdvConfig.modo_escuro_cardapio,
         ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
         ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
         ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : pdvConfig.ocultar_nfce_com_impressao,
@@ -5963,7 +5967,8 @@ const ConfiguracoesPage: React.FC = () => {
                         <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                           <input
                             type="checkbox"
-                            defaultChecked={false}
+                            checked={pdvConfig.modo_escuro_cardapio}
+                            onChange={(e) => handlePdvConfigChange('modo_escuro_cardapio', e.target.checked)}
                             className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
                             style={{ borderRadius: '50%' }}
                           />
