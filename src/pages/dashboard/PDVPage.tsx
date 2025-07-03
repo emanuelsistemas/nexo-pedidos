@@ -3592,19 +3592,14 @@ const PDVPage: React.FC = () => {
       const itensAtualizados = itensNfceEdicao.map(item => {
         const codigoProduto = item.produto?.codigo || item.codigo_produto;
 
-        // ✅ CORREÇÃO: Fallback 'UN' APENAS para produto 999999 (venda sem produto)
-        const unidadeCalculada = codigoProduto === '999999'
-          ? 'UN' // ✅ Produto 999999 sempre usa 'UN' fixo
-          : item.produto?.unidade_medida?.sigla; // ✅ Outros produtos usam dados reais (pode ser null se não tiver)
+        // ✅ CORREÇÃO: Usar unidade já salva na tabela pdv_itens
+        const unidadeCalculada = item.unidade || 'UN'; // ✅ Usar unidade salva nos itens, fallback 'UN' se não tiver
 
         console.log(`🔍 REPROCESSAMENTO - Item ${item.nome_produto}:`, {
           codigo_produto: codigoProduto,
-          eh_venda_sem_produto: codigoProduto === '999999',
-          produto_unidade_medida: item.produto?.unidade_medida,
-          produto_unidade_medida_sigla: item.produto?.unidade_medida?.sigla,
-          item_unidade: item.unidade,
+          unidade_salva_pdv_itens: item.unidade,
           unidade_final_calculada: unidadeCalculada,
-          fallback_aplicado: codigoProduto === '999999' ? 'SIM (UN fixo)' : 'NÃO (dados reais)'
+          fonte_dados: 'pdv_itens (dados já processados)'
         });
 
         return {
@@ -16638,7 +16633,15 @@ const PDVPage: React.FC = () => {
 
                     {/* ✅ NOVO: Campos para editar número e série da NFC-e */}
                     <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                      <p className="text-blue-400 text-sm font-medium mb-2">Dados da NFC-e:</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-blue-400 text-sm font-medium">Dados da NFC-e:</p>
+                        {/* ✅ NOVO: Tag de homologação no modal de edição NFC-e */}
+                        {vendaParaEditarNfce?.ambiente === 'homologacao' && (
+                          <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs font-medium rounded-full border border-orange-500/30">
+                            HOMOLOG.
+                          </span>
+                        )}
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         {/* Campo Número */}
                         <div>
