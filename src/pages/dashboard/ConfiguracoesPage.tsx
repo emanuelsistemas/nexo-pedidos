@@ -8,6 +8,7 @@ import MultiSelect from '../../components/comum/MultiSelect';
 import { showMessage, translateErrorMessage } from '../../utils/toast';
 import { TipoUserConfig } from '../../types';
 import { useAuthSession } from '../../hooks/useAuthSession';
+import QRCode from 'qrcode';
 import { extractCertificateInfo, checkCertificateExpiry, checkCertificateStatus } from '../../api/certificateApi';
 import { useCertificateUpload } from '../../hooks/useCertificateUpload';
 import NFeValidationModal from '../../components/comum/NFeValidationModal';
@@ -278,6 +279,34 @@ const ConfiguracoesPage: React.FC = () => {
 
   // Estado para URL personalizada do cardápio digital
   const [cardapioUrlPersonalizada, setCardapioUrlPersonalizada] = useState('');
+
+  // Estado para o QR Code do cardápio
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
+
+  // Função para gerar QR Code
+  const generateQRCode = async (url: string) => {
+    try {
+      const qrCodeDataUrl = await QRCode.toDataURL(url, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodeDataUrl(qrCodeDataUrl);
+    } catch (error) {
+      console.error('Erro ao gerar QR Code:', error);
+    }
+  };
+
+  // Gerar QR Code quando a URL personalizada mudar
+  useEffect(() => {
+    if (cardapioUrlPersonalizada.trim()) {
+      const url = `https://nexo.emasoftware.app/cardapio/${cardapioUrlPersonalizada}`;
+      generateQRCode(url);
+    }
+  }, [cardapioUrlPersonalizada]);
   const [horarioForm, setHorarioForm] = useState({
     id: '',
     dia_semana: '0',
@@ -3241,6 +3270,10 @@ const ConfiguracoesPage: React.FC = () => {
       // Atualizar o estado local
       setPdvConfig(prev => ({ ...prev, cardapio_url_personalizada: cardapioUrlPersonalizada }));
 
+      // Gerar QR Code com a nova URL
+      const url = `https://nexo.emasoftware.app/cardapio/${cardapioUrlPersonalizada}`;
+      await generateQRCode(url);
+
       showMessage('success', 'URL do cardápio salva com sucesso!');
 
     } catch (error: any) {
@@ -5716,22 +5749,66 @@ const ConfiguracoesPage: React.FC = () => {
                         <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
                           <h5 className="text-white font-medium mb-3">QR Code do Cardápio</h5>
                           <div className="flex items-center gap-4">
-                            <div className="w-24 h-24 bg-white rounded-lg flex items-center justify-center">
-                              <div className="w-20 h-20 bg-gray-900 rounded grid grid-cols-8 gap-px p-1">
-                                {Array.from({ length: 64 }).map((_, i) => (
-                                  <div key={i} className={`${Math.random() > 0.5 ? 'bg-black' : 'bg-white'} rounded-sm`}></div>
-                                ))}
-                              </div>
+                            <div className="w-32 h-32 bg-white rounded-lg flex items-center justify-center p-2">
+                              {qrCodeDataUrl ? (
+                                <img
+                                  src={qrCodeDataUrl}
+                                  alt="QR Code do Cardápio"
+                                  className="w-full h-full object-contain"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gray-200 rounded flex items-center justify-center">
+                                  <span className="text-gray-500 text-xs text-center">
+                                    Salve a URL<br/>para gerar<br/>QR Code
+                                  </span>
+                                </div>
+                              )}
                             </div>
                             <div className="flex-1">
                               <p className="text-sm text-gray-400 mb-3">
                                 Use este QR Code em seu estabelecimento para que clientes acessem o cardápio digital.
                               </p>
                               <div className="flex gap-2">
-                                <button className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors">
+                                <button
+                                  onClick={() => {
+                                    if (qrCodeDataUrl) {
+                                      const link = document.createElement('a');
+                                      link.download = `qrcode-cardapio-${cardapioUrlPersonalizada || 'loja'}.png`;
+                                      link.href = qrCodeDataUrl;
+                                      link.click();
+                                    }
+                                  }}
+                                  disabled={!qrCodeDataUrl}
+                                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+                                >
                                   Baixar QR Code
                                 </button>
-                                <button className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded-lg transition-colors">
+                                <button
+                                  onClick={() => {
+                                    if (qrCodeDataUrl) {
+                                      const printWindow = window.open('', '_blank');
+                                      if (printWindow) {
+                                        printWindow.document.write(`
+                                          <html>
+                                            <head><title>QR Code - Cardápio Digital</title></head>
+                                            <body style="margin: 0; padding: 20px; text-align: center;">
+                                              <h2>Cardápio Digital</h2>
+                                              <p>Escaneie o QR Code para acessar nosso cardápio</p>
+                                              <img src="${qrCodeDataUrl}" style="max-width: 300px; margin: 20px 0;" />
+                                              <p style="font-size: 12px; color: #666;">
+                                                https://nexo.emasoftware.app/cardapio/${cardapioUrlPersonalizada || 'sua-loja'}
+                                              </p>
+                                            </body>
+                                          </html>
+                                        `);
+                                        printWindow.document.close();
+                                        printWindow.print();
+                                      }
+                                    }
+                                  }}
+                                  disabled={!qrCodeDataUrl}
+                                  className="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+                                >
                                   Imprimir
                                 </button>
                               </div>
