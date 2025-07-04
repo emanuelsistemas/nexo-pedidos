@@ -9776,9 +9776,28 @@ const PDVPage: React.FC = () => {
 
           <div class="linha"></div>
 
-          ${dadosImpressao.itens.map(item => `
+          ${dadosImpressao.itens.map(item => {
+            // ✅ NOVO: Formatar nome com sabores em linhas separadas
+            const formatarNomeComSabores = (nome) => {
+              if (nome.includes('\n')) {
+                const linhas = nome.split('\n');
+                const nomePrincipal = linhas[0];
+                const sabores = linhas.slice(1);
+
+                return `
+                  <div class="bold">${nomePrincipal}</div>
+                  ${sabores.map(sabor => `<div style="font-size: 11px; color: #666; margin-left: 5px;">${sabor}</div>`).join('')}
+                `;
+              }
+              return `<div class="bold">${nome}</div>`;
+            };
+
+            return `
             <div class="item">
-              <div>${item.nome} (${item.unidade})</div>
+              <div>
+                ${formatarNomeComSabores(item.nome)}
+                <span style="font-size: 10px; color: #888;">(${item.unidade})</span>
+              </div>
               <div class="item-linha">
                 <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
                 <span class="valor-monetario">${formatCurrency(item.valor_total)}</span>
@@ -9802,8 +9821,9 @@ const PDVPage: React.FC = () => {
 
                 return adicionaisHtml + vendedorHtml;
               })()}
-            </div>
-          `).join('')}
+            </div>`;
+          }).join('')}
+
 
           <div class="linha"></div>
 
@@ -10268,9 +10288,28 @@ const PDVPage: React.FC = () => {
 
           <div class="linha"></div>
 
-          ${dadosImpressao.itens.map(item => `
+          ${dadosImpressao.itens.map(item => {
+            // ✅ NOVO: Formatar nome com sabores em linhas separadas
+            const formatarNomeComSabores = (nome) => {
+              if (nome.includes('\n')) {
+                const linhas = nome.split('\n');
+                const nomePrincipal = linhas[0];
+                const sabores = linhas.slice(1);
+
+                return `
+                  <div class="bold">${nomePrincipal}</div>
+                  ${sabores.map(sabor => `<div style="font-size: 11px; color: #666; margin-left: 5px;">${sabor}</div>`).join('')}
+                `;
+              }
+              return `<div class="bold">${nome}</div>`;
+            };
+
+            return `
             <div class="item">
-              <div>${item.nome} (${item.unidade})</div>
+              <div>
+                ${formatarNomeComSabores(item.nome)}
+                <span style="font-size: 10px; color: #888;">(${item.unidade})</span>
+              </div>
               <div class="item-linha">
                 <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
                 <span class="valor-monetario">${formatCurrency(item.valor_total)}</span>
@@ -10294,8 +10333,9 @@ const PDVPage: React.FC = () => {
 
                 return adicionaisHtml + vendedorHtml;
               })()}
-            </div>
-          `).join('')}
+            </div>`;
+          }).join('')}
+
 
           <div class="linha"></div>
 
