@@ -10422,34 +10422,8 @@ const PDVPage: React.FC = () => {
             <div className="h-full flex flex-col">
 
 
-              {/* Barra de Busca com Seletor de Tabela - Compacta */}
+              {/* Barra de Busca - Compacta */}
               <div className="mb-3">
-                {/* ✅ NOVO: Dropdown de Tabela de Preços */}
-                {trabalhaComTabelaPrecos && tabelasPrecos.length > 0 && (
-                  <div className="mb-2">
-                    <div className="relative w-40">
-                      <select
-                        value={tabelaPrecoSelecionada}
-                        onChange={(e) => setTabelaPrecoSelecionada(e.target.value)}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-3 pr-8 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 appearance-none cursor-pointer"
-                      >
-                        <option value="padrao">📋 Preço Padrão</option>
-                        {tabelasPrecos.map((tabela) => (
-                          <option key={tabela.id} value={tabela.id}>
-                            📋 {tabela.nome}
-                          </option>
-                        ))}
-                      </select>
-                      {/* Ícone de dropdown customizado */}
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 <div className="relative">
                   <input
                     type="text"
