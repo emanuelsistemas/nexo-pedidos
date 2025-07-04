@@ -4468,10 +4468,37 @@ const PDVPage: React.FC = () => {
       }
     });
 
-    // ✅ CORREÇÃO: Salvar item na tabela pdv_itens - usar setTimeout para garantir que o estado seja atualizado
-    setTimeout(async () => {
+    // ✅ CORREÇÃO: Aguardar venda ser criada antes de salvar item
+    const aguardarVendaEsalvarItem = async () => {
+      console.log('🔍 AGUARDAR: Iniciando processo de aguardar venda e salvar item...');
+
+      // Se é primeiro item e não há venda, aguardar criação
+      if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
+        console.log('🔍 AGUARDAR: É primeiro item, aguardando criação da venda...');
+
+        let tentativas = 0;
+        const maxTentativas = 100; // 10 segundos
+
+        while (!vendaEmAndamento && tentativas < maxTentativas) {
+          // Log apenas a cada 10 tentativas para não poluir o console
+          if (tentativas % 10 === 0) {
+            console.log(`🔍 AGUARDAR: Tentativa ${tentativas + 1}/${maxTentativas} - Aguardando venda...`);
+          }
+          await new Promise(resolve => setTimeout(resolve, 100));
+          tentativas++;
+        }
+
+        if (!vendaEmAndamento) {
+          console.error('❌ AGUARDAR: Timeout - Venda não foi criada após aguardar');
+          return;
+        }
+
+        console.log('✅ AGUARDAR: Venda encontrada após aguardar:', vendaEmAndamento);
+      }
+
       // Usar o estado mais atual da venda em andamento
       const vendaAtual = vendaEmAndamento;
+      console.log('🔍 AGUARDAR: Venda atual para salvamento:', vendaAtual);
 
       if (vendaAtual) {
         console.log('🔍 DEBUG: Iniciando salvamento do item na venda em andamento:', {
@@ -4543,7 +4570,10 @@ const PDVPage: React.FC = () => {
           }, 500);
         }
       }
-    }, 100); // Aguardar 100ms para o estado ser atualizado
+    };
+
+    // Chamar a função para aguardar venda e salvar item
+    aguardarVendaEsalvarItem();
   };
 
   // Funções para seleção de vendedor
