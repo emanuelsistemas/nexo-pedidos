@@ -122,6 +122,8 @@ interface ItemCarrinho {
   vendedor_nome?: string; // Nome do vendedor responsável por este item
   vendaSemProduto?: boolean; // ✅ Indica se é um item de venda sem produto
   nome?: string; // ✅ Nome personalizado para venda sem produto
+  tabela_preco_id?: string | null; // ✅ NOVO: ID da tabela de preços usada neste item
+  tabela_preco_nome?: string | null; // ✅ NOVO: Nome da tabela de preços usada neste item
 }
 
 interface Cliente {
@@ -4358,7 +4360,12 @@ const PDVPage: React.FC = () => {
       subtotal: precoFinal * quantidadeParaAdicionar,
       temOpcoesAdicionais,
       vendedor_id: vendedorSelecionado?.id,
-      vendedor_nome: vendedorSelecionado?.nome
+      vendedor_nome: vendedorSelecionado?.nome,
+      // ✅ NOVO: Salvar qual tabela de preços foi usada neste item
+      tabela_preco_id: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao' ? tabelaPrecoSelecionada : null,
+      tabela_preco_nome: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao'
+        ? tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada)?.nome
+        : null
     };
 
     // ✅ NOVO: Criar venda em andamento no primeiro item (adaptado do sistema de rascunhos NFe)
@@ -4380,21 +4387,33 @@ const PDVPage: React.FC = () => {
       });
 
       setCriandoVenda(true);
-      const vendaCriada = await criarVendaEmAndamento();
-      console.log('🔍 Resultado da criação:', vendaCriada);
+      console.log('🚀 CRIACAO: Iniciando criação da venda em andamento...');
 
-      if (!vendaCriada) {
+      try {
+        const vendaCriada = await criarVendaEmAndamento();
+        console.log('🔍 CRIACAO: Resultado da criação:', vendaCriada);
+
+        if (!vendaCriada) {
+          setCriandoVenda(false);
+          console.error('❌ CRIACAO: Falha ao criar venda em andamento - função retornou false');
+          toast.error('Erro ao criar venda. Tente novamente.');
+          return;
+        }
+
+        // ✅ CORREÇÃO: Aguardar um pouco para garantir que a transação foi commitada
+        console.log('⏳ CRIACAO: Aguardando transação ser commitada...');
+        await new Promise(resolve => setTimeout(resolve, 200));
         setCriandoVenda(false);
-        console.error('❌ ERRO: Falha ao criar venda em andamento');
-        toast.error('Erro ao criar venda. Tente novamente.');
+
+        console.log('✅ CRIACAO: Venda em andamento criada com sucesso');
+        console.log('✅ CRIACAO: Estado vendaEmAndamento após criação:', vendaEmAndamento);
+      } catch (error) {
+        setCriandoVenda(false);
+        console.error('❌ CRIACAO: Erro durante criação da venda:', error);
+        console.error('❌ CRIACAO: Stack trace:', (error as Error).stack);
+        toast.error('Erro ao criar venda: ' + (error as Error).message);
         return;
       }
-
-      // ✅ CORREÇÃO: Aguardar um pouco para garantir que a transação foi commitada
-      await new Promise(resolve => setTimeout(resolve, 200));
-      setCriandoVenda(false);
-
-      console.log('✅ Venda em andamento criada com sucesso');
     } else if (criandoVenda) {
       // ✅ NOVO: Se está criando venda, aguardar até terminar
       console.log('⏳ Aguardando criação da venda terminar...');
@@ -4731,7 +4750,10 @@ const PDVPage: React.FC = () => {
       nome: nome.trim(), // ✅ Nome personalizado para venda sem produto
       preco: preco, // ✅ CORREÇÃO: Adicionar campo preco para venda sem produto
       vendedor_id: vendedorSelecionado?.id,
-      vendedor_nome: vendedorSelecionado?.nome
+      vendedor_nome: vendedorSelecionado?.nome,
+      // ✅ NOVO: Salvar qual tabela de preços foi usada neste item (venda sem produto sempre usa preço padrão)
+      tabela_preco_id: null,
+      tabela_preco_nome: null
     };
 
     setCarrinho(prev => [...prev, novoItem]);
@@ -4886,7 +4908,12 @@ const PDVPage: React.FC = () => {
       subtotal: precoFinal * quantidadeParaAdicionar,
       temOpcoesAdicionais,
       vendedor_id: vendedor?.id,
-      vendedor_nome: vendedor?.nome
+      vendedor_nome: vendedor?.nome,
+      // ✅ NOVO: Salvar qual tabela de preços foi usada neste item
+      tabela_preco_id: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao' ? tabelaPrecoSelecionada : null,
+      tabela_preco_nome: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao'
+        ? tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada)?.nome
+        : null
     };
 
     // Se o produto tem opções adicionais, abrir modal
@@ -6600,8 +6627,8 @@ const PDVPage: React.FC = () => {
       };
 
       // Inserir venda na tabela pdv
-      console.log('🔍 Inserindo venda na tabela pdv...');
-      console.log('🔍 Dados da venda:', vendaData);
+      console.log('🔍 VENDA: Inserindo venda na tabela pdv...');
+      console.log('🔍 VENDA: Dados da venda a serem inseridos:', JSON.stringify(vendaData, null, 2));
 
       const { data: vendaInserida, error: vendaError } = await supabase
         .from('pdv')
@@ -6610,30 +6637,37 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (vendaError) {
-        console.error('❌ Erro ao criar venda em andamento:', vendaError);
-        console.error('❌ Detalhes do erro:', {
+        console.error('❌ VENDA: Erro ao inserir venda na tabela pdv:', vendaError);
+        console.error('❌ VENDA: Detalhes completos do erro:', {
           message: vendaError.message,
           details: vendaError.details,
           hint: vendaError.hint,
-          code: vendaError.code
+          code: vendaError.code,
+          vendaData: vendaData
         });
-        return false;
+        throw new Error(`Falha ao inserir venda: ${vendaError.message}`);
       }
 
-      console.log('✅ Venda inserida com sucesso:', vendaInserida);
+      console.log('✅ VENDA: Venda inserida com sucesso:', vendaInserida);
 
       // Atualizar estado da venda em andamento
-      setVendaEmAndamento({
+      const novaVendaEmAndamento = {
         id: vendaInserida.id,
         numero_venda: vendaInserida.numero_venda,
         numero_nfce_reservado: vendaInserida.numero_documento,
         serie_usuario: vendaInserida.serie_documento,
         status_venda: 'aberta'
-      });
+      };
+
+      console.log('🔄 VENDA: Atualizando estado vendaEmAndamento:', novaVendaEmAndamento);
+      setVendaEmAndamento(novaVendaEmAndamento);
+
       // ✅ CORREÇÃO: Venda NOVA deve ter isEditingVenda = false
+      console.log('🔄 VENDA: Definindo isEditingVenda = false');
       setIsEditingVenda(false);
 
-      console.log('✅ Venda em andamento criada:', vendaInserida);
+      console.log('✅ VENDA: Processo de criação concluído com sucesso');
+      console.log('✅ VENDA: Retornando true da função criarVendaEmAndamento');
       return true;
 
     } catch (error) {
@@ -6710,7 +6744,10 @@ const PDVPage: React.FC = () => {
         tem_desconto: false,
         valor_desconto_item: 0,
         valor_desconto_aplicado: 0,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        // ✅ NOVO: Campos da tabela de preços
+        tabela_preco_id: item.tabela_preco_id || null,
+        tabela_preco_nome: item.tabela_preco_nome || null
       };
 
       console.log('🔍 Dados do item preparados:', itemData);
@@ -7321,7 +7358,10 @@ const PDVPage: React.FC = () => {
           // ✅ NOVO: Incluir adicionais carregados
           adicionais: adicionaisItem,
           // ✅ NOVO: Manter referência ao ID original do banco para futuras atualizações
-          pdv_item_id: item.id
+          pdv_item_id: item.id,
+          // ✅ NOVO: Incluir dados da tabela de preços
+          tabela_preco_id: item.tabela_preco_id,
+          tabela_preco_nome: item.tabela_preco_nome
         };
       }));
 
@@ -7788,6 +7828,9 @@ const PDVPage: React.FC = () => {
           vendedor_id: item.vendedor_id || null,
           vendedor_nome: item.vendedor_nome || null,
           observacao_item: item.observacao || null,
+          // ✅ NOVO: Incluir dados da tabela de preços
+          tabela_preco_id: item.tabela_preco_id || null,
+          tabela_preco_nome: item.tabela_preco_nome || null,
           // ✅ CORREÇÃO: Incluir dados fiscais
           ...dadosFiscais
         };
@@ -7857,6 +7900,8 @@ const PDVPage: React.FC = () => {
                 vendedor_id: itemData.vendedor_id,
                 vendedor_nome: itemData.vendedor_nome,
                 observacao_item: itemData.observacao_item,
+                tabela_preco_id: itemData.tabela_preco_id,
+                tabela_preco_nome: itemData.tabela_preco_nome,
                 updated_at: new Date().toISOString()
               })
               .eq('id', itemExistente.id);
@@ -10780,6 +10825,12 @@ const PDVPage: React.FC = () => {
                                             {!item.vendaSemProduto && item.produto.unidade_medida?.sigla && (
                                               <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
                                                 {item.produto.unidade_medida.sigla}
+                                              </span>
+                                            )}
+                                            {/* ✅ NOVO: Tag da tabela de preços (fixa no item quando foi adicionado) */}
+                                            {item.tabela_preco_nome && (
+                                              <span className="ml-2 px-1.5 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded border border-purple-500/30">
+                                                {item.tabela_preco_nome}
                                               </span>
                                             )}
                                           </h4>
