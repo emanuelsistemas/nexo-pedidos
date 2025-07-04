@@ -66,6 +66,53 @@ const CardapioPublicoPage: React.FC = () => {
   const [grupoSelecionado, setGrupoSelecionado] = useState<string>('todos');
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
+  // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
+  useEffect(() => {
+    if (empresa && slug) {
+      const nomeEmpresa = empresa.nome_fantasia || empresa.razao_social;
+      const logoUrl = empresa.logo_url || '';
+      const cardapioUrl = `https://nexo.emasoftware.app/cardapio/${slug}`;
+
+      // Atualizar título da página
+      document.title = `${nomeEmpresa} - Cardápio Digital`;
+
+      // Função para atualizar ou criar meta tag
+      const updateMetaTag = (property: string, content: string) => {
+        let metaTag = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement;
+        if (!metaTag) {
+          metaTag = document.createElement('meta');
+          metaTag.setAttribute('property', property);
+          document.head.appendChild(metaTag);
+        }
+        metaTag.setAttribute('content', content);
+      };
+
+      // Atualizar meta tags Open Graph para WhatsApp
+      updateMetaTag('og:title', nomeEmpresa);
+      updateMetaTag('og:description', 'Consulte o cardápio e faça seu pedido');
+      updateMetaTag('og:url', cardapioUrl);
+      updateMetaTag('og:type', 'website');
+      updateMetaTag('og:site_name', 'Nexo Pedidos');
+
+      if (logoUrl) {
+        updateMetaTag('og:image', logoUrl);
+        updateMetaTag('og:image:width', '400');
+        updateMetaTag('og:image:height', '400');
+        updateMetaTag('og:image:alt', `Logo ${nomeEmpresa}`);
+      }
+
+      // Meta tags para Twitter
+      updateMetaTag('twitter:card', 'summary_large_image');
+      updateMetaTag('twitter:title', nomeEmpresa);
+      updateMetaTag('twitter:description', 'Consulte o cardápio e faça seu pedido');
+      if (logoUrl) {
+        updateMetaTag('twitter:image', logoUrl);
+      }
+
+      console.log('🔗 Meta tags atualizadas para:', nomeEmpresa);
+    }
+  }, [empresa, slug]);
+
   useEffect(() => {
     if (slug) {
       carregarDadosCardapio();
@@ -182,7 +229,7 @@ const CardapioPublicoPage: React.FC = () => {
       console.log('🔍 Buscando configuração PDV para slug:', slug);
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, logo_url, cardapio_digital')
+        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, logo_url, cardapio_digital')
         .eq('cardapio_url_personalizada', slug)
         .single();
 
@@ -225,10 +272,11 @@ const CardapioPublicoPage: React.FC = () => {
       // Definir o ID da empresa para o realtime
       setEmpresaId(empresaComLogo.id);
 
-      // Configurar tema baseado na configuração da empresa
+      // Configurar tema e exibição de fotos baseado na configuração da empresa
       setConfig(prev => ({
         ...prev,
-        modo_escuro: pdvConfigData.modo_escuro_cardapio || false
+        modo_escuro: pdvConfigData.modo_escuro_cardapio || false,
+        mostrar_fotos: pdvConfigData.exibir_fotos_itens_cardapio !== false // Default true se não definido
       }));
 
       // 3. Buscar produtos ativos da empresa
@@ -670,25 +718,27 @@ const CardapioPublicoPage: React.FC = () => {
                     : 'bg-white border border-gray-200 shadow-lg'
                 }`}
               >
-                {/* Imagem do produto */}
-                {produto.foto_url ? (
-                  <div className="relative h-48 overflow-hidden">
-                    <img
-                      src={produto.foto_url}
-                      alt={produto.nome}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                  </div>
-                ) : (
-                  <div className={`h-48 flex items-center justify-center ${config.modo_escuro ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                    <svg className={`w-16 h-16 ${config.modo_escuro ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
+                {/* Imagem do produto - Condicional baseada na configuração */}
+                {config.mostrar_fotos && (
+                  produto.foto_url ? (
+                    <div className="relative h-48 overflow-hidden">
+                      <img
+                        src={produto.foto_url}
+                        alt={produto.nome}
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    </div>
+                  ) : (
+                    <div className={`h-48 flex items-center justify-center ${config.modo_escuro ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                      <svg className={`w-16 h-16 ${config.modo_escuro ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )
                 )}
 
                 {/* Conteúdo do card */}

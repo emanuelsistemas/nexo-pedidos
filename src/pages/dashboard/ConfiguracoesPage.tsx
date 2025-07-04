@@ -280,6 +280,7 @@ const ConfiguracoesPage: React.FC = () => {
     venda_sem_produto_cst: '60',
     venda_sem_produto_csosn: '500',
     modo_escuro_cardapio: false,
+    exibir_fotos_itens_cardapio: false,
     cardapio_abertura_tipo: 'automatico',
     cardapio_loja_aberta: true
   });
@@ -2865,6 +2866,7 @@ const ConfiguracoesPage: React.FC = () => {
           venda_sem_produto_aliquota_cofins: config.venda_sem_produto_aliquota_cofins !== undefined ? config.venda_sem_produto_aliquota_cofins : 7.6,
           venda_sem_produto_peso_liquido: config.venda_sem_produto_peso_liquido !== undefined ? config.venda_sem_produto_peso_liquido : 0,
           modo_escuro_cardapio: config.modo_escuro_cardapio || false,
+          exibir_fotos_itens_cardapio: config.exibir_fotos_itens_cardapio || false,
           cardapio_abertura_tipo: config.cardapio_abertura_tipo || 'automatico',
           cardapio_loja_aberta: config.cardapio_loja_aberta !== undefined ? config.cardapio_loja_aberta : true
         });
@@ -2926,7 +2928,8 @@ const ConfiguracoesPage: React.FC = () => {
           venda_sem_produto_nome_padrao: 'Diversos',
           venda_sem_produto_cst: '60',
           venda_sem_produto_csosn: '500',
-          modo_escuro_cardapio: false
+          modo_escuro_cardapio: false,
+          exibir_fotos_itens_cardapio: false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2979,7 +2982,11 @@ const ConfiguracoesPage: React.FC = () => {
         venda_sem_produto_peso_liquido: 0,
         venda_sem_produto_nome_padrao: 'Diversos',
         venda_sem_produto_cst: '60',
-        venda_sem_produto_csosn: '500'
+        venda_sem_produto_csosn: '500',
+        modo_escuro_cardapio: false,
+        exibir_fotos_itens_cardapio: false,
+        cardapio_abertura_tipo: 'automatico',
+        cardapio_loja_aberta: true
       });
 
       // Atualizar também o estado separado do rodapé
@@ -3516,6 +3523,7 @@ const ConfiguracoesPage: React.FC = () => {
           vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : false,
           exibir_dados_fiscais_venda: field === 'exibir_dados_fiscais_venda' ? value : false,
           modo_escuro_cardapio: field === 'modo_escuro_cardapio' ? value : false,
+          exibir_fotos_itens_cardapio: field === 'exibir_fotos_itens_cardapio' ? value : false,
           cardapio_abertura_tipo: field === 'cardapio_abertura_tipo' ? value : 'automatico',
           cardapio_loja_aberta: field === 'cardapio_loja_aberta' ? value : true,
           ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : false,
@@ -3598,7 +3606,9 @@ const ConfiguracoesPage: React.FC = () => {
         ocultar_nfce_com_impressao: 'Ocultar "NFC-e com Impressão"',
         ocultar_nfce_sem_impressao: 'Ocultar "NFC-e sem Impressão"',
         ocultar_nfce_producao: 'Ocultar "NFC-e + Produção"',
-        ocultar_producao: 'Ocultar "Produção"'
+        ocultar_producao: 'Ocultar "Produção"',
+        modo_escuro_cardapio: 'Modo Escuro do Cardápio',
+        exibir_fotos_itens_cardapio: 'Exibir Fotos nos Itens Principal'
       };
 
       const fieldName = fieldNames[field] || field;
@@ -6640,6 +6650,22 @@ const ConfiguracoesPage: React.FC = () => {
                             <h5 className="text-white font-medium">Modo Escuro</h5>
                             <p className="text-sm text-gray-400 mt-1">
                               Aplica tema escuro no cardápio digital.
+                            </p>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={pdvConfig.exibir_fotos_itens_cardapio}
+                            onChange={(e) => handlePdvConfigChange('exibir_fotos_itens_cardapio', e.target.checked)}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h5 className="text-white font-medium">Exibir Fotos nos Itens Principal</h5>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Mostra as fotos dos produtos na página principal do cardápio digital.
                             </p>
                           </div>
                         </label>
