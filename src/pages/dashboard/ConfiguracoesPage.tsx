@@ -4631,6 +4631,10 @@ const ConfiguracoesPage: React.FC = () => {
                   const horaAbertura = horario.hora_abertura.substring(0, 5);
                   const horaFechamento = horario.hora_fechamento.substring(0, 5);
 
+                  // Verificar se é o dia de hoje
+                  const hoje = new Date().getDay();
+                  const isHoje = horario.dia_semana === hoje;
+
                   return (
                     <div
                       key={horario.id}
@@ -4638,12 +4642,26 @@ const ConfiguracoesPage: React.FC = () => {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="text-white font-medium">{diaNome}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-white font-medium">{diaNome}</h3>
+                            {isHoje && (
+                              <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-full border border-green-500/30 font-medium">
+                                Hoje
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-gray-400 mt-1">
                             {horaAbertura} às {horaFechamento}
                           </p>
                         </div>
                         <div className="flex items-center gap-1">
+                          {isHoje && (
+                            <span className="text-green-400 mr-1" title="Dia atual">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                              </svg>
+                            </span>
+                          )}
                           <button
                             onClick={() => handleEditHorario(horario)}
                             className="p-2 text-blue-400 hover:text-blue-300 transition-colors"

@@ -220,6 +220,112 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [empresa]);
 
+  // Teste simples de realtime para horários de atendimento
+  useEffect(() => {
+    if (!empresaId) return;
+
+    console.log('🧪 TESTE: Configurando realtime para horários - empresa:', empresaId);
+
+    const channel = supabase
+      .channel(`teste_horarios_${empresaId}_${Date.now()}`, {
+        config: {
+          broadcast: { self: true }
+        }
+      })
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'horario_atendimento',
+          filter: `empresa_id=eq.${empresaId}`
+        },
+        (payload) => {
+          console.log('🧪 TESTE: REALTIME FUNCIONOU! Mudança detectada:', payload);
+          console.log('🧪 TESTE: Tipo de evento:', payload.eventType);
+          console.log('🧪 TESTE: Dados novos:', payload.new);
+          console.log('🧪 TESTE: Dados antigos:', payload.old);
+
+          // Forçar atualização do status da loja para testar
+          console.log('🧪 TESTE: Forçando verificação de status...');
+          setTimeout(async () => {
+            try {
+              // Buscar configuração atual
+              const { data: config } = await supabase
+                .from('pdv_config')
+                .select('cardapio_abertura_tipo, cardapio_loja_aberta')
+                .eq('empresa_id', empresaId)
+                .single();
+
+              console.log('🧪 TESTE: Configuração atual:', config);
+
+              if (config?.cardapio_abertura_tipo === 'automatico') {
+                console.log('🧪 TESTE: Modo automático - verificando horários...');
+
+                const now = new Date();
+                const currentDay = now.getDay();
+                const currentTime = now.getHours() * 60 + now.getMinutes();
+
+                const { data: horario } = await supabase
+                  .from('horario_atendimento')
+                  .select('*')
+                  .eq('empresa_id', empresaId)
+                  .eq('dia_semana', currentDay)
+                  .single();
+
+                console.log('🧪 TESTE: Horário para hoje:', horario);
+
+                if (horario) {
+                  const [horaAbertura, minutoAbertura] = horario.hora_abertura.split(':').map(Number);
+                  const [horaFechamento, minutoFechamento] = horario.hora_fechamento.split(':').map(Number);
+                  const aberturaMinutos = horaAbertura * 60 + minutoAbertura;
+                  const fechamentoMinutos = horaFechamento * 60 + minutoFechamento;
+                  const shouldBeOpen = currentTime >= aberturaMinutos && currentTime <= fechamentoMinutos;
+
+                  console.log('🧪 TESTE: Análise:', {
+                    horaAtual: currentTime,
+                    abertura: aberturaMinutos,
+                    fechamento: fechamentoMinutos,
+                    deveEstarAberto: shouldBeOpen,
+                    statusAtual: lojaAberta
+                  });
+
+                  if (shouldBeOpen !== lojaAberta) {
+                    console.log('🧪 TESTE: Mudando status da loja para:', shouldBeOpen);
+                    setLojaAberta(shouldBeOpen);
+                  } else {
+                    console.log('🧪 TESTE: Status já está correto');
+                  }
+                } else {
+                  console.log('🧪 TESTE: Sem horário para hoje, fechando loja');
+                  if (lojaAberta) {
+                    setLojaAberta(false);
+                  }
+                }
+              } else {
+                console.log('🧪 TESTE: Modo manual - ignorando mudança');
+              }
+            } catch (error) {
+              console.error('🧪 TESTE: Erro:', error);
+            }
+          }, 1000);
+        }
+      )
+      .subscribe((status) => {
+        console.log('🧪 TESTE: Status da subscrição:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ TESTE: Realtime conectado com sucesso!');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ TESTE: Erro na conexão realtime');
+        }
+      });
+
+    return () => {
+      console.log('🧪 TESTE: Removendo canal realtime');
+      supabase.removeChannel(channel);
+    };
+  }, [empresaId]);
+
   const carregarDadosCardapio = async () => {
     try {
       setLoading(true);

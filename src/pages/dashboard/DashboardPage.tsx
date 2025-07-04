@@ -274,6 +274,77 @@ const DashboardPage: React.FC = () => {
     };
   }, [storeStatus.aberto, storeStatus.modo_operacao]);
 
+  // Monitorar mudanças nos horários de atendimento em tempo real
+  useEffect(() => {
+    const setupHorarioRealtimeSync = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        console.log('🕐 Configurando realtime para horários de atendimento da empresa:', usuarioData.empresa_id);
+
+        // Criar canal único para monitorar horários desta empresa
+        const channelName = `horarios_atendimento_${usuarioData.empresa_id}`;
+
+        const channel = supabase
+          .channel(channelName, {
+            config: {
+              broadcast: { self: true },
+              presence: { key: usuarioData.empresa_id }
+            }
+          })
+          .on(
+            'postgres_changes',
+            {
+              event: '*', // INSERT, UPDATE, DELETE
+              schema: 'public',
+              table: 'horario_atendimento',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              console.log('🕐 Mudança nos horários de atendimento detectada:', payload);
+
+              // Se estiver em modo automático, verificar imediatamente o status
+              if (storeStatus.modo_operacao === 'automatico') {
+                console.log('🔄 Modo automático ativo, verificando status da loja imediatamente...');
+                setTimeout(() => {
+                  checkStoreStatus();
+                }, 1000); // Aguardar 1 segundo para garantir que a mudança foi salva
+              }
+            }
+          )
+          .subscribe((status) => {
+            console.log('📡 Status da subscrição realtime horários:', status);
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Realtime de horários conectado com sucesso para empresa:', usuarioData.empresa_id);
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('❌ Erro na conexão realtime de horários');
+            }
+          });
+
+        return () => {
+          console.log('🕐 Removendo canal realtime de horários');
+          supabase.removeChannel(channel);
+        };
+      } catch (error) {
+        console.error('❌ Erro ao configurar realtime de horários:', error);
+      }
+    };
+
+    const cleanup = setupHorarioRealtimeSync();
+    return () => {
+      if (cleanup) cleanup.then(fn => fn && fn());
+    };
+  }, [storeStatus.modo_operacao]); // Dependência do modo de operação
+
   // Recarregar dados quando o usuário selecionado mudar
   useEffect(() => {
     loadDashboardData();
@@ -413,33 +484,32 @@ const DashboardPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      const { data: statusData } = await supabase
-        .from('status_loja')
-        .select('*')
+      // Carregar status da loja do pdv_config
+      const { data: configData } = await supabase
+        .from('pdv_config')
+        .select('cardapio_loja_aberta, cardapio_abertura_tipo')
         .eq('empresa_id', usuarioData.empresa_id)
         .maybeSingle();
 
-      if (statusData) {
-        setStoreStatus(statusData);
+      if (configData) {
+        setStoreStatus({
+          aberto: configData.cardapio_loja_aberta !== false, // Default true se não definido
+          modo_operacao: configData.cardapio_abertura_tipo || 'manual'
+        });
+        console.log('📊 Status da loja carregado:', {
+          aberto: configData.cardapio_loja_aberta,
+          modo: configData.cardapio_abertura_tipo
+        });
       } else {
-        // Create initial status if it doesn't exist
-        const { data: newStatus } = await supabase
-          .from('status_loja')
-          .insert([{
-            empresa_id: usuarioData.empresa_id,
-            aberto: true,
-            aberto_manual: false,
-            modo_operacao: 'manual'
-          }])
-          .select()
-          .single();
-
-        if (newStatus) {
-          setStoreStatus(newStatus);
-        }
+        // Se não há configuração PDV, usar valores padrão
+        setStoreStatus({
+          aberto: true,
+          modo_operacao: 'manual'
+        });
+        console.log('📊 Usando status padrão da loja (sem configuração PDV)');
       }
     } catch (error) {
-      console.error('Error loading store status:', error);
+      console.error('❌ Erro ao carregar status da loja:', error);
     }
   };
 
@@ -492,11 +562,26 @@ const DashboardPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      // Only check automatic status if mode is automatic
-      if (storeStatus.modo_operacao === 'automatico') {
+      // Buscar configuração atual do PDV
+      const { data: configAtual } = await supabase
+        .from('pdv_config')
+        .select('cardapio_abertura_tipo, cardapio_loja_aberta')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (!configAtual) return;
+
+      // Só verificar automaticamente se estiver em modo automático
+      if (configAtual.cardapio_abertura_tipo === 'automatico') {
         const now = new Date();
-        const currentDay = now.getDay();
+        const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda, etc.
         const currentTime = now.getHours() * 60 + now.getMinutes();
+
+        console.log('🕐 Verificando horário automático:', {
+          dia: currentDay,
+          hora: `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`,
+          minutos: currentTime
+        });
 
         const { data: horario } = await supabase
           .from('horario_atendimento')
@@ -506,9 +591,10 @@ const DashboardPage: React.FC = () => {
           .maybeSingle();
 
         if (!horario) {
-          // If no schedule is set for today, consider it closed
-          if (!storeStatus.aberto_manual) {
-            await updateStoreStatus(false, false);
+          // Se não há horário cadastrado para hoje, considerar fechado
+          console.log('❌ Sem horário cadastrado para hoje, fechando loja');
+          if (configAtual.cardapio_loja_aberta) {
+            await updateStoreStatusAutomatico(false);
           }
           return;
         }
@@ -520,16 +606,57 @@ const DashboardPage: React.FC = () => {
 
         const shouldBeOpen = currentTime >= aberturaMinutos && currentTime <= fechamentoMinutos;
 
-        if (!storeStatus.aberto_manual && storeStatus.aberto !== shouldBeOpen) {
-          await updateStoreStatus(shouldBeOpen, false);
+        console.log('🕐 Análise de horário:', {
+          abertura: `${horaAbertura}:${minutoAbertura.toString().padStart(2, '0')} (${aberturaMinutos}min)`,
+          fechamento: `${horaFechamento}:${minutoFechamento.toString().padStart(2, '0')} (${fechamentoMinutos}min)`,
+          atual: `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')} (${currentTime}min)`,
+          deveEstarAberto: shouldBeOpen,
+          statusAtual: configAtual.cardapio_loja_aberta
+        });
+
+        // Atualizar apenas se o status mudou
+        if (configAtual.cardapio_loja_aberta !== shouldBeOpen) {
+          console.log(`🔄 Atualizando status da loja para: ${shouldBeOpen ? 'ABERTA' : 'FECHADA'}`);
+          await updateStoreStatusAutomatico(shouldBeOpen);
         }
       }
     } catch (error) {
-      console.error('Error checking store status:', error);
+      console.error('❌ Erro ao verificar status da loja:', error);
     }
   };
 
-  const updateStoreStatus = async (aberto: boolean, manual: boolean) => {
+  // Função para atualização automática (sem mostrar toast)
+  const updateStoreStatusAutomatico = async (aberto: boolean) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { error } = await supabase
+        .from('pdv_config')
+        .update({ cardapio_loja_aberta: aberto })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setStoreStatus(prev => ({ ...prev, aberto }));
+
+      console.log(`✅ Status da loja atualizado automaticamente: ${aberto ? 'ABERTA' : 'FECHADA'}`);
+    } catch (error) {
+      console.error('❌ Erro ao atualizar status automático da loja:', error);
+    }
+  };
+
+  // Função para atualização manual (com toast)
+  const updateStoreStatusManual = async (aberto: boolean) => {
     if (isLoading) return;
 
     try {
@@ -547,33 +674,19 @@ const DashboardPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      const { data: updatedStatus, error } = await supabase
-        .from('status_loja')
-        .update({
-          aberto,
-          aberto_manual: manual
-        })
-        .eq('empresa_id', usuarioData.empresa_id)
-        .select()
-        .single();
+      const { error } = await supabase
+        .from('pdv_config')
+        .update({ cardapio_loja_aberta: aberto })
+        .eq('empresa_id', usuarioData.empresa_id);
 
       if (error) throw error;
 
-      if (updatedStatus) {
-        setStoreStatus(prev => ({ ...prev, ...updatedStatus }));
+      // Atualizar estado local
+      setStoreStatus(prev => ({ ...prev, aberto }));
 
-        // Sincronizar com configuração PDV
-        if (pdvConfig) {
-          await supabase
-            .from('pdv_config')
-            .update({ cardapio_loja_aberta: aberto })
-            .eq('empresa_id', usuarioData.empresa_id);
-        }
-
-        showMessage('success', `Loja ${aberto ? 'aberta' : 'fechada'} com sucesso!`);
-      }
+      showMessage('success', `Loja ${aberto ? 'aberta' : 'fechada'} com sucesso!`);
     } catch (error) {
-      console.error('Error updating store status:', error);
+      console.error('❌ Erro ao atualizar status da loja:', error);
       showMessage('error', 'Erro ao atualizar status da loja');
     } finally {
       setIsLoading(false);
@@ -584,7 +697,7 @@ const DashboardPage: React.FC = () => {
   };
 
   const toggleStoreStatus = () => {
-    updateStoreStatus(!storeStatus.aberto, true);
+    updateStoreStatusManual(!storeStatus.aberto);
   };
 
   const loadDashboardData = async () => {
@@ -776,8 +889,11 @@ const DashboardPage: React.FC = () => {
       color: storeStatus.aberto ? 'bg-green-500/10' : 'bg-red-500/10',
       iconColor: storeStatus.aberto ? 'text-green-500' : 'text-red-500',
       borderColor: storeStatus.aberto ? 'border-green-500/20' : 'border-red-500/20',
-      action: toggleStoreStatus,
-      actionText: storeStatus.aberto ? 'Fechar Loja' : 'Abrir Loja',
+      // Só mostrar botão se estiver em modo manual
+      action: storeStatus.modo_operacao === 'manual' ? toggleStoreStatus : undefined,
+      actionText: storeStatus.modo_operacao === 'manual'
+        ? (storeStatus.aberto ? 'Fechar Loja' : 'Abrir Loja')
+        : (storeStatus.modo_operacao === 'automatico' ? 'Modo Automático' : ''),
       actionColor: storeStatus.aberto ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600',
       loading: isLoading
     }] : []),
