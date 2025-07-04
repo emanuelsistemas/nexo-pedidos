@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock } from 'lucide-react';
+import { ChevronDown, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -72,6 +72,14 @@ const CardapioPublicoPage: React.FC = () => {
   const [grupoSelecionado, setGrupoSelecionado] = useState<string>('todos');
   const [termoPesquisa, setTermoPesquisa] = useState<string>('');
   const [empresaId, setEmpresaId] = useState<string | null>(null);
+
+  // Estados para navegação horizontal das categorias
+  const [categoriaStartIndex, setCategoriaStartIndex] = useState(0);
+  const [visibleCategoriaItems, setVisibleCategoriaItems] = useState(4);
+
+  // Estados para suporte a arrastar no mobile
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [touchEndX, setTouchEndX] = useState(0);
 
   // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
   useEffect(() => {
@@ -412,6 +420,31 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [horarios, modoAutomatico, lojaAberta]);
 
+  // Calcular categorias visíveis baseado no tamanho da tela
+  useEffect(() => {
+    const handleResize = () => {
+      const novasCategoriasVisiveis = calcularCategoriasVisiveis();
+      setVisibleCategoriaItems(novasCategoriasVisiveis);
+
+      // Ajustar startIndex se necessário
+      const totalItens = grupos.length + 1; // +1 para incluir "Todos"
+      const maxIndex = Math.max(0, totalItens - novasCategoriasVisiveis);
+      if (categoriaStartIndex > maxIndex) {
+        setCategoriaStartIndex(maxIndex);
+      }
+    };
+
+    handleResize(); // Calcular inicialmente
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, [categoriaStartIndex, grupos.length]);
+
+  // Resetar categoriaStartIndex quando grupos mudarem
+  useEffect(() => {
+    setCategoriaStartIndex(0);
+  }, [grupos.length]);
+
   const carregarDadosCardapio = async () => {
     try {
       setLoading(true);
@@ -592,6 +625,53 @@ const CardapioPublicoPage: React.FC = () => {
       style: 'currency',
       currency: 'BRL'
     }).format(preco);
+  };
+
+  // Função para calcular quantas categorias cabem na tela
+  const calcularCategoriasVisiveis = () => {
+    const larguraTela = window.innerWidth;
+    const larguraMinimaBotao = 120; // Largura mínima de cada botão de categoria
+    const espacoBotoes = 80; // Espaço para botões de navegação (se necessário)
+    const padding = 32; // Padding lateral do container
+
+    const larguraDisponivel = larguraTela - padding - (categoriaStartIndex > 0 || categoriaStartIndex + visibleCategoriaItems < (grupos.length + 1) ? espacoBotoes : 0);
+    const itensPossiveis = Math.floor(larguraDisponivel / larguraMinimaBotao);
+
+    return Math.max(1, Math.min(itensPossiveis, grupos.length + 1)); // +1 para incluir "Todos"
+  };
+
+  const navegarCategoriaAnterior = () => {
+    setCategoriaStartIndex(Math.max(0, categoriaStartIndex - 1));
+  };
+
+  const navegarCategoriaProxima = () => {
+    const totalItens = grupos.length + 1; // +1 para incluir "Todos"
+    const maxIndex = Math.max(0, totalItens - visibleCategoriaItems);
+    setCategoriaStartIndex(Math.min(maxIndex, categoriaStartIndex + 1));
+  };
+
+  // Funções para suporte a arrastar no mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX || !touchEndX) return;
+
+    const distance = touchStartX - touchEndX;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe) {
+      navegarCategoriaProxima();
+    }
+    if (isRightSwipe) {
+      navegarCategoriaAnterior();
+    }
   };
 
   // Função para obter o primeiro telefone com WhatsApp
@@ -1045,44 +1125,72 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filtros de Categoria com design moderno */}
-      {grupos.length > 1 && (
+      {/* Filtros de Categoria com navegação horizontal */}
+      {grupos.length > 0 && (
         <div className={`${config.modo_escuro ? 'bg-gray-800/50' : 'bg-white/80'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-10`}>
           <div className="max-w-6xl mx-auto px-4 py-4">
-            <div className="flex items-center gap-3 mb-3">
-              <svg className={`w-5 h-5 ${config.modo_escuro ? 'text-purple-400' : 'text-purple-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14-7l2 2-2 2m0 8l2 2-2 2" />
-              </svg>
-              <h3 className={`font-semibold ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>Categorias</h3>
-            </div>
-            <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-              <button
-                onClick={() => setGrupoSelecionado('todos')}
-                className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
-                  grupoSelecionado === 'todos'
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/25'
-                    : config.modo_escuro
-                    ? 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border border-gray-600'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm'
-                }`}
-              >
-                🍽️ Todos
-              </button>
-              {grupos.map(grupo => (
+            <div className="h-14 flex items-center">
+              {/* Botão Anterior */}
+              {categoriaStartIndex > 0 && (
                 <button
-                  key={grupo.id}
-                  onClick={() => setGrupoSelecionado(grupo.id)}
-                  className={`px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 ${
-                    grupoSelecionado === grupo.id
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/25'
-                      : config.modo_escuro
-                      ? 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 border border-gray-600'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm'
+                  onClick={navegarCategoriaAnterior}
+                  className={`w-10 h-full flex items-center justify-center transition-colors border-r ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300'
                   }`}
                 >
-                  {grupo.nome}
+                  <ChevronLeft size={20} />
                 </button>
-              ))}
+              )}
+
+              {/* Categorias Visíveis */}
+              <div
+                className="flex items-center h-full flex-1 overflow-hidden"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                {(() => {
+                  const todasCategorias = [
+                    { id: 'todos', nome: '🍽️ Todos' },
+                    ...grupos
+                  ];
+
+                  return todasCategorias
+                    .slice(categoriaStartIndex, categoriaStartIndex + visibleCategoriaItems)
+                    .map((categoria, index) => (
+                      <button
+                        key={categoria.id}
+                        onClick={() => setGrupoSelecionado(categoria.id)}
+                        className={`flex items-center justify-center transition-all duration-300 h-full px-4 font-medium text-sm whitespace-nowrap ${
+                          grupoSelecionado === categoria.id
+                            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                            : config.modo_escuro
+                            ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                            : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
+                        }`}
+                        style={{ flex: '1 1 120px', minWidth: '120px' }}
+                      >
+                        {categoria.nome}
+                      </button>
+                    ));
+                })()}
+              </div>
+
+              {/* Botão Próximo */}
+              {categoriaStartIndex + visibleCategoriaItems < (grupos.length + 1) && (
+                <button
+                  onClick={navegarCategoriaProxima}
+                  className={`w-10 h-full flex items-center justify-center transition-colors border-l ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300'
+                  }`}
+                >
+                  <ChevronRight size={20} />
+                </button>
+              )}
             </div>
           </div>
         </div>
