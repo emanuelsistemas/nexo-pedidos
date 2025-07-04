@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt, DollarSign, ChevronDown, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -297,6 +297,12 @@ const ConfiguracoesPage: React.FC = () => {
   // Estado para verificação de disponibilidade da URL
   const [urlDisponivel, setUrlDisponivel] = useState<boolean | null>(null);
   const [verificandoUrl, setVerificandoUrl] = useState(false);
+
+  // Estados para upload de logo
+  const [logoUrl, setLogoUrl] = useState('');
+  const [logoStoragePath, setLogoStoragePath] = useState('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Função para gerar QR Code
   const generateQRCode = async (url: string) => {
@@ -2754,6 +2760,10 @@ const ConfiguracoesPage: React.FC = () => {
 
         // Atualizar também o estado separado da URL do cardápio
         setCardapioUrlPersonalizada(config.cardapio_url_personalizada || '');
+
+        // Atualizar estados do logo
+        setLogoUrl(config.logo_url || '');
+        setLogoStoragePath(config.logo_storage_path || '');
       } else {
         // Se não encontrou configuração, definir valores padrão
         setPdvConfig({
@@ -3697,6 +3707,143 @@ const ConfiguracoesPage: React.FC = () => {
       showMessage('error', 'Erro ao salvar URL do cardápio: ' + error.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Função para upload do logo
+  const handleLogoUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    try {
+      setIsUploadingLogo(true);
+
+      const file = files[0];
+
+      // Validar tipo de arquivo
+      if (!file.type.startsWith('image/')) {
+        showMessage('error', 'Por favor, selecione apenas arquivos de imagem');
+        return;
+      }
+
+      // Validar tamanho (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showMessage('error', 'A imagem deve ter no máximo 5MB');
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Remover logo anterior se existir
+      if (logoStoragePath) {
+        await supabase.storage
+          .from('logo')
+          .remove([logoStoragePath]);
+      }
+
+      // Gerar nome único para o arquivo
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `empresa_${usuarioData.empresa_id}/${fileName}`;
+
+      // Upload para o storage
+      const { error: uploadError } = await supabase.storage
+        .from('logo')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // Obter URL pública
+      const { data: urlData } = supabase.storage
+        .from('logo')
+        .getPublicUrl(filePath);
+
+      // Atualizar configuração no banco
+      const { error: updateError } = await supabase
+        .from('pdv_config')
+        .update({
+          logo_url: urlData.publicUrl,
+          logo_storage_path: filePath
+        })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (updateError) throw updateError;
+
+      // Atualizar estados locais
+      setLogoUrl(urlData.publicUrl);
+      setLogoStoragePath(filePath);
+
+      showMessage('success', 'Logo enviado com sucesso!');
+
+    } catch (error: any) {
+      console.error('Erro ao fazer upload do logo:', error);
+      showMessage('error', `Erro ao enviar logo: ${error.message}`);
+    } finally {
+      setIsUploadingLogo(false);
+      // Limpar o input de arquivo
+      if (logoInputRef.current) {
+        logoInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Função para remover o logo
+  const handleRemoverLogo = async () => {
+    try {
+      setIsUploadingLogo(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Remover arquivo do storage se existir
+      if (logoStoragePath) {
+        await supabase.storage
+          .from('logo')
+          .remove([logoStoragePath]);
+      }
+
+      // Atualizar configuração no banco
+      const { error: updateError } = await supabase
+        .from('pdv_config')
+        .update({
+          logo_url: '',
+          logo_storage_path: ''
+        })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (updateError) throw updateError;
+
+      // Atualizar estados locais
+      setLogoUrl('');
+      setLogoStoragePath('');
+
+      showMessage('success', 'Logo removido com sucesso!');
+
+    } catch (error: any) {
+      console.error('Erro ao remover logo:', error);
+      showMessage('error', `Erro ao remover logo: ${error.message}`);
+    } finally {
+      setIsUploadingLogo(false);
     }
   };
 
@@ -6262,37 +6409,7 @@ const ConfiguracoesPage: React.FC = () => {
                     <div className="space-y-4">
                       <h4 className="text-white font-medium">Configurações Avançadas</h4>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                          <input
-                            type="checkbox"
-                            defaultChecked={true}
-                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                            style={{ borderRadius: '50%' }}
-                          />
-                          <div>
-                            <h5 className="text-white font-medium">Mostrar Preços</h5>
-                            <p className="text-sm text-gray-400 mt-1">
-                              Exibe os preços dos produtos no cardápio digital.
-                            </p>
-                          </div>
-                        </label>
-
-                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                          <input
-                            type="checkbox"
-                            defaultChecked={true}
-                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                            style={{ borderRadius: '50%' }}
-                          />
-                          <div>
-                            <h5 className="text-white font-medium">Permitir Pedidos</h5>
-                            <p className="text-sm text-gray-400 mt-1">
-                              Permite que clientes façam pedidos diretamente pelo cardápio.
-                            </p>
-                          </div>
-                        </label>
-
+                      <div className="grid grid-cols-1 gap-4">
                         <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                           <input
                             type="checkbox"
@@ -6308,21 +6425,96 @@ const ConfiguracoesPage: React.FC = () => {
                             </p>
                           </div>
                         </label>
+                      </div>
+                    </div>
 
-                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                          <input
-                            type="checkbox"
-                            defaultChecked={true}
-                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                            style={{ borderRadius: '50%' }}
-                          />
-                          <div>
-                            <h5 className="text-white font-medium">Mostrar Fotos</h5>
-                            <p className="text-sm text-gray-400 mt-1">
-                              Exibe fotos dos produtos quando disponíveis.
-                            </p>
+                    {/* Upload do Logo */}
+                    <div className="space-y-4">
+                      <h4 className="text-white font-medium">Logo da Empresa</h4>
+
+                      <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                        <div className="flex items-start gap-4">
+                          {/* Preview do logo */}
+                          <div className="flex-shrink-0">
+                            <div className="w-24 h-24 bg-gray-900 rounded-lg border border-gray-600 flex items-center justify-center overflow-hidden">
+                              {logoUrl ? (
+                                <img
+                                  src={logoUrl}
+                                  alt="Logo da empresa"
+                                  className="w-full h-full object-contain"
+                                />
+                              ) : (
+                                <div className="text-center">
+                                  <svg className="w-8 h-8 text-gray-600 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  <span className="text-xs text-gray-500">Sem logo</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </label>
+
+                          {/* Controles de upload */}
+                          <div className="flex-1">
+                            <div className="mb-3">
+                              <h5 className="text-white font-medium mb-1">Logo do Cardápio Digital</h5>
+                              <p className="text-sm text-gray-400">
+                                Adicione o logo da sua empresa que aparecerá no cardápio digital.
+                                Recomendamos imagens quadradas com boa qualidade.
+                              </p>
+                            </div>
+
+                            <div className="flex gap-2">
+                              {/* Input de arquivo oculto */}
+                              <input
+                                ref={logoInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleLogoUpload(e.target.files)}
+                                className="hidden"
+                              />
+
+                              {/* Botão de upload */}
+                              <button
+                                onClick={() => logoInputRef.current?.click()}
+                                disabled={isUploadingLogo}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+                              >
+                                {isUploadingLogo ? (
+                                  <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    Enviando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                    {logoUrl ? 'Alterar Logo' : 'Enviar Logo'}
+                                  </>
+                                )}
+                              </button>
+
+                              {/* Botão de remover (só aparece se tem logo) */}
+                              {logoUrl && (
+                                <button
+                                  onClick={handleRemoverLogo}
+                                  disabled={isUploadingLogo}
+                                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                  Remover
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="mt-3 text-xs text-gray-500">
+                              Formatos aceitos: JPG, PNG, GIF • Tamanho máximo: 5MB
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
