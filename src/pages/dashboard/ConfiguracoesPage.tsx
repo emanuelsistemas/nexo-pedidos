@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt, DollarSign, ChevronDown, FileText } from 'lucide-react';
+import { X, Pencil, Trash2, Users, Shield, Settings, CreditCard, Search, Store, Bike, Clock, Eye, EyeOff, Lock, Unlock, Copy, Check, ShoppingCart, Truck, MessageSquare, Receipt, DollarSign, ChevronDown, FileText, Phone, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import SearchableSelect from '../../components/comum/SearchableSelect';
@@ -411,6 +411,7 @@ const ConfiguracoesPage: React.FC = () => {
     nome_fantasia: '',
     nome_proprietario: '',
     whatsapp: '',
+    telefones: [],
     cep: '',
     endereco: '',
     numero: '',
@@ -422,6 +423,13 @@ const ConfiguracoesPage: React.FC = () => {
     regime_tributario: 4, // Padrão MEI
     codigo_municipio: '',
     email: ''
+  });
+
+  // Estados para múltiplos telefones da empresa
+  const [novoTelefoneEmpresa, setNovoTelefoneEmpresa] = useState({
+    numero: '',
+    tipo: 'Celular',
+    whatsapp: false
   });
 
   // Estados para deletar conta
@@ -671,7 +679,12 @@ const ConfiguracoesPage: React.FC = () => {
           .single();
         setEmpresa(empresaData);
         if (empresaData) {
-          setEmpresaForm(empresaData);
+          // Garantir que telefones seja um array
+          const telefones = Array.isArray(empresaData.telefones) ? empresaData.telefones : [];
+          setEmpresaForm({
+            ...empresaData,
+            telefones: telefones
+          });
         }
       }
 
@@ -1291,6 +1304,64 @@ const ConfiguracoesPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Funções para gerenciar telefones da empresa
+  const adicionarTelefoneEmpresa = () => {
+    if (!novoTelefoneEmpresa.numero) {
+      showMessage('error', 'Digite um número de telefone');
+      return;
+    }
+
+    // Validar o número de telefone
+    const numeroLimpo = novoTelefoneEmpresa.numero.replace(/\D/g, '');
+    if ((novoTelefoneEmpresa.tipo === 'Fixo' && numeroLimpo.length !== 10) ||
+        (novoTelefoneEmpresa.tipo === 'Celular' && numeroLimpo.length !== 11)) {
+      showMessage('error', `Número de ${novoTelefoneEmpresa.tipo.toLowerCase()} inválido`);
+      return;
+    }
+
+    // Adicionar à lista de telefones
+    setEmpresaForm(prev => ({
+      ...prev,
+      telefones: [...prev.telefones, { ...novoTelefoneEmpresa }]
+    }));
+
+    // Limpar o campo para adicionar outro telefone
+    setNovoTelefoneEmpresa({
+      numero: '',
+      tipo: 'Celular',
+      whatsapp: false
+    });
+  };
+
+  const removerTelefoneEmpresa = (index: number) => {
+    setEmpresaForm(prev => ({
+      ...prev,
+      telefones: prev.telefones.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleNovoTelefoneEmpresaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    let numeroFormatado = value;
+
+    // Aplicar máscara baseada no tipo
+    if (novoTelefoneEmpresa.tipo === 'Celular') {
+      numeroFormatado = value
+        .replace(/\D/g, '')
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{5})(\d)/, '$1-$2')
+        .replace(/(-\d{4})\d+?$/, '$1');
+    } else {
+      numeroFormatado = value
+        .replace(/\D/g, '')
+        .replace(/(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+        .replace(/(-\d{4})\d+?$/, '$1');
+    }
+
+    setNovoTelefoneEmpresa(prev => ({ ...prev, numero: numeroFormatado }));
   };
 
   // Função para deletar a empresa inteira
@@ -4557,7 +4628,7 @@ const ConfiguracoesPage: React.FC = () => {
                   type="button"
                   variant="primary"
                   onClick={() => {
-                    setEmpresaForm(empresa || {
+                    const empresaData = empresa || {
                       segmento: '',
                       tipo_documento: 'CNPJ',
                       documento: '',
@@ -4565,6 +4636,7 @@ const ConfiguracoesPage: React.FC = () => {
                       nome_fantasia: '',
                       nome_proprietario: '',
                       whatsapp: '',
+                      telefones: [],
                       cep: '',
                       endereco: '',
                       numero: '',
@@ -4576,6 +4648,13 @@ const ConfiguracoesPage: React.FC = () => {
                       regime_tributario: 4, // Padrão MEI
                       codigo_municipio: '',
                       email: ''
+                    };
+
+                    // Garantir que telefones seja um array
+                    const telefones = Array.isArray(empresaData.telefones) ? empresaData.telefones : [];
+                    setEmpresaForm({
+                      ...empresaData,
+                      telefones: telefones
                     });
                     setShowSidebar(true);
                   }}
@@ -8155,17 +8234,110 @@ const ConfiguracoesPage: React.FC = () => {
                       />
                     </div>
 
+                    {/* Sistema de múltiplos telefones */}
                     <div>
                       <label className="block text-sm font-medium text-gray-400 mb-2">
-                        WhatsApp
+                        Telefones *
                       </label>
-                      <input
-                        type="text"
-                        value={empresaForm.whatsapp}
-                        onChange={(e) => setEmpresaForm(prev => ({ ...prev, whatsapp: formatWhatsapp(e.target.value) }))}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="(00) 0 0000-0000"
-                      />
+
+                      {/* Lista de telefones adicionados */}
+                      {empresaForm.telefones.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          {empresaForm.telefones.map((tel, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between bg-gray-800/70 rounded-lg p-2 border border-gray-700"
+                            >
+                              <div className="flex items-center gap-2">
+                                {/* Ícone baseado no tipo e WhatsApp */}
+                                {tel.tipo === 'Celular' && tel.whatsapp ? (
+                                  <svg className="w-[18px] h-[18px] text-green-500" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.515z"/>
+                                  </svg>
+                                ) : (
+                                  <Phone size={18} className={tel.tipo === 'Celular' ? "text-blue-500" : "text-gray-500"} />
+                                )}
+                                <div>
+                                  <p className="text-white">{tel.numero}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {tel.tipo}{tel.whatsapp ? " - WhatsApp" : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removerTelefoneEmpresa(index)}
+                                className="text-red-400 hover:text-red-300 p-1"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Formulário para adicionar novo telefone */}
+                      <div className="bg-gray-800/30 rounded-lg p-3 border border-gray-700">
+                        <h4 className="text-sm font-medium text-gray-300 mb-3">Adicionar telefone</h4>
+
+                        {/* Tipo de telefone */}
+                        <div className="flex gap-4 mb-3">
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              checked={novoTelefoneEmpresa.tipo === 'Celular'}
+                              onChange={() => setNovoTelefoneEmpresa(prev => ({ ...prev, tipo: 'Celular', numero: '' }))}
+                              className="mr-2 text-primary-500"
+                            />
+                            <span className="text-white text-sm">Celular</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              checked={novoTelefoneEmpresa.tipo === 'Fixo'}
+                              onChange={() => setNovoTelefoneEmpresa(prev => ({ ...prev, tipo: 'Fixo', numero: '' }))}
+                              className="mr-2 text-primary-500"
+                            />
+                            <span className="text-white text-sm">Fixo</span>
+                          </label>
+                        </div>
+
+                        {/* Checkbox WhatsApp */}
+                        <div className="mb-3">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={novoTelefoneEmpresa.whatsapp}
+                              onChange={(e) => setNovoTelefoneEmpresa(prev => ({ ...prev, whatsapp: e.target.checked }))}
+                              className="mr-2 text-primary-500"
+                            />
+                            <span className="text-white text-sm">Este número tem WhatsApp</span>
+                          </label>
+                        </div>
+
+                        {/* Campo de telefone */}
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <Phone size={18} className="text-gray-500" />
+                            </div>
+                            <input
+                              type="text"
+                              value={novoTelefoneEmpresa.numero}
+                              onChange={handleNovoTelefoneEmpresaChange}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder={novoTelefoneEmpresa.tipo === 'Celular' ? "(00) 0 0000-0000" : "(00) 0000-0000"}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={adicionarTelefoneEmpresa}
+                            className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors"
+                          >
+                            <Plus size={18} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div>
