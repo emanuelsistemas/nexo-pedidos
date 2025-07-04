@@ -203,6 +203,8 @@ const ProdutosPage: React.FC = () => {
     cest: '',
     peso_liquido: 0,
     estoque_minimo_ativo: false,
+    preco_custo: 0,
+    margem_percentual: 0,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -214,6 +216,10 @@ const ProdutosPage: React.FC = () => {
   const [abaPrecoAtiva, setAbaPrecoAtiva] = useState<string>('padrao'); // 'padrao' ou ID da tabela
   const [precosTabelas, setPrecosTabelas] = useState<{[key: string]: number}>({});
   const [precoTabelaFormatado, setPrecoTabelaFormatado] = useState<string>('0,00');
+
+  // Estados para preço de custo e margem
+  const [precoCustoFormatado, setPrecoCustoFormatado] = useState<string>('0,00');
+  const [margemFormatada, setMargemFormatada] = useState<string>('0,00');
 
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -1466,6 +1472,36 @@ const ProdutosPage: React.FC = () => {
     });
   };
 
+  // Função para calcular preço final baseado no custo e margem
+  const calcularPrecoFinal = (custo: number, margem: number): number => {
+    if (custo <= 0 || margem <= 0) return 0;
+    return custo * (1 + margem / 100);
+  };
+
+  // Função para calcular margem baseada no custo e preço final
+  const calcularMargem = (custo: number, precoFinal: number): number => {
+    if (custo <= 0 || precoFinal <= 0) return 0;
+    return ((precoFinal - custo) / custo) * 100;
+  };
+
+  // Função para atualizar preço baseado no custo e margem
+  const atualizarPrecoComCustoMargem = (custo: number, margem: number) => {
+    const precoFinal = calcularPrecoFinal(custo, margem);
+    if (precoFinal > 0) {
+      setNovoProduto(prev => ({ ...prev, preco: precoFinal }));
+      setPrecoFormatado(formatarPreco(precoFinal));
+    }
+  };
+
+  // Função para atualizar margem baseada no custo e preço
+  const atualizarMargemComCustoPreco = (custo: number, preco: number) => {
+    const margem = calcularMargem(custo, preco);
+    if (margem > 0) {
+      setNovoProduto(prev => ({ ...prev, margem_percentual: margem }));
+      setMargemFormatada(formatarPreco(margem));
+    }
+  };
+
   // Função para converter o valor formatado para número
   const desformatarPreco = (valorFormatado: string): number => {
     // Remove todos os caracteres não numéricos, exceto a vírgula decimal
@@ -1549,10 +1585,16 @@ const ProdutosPage: React.FC = () => {
       aliquota_cofins: 7.60,
       cest: '',
       peso_liquido: 0,
+      preco_custo: 0,
+      margem_percentual: 0,
     });
 
     // Inicializa o preço formatado
     setPrecoFormatado(formatarPreco(0));
+
+    // Inicializa preço de custo e margem formatados
+    setPrecoCustoFormatado(formatarPreco(0));
+    setMargemFormatada(formatarPreco(0));
 
     // Inicializa o valor do desconto formatado
     setDescontoFormatado('0');
@@ -1736,6 +1778,8 @@ const ProdutosPage: React.FC = () => {
       cest: produto.cest || '',
       margem_st: produto.margem_st || null, // ✅ CORREÇÃO: Carregar margem ST na edição
       peso_liquido: produto.peso_liquido || 0,
+      preco_custo: produto.preco_custo || 0,
+      margem_percentual: produto.margem_percentual || 0,
     };
 
     // Definir o estado do novo produto
@@ -1754,6 +1798,10 @@ const ProdutosPage: React.FC = () => {
 
     // Definir o preço formatado
     setPrecoFormatado(formatarPreco(produto.preco));
+
+    // Definir preço de custo e margem formatados
+    setPrecoCustoFormatado(formatarPreco(produto.preco_custo || 0));
+    setMargemFormatada(formatarPreco(produto.margem_percentual || 0));
 
     // Definir o desconto formatado
     if (produto.valor_desconto !== undefined) {
@@ -3118,6 +3166,10 @@ const ProdutosPage: React.FC = () => {
     setPrecosTabelas({});
     setPrecoTabelaFormatado('0,00');
 
+    // Resetar estados de custo e margem
+    setPrecoCustoFormatado('0,00');
+    setMargemFormatada('0,00');
+
     // Resetar validação de NCM
     setNcmValidacao({
       validando: false,
@@ -4122,6 +4174,80 @@ const ProdutosPage: React.FC = () => {
                           </div>
                         </div>
                         <div>
+                          {/* Campos de Preço de Custo e Margem */}
+                          <div className="grid grid-cols-2 gap-4 mb-6">
+                            {/* Preço de Custo */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Preço de Custo
+                              </label>
+                              <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                  R$
+                                </span>
+                                <input
+                                  type="text"
+                                  value={precoCustoFormatado}
+                                  onChange={(e) => {
+                                    setPrecoCustoFormatado(e.target.value);
+                                    const valorNumerico = desformatarPreco(e.target.value);
+                                    setNovoProduto({ ...novoProduto, preco_custo: valorNumerico });
+
+                                    // Se tem margem definida, calcular preço final
+                                    if (novoProduto.margem_percentual > 0) {
+                                      atualizarPrecoComCustoMargem(valorNumerico, novoProduto.margem_percentual);
+                                    }
+                                  }}
+                                  onFocus={() => setPrecoCustoFormatado('')}
+                                  onBlur={() => {
+                                    const valorNumerico = desformatarPreco(precoCustoFormatado);
+                                    setPrecoCustoFormatado(formatarPreco(valorNumerico));
+
+                                    // Se não tem margem mas tem preço final, calcular margem
+                                    if (novoProduto.margem_percentual === 0 && novoProduto.preco > 0) {
+                                      atualizarMargemComCustoPreco(valorNumerico, novoProduto.preco);
+                                    }
+                                  }}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder="0,00"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Margem % */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                Margem %
+                              </label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  value={margemFormatada}
+                                  onChange={(e) => {
+                                    setMargemFormatada(e.target.value);
+                                    const valorNumerico = desformatarPreco(e.target.value);
+                                    setNovoProduto({ ...novoProduto, margem_percentual: valorNumerico });
+
+                                    // Se tem custo definido, calcular preço final
+                                    if (novoProduto.preco_custo > 0) {
+                                      atualizarPrecoComCustoMargem(novoProduto.preco_custo, valorNumerico);
+                                    }
+                                  }}
+                                  onFocus={() => setMargemFormatada('')}
+                                  onBlur={() => {
+                                    const valorNumerico = desformatarPreco(margemFormatada);
+                                    setMargemFormatada(formatarPreco(valorNumerico));
+                                  }}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-3 pr-8 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder="0,00"
+                                />
+                                <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                                  %
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
                           {/* Sistema de abas para preços */}
                           <div className="mb-4">
                             {/* Container das abas com scroll horizontal */}

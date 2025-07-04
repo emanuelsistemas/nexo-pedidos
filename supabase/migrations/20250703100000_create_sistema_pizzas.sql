@@ -352,7 +352,32 @@ COMMENT ON TABLE produto_precos IS 'Preços dos produtos por tabela de preços';
 COMMENT ON COLUMN produto_precos.preco IS 'Preço do produto nesta tabela de preços específica';
 
 -- =====================================================
--- 12. TRIGGER AUTOMÁTICO PARA NOVAS EMPRESAS
+-- 12. CAMPOS DE PREÇO DE CUSTO E MARGEM
+-- =====================================================
+
+-- Adicionar campos de preço de custo e margem percentual na tabela produtos
+ALTER TABLE produtos
+ADD COLUMN IF NOT EXISTS preco_custo NUMERIC(10,2) DEFAULT 0,
+ADD COLUMN IF NOT EXISTS margem_percentual NUMERIC(5,2) DEFAULT 0;
+
+-- Adicionar constraints de validação
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_produtos_preco_custo_positivo') THEN
+        ALTER TABLE produtos ADD CONSTRAINT chk_produtos_preco_custo_positivo CHECK (preco_custo >= 0);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_produtos_margem_positiva') THEN
+        ALTER TABLE produtos ADD CONSTRAINT chk_produtos_margem_positiva CHECK (margem_percentual >= 0);
+    END IF;
+END $$;
+
+-- Comentar os campos
+COMMENT ON COLUMN produtos.preco_custo IS 'Preço de custo do produto';
+COMMENT ON COLUMN produtos.margem_percentual IS 'Margem de lucro em percentual sobre o custo';
+
+-- =====================================================
+-- 13. TRIGGER AUTOMÁTICO PARA NOVAS EMPRESAS
 -- =====================================================
 
 -- Função para criar configuração padrão de tabela de preços
@@ -394,7 +419,7 @@ CREATE TRIGGER trigger_create_tabela_preco_config
 COMMENT ON TRIGGER trigger_create_tabela_preco_config ON empresas IS 'Cria automaticamente configuração padrão de tabela de preços para novas empresas';
 
 -- =====================================================
--- 13. CONFIGURAÇÃO INICIAL PARA EMPRESAS EXISTENTES
+-- 14. CONFIGURAÇÃO INICIAL PARA EMPRESAS EXISTENTES
 -- =====================================================
 
 -- Inserir configurações padrão para empresas existentes que não possuem
