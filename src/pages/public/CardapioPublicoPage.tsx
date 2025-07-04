@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, Clock, ChevronLeft, ChevronRight, Minus, Plus, ShoppingCart, X, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -81,6 +81,14 @@ const CardapioPublicoPage: React.FC = () => {
   // Estados para suporte a arrastar no mobile
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchEndX, setTouchEndX] = useState(0);
+
+  // Estados para controle de quantidade dos produtos
+  const [quantidadesProdutos, setQuantidadesProdutos] = useState<Record<string, number>>({});
+  const [produtoEditandoQuantidade, setProdutoEditandoQuantidade] = useState<string | null>(null);
+
+  // Estados para o modal do carrinho
+  const [carrinhoAberto, setCarrinhoAberto] = useState(false);
+  const [itemEditandoCarrinho, setItemEditandoCarrinho] = useState<string | null>(null);
 
   // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
   useEffect(() => {
@@ -446,6 +454,14 @@ const CardapioPublicoPage: React.FC = () => {
     setCategoriaStartIndex(0);
   }, [grupos.length]);
 
+  // Fechar carrinho automaticamente quando não há itens
+  useEffect(() => {
+    const totalItens = obterQuantidadeTotalItens();
+    if (totalItens === 0 && carrinhoAberto) {
+      setCarrinhoAberto(false);
+    }
+  }, [quantidadesProdutos, carrinhoAberto]);
+
   const carregarDadosCardapio = async () => {
     try {
       setLoading(true);
@@ -695,6 +711,81 @@ const CardapioPublicoPage: React.FC = () => {
     setTouchEndX(0);
   };
 
+  // Funções para controle de quantidade dos produtos
+  const obterQuantidadeProduto = (produtoId: string): number => {
+    return quantidadesProdutos[produtoId] || 0;
+  };
+
+  const alterarQuantidadeProduto = (produtoId: string, novaQuantidade: number) => {
+    if (novaQuantidade < 0) return;
+
+    setQuantidadesProdutos(prev => ({
+      ...prev,
+      [produtoId]: novaQuantidade
+    }));
+  };
+
+  const incrementarQuantidade = (produtoId: string) => {
+    const quantidadeAtual = obterQuantidadeProduto(produtoId);
+    alterarQuantidadeProduto(produtoId, quantidadeAtual + 1);
+
+    // Abrir carrinho automaticamente quando adicionar primeiro item
+    if (quantidadeAtual === 0) {
+      setCarrinhoAberto(true);
+    }
+  };
+
+  const decrementarQuantidade = (produtoId: string) => {
+    const quantidadeAtual = obterQuantidadeProduto(produtoId);
+    if (quantidadeAtual > 0) {
+      alterarQuantidadeProduto(produtoId, quantidadeAtual - 1);
+    }
+  };
+
+  const handleQuantidadeInputChange = (produtoId: string, valor: string) => {
+    // Permitir apenas números
+    const valorLimpo = valor.replace(/[^\d]/g, '');
+    const quantidade = valorLimpo === '' ? 0 : parseInt(valorLimpo);
+
+    if (!isNaN(quantidade)) {
+      alterarQuantidadeProduto(produtoId, quantidade);
+    }
+  };
+
+  // Funções para o carrinho
+  const obterItensCarrinho = () => {
+    return Object.entries(quantidadesProdutos)
+      .filter(([_, quantidade]) => quantidade > 0)
+      .map(([produtoId, quantidade]) => {
+        const produto = produtos.find(p => p.id === produtoId);
+        return produto ? { produto, quantidade } : null;
+      })
+      .filter(Boolean) as Array<{ produto: Produto; quantidade: number }>;
+  };
+
+  const obterTotalCarrinho = () => {
+    return obterItensCarrinho().reduce((total, item) => {
+      return total + (item.produto.preco * item.quantidade);
+    }, 0);
+  };
+
+  const obterQuantidadeTotalItens = () => {
+    return Object.values(quantidadesProdutos).reduce((total, quantidade) => total + quantidade, 0);
+  };
+
+  const removerItemCarrinho = (produtoId: string) => {
+    setQuantidadesProdutos(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+  };
+
+  const limparCarrinho = () => {
+    setQuantidadesProdutos({});
+    setCarrinhoAberto(false);
+  };
+
   // Função para obter o primeiro telefone com WhatsApp
   const obterWhatsAppEmpresa = () => {
     // Usar apenas o campo telefones (novo sistema)
@@ -885,7 +976,7 @@ const CardapioPublicoPage: React.FC = () => {
     setContadorFechamento(contador);
   };
 
-  const handlePedirWhatsApp = (produto: Produto) => {
+  const handlePedirWhatsApp = (produto?: Produto) => {
     // Verificar se a loja está fechada (só bloqueia se explicitamente false)
     if (lojaAberta === false) {
       showMessage('error', 'Loja fechada! Não é possível fazer pedidos no momento.');
@@ -899,9 +990,53 @@ const CardapioPublicoPage: React.FC = () => {
     }
 
     const whatsapp = whatsappNumero.replace(/\D/g, '');
-    const mensagem = `Olá! Gostaria de fazer um pedido:\n\n*${produto.nome}*\n${config.mostrar_precos ? `Preço: ${formatarPreco(produto.preco)}` : ''}`;
+    let mensagem = 'Olá! Gostaria de fazer um pedido:\n\n';
+
+    if (produto) {
+      // Pedido de um produto específico
+      const quantidade = obterQuantidadeProduto(produto.id);
+      const quantidadeFinal = quantidade > 0 ? quantidade : 1;
+      const valorTotal = produto.preco * quantidadeFinal;
+
+      mensagem += `*${produto.nome}*`;
+      if (quantidadeFinal > 1) {
+        mensagem += `\nQuantidade: ${quantidadeFinal}`;
+      }
+      if (config.mostrar_precos) {
+        mensagem += `\nPreço unitário: ${formatarPreco(produto.preco)}`;
+        if (quantidadeFinal > 1) {
+          mensagem += `\nTotal: ${formatarPreco(valorTotal)}`;
+        }
+      }
+    } else {
+      // Pedido do carrinho completo
+      const itensCarrinho = obterItensCarrinho();
+      if (itensCarrinho.length === 0) {
+        showMessage('error', 'Carrinho vazio!');
+        return;
+      }
+
+      itensCarrinho.forEach((item, index) => {
+        mensagem += `${index + 1}. *${item.produto.nome}*\n`;
+        mensagem += `   Quantidade: ${item.quantidade}\n`;
+        if (config.mostrar_precos) {
+          mensagem += `   Preço unitário: ${formatarPreco(item.produto.preco)}\n`;
+          mensagem += `   Subtotal: ${formatarPreco(item.produto.preco * item.quantidade)}\n`;
+        }
+        mensagem += '\n';
+      });
+
+      if (config.mostrar_precos) {
+        mensagem += `*Total Geral: ${formatarPreco(obterTotalCarrinho())}*`;
+      }
+    }
+
     const url = `https://wa.me/55${whatsapp}?text=${encodeURIComponent(mensagem)}`;
     window.open(url, '_blank');
+  };
+
+  const handlePedirCarrinhoCompleto = () => {
+    handlePedirWhatsApp();
   };
 
   const handleContatoWhatsApp = () => {
@@ -1237,6 +1372,158 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       )}
 
+      {/* Modal do Carrinho */}
+      {carrinhoAberto && obterQuantidadeTotalItens() > 0 && (
+        <div className={`${config.modo_escuro ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-20`}>
+          <div className="max-w-6xl mx-auto px-4 py-3">
+            {/* Header do Carrinho */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={18} className={config.modo_escuro ? 'text-purple-400' : 'text-purple-600'} />
+                <h3 className={`font-semibold text-sm ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                  Carrinho ({obterQuantidadeTotalItens()} {obterQuantidadeTotalItens() === 1 ? 'item' : 'itens'})
+                </h3>
+                {config.mostrar_precos && (
+                  <span className={`text-sm font-bold ${config.modo_escuro ? 'text-green-400' : 'text-green-600'}`}>
+                    Total: {formatarPreco(obterTotalCarrinho())}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={limparCarrinho}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    config.modo_escuro
+                      ? 'text-red-400 hover:bg-red-900/20'
+                      : 'text-red-600 hover:bg-red-100'
+                  }`}
+                  title="Limpar carrinho"
+                >
+                  <Trash2 size={16} />
+                </button>
+                <button
+                  onClick={() => setCarrinhoAberto(false)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:bg-gray-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Lista de Itens do Carrinho */}
+            <div className="max-h-28 overflow-y-auto space-y-2 mb-3">
+              {obterItensCarrinho().map(({ produto, quantidade }) => (
+                <div
+                  key={produto.id}
+                  className={`flex items-center justify-between p-2 rounded-lg ${
+                    config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-50'
+                  }`}
+                >
+                  {/* Info do Produto */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                      {produto.nome}
+                    </h4>
+                    {config.mostrar_precos && (
+                      <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {formatarPreco(produto.preco)} × {quantidade} = {formatarPreco(produto.preco * quantidade)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Controles de Quantidade */}
+                  <div className="flex items-center gap-2 ml-3">
+                    <button
+                      onClick={() => decrementarQuantidade(produto.id)}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                        config.modo_escuro
+                          ? 'bg-gray-600 text-white hover:bg-gray-500'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <Minus size={12} />
+                    </button>
+
+                    {itemEditandoCarrinho === produto.id ? (
+                      <input
+                        type="text"
+                        value={quantidade}
+                        onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
+                        onBlur={() => setItemEditandoCarrinho(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setItemEditandoCarrinho(null);
+                          }
+                        }}
+                        className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
+                          config.modo_escuro
+                            ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                        }`}
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        onClick={() => setItemEditandoCarrinho(produto.id)}
+                        className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
+                          config.modo_escuro
+                            ? 'bg-gray-600 text-white hover:bg-gray-500'
+                            : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                        }`}
+                      >
+                        {quantidade}
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => incrementarQuantidade(produto.id)}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                        config.modo_escuro
+                          ? 'bg-blue-600 text-white hover:bg-blue-500'
+                          : 'bg-blue-500 text-white hover:bg-blue-600'
+                      }`}
+                    >
+                      <Plus size={12} />
+                    </button>
+
+                    <button
+                      onClick={() => removerItemCarrinho(produto.id)}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ml-1 ${
+                        config.modo_escuro
+                          ? 'bg-red-600 text-white hover:bg-red-500'
+                          : 'bg-red-500 text-white hover:bg-red-600'
+                      }`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Botão Finalizar Pedido */}
+            {obterWhatsAppEmpresa() && (
+              <button
+                onClick={handlePedirCarrinhoCompleto}
+                disabled={lojaAberta === false}
+                className={`w-full py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-300 ${
+                  lojaAberta === false
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg'
+                }`}
+              >
+                {lojaAberta === false ? 'Loja Fechada' : 'Finalizar Pedido no WhatsApp'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Campo de Pesquisa */}
       <div className={`${config.modo_escuro ? 'bg-gray-800/30' : 'bg-white/60'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'}`}>
         <div className="max-w-6xl mx-auto px-4 py-4">
@@ -1352,7 +1639,7 @@ const CardapioPublicoPage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Preço e botão */}
+                  {/* Preço e controles */}
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
@@ -1361,17 +1648,82 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
 
                     {obterWhatsAppEmpresa() && (
-                      <button
-                        onClick={() => handlePedirWhatsApp(produto)}
-                        disabled={lojaAberta === false}
-                        className={`group/btn relative overflow-hidden px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg ${
-                          lojaAberta === false
-                            ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
-                            : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 hover:shadow-xl cursor-pointer'
-                        }`}
-                      >
-                        <span>{lojaAberta === false ? 'Loja Fechada' : 'Pedir'}</span>
-                      </button>
+                      <div className="flex items-center gap-3">
+                        {/* Controles de Quantidade */}
+                        <div className="flex items-center gap-2">
+                          {/* Botão Decrementar */}
+                          <button
+                            onClick={() => decrementarQuantidade(produto.id)}
+                            disabled={obterQuantidadeProduto(produto.id) === 0}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                              obterQuantidadeProduto(produto.id) === 0
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : config.modo_escuro
+                                ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            }`}
+                          >
+                            <Minus size={14} />
+                          </button>
+
+                          {/* Campo de Quantidade */}
+                          {produtoEditandoQuantidade === produto.id ? (
+                            <input
+                              type="text"
+                              value={obterQuantidadeProduto(produto.id)}
+                              onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
+                              onBlur={() => setProdutoEditandoQuantidade(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  setProdutoEditandoQuantidade(null);
+                                }
+                              }}
+                              className={`w-12 h-8 text-center text-sm font-semibold rounded border-2 focus:outline-none ${
+                                config.modo_escuro
+                                  ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
+                                  : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                              }`}
+                              autoFocus
+                            />
+                          ) : (
+                            <button
+                              onClick={() => setProdutoEditandoQuantidade(produto.id)}
+                              className={`w-12 h-8 text-center text-sm font-semibold rounded transition-colors ${
+                                config.modo_escuro
+                                  ? 'bg-gray-700 text-white hover:bg-gray-600'
+                                  : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                              }`}
+                            >
+                              {obterQuantidadeProduto(produto.id)}
+                            </button>
+                          )}
+
+                          {/* Botão Incrementar */}
+                          <button
+                            onClick={() => incrementarQuantidade(produto.id)}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                              config.modo_escuro
+                                ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                            }`}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+
+                        {/* Botão Pedir */}
+                        <button
+                          onClick={() => handlePedirWhatsApp(produto)}
+                          disabled={lojaAberta === false}
+                          className={`group/btn relative overflow-hidden px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg ${
+                            lojaAberta === false
+                              ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                              : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 hover:shadow-xl cursor-pointer'
+                          }`}
+                        >
+                          <span>{lojaAberta === false ? 'Loja Fechada' : 'Pedir'}</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1380,6 +1732,27 @@ const CardapioPublicoPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Botão Flutuante do Carrinho */}
+      {!carrinhoAberto && obterQuantidadeTotalItens() > 0 && (
+        <button
+          onClick={() => setCarrinhoAberto(true)}
+          className={`fixed bottom-6 right-6 w-14 h-14 rounded-full shadow-lg transition-all duration-300 transform hover:scale-110 z-30 ${
+            config.modo_escuro
+              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white'
+              : 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
+          }`}
+        >
+          <div className="relative flex items-center justify-center">
+            <ShoppingCart size={24} />
+            <span className={`absolute -top-2 -right-2 w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${
+              config.modo_escuro ? 'bg-red-500 text-white' : 'bg-red-500 text-white'
+            }`}>
+              {obterQuantidadeTotalItens()}
+            </span>
+          </div>
+        </button>
+      )}
 
       {/* Footer moderno */}
       <footer className={`mt-16 ${config.modo_escuro ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-t`}>
