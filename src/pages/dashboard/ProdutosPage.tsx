@@ -4198,7 +4198,9 @@ const ProdutosPage: React.FC = () => {
                                       atualizarPrecoComCustoMargem(valorNumerico, novoProduto.margem_percentual);
                                     }
                                   }}
-                                  onFocus={() => setPrecoCustoFormatado('')}
+                                  onFocus={() => {
+                                    // Não limpar automaticamente - preservar valor para edição
+                                  }}
                                   onBlur={() => {
                                     const valorNumerico = desformatarPreco(precoCustoFormatado);
                                     setPrecoCustoFormatado(formatarPreco(valorNumerico));
@@ -4233,7 +4235,9 @@ const ProdutosPage: React.FC = () => {
                                       atualizarPrecoComCustoMargem(novoProduto.preco_custo, valorNumerico);
                                     }
                                   }}
-                                  onFocus={() => setMargemFormatada('')}
+                                  onFocus={() => {
+                                    // Não limpar automaticamente - preservar valor para edição
+                                  }}
                                   onBlur={() => {
                                     const valorNumerico = desformatarPreco(margemFormatada);
                                     setMargemFormatada(formatarPreco(valorNumerico));
@@ -4322,16 +4326,18 @@ const ProdutosPage: React.FC = () => {
                                     }
                                   }}
                                   onFocus={() => {
-                                    if (abaPrecoAtiva === 'padrao') {
-                                      setPrecoFormatado('');
-                                    } else {
-                                      setPrecoTabelaFormatado('');
-                                    }
+                                    // Não limpar o campo automaticamente para preservar valores calculados
+                                    // O usuário pode selecionar tudo com Ctrl+A se quiser substituir
                                   }}
                                   onBlur={async () => {
                                     if (abaPrecoAtiva === 'padrao') {
                                       const valorNumerico = desformatarPreco(precoFormatado);
                                       setPrecoFormatado(formatarPreco(valorNumerico));
+
+                                      // Se tem preço de custo definido, recalcular margem automaticamente
+                                      if (novoProduto.preco_custo > 0 && valorNumerico > 0) {
+                                        atualizarMargemComCustoPreco(novoProduto.preco_custo, valorNumerico);
+                                      }
                                     } else {
                                       const valorNumerico = desformatarPreco(precoTabelaFormatado);
                                       setPrecoTabelaFormatado(formatarPreco(valorNumerico));
