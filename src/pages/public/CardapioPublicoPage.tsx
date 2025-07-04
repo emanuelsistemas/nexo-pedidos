@@ -76,6 +76,7 @@ const CardapioPublicoPage: React.FC = () => {
   // Estados para navegação horizontal das categorias
   const [categoriaStartIndex, setCategoriaStartIndex] = useState(0);
   const [visibleCategoriaItems, setVisibleCategoriaItems] = useState(4);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   // Estados para suporte a arrastar no mobile
   const [touchStartX, setTouchStartX] = useState(0);
@@ -630,24 +631,40 @@ const CardapioPublicoPage: React.FC = () => {
   // Função para calcular quantas categorias cabem na tela
   const calcularCategoriasVisiveis = () => {
     const larguraTela = window.innerWidth;
-    const larguraMinimaBotao = 120; // Largura mínima de cada botão de categoria
+    const larguraBotaoCategoria = 120; // Largura fixa de cada botão de categoria
     const espacoBotoes = 80; // Espaço para botões de navegação (se necessário)
     const padding = 32; // Padding lateral do container
 
-    const larguraDisponivel = larguraTela - padding - (categoriaStartIndex > 0 || categoriaStartIndex + visibleCategoriaItems < (grupos.length + 1) ? espacoBotoes : 0);
-    const itensPossiveis = Math.floor(larguraDisponivel / larguraMinimaBotao);
+    const totalCategorias = grupos.length + 1; // +1 para incluir "Todos"
+    const temNavegacao = totalCategorias > 1;
 
-    return Math.max(1, Math.min(itensPossiveis, grupos.length + 1)); // +1 para incluir "Todos"
+    const larguraDisponivel = larguraTela - padding - (temNavegacao ? espacoBotoes : 0);
+    const itensPossiveis = Math.floor(larguraDisponivel / larguraBotaoCategoria);
+
+    return Math.max(1, Math.min(itensPossiveis, totalCategorias));
   };
 
   const navegarCategoriaAnterior = () => {
+    if (isAnimating) return; // Previne múltiplos cliques durante animação
+
+    setIsAnimating(true);
     setCategoriaStartIndex(Math.max(0, categoriaStartIndex - 1));
+
+    // Reset da animação após a transição
+    setTimeout(() => setIsAnimating(false), 300);
   };
 
   const navegarCategoriaProxima = () => {
+    if (isAnimating) return; // Previne múltiplos cliques durante animação
+
     const totalItens = grupos.length + 1; // +1 para incluir "Todos"
     const maxIndex = Math.max(0, totalItens - visibleCategoriaItems);
+
+    setIsAnimating(true);
     setCategoriaStartIndex(Math.min(maxIndex, categoriaStartIndex + 1));
+
+    // Reset da animação após a transição
+    setTimeout(() => setIsAnimating(false), 300);
   };
 
   // Funções para suporte a arrastar no mobile
@@ -660,7 +677,7 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const handleTouchEnd = () => {
-    if (!touchStartX || !touchEndX) return;
+    if (!touchStartX || !touchEndX || isAnimating) return;
 
     const distance = touchStartX - touchEndX;
     const isLeftSwipe = distance > 50;
@@ -672,6 +689,10 @@ const CardapioPublicoPage: React.FC = () => {
     if (isRightSwipe) {
       navegarCategoriaAnterior();
     }
+
+    // Reset dos valores de touch
+    setTouchStartX(0);
+    setTouchEndX(0);
   };
 
   // Função para obter o primeiro telefone com WhatsApp
@@ -1134,61 +1155,81 @@ const CardapioPublicoPage: React.FC = () => {
               {categoriaStartIndex > 0 && (
                 <button
                   onClick={navegarCategoriaAnterior}
-                  className={`w-10 h-full flex items-center justify-center transition-colors border-r ${
-                    config.modo_escuro
-                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300'
+                  disabled={isAnimating}
+                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-r ${
+                    isAnimating
+                      ? 'opacity-50 cursor-not-allowed'
+                      : config.modo_escuro
+                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600 hover:scale-110'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
                   }`}
                 >
                   <ChevronLeft size={20} />
                 </button>
               )}
 
-              {/* Categorias Visíveis */}
+              {/* Container de Categorias com Slide Suave */}
               <div
                 className="flex items-center h-full flex-1 overflow-hidden"
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
               >
-                {(() => {
-                  const todasCategorias = [
-                    { id: 'todos', nome: '🍽️ Todos' },
-                    ...grupos
-                  ];
+                <div
+                  className="flex items-center h-full transition-transform duration-300 ease-in-out"
+                  style={{
+                    transform: `translateX(-${categoriaStartIndex * 120}px)`,
+                    width: `${(grupos.length + 1) * 120}px` // +1 para incluir "Todos"
+                  }}
+                >
+                  {(() => {
+                    const todasCategorias = [
+                      { id: 'todos', nome: '🍽️ Todos' },
+                      ...grupos
+                    ];
 
-                  return todasCategorias
-                    .slice(categoriaStartIndex, categoriaStartIndex + visibleCategoriaItems)
-                    .map((categoria, index) => (
+                    return todasCategorias.map((categoria, index) => (
                       <button
                         key={categoria.id}
                         onClick={() => setGrupoSelecionado(categoria.id)}
-                        className={`flex items-center justify-center transition-all duration-300 h-full px-4 font-medium text-sm whitespace-nowrap ${
+                        className={`flex items-center justify-center transition-all duration-200 h-full px-4 font-medium text-sm whitespace-nowrap ${
                           grupoSelecionado === categoria.id
                             ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
                             : config.modo_escuro
                             ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                             : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
                         }`}
-                        style={{ flex: '1 1 120px', minWidth: '120px' }}
+                        style={{
+                          width: '120px',
+                          minWidth: '120px',
+                          flexShrink: 0
+                        }}
                       >
                         {categoria.nome}
                       </button>
                     ));
-                })()}
+                  })()}
+                </div>
               </div>
 
               {/* Botão Próximo */}
               {categoriaStartIndex + visibleCategoriaItems < (grupos.length + 1) && (
                 <button
                   onClick={navegarCategoriaProxima}
-                  className={`w-10 h-full flex items-center justify-center transition-colors border-l ${
-                    config.modo_escuro
-                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300'
+                  disabled={isAnimating}
+                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-l relative ${
+                    isAnimating
+                      ? 'opacity-50 cursor-not-allowed'
+                      : config.modo_escuro
+                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600 hover:scale-110'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
                   }`}
                 >
                   <ChevronRight size={20} />
+                  {/* Indicador de mais itens */}
+                  <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full animate-pulse ${
+                    config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                  }`}></div>
                 </button>
               )}
             </div>
