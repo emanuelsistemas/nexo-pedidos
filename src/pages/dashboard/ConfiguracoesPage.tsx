@@ -3555,6 +3555,19 @@ const ConfiguracoesPage: React.FC = () => {
       });
       window.dispatchEvent(pdvConfigEvent);
 
+      // Disparar evento específico para mudanças no status da loja
+      if (field === 'cardapio_loja_aberta') {
+        const lojaStatusEvent = new CustomEvent('lojaStatusChanged', {
+          detail: {
+            lojaAberta: value,
+            empresaId: usuarioData.empresa_id,
+            timestamp: Date.now()
+          }
+        });
+        window.dispatchEvent(lojaStatusEvent);
+        console.log('🚀 Evento lojaStatusChanged disparado:', { lojaAberta: value, empresaId: usuarioData.empresa_id });
+      }
+
       // Mostrar mensagem de sucesso
       const fieldNames: { [key: string]: string } = {
         comandas: 'Comandas',

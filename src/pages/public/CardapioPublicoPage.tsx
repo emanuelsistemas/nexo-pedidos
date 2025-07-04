@@ -71,6 +71,21 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [slug]);
 
+  // Escutar evento customizado para atualização imediata do status da loja
+  useEffect(() => {
+    const handleLojaStatusChange = (event: CustomEvent) => {
+      console.log('🚀 Cardápio: Evento lojaStatusChanged recebido:', event.detail);
+      console.log('🚀 Atualizando lojaAberta para:', event.detail.lojaAberta);
+      setLojaAberta(event.detail.lojaAberta);
+    };
+
+    window.addEventListener('lojaStatusChanged', handleLojaStatusChange as EventListener);
+
+    return () => {
+      window.removeEventListener('lojaStatusChanged', handleLojaStatusChange as EventListener);
+    };
+  }, []);
+
   // Estado para armazenar o ID da empresa para o realtime
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
@@ -144,15 +159,17 @@ const CardapioPublicoPage: React.FC = () => {
       setError(null);
 
       // 1. Buscar configuração PDV pelo slug personalizado
+      console.log('🔍 Buscando configuração PDV para slug:', slug);
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, logo_url')
+        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, logo_url, cardapio_digital')
         .eq('cardapio_url_personalizada', slug)
-        .eq('cardapio_digital', true)
         .single();
 
+      console.log('🔍 Resultado da consulta PDV config:', { pdvConfigData, configError });
+
       if (configError || !pdvConfigData) {
-        console.error('Erro ao buscar configuração PDV:', configError);
+        console.error('❌ Erro ao buscar configuração PDV:', configError);
         setError('Cardápio não encontrado ou não está disponível.');
         return;
       }
