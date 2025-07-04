@@ -10422,12 +10422,12 @@ const PDVPage: React.FC = () => {
             <div className="h-full flex flex-col">
 
 
-              {/* Barra de Busca com Seletor de Tabela - Lado a Lado */}
+              {/* Barra de Busca com Seletor de Tabela - Compacta */}
               <div className="mb-3">
-                <div className="flex gap-2">
-                  {/* ✅ NOVO: Dropdown de Tabela de Preços - AO LADO */}
-                  {trabalhaComTabelaPrecos && tabelasPrecos.length > 0 && (
-                    <div className="relative w-36 flex-shrink-0">
+                {/* ✅ NOVO: Dropdown de Tabela de Preços */}
+                {trabalhaComTabelaPrecos && tabelasPrecos.length > 0 && (
+                  <div className="mb-2">
+                    <div className="relative w-40">
                       <select
                         value={tabelaPrecoSelecionada}
                         onChange={(e) => setTabelaPrecoSelecionada(e.target.value)}
@@ -10447,10 +10447,10 @@ const PDVPage: React.FC = () => {
                         </svg>
                       </div>
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {/* Campo de Busca - Flex para ocupar espaço restante */}
-                  <div className="relative flex-1">
+                <div className="relative">
                   <input
                     type="text"
                     placeholder="Produto"
@@ -10494,7 +10494,6 @@ const PDVPage: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  </div>
                 </div>
 
                 {/* Indicador de captura automática ativa */}
