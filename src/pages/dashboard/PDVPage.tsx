@@ -10478,7 +10478,13 @@ const PDVPage: React.FC = () => {
                       <select
                         value={tabelaPrecoSelecionada}
                         onChange={(e) => setTabelaPrecoSelecionada(e.target.value)}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded py-2 pl-3 pr-8 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 appearance-none cursor-pointer"
+                        className="w-full h-[42px] bg-gray-800/50 border border-gray-700 rounded py-2 pl-3 pr-8 text-white text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 cursor-pointer"
+                        style={{
+                          appearance: 'none',
+                          WebkitAppearance: 'none',
+                          MozAppearance: 'none',
+                          backgroundImage: 'none'
+                        }}
                       >
                         <option value="padrao">📋 Preço Padrão</option>
                         {tabelasPrecos.map((tabela) => (
@@ -10487,11 +10493,9 @@ const PDVPage: React.FC = () => {
                           </option>
                         ))}
                       </select>
-                      {/* Ícone de dropdown melhorado */}
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9l6 6 6-6" />
-                        </svg>
+                      {/* Seta dropdown simples e bonita */}
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <div className="w-0 h-0 border-l-[4px] border-r-[4px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-300"></div>
                       </div>
                     </div>
                   )}
