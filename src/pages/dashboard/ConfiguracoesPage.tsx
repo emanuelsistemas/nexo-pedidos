@@ -279,7 +279,9 @@ const ConfiguracoesPage: React.FC = () => {
     venda_sem_produto_nome_padrao: 'Diversos',
     venda_sem_produto_cst: '60',
     venda_sem_produto_csosn: '500',
-    modo_escuro_cardapio: false
+    modo_escuro_cardapio: false,
+    cardapio_abertura_tipo: 'automatico',
+    cardapio_loja_aberta: true
   });
 
   // Estado para controlar as abas do PDV
@@ -2823,7 +2825,9 @@ const ConfiguracoesPage: React.FC = () => {
           venda_sem_produto_aliquota_pis: config.venda_sem_produto_aliquota_pis !== undefined ? config.venda_sem_produto_aliquota_pis : 1.65,
           venda_sem_produto_aliquota_cofins: config.venda_sem_produto_aliquota_cofins !== undefined ? config.venda_sem_produto_aliquota_cofins : 7.6,
           venda_sem_produto_peso_liquido: config.venda_sem_produto_peso_liquido !== undefined ? config.venda_sem_produto_peso_liquido : 0,
-          modo_escuro_cardapio: config.modo_escuro_cardapio || false
+          modo_escuro_cardapio: config.modo_escuro_cardapio || false,
+          cardapio_abertura_tipo: config.cardapio_abertura_tipo || 'automatico',
+          cardapio_loja_aberta: config.cardapio_loja_aberta !== undefined ? config.cardapio_loja_aberta : true
         });
 
         // Atualizar também o estado separado do rodapé
@@ -3471,6 +3475,8 @@ const ConfiguracoesPage: React.FC = () => {
         exibir_dados_fiscais_venda: field === 'exibir_dados_fiscais_venda' ? value : pdvConfig.exibir_dados_fiscais_venda,
         cardapio_url_personalizada: pdvConfig.cardapio_url_personalizada || '',
         modo_escuro_cardapio: field === 'modo_escuro_cardapio' ? value : pdvConfig.modo_escuro_cardapio,
+        cardapio_abertura_tipo: field === 'cardapio_abertura_tipo' ? value : pdvConfig.cardapio_abertura_tipo,
+        cardapio_loja_aberta: field === 'cardapio_loja_aberta' ? value : pdvConfig.cardapio_loja_aberta,
         ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
         ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
         ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : pdvConfig.ocultar_nfce_com_impressao,
@@ -6316,6 +6322,80 @@ const ConfiguracoesPage: React.FC = () => {
 
                     {/* Configurações do cardápio */}
                     <div className="space-y-4">
+                      {/* Configuração de Abertura da Loja - Primeira seção */}
+                      <div className="space-y-4">
+                        <h4 className="text-white font-medium">Abertura da Loja</h4>
+
+                        <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                          <p className="text-sm text-gray-400 mb-4">
+                            Configure como a loja será aberta no cardápio digital.
+                          </p>
+
+                          <div className="space-y-3">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="cardapio_abertura_tipo"
+                                value="automatico"
+                                checked={pdvConfig.cardapio_abertura_tipo === 'automatico'}
+                                onChange={(e) => handlePdvConfigChange('cardapio_abertura_tipo', e.target.value)}
+                                className="w-4 h-4 text-primary-500 bg-gray-800 border-gray-600 focus:ring-primary-500 focus:ring-2 mr-3"
+                              />
+                              <div>
+                                <span className="text-white font-medium">Automático</span>
+                                <p className="text-sm text-gray-400">
+                                  A loja abre/fecha automaticamente baseado nos horários de atendimento cadastrados.
+                                </p>
+                              </div>
+                            </label>
+
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="cardapio_abertura_tipo"
+                                value="manual"
+                                checked={pdvConfig.cardapio_abertura_tipo === 'manual'}
+                                onChange={(e) => handlePdvConfigChange('cardapio_abertura_tipo', e.target.value)}
+                                className="w-4 h-4 text-primary-500 bg-gray-800 border-gray-600 focus:ring-primary-500 focus:ring-2 mr-3"
+                              />
+                              <div>
+                                <span className="text-white font-medium">Manual</span>
+                                <p className="text-sm text-gray-400">
+                                  Você controla manualmente quando a loja está aberta ou fechada no cardápio.
+                                </p>
+                              </div>
+                            </label>
+                          </div>
+
+                          {/* Controle manual da loja - só aparece quando modo manual está selecionado */}
+                          {pdvConfig.cardapio_abertura_tipo === 'manual' && (
+                            <div className="mt-4 pt-4 border-t border-gray-700">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                  <h6 className="text-white font-medium">Controle da Loja</h6>
+                                  <p className="text-sm text-gray-400">
+                                    Status atual: {pdvConfig.cardapio_loja_aberta ? 'Aberta' : 'Fechada'}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => handlePdvConfigChange('cardapio_loja_aberta', !pdvConfig.cardapio_loja_aberta)}
+                                  className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 flex items-center gap-2 ${
+                                    pdvConfig.cardapio_loja_aberta
+                                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-red-500/25'
+                                      : 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-green-500/25'
+                                  }`}
+                                >
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    pdvConfig.cardapio_loja_aberta ? 'bg-red-200' : 'bg-green-200'
+                                  }`}></div>
+                                  {pdvConfig.cardapio_loja_aberta ? 'Fechar Loja' : 'Abrir Loja'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <h4 className="text-white font-medium">Configurações Gerais</h4>
 
                       <div className="grid grid-cols-1 gap-4">
@@ -6504,6 +6584,8 @@ const ConfiguracoesPage: React.FC = () => {
                             </p>
                           </div>
                         </label>
+
+
                       </div>
                     </div>
 
