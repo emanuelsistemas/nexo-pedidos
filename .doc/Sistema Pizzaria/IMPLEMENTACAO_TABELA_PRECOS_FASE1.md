@@ -53,12 +53,21 @@ Tabelas Criadas:
 • Pizza Família - até 4 sabores
 ```
 
-## 🔄 **PRÓXIMAS FASES**
+## ✅ **FASE 2 COMPLETA: BANCO DE DADOS**
 
-### **Fase 2: Banco de Dados**
-- [ ] Criar tabelas no Supabase
-- [ ] Implementar salvamento real
-- [ ] Carregar configurações existentes
+### **Tabelas Criadas:**
+- ✅ `tabela_preco_config` - Configurações por empresa
+- ✅ `tabela_de_preco` - Tabelas de preços individuais
+- ✅ Índices, constraints e triggers implementados
+
+### **Funcionalidades Implementadas:**
+- ✅ Salvamento real das configurações
+- ✅ Carregamento automático ao acessar a seção
+- ✅ CRUD completo de tabelas de preços
+- ✅ Validações de nome único por empresa
+- ✅ Soft delete (deletado = true)
+
+## 🔄 **PRÓXIMAS FASES**
 
 ### **Fase 3: Integração PDV**
 - [ ] Seletor de tabela no PDV

@@ -15,13 +15,17 @@ CREATE TABLE IF NOT EXISTS tabela_preco_config (
   -- Configurações principais
   trabalha_com_tabela_precos BOOLEAN DEFAULT FALSE,
   trabalha_com_sabores BOOLEAN DEFAULT FALSE,
+  tipo_preco_pizza VARCHAR(20) DEFAULT 'sabor_mais_caro',
 
   -- Controle
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
 
   -- Constraint para garantir uma configuração por empresa
-  CONSTRAINT uk_tabela_preco_config_empresa UNIQUE (empresa_id)
+  CONSTRAINT uk_tabela_preco_config_empresa UNIQUE (empresa_id),
+
+  -- Constraint para validar tipo de preço da pizza
+  CONSTRAINT chk_tipo_preco_pizza CHECK (tipo_preco_pizza IN ('sabor_mais_caro', 'media_sabores'))
 );
 
 -- =====================================================
@@ -34,8 +38,6 @@ CREATE TABLE IF NOT EXISTS tabela_de_preco (
 
   -- Informações da tabela
   nome VARCHAR(255) NOT NULL,
-  codigo VARCHAR(50),
-  descricao TEXT,
   ativo BOOLEAN DEFAULT TRUE,
 
   -- Configurações específicas para sabores (pizzarias)
@@ -201,11 +203,6 @@ ALTER TABLE tabela_de_preco
 ADD CONSTRAINT uk_tabela_de_preco_nome_empresa
 UNIQUE (empresa_id, nome);
 
--- Código único por empresa para tabela_de_preco (se preenchido)
-CREATE UNIQUE INDEX uk_tabela_de_preco_codigo_empresa
-ON tabela_de_preco (empresa_id, codigo)
-WHERE codigo IS NOT NULL AND codigo != '';
-
 -- Código único por empresa
 ALTER TABLE produto_variacoes
 ADD CONSTRAINT uk_produto_variacoes_codigo_empresa
@@ -223,11 +220,12 @@ UNIQUE (variacao_id, opcao_adicional_id);
 COMMENT ON TABLE tabela_preco_config IS 'Configurações de tabela de preços por empresa';
 COMMENT ON COLUMN tabela_preco_config.trabalha_com_tabela_precos IS 'Se a empresa utiliza sistema de tabela de preços';
 COMMENT ON COLUMN tabela_preco_config.trabalha_com_sabores IS 'Se a empresa trabalha com sabores (pizzarias)';
+COMMENT ON COLUMN tabela_preco_config.tipo_preco_pizza IS 'Tipo de cálculo do preço: sabor_mais_caro ou media_sabores';
 
 COMMENT ON TABLE tabela_de_preco IS 'Tabelas de preços criadas pela empresa (ex: Pizza Pequena, Atacado 10un)';
 COMMENT ON COLUMN tabela_de_preco.nome IS 'Nome da tabela (ex: Pizza Pequena, Atacado 10un)';
-COMMENT ON COLUMN tabela_de_preco.quantidade_sabores IS 'Quantidade máxima de sabores para esta tabela';
-COMMENT ON COLUMN tabela_de_preco.permite_meio_a_meio IS 'Se permite dividir em sabores diferentes';
+COMMENT ON COLUMN tabela_de_preco.quantidade_sabores IS 'Quantidade máxima de sabores para esta tabela (pizzarias)';
+COMMENT ON COLUMN tabela_de_preco.permite_meio_a_meio IS 'Se permite dividir em sabores diferentes (pizzarias)';
 
 COMMENT ON TABLE produto_variacoes IS 'Variações de produtos (ex: Pizza Pequena, Pizza Média)';
 COMMENT ON COLUMN produto_variacoes.produto_base_id IS 'Referência ao produto base (ex: Pizza)';
@@ -303,7 +301,69 @@ ADD COLUMN IF NOT EXISTS tipo_produto VARCHAR(50) DEFAULT 'simples';
 COMMENT ON COLUMN produtos.tipo_produto IS 'Tipo do produto: simples, pizza_base, combo, etc.';
 
 -- Adicionar configuração para habilitar sistema de pizzas
-ALTER TABLE produtos_config 
+ALTER TABLE produtos_config
 ADD COLUMN IF NOT EXISTS sistema_pizzas BOOLEAN DEFAULT FALSE;
 
 COMMENT ON COLUMN produtos_config.sistema_pizzas IS 'Habilita o sistema de variações para pizzarias';
+
+-- =====================================================
+-- 11. TRIGGER AUTOMÁTICO PARA NOVAS EMPRESAS
+-- =====================================================
+
+-- Função para criar configuração padrão de tabela de preços
+CREATE OR REPLACE FUNCTION create_default_tabela_preco_config()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Inserir configuração padrão para a nova empresa
+    INSERT INTO tabela_preco_config (
+        empresa_id,
+        trabalha_com_tabela_precos,
+        trabalha_com_sabores,
+        tipo_preco_pizza
+    ) VALUES (
+        NEW.id,
+        FALSE,
+        FALSE,
+        'sabor_mais_caro'
+    );
+
+    -- Log para debug
+    RAISE NOTICE 'Configuração de tabela de preços criada para empresa: %', NEW.id;
+
+    RETURN NEW;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Em caso de erro, não falhar o cadastro da empresa
+        RAISE WARNING 'Erro ao criar configuração de tabela de preços para empresa %: %', NEW.id, SQLERRM;
+        RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger para executar após inserir nova empresa
+DROP TRIGGER IF EXISTS trigger_create_tabela_preco_config ON empresas;
+CREATE TRIGGER trigger_create_tabela_preco_config
+    AFTER INSERT ON empresas
+    FOR EACH ROW
+    EXECUTE FUNCTION create_default_tabela_preco_config();
+
+COMMENT ON TRIGGER trigger_create_tabela_preco_config ON empresas IS 'Cria automaticamente configuração padrão de tabela de preços para novas empresas';
+
+-- =====================================================
+-- 12. CONFIGURAÇÃO INICIAL PARA EMPRESAS EXISTENTES
+-- =====================================================
+
+-- Inserir configurações padrão para empresas existentes que não possuem
+INSERT INTO tabela_preco_config (
+    empresa_id,
+    trabalha_com_tabela_precos,
+    trabalha_com_sabores,
+    tipo_preco_pizza
+)
+SELECT
+    e.id,
+    FALSE,
+    FALSE,
+    'sabor_mais_caro'
+FROM empresas e
+LEFT JOIN tabela_preco_config tpc ON e.id = tpc.empresa_id
+WHERE tpc.empresa_id IS NULL;

@@ -219,6 +219,7 @@ const ConfiguracoesPage: React.FC = () => {
   // Estados para Tabela de Preços
   const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState<boolean>(false);
   const [trabalhaComSabores, setTrabalhaComSabores] = useState<boolean>(false);
+  const [tipoPrecoPizza, setTipoPrecoPizza] = useState<'sabor_mais_caro' | 'media_sabores'>('sabor_mais_caro');
   const [tabelasPrecos, setTabelasPrecos] = useState<any[]>([]);
   const [showModalTabelaPrecos, setShowModalTabelaPrecos] = useState<boolean>(false);
   const [tabelaPrecosSelecionada, setTabelaPrecosSelecionada] = useState<any>(null);
@@ -831,6 +832,53 @@ const ConfiguracoesPage: React.FC = () => {
         } catch (error) {
           console.error('Erro ao processar configuração de taxa de entrega:', error);
           showMessage('error', 'Erro ao processar configuração de taxa de entrega');
+        }
+      }
+
+      if (activeSection === 'tabelaprecos') {
+        try {
+          // Carregar configuração de tabela de preços
+          const { data: tabelaPrecoConfigData, error: tabelaPrecoConfigError } = await supabase
+            .from('tabela_preco_config')
+            .select('*')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .single();
+
+          if (tabelaPrecoConfigError) {
+            // Se não encontrou configuração, algo está errado (deveria existir devido ao trigger)
+            console.error('Erro ao carregar configuração de tabela de preços:', tabelaPrecoConfigError);
+            showMessage('error', 'Erro ao carregar configuração de tabela de preços');
+
+            // Definir valores padrão nos estados como fallback
+            setTrabalhaComTabelaPrecos(false);
+            setTrabalhaComSabores(false);
+          } else if (tabelaPrecoConfigData) {
+            // Se encontrou configuração, atualizar os estados
+            console.log('Configuração de tabela de preços encontrada:', tabelaPrecoConfigData);
+            setTrabalhaComTabelaPrecos(tabelaPrecoConfigData.trabalha_com_tabela_precos || false);
+            setTrabalhaComSabores(tabelaPrecoConfigData.trabalha_com_sabores || false);
+            setTipoPrecoPizza(tabelaPrecoConfigData.tipo_preco_pizza || 'sabor_mais_caro');
+          }
+
+          // Carregar tabelas de preços existentes
+          const { data: tabelasData, error: tabelasError } = await supabase
+            .from('tabela_de_preco')
+            .select('*')
+            .eq('empresa_id', usuarioData.empresa_id)
+            .eq('deletado', false)
+            .order('created_at', { ascending: true });
+
+          if (tabelasError) {
+            console.error('Erro ao carregar tabelas de preços:', tabelasError);
+            showMessage('error', 'Erro ao carregar tabelas de preços');
+          } else {
+            console.log('Tabelas de preços carregadas:', tabelasData);
+            setTabelasPrecos(tabelasData || []);
+          }
+
+        } catch (error) {
+          console.error('Erro ao processar configuração de tabela de preços:', error);
+          showMessage('error', 'Erro ao processar configuração de tabela de preços');
         }
       }
 
@@ -2937,6 +2985,278 @@ const ConfiguracoesPage: React.FC = () => {
       showMessage('error', 'Erro ao salvar configuração de taxa de entrega');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTrabalhaComTabelaPrecosChange = async (value: boolean) => {
+    try {
+      // Atualizar estado local primeiro
+      setTrabalhaComTabelaPrecos(value);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Atualizar no banco de dados
+      const { error } = await supabase
+        .from('tabela_preco_config')
+        .update({
+          trabalha_com_tabela_precos: value
+        })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      const status = value ? 'habilitado' : 'desabilitado';
+      showMessage('success', `Sistema de Tabela de Preços ${status} com sucesso!`);
+
+      // Se desabilitou, também desabilitar sabores
+      if (!value && trabalhaComSabores) {
+        await handleTrabalhaComSaboresChange(false);
+      }
+
+    } catch (error) {
+      // Reverter estado local em caso de erro
+      setTrabalhaComTabelaPrecos(!value);
+      console.error('Erro ao alterar configuração de tabela de preços:', error);
+      showMessage('error', 'Erro ao alterar configuração de tabela de preços');
+    }
+  };
+
+  const handleTrabalhaComSaboresChange = async (value: boolean) => {
+    try {
+      // Atualizar estado local primeiro
+      setTrabalhaComSabores(value);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Atualizar no banco de dados
+      const { error } = await supabase
+        .from('tabela_preco_config')
+        .update({
+          trabalha_com_sabores: value
+        })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      const status = value ? 'habilitado' : 'desabilitado';
+      showMessage('success', `Sistema de Sabores ${status} com sucesso!`);
+
+    } catch (error) {
+      // Reverter estado local em caso de erro
+      setTrabalhaComSabores(!value);
+      console.error('Erro ao alterar configuração de sabores:', error);
+      showMessage('error', 'Erro ao alterar configuração de sabores');
+    }
+  };
+
+  const handleTipoPrecoPizzaChange = async (value: 'sabor_mais_caro' | 'media_sabores') => {
+    try {
+      // Atualizar estado local primeiro
+      setTipoPrecoPizza(value);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Atualizar no banco de dados
+      const { error } = await supabase
+        .from('tabela_preco_config')
+        .update({
+          tipo_preco_pizza: value
+        })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      const descricao = value === 'sabor_mais_caro' ? 'Preço do sabor mais caro' : 'Média dos preços dos sabores';
+      showMessage('success', `Tipo de preço alterado para: ${descricao}`);
+
+    } catch (error) {
+      // Reverter estado local em caso de erro
+      setTipoPrecoPizza(value === 'sabor_mais_caro' ? 'media_sabores' : 'sabor_mais_caro');
+      console.error('Erro ao alterar tipo de preço da pizza:', error);
+      showMessage('error', 'Erro ao alterar tipo de preço da pizza');
+    }
+  };
+
+  const handleSalvarTabelaPrecos = async () => {
+    try {
+      setIsLoading(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Atualizar configurações (caso tenham sido alteradas localmente)
+      const { error } = await supabase
+        .from('tabela_preco_config')
+        .update({
+          trabalha_com_tabela_precos: trabalhaComTabelaPrecos,
+          trabalha_com_sabores: trabalhaComSabores,
+          tipo_preco_pizza: tipoPrecoPizza
+        })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      showMessage('success', 'Configurações de tabela de preços salvas com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar configuração de tabela de preços:', error);
+      showMessage('error', 'Erro ao salvar configuração de tabela de preços');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSalvarNovaTabela = async (nome: string, quantidadeSabores: number) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const novaTabela = {
+        empresa_id: usuarioData.empresa_id,
+        nome: nome.trim(),
+        quantidade_sabores: trabalhaComSabores ? quantidadeSabores : 1,
+        permite_meio_a_meio: trabalhaComSabores && quantidadeSabores > 1,
+        ativo: true
+      };
+
+      const { data, error } = await supabase
+        .from('tabela_de_preco')
+        .insert(novaTabela)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Atualizar lista local
+      setTabelasPrecos(prev => [...prev, data]);
+
+      return data;
+    } catch (error) {
+      console.error('Erro ao salvar nova tabela:', error);
+      throw error;
+    }
+  };
+
+  const handleEditarTabela = async (id: string, nome: string, quantidadeSabores: number) => {
+    try {
+      console.log('🔧 handleEditarTabela chamada:', { id, nome, quantidadeSabores });
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const dadosAtualizados = {
+        nome: nome.trim(),
+        quantidade_sabores: trabalhaComSabores ? quantidadeSabores : 1,
+        permite_meio_a_meio: trabalhaComSabores && quantidadeSabores > 1
+      };
+
+      console.log('📝 Dados para atualização:', dadosAtualizados);
+      console.log('🎯 Filtros:', { id, empresa_id: usuarioData.empresa_id });
+
+      const { data, error } = await supabase
+        .from('tabela_de_preco')
+        .update(dadosAtualizados)
+        .eq('id', id)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Atualizar lista local
+      setTabelasPrecos(prev =>
+        prev.map(t => t.id === id ? data : t)
+      );
+
+      return data;
+    } catch (error) {
+      console.error('Erro ao editar tabela:', error);
+      throw error;
+    }
+  };
+
+  const handleExcluirTabela = async (id: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { error } = await supabase
+        .from('tabela_de_preco')
+        .update({
+          deletado: true,
+          deletado_em: new Date().toISOString(),
+          deletado_por: userData.user.id
+        })
+        .eq('id', id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (error) throw error;
+
+      // Remover da lista local
+      setTabelasPrecos(prev => prev.filter(t => t.id !== id));
+
+      showMessage('success', 'Tabela excluída com sucesso!');
+    } catch (error) {
+      console.error('Erro ao excluir tabela:', error);
+      showMessage('error', 'Erro ao excluir tabela');
     }
   };
 
@@ -6130,7 +6450,7 @@ const ConfiguracoesPage: React.FC = () => {
                     id="trabalha_com_tabela_precos"
                     type="checkbox"
                     checked={trabalhaComTabelaPrecos}
-                    onChange={(e) => setTrabalhaComTabelaPrecos(e.target.checked)}
+                    onChange={(e) => handleTrabalhaComTabelaPrecosChange(e.target.checked)}
                     className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
                   />
                   <label htmlFor="trabalha_com_tabela_precos" className="ml-3 cursor-pointer">
@@ -6161,17 +6481,75 @@ const ConfiguracoesPage: React.FC = () => {
                         id="trabalha_com_sabores"
                         type="checkbox"
                         checked={trabalhaComSabores}
-                        onChange={(e) => setTrabalhaComSabores(e.target.checked)}
-                        className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                        onChange={(e) => handleTrabalhaComSaboresChange(e.target.checked)}
+                        disabled={!trabalhaComTabelaPrecos}
+                        className="w-5 h-5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       />
-                      <label htmlFor="trabalha_com_sabores" className="ml-3 cursor-pointer">
+                      <label htmlFor="trabalha_com_sabores" className={`ml-3 cursor-pointer ${!trabalhaComTabelaPrecos ? 'opacity-50' : ''}`}>
                         <h4 className="text-white font-medium">Trabalha com Sabores</h4>
                         <p className="text-sm text-gray-400 mt-1">
                           Específico para pizzarias - permite configurar múltiplos sabores por pizza (meio a meio, 1/3, etc).
+                          {!trabalhaComTabelaPrecos && (
+                            <span className="text-yellow-400 block mt-1">
+                              ⚠️ Habilite "Trabalha com Tabela de Preços" primeiro
+                            </span>
+                          )}
                         </p>
                       </label>
                     </div>
                   </div>
+
+                  {/* Opções de tipo de preço da pizza (só aparece se trabalha com sabores) */}
+                  {trabalhaComSabores && (
+                    <div className="mt-4 p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+                      <h5 className="text-white font-medium mb-3">Pizza preço</h5>
+                      <div className="space-y-3">
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            name="tipo_preco_pizza"
+                            checked={tipoPrecoPizza === 'sabor_mais_caro'}
+                            onChange={() => handleTipoPrecoPizzaChange('sabor_mais_caro')}
+                            className="w-4 h-4 text-primary-500 border-gray-600 focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                          />
+                          <span className="ml-3 text-white text-sm">
+                            Preço da pizza é o preço do sabor mais caro
+                          </span>
+                        </label>
+
+                        <label className="flex items-center cursor-pointer">
+                          <input
+                            type="radio"
+                            name="tipo_preco_pizza"
+                            checked={tipoPrecoPizza === 'media_sabores'}
+                            onChange={() => handleTipoPrecoPizzaChange('media_sabores')}
+                            className="w-4 h-4 text-primary-500 border-gray-600 focus:ring-primary-500 focus:ring-opacity-25 bg-gray-700"
+                          />
+                          <span className="ml-3 text-white text-sm">
+                            Preço da pizza é a média do preço dos sabores
+                          </span>
+                        </label>
+                      </div>
+
+                      {/* Exemplo visual */}
+                      <div className="mt-3 p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                        <h6 className="text-blue-400 font-medium text-xs mb-2">💡 Exemplo:</h6>
+                        <div className="text-blue-300/80 text-xs">
+                          {tipoPrecoPizza === 'sabor_mais_caro' ? (
+                            <>
+                              <div>Pizza meio a meio: Calabresa (R$ 25) + Portuguesa (R$ 35)</div>
+                              <div className="font-medium">→ Preço final: R$ 35,00 (sabor mais caro)</div>
+                            </>
+                          ) : (
+                            <>
+                              <div>Pizza meio a meio: Calabresa (R$ 25) + Portuguesa (R$ 35)</div>
+                              <div className="font-medium">→ Preço final: R$ 30,00 (média: 25+35÷2)</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -6238,7 +6616,9 @@ const ConfiguracoesPage: React.FC = () => {
                                 variant="danger"
                                 size="sm"
                                 onClick={() => {
-                                  // TODO: Implementar exclusão
+                                  if (confirm(`Tem certeza que deseja excluir a tabela "${tabela.nome}"?`)) {
+                                    handleExcluirTabela(tabela.id);
+                                  }
                                 }}
                               >
                                 <Trash2 size={14} />
@@ -6256,10 +6636,7 @@ const ConfiguracoesPage: React.FC = () => {
                 <Button
                   type="button"
                   variant="primary"
-                  onClick={() => {
-                    // TODO: Implementar salvamento das configurações
-                    showMessage('success', 'Configurações de tabela de preços salvas com sucesso!');
-                  }}
+                  onClick={handleSalvarTabelaPrecos}
                   disabled={isLoading}
                   className="min-w-[120px]"
                 >
@@ -8118,33 +8495,40 @@ const ConfiguracoesPage: React.FC = () => {
                 <Button
                   type="button"
                   variant="primary"
-                  onClick={() => {
+                  onClick={async () => {
                     if (!nomeNovaTabela.trim()) {
                       showMessage('error', 'Por favor, informe o nome da tabela');
                       return;
                     }
 
-                    // TODO: Implementar salvamento da tabela
-                    const novaTabela = {
-                      id: tabelaPrecosSelecionada?.id || Date.now().toString(),
-                      nome: nomeNovaTabela.trim(),
-                      quantidade_sabores: trabalhaComSabores ? quantidadeSabores : null,
-                      ativo: true
-                    };
+                    try {
+                      console.log('🔍 Debug Modal:', {
+                        tabelaPrecosSelecionada,
+                        nomeNovaTabela,
+                        quantidadeSabores,
+                        isEditing: !!tabelaPrecosSelecionada
+                      });
 
-                    if (tabelaPrecosSelecionada) {
-                      // Editar tabela existente
-                      setTabelasPrecos(prev =>
-                        prev.map(t => t.id === tabelaPrecosSelecionada.id ? novaTabela : t)
-                      );
-                      showMessage('success', 'Tabela atualizada com sucesso!');
-                    } else {
-                      // Criar nova tabela
-                      setTabelasPrecos(prev => [...prev, novaTabela]);
-                      showMessage('success', 'Tabela criada com sucesso!');
+                      if (tabelaPrecosSelecionada) {
+                        // Editar tabela existente
+                        console.log('✏️ Editando tabela:', tabelaPrecosSelecionada.id);
+                        await handleEditarTabela(tabelaPrecosSelecionada.id, nomeNovaTabela, quantidadeSabores);
+                        showMessage('success', 'Tabela atualizada com sucesso!');
+                      } else {
+                        // Criar nova tabela
+                        console.log('➕ Criando nova tabela');
+                        await handleSalvarNovaTabela(nomeNovaTabela, quantidadeSabores);
+                        showMessage('success', 'Tabela criada com sucesso!');
+                      }
+
+                      setShowModalTabelaPrecos(false);
+                    } catch (error: any) {
+                      if (error.code === '23505') {
+                        showMessage('error', 'Já existe uma tabela com este nome');
+                      } else {
+                        showMessage('error', `Erro ao ${tabelaPrecosSelecionada ? 'atualizar' : 'criar'} tabela`);
+                      }
                     }
-
-                    setShowModalTabelaPrecos(false);
                   }}
                   disabled={!nomeNovaTabela.trim()}
                   className="flex-1"
