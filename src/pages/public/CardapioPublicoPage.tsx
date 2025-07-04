@@ -64,6 +64,7 @@ const CardapioPublicoPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [grupoSelecionado, setGrupoSelecionado] = useState<string>('todos');
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
 
   useEffect(() => {
     if (slug) {
@@ -75,28 +76,38 @@ const CardapioPublicoPage: React.FC = () => {
   useEffect(() => {
     const handleLojaStatusChange = (event: CustomEvent) => {
       console.log('🚀 Cardápio: Evento lojaStatusChanged recebido:', event.detail);
-      console.log('🚀 Atualizando lojaAberta para:', event.detail.lojaAberta);
-      setLojaAberta(event.detail.lojaAberta);
+      console.log('🚀 Empresa atual:', empresaId);
+      console.log('🚀 Empresa do evento:', event.detail.empresaId);
+
+      // Verificar se o evento é para a empresa atual
+      if (empresaId && event.detail.empresaId === empresaId) {
+        console.log('✅ Evento é para esta empresa, atualizando status');
+        console.log('🚀 Atualizando lojaAberta para:', event.detail.lojaAberta);
+        setLojaAberta(event.detail.lojaAberta);
+      } else {
+        console.log('❌ Evento não é para esta empresa, ignorando');
+      }
     };
 
+    console.log('🎧 Configurando listener para lojaStatusChanged');
     window.addEventListener('lojaStatusChanged', handleLojaStatusChange as EventListener);
 
     return () => {
+      console.log('🎧 Removendo listener para lojaStatusChanged');
       window.removeEventListener('lojaStatusChanged', handleLojaStatusChange as EventListener);
     };
-  }, []);
+  }, [empresaId]);
 
-  // Estado para armazenar o ID da empresa para o realtime
-  const [empresaId, setEmpresaId] = useState<string | null>(null);
 
-  // Configurar realtime para monitorar mudanças no status da loja
+
+  // Configurar realtime para monitorar mudanças no status da loja via trigger do banco
   useEffect(() => {
     if (!empresaId) return;
 
-    console.log('Configurando realtime para empresa:', empresaId);
+    console.log('🔔 Configurando notificações do banco para empresa:', empresaId);
 
     const channel = supabase
-      .channel('cardapio_loja_status')
+      .channel('loja_status_notifications')
       .on(
         'postgres_changes',
         {
@@ -106,28 +117,39 @@ const CardapioPublicoPage: React.FC = () => {
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🔄 Cardápio: Atualização realtime recebida:', payload);
-          console.log('🏪 Status atual da loja:', lojaAberta);
+          console.log('🔄 Cardápio: Atualização realtime recebida via Supabase:', payload);
 
           if (payload.new && payload.new.cardapio_loja_aberta !== undefined) {
             const novoStatus = payload.new.cardapio_loja_aberta;
-            console.log('✅ Atualizando status da loja de', lojaAberta, 'para', novoStatus);
+            console.log('✅ Atualizando status da loja via Supabase de', lojaAberta, 'para', novoStatus);
             setLojaAberta(novoStatus);
+          }
+        }
+      )
+      .subscribe();
 
-            // Forçar re-render
-            setTimeout(() => {
-              console.log('🔍 Status após atualização:', novoStatus);
-            }, 100);
-          } else {
-            console.log('❌ Payload não contém cardapio_loja_aberta');
+    // Escutar notificações diretas do PostgreSQL via trigger
+    const notificationChannel = supabase
+      .channel('postgres_notifications')
+      .on(
+        'broadcast',
+        { event: 'loja_status_changed' },
+        (payload) => {
+          console.log('🔔 Notificação do trigger recebida:', payload);
+
+          if (payload.payload && payload.payload.empresa_id === empresaId) {
+            const novoStatus = payload.payload.loja_aberta;
+            console.log('✅ Atualizando status da loja via trigger de', lojaAberta, 'para', novoStatus);
+            setLojaAberta(novoStatus);
           }
         }
       )
       .subscribe();
 
     return () => {
-      console.log('Removendo canal realtime');
+      console.log('🔔 Removendo canais de notificação');
       supabase.removeChannel(channel);
+      supabase.removeChannel(notificationChannel);
     };
   }, [empresaId]);
 
