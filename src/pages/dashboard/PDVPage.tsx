@@ -6416,10 +6416,20 @@ const PDVPage: React.FC = () => {
   // Função para gerar próximo número de NFC-e (modelo 65)
   const gerarProximoNumeroNFCe = async (empresaId: string): Promise<number> => {
     try {
-      console.log('🔢 FRONTEND: Gerando próximo número NFC-e para empresa:', empresaId);
+      console.log('🔢 NUMERACAO: Iniciando geração de número NFC-e');
+      console.log('🔢 NUMERACAO: Empresa ID recebido:', empresaId);
+      console.log('🔢 NUMERACAO: Tipo da empresa ID:', typeof empresaId);
+      console.log('🔢 NUMERACAO: Empresa ID válido?', !!empresaId);
+
+      if (!empresaId) {
+        throw new Error('Empresa ID não fornecido para geração de número NFC-e');
+      }
 
       // ✅ CORREÇÃO: Buscar o último número de NFC-e da empresa (modelo 65) incluindo pendentes
-      console.log('🔍 FRONTEND: Consultando último número NFC-e no banco (incluindo pendentes)...');
+      console.log('🔍 NUMERACAO: Consultando último número NFC-e no banco...');
+      console.log('🔍 NUMERACAO: Query - empresa_id:', empresaId);
+      console.log('🔍 NUMERACAO: Query - modelo_documento: 65');
+
       const { data, error } = await supabase
         .from('pdv')
         .select('numero_documento, status_fiscal')
@@ -6430,33 +6440,40 @@ const PDVPage: React.FC = () => {
         .limit(1);
 
       if (error) {
-        console.error('❌ FRONTEND: Erro ao buscar último número NFC-e:', error);
-        console.error('❌ FRONTEND: Detalhes do erro:', error.message, error.details);
-        console.log('🔄 FRONTEND: Usando fallback - número 1');
-        return 1; // Começar do 1 em caso de erro
+        console.error('❌ NUMERACAO: Erro ao buscar último número NFC-e:', error);
+        console.error('❌ NUMERACAO: Detalhes do erro:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw new Error(`Falha ao consultar numeração NFC-e: ${error.message}`);
       }
 
-      console.log('📋 FRONTEND: Dados encontrados na tabela PDV para NFC-e:', data);
-      console.log('📊 FRONTEND: Quantidade de registros encontrados:', data?.length || 0);
+      console.log('📋 NUMERACAO: Dados encontrados na tabela PDV para NFC-e:', data);
+      console.log('📊 NUMERACAO: Quantidade de registros encontrados:', data?.length || 0);
+      console.log('📊 NUMERACAO: Primeiro registro:', data?.[0]);
 
       // Se não encontrou nenhum registro, começar do 1
       let proximoNumero = 1;
       if (data && data.length > 0 && data[0].numero_documento) {
         proximoNumero = data[0].numero_documento + 1;
-        console.log(`📊 FRONTEND: Último número NFC-e encontrado: ${data[0].numero_documento} (status: ${data[0].status_fiscal})`);
-        console.log(`➕ FRONTEND: Incrementando para: ${proximoNumero}`);
+        console.log(`📊 NUMERACAO: Último número NFC-e encontrado: ${data[0].numero_documento} (status: ${data[0].status_fiscal})`);
+        console.log(`➕ NUMERACAO: Incrementando para: ${proximoNumero}`);
       } else {
-        console.log('📊 FRONTEND: Nenhum registro NFC-e encontrado, iniciando do número 1');
+        console.log('📊 NUMERACAO: Nenhum registro NFC-e encontrado, iniciando do número 1');
       }
 
-      console.log(`🎯 FRONTEND: Próximo número NFC-e definido: ${proximoNumero}`);
+      console.log(`🎯 NUMERACAO: Próximo número NFC-e definido: ${proximoNumero}`);
+      console.log(`🎯 NUMERACAO: Retornando número: ${proximoNumero} (tipo: ${typeof proximoNumero})`);
       return proximoNumero;
 
     } catch (error) {
-      console.error('❌ FRONTEND: Erro geral ao buscar próximo número NFC-e:', error);
-      console.error('❌ FRONTEND: Stack trace:', (error as Error).stack);
-      console.log('🔄 FRONTEND: Usando fallback - número 1');
-      return 1; // Fallback para 1
+      console.error('❌ NUMERACAO: Erro geral ao buscar próximo número NFC-e:', error);
+      console.error('❌ NUMERACAO: Stack trace:', (error as Error).stack);
+      console.error('❌ NUMERACAO: Tipo do erro:', typeof error);
+      console.error('❌ NUMERACAO: Nome do erro:', (error as Error).name);
+      throw error; // ✅ LEI FUNDAMENTAL #2: NUNCA usar fallbacks - propagar erro
     }
   };
 
@@ -6510,9 +6527,15 @@ const PDVPage: React.FC = () => {
       console.log('🔢 Número da venda gerado:', numeroVenda);
 
       // Reservar número da NFC-e
-      console.log('🔍 Reservando número da NFC-e...');
+      console.log('🔍 VENDA: Reservando número da NFC-e...');
+      console.log('🔍 VENDA: Empresa ID para numeração:', usuarioData.empresa_id);
+      console.log('🔍 VENDA: Série do usuário:', usuarioData.serie_nfce);
+
       const numeroNfceReservado = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
+      console.log('✅ VENDA: Número NFC-e reservado com sucesso:', numeroNfceReservado);
+
       const serieUsuario = usuarioData.serie_nfce;
+      console.log('✅ VENDA: Série confirmada:', serieUsuario);
 
       console.log('🔢 Números reservados:', {
         numeroVenda,
