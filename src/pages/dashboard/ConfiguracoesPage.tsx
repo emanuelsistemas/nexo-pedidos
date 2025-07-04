@@ -3768,15 +3768,14 @@ const ConfiguracoesPage: React.FC = () => {
         .from('pdv_config')
         .select('empresa_id, cardapio_url_personalizada')
         .eq('cardapio_url_personalizada', cardapioUrlPersonalizada.trim())
-        .neq('empresa_id', usuarioData.empresa_id) // Excluir a própria empresa
-        .single();
+        .neq('empresa_id', usuarioData.empresa_id); // Excluir a própria empresa
 
-      if (urlError && urlError.code !== 'PGRST116') { // PGRST116 = no rows returned (que é o que queremos)
+      if (urlError) {
         console.error('Erro ao verificar URL:', urlError);
         throw new Error('Erro ao verificar disponibilidade da URL');
       }
 
-      if (urlExistente) {
+      if (urlExistente && urlExistente.length > 0) {
         showMessage('error', `O nome "${cardapioUrlPersonalizada}" já está sendo usado por outra empresa. Escolha um nome diferente.`);
         return;
       }

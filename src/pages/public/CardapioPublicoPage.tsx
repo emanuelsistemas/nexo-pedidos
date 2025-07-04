@@ -91,11 +91,20 @@ const CardapioPublicoPage: React.FC = () => {
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('Cardápio: Atualização status da loja recebida:', payload);
+          console.log('🔄 Cardápio: Atualização realtime recebida:', payload);
+          console.log('🏪 Status atual da loja:', lojaAberta);
 
           if (payload.new && payload.new.cardapio_loja_aberta !== undefined) {
-            console.log('Atualizando status da loja para:', payload.new.cardapio_loja_aberta);
-            setLojaAberta(payload.new.cardapio_loja_aberta);
+            const novoStatus = payload.new.cardapio_loja_aberta;
+            console.log('✅ Atualizando status da loja de', lojaAberta, 'para', novoStatus);
+            setLojaAberta(novoStatus);
+
+            // Forçar re-render
+            setTimeout(() => {
+              console.log('🔍 Status após atualização:', novoStatus);
+            }, 100);
+          } else {
+            console.log('❌ Payload não contém cardapio_loja_aberta');
           }
         }
       )
@@ -106,6 +115,28 @@ const CardapioPublicoPage: React.FC = () => {
       supabase.removeChannel(channel);
     };
   }, [empresaId]);
+
+  // Monitor para mudanças no estado lojaAberta
+  useEffect(() => {
+    console.log('🔄 Estado lojaAberta mudou para:', lojaAberta);
+    if (lojaAberta === false) {
+      console.log('🔴 Tarja deve aparecer agora');
+    } else if (lojaAberta === true) {
+      console.log('🟢 Tarja deve desaparecer agora');
+    } else {
+      console.log('⚪ Status ainda carregando');
+    }
+  }, [lojaAberta]);
+
+  // Monitor para mudanças no estado da empresa
+  useEffect(() => {
+    console.log('🏢 Estado da empresa mudou:', empresa);
+    if (empresa) {
+      console.log('🏢 Nome da empresa:', empresa.nome_fantasia || empresa.razao_social);
+    } else {
+      console.log('❌ Empresa está null/undefined');
+    }
+  }, [empresa]);
 
   const carregarDadosCardapio = async () => {
     try {
@@ -127,14 +158,19 @@ const CardapioPublicoPage: React.FC = () => {
       }
 
       // 2. Buscar dados da empresa
+      console.log('🏢 Buscando dados da empresa ID:', pdvConfigData.empresa_id);
       const { data: empresaData, error: empresaError } = await supabase
         .from('empresas')
         .select('id, razao_social, nome_fantasia, whatsapp, telefones, endereco, numero, bairro, cidade, estado')
         .eq('id', pdvConfigData.empresa_id)
         .single();
 
+      console.log('🏢 Dados da empresa carregados:', empresaData);
+      console.log('🏢 Nome fantasia:', empresaData?.nome_fantasia);
+      console.log('🏢 Razão social:', empresaData?.razao_social);
+
       if (empresaError || !empresaData) {
-        console.error('Erro ao buscar empresa:', empresaError);
+        console.error('❌ Erro ao buscar empresa:', empresaError);
         setError('Dados da empresa não encontrados.');
         return;
       }
@@ -145,6 +181,8 @@ const CardapioPublicoPage: React.FC = () => {
         logo_url: pdvConfigData.logo_url || ''
       };
 
+      console.log('🏢 Definindo empresa no estado:', empresaComLogo);
+      console.log('🏢 Nome que será exibido:', empresaComLogo.nome_fantasia || empresaComLogo.razao_social);
       setEmpresa(empresaComLogo);
 
       // Definir o ID da empresa para o realtime
@@ -221,9 +259,11 @@ const CardapioPublicoPage: React.FC = () => {
 
       if (!statusLojaError && statusLojaData) {
         // Usar exatamente o valor do banco, sem fallbacks
-        setLojaAberta(statusLojaData.cardapio_loja_aberta);
+        const statusInicial = statusLojaData.cardapio_loja_aberta;
+        console.log('🏪 Status inicial da loja carregado:', statusInicial);
+        setLojaAberta(statusInicial);
       } else {
-        console.error('Erro ao carregar status da loja:', statusLojaError);
+        console.error('❌ Erro ao carregar status da loja:', statusLojaError);
         // Se não conseguir carregar, não assumir nenhum valor padrão
         setLojaAberta(null);
       }
@@ -372,8 +412,14 @@ const CardapioPublicoPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${config.modo_escuro ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
-      {/* Tarja de loja fechada - só exibe se o status foi carregado e a loja está fechada */}
-      {lojaAberta === false && (
+      {/* Área fixa para tarja de loja fechada - sempre presente no DOM */}
+      <div
+        className={`transition-all duration-500 ease-in-out overflow-hidden ${
+          lojaAberta === false
+            ? 'max-h-20 opacity-100'
+            : 'max-h-0 opacity-0'
+        }`}
+      >
         <div className="bg-red-600 text-white py-3 px-4 text-center relative overflow-hidden animate-pulse">
           <div className="absolute inset-0 bg-gradient-to-r from-red-600 via-red-500 to-red-600 animate-pulse"></div>
           <div className="relative z-10 flex items-center justify-center gap-3">
@@ -387,7 +433,7 @@ const CardapioPublicoPage: React.FC = () => {
             No momento não é possível fazer pedidos. Tente novamente mais tarde.
           </p>
         </div>
-      )}
+      </div>
 
       {/* Header com gradiente */}
       <div className={`relative ${config.modo_escuro ? 'bg-gradient-to-r from-gray-800 via-gray-900 to-gray-800' : 'bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800'} shadow-xl`}>
