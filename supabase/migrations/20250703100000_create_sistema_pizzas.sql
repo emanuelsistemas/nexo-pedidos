@@ -307,7 +307,52 @@ ADD COLUMN IF NOT EXISTS sistema_pizzas BOOLEAN DEFAULT FALSE;
 COMMENT ON COLUMN produtos_config.sistema_pizzas IS 'Habilita o sistema de variações para pizzarias';
 
 -- =====================================================
--- 11. TRIGGER AUTOMÁTICO PARA NOVAS EMPRESAS
+-- 11. TABELA DE PREÇOS POR PRODUTO
+-- =====================================================
+
+-- Criar tabela para armazenar preços dos produtos por tabela de preços
+CREATE TABLE IF NOT EXISTS produto_precos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  produto_id UUID NOT NULL REFERENCES produtos(id) ON DELETE CASCADE,
+  tabela_preco_id UUID NOT NULL REFERENCES tabela_de_preco(id) ON DELETE CASCADE,
+
+  -- Preço do produto nesta tabela
+  preco NUMERIC(10,2) NOT NULL DEFAULT 0,
+
+  -- Controle
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- Constraint para garantir um preço por produto por tabela
+  CONSTRAINT uk_produto_precos_produto_tabela UNIQUE (produto_id, tabela_preco_id)
+);
+
+-- Índices para performance
+CREATE INDEX IF NOT EXISTS idx_produto_precos_empresa_id ON produto_precos(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_produto_precos_produto_id ON produto_precos(produto_id);
+CREATE INDEX IF NOT EXISTS idx_produto_precos_tabela_id ON produto_precos(tabela_preco_id);
+
+-- Constraint de validação
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_produto_precos_preco_positivo') THEN
+        ALTER TABLE produto_precos ADD CONSTRAINT chk_produto_precos_preco_positivo CHECK (preco >= 0);
+    END IF;
+END $$;
+
+-- Trigger para updated_at
+DROP TRIGGER IF EXISTS update_produto_precos_updated_at ON produto_precos;
+CREATE TRIGGER update_produto_precos_updated_at
+BEFORE UPDATE ON produto_precos
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Comentários
+COMMENT ON TABLE produto_precos IS 'Preços dos produtos por tabela de preços';
+COMMENT ON COLUMN produto_precos.preco IS 'Preço do produto nesta tabela de preços específica';
+
+-- =====================================================
+-- 12. TRIGGER AUTOMÁTICO PARA NOVAS EMPRESAS
 -- =====================================================
 
 -- Função para criar configuração padrão de tabela de preços
@@ -349,7 +394,7 @@ CREATE TRIGGER trigger_create_tabela_preco_config
 COMMENT ON TRIGGER trigger_create_tabela_preco_config ON empresas IS 'Cria automaticamente configuração padrão de tabela de preços para novas empresas';
 
 -- =====================================================
--- 12. CONFIGURAÇÃO INICIAL PARA EMPRESAS EXISTENTES
+-- 13. CONFIGURAÇÃO INICIAL PARA EMPRESAS EXISTENTES
 -- =====================================================
 
 -- Inserir configurações padrão para empresas existentes que não possuem

@@ -207,6 +207,14 @@ const ProdutosPage: React.FC = () => {
 
   // Estado para controlar o valor formatado do preço
   const [precoFormatado, setPrecoFormatado] = useState('');
+
+  // Estados para sistema de tabelas de preços
+  const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState<boolean>(false);
+  const [tabelasPrecos, setTabelasPrecos] = useState<any[]>([]);
+  const [abaPrecoAtiva, setAbaPrecoAtiva] = useState<string>('padrao'); // 'padrao' ou ID da tabela
+  const [precosTabelas, setPrecosTabelas] = useState<{[key: string]: number}>({});
+  const [precoTabelaFormatado, setPrecoTabelaFormatado] = useState<string>('0,00');
+
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
@@ -367,6 +375,51 @@ const ProdutosPage: React.FC = () => {
   const [cfopDropdownOpen, setCfopDropdownOpen] = useState(false);
   const [cfopSearchTerm, setCfopSearchTerm] = useState('');
 
+  // Função para carregar configurações de tabela de preços
+  const carregarConfiguracoesTabelaPrecos = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Carregar configuração de tabela de preços
+      const { data: configData } = await supabase
+        .from('tabela_preco_config')
+        .select('trabalha_com_tabela_precos')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (configData?.trabalha_com_tabela_precos) {
+        setTrabalhaComTabelaPrecos(true);
+
+        // Carregar tabelas de preços ativas
+        const { data: tabelasData } = await supabase
+          .from('tabela_de_preco')
+          .select('id, nome')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('ativo', true)
+          .eq('deletado', false)
+          .order('created_at', { ascending: true });
+
+        if (tabelasData) {
+          setTabelasPrecos(tabelasData);
+        }
+      } else {
+        setTrabalhaComTabelaPrecos(false);
+        setTabelasPrecos([]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações de tabela de preços:', error);
+    }
+  };
+
   useEffect(() => {
     loadGrupos();
     loadAvailableOpcoes();
@@ -375,6 +428,7 @@ const ProdutosPage: React.FC = () => {
     loadProdutosEstoque();
     loadOpcoesAdicionaisConfig();
     loadRegimeTributario();
+    carregarConfiguracoesTabelaPrecos();
   }, []);
 
   // Fechar dropdown de CFOP quando clicar fora
@@ -888,6 +942,15 @@ const ProdutosPage: React.FC = () => {
       setValorFinalFormatado('');
     }
   }, [novoProduto.preco, novoProduto.promocao, novoProduto.tipo_desconto, novoProduto.valor_desconto]);
+
+  // Efeito para carregar preço da tabela quando a aba ativa mudar
+  useEffect(() => {
+    if (abaPrecoAtiva !== 'padrao' && precosTabelas[abaPrecoAtiva] !== undefined) {
+      setPrecoTabelaFormatado(formatarPreco(precosTabelas[abaPrecoAtiva]));
+    } else if (abaPrecoAtiva !== 'padrao') {
+      setPrecoTabelaFormatado('0,00');
+    }
+  }, [abaPrecoAtiva, precosTabelas]);
 
   // Efeito para arredondar o estoque inicial quando a unidade de medida mudar
   useEffect(() => {
@@ -1632,6 +1695,11 @@ const ProdutosPage: React.FC = () => {
 
     // Definir o produto que está sendo editado
     setEditingProduto(produto);
+
+    // Carregar preços das tabelas se a empresa trabalha com tabelas de preços
+    if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+      await carregarPrecosTabelas(produto.id);
+    }
 
     // Definir o estado do novo produto com os valores do produto existente
     const produtoState = {
@@ -2970,6 +3038,63 @@ const ProdutosPage: React.FC = () => {
     }));
   };
 
+  // Função para carregar preços das tabelas de um produto
+  const carregarPrecosTabelas = async (produtoId: string) => {
+    try {
+      const { data: precosData } = await supabase
+        .from('produto_precos')
+        .select('tabela_preco_id, preco')
+        .eq('produto_id', produtoId);
+
+      if (precosData) {
+        const precosMap: {[key: string]: number} = {};
+        precosData.forEach(item => {
+          precosMap[item.tabela_preco_id] = item.preco;
+        });
+        setPrecosTabelas(precosMap);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar preços das tabelas:', error);
+    }
+  };
+
+  // Função para salvar preço de uma tabela específica
+  const salvarPrecoTabela = async (produtoId: string, tabelaId: string, preco: number) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { error } = await supabase
+        .from('produto_precos')
+        .upsert({
+          empresa_id: usuarioData.empresa_id,
+          produto_id: produtoId,
+          tabela_preco_id: tabelaId,
+          preco: preco
+        });
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setPrecosTabelas(prev => ({
+        ...prev,
+        [tabelaId]: preco
+      }));
+
+    } catch (error) {
+      console.error('Erro ao salvar preço da tabela:', error);
+      showMessage('error', 'Erro ao salvar preço da tabela');
+    }
+  };
+
   // Função para resetar o formulário de produto
   const resetFormularioProduto = () => {
     // Não definimos o estado novoProduto aqui para evitar problemas com a unidade de medida
@@ -2987,6 +3112,11 @@ const ProdutosPage: React.FC = () => {
     setSelectedOpcoes([]);
     setActiveTab('dados');
     setProdutoFotos([]);
+
+    // Resetar estados de tabela de preços
+    setAbaPrecoAtiva('padrao');
+    setPrecosTabelas({});
+    setPrecoTabelaFormatado('0,00');
 
     // Resetar validação de NCM
     setNcmValidacao({
@@ -3992,34 +4122,116 @@ const ProdutosPage: React.FC = () => {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-400 mb-2">
-                            Preço
-                          </label>
-                          <div className="relative">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                              R$
-                            </span>
-                            <input
-                              type="text"
-                              value={precoFormatado}
-                              onChange={(e) => {
-                                setPrecoFormatado(e.target.value);
-                                // Atualiza o valor numérico no estado do produto
-                                const valorNumerico = desformatarPreco(e.target.value);
-                                setNovoProduto({ ...novoProduto, preco: valorNumerico });
-                              }}
-                              onFocus={() => {
-                                // Ao receber o foco, limpa o campo para facilitar a digitação
-                                setPrecoFormatado('');
-                              }}
-                              onBlur={() => {
-                                // Ao perder o foco, formata corretamente o valor
-                                const valorNumerico = desformatarPreco(precoFormatado);
-                                setPrecoFormatado(formatarPreco(valorNumerico));
-                              }}
-                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                              placeholder="0,00"
-                            />
+                          {/* Sistema de abas para preços */}
+                          <div className="mb-4">
+                            {/* Container das abas com scroll horizontal */}
+                            <div className="relative">
+                              <div className="flex border-b border-gray-700 overflow-x-auto tabs-scroll-container">
+                                {/* Aba Preço Padrão */}
+                                <button
+                                  type="button"
+                                  onClick={() => setAbaPrecoAtiva('padrao')}
+                                  className={`flex-shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                                    abaPrecoAtiva === 'padrao'
+                                      ? 'border-primary-500 text-primary-400'
+                                      : 'border-transparent text-gray-400 hover:text-gray-300'
+                                  }`}
+                                >
+                                  Preço
+                                </button>
+
+                                {/* Abas das Tabelas de Preços */}
+                                {trabalhaComTabelaPrecos && tabelasPrecos.map((tabela) => (
+                                  <button
+                                    key={tabela.id}
+                                    type="button"
+                                    onClick={() => setAbaPrecoAtiva(tabela.id)}
+                                    className={`flex-shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                                      abaPrecoAtiva === tabela.id
+                                        ? 'border-primary-500 text-primary-400'
+                                        : 'border-transparent text-gray-400 hover:text-gray-300'
+                                    }`}
+                                  >
+                                    {tabela.nome}
+                                  </button>
+                                ))}
+                              </div>
+
+                              {/* Indicador de scroll e gradiente (aparece só se houver muitas abas) */}
+                              {trabalhaComTabelaPrecos && tabelasPrecos.length > 2 && (
+                                <>
+                                  {/* Gradiente à esquerda */}
+                                  <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-gray-900 to-transparent pointer-events-none z-10"></div>
+
+                                  {/* Gradiente à direita com indicador */}
+                                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-900 to-transparent pointer-events-none z-10 flex items-center justify-end pr-2">
+                                    <div className="text-gray-500 text-xs animate-pulse">⋯</div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            {/* Campo de preço dinâmico */}
+                            <div className="mt-3">
+                              <label className="block text-sm font-medium text-gray-400 mb-2">
+                                {abaPrecoAtiva === 'padrao'
+                                  ? 'Preço Padrão'
+                                  : `Preço - ${tabelasPrecos.find(t => t.id === abaPrecoAtiva)?.nome || ''}`
+                                }
+                              </label>
+                              <div className="relative">
+                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                  R$
+                                </span>
+                                <input
+                                  type="text"
+                                  value={abaPrecoAtiva === 'padrao' ? precoFormatado : precoTabelaFormatado}
+                                  onChange={(e) => {
+                                    if (abaPrecoAtiva === 'padrao') {
+                                      setPrecoFormatado(e.target.value);
+                                      const valorNumerico = desformatarPreco(e.target.value);
+                                      setNovoProduto({ ...novoProduto, preco: valorNumerico });
+                                    } else {
+                                      setPrecoTabelaFormatado(e.target.value);
+                                    }
+                                  }}
+                                  onFocus={() => {
+                                    if (abaPrecoAtiva === 'padrao') {
+                                      setPrecoFormatado('');
+                                    } else {
+                                      setPrecoTabelaFormatado('');
+                                    }
+                                  }}
+                                  onBlur={async () => {
+                                    if (abaPrecoAtiva === 'padrao') {
+                                      const valorNumerico = desformatarPreco(precoFormatado);
+                                      setPrecoFormatado(formatarPreco(valorNumerico));
+                                    } else {
+                                      const valorNumerico = desformatarPreco(precoTabelaFormatado);
+                                      setPrecoTabelaFormatado(formatarPreco(valorNumerico));
+
+                                      // Salvar preço da tabela se estiver editando um produto
+                                      if (editingProduto && valorNumerico > 0) {
+                                        await salvarPrecoTabela(editingProduto.id, abaPrecoAtiva, valorNumerico);
+                                      }
+                                    }
+                                  }}
+                                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  placeholder={abaPrecoAtiva === 'padrao'
+                                    ? '0,00'
+                                    : `0,00 (${tabelasPrecos.find(t => t.id === abaPrecoAtiva)?.nome || ''})`
+                                  }
+                                />
+                              </div>
+
+                              {/* Informação sobre a aba ativa */}
+                              <p className="text-xs text-gray-500 mt-1">
+                                {abaPrecoAtiva === 'padrao'
+                                  ? '💡 Preço padrão para produtos que não fazem parte de tabelas específicas (ex: refrigerantes).'
+                                  : `💡 Preço para "${tabelasPrecos.find(t => t.id === abaPrecoAtiva)?.nome}". Deixe vazio se o produto não fizer parte desta tabela.`
+                                }
+                              </p>
+                            </div>
                           </div>
                         </div>
                         <div>
