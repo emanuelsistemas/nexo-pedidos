@@ -1281,100 +1281,9 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filtros de Categoria com navegação horizontal */}
-      {grupos.length > 0 && (
-        <div className={`${config.modo_escuro ? 'bg-gray-800/50' : 'bg-white/80'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-10`}>
-          <div className="max-w-6xl mx-auto px-4 py-4">
-            <div className="h-14 flex items-center">
-              {/* Botão Anterior */}
-              {categoriaStartIndex > 0 && (
-                <button
-                  onClick={navegarCategoriaAnterior}
-                  disabled={isAnimating}
-                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-r ${
-                    isAnimating
-                      ? 'opacity-50 cursor-not-allowed'
-                      : config.modo_escuro
-                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600 hover:scale-110'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
-                  }`}
-                >
-                  <ChevronLeft size={20} />
-                </button>
-              )}
-
-              {/* Container de Categorias com Slide Suave */}
-              <div
-                className="flex items-center h-full flex-1 overflow-hidden"
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-              >
-                <div
-                  className="flex items-center h-full transition-transform duration-300 ease-in-out"
-                  style={{
-                    transform: `translateX(-${categoriaStartIndex * 120}px)`,
-                    width: `${(grupos.length + 1) * 120}px` // +1 para incluir "Todos"
-                  }}
-                >
-                  {(() => {
-                    const todasCategorias = [
-                      { id: 'todos', nome: '🍽️ Todos' },
-                      ...grupos
-                    ];
-
-                    return todasCategorias.map((categoria, index) => (
-                      <button
-                        key={categoria.id}
-                        onClick={() => setGrupoSelecionado(categoria.id)}
-                        className={`flex items-center justify-center transition-all duration-200 h-full px-4 font-medium text-sm whitespace-nowrap ${
-                          grupoSelecionado === categoria.id
-                            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                            : config.modo_escuro
-                            ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-                            : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
-                        }`}
-                        style={{
-                          width: '120px',
-                          minWidth: '120px',
-                          flexShrink: 0
-                        }}
-                      >
-                        {categoria.nome}
-                      </button>
-                    ));
-                  })()}
-                </div>
-              </div>
-
-              {/* Botão Próximo */}
-              {categoriaStartIndex + visibleCategoriaItems < (grupos.length + 1) && (
-                <button
-                  onClick={navegarCategoriaProxima}
-                  disabled={isAnimating}
-                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-l relative ${
-                    isAnimating
-                      ? 'opacity-50 cursor-not-allowed'
-                      : config.modo_escuro
-                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600 hover:scale-110'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
-                  }`}
-                >
-                  <ChevronRight size={20} />
-                  {/* Indicador de mais itens */}
-                  <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full animate-pulse ${
-                    config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                  }`}></div>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal do Carrinho */}
+      {/* Modal do Carrinho - ACIMA dos grupos */}
       {carrinhoAberto && obterQuantidadeTotalItens() > 0 && (
-        <div className={`${config.modo_escuro ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-20`}>
+        <div className={`${config.modo_escuro ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-30`}>
           <div className="max-w-6xl mx-auto px-4 py-3">
             {/* Header do Carrinho */}
             <div className="flex items-center justify-between mb-3">
@@ -1520,6 +1429,97 @@ const CardapioPublicoPage: React.FC = () => {
                 {lojaAberta === false ? 'Loja Fechada' : 'Finalizar Pedido no WhatsApp'}
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Filtros de Categoria com navegação horizontal */}
+      {grupos.length > 0 && (
+        <div className={`${config.modo_escuro ? 'bg-gray-800/50' : 'bg-white/80'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-10`}>
+          <div className="max-w-6xl mx-auto px-4 py-4">
+            <div className="h-14 flex items-center">
+              {/* Botão Anterior */}
+              {categoriaStartIndex > 0 && (
+                <button
+                  onClick={navegarCategoriaAnterior}
+                  disabled={isAnimating}
+                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-r ${
+                    isAnimating
+                      ? 'opacity-50 cursor-not-allowed'
+                      : config.modo_escuro
+                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600 hover:scale-110'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
+                  }`}
+                >
+                  <ChevronLeft size={20} />
+                </button>
+              )}
+
+              {/* Container de Categorias com Slide Suave */}
+              <div
+                className="flex items-center h-full flex-1 overflow-hidden"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+              >
+                <div
+                  className="flex items-center h-full transition-transform duration-300 ease-in-out"
+                  style={{
+                    transform: `translateX(-${categoriaStartIndex * 120}px)`,
+                    width: `${(grupos.length + 1) * 120}px` // +1 para incluir "Todos"
+                  }}
+                >
+                  {(() => {
+                    const todasCategorias = [
+                      { id: 'todos', nome: '🍽️ Todos' },
+                      ...grupos
+                    ];
+
+                    return todasCategorias.map((categoria, index) => (
+                      <button
+                        key={categoria.id}
+                        onClick={() => setGrupoSelecionado(categoria.id)}
+                        className={`flex items-center justify-center transition-all duration-200 h-full px-4 font-medium text-sm whitespace-nowrap ${
+                          grupoSelecionado === categoria.id
+                            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                            : config.modo_escuro
+                            ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                            : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
+                        }`}
+                        style={{
+                          width: '120px',
+                          minWidth: '120px',
+                          flexShrink: 0
+                        }}
+                      >
+                        {categoria.nome}
+                      </button>
+                    ));
+                  })()}
+                </div>
+              </div>
+
+              {/* Botão Próximo */}
+              {categoriaStartIndex + visibleCategoriaItems < (grupos.length + 1) && (
+                <button
+                  onClick={navegarCategoriaProxima}
+                  disabled={isAnimating}
+                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-l relative ${
+                    isAnimating
+                      ? 'opacity-50 cursor-not-allowed'
+                      : config.modo_escuro
+                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600 hover:scale-110'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
+                  }`}
+                >
+                  <ChevronRight size={20} />
+                  {/* Indicador de mais itens */}
+                  <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full animate-pulse ${
+                    config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                  }`}></div>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
