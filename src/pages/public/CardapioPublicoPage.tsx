@@ -54,6 +54,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [grupos, setGrupos] = useState<any[]>([]);
   const [horarios, setHorarios] = useState<HorarioAtendimento[]>([]);
   const [horariosExpanded, setHorariosExpanded] = useState(false);
+  const [proximaAbertura, setProximaAbertura] = useState<Date | null>(null);
+  const [contadorRegressivo, setContadorRegressivo] = useState<string>('');
+  const [modoAutomatico, setModoAutomatico] = useState<boolean>(false);
   const [lojaAberta, setLojaAberta] = useState<boolean | null>(null);
   const [config, setConfig] = useState<CardapioConfig>({
     mostrar_precos: true,
@@ -326,6 +329,55 @@ const CardapioPublicoPage: React.FC = () => {
     };
   }, [empresaId]);
 
+  // Carregar modo automático e calcular próxima abertura
+  useEffect(() => {
+    const carregarModoAutomatico = async () => {
+      if (!empresaId) return;
+
+      try {
+        const { data: configData } = await supabase
+          .from('pdv_config')
+          .select('cardapio_abertura_tipo')
+          .eq('empresa_id', empresaId)
+          .single();
+
+        const isAutomatico = configData?.cardapio_abertura_tipo === 'automatico';
+        setModoAutomatico(isAutomatico);
+
+        if (isAutomatico && lojaAberta === false) {
+          calcularProximaAbertura();
+        }
+      } catch (error) {
+        console.error('Erro ao carregar modo automático:', error);
+      }
+    };
+
+    carregarModoAutomatico();
+  }, [empresaId, lojaAberta, horarios]);
+
+  // Atualizar contagem regressiva a cada segundo
+  useEffect(() => {
+    if (!modoAutomatico || lojaAberta !== false || !proximaAbertura) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      formatarContadorRegressivo();
+    }, 1000);
+
+    // Executar imediatamente
+    formatarContadorRegressivo();
+
+    return () => clearInterval(interval);
+  }, [modoAutomatico, lojaAberta, proximaAbertura]);
+
+  // Recalcular próxima abertura quando horários mudarem
+  useEffect(() => {
+    if (modoAutomatico && lojaAberta === false) {
+      calcularProximaAbertura();
+    }
+  }, [horarios, modoAutomatico, lojaAberta]);
+
   const carregarDadosCardapio = async () => {
     try {
       setLoading(true);
@@ -543,6 +595,86 @@ const CardapioPublicoPage: React.FC = () => {
     return hora.substring(0, 5); // Remove os segundos (HH:MM)
   };
 
+  // Função para calcular a próxima abertura da loja
+  const calcularProximaAbertura = () => {
+    if (!horarios.length || !modoAutomatico) {
+      setProximaAbertura(null);
+      return;
+    }
+
+    const agora = new Date();
+    const diaAtual = agora.getDay();
+    const horaAtual = agora.getHours() * 60 + agora.getMinutes();
+
+    // Primeiro, verificar se há horário para hoje e se ainda não passou
+    const horarioHoje = horarios.find(h => h.dia_semana === diaAtual);
+    if (horarioHoje) {
+      const [horaAbertura, minutoAbertura] = horarioHoje.hora_abertura.split(':').map(Number);
+      const aberturaMinutos = horaAbertura * 60 + minutoAbertura;
+
+      if (horaAtual < aberturaMinutos) {
+        // Ainda não chegou a hora de abrir hoje
+        const proximaAbertura = new Date();
+        proximaAbertura.setHours(horaAbertura, minutoAbertura, 0, 0);
+        setProximaAbertura(proximaAbertura);
+        return;
+      }
+    }
+
+    // Procurar o próximo dia com horário de funcionamento
+    for (let i = 1; i <= 7; i++) {
+      const proximoDia = (diaAtual + i) % 7;
+      const horarioProximoDia = horarios.find(h => h.dia_semana === proximoDia);
+
+      if (horarioProximoDia) {
+        const [horaAbertura, minutoAbertura] = horarioProximoDia.hora_abertura.split(':').map(Number);
+        const proximaAbertura = new Date();
+        proximaAbertura.setDate(proximaAbertura.getDate() + i);
+        proximaAbertura.setHours(horaAbertura, minutoAbertura, 0, 0);
+        setProximaAbertura(proximaAbertura);
+        return;
+      }
+    }
+
+    // Se não encontrou nenhum horário, não há próxima abertura
+    setProximaAbertura(null);
+  };
+
+  // Função para formatar o contador regressivo
+  const formatarContadorRegressivo = () => {
+    if (!proximaAbertura) {
+      setContadorRegressivo('');
+      return;
+    }
+
+    const agora = new Date();
+    const diferenca = proximaAbertura.getTime() - agora.getTime();
+
+    if (diferenca <= 0) {
+      setContadorRegressivo('');
+      calcularProximaAbertura(); // Recalcular próxima abertura
+      return;
+    }
+
+    const dias = Math.floor(diferenca / (1000 * 60 * 60 * 24));
+    const horas = Math.floor((diferenca % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutos = Math.floor((diferenca % (1000 * 60 * 60)) / (1000 * 60));
+    const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
+
+    let contador = '';
+    if (dias > 0) {
+      contador = `${dias}d ${horas}h ${minutos}m ${segundos}s`;
+    } else if (horas > 0) {
+      contador = `${horas}h ${minutos}m ${segundos}s`;
+    } else if (minutos > 0) {
+      contador = `${minutos}m ${segundos}s`;
+    } else {
+      contador = `${segundos}s`;
+    }
+
+    setContadorRegressivo(contador);
+  };
+
   const handlePedirWhatsApp = (produto: Produto) => {
     // Verificar se a loja está fechada (só bloqueia se explicitamente false)
     if (lojaAberta === false) {
@@ -620,9 +752,24 @@ const CardapioPublicoPage: React.FC = () => {
             </div>
             <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
           </div>
-          <p className="relative z-10 text-sm mt-1 font-medium">
-            No momento não é possível fazer pedidos. Tente novamente mais tarde.
-          </p>
+          <div className="relative z-10 mt-1">
+            {modoAutomatico && contadorRegressivo ? (
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                <p className="text-sm font-medium">
+                  A loja abrirá em:
+                </p>
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 py-2">
+                  <span className="font-mono text-lg font-bold tracking-wider">
+                    ⏰ {contadorRegressivo}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm font-medium">
+                No momento não é possível fazer pedidos. Tente novamente mais tarde.
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
