@@ -49,6 +49,7 @@ import { EVENT_TYPES, contarPedidosPendentes, PedidoEventData, RecarregarEventDa
 import Sidebar from '../../components/dashboard/Sidebar';
 import { useSidebarStore } from '../../store/sidebarStore';
 import OpcoesAdicionaisModal from '../../components/pdv/OpcoesAdicionaisModal';
+import SeletorSaboresModal from '../../components/pdv/SeletorSaboresModal';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import { salvarAdicionaisItem } from '../../utils/pdvAdicionaisUtils'; // ✅ NOVO: Import da função utilitária
 
@@ -124,6 +125,11 @@ interface ItemCarrinho {
   nome?: string; // ✅ Nome personalizado para venda sem produto
   tabela_preco_id?: string | null; // ✅ NOVO: ID da tabela de preços usada neste item
   tabela_preco_nome?: string | null; // ✅ NOVO: Nome da tabela de preços usada neste item
+  sabores?: Array<{ // ✅ NOVO: Sabores selecionados para pizza meio a meio
+    produto: any;
+    porcentagem: number;
+  }>;
+  descricaoSabores?: string; // ✅ NOVO: Descrição formatada dos sabores
 }
 
 interface Cliente {
@@ -155,6 +161,13 @@ const PDVPage: React.FC = () => {
   const [tabelasPrecos, setTabelasPrecos] = useState<any[]>([]);
   const [tabelaPrecoSelecionada, setTabelaPrecoSelecionada] = useState<string>('padrao');
   const [isLoading, setIsLoading] = useState(true);
+
+  // ✅ NOVO: Estados para sistema de sabores
+  const [trabalhaComSabores, setTrabalhaComSabores] = useState(false);
+  const [tipoPrecoSabores, setTipoPrecoSabores] = useState<'sabor_mais_caro' | 'preco_medio'>('sabor_mais_caro');
+  const [showSeletorSabores, setShowSeletorSabores] = useState(false);
+  const [tabelaParaSabores, setTabelaParaSabores] = useState<any>(null);
+  const [produtoParaSabores, setProdutoParaSabores] = useState<any>(null);
   const [showClienteModal, setShowClienteModal] = useState(false);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -878,15 +891,21 @@ const PDVPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      // Carregar configuração de tabela de preços
+      // Carregar configuração de tabela de preços e sabores
       const { data: configData } = await supabase
         .from('tabela_preco_config')
-        .select('trabalha_com_tabela_precos')
+        .select('trabalha_com_tabela_precos, trabalha_com_sabores, tipo_preco_pizza')
         .eq('empresa_id', usuarioData.empresa_id)
         .single();
 
       if (configData?.trabalha_com_tabela_precos) {
         setTrabalhaComTabelaPrecos(true);
+
+        // ✅ NOVO: Configurar sistema de sabores
+        if (configData.trabalha_com_sabores) {
+          setTrabalhaComSabores(true);
+          setTipoPrecoSabores(configData.tipo_preco_pizza || 'sabor_mais_caro');
+        }
 
         // Carregar tabelas de preços disponíveis
         const { data: tabelasData } = await supabase
@@ -2019,6 +2038,157 @@ const PDVPage: React.FC = () => {
 
     if (error) throw error;
     setProdutos(data || []);
+  };
+
+  // ✅ NOVA FUNÇÃO: Verificar se produto permite múltiplos sabores
+  const verificarPermiteSabores = (produto: any): boolean => {
+    if (!trabalhaComSabores || tabelaPrecoSelecionada === 'padrao') {
+      return false;
+    }
+
+    const tabelaAtual = tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada);
+    return tabelaAtual?.quantidade_sabores > 1 || tabelaAtual?.permite_meio_a_meio;
+  };
+
+  // ✅ NOVA FUNÇÃO: Confirmar seleção de sabores e adicionar ao carrinho
+  const confirmarSabores = async (sabores: any[], precoCalculado: number) => {
+    if (!produtoParaSabores) return;
+
+    // Criar descrição dos sabores com frações
+    const criarDescricaoSabores = () => {
+      if (!tabelaParaSabores.permite_meio_a_meio) {
+        return sabores.map(sabor => sabor.produto.nome).join(', ');
+      }
+
+      // Determinar fração baseada na quantidade de sabores
+      let fracao = '';
+      if (sabores.length === 2) {
+        fracao = '1/2';
+      } else if (sabores.length === 3) {
+        fracao = '1/3';
+      } else if (sabores.length === 4) {
+        fracao = '1/4';
+      } else {
+        fracao = `${Math.round(100/sabores.length)}%`;
+      }
+
+      // Criar lista com frações
+      return sabores.map(sabor => `${fracao} ${sabor.produto.nome}`).join('\n');
+    };
+
+    const descricaoSabores = criarDescricaoSabores();
+
+    // Criar item do carrinho com sabores
+    const novoItem: ItemCarrinho = {
+      id: `${produtoParaSabores.id}-${Date.now()}-${Math.random()}`,
+      produto: {
+        ...produtoParaSabores,
+        preco: precoCalculado, // Usar preço calculado dos sabores
+        nome: produtoParaSabores.nome // Nome base do produto
+      },
+      quantidade: produtoParaSabores.quantidadeParaAdicionar,
+      subtotal: precoCalculado * produtoParaSabores.quantidadeParaAdicionar,
+      temOpcoesAdicionais: produtoParaSabores.temOpcoesAdicionais,
+      vendedor_id: vendedorSelecionado?.id,
+      vendedor_nome: vendedorSelecionado?.nome,
+      tabela_preco_id: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao' ? tabelaPrecoSelecionada : null,
+      tabela_preco_nome: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao'
+        ? tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada)?.nome
+        : null,
+      // ✅ NOVO: Salvar informações dos sabores
+      sabores: sabores,
+      descricaoSabores: descricaoSabores, // Descrição formatada dos sabores
+      observacao: `Sabores: ${descricaoSabores.replace(/\n/g, ', ')}`
+    };
+
+    // Verificar se tem opções adicionais
+    if (produtoParaSabores.temOpcoesAdicionais) {
+      setItemParaAdicionais(novoItem);
+      setShowAdicionaisModal(true);
+    } else {
+      // Adicionar diretamente ao carrinho
+      setCarrinho(prev => [...prev, novoItem]);
+
+      // Criar venda em andamento se for o primeiro item
+      const isFirstItem = carrinho.length === 0;
+      if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
+        setCriandoVenda(true);
+        console.log('🚀 CRIACAO: Iniciando criação da venda em andamento...');
+
+        try {
+          const vendaCriada = await criarVendaEmAndamento();
+          console.log('🔍 CRIACAO: Resultado da criação:', vendaCriada);
+
+          if (!vendaCriada) {
+            setCriandoVenda(false);
+            console.error('❌ CRIACAO: Falha ao criar venda em andamento - função retornou false');
+            toast.error('Erro ao criar venda. Tente novamente.');
+            return;
+          }
+
+          console.log('⏳ CRIACAO: Aguardando transação ser commitada...');
+          await new Promise(resolve => setTimeout(resolve, 200));
+          setCriandoVenda(false);
+
+          console.log('✅ CRIACAO: Venda em andamento criada com sucesso');
+          console.log('✅ CRIACAO: Estado vendaEmAndamento após criação:', vendaEmAndamento);
+        } catch (error) {
+          setCriandoVenda(false);
+          console.error('❌ CRIACAO: Erro durante criação da venda:', error);
+          console.error('❌ CRIACAO: Stack trace:', (error as Error).stack);
+          toast.error('Erro ao criar venda: ' + (error as Error).message);
+          return;
+        }
+      }
+
+      // Salvar item na venda em andamento
+      const aguardarVendaEsalvarItem = async () => {
+        console.log('🔍 AGUARDAR: Iniciando processo de aguardar venda e salvar item...');
+
+        if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
+          console.log('🔍 AGUARDAR: É primeiro item, aguardando criação da venda...');
+
+          let tentativas = 0;
+          const maxTentativas = 100;
+
+          while (!vendaEmAndamento && tentativas < maxTentativas) {
+            if (tentativas % 10 === 0) {
+              console.log(`🔍 AGUARDAR: Tentativa ${tentativas + 1}/${maxTentativas} - Aguardando venda...`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+            tentativas++;
+          }
+
+          if (!vendaEmAndamento) {
+            console.error('❌ AGUARDAR: Timeout - Venda não foi criada após aguardar');
+            return;
+          }
+
+          console.log('✅ AGUARDAR: Venda encontrada após aguardar:', vendaEmAndamento);
+        }
+
+        const vendaAtual = vendaEmAndamento;
+        console.log('🔍 AGUARDAR: Venda atual para salvamento:', vendaAtual);
+
+        if (vendaAtual) {
+          console.log('🔍 DEBUG: Iniciando salvamento do item na venda em andamento...');
+          const sucesso = await salvarItemNaVendaEmAndamento(novoItem);
+          if (sucesso) {
+            console.log('✅ SUCESSO: Item salvo com sucesso na venda em andamento');
+          } else {
+            console.error('❌ ERRO: Falha ao salvar item na venda em andamento');
+          }
+        }
+      };
+
+      aguardarVendaEsalvarItem();
+
+      toast.success(`${produtoParaSabores.nome} adicionado ao carrinho!`);
+    }
+
+    // Limpar estados
+    setProdutoParaSabores(null);
+    setTabelaParaSabores(null);
   };
 
   // ✅ NOVA FUNÇÃO: Carregar produtos com preços das tabelas
@@ -4348,6 +4518,18 @@ const PDVPage: React.FC = () => {
 
     // Verificar se o produto tem opções adicionais
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
+
+    // ✅ NOVO: Verificar se produto permite múltiplos sabores
+    const permiteSabores = verificarPermiteSabores(produto);
+
+    if (permiteSabores) {
+      // Abrir modal de seleção de sabores
+      const tabelaAtual = tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada);
+      setTabelaParaSabores(tabelaAtual);
+      setProdutoParaSabores({ ...produto, quantidadeParaAdicionar, temOpcoesAdicionais });
+      setShowSeletorSabores(true);
+      return; // Não continuar com adição normal
+    }
 
     // ✅ CORRIGIDO: Calcular o preço final considerando promoções E desconto por quantidade
     const precoFinal = calcularPrecoModalQuantidade(produto, quantidadeParaAdicionar);
@@ -10820,8 +11002,22 @@ const PDVPage: React.FC = () => {
                                         </div>
                                       ) : (
                                         <div className="flex items-center gap-1">
-                                          <h4 className="text-white font-medium text-sm line-clamp-1">
-                                            {item.vendaSemProduto ? item.nome : item.produto.nome}
+                                          <div className="flex-1">
+                                            <h4 className="text-white font-medium text-sm line-clamp-1">
+                                              {item.vendaSemProduto ? item.nome : item.produto.nome}
+                                            </h4>
+                                            {/* ✅ NOVO: Exibir sabores em linhas separadas */}
+                                            {item.descricaoSabores && (
+                                              <div className="mt-1 text-xs text-gray-300 leading-tight">
+                                                {item.descricaoSabores.split('\n').map((sabor, index) => (
+                                                  <div key={index} className="text-gray-400">
+                                                    {sabor}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-1 flex-shrink-0">
                                             {!item.vendaSemProduto && item.produto.unidade_medida?.sigla && (
                                               <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
                                                 {item.produto.unidade_medida.sigla}
@@ -10833,16 +11029,16 @@ const PDVPage: React.FC = () => {
                                                 {item.tabela_preco_nome}
                                               </span>
                                             )}
-                                          </h4>
                                           {pdvConfig?.editar_nome_produto && (
                                             <button
                                               onClick={() => iniciarEdicaoNome(item.id, item.vendaSemProduto ? item.nome : item.produto.nome)}
-                                              className="text-gray-500 hover:text-gray-300 transition-colors opacity-60 hover:opacity-100 flex-shrink-0"
+                                              className="text-gray-500 hover:text-gray-300 transition-colors opacity-60 hover:opacity-100"
                                               title="Editar nome do produto"
                                             >
                                               <Pencil size={12} />
                                             </button>
                                           )}
+                                          </div>
                                         </div>
                                       )}
                                     </div>
@@ -18567,6 +18763,20 @@ const PDVPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Seleção de Sabores */}
+      <SeletorSaboresModal
+        isOpen={showSeletorSabores}
+        onClose={() => {
+          setShowSeletorSabores(false);
+          setProdutoParaSabores(null);
+          setTabelaParaSabores(null);
+        }}
+        tabelaPreco={tabelaParaSabores}
+        onConfirmar={confirmarSabores}
+        tipoPreco={tipoPrecoSabores}
+        produtoAtual={produtoParaSabores} // ✅ NOVO: Passar produto atual para filtrar
+      />
     </div>
   );
 };
