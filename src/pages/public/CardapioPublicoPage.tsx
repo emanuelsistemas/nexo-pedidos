@@ -57,6 +57,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [proximaAbertura, setProximaAbertura] = useState<Date | null>(null);
   const [contadorRegressivo, setContadorRegressivo] = useState<string>('');
   const [modoAutomatico, setModoAutomatico] = useState<boolean>(false);
+  const [proximoFechamento, setProximoFechamento] = useState<Date | null>(null);
+  const [contadorFechamento, setContadorFechamento] = useState<string>('');
+  const [mostrarAvisoFechamento, setMostrarAvisoFechamento] = useState<boolean>(false);
   const [lojaAberta, setLojaAberta] = useState<boolean | null>(null);
   const [config, setConfig] = useState<CardapioConfig>({
     mostrar_precos: true,
@@ -378,6 +381,36 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [horarios, modoAutomatico, lojaAberta]);
 
+  // Calcular próximo fechamento quando necessário
+  useEffect(() => {
+    if (modoAutomatico && lojaAberta === true) {
+      calcularProximoFechamento();
+    }
+  }, [horarios, modoAutomatico, lojaAberta]);
+
+  // Atualizar contagem regressiva de fechamento a cada segundo
+  useEffect(() => {
+    if (!modoAutomatico || !mostrarAvisoFechamento || !proximoFechamento) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      formatarContadorFechamento();
+    }, 1000);
+
+    // Executar imediatamente
+    formatarContadorFechamento();
+
+    return () => clearInterval(interval);
+  }, [modoAutomatico, mostrarAvisoFechamento, proximoFechamento]);
+
+  // Recalcular fechamento quando horários mudarem
+  useEffect(() => {
+    if (modoAutomatico && lojaAberta === true) {
+      calcularProximoFechamento();
+    }
+  }, [horarios, modoAutomatico, lojaAberta]);
+
   const carregarDadosCardapio = async () => {
     try {
       setLoading(true);
@@ -675,6 +708,72 @@ const CardapioPublicoPage: React.FC = () => {
     setContadorRegressivo(contador);
   };
 
+  // Função para calcular o próximo fechamento da loja
+  const calcularProximoFechamento = () => {
+    if (!horarios.length || !modoAutomatico || !lojaAberta) {
+      setProximoFechamento(null);
+      setMostrarAvisoFechamento(false);
+      return;
+    }
+
+    const agora = new Date();
+    const diaAtual = agora.getDay();
+    const horaAtual = agora.getHours() * 60 + agora.getMinutes();
+
+    // Verificar se há horário para hoje
+    const horarioHoje = horarios.find(h => h.dia_semana === diaAtual);
+    if (horarioHoje) {
+      const [horaFechamento, minutoFechamento] = horarioHoje.hora_fechamento.split(':').map(Number);
+      const fechamentoMinutos = horaFechamento * 60 + minutoFechamento;
+
+      if (horaAtual < fechamentoMinutos) {
+        // Ainda não chegou a hora de fechar hoje
+        const proximoFechamento = new Date();
+        proximoFechamento.setHours(horaFechamento, minutoFechamento, 0, 0);
+        setProximoFechamento(proximoFechamento);
+
+        // Verificar se faltam 5 minutos ou menos para fechar
+        const minutosParaFechar = fechamentoMinutos - horaAtual;
+        setMostrarAvisoFechamento(minutosParaFechar <= 5 && minutosParaFechar > 0);
+        return;
+      }
+    }
+
+    // Se não há horário para hoje ou já passou, não mostrar aviso
+    setProximoFechamento(null);
+    setMostrarAvisoFechamento(false);
+  };
+
+  // Função para formatar o contador de fechamento
+  const formatarContadorFechamento = () => {
+    if (!proximoFechamento || !mostrarAvisoFechamento) {
+      setContadorFechamento('');
+      return;
+    }
+
+    const agora = new Date();
+    const diferenca = proximoFechamento.getTime() - agora.getTime();
+
+    if (diferenca <= 0) {
+      setContadorFechamento('');
+      setMostrarAvisoFechamento(false);
+      calcularProximoFechamento(); // Recalcular
+      return;
+    }
+
+    const minutos = Math.floor(diferenca / (1000 * 60));
+    const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
+
+    let contador = '';
+    if (minutos > 0) {
+      contador = `${minutos}m ${segundos}s`;
+    } else {
+      contador = `${segundos}s`;
+    }
+
+    setContadorFechamento(contador);
+  };
+
   const handlePedirWhatsApp = (produto: Produto) => {
     // Verificar se a loja está fechada (só bloqueia se explicitamente false)
     if (lojaAberta === false) {
@@ -735,6 +834,41 @@ const CardapioPublicoPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${config.modo_escuro ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
+      {/* Área fixa para tarja de aviso de fechamento - sempre presente no DOM */}
+      <div
+        className={`transition-all duration-500 ease-in-out overflow-hidden ${
+          modoAutomatico && mostrarAvisoFechamento && lojaAberta === true
+            ? 'max-h-24 opacity-100'
+            : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="bg-yellow-600 text-white py-3 px-4 text-center relative overflow-hidden animate-pulse">
+          <div className="absolute inset-0 bg-gradient-to-r from-yellow-600 via-yellow-500 to-yellow-600 animate-pulse"></div>
+          <div className="relative z-10 flex items-center justify-center gap-3">
+            <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+            <div className="font-bold text-lg">
+              ⚠️ ATENÇÃO - LOJA FECHARÁ EM BREVE
+            </div>
+            <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+          </div>
+          <div className="relative z-10 mt-1">
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <p className="text-sm font-medium">
+                A loja fechará em:
+              </p>
+              <div className="bg-white/20 backdrop-blur-sm rounded-lg px-3 py-2">
+                <span className="font-mono text-lg font-bold tracking-wider">
+                  ⏰ {contadorFechamento}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs mt-2 font-medium opacity-90">
+              Finalize seu pedido antes do fechamento
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Área fixa para tarja de loja fechada - sempre presente no DOM */}
       <div
         className={`transition-all duration-500 ease-in-out overflow-hidden ${
