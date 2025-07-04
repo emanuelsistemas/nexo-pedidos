@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { ChevronDown, Clock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -32,6 +33,13 @@ interface Empresa {
   logo_url?: string;
 }
 
+interface HorarioAtendimento {
+  id: string;
+  dia_semana: number;
+  hora_abertura: string;
+  hora_fechamento: string;
+}
+
 interface CardapioConfig {
   mostrar_precos: boolean;
   permitir_pedidos: boolean;
@@ -44,6 +52,8 @@ const CardapioPublicoPage: React.FC = () => {
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [grupos, setGrupos] = useState<any[]>([]);
+  const [horarios, setHorarios] = useState<HorarioAtendimento[]>([]);
+  const [horariosExpanded, setHorariosExpanded] = useState(false);
   const [config, setConfig] = useState<CardapioConfig>({
     mostrar_precos: true,
     permitir_pedidos: true,
@@ -151,6 +161,17 @@ const CardapioPublicoPage: React.FC = () => {
         }
       }
 
+      // 6. Buscar horários de atendimento
+      const { data: horariosData, error: horariosError } = await supabase
+        .from('horario_atendimento')
+        .select('id, dia_semana, hora_abertura, hora_fechamento')
+        .eq('empresa_id', empresaComLogo.id)
+        .order('dia_semana');
+
+      if (!horariosError && horariosData) {
+        setHorarios(horariosData);
+      }
+
       // Processar produtos com nome do grupo e foto
       const produtosProcessados = produtosData?.map(produto => {
         const grupo = gruposData.find(g => g.id === produto.grupo_id);
@@ -224,6 +245,25 @@ const CardapioPublicoPage: React.FC = () => {
     }
 
     return telefones;
+  };
+
+  // Função para obter o nome do dia da semana
+  const obterNomeDiaSemana = (dia: number) => {
+    const dias = [
+      'Domingo',
+      'Segunda-feira',
+      'Terça-feira',
+      'Quarta-feira',
+      'Quinta-feira',
+      'Sexta-feira',
+      'Sábado'
+    ];
+    return dias[dia] || '';
+  };
+
+  // Função para formatar horário
+  const formatarHorario = (hora: string) => {
+    return hora.substring(0, 5); // Remove os segundos (HH:MM)
   };
 
   const handlePedirWhatsApp = (produto: Produto) => {
@@ -366,6 +406,41 @@ const CardapioPublicoPage: React.FC = () => {
                       <span className="text-white/90 group-hover:text-white transition-colors font-medium">{telefone.numero}</span>
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* Seção de Horários de Atendimento */}
+              {horarios.length > 0 && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => setHorariosExpanded(!horariosExpanded)}
+                    className="flex items-center justify-center gap-2 text-sm md:text-base bg-blue-600/20 hover:bg-blue-600/30 backdrop-blur-sm border border-blue-400/30 rounded-lg px-4 py-2 transition-all duration-300 hover:scale-105 group w-full md:w-auto"
+                  >
+                    <Clock size={18} className="text-blue-400 group-hover:text-blue-300 transition-colors" />
+                    <span className="text-white/90 group-hover:text-white transition-colors font-medium">
+                      Horários de Atendimento
+                    </span>
+                    <ChevronDown
+                      size={18}
+                      className={`text-blue-400 group-hover:text-blue-300 transition-all duration-300 ${horariosExpanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+
+                  {/* Lista de horários expandida */}
+                  {horariosExpanded && (
+                    <div className="mt-3 bg-gray-800/70 backdrop-blur-sm border border-gray-700 rounded-lg p-4 space-y-2">
+                      {horarios.map((horario) => (
+                        <div key={horario.id} className="flex justify-between items-center">
+                          <span className="text-white/90 font-medium">
+                            {obterNomeDiaSemana(horario.dia_semana)}
+                          </span>
+                          <span className="text-blue-400">
+                            {formatarHorario(horario.hora_abertura)} - {formatarHorario(horario.hora_fechamento)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
