@@ -3479,65 +3479,58 @@ const ConfiguracoesPage: React.FC = () => {
         .eq('empresa_id', usuarioData.empresa_id)
         .single();
 
-      const configData = {
-        empresa_id: usuarioData.empresa_id,
-        comandas: field === 'comandas' ? value : pdvConfig.comandas,
-        mesas: field === 'mesas' ? value : pdvConfig.mesas,
-        vendedor: field === 'vendedor' ? value : pdvConfig.vendedor,
-        exibe_foto_item: field === 'exibe_foto_item' ? value : pdvConfig.exibe_foto_item,
-        seleciona_clientes: field === 'seleciona_clientes' ? value : pdvConfig.seleciona_clientes,
-        controla_caixa: field === 'controla_caixa' ? value : pdvConfig.controla_caixa,
-        agrupa_itens: field === 'agrupa_itens' ? value : pdvConfig.agrupa_itens,
-        delivery: field === 'delivery' ? value : pdvConfig.delivery,
-        cardapio_digital: field === 'cardapio_digital' ? value : pdvConfig.cardapio_digital,
-        delivery_chat_ia: field === 'delivery_chat_ia' ? value : pdvConfig.delivery_chat_ia,
-        baixa_estoque_pdv: field === 'baixa_estoque_pdv' ? value : pdvConfig.baixa_estoque_pdv,
-        venda_codigo_barras: field === 'venda_codigo_barras' ? value : pdvConfig.venda_codigo_barras,
-        forca_venda_fiscal_cartao: field === 'forca_venda_fiscal_cartao' ? value : pdvConfig.forca_venda_fiscal_cartao,
-        observacao_no_item: field === 'observacao_no_item' ? value : pdvConfig.observacao_no_item,
-        desconto_no_item: field === 'desconto_no_item' ? value : pdvConfig.desconto_no_item,
-        desconto_no_total: field === 'desconto_no_total' ? value : pdvConfig.desconto_no_total,
-        editar_nome_produto: field === 'editar_nome_produto' ? value : pdvConfig.editar_nome_produto,
-        fiado: field === 'fiado' ? value : pdvConfig.fiado,
-        venda_sem_produto: field === 'venda_sem_produto' ? value : pdvConfig.venda_sem_produto,
-        venda_sem_produto_ncm: field === 'venda_sem_produto_ncm' ? value : pdvConfig.venda_sem_produto_ncm,
-        venda_sem_produto_cfop: field === 'venda_sem_produto_cfop' ? value : pdvConfig.venda_sem_produto_cfop,
-        venda_sem_produto_origem: field === 'venda_sem_produto_origem' ? value : pdvConfig.venda_sem_produto_origem,
-        venda_sem_produto_situacao_tributaria: field === 'venda_sem_produto_situacao_tributaria' ? value : pdvConfig.venda_sem_produto_situacao_tributaria,
-        venda_sem_produto_cest: field === 'venda_sem_produto_cest' ? value : pdvConfig.venda_sem_produto_cest,
-        venda_sem_produto_margem_st: field === 'venda_sem_produto_margem_st' ? value : pdvConfig.venda_sem_produto_margem_st,
-        venda_sem_produto_aliquota_icms: field === 'venda_sem_produto_aliquota_icms' ? value : pdvConfig.venda_sem_produto_aliquota_icms,
-        venda_sem_produto_aliquota_pis: field === 'venda_sem_produto_aliquota_pis' ? value : pdvConfig.venda_sem_produto_aliquota_pis,
-        venda_sem_produto_aliquota_cofins: field === 'venda_sem_produto_aliquota_cofins' ? value : pdvConfig.venda_sem_produto_aliquota_cofins,
-        venda_sem_produto_peso_liquido: field === 'venda_sem_produto_peso_liquido' ? value : pdvConfig.venda_sem_produto_peso_liquido,
-        vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : pdvConfig.vendas_itens_multiplicacao,
-        exibir_dados_fiscais_venda: field === 'exibir_dados_fiscais_venda' ? value : pdvConfig.exibir_dados_fiscais_venda,
-        cardapio_url_personalizada: pdvConfig.cardapio_url_personalizada || '',
-        modo_escuro_cardapio: field === 'modo_escuro_cardapio' ? value : pdvConfig.modo_escuro_cardapio,
-        cardapio_abertura_tipo: field === 'cardapio_abertura_tipo' ? value : pdvConfig.cardapio_abertura_tipo,
-        cardapio_loja_aberta: field === 'cardapio_loja_aberta' ? value : pdvConfig.cardapio_loja_aberta,
-        ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : pdvConfig.ocultar_finalizar_com_impressao,
-        ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : pdvConfig.ocultar_finalizar_sem_impressao,
-        ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : pdvConfig.ocultar_nfce_com_impressao,
-        ocultar_nfce_sem_impressao: field === 'ocultar_nfce_sem_impressao' ? value : pdvConfig.ocultar_nfce_sem_impressao,
-        ocultar_nfce_producao: field === 'ocultar_nfce_producao' ? value : pdvConfig.ocultar_nfce_producao,
-        ocultar_producao: field === 'ocultar_producao' ? value : pdvConfig.ocultar_producao,
-        rodape_personalizado: pdvConfig.rodape_personalizado,
-        mostrar_razao_social_cupom_finalizar: field === 'mostrar_razao_social_cupom_finalizar' ? value : pdvConfig.mostrar_razao_social_cupom_finalizar,
-        mostrar_endereco_cupom_finalizar: field === 'mostrar_endereco_cupom_finalizar' ? value : pdvConfig.mostrar_endereco_cupom_finalizar,
-        mostrar_operador_cupom_finalizar: field === 'mostrar_operador_cupom_finalizar' ? value : pdvConfig.mostrar_operador_cupom_finalizar,
-        tipo_impressao_80mm: field === 'tipo_impressao_80mm' ? value : pdvConfig.tipo_impressao_80mm,  // ✅ NOVO
-        tipo_impressao_50mm: field === 'tipo_impressao_50mm' ? value : pdvConfig.tipo_impressao_50mm   // ✅ NOVO
-      };
+      // Para evitar sobrescrever campos importantes, fazer UPDATE apenas do campo específico
+      const updateData: any = {};
+      updateData[field] = value;
 
       if (existingConfig) {
         const { error } = await supabase
           .from('pdv_config')
-          .update(configData)
+          .update(updateData)
           .eq('empresa_id', usuarioData.empresa_id);
 
         if (error) throw error;
       } else {
+        // Se não existe configuração, criar com todos os campos necessários
+        const configData = {
+          empresa_id: usuarioData.empresa_id,
+          comandas: field === 'comandas' ? value : false,
+          mesas: field === 'mesas' ? value : false,
+          vendedor: field === 'vendedor' ? value : false,
+          exibe_foto_item: field === 'exibe_foto_item' ? value : false,
+          seleciona_clientes: field === 'seleciona_clientes' ? value : false,
+          controla_caixa: field === 'controla_caixa' ? value : false,
+          agrupa_itens: field === 'agrupa_itens' ? value : false,
+          delivery: field === 'delivery' ? value : false,
+          cardapio_digital: field === 'cardapio_digital' ? value : false,
+          delivery_chat_ia: field === 'delivery_chat_ia' ? value : false,
+          baixa_estoque_pdv: field === 'baixa_estoque_pdv' ? value : false,
+          venda_codigo_barras: field === 'venda_codigo_barras' ? value : false,
+          forca_venda_fiscal_cartao: field === 'forca_venda_fiscal_cartao' ? value : false,
+          observacao_no_item: field === 'observacao_no_item' ? value : false,
+          desconto_no_item: field === 'desconto_no_item' ? value : false,
+          desconto_no_total: field === 'desconto_no_total' ? value : false,
+          editar_nome_produto: field === 'editar_nome_produto' ? value : false,
+          fiado: field === 'fiado' ? value : false,
+          venda_sem_produto: field === 'venda_sem_produto' ? value : false,
+          vendas_itens_multiplicacao: field === 'vendas_itens_multiplicacao' ? value : false,
+          exibir_dados_fiscais_venda: field === 'exibir_dados_fiscais_venda' ? value : false,
+          modo_escuro_cardapio: field === 'modo_escuro_cardapio' ? value : false,
+          cardapio_abertura_tipo: field === 'cardapio_abertura_tipo' ? value : 'automatico',
+          cardapio_loja_aberta: field === 'cardapio_loja_aberta' ? value : true,
+          ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : false,
+          ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : false,
+          ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : false,
+          ocultar_nfce_sem_impressao: field === 'ocultar_nfce_sem_impressao' ? value : false,
+          ocultar_nfce_producao: field === 'ocultar_nfce_producao' ? value : false,
+          ocultar_producao: field === 'ocultar_producao' ? value : false,
+          mostrar_razao_social_cupom_finalizar: field === 'mostrar_razao_social_cupom_finalizar' ? value : false,
+          mostrar_endereco_cupom_finalizar: field === 'mostrar_endereco_cupom_finalizar' ? value : false,
+          mostrar_operador_cupom_finalizar: field === 'mostrar_operador_cupom_finalizar' ? value : false,
+          tipo_impressao_80mm: field === 'tipo_impressao_80mm' ? value : false,
+          tipo_impressao_50mm: field === 'tipo_impressao_50mm' ? value : false
+        };
+
         const { error } = await supabase
           .from('pdv_config')
           .insert([configData]);
@@ -3550,7 +3543,7 @@ const ConfiguracoesPage: React.FC = () => {
         detail: {
           field,
           value,
-          config: configData
+          config: updateData
         }
       });
       window.dispatchEvent(pdvConfigEvent);

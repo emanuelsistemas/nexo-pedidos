@@ -121,57 +121,158 @@ const DashboardPage: React.FC = () => {
     };
   }, []);
 
-  // Configurar realtime para sincronizar com mudanças na configuração PDV
+  // Configurar realtime para monitorar mudanças no status da loja (MESMO MÉTODO DO CARDÁPIO)
   useEffect(() => {
-    if (!pdvConfig) return;
+    const setupRealtimeSync = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
 
-    const channel = supabase
-      .channel('dashboard_pdv_config_sync')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'pdv_config',
-          filter: `empresa_id=eq.${pdvConfig.empresa_id || ''}`
-        },
-        (payload) => {
-          console.log('Dashboard: Atualização PDV config recebida:', payload);
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
 
-          if (payload.new && (
-            payload.new.cardapio_loja_aberta !== undefined ||
-            payload.new.cardapio_abertura_tipo !== undefined
-          )) {
-            // Atualizar configuração PDV local
-            setPdvConfig(prev => ({
-              ...prev,
-              ...payload.new
-            }));
+        if (!usuarioData?.empresa_id) return;
 
-            // Atualizar status da loja se necessário
-            if (payload.new.cardapio_loja_aberta !== undefined) {
-              setStoreStatus(prev => ({
-                ...prev,
-                aberto: payload.new.cardapio_loja_aberta
-              }));
+        console.log('🔔 Dashboard: Configurando realtime para empresa:', usuarioData.empresa_id);
+
+        // Criar canal único para esta empresa
+        const channelName = `dashboard_loja_status_${usuarioData.empresa_id}`;
+
+        const channel = supabase
+          .channel(channelName, {
+            config: {
+              broadcast: { self: true },
+              presence: { key: usuarioData.empresa_id }
             }
+          })
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'pdv_config',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              console.log('🔄 Dashboard: Atualização realtime recebida:', payload);
+              console.log('🔄 Dashboard: Payload completo:', JSON.stringify(payload, null, 2));
 
-            // Atualizar modo de operação se necessário
-            if (payload.new.cardapio_abertura_tipo) {
-              setStoreStatus(prev => ({
-                ...prev,
-                modo_operacao: payload.new.cardapio_abertura_tipo
-              }));
+              if (payload.new && payload.new.cardapio_loja_aberta !== undefined) {
+                const novoStatus = payload.new.cardapio_loja_aberta;
+                console.log('✅ Dashboard: Atualizando status da loja de', storeStatus.aberto, 'para', novoStatus);
+
+                // Atualizar configuração PDV local
+                setPdvConfig(prev => ({
+                  ...prev,
+                  ...payload.new
+                }));
+
+                // Atualizar status da loja
+                setStoreStatus(prev => ({
+                  ...prev,
+                  aberto: novoStatus
+                }));
+              }
+
+              // Atualizar modo de operação se necessário
+              if (payload.new && payload.new.cardapio_abertura_tipo) {
+                setStoreStatus(prev => ({
+                  ...prev,
+                  modo_operacao: payload.new.cardapio_abertura_tipo
+                }));
+              }
             }
-          }
-        }
-      )
-      .subscribe();
+          )
+          .subscribe((status) => {
+            console.log('📡 Dashboard: Status da subscrição realtime:', status);
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Dashboard: Realtime conectado com sucesso para empresa:', usuarioData.empresa_id);
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('❌ Dashboard: Erro na conexão realtime');
+            }
+          });
 
-    return () => {
-      supabase.removeChannel(channel);
+        return () => {
+          console.log('🔔 Dashboard: Removendo canal realtime');
+          supabase.removeChannel(channel);
+        };
+      } catch (error) {
+        console.error('❌ Dashboard: Erro ao configurar realtime:', error);
+      }
     };
-  }, [pdvConfig]);
+
+    const cleanup = setupRealtimeSync();
+    return () => {
+      if (cleanup) cleanup.then(fn => fn && fn());
+    };
+  }, []);
+
+  // Polling como backup para garantir sincronização (MESMO MÉTODO DO CARDÁPIO)
+  useEffect(() => {
+    const setupPollingBackup = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        console.log('⏰ Dashboard: Configurando polling de backup para empresa:', usuarioData.empresa_id);
+
+        const interval = setInterval(async () => {
+          try {
+            const { data: statusData, error } = await supabase
+              .from('pdv_config')
+              .select('cardapio_loja_aberta, cardapio_abertura_tipo')
+              .eq('empresa_id', usuarioData.empresa_id)
+              .single();
+
+            if (!error && statusData) {
+              // Verificar se status da loja mudou
+              if (statusData.cardapio_loja_aberta !== storeStatus.aberto) {
+                console.log('🔄 Dashboard Polling: Status diferente detectado, atualizando de', storeStatus.aberto, 'para', statusData.cardapio_loja_aberta);
+                setStoreStatus(prev => ({
+                  ...prev,
+                  aberto: statusData.cardapio_loja_aberta
+                }));
+              }
+
+              // Verificar se modo de operação mudou
+              if (statusData.cardapio_abertura_tipo !== storeStatus.modo_operacao) {
+                console.log('🔄 Dashboard Polling: Modo operação diferente detectado, atualizando para', statusData.cardapio_abertura_tipo);
+                setStoreStatus(prev => ({
+                  ...prev,
+                  modo_operacao: statusData.cardapio_abertura_tipo
+                }));
+              }
+            }
+          } catch (error) {
+            console.error('❌ Dashboard: Erro no polling:', error);
+          }
+        }, 3000); // Verificar a cada 3 segundos
+
+        return () => {
+          console.log('⏰ Dashboard: Removendo polling de backup');
+          clearInterval(interval);
+        };
+      } catch (error) {
+        console.error('❌ Dashboard: Erro ao configurar polling:', error);
+      }
+    };
+
+    const cleanup = setupPollingBackup();
+    return () => {
+      if (cleanup) cleanup.then(fn => fn && fn());
+    };
+  }, [storeStatus.aberto, storeStatus.modo_operacao]);
 
   // Recarregar dados quando o usuário selecionado mudar
   useEffect(() => {
