@@ -529,6 +529,45 @@ const ConfiguracoesPage: React.FC = () => {
     loadDataWithLoading();
   }, [activeSection]);
 
+  // Configurar realtime para atualizações do status da loja
+  useEffect(() => {
+    if (!empresa?.id) return;
+
+    const channel = supabase
+      .channel('pdv_config_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pdv_config',
+          filter: `empresa_id=eq.${empresa.id}`
+        },
+        (payload) => {
+          console.log('Atualização realtime recebida:', payload);
+
+          // Atualizar apenas os campos relacionados ao cardápio
+          if (payload.new && (
+            payload.new.cardapio_loja_aberta !== undefined ||
+            payload.new.cardapio_abertura_tipo !== undefined
+          )) {
+            setPdvConfig(prev => ({
+              ...prev,
+              cardapio_loja_aberta: payload.new.cardapio_loja_aberta !== undefined
+                ? payload.new.cardapio_loja_aberta
+                : prev.cardapio_loja_aberta,
+              cardapio_abertura_tipo: payload.new.cardapio_abertura_tipo || prev.cardapio_abertura_tipo
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [empresa?.id]);
+
   // useEffect para sincronizar configurações fiscais locais com dados carregados
   useEffect(() => {
     if (pdvConfig) {
@@ -6327,9 +6366,24 @@ const ConfiguracoesPage: React.FC = () => {
                         <h4 className="text-white font-medium">Abertura da Loja</h4>
 
                         <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                          <p className="text-sm text-gray-400 mb-4">
-                            Configure como a loja será aberta no cardápio digital.
-                          </p>
+                          {/* Tag de Status em Tempo Real */}
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm text-gray-400">
+                              Configure como a loja será aberta no cardápio digital.
+                            </p>
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+                              pdvConfig.cardapio_loja_aberta
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}>
+                              <div className={`w-2 h-2 rounded-full ${
+                                pdvConfig.cardapio_loja_aberta ? 'bg-green-400' : 'bg-red-400'
+                              }`}></div>
+                              <span>
+                                {pdvConfig.cardapio_loja_aberta ? 'Loja Aberta' : 'Loja Fechada'}
+                              </span>
+                            </div>
+                          </div>
 
                           <div className="space-y-3">
                             <label className="flex items-center cursor-pointer">

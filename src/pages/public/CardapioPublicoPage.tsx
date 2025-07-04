@@ -54,6 +54,7 @@ const CardapioPublicoPage: React.FC = () => {
   const [grupos, setGrupos] = useState<any[]>([]);
   const [horarios, setHorarios] = useState<HorarioAtendimento[]>([]);
   const [horariosExpanded, setHorariosExpanded] = useState(false);
+  const [lojaAberta, setLojaAberta] = useState(true);
   const [config, setConfig] = useState<CardapioConfig>({
     mostrar_precos: true,
     permitir_pedidos: true,
@@ -69,6 +70,35 @@ const CardapioPublicoPage: React.FC = () => {
       carregarDadosCardapio();
     }
   }, [slug]);
+
+  // Configurar realtime para monitorar mudanças no status da loja
+  useEffect(() => {
+    if (!empresa?.id) return;
+
+    const channel = supabase
+      .channel('cardapio_loja_status')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pdv_config',
+          filter: `empresa_id=eq.${empresa.id}`
+        },
+        (payload) => {
+          console.log('Cardápio: Atualização status da loja recebida:', payload);
+
+          if (payload.new && payload.new.cardapio_loja_aberta !== undefined) {
+            setLojaAberta(payload.new.cardapio_loja_aberta);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [empresa?.id]);
 
   const carregarDadosCardapio = async () => {
     try {
@@ -172,6 +202,17 @@ const CardapioPublicoPage: React.FC = () => {
         setHorarios(horariosData);
       }
 
+      // 7. Buscar status da loja (configuração PDV)
+      const { data: statusLojaData, error: statusLojaError } = await supabase
+        .from('pdv_config')
+        .select('cardapio_loja_aberta, cardapio_abertura_tipo')
+        .eq('empresa_id', empresaComLogo.id)
+        .single();
+
+      if (!statusLojaError && statusLojaData) {
+        setLojaAberta(statusLojaData.cardapio_loja_aberta !== false); // Default true se não definido
+      }
+
       // Processar produtos com nome do grupo e foto
       const produtosProcessados = produtosData?.map(produto => {
         const grupo = gruposData.find(g => g.id === produto.grupo_id);
@@ -267,6 +308,12 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const handlePedirWhatsApp = (produto: Produto) => {
+    // Verificar se a loja está aberta
+    if (!lojaAberta) {
+      showMessage('error', 'Loja fechada! Não é possível fazer pedidos no momento.');
+      return;
+    }
+
     const whatsappNumero = obterWhatsAppEmpresa();
     if (!whatsappNumero) {
       showMessage('error', 'WhatsApp da empresa não disponível');
@@ -320,6 +367,23 @@ const CardapioPublicoPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${config.modo_escuro ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
+      {/* Tarja de loja fechada */}
+      {!lojaAberta && (
+        <div className="bg-red-600 text-white py-3 px-4 text-center relative overflow-hidden animate-pulse">
+          <div className="absolute inset-0 bg-gradient-to-r from-red-600 via-red-500 to-red-600 animate-pulse"></div>
+          <div className="relative z-10 flex items-center justify-center gap-3">
+            <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+            <div className="font-bold text-lg">
+              🔒 LOJA FECHADA
+            </div>
+            <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+          </div>
+          <p className="relative z-10 text-sm mt-1 font-medium">
+            No momento não é possível fazer pedidos. Tente novamente mais tarde.
+          </p>
+        </div>
+      )}
+
       {/* Header com gradiente */}
       <div className={`relative ${config.modo_escuro ? 'bg-gradient-to-r from-gray-800 via-gray-900 to-gray-800' : 'bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800'} shadow-xl`}>
         {/* Overlay pattern */}
@@ -563,9 +627,14 @@ const CardapioPublicoPage: React.FC = () => {
                     {obterWhatsAppEmpresa() && (
                       <button
                         onClick={() => handlePedirWhatsApp(produto)}
-                        className="group/btn relative overflow-hidden bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                        disabled={!lojaAberta}
+                        className={`group/btn relative overflow-hidden px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg ${
+                          lojaAberta
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 hover:shadow-xl cursor-pointer'
+                            : 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                        }`}
                       >
-                        <span>Pedir</span>
+                        <span>{lojaAberta ? 'Pedir' : 'Loja Fechada'}</span>
                       </button>
                     )}
                   </div>

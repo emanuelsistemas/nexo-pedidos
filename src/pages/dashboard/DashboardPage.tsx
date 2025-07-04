@@ -16,6 +16,7 @@ import {
   RefreshCw,
   CheckCircle,
   AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler, ChartData } from 'chart.js';
 import { Line } from 'react-chartjs-2';
@@ -82,6 +83,7 @@ const DashboardPage: React.FC = () => {
     aberto_manual: false,
     modo_operacao: 'manual'
   });
+  const [pdvConfig, setPdvConfig] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const updateStatusRef = useRef(false);
@@ -100,6 +102,7 @@ const DashboardPage: React.FC = () => {
   useEffect(() => {
     loadDashboardData();
     loadStoreStatus();
+    loadPdvConfig();
     checkStoreStatus();
     checkUserType();
     loadUsuarios();
@@ -117,6 +120,58 @@ const DashboardPage: React.FC = () => {
       }
     };
   }, []);
+
+  // Configurar realtime para sincronizar com mudanças na configuração PDV
+  useEffect(() => {
+    if (!pdvConfig) return;
+
+    const channel = supabase
+      .channel('dashboard_pdv_config_sync')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'pdv_config',
+          filter: `empresa_id=eq.${pdvConfig.empresa_id || ''}`
+        },
+        (payload) => {
+          console.log('Dashboard: Atualização PDV config recebida:', payload);
+
+          if (payload.new && (
+            payload.new.cardapio_loja_aberta !== undefined ||
+            payload.new.cardapio_abertura_tipo !== undefined
+          )) {
+            // Atualizar configuração PDV local
+            setPdvConfig(prev => ({
+              ...prev,
+              ...payload.new
+            }));
+
+            // Atualizar status da loja se necessário
+            if (payload.new.cardapio_loja_aberta !== undefined) {
+              setStoreStatus(prev => ({
+                ...prev,
+                aberto: payload.new.cardapio_loja_aberta
+              }));
+            }
+
+            // Atualizar modo de operação se necessário
+            if (payload.new.cardapio_abertura_tipo) {
+              setStoreStatus(prev => ({
+                ...prev,
+                modo_operacao: payload.new.cardapio_abertura_tipo
+              }));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pdvConfig]);
 
   // Recarregar dados quando o usuário selecionado mudar
   useEffect(() => {
@@ -287,6 +342,40 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const loadPdvConfig = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data: configData } = await supabase
+        .from('pdv_config')
+        .select('cardapio_abertura_tipo, cardapio_loja_aberta, empresa_id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (configData) {
+        setPdvConfig(configData);
+
+        // Sincronizar status da loja com configuração PDV
+        setStoreStatus(prev => ({
+          ...prev,
+          aberto: configData.cardapio_loja_aberta !== undefined ? configData.cardapio_loja_aberta : prev.aberto,
+          modo_operacao: configData.cardapio_abertura_tipo || 'manual'
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading PDV config:', error);
+    }
+  };
+
   const checkStoreStatus = async () => {
     if (updateStatusRef.current) return;
 
@@ -371,6 +460,15 @@ const DashboardPage: React.FC = () => {
 
       if (updatedStatus) {
         setStoreStatus(prev => ({ ...prev, ...updatedStatus }));
+
+        // Sincronizar com configuração PDV
+        if (pdvConfig) {
+          await supabase
+            .from('pdv_config')
+            .update({ cardapio_loja_aberta: aberto })
+            .eq('empresa_id', usuarioData.empresa_id);
+        }
+
         showMessage('success', `Loja ${aberto ? 'aberta' : 'fechada'} com sucesso!`);
       }
     } catch (error) {
@@ -569,7 +667,19 @@ const DashboardPage: React.FC = () => {
   };
 
   const cards = [
-    // Card "Status da Loja" removido
+    // Card "Status da Loja" - habilitado quando há configuração PDV (cardápio digital configurado)
+    ...(pdvConfig ? [{
+      title: 'Status da Loja',
+      value: storeStatus.aberto ? 'Aberta' : 'Fechada',
+      icon: storeStatus.aberto ? Store : Lock,
+      color: storeStatus.aberto ? 'bg-green-500/10' : 'bg-red-500/10',
+      iconColor: storeStatus.aberto ? 'text-green-500' : 'text-red-500',
+      borderColor: storeStatus.aberto ? 'border-green-500/20' : 'border-red-500/20',
+      action: toggleStoreStatus,
+      actionText: storeStatus.aberto ? 'Fechar Loja' : 'Abrir Loja',
+      actionColor: storeStatus.aberto ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600',
+      loading: isLoading
+    }] : []),
     {
       title: 'Pedidos Hoje',
       value: data.pedidosHoje,
@@ -818,6 +928,29 @@ const DashboardPage: React.FC = () => {
               card.value
             )}
             {card.customContent}
+
+            {/* Botão de ação para o card de status da loja */}
+            {card.action && (
+              <div className="mt-3">
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    card.action();
+                  }}
+                  className={`w-full text-xs py-2 ${card.actionColor} text-white`}
+                  disabled={card.loading}
+                >
+                  {card.loading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw size={12} className="animate-spin" />
+                      <span>Atualizando...</span>
+                    </div>
+                  ) : (
+                    card.actionText
+                  )}
+                </Button>
+              </div>
+            )}
           </motion.div>
         ))}
       </div>
