@@ -8784,14 +8784,17 @@ const PDVPage: React.FC = () => {
             operador: userData || null, // Incluir dados do operador (usuário atual)
             itens: carrinho.map(item => ({
               codigo: item.produto.codigo,
-              nome: item.produto.nome,
+              nome: item.descricaoSabores ?
+                `${item.produto.nome}\n${item.descricaoSabores}` :
+                item.produto.nome, // ✅ NOVO: Incluir sabores na impressão
               quantidade: item.quantidade,
               valor_unitario: item.produto.preco,
               valor_total: item.subtotal,
               unidade: item.vendaSemProduto ? 'UN' : (item.produto.unidade_medida?.sigla || 'UN'), // ✅ NOVO: Incluir unidade de medida do carrinho
               vendedor_id: item.vendedor_id || null,
               vendedor_nome: item.vendedor_nome || null,
-              adicionais: item.adicionais || [] // ✅ NOVO: Incluir adicionais
+              adicionais: item.adicionais || [], // ✅ NOVO: Incluir adicionais
+              sabores: item.sabores || null // ✅ NOVO: Incluir sabores para referência
             })),
             pagamento: pagamentoData,
             timestamp: new Date().toISOString(),
@@ -8894,14 +8897,17 @@ const PDVPage: React.FC = () => {
             operador: userData || null, // Incluir dados do operador (usuário atual)
             itens: carrinho.map(item => ({
               codigo: item.produto.codigo,
-              nome: item.produto.nome,
+              nome: item.descricaoSabores ?
+                `${item.produto.nome}\n${item.descricaoSabores}` :
+                item.produto.nome, // ✅ NOVO: Incluir sabores na impressão
               quantidade: item.quantidade,
               valor_unitario: item.produto.preco,
               valor_total: item.subtotal,
               unidade: item.vendaSemProduto ? 'UN' : (item.produto.unidade_medida?.sigla || 'UN'), // ✅ NOVO: Incluir unidade de medida do carrinho
               vendedor_id: item.vendedor_id || null,
               vendedor_nome: item.vendedor_nome || null,
-              adicionais: item.adicionais || [] // ✅ NOVO: Incluir adicionais
+              adicionais: item.adicionais || [], // ✅ NOVO: Incluir adicionais
+              sabores: item.sabores || null // ✅ NOVO: Incluir sabores para referência
             })),
             pagamento: pagamentoData,
             timestamp: new Date().toISOString(),
@@ -9263,13 +9269,16 @@ const PDVPage: React.FC = () => {
         vendedores: vendedoresData, // ✅ NOVO: Incluir todos os vendedores da venda
         itens: itensData.map(item => ({
           codigo: item.codigo_produto || 'N/A',
-          nome: item.nome_produto,
+          nome: item.descricao_sabores ?
+            `${item.nome_produto}\n${item.descricao_sabores}` :
+            item.nome_produto, // ✅ NOVO: Incluir sabores na reimpressão
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
           valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario),
           unidade: item.unidade || 'UN', // ✅ NOVO: Incluir unidade de medida para impressão
           vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
-          vendedor_nome: vendedoresItens.get(item.vendedor_id) || null // ✅ NOVO: Nome do vendedor do item
+          vendedor_nome: vendedoresItens.get(item.vendedor_id) || null, // ✅ NOVO: Nome do vendedor do item
+          sabores: item.sabores_json ? JSON.parse(item.sabores_json) : null // ✅ NOVO: Incluir sabores para referência
         })),
         pagamento: dadosPagamento, // ✅ NOVO: Incluir dados de pagamento
         timestamp: new Date().toISOString(),
@@ -9448,13 +9457,16 @@ const PDVPage: React.FC = () => {
         vendedores: vendedoresDataCupom, // ✅ NOVO: Incluir todos os vendedores da venda
         itens: itensData.map(item => ({
           codigo: item.codigo_produto || 'N/A',
-          nome: item.nome_produto,
+          nome: item.descricao_sabores ?
+            `${item.nome_produto}\n${item.descricao_sabores}` :
+            item.nome_produto, // ✅ NOVO: Incluir sabores salvos no banco para reimpressão
           quantidade: item.quantidade,
           valor_unitario: item.valor_unitario,
           valor_total: item.valor_total_item || item.valor_total || (item.quantidade * item.valor_unitario),
           unidade: item.unidade || 'UN', // ✅ NOVO: Incluir unidade de medida para impressão
           vendedor_id: item.vendedor_id || null, // ✅ NOVO: ID do vendedor do item
-          vendedor_nome: vendedoresItensCupom.get(item.vendedor_id) || null // ✅ NOVO: Nome do vendedor do item
+          vendedor_nome: vendedoresItensCupom.get(item.vendedor_id) || null, // ✅ NOVO: Nome do vendedor do item
+          sabores: item.sabores_json ? JSON.parse(item.sabores_json) : null // ✅ NOVO: Incluir sabores para referência
         })),
         pagamento: dadosPagamentoCupom, // ✅ NOVO: Incluir dados de pagamento
         timestamp: new Date().toISOString()
