@@ -72,42 +72,22 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [slug]);
 
-  // Escutar evento customizado para atualização imediata do status da loja
-  useEffect(() => {
-    const handleLojaStatusChange = (event: CustomEvent) => {
-      console.log('🚀 Cardápio: Evento lojaStatusChanged recebido:', event.detail);
-      console.log('🚀 Empresa atual:', empresaId);
-      console.log('🚀 Empresa do evento:', event.detail.empresaId);
-
-      // Verificar se o evento é para a empresa atual
-      if (empresaId && event.detail.empresaId === empresaId) {
-        console.log('✅ Evento é para esta empresa, atualizando status');
-        console.log('🚀 Atualizando lojaAberta para:', event.detail.lojaAberta);
-        setLojaAberta(event.detail.lojaAberta);
-      } else {
-        console.log('❌ Evento não é para esta empresa, ignorando');
-      }
-    };
-
-    console.log('🎧 Configurando listener para lojaStatusChanged');
-    window.addEventListener('lojaStatusChanged', handleLojaStatusChange as EventListener);
-
-    return () => {
-      console.log('🎧 Removendo listener para lojaStatusChanged');
-      window.removeEventListener('lojaStatusChanged', handleLojaStatusChange as EventListener);
-    };
-  }, [empresaId]);
-
-
-
-  // Configurar realtime para monitorar mudanças no status da loja via trigger do banco
+  // Configurar realtime para monitorar mudanças no status da loja
   useEffect(() => {
     if (!empresaId) return;
 
-    console.log('🔔 Configurando notificações do banco para empresa:', empresaId);
+    console.log('🔔 Configurando realtime para empresa:', empresaId);
+
+    // Criar canal único para esta empresa
+    const channelName = `cardapio_loja_status_${empresaId}`;
 
     const channel = supabase
-      .channel('loja_status_notifications')
+      .channel(channelName, {
+        config: {
+          broadcast: { self: true },
+          presence: { key: empresaId }
+        }
+      })
       .on(
         'postgres_changes',
         {
@@ -117,41 +97,59 @@ const CardapioPublicoPage: React.FC = () => {
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🔄 Cardápio: Atualização realtime recebida via Supabase:', payload);
+          console.log('🔄 Cardápio: Atualização realtime recebida:', payload);
+          console.log('🔄 Payload completo:', JSON.stringify(payload, null, 2));
 
           if (payload.new && payload.new.cardapio_loja_aberta !== undefined) {
             const novoStatus = payload.new.cardapio_loja_aberta;
-            console.log('✅ Atualizando status da loja via Supabase de', lojaAberta, 'para', novoStatus);
+            console.log('✅ Atualizando status da loja de', lojaAberta, 'para', novoStatus);
             setLojaAberta(novoStatus);
           }
         }
       )
-      .subscribe();
-
-    // Escutar notificações diretas do PostgreSQL via trigger
-    const notificationChannel = supabase
-      .channel('postgres_notifications')
-      .on(
-        'broadcast',
-        { event: 'loja_status_changed' },
-        (payload) => {
-          console.log('🔔 Notificação do trigger recebida:', payload);
-
-          if (payload.payload && payload.payload.empresa_id === empresaId) {
-            const novoStatus = payload.payload.loja_aberta;
-            console.log('✅ Atualizando status da loja via trigger de', lojaAberta, 'para', novoStatus);
-            setLojaAberta(novoStatus);
-          }
+      .subscribe((status) => {
+        console.log('📡 Status da subscrição realtime:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime conectado com sucesso para empresa:', empresaId);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Erro na conexão realtime');
         }
-      )
-      .subscribe();
+      });
 
     return () => {
-      console.log('🔔 Removendo canais de notificação');
+      console.log('🔔 Removendo canal realtime');
       supabase.removeChannel(channel);
-      supabase.removeChannel(notificationChannel);
     };
   }, [empresaId]);
+
+  // Polling como backup para garantir sincronização
+  useEffect(() => {
+    if (!empresaId) return;
+
+    console.log('⏰ Configurando polling de backup para empresa:', empresaId);
+
+    const interval = setInterval(async () => {
+      try {
+        const { data: statusData, error } = await supabase
+          .from('pdv_config')
+          .select('cardapio_loja_aberta')
+          .eq('empresa_id', empresaId)
+          .single();
+
+        if (!error && statusData && statusData.cardapio_loja_aberta !== lojaAberta) {
+          console.log('🔄 Polling: Status diferente detectado, atualizando de', lojaAberta, 'para', statusData.cardapio_loja_aberta);
+          setLojaAberta(statusData.cardapio_loja_aberta);
+        }
+      } catch (error) {
+        console.error('❌ Erro no polling:', error);
+      }
+    }, 3000); // Verificar a cada 3 segundos
+
+    return () => {
+      console.log('⏰ Removendo polling de backup');
+      clearInterval(interval);
+    };
+  }, [empresaId, lojaAberta]);
 
   // Monitor para mudanças no estado lojaAberta
   useEffect(() => {
