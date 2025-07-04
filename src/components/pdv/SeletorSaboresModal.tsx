@@ -163,11 +163,14 @@ export default function SeletorSaboresModal({
     if (tabelaPreco.permite_meio_a_meio && novosSabores.length > 1) {
       const porcentagemIgual = Math.floor(100 / novosSabores.length);
       const resto = 100 - (porcentagemIgual * novosSabores.length);
-      
+
       novosSabores = novosSabores.map((sabor, index) => ({
         ...sabor,
         porcentagem: porcentagemIgual + (index === 0 ? resto : 0)
       }));
+
+      console.log(`🍕 SABORES: ${novosSabores.length} sabores selecionados`);
+      console.log('🍕 SABORES: Porcentagens redistribuídas:', novosSabores.map(s => `${s.produto.nome}: ${s.porcentagem}%`));
     }
 
     setSaboresSelecionados(novosSabores);

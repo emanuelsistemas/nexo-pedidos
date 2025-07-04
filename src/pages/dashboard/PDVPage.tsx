@@ -2054,26 +2054,45 @@ const PDVPage: React.FC = () => {
   const confirmarSabores = async (sabores: any[], precoCalculado: number) => {
     if (!produtoParaSabores) return;
 
+    // ✅ CORREÇÃO: Incluir o produto principal como primeiro sabor
+    const todosSabores = [
+      {
+        produto: produtoParaSabores,
+        porcentagem: Math.floor(100 / (sabores.length + 1))
+      },
+      ...sabores
+    ];
+
+    console.log(`🍕 CORREÇÃO: Produto principal "${produtoParaSabores.nome}" incluído como sabor`);
+    console.log(`🍕 CORREÇÃO: Total de sabores (incluindo principal): ${todosSabores.length}`);
+
     // Criar descrição dos sabores com frações
     const criarDescricaoSabores = () => {
+      console.log(`🍕 DESCRIÇÃO: Criando descrição para ${todosSabores.length} sabores`);
+      console.log('🍕 DESCRIÇÃO: Sabores recebidos:', todosSabores.map(s => s.produto.nome));
+
       if (!tabelaParaSabores.permite_meio_a_meio) {
-        return sabores.map(sabor => sabor.produto.nome).join(', ');
+        return todosSabores.map(sabor => sabor.produto.nome).join(', ');
       }
 
-      // Determinar fração baseada na quantidade de sabores
+      // Determinar fração baseada na quantidade TOTAL de sabores
       let fracao = '';
-      if (sabores.length === 2) {
+      if (todosSabores.length === 2) {
         fracao = '1/2';
-      } else if (sabores.length === 3) {
+      } else if (todosSabores.length === 3) {
         fracao = '1/3';
-      } else if (sabores.length === 4) {
+      } else if (todosSabores.length === 4) {
         fracao = '1/4';
       } else {
-        fracao = `${Math.round(100/sabores.length)}%`;
+        fracao = `${Math.round(100/todosSabores.length)}%`;
       }
 
+      console.log(`🍕 DESCRIÇÃO: Fração calculada: ${fracao} para ${todosSabores.length} sabores`);
+
       // Criar lista com frações
-      return sabores.map(sabor => `${fracao} ${sabor.produto.nome}`).join('\n');
+      const resultado = todosSabores.map(sabor => `${fracao} ${sabor.produto.nome}`).join('\n');
+      console.log('🍕 DESCRIÇÃO: Resultado final:', resultado);
+      return resultado;
     };
 
     const descricaoSabores = criarDescricaoSabores();
@@ -2095,8 +2114,8 @@ const PDVPage: React.FC = () => {
       tabela_preco_nome: trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao'
         ? tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada)?.nome
         : null,
-      // ✅ NOVO: Salvar informações dos sabores
-      sabores: sabores,
+      // ✅ NOVO: Salvar informações dos sabores (incluindo produto principal)
+      sabores: todosSabores,
       descricaoSabores: descricaoSabores, // Descrição formatada dos sabores
       observacao: `Sabores: ${descricaoSabores.replace(/\n/g, ', ')}`
     };
@@ -3186,6 +3205,10 @@ const PDVPage: React.FC = () => {
           cst_pis,
           cst_cofins,
           unidade,
+          sabores_json,
+          descricao_sabores,
+          tabela_preco_id,
+          tabela_preco_nome,
           produto:produtos(
             id,
             codigo,
@@ -6929,7 +6952,10 @@ const PDVPage: React.FC = () => {
         created_at: new Date().toISOString(),
         // ✅ NOVO: Campos da tabela de preços
         tabela_preco_id: item.tabela_preco_id || null,
-        tabela_preco_nome: item.tabela_preco_nome || null
+        tabela_preco_nome: item.tabela_preco_nome || null,
+        // ✅ NOVO: Campos dos sabores
+        sabores_json: item.sabores ? JSON.stringify(item.sabores) : null,
+        descricao_sabores: item.descricaoSabores || null
       };
 
       console.log('🔍 Dados do item preparados:', itemData);
@@ -7062,6 +7088,11 @@ const PDVPage: React.FC = () => {
           vendedor_id: item.vendedor_id || null,
           vendedor_nome: item.vendedor_nome || null,
           observacao_item: item.observacao || null,
+          // ✅ NOVO: Atualizar campos dos sabores
+          sabores_json: item.sabores ? JSON.stringify(item.sabores) : null,
+          descricao_sabores: item.descricaoSabores || null,
+          tabela_preco_id: item.tabela_preco_id || null,
+          tabela_preco_nome: item.tabela_preco_nome || null,
           updated_at: new Date().toISOString()
         };
 
@@ -7543,7 +7574,10 @@ const PDVPage: React.FC = () => {
           pdv_item_id: item.id,
           // ✅ NOVO: Incluir dados da tabela de preços
           tabela_preco_id: item.tabela_preco_id,
-          tabela_preco_nome: item.tabela_preco_nome
+          tabela_preco_nome: item.tabela_preco_nome,
+          // ✅ NOVO: Incluir sabores recuperados
+          sabores: item.sabores_json ? JSON.parse(item.sabores_json) : null,
+          descricaoSabores: item.descricao_sabores || null
         };
       }));
 
