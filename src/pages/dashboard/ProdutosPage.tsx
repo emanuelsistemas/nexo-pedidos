@@ -951,12 +951,31 @@ const ProdutosPage: React.FC = () => {
 
   // Efeito para carregar preço da tabela quando a aba ativa mudar
   useEffect(() => {
+    console.log('🔄 Mudança de aba:', abaPrecoAtiva, 'Preços disponíveis:', precosTabelas);
+
     if (abaPrecoAtiva !== 'padrao' && precosTabelas[abaPrecoAtiva] !== undefined) {
-      setPrecoTabelaFormatado(formatarPreco(precosTabelas[abaPrecoAtiva]));
+      const valorFormatado = formatarPreco(precosTabelas[abaPrecoAtiva]);
+      console.log('📥 Carregando valor da aba:', abaPrecoAtiva, 'Valor:', valorFormatado);
+      setPrecoTabelaFormatado(valorFormatado);
     } else if (abaPrecoAtiva !== 'padrao') {
+      console.log('🆕 Nova aba sem valor:', abaPrecoAtiva);
       setPrecoTabelaFormatado('0,00');
     }
   }, [abaPrecoAtiva, precosTabelas]);
+
+  // Função para salvar valor da aba atual antes de trocar de aba
+  const salvarValorAbaAtual = () => {
+    if (abaPrecoAtiva !== 'padrao' && precoTabelaFormatado) {
+      const valorNumerico = desformatarPreco(precoTabelaFormatado);
+      console.log('💾 Salvando valor da aba:', abaPrecoAtiva, 'Valor:', valorNumerico);
+
+      // Atualizar estado local dos preços das tabelas
+      setPrecosTabelas(prev => ({
+        ...prev,
+        [abaPrecoAtiva]: valorNumerico
+      }));
+    }
+  };
 
   // Efeito para arredondar o estoque inicial quando a unidade de medida mudar
   useEffect(() => {
@@ -2625,6 +2644,9 @@ const ProdutosPage: React.FC = () => {
           cest: novoProduto.cest, // ✅ CORREÇÃO CRÍTICA: CEST estava faltando na edição!
           margem_st: novoProduto.margem_st, // ✅ CORREÇÃO: Margem ST estava faltando na edição!
           peso_liquido: novoProduto.peso_liquido,
+          // ✅ NOVOS CAMPOS: Preço de custo e margem percentual
+          preco_custo: novoProduto.preco_custo || 0,
+          margem_percentual: novoProduto.margem_percentual || 0,
           empresa_id: usuarioData.empresa_id
         };
 
@@ -2646,6 +2668,8 @@ const ProdutosPage: React.FC = () => {
         console.log('CEST:', updateData.cest);
         console.log('Margem ST:', updateData.margem_st);
         console.log('Peso Líquido:', updateData.peso_liquido);
+        console.log('Preço de Custo:', updateData.preco_custo);
+        console.log('Margem Percentual:', updateData.margem_percentual);
 
         const { data, error } = await supabase
           .from('produtos')
@@ -2681,6 +2705,9 @@ const ProdutosPage: React.FC = () => {
           // Incluir os campos de estoque mínimo
           estoque_minimo: novoProduto.estoque_minimo_ativo ? (novoProduto.estoque_minimo || 0) : 0,
           estoque_minimo_ativo: novoProduto.estoque_minimo_ativo || false,
+          // ✅ NOVOS CAMPOS: Preço de custo e margem percentual
+          preco_custo: novoProduto.preco_custo || 0,
+          margem_percentual: novoProduto.margem_percentual || 0,
         };
 
         // Log para confirmar que os dados fiscais estão sendo salvos
@@ -2693,6 +2720,8 @@ const ProdutosPage: React.FC = () => {
         console.log('Alíquota ICMS:', produtoData.aliquota_icms);
         console.log('CEST:', produtoData.cest);
         console.log('Margem ST:', produtoData.margem_st);
+        console.log('Preço de Custo:', produtoData.preco_custo);
+        console.log('Margem Percentual:', produtoData.margem_percentual);
 
         const { data, error } = await supabase
           .from('produtos')
@@ -2748,6 +2777,9 @@ const ProdutosPage: React.FC = () => {
 
         if (opcoesError) throw opcoesError;
       }
+
+      // ✅ NOVO: Salvar preços das tabelas de preços
+      await salvarTodosPrecosTabelas(productId);
 
       await loadGrupos();
 
@@ -2896,6 +2928,9 @@ const ProdutosPage: React.FC = () => {
         cest: produtoOriginal.cest || '',
         margem_st: produtoOriginal.margem_st || null, // ✅ CORREÇÃO: Incluir margem ST na clonagem
         peso_liquido: produtoOriginal.peso_liquido || 0,
+        // ✅ NOVOS CAMPOS: Preço de custo e margem percentual
+        preco_custo: produtoOriginal.preco_custo || 0,
+        margem_percentual: produtoOriginal.margem_percentual || 0,
       };
 
       // Configurar para edição
@@ -2909,6 +2944,15 @@ const ProdutosPage: React.FC = () => {
       setPrecoFormatado(formatarPreco(produtoClonado.preco));
       setDescontoFormatado(produtoClonado.valor_desconto?.toString() || '0');
       setDescontoQuantidadeFormatado(produtoClonado.percentual_desconto_quantidade?.toString() || '10');
+
+      // ✅ NOVOS CAMPOS: Formatar preço de custo e margem
+      setPrecoCustoFormatado(formatarPreco(produtoClonado.preco_custo));
+      setMargemFormatada(formatarPreco(produtoClonado.margem_percentual));
+
+      // ✅ CLONAR PREÇOS DAS TABELAS: Carregar preços das tabelas do produto original
+      if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+        await carregarPrecosTabelas(produtoOriginal.id);
+      }
 
       // Resetar estados de validação
       setEstoqueInputVazio(false);
@@ -3140,6 +3184,57 @@ const ProdutosPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao salvar preço da tabela:', error);
       showMessage('error', 'Erro ao salvar preço da tabela');
+    }
+  };
+
+  // Função para salvar todos os preços das tabelas de um produto
+  const salvarTodosPrecosTabelas = async (produtoId: string) => {
+    try {
+      if (!trabalhaComTabelaPrecos || tabelasPrecos.length === 0) {
+        return; // Não há tabelas de preços para salvar
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Preparar dados para inserção em lote
+      const precosParaInserir = [];
+
+      // Verificar cada tabela de preços e seus valores
+      for (const tabela of tabelasPrecos) {
+        const preco = precosTabelas[tabela.id];
+        if (preco && preco > 0) {
+          precosParaInserir.push({
+            empresa_id: usuarioData.empresa_id,
+            produto_id: produtoId,
+            tabela_preco_id: tabela.id,
+            preco: preco
+          });
+        }
+      }
+
+      // Se há preços para salvar, fazer upsert em lote
+      if (precosParaInserir.length > 0) {
+        const { error } = await supabase
+          .from('produto_precos')
+          .upsert(precosParaInserir);
+
+        if (error) throw error;
+
+        console.log(`✅ Salvos ${precosParaInserir.length} preços de tabelas para o produto ${produtoId}`);
+      }
+
+    } catch (error) {
+      console.error('Erro ao salvar preços das tabelas:', error);
+      showMessage('error', 'Erro ao salvar preços das tabelas');
     }
   };
 
@@ -4260,7 +4355,10 @@ const ProdutosPage: React.FC = () => {
                                 {/* Aba Preço Padrão */}
                                 <button
                                   type="button"
-                                  onClick={() => setAbaPrecoAtiva('padrao')}
+                                  onClick={() => {
+                                    salvarValorAbaAtual(); // Salvar valor da aba atual antes de trocar
+                                    setAbaPrecoAtiva('padrao');
+                                  }}
                                   className={`flex-shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                                     abaPrecoAtiva === 'padrao'
                                       ? 'border-primary-500 text-primary-400'
@@ -4275,7 +4373,10 @@ const ProdutosPage: React.FC = () => {
                                   <button
                                     key={tabela.id}
                                     type="button"
-                                    onClick={() => setAbaPrecoAtiva(tabela.id)}
+                                    onClick={() => {
+                                      salvarValorAbaAtual(); // Salvar valor da aba atual antes de trocar
+                                      setAbaPrecoAtiva(tabela.id);
+                                    }}
                                     className={`flex-shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                                       abaPrecoAtiva === tabela.id
                                         ? 'border-primary-500 text-primary-400'
