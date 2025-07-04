@@ -2019,97 +2019,6 @@ const PDVPage: React.FC = () => {
     setProdutos(data || []);
   };
 
-  // ✅ NOVA FUNÇÃO: Carregar produtos com preços das tabelas
-  const carregarProdutosComPrecos = async () => {
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return [];
-
-      const { data: usuarioData } = await supabase
-        .from('usuarios')
-        .select('empresa_id')
-        .eq('id', userData.user.id)
-        .single();
-
-      if (!usuarioData?.empresa_id) return [];
-
-      // Se não trabalha com tabelas ou tabela padrão selecionada, usar produtos normais
-      if (!trabalhaComTabelaPrecos || tabelaPrecoSelecionada === 'padrao') {
-        return produtos.filter(produto => produto.preco > 0);
-      }
-
-      // Buscar produtos que têm preço na tabela selecionada
-      const { data: produtosComPreco, error } = await supabase
-        .from('produto_precos')
-        .select(`
-          preco,
-          produto:produtos(
-            id,
-            nome,
-            preco,
-            codigo,
-            codigo_barras,
-            descricao,
-            promocao,
-            tipo_desconto,
-            valor_desconto,
-            desconto_quantidade,
-            quantidade_minima,
-            tipo_desconto_quantidade,
-            valor_desconto_quantidade,
-            percentual_desconto_quantidade,
-            unidade_medida_id,
-            grupo_id,
-            estoque_inicial,
-            ncm,
-            cfop,
-            origem_produto,
-            situacao_tributaria,
-            cst_icms,
-            csosn_icms,
-            cst_pis,
-            cst_cofins,
-            cst_ipi,
-            aliquota_icms,
-            aliquota_pis,
-            aliquota_cofins,
-            aliquota_ipi,
-            cest,
-            margem_st,
-            peso_liquido,
-            grupo:grupos(nome),
-            unidade_medida:unidade_medida_id (
-              id,
-              sigla,
-              nome,
-              fracionado
-            ),
-            produto_fotos(url, principal)
-          )
-        `)
-        .eq('empresa_id', usuarioData.empresa_id)
-        .eq('tabela_preco_id', tabelaPrecoSelecionada)
-        .gt('preco', 0) // Apenas produtos com preço > 0 na tabela
-        .eq('produto.ativo', true)
-        .eq('produto.deletado', false);
-
-      if (error) throw error;
-
-      // Transformar dados para o formato esperado, substituindo o preço padrão pelo preço da tabela
-      const produtosFormatados = produtosComPreco?.map(item => ({
-        ...item.produto,
-        preco: item.preco // Usar preço da tabela em vez do preço padrão
-      })) || [];
-
-      console.log(`📋 Produtos carregados para tabela "${tabelaPrecoSelecionada}":`, produtosFormatados.length);
-      return produtosFormatados;
-
-    } catch (error) {
-      console.error('Erro ao carregar produtos com preços:', error);
-      return [];
-    }
-  };
-
   const loadGrupos = async () => {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
@@ -10216,13 +10125,6 @@ const PDVPage: React.FC = () => {
         console.log('Fullscreen ativado para modal de produtos');
       }
 
-      // ✅ NOVO: Carregar produtos com preços da tabela selecionada
-      console.log('📋 Carregando produtos para tabela:', tabelaPrecoSelecionada);
-      const produtosComPrecos = await carregarProdutosComPrecos();
-
-      // Temporariamente substituir produtos para o modal
-      setProdutos(produtosComPrecos);
-
       // Abrir o modal de produtos
       setShowAreaProdutos(true);
     } catch (error) {
@@ -10400,14 +10302,6 @@ const PDVPage: React.FC = () => {
       loadUnidadesMedida();
     }
   }, [showSeletorUnidadeModal]);
-
-  // ✅ NOVO: useEffect para restaurar produtos quando modal de produtos fechar
-  useEffect(() => {
-    if (!showAreaProdutos) {
-      // Quando modal fechar, recarregar produtos originais
-      loadProdutos();
-    }
-  }, [showAreaProdutos]);
 
   // useEffect para focar no campo valor quando modal de venda sem produto abrir
   useEffect(() => {
