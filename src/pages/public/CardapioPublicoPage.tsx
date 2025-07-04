@@ -54,7 +54,7 @@ const CardapioPublicoPage: React.FC = () => {
   const [grupos, setGrupos] = useState<any[]>([]);
   const [horarios, setHorarios] = useState<HorarioAtendimento[]>([]);
   const [horariosExpanded, setHorariosExpanded] = useState(false);
-  const [lojaAberta, setLojaAberta] = useState(true);
+  const [lojaAberta, setLojaAberta] = useState<boolean | null>(null);
   const [config, setConfig] = useState<CardapioConfig>({
     mostrar_precos: true,
     permitir_pedidos: true,
@@ -71,9 +71,14 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [slug]);
 
+  // Estado para armazenar o ID da empresa para o realtime
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
+
   // Configurar realtime para monitorar mudanças no status da loja
   useEffect(() => {
-    if (!empresa?.id) return;
+    if (!empresaId) return;
+
+    console.log('Configurando realtime para empresa:', empresaId);
 
     const channel = supabase
       .channel('cardapio_loja_status')
@@ -83,12 +88,13 @@ const CardapioPublicoPage: React.FC = () => {
           event: 'UPDATE',
           schema: 'public',
           table: 'pdv_config',
-          filter: `empresa_id=eq.${empresa.id}`
+          filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
           console.log('Cardápio: Atualização status da loja recebida:', payload);
 
           if (payload.new && payload.new.cardapio_loja_aberta !== undefined) {
+            console.log('Atualizando status da loja para:', payload.new.cardapio_loja_aberta);
             setLojaAberta(payload.new.cardapio_loja_aberta);
           }
         }
@@ -96,9 +102,10 @@ const CardapioPublicoPage: React.FC = () => {
       .subscribe();
 
     return () => {
+      console.log('Removendo canal realtime');
       supabase.removeChannel(channel);
     };
-  }, [empresa?.id]);
+  }, [empresaId]);
 
   const carregarDadosCardapio = async () => {
     try {
@@ -139,6 +146,9 @@ const CardapioPublicoPage: React.FC = () => {
       };
 
       setEmpresa(empresaComLogo);
+
+      // Definir o ID da empresa para o realtime
+      setEmpresaId(empresaComLogo.id);
 
       // Configurar tema baseado na configuração da empresa
       setConfig(prev => ({
@@ -210,7 +220,12 @@ const CardapioPublicoPage: React.FC = () => {
         .single();
 
       if (!statusLojaError && statusLojaData) {
-        setLojaAberta(statusLojaData.cardapio_loja_aberta !== false); // Default true se não definido
+        // Usar exatamente o valor do banco, sem fallbacks
+        setLojaAberta(statusLojaData.cardapio_loja_aberta);
+      } else {
+        console.error('Erro ao carregar status da loja:', statusLojaError);
+        // Se não conseguir carregar, não assumir nenhum valor padrão
+        setLojaAberta(null);
       }
 
       // Processar produtos com nome do grupo e foto
@@ -255,7 +270,7 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Função para obter o primeiro telefone com WhatsApp
   const obterWhatsAppEmpresa = () => {
-    // Primeiro, tentar usar o campo telefones (novo sistema)
+    // Usar apenas o campo telefones (novo sistema)
     if (empresa?.telefones && Array.isArray(empresa.telefones)) {
       const telefoneWhatsApp = empresa.telefones.find(tel => tel.whatsapp);
       if (telefoneWhatsApp) {
@@ -263,29 +278,19 @@ const CardapioPublicoPage: React.FC = () => {
       }
     }
 
-    // Fallback para o campo whatsapp antigo
-    return empresa?.whatsapp || '';
+    // Retornar null se não houver telefone com WhatsApp configurado
+    return null;
   };
 
   // Função para obter todos os telefones da empresa
   const obterTodosTelefones = () => {
-    const telefones = [];
-
-    // Primeiro, tentar usar o campo telefones (novo sistema)
+    // Usar apenas o campo telefones (novo sistema)
     if (empresa?.telefones && Array.isArray(empresa.telefones)) {
-      telefones.push(...empresa.telefones);
+      return empresa.telefones;
     }
 
-    // Se não houver telefones no novo sistema, usar o campo whatsapp antigo
-    if (telefones.length === 0 && empresa?.whatsapp) {
-      telefones.push({
-        numero: empresa.whatsapp,
-        tipo: 'Celular',
-        whatsapp: true
-      });
-    }
-
-    return telefones;
+    // Retornar array vazio se não houver telefones configurados
+    return [];
   };
 
   // Função para obter o nome do dia da semana
@@ -308,8 +313,8 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const handlePedirWhatsApp = (produto: Produto) => {
-    // Verificar se a loja está aberta
-    if (!lojaAberta) {
+    // Verificar se a loja está fechada (só bloqueia se explicitamente false)
+    if (lojaAberta === false) {
       showMessage('error', 'Loja fechada! Não é possível fazer pedidos no momento.');
       return;
     }
@@ -367,8 +372,8 @@ const CardapioPublicoPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${config.modo_escuro ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
-      {/* Tarja de loja fechada */}
-      {!lojaAberta && (
+      {/* Tarja de loja fechada - só exibe se o status foi carregado e a loja está fechada */}
+      {lojaAberta === false && (
         <div className="bg-red-600 text-white py-3 px-4 text-center relative overflow-hidden animate-pulse">
           <div className="absolute inset-0 bg-gradient-to-r from-red-600 via-red-500 to-red-600 animate-pulse"></div>
           <div className="relative z-10 flex items-center justify-center gap-3">
@@ -627,14 +632,14 @@ const CardapioPublicoPage: React.FC = () => {
                     {obterWhatsAppEmpresa() && (
                       <button
                         onClick={() => handlePedirWhatsApp(produto)}
-                        disabled={!lojaAberta}
+                        disabled={lojaAberta === false}
                         className={`group/btn relative overflow-hidden px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg ${
-                          lojaAberta
-                            ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 hover:shadow-xl cursor-pointer'
-                            : 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                          lojaAberta === false
+                            ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                            : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 hover:shadow-xl cursor-pointer'
                         }`}
                       >
-                        <span>{lojaAberta ? 'Pedir' : 'Loja Fechada'}</span>
+                        <span>{lojaAberta === false ? 'Loja Fechada' : 'Pedir'}</span>
                       </button>
                     )}
                   </div>
