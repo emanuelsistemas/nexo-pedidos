@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare } from 'lucide-react';
+import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
+import ScrollContainer from 'react-indiana-drag-scroll';
 
 interface Produto {
   id: string;
@@ -108,23 +109,8 @@ const CardapioPublicoPage: React.FC = () => {
   const [termoPesquisa, setTermoPesquisa] = useState<string>('');
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
-  // Estados para navegação horizontal das categorias
-  const [categoriaStartIndex, setCategoriaStartIndex] = useState(0);
-  const [visibleCategoriaItems, setVisibleCategoriaItems] = useState(4);
-  const [isAnimating, setIsAnimating] = useState(false);
-
-  // Estados para suporte a arrastar no mobile
-  const [touchStartX, setTouchStartX] = useState(0);
-  const [touchEndX, setTouchEndX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartTime, setDragStartTime] = useState(0);
-  const [scrollVelocity, setScrollVelocity] = useState(0);
+  // Ref para o container de categorias (mantido para compatibilidade)
   const categoriaContainerRef = useRef<HTMLDivElement>(null);
-  const [isMouseDragging, setIsMouseDragging] = useState(false);
-  const [mouseStartX, setMouseStartX] = useState(0);
-  const [currentScrollPosition, setCurrentScrollPosition] = useState(0);
-  const [lastTouchX, setLastTouchX] = useState(0);
-  const [lastTouchTime, setLastTouchTime] = useState(0);
 
   // Estados para controle de quantidade dos produtos
   const [quantidadesProdutos, setQuantidadesProdutos] = useState<Record<string, number>>({});
@@ -531,123 +517,9 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [horarios, modoAutomatico, lojaAberta]);
 
-  // Gerenciar event listeners globais para mouse drag
-  useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (!isMouseDragging) return;
 
-      const deltaX = e.clientX - mouseStartX;
-      const currentTime = Date.now();
-      const deltaTime = currentTime - dragStartTime;
 
-      // Calcular velocidade
-      if (deltaTime > 0) {
-        const velocity = deltaX / deltaTime;
-        setScrollVelocity(velocity);
-      }
 
-      setDragStartTime(currentTime);
-
-      // Aplicar scroll em tempo real
-      if (categoriaContainerRef.current) {
-        const container = categoriaContainerRef.current;
-        const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
-        const currentScroll = categoriaStartIndex * 120;
-        const newScroll = Math.max(0, Math.min(maxScroll, currentScroll - deltaX));
-
-        container.style.transform = `translateX(-${newScroll}px)`;
-      }
-    };
-
-    const handleGlobalMouseUp = () => {
-      if (isMouseDragging) {
-        handleMouseUp();
-      }
-    };
-
-    if (isMouseDragging) {
-      document.addEventListener('mousemove', handleGlobalMouseMove);
-      document.addEventListener('mouseup', handleGlobalMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleGlobalMouseMove);
-      document.removeEventListener('mouseup', handleGlobalMouseUp);
-    };
-  }, [isMouseDragging, mouseStartX, dragStartTime, categoriaStartIndex, grupos.length]);
-
-  // Configurar event listeners não-passivos para touch
-  useEffect(() => {
-    const container = categoriaContainerRef.current;
-    if (!container) return;
-
-    const handleTouchMoveNonPassive = (e: TouchEvent) => {
-      if (isDragging) {
-        e.preventDefault(); // Agora funciona porque não é passivo
-
-        const touch = e.targetTouches[0];
-        const currentX = touch.clientX;
-        const currentTime = Date.now();
-        const deltaX = currentX - touchStartX;
-
-        // Calcular velocidade
-        const timeDelta = currentTime - lastTouchTime;
-        if (timeDelta > 0) {
-          const velocity = (currentX - lastTouchX) / timeDelta;
-          setScrollVelocity(velocity);
-        }
-
-        setLastTouchX(currentX);
-        setLastTouchTime(currentTime);
-
-        // Aplicar scroll
-        const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
-        const newScroll = Math.max(0, Math.min(maxScroll, currentScrollPosition - deltaX));
-
-        container.style.transform = `translateX(-${newScroll}px)`;
-      }
-    };
-
-    // Adicionar event listener não-passivo
-    container.addEventListener('touchmove', handleTouchMoveNonPassive, { passive: false });
-
-    return () => {
-      container.removeEventListener('touchmove', handleTouchMoveNonPassive);
-    };
-  }, [isDragging, touchStartX, currentScrollPosition, lastTouchX, lastTouchTime, grupos.length]);
-
-  // Sincronizar currentScrollPosition com categoriaStartIndex quando não estiver arrastando
-  useEffect(() => {
-    if (!isDragging && !isMouseDragging) {
-      const newScrollPosition = categoriaStartIndex * 120;
-      setCurrentScrollPosition(newScrollPosition);
-    }
-  }, [categoriaStartIndex, isDragging, isMouseDragging]);
-
-  // Calcular categorias visíveis baseado no tamanho da tela
-  useEffect(() => {
-    const handleResize = () => {
-      const novasCategoriasVisiveis = calcularCategoriasVisiveis();
-      setVisibleCategoriaItems(novasCategoriasVisiveis);
-
-      // Ajustar startIndex se necessário
-      const totalItens = grupos.length + 1; // +1 para incluir "Todos"
-      const maxIndex = Math.max(0, totalItens - novasCategoriasVisiveis);
-      if (categoriaStartIndex > maxIndex) {
-        setCategoriaStartIndex(maxIndex);
-      }
-    };
-
-    handleResize(); // Calcular inicialmente
-    window.addEventListener('resize', handleResize);
-
-    return () => window.removeEventListener('resize', handleResize);
-  }, [categoriaStartIndex, grupos.length]);
-
-  // Resetar categoriaStartIndex quando grupos mudarem
-  useEffect(() => {
-    setCategoriaStartIndex(0);
-  }, [grupos.length]);
 
   // Fechar carrinho automaticamente quando não há itens
   useEffect(() => {
@@ -1148,204 +1020,9 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
-  // Função para calcular quantas categorias cabem na tela
-  const calcularCategoriasVisiveis = () => {
-    const larguraTela = window.innerWidth;
-    const larguraBotaoCategoria = 120; // Largura fixa de cada botão de categoria
-    const espacoBotoes = 80; // Espaço para botões de navegação (se necessário)
-    const padding = 32; // Padding lateral do container
 
-    const totalCategorias = grupos.length + 1; // +1 para incluir "Todos"
-    const temNavegacao = totalCategorias > 1;
 
-    const larguraDisponivel = larguraTela - padding - (temNavegacao ? espacoBotoes : 0);
-    const itensPossiveis = Math.floor(larguraDisponivel / larguraBotaoCategoria);
 
-    return Math.max(1, Math.min(itensPossiveis, totalCategorias));
-  };
-
-  const navegarCategoriaAnterior = () => {
-    if (isAnimating) return; // Previne múltiplos cliques durante animação
-
-    setIsAnimating(true);
-    setCategoriaStartIndex(Math.max(0, categoriaStartIndex - 1));
-
-    // Reset da animação após a transição
-    setTimeout(() => setIsAnimating(false), 300);
-  };
-
-  const navegarCategoriaProxima = () => {
-    if (isAnimating) return; // Previne múltiplos cliques durante animação
-
-    const totalItens = grupos.length + 1; // +1 para incluir "Todos"
-    const maxIndex = Math.max(0, totalItens - visibleCategoriaItems);
-
-    setIsAnimating(true);
-    setCategoriaStartIndex(Math.min(maxIndex, categoriaStartIndex + 1));
-
-    // Reset da animação após a transição
-    setTimeout(() => setIsAnimating(false), 300);
-  };
-
-  // Funções para suporte a arrastar no mobile com scroll suave
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const touch = e.targetTouches[0];
-    const startX = touch.clientX;
-    const currentTime = Date.now();
-
-    setTouchStartX(startX);
-    setLastTouchX(startX);
-    setLastTouchTime(currentTime);
-    setIsDragging(true);
-    setScrollVelocity(0);
-
-    // Capturar posição atual do scroll
-    if (categoriaContainerRef.current) {
-      const container = categoriaContainerRef.current;
-      const currentTransform = container.style.transform;
-      const currentScroll = currentTransform ? parseFloat(currentTransform.match(/-?[\d.]+/)?.[0] || '0') : 0;
-      setCurrentScrollPosition(currentScroll);
-
-      // Parar qualquer animação em andamento
-      container.style.transition = 'none';
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    // Esta função é mantida vazia para evitar conflitos
-    // A lógica real está no event listener não-passivo
-  };
-
-  const handleTouchEnd = () => {
-    if (!isDragging || !categoriaContainerRef.current) return;
-
-    setIsDragging(false);
-
-    const container = categoriaContainerRef.current;
-    const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
-    const currentTransform = container.style.transform;
-    const currentScroll = currentTransform ? parseFloat(currentTransform.match(/-?[\d.]+/)?.[0] || '0') : 0;
-
-    // Aplicar inércia baseada na velocidade
-    let finalScroll = currentScroll;
-    if (Math.abs(scrollVelocity) > 0.2) {
-      const inertiaMultiplier = 150;
-      finalScroll = currentScroll - (scrollVelocity * inertiaMultiplier);
-    }
-
-    // Garantir que não ultrapasse os limites
-    finalScroll = Math.max(0, Math.min(maxScroll, finalScroll));
-
-    // Snap para o item mais próximo (opcional)
-    const itemWidth = 120;
-    const snappedIndex = Math.round(finalScroll / itemWidth);
-    finalScroll = snappedIndex * itemWidth;
-
-    // Aplicar animação suave para a posição final
-    container.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-    container.style.transform = `translateX(-${finalScroll}px)`;
-
-    // Atualizar estados
-    setCategoriaStartIndex(snappedIndex);
-    setCurrentScrollPosition(finalScroll);
-
-    // Remover transição após a animação
-    setTimeout(() => {
-      if (container) {
-        container.style.transition = '';
-      }
-    }, 300);
-
-    // Reset dos valores
-    setTouchStartX(0);
-    setScrollVelocity(0);
-  };
-
-  // Funções para suporte a mouse drag no desktop
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setMouseStartX(e.clientX);
-    setIsMouseDragging(true);
-    setDragStartTime(Date.now());
-
-    // Parar qualquer animação em andamento
-    if (categoriaContainerRef.current) {
-      categoriaContainerRef.current.style.transition = 'none';
-    }
-
-    // Prevenir seleção de texto
-    e.preventDefault();
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isMouseDragging) return;
-
-    const deltaX = e.clientX - mouseStartX;
-    const currentTime = Date.now();
-    const deltaTime = currentTime - dragStartTime;
-
-    // Calcular velocidade
-    if (deltaTime > 0) {
-      const velocity = deltaX / deltaTime;
-      setScrollVelocity(velocity);
-    }
-
-    setDragStartTime(currentTime);
-
-    // Aplicar scroll em tempo real
-    if (categoriaContainerRef.current) {
-      const container = categoriaContainerRef.current;
-      const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
-      const currentScroll = categoriaStartIndex * 120;
-      const newScroll = Math.max(0, Math.min(maxScroll, currentScroll - deltaX));
-
-      container.style.transform = `translateX(-${newScroll}px)`;
-    }
-  };
-
-  const handleMouseUp = () => {
-    if (!isMouseDragging) return;
-
-    setIsMouseDragging(false);
-
-    if (categoriaContainerRef.current) {
-      const container = categoriaContainerRef.current;
-      const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
-      const currentTransform = container.style.transform;
-      const currentScroll = currentTransform ? parseFloat(currentTransform.match(/-?[\d.]+/)?.[0] || '0') : 0;
-
-      // Aplicar inércia baseada na velocidade
-      let finalScroll = currentScroll;
-      if (Math.abs(scrollVelocity) > 0.1) {
-        const inertiaMultiplier = 200;
-        finalScroll = currentScroll - (scrollVelocity * inertiaMultiplier);
-      }
-
-      // Garantir que não ultrapasse os limites
-      finalScroll = Math.max(0, Math.min(maxScroll, finalScroll));
-
-      // Snap para o item mais próximo
-      const itemWidth = 120;
-      const snappedIndex = Math.round(finalScroll / itemWidth);
-      finalScroll = snappedIndex * itemWidth;
-
-      // Aplicar animação suave para a posição final
-      container.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-      container.style.transform = `translateX(-${finalScroll}px)`;
-
-      // Atualizar o índice de categoria
-      setCategoriaStartIndex(Math.round(finalScroll / itemWidth));
-
-      // Remover transição após a animação
-      setTimeout(() => {
-        if (container) {
-          container.style.transition = '';
-        }
-      }, 300);
-    }
-
-    setMouseStartX(0);
-    setScrollVelocity(0);
-  };
 
   // Funções para controle de quantidade dos produtos
   const obterQuantidadeProduto = (produtoId: string): number => {
@@ -2584,65 +2261,19 @@ const CardapioPublicoPage: React.FC = () => {
         <div className={`${config.modo_escuro ? 'bg-gray-800/50' : 'bg-white/80'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-10`}>
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="h-14 flex items-center">
-              {/* Botão Anterior */}
-              {categoriaStartIndex > 0 && (
-                <button
-                  onClick={navegarCategoriaAnterior}
-                  disabled={isAnimating}
-                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-r relative ${
-                    isAnimating
-                      ? 'opacity-50 cursor-not-allowed'
-                      : config.modo_escuro
-                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600 hover:scale-110'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
-                  }`}
-                >
-                  {/* Efeito de pulsação suave de dentro para fora */}
-                  <div className="relative">
-                    <ChevronsLeft size={20} className="relative z-10" />
-                    {/* Onda de pulsação 1 - mais interna */}
-                    <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${
-                      config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                    }`} style={{ animationDuration: '2s', animationDelay: '0s' }}></div>
-                    {/* Onda de pulsação 2 - média */}
-                    <div className={`absolute inset-0 rounded-full animate-ping opacity-15 scale-110 ${
-                      config.modo_escuro ? 'bg-blue-400' : 'bg-blue-600'
-                    }`} style={{ animationDuration: '2s', animationDelay: '0.3s' }}></div>
-                    {/* Onda de pulsação 3 - mais externa */}
-                    <div className={`absolute inset-0 rounded-full animate-ping opacity-10 scale-125 ${
-                      config.modo_escuro ? 'bg-purple-300' : 'bg-purple-500'
-                    }`} style={{ animationDuration: '2s', animationDelay: '0.6s' }}></div>
-                  </div>
-                </button>
-              )}
 
-              {/* Container de Categorias com Scroll Suave */}
-              <div
-                className="flex items-center h-full flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
+
+              {/* Container de Categorias com Scroll Suave usando biblioteca */}
+              <ScrollContainer
+                className="flex items-center h-full flex-1 overflow-hidden"
+                horizontal={true}
+                vertical={false}
+                hideScrollbars={true}
                 style={{
-                  touchAction: 'none', // Desabilita todos os gestos nativos
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  msUserSelect: 'none',
-                  MozUserSelect: 'none'
+                  cursor: 'grab'
                 }}
               >
-                <div
-                  ref={categoriaContainerRef}
-                  className="flex items-center h-full"
-                  style={{
-                    transform: `translateX(-${currentScrollPosition}px)`,
-                    width: `${(grupos.length + 1) * 120}px`, // +1 para incluir "Todos"
-                    willChange: 'transform' // Otimização para animações
-                  }}
-                >
+                <div className="flex items-center h-full gap-2 px-2">
                   {(() => {
                     const todasCategorias = [
                       { id: 'todos', nome: '🍽️ Todos' },
@@ -2671,39 +2302,7 @@ const CardapioPublicoPage: React.FC = () => {
                     ));
                   })()}
                 </div>
-              </div>
-
-              {/* Botão Próximo */}
-              {categoriaStartIndex + visibleCategoriaItems < (grupos.length + 1) && (
-                <button
-                  onClick={navegarCategoriaProxima}
-                  disabled={isAnimating}
-                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-l relative ${
-                    isAnimating
-                      ? 'opacity-50 cursor-not-allowed'
-                      : config.modo_escuro
-                      ? 'text-gray-400 hover:text-white hover:bg-gray-700/50 border-gray-600 hover:scale-110'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
-                  }`}
-                >
-                  {/* Efeito de pulsação suave de dentro para fora */}
-                  <div className="relative">
-                    <ChevronsRight size={20} className="relative z-10" />
-                    {/* Onda de pulsação 1 - mais interna */}
-                    <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${
-                      config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                    }`} style={{ animationDuration: '2s', animationDelay: '0s' }}></div>
-                    {/* Onda de pulsação 2 - média */}
-                    <div className={`absolute inset-0 rounded-full animate-ping opacity-15 scale-110 ${
-                      config.modo_escuro ? 'bg-blue-400' : 'bg-blue-600'
-                    }`} style={{ animationDuration: '2s', animationDelay: '0.3s' }}></div>
-                    {/* Onda de pulsação 3 - mais externa */}
-                    <div className={`absolute inset-0 rounded-full animate-ping opacity-10 scale-125 ${
-                      config.modo_escuro ? 'bg-purple-300' : 'bg-purple-500'
-                    }`} style={{ animationDuration: '2s', animationDelay: '0.6s' }}></div>
-                  </div>
-                </button>
-              )}
+              </ScrollContainer>
             </div>
           </div>
         </div>
