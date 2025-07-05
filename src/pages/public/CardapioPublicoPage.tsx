@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package } from 'lucide-react';
+import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
@@ -124,6 +124,10 @@ const CardapioPublicoPage: React.FC = () => {
   const [galeriaAberta, setGaleriaAberta] = useState(false);
   const [fotosProdutoSelecionado, setFotosProdutoSelecionado] = useState<Array<{id: string; url: string; principal?: boolean}>>([]);
   const [fotoInicialIndex, setFotoInicialIndex] = useState(0);
+
+  // Estados para adicionais
+  const [adicionaisExpandidos, setAdicionaisExpandidos] = useState<{[produtoId: string]: {[opcaoId: string]: boolean}}>({});
+  const [adicionaisSelecionados, setAdicionaisSelecionados] = useState<{[produtoId: string]: {[itemId: string]: number}}>({});
 
   // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
   useEffect(() => {
@@ -822,6 +826,55 @@ const CardapioPublicoPage: React.FC = () => {
     setFotosProdutoSelecionado(produto.produto_fotos);
     setFotoInicialIndex(fotoIndex);
     setGaleriaAberta(true);
+  };
+
+  // Funções para controlar adicionais
+  const toggleAdicionalOpcao = (produtoId: string, opcaoId: string) => {
+    setAdicionaisExpandidos(prev => ({
+      ...prev,
+      [produtoId]: {
+        ...prev[produtoId],
+        [opcaoId]: !prev[produtoId]?.[opcaoId]
+      }
+    }));
+  };
+
+  const incrementarAdicional = (produtoId: string, itemId: string) => {
+    setAdicionaisSelecionados(prev => ({
+      ...prev,
+      [produtoId]: {
+        ...prev[produtoId],
+        [itemId]: (prev[produtoId]?.[itemId] || 0) + 1
+      }
+    }));
+  };
+
+  const decrementarAdicional = (produtoId: string, itemId: string) => {
+    setAdicionaisSelecionados(prev => {
+      const quantidadeAtual = prev[produtoId]?.[itemId] || 0;
+      if (quantidadeAtual <= 1) {
+        const novosProdutos = { ...prev };
+        if (novosProdutos[produtoId]) {
+          delete novosProdutos[produtoId][itemId];
+          if (Object.keys(novosProdutos[produtoId]).length === 0) {
+            delete novosProdutos[produtoId];
+          }
+        }
+        return novosProdutos;
+      }
+
+      return {
+        ...prev,
+        [produtoId]: {
+          ...prev[produtoId],
+          [itemId]: quantidadeAtual - 1
+        }
+      };
+    });
+  };
+
+  const obterQuantidadeAdicional = (produtoId: string, itemId: string): number => {
+    return adicionaisSelecionados[produtoId]?.[itemId] || 0;
   };
 
   // Funções para localStorage do carrinho
@@ -2291,16 +2344,106 @@ const CardapioPublicoPage: React.FC = () => {
                   {/* Adicionais do produto - largura total do card */}
                   {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && (
                     <div className="mb-3 w-full">
+                      {/* Divisória acima dos adicionais */}
+                      <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
+
+                      {/* Título dos adicionais */}
                       <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Opções disponíveis:
+                        Adicionais:
                       </div>
-                      <div className="space-y-1 w-full">
+
+                      {/* Lista de opções de adicionais */}
+                      <div className="space-y-2 w-full">
                         {produto.opcoes_adicionais.map(opcao => (
-                          <div key={opcao.id} className={`text-xs w-full ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
-                            <span className="font-medium">{opcao.nome}:</span>
-                            <span className="ml-1">
-                              {opcao.itens.map(item => item.nome).join(', ')}
-                            </span>
+                          <div key={opcao.id} className="w-full">
+                            {/* Botão do grupo de adicional */}
+                            <button
+                              onClick={() => toggleAdicionalOpcao(produto.id, opcao.id)}
+                              className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                                config.modo_escuro
+                                  ? 'bg-gray-700/50 hover:bg-gray-700 text-white'
+                                  : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{opcao.nome}</span>
+                                <span className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  ({opcao.itens.length} {opcao.itens.length === 1 ? 'item' : 'itens'})
+                                </span>
+                              </div>
+                              {adicionaisExpandidos[produto.id]?.[opcao.id] ? (
+                                <ChevronUp size={16} className={config.modo_escuro ? 'text-gray-400' : 'text-gray-500'} />
+                              ) : (
+                                <ChevronDown size={16} className={config.modo_escuro ? 'text-gray-400' : 'text-gray-500'} />
+                              )}
+                            </button>
+
+                            {/* Itens do adicional (expansível) */}
+                            {adicionaisExpandidos[produto.id]?.[opcao.id] && (
+                              <div className="mt-2 space-y-2">
+                                {opcao.itens.map(item => {
+                                  const quantidade = obterQuantidadeAdicional(produto.id, item.id);
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      className={`flex items-center justify-between p-2 rounded-lg ${
+                                        config.modo_escuro
+                                          ? 'bg-gray-800/50'
+                                          : 'bg-gray-50'
+                                      }`}
+                                    >
+                                      <div className="flex-1">
+                                        <p className={`text-sm font-medium ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                                          {item.nome}
+                                        </p>
+                                        <p className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                                          {item.preco > 0 ? `+ ${formatarPreco(item.preco)}` : 'Grátis'}
+                                        </p>
+                                      </div>
+
+                                      {/* Controles de quantidade do adicional */}
+                                      {obterWhatsAppEmpresa() && lojaAberta !== false && (
+                                        <div className="flex items-center gap-1">
+                                          {/* Botão Decrementar */}
+                                          <button
+                                            onClick={() => decrementarAdicional(produto.id, item.id)}
+                                            disabled={quantidade === 0}
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                              quantidade === 0
+                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                : config.modo_escuro
+                                                ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                          >
+                                            <Minus size={10} />
+                                          </button>
+
+                                          {/* Quantidade */}
+                                          <span className={`w-6 text-center text-xs font-semibold ${
+                                            config.modo_escuro ? 'text-white' : 'text-gray-800'
+                                          }`}>
+                                            {quantidade}
+                                          </span>
+
+                                          {/* Botão Incrementar */}
+                                          <button
+                                            onClick={() => incrementarAdicional(produto.id, item.id)}
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                              config.modo_escuro
+                                                ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                                            }`}
+                                          >
+                                            <Plus size={10} />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
