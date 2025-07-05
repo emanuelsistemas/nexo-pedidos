@@ -2046,19 +2046,7 @@ const CardapioPublicoPage: React.FC = () => {
                       : 'bg-white border border-gray-200 shadow-lg'
                   }`}
                 >
-                  {/* Badge de Selecionado */}
-                  {estaSelecionado && (
-                    <div className="absolute top-3 right-3 z-10">
-                      <div className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
-                        config.modo_escuro
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-blue-500 text-white'
-                      }`}>
-                        <ShoppingCart size={10} />
-                        {formatarQuantidade(quantidadeSelecionada, produto.unidade_medida)}
-                      </div>
-                    </div>
-                  )}
+
 
                 {/* Imagem do produto - Apenas para config.mostrar_fotos (fotos grandes) */}
                 {config.mostrar_fotos && !config.cardapio_fotos_minimizadas && (() => {
@@ -2084,12 +2072,12 @@ const CardapioPublicoPage: React.FC = () => {
 
                 {/* Conteúdo do card */}
                 <div className="p-3">
-                  <div className="mb-4">
+                  <div className="mb-2">
                     {/* Layout com foto pequena quando cardapio_fotos_minimizadas ativo */}
                     {config.cardapio_fotos_minimizadas ? (
-                      <div className="flex items-start gap-3 mb-2">
+                      <div className="flex items-start gap-2 mb-1">
                         {/* Foto pequena */}
-                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
                           {(() => {
                             const fotoItem = getFotoPrincipal(produto);
                             return fotoItem ? (
@@ -2111,26 +2099,26 @@ const CardapioPublicoPage: React.FC = () => {
 
                         {/* Nome, preço e descrição */}
                         <div className="flex-1 min-w-0">
-                          <h3 className={`text-xl font-bold ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                          <h3 className={`text-lg font-bold leading-tight truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                             {produto.nome}
                           </h3>
 
                           {/* Linha do preço com controles de quantidade */}
-                          <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center justify-between">
                             {config.mostrar_precos && (
-                              <div className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                              <div className="text-lg font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
                                 {formatarPreco(produto.preco)}
                               </div>
                             )}
 
                             {/* Controles de quantidade na mesma linha do preço */}
                             {obterWhatsAppEmpresa() && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1">
                                 {/* Botão Decrementar */}
                                 <button
                                   onClick={() => decrementarQuantidade(produto.id)}
                                   disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
-                                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 ${
                                     obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
                                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                       : config.modo_escuro
@@ -2138,7 +2126,7 @@ const CardapioPublicoPage: React.FC = () => {
                                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                   }`}
                                 >
-                                  <Minus size={14} />
+                                  <Minus size={12} />
                                 </button>
 
                                 {/* Campo de Quantidade */}
@@ -2149,7 +2137,7 @@ const CardapioPublicoPage: React.FC = () => {
                                   onBlur={() => setItemEditandoQuantidade(null)}
                                   onFocus={() => setItemEditandoQuantidade(produto.id)}
                                   disabled={lojaAberta === false}
-                                  className={`w-12 h-8 text-center text-sm font-semibold rounded-lg border-2 transition-all duration-200 ${
+                                  className={`w-10 h-7 text-center text-xs font-semibold rounded-lg border-2 transition-all duration-200 ${
                                     lojaAberta === false
                                       ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
                                       : itemEditandoQuantidade === produto.id
@@ -2166,7 +2154,7 @@ const CardapioPublicoPage: React.FC = () => {
                                 <button
                                   onClick={() => incrementarQuantidade(produto.id)}
                                   disabled={lojaAberta === false}
-                                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 ${
                                     lojaAberta === false
                                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                       : config.modo_escuro
@@ -2174,14 +2162,14 @@ const CardapioPublicoPage: React.FC = () => {
                                       : 'bg-blue-500 text-white hover:bg-blue-600'
                                   }`}
                                 >
-                                  <Plus size={14} />
+                                  <Plus size={12} />
                                 </button>
                               </div>
                             )}
                           </div>
 
                           {produto.descricao && (
-                            <p className={`text-sm leading-relaxed ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                            <p className={`text-xs leading-tight mt-1 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
                               {produto.descricao}
                             </p>
                           )}
