@@ -521,6 +521,8 @@ const CardapioPublicoPage: React.FC = () => {
 
 
 
+
+
   // Fechar carrinho automaticamente quando não há itens
   useEffect(() => {
     const totalItens = obterQuantidadeTotalItens();
@@ -2280,7 +2282,7 @@ const CardapioPublicoPage: React.FC = () => {
                       ...grupos
                     ];
 
-                    return todasCategorias.map((categoria, index) => (
+                    return todasCategorias.map((categoria) => (
                       <button
                         key={categoria.id}
                         onClick={() => setGrupoSelecionado(categoria.id)}
