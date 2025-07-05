@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare } from 'lucide-react';
+import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
@@ -2810,19 +2810,6 @@ const CardapioPublicoPage: React.FC = () => {
                                 >
                                   <Plus size={12} />
                                 </button>
-
-                                {/* Botão Pedir Individual */}
-                                <button
-                                  onClick={() => handlePedirWhatsApp(produto)}
-                                  disabled={lojaAberta === false}
-                                  className={`ml-2 px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
-                                    lojaAberta === false
-                                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
-                                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 shadow-sm'
-                                  }`}
-                                >
-                                  {lojaAberta === false ? 'Fechada' : 'Pedir'}
-                                </button>
                               </div>
                             )}
                           </div>
@@ -2913,19 +2900,6 @@ const CardapioPublicoPage: React.FC = () => {
                                   <Plus size={14} />
                                 </button>
                               </div>
-
-                              {/* Botão Pedir Individual */}
-                              <button
-                                onClick={() => handlePedirWhatsApp(produto)}
-                                disabled={lojaAberta === false}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                                  lojaAberta === false
-                                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
-                                    : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 shadow-lg'
-                                }`}
-                              >
-                                {lojaAberta === false ? 'Loja Fechada' : 'Pedir'}
-                              </button>
                             </div>
                           )}
                         </div>
@@ -3175,6 +3149,21 @@ const CardapioPublicoPage: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Botão Pedir - Linha completa acima da observação */}
+                  <div className="mt-4 w-full">
+                    <button
+                      onClick={() => handlePedirWhatsApp(produto)}
+                      disabled={lojaAberta === false}
+                      className={`w-full py-3 px-4 rounded-xl text-base font-semibold transition-all duration-200 ${
+                        lojaAberta === false
+                          ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                          : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg hover:shadow-xl'
+                      }`}
+                    >
+                      {lojaAberta === false ? 'Loja Fechada' : 'Pedir via WhatsApp'}
+                    </button>
+                  </div>
 
                   {/* Seção de Observação - Apenas se produto estiver no carrinho */}
                   {obterQuantidadeProduto(produto.id) > 0 && (
