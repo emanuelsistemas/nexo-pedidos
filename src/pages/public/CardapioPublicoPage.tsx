@@ -116,6 +116,15 @@ const CardapioPublicoPage: React.FC = () => {
   // Estados para suporte a arrastar no mobile
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchEndX, setTouchEndX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartTime, setDragStartTime] = useState(0);
+  const [scrollVelocity, setScrollVelocity] = useState(0);
+  const categoriaContainerRef = useRef<HTMLDivElement>(null);
+  const [isMouseDragging, setIsMouseDragging] = useState(false);
+  const [mouseStartX, setMouseStartX] = useState(0);
+  const [currentScrollPosition, setCurrentScrollPosition] = useState(0);
+  const [lastTouchX, setLastTouchX] = useState(0);
+  const [lastTouchTime, setLastTouchTime] = useState(0);
 
   // Estados para controle de quantidade dos produtos
   const [quantidadesProdutos, setQuantidadesProdutos] = useState<Record<string, number>>({});
@@ -521,6 +530,99 @@ const CardapioPublicoPage: React.FC = () => {
       calcularProximoFechamento();
     }
   }, [horarios, modoAutomatico, lojaAberta]);
+
+  // Gerenciar event listeners globais para mouse drag
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isMouseDragging) return;
+
+      const deltaX = e.clientX - mouseStartX;
+      const currentTime = Date.now();
+      const deltaTime = currentTime - dragStartTime;
+
+      // Calcular velocidade
+      if (deltaTime > 0) {
+        const velocity = deltaX / deltaTime;
+        setScrollVelocity(velocity);
+      }
+
+      setDragStartTime(currentTime);
+
+      // Aplicar scroll em tempo real
+      if (categoriaContainerRef.current) {
+        const container = categoriaContainerRef.current;
+        const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
+        const currentScroll = categoriaStartIndex * 120;
+        const newScroll = Math.max(0, Math.min(maxScroll, currentScroll - deltaX));
+
+        container.style.transform = `translateX(-${newScroll}px)`;
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isMouseDragging) {
+        handleMouseUp();
+      }
+    };
+
+    if (isMouseDragging) {
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isMouseDragging, mouseStartX, dragStartTime, categoriaStartIndex, grupos.length]);
+
+  // Configurar event listeners não-passivos para touch
+  useEffect(() => {
+    const container = categoriaContainerRef.current;
+    if (!container) return;
+
+    const handleTouchMoveNonPassive = (e: TouchEvent) => {
+      if (isDragging) {
+        e.preventDefault(); // Agora funciona porque não é passivo
+
+        const touch = e.targetTouches[0];
+        const currentX = touch.clientX;
+        const currentTime = Date.now();
+        const deltaX = currentX - touchStartX;
+
+        // Calcular velocidade
+        const timeDelta = currentTime - lastTouchTime;
+        if (timeDelta > 0) {
+          const velocity = (currentX - lastTouchX) / timeDelta;
+          setScrollVelocity(velocity);
+        }
+
+        setLastTouchX(currentX);
+        setLastTouchTime(currentTime);
+
+        // Aplicar scroll
+        const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
+        const newScroll = Math.max(0, Math.min(maxScroll, currentScrollPosition - deltaX));
+
+        container.style.transform = `translateX(-${newScroll}px)`;
+      }
+    };
+
+    // Adicionar event listener não-passivo
+    container.addEventListener('touchmove', handleTouchMoveNonPassive, { passive: false });
+
+    return () => {
+      container.removeEventListener('touchmove', handleTouchMoveNonPassive);
+    };
+  }, [isDragging, touchStartX, currentScrollPosition, lastTouchX, lastTouchTime, grupos.length]);
+
+  // Sincronizar currentScrollPosition com categoriaStartIndex quando não estiver arrastando
+  useEffect(() => {
+    if (!isDragging && !isMouseDragging) {
+      const newScrollPosition = categoriaStartIndex * 120;
+      setCurrentScrollPosition(newScrollPosition);
+    }
+  }, [categoriaStartIndex, isDragging, isMouseDragging]);
 
   // Calcular categorias visíveis baseado no tamanho da tela
   useEffect(() => {
@@ -1085,32 +1187,164 @@ const CardapioPublicoPage: React.FC = () => {
     setTimeout(() => setIsAnimating(false), 300);
   };
 
-  // Funções para suporte a arrastar no mobile
+  // Funções para suporte a arrastar no mobile com scroll suave
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.targetTouches[0].clientX);
+    const touch = e.targetTouches[0];
+    const startX = touch.clientX;
+    const currentTime = Date.now();
+
+    setTouchStartX(startX);
+    setLastTouchX(startX);
+    setLastTouchTime(currentTime);
+    setIsDragging(true);
+    setScrollVelocity(0);
+
+    // Capturar posição atual do scroll
+    if (categoriaContainerRef.current) {
+      const container = categoriaContainerRef.current;
+      const currentTransform = container.style.transform;
+      const currentScroll = currentTransform ? parseFloat(currentTransform.match(/-?[\d.]+/)?.[0] || '0') : 0;
+      setCurrentScrollPosition(currentScroll);
+
+      // Parar qualquer animação em andamento
+      container.style.transition = 'none';
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEndX(e.targetTouches[0].clientX);
+    // Esta função é mantida vazia para evitar conflitos
+    // A lógica real está no event listener não-passivo
   };
 
   const handleTouchEnd = () => {
-    if (!touchStartX || !touchEndX || isAnimating) return;
+    if (!isDragging || !categoriaContainerRef.current) return;
 
-    const distance = touchStartX - touchEndX;
-    const isLeftSwipe = distance > 50;
-    const isRightSwipe = distance < -50;
+    setIsDragging(false);
 
-    if (isLeftSwipe) {
-      navegarCategoriaProxima();
+    const container = categoriaContainerRef.current;
+    const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
+    const currentTransform = container.style.transform;
+    const currentScroll = currentTransform ? parseFloat(currentTransform.match(/-?[\d.]+/)?.[0] || '0') : 0;
+
+    // Aplicar inércia baseada na velocidade
+    let finalScroll = currentScroll;
+    if (Math.abs(scrollVelocity) > 0.2) {
+      const inertiaMultiplier = 150;
+      finalScroll = currentScroll - (scrollVelocity * inertiaMultiplier);
     }
-    if (isRightSwipe) {
-      navegarCategoriaAnterior();
-    }
 
-    // Reset dos valores de touch
+    // Garantir que não ultrapasse os limites
+    finalScroll = Math.max(0, Math.min(maxScroll, finalScroll));
+
+    // Snap para o item mais próximo (opcional)
+    const itemWidth = 120;
+    const snappedIndex = Math.round(finalScroll / itemWidth);
+    finalScroll = snappedIndex * itemWidth;
+
+    // Aplicar animação suave para a posição final
+    container.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    container.style.transform = `translateX(-${finalScroll}px)`;
+
+    // Atualizar estados
+    setCategoriaStartIndex(snappedIndex);
+    setCurrentScrollPosition(finalScroll);
+
+    // Remover transição após a animação
+    setTimeout(() => {
+      if (container) {
+        container.style.transition = '';
+      }
+    }, 300);
+
+    // Reset dos valores
     setTouchStartX(0);
-    setTouchEndX(0);
+    setScrollVelocity(0);
+  };
+
+  // Funções para suporte a mouse drag no desktop
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setMouseStartX(e.clientX);
+    setIsMouseDragging(true);
+    setDragStartTime(Date.now());
+
+    // Parar qualquer animação em andamento
+    if (categoriaContainerRef.current) {
+      categoriaContainerRef.current.style.transition = 'none';
+    }
+
+    // Prevenir seleção de texto
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isMouseDragging) return;
+
+    const deltaX = e.clientX - mouseStartX;
+    const currentTime = Date.now();
+    const deltaTime = currentTime - dragStartTime;
+
+    // Calcular velocidade
+    if (deltaTime > 0) {
+      const velocity = deltaX / deltaTime;
+      setScrollVelocity(velocity);
+    }
+
+    setDragStartTime(currentTime);
+
+    // Aplicar scroll em tempo real
+    if (categoriaContainerRef.current) {
+      const container = categoriaContainerRef.current;
+      const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
+      const currentScroll = categoriaStartIndex * 120;
+      const newScroll = Math.max(0, Math.min(maxScroll, currentScroll - deltaX));
+
+      container.style.transform = `translateX(-${newScroll}px)`;
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!isMouseDragging) return;
+
+    setIsMouseDragging(false);
+
+    if (categoriaContainerRef.current) {
+      const container = categoriaContainerRef.current;
+      const maxScroll = Math.max(0, (grupos.length + 1) * 120 - container.parentElement!.offsetWidth);
+      const currentTransform = container.style.transform;
+      const currentScroll = currentTransform ? parseFloat(currentTransform.match(/-?[\d.]+/)?.[0] || '0') : 0;
+
+      // Aplicar inércia baseada na velocidade
+      let finalScroll = currentScroll;
+      if (Math.abs(scrollVelocity) > 0.1) {
+        const inertiaMultiplier = 200;
+        finalScroll = currentScroll - (scrollVelocity * inertiaMultiplier);
+      }
+
+      // Garantir que não ultrapasse os limites
+      finalScroll = Math.max(0, Math.min(maxScroll, finalScroll));
+
+      // Snap para o item mais próximo
+      const itemWidth = 120;
+      const snappedIndex = Math.round(finalScroll / itemWidth);
+      finalScroll = snappedIndex * itemWidth;
+
+      // Aplicar animação suave para a posição final
+      container.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      container.style.transform = `translateX(-${finalScroll}px)`;
+
+      // Atualizar o índice de categoria
+      setCategoriaStartIndex(Math.round(finalScroll / itemWidth));
+
+      // Remover transição após a animação
+      setTimeout(() => {
+        if (container) {
+          container.style.transition = '';
+        }
+      }, 300);
+    }
+
+    setMouseStartX(0);
+    setScrollVelocity(0);
   };
 
   // Funções para controle de quantidade dos produtos
@@ -2382,18 +2616,31 @@ const CardapioPublicoPage: React.FC = () => {
                 </button>
               )}
 
-              {/* Container de Categorias com Slide Suave */}
+              {/* Container de Categorias com Scroll Suave */}
               <div
-                className="flex items-center h-full flex-1 overflow-hidden"
+                className="flex items-center h-full flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                style={{
+                  touchAction: 'none', // Desabilita todos os gestos nativos
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  msUserSelect: 'none',
+                  MozUserSelect: 'none'
+                }}
               >
                 <div
-                  className="flex items-center h-full transition-transform duration-300 ease-in-out"
+                  ref={categoriaContainerRef}
+                  className="flex items-center h-full"
                   style={{
-                    transform: `translateX(-${categoriaStartIndex * 120}px)`,
-                    width: `${(grupos.length + 1) * 120}px` // +1 para incluir "Todos"
+                    transform: `translateX(-${currentScrollPosition}px)`,
+                    width: `${(grupos.length + 1) * 120}px`, // +1 para incluir "Todos"
+                    willChange: 'transform' // Otimização para animações
                   }}
                 >
                   {(() => {
