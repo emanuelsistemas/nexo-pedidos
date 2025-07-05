@@ -143,6 +143,7 @@ const ProdutosPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true); // Iniciar como true
   const [isDataReady, setIsDataReady] = useState(false); // Novo estado para controlar quando os dados estão prontos
   const [isGrupoForm, setIsGrupoForm] = useState(true);
+  const [trabalhaComPizzas, setTrabalhaComPizzas] = useState(false);
 
   // Estados para controlar o carregamento de cada parte dos dados
   const [loadingStates, setLoadingStates] = useState({
@@ -205,6 +206,7 @@ const ProdutosPage: React.FC = () => {
     estoque_minimo_ativo: false,
     preco_custo: 0,
     margem_percentual: 0,
+    pizza: false,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -426,6 +428,41 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
+  const carregarConfiguracaoPizzas = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Buscar empresa_id da tabela usuarios (mesmo padrão das outras funções)
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      console.log('🍕 Carregando configuração de pizzas para empresa:', usuarioData.empresa_id);
+
+      // Buscar configuração de pizzas
+      const { data: configData } = await supabase
+        .from('pdv_config')
+        .select('trabalha_com_pizzas')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      console.log('🍕 Configuração encontrada:', configData);
+
+      if (configData) {
+        const trabalhaComPizzasValue = configData.trabalha_com_pizzas || false;
+        console.log('🍕 Definindo trabalhaComPizzas como:', trabalhaComPizzasValue);
+        setTrabalhaComPizzas(trabalhaComPizzasValue);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configuração de pizzas:', error);
+    }
+  };
+
   useEffect(() => {
     loadGrupos();
     loadAvailableOpcoes();
@@ -435,6 +472,21 @@ const ProdutosPage: React.FC = () => {
     loadOpcoesAdicionaisConfig();
     loadRegimeTributario();
     carregarConfiguracoesTabelaPrecos();
+    carregarConfiguracaoPizzas();
+  }, []);
+
+  // useEffect separado para configurar event listener de pizzas
+  useEffect(() => {
+    const handlePizzasChange = (event: CustomEvent) => {
+      console.log('🍕 Evento pizzasChanged recebido:', event.detail);
+      setTrabalhaComPizzas(event.detail.trabalhaComPizzas);
+    };
+
+    window.addEventListener('pizzasChanged', handlePizzasChange as EventListener);
+
+    return () => {
+      window.removeEventListener('pizzasChanged', handlePizzasChange as EventListener);
+    };
   }, []);
 
   // Fechar dropdown de CFOP quando clicar fora
@@ -1606,6 +1658,7 @@ const ProdutosPage: React.FC = () => {
       peso_liquido: 0,
       preco_custo: 0,
       margem_percentual: 0,
+      pizza: false,
     });
 
     // Inicializa o preço formatado
@@ -1799,6 +1852,7 @@ const ProdutosPage: React.FC = () => {
       peso_liquido: produto.peso_liquido || 0,
       preco_custo: produto.preco_custo || 0,
       margem_percentual: produto.margem_percentual || 0,
+      pizza: produto.pizza || false,
     };
 
     // Definir o estado do novo produto
@@ -2647,6 +2701,7 @@ const ProdutosPage: React.FC = () => {
           // ✅ NOVOS CAMPOS: Preço de custo e margem percentual
           preco_custo: novoProduto.preco_custo || 0,
           margem_percentual: novoProduto.margem_percentual || 0,
+          pizza: novoProduto.pizza || false,
           empresa_id: usuarioData.empresa_id
         };
 
@@ -2708,6 +2763,7 @@ const ProdutosPage: React.FC = () => {
           // ✅ NOVOS CAMPOS: Preço de custo e margem percentual
           preco_custo: novoProduto.preco_custo || 0,
           margem_percentual: novoProduto.margem_percentual || 0,
+          pizza: novoProduto.pizza || false,
         };
 
         // Log para confirmar que os dados fiscais estão sendo salvos
@@ -2931,6 +2987,7 @@ const ProdutosPage: React.FC = () => {
         // ✅ NOVOS CAMPOS: Preço de custo e margem percentual
         preco_custo: produtoOriginal.preco_custo || 0,
         margem_percentual: produtoOriginal.margem_percentual || 0,
+        pizza: produtoOriginal.pizza || false,
       };
 
       // Configurar para edição
@@ -4144,6 +4201,8 @@ const ProdutosPage: React.FC = () => {
                           </div>
                         </div>
 
+
+
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-2">
                             Código do Produto
@@ -4967,6 +5026,33 @@ const ProdutosPage: React.FC = () => {
                             </div>
                           )}
                         </div>
+
+                        {/* Seção de Pizza - Só aparece se a empresa trabalha com pizzas */}
+                        {console.log('🍕 DEBUG: trabalhaComPizzas =', trabalhaComPizzas)}
+                        {trabalhaComPizzas && (
+                          <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-gray-800/30">
+                            <div className="flex items-center mb-4">
+                              <input
+                                type="checkbox"
+                                id="pizza"
+                                checked={novoProduto.pizza || false}
+                                onChange={(e) => setNovoProduto({ ...novoProduto, pizza: e.target.checked })}
+                                className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                              />
+                              <label htmlFor="pizza" className="text-sm font-medium text-white cursor-pointer">
+                                Este produto é Pizza?
+                              </label>
+                            </div>
+
+                            {novoProduto.pizza && (
+                              <div className="pl-7 border-l-2 border-primary-500/30 ml-1.5">
+                                <p className="text-sm text-gray-400">
+                                  🍕 Produto marcado como pizza. Funcionalidades específicas para pizzarias estarão disponíveis no cardápio digital.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Seção de Opções Adicionais ocultada conforme solicitado */}
 

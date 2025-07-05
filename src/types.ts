@@ -36,6 +36,8 @@ export interface Produto {
   aliquota_cofins?: number;
   cest?: string;
   peso_liquido?: number;
+  // Campos específicos para pizzas
+  pizza?: boolean;
 }
 
 export interface Grupo {
