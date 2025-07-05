@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
+import FotoGaleria from '../../components/comum/FotoGaleria';
 
 interface Produto {
   id: string;
@@ -13,6 +14,12 @@ interface Produto {
   grupo_id: string;
   grupo_nome?: string;
   ativo: boolean;
+  produto_fotos?: Array<{
+    id: string;
+    url: string;
+    principal: boolean;
+  }>;
+  fotos_count?: number;
 }
 
 interface Empresa {
@@ -97,6 +104,11 @@ const CardapioPublicoPage: React.FC = () => {
   const [ordemAdicaoItens, setOrdemAdicaoItens] = useState<Record<string, number>>({});
   const [itemChacoalhando, setItemChacoalhando] = useState<string | null>(null);
   const [itemEditandoQuantidade, setItemEditandoQuantidade] = useState<string | null>(null);
+
+  // Estados para galeria de fotos
+  const [galeriaAberta, setGaleriaAberta] = useState(false);
+  const [fotosProdutoSelecionado, setFotosProdutoSelecionado] = useState<Array<{id: string; url: string; principal?: boolean}>>([]);
+  const [fotoInicialIndex, setFotoInicialIndex] = useState(0);
 
   // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
   useEffect(() => {
@@ -614,19 +626,19 @@ const CardapioPublicoPage: React.FC = () => {
         return;
       }
 
-      // 4. Buscar fotos dos produtos
+      // 4. Buscar todas as fotos dos produtos
       const produtosIds = produtosData?.map(p => p.id) || [];
-      let fotosData: any[] = [];
+      let todasFotosData: any[] = [];
 
       if (produtosIds.length > 0) {
         const { data: fotosResult, error: fotosError } = await supabase
           .from('produto_fotos')
-          .select('produto_id, url, principal')
+          .select('id, produto_id, url, principal')
           .in('produto_id', produtosIds)
-          .eq('principal', true); // Buscar apenas a foto principal
+          .order('principal', { ascending: false }); // Principal primeiro
 
         if (!fotosError && fotosResult) {
-          fotosData = fotosResult;
+          todasFotosData = fotosResult;
         }
       }
 
@@ -674,14 +686,22 @@ const CardapioPublicoPage: React.FC = () => {
         setLojaAberta(null);
       }
 
-      // Processar produtos com nome do grupo e foto
+      // Processar produtos com nome do grupo e todas as fotos
       const produtosProcessados = produtosData?.map(produto => {
         const grupo = gruposData.find(g => g.id === produto.grupo_id);
-        const foto = fotosData.find(f => f.produto_id === produto.id);
+        const fotosProduto = todasFotosData.filter(f => f.produto_id === produto.id);
+        const fotoPrincipal = fotosProduto.find(f => f.principal) || fotosProduto[0];
+
         return {
           ...produto,
           grupo_nome: grupo?.nome || 'Sem categoria',
-          foto_url: foto?.url || null
+          foto_url: fotoPrincipal?.url || null,
+          produto_fotos: fotosProduto.map(f => ({
+            id: f.id,
+            url: f.url,
+            principal: f.principal
+          })),
+          fotos_count: fotosProduto.length
         };
       }) || [];
 
@@ -744,6 +764,15 @@ const CardapioPublicoPage: React.FC = () => {
 
     // Se não encontrar foto principal, retornar a primeira
     return fotoPrincipal || produto.produto_fotos[0];
+  };
+
+  // Função para abrir galeria de fotos
+  const abrirGaleriaFotos = (produto: Produto, fotoIndex: number = 0) => {
+    if (!produto.produto_fotos || produto.produto_fotos.length === 0) return;
+
+    setFotosProdutoSelecionado(produto.produto_fotos);
+    setFotoInicialIndex(fotoIndex);
+    setGaleriaAberta(true);
   };
 
   // Funções para localStorage do carrinho
@@ -2052,7 +2081,10 @@ const CardapioPublicoPage: React.FC = () => {
                 {config.mostrar_fotos && !config.cardapio_fotos_minimizadas && (() => {
                   const fotoItem = getFotoPrincipal(produto);
                   return fotoItem ? (
-                    <div className="relative h-48 overflow-hidden">
+                    <div
+                      className="relative h-48 overflow-hidden cursor-pointer"
+                      onClick={() => abrirGaleriaFotos(produto, 0)}
+                    >
                       <img
                         src={fotoItem.url}
                         alt={produto.nome}
@@ -2062,6 +2094,13 @@ const CardapioPublicoPage: React.FC = () => {
                         }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+
+                      {/* Contador de fotos */}
+                      {produto.fotos_count && produto.fotos_count > 1 && (
+                        <div className="absolute top-2 right-2 bg-black/70 text-white px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm">
+                          {produto.fotos_count}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className={`h-48 flex items-center justify-center ${config.modo_escuro ? 'bg-gray-700' : 'bg-gray-100'}`}>
@@ -2077,14 +2116,17 @@ const CardapioPublicoPage: React.FC = () => {
                     {config.cardapio_fotos_minimizadas ? (
                       <div className="flex items-start gap-2 mb-1">
                         {/* Foto pequena */}
-                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                        <div
+                          className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
+                          onClick={() => abrirGaleriaFotos(produto, 0)}
+                        >
                           {(() => {
                             const fotoItem = getFotoPrincipal(produto);
                             return fotoItem ? (
                               <img
                                 src={fotoItem.url}
                                 alt={produto.nome}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
@@ -2095,6 +2137,13 @@ const CardapioPublicoPage: React.FC = () => {
                               </div>
                             );
                           })()}
+
+                          {/* Contador de fotos para foto pequena */}
+                          {produto.fotos_count && produto.fotos_count > 1 && (
+                            <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium">
+                              {produto.fotos_count}
+                            </div>
+                          )}
                         </div>
 
                         {/* Nome, preço e descrição */}
@@ -2438,14 +2487,17 @@ const CardapioPublicoPage: React.FC = () => {
 
                             {/* Foto do produto (quando configuração ativa) */}
                             {config.cardapio_fotos_minimizadas && (
-                              <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                              <div
+                                className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
+                                onClick={() => abrirGaleriaFotos(produto, 0)}
+                              >
                                 {(() => {
                                   const fotoItem = getFotoPrincipal(produto);
                                   return fotoItem ? (
                                     <img
                                       src={fotoItem.url}
                                       alt={produto.nome}
-                                      className="w-full h-full object-cover"
+                                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
                                     />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center">
@@ -2453,6 +2505,13 @@ const CardapioPublicoPage: React.FC = () => {
                                     </div>
                                   );
                                 })()}
+
+                                {/* Contador de fotos para carrinho */}
+                                {produto.fotos_count && produto.fotos_count > 1 && (
+                                  <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium">
+                                    {produto.fotos_count}
+                                  </div>
+                                )}
                               </div>
                             )}
 
@@ -2612,6 +2671,14 @@ const CardapioPublicoPage: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Modal de Galeria de Fotos */}
+      <FotoGaleria
+        fotos={fotosProdutoSelecionado}
+        isOpen={galeriaAberta}
+        onClose={() => setGaleriaAberta(false)}
+        initialFotoIndex={fotoInicialIndex}
+      />
     </div>
     </>
   );
