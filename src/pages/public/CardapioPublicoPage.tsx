@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, ChevronLeft, ChevronRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle } from 'lucide-react';
+import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -1635,7 +1635,11 @@ const CardapioPublicoPage: React.FC = () => {
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
                   }`}
                 >
-                  <ChevronLeft size={20} />
+                  {/* Seta dupla com animação de pulso para indicar mais itens à esquerda */}
+                  <ChevronsLeft
+                    size={20}
+                    className="animate-pulse"
+                  />
                 </button>
               )}
 
@@ -1688,7 +1692,7 @@ const CardapioPublicoPage: React.FC = () => {
                 <button
                   onClick={navegarCategoriaProxima}
                   disabled={isAnimating}
-                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-l relative ${
+                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-l ${
                     isAnimating
                       ? 'opacity-50 cursor-not-allowed'
                       : config.modo_escuro
@@ -1696,11 +1700,11 @@ const CardapioPublicoPage: React.FC = () => {
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
                   }`}
                 >
-                  <ChevronRight size={20} />
-                  {/* Indicador de mais itens */}
-                  <div className={`absolute -top-1 -right-1 w-2 h-2 rounded-full animate-pulse ${
-                    config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                  }`}></div>
+                  {/* Seta dupla com animação de pulso para indicar mais itens */}
+                  <ChevronsRight
+                    size={20}
+                    className="animate-pulse"
+                  />
                 </button>
               )}
             </div>
