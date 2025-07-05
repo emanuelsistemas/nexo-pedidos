@@ -516,13 +516,15 @@ const CardapioPublicoPage: React.FC = () => {
   useEffect(() => {
     if (empresaId) {
       console.log('🛒 Carregando carrinho do localStorage para empresa:', empresaId);
-      const { quantidades, ordem } = carregarCarrinhoLocalStorage();
+      const { quantidades, ordem, adicionais } = carregarCarrinhoLocalStorage();
       console.log('🛒 Carrinho salvo encontrado:', quantidades);
       console.log('🛒 Ordem salva encontrada:', ordem);
+      console.log('🛒 Adicionais salvos encontrados:', adicionais);
 
       if (Object.keys(quantidades).length > 0) {
         setQuantidadesProdutos(quantidades);
         setOrdemAdicaoItens(ordem);
+        setAdicionaisSelecionados(adicionais);
         setCarrinhoAberto(true);
         console.log('🛒 Carrinho carregado e aberto');
       }
@@ -552,14 +554,15 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [produtos]);
 
-  // Salvar carrinho no localStorage sempre que quantidades ou ordem mudarem
+  // Salvar carrinho no localStorage sempre que quantidades, ordem ou adicionais mudarem
   useEffect(() => {
     if (empresaId) {
       console.log('🛒 Salvando carrinho devido a mudança nas quantidades:', quantidadesProdutos);
       console.log('🛒 Salvando ordem devido a mudança:', ordemAdicaoItens);
+      console.log('🛒 Salvando adicionais devido a mudança:', adicionaisSelecionados);
       salvarCarrinhoLocalStorage(quantidadesProdutos);
     }
-  }, [quantidadesProdutos, ordemAdicaoItens, empresaId]);
+  }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, empresaId]);
 
 
 
@@ -858,11 +861,23 @@ const CardapioPublicoPage: React.FC = () => {
         [itemId]: (prev[produtoId]?.[itemId] || 0) + 1
       }
     }));
+
+    // Efeito visual de chacoalhar o produto quando adicional é adicionado
+    setItemChacoalhando(produtoId);
+    setTimeout(() => setItemChacoalhando(null), 600);
+
+    // Se o carrinho não estiver aberto, abrir automaticamente
+    if (!carrinhoAberto) {
+      setCarrinhoAberto(true);
+      setCarrinhoRecemAberto(true);
+      setTimeout(() => setCarrinhoRecemAberto(false), 2000);
+    }
   };
 
   const decrementarAdicional = (produtoId: string, itemId: string) => {
+    const quantidadeAtual = obterQuantidadeAdicional(produtoId, itemId);
+
     setAdicionaisSelecionados(prev => {
-      const quantidadeAtual = prev[produtoId]?.[itemId] || 0;
       if (quantidadeAtual <= 1) {
         const novosProdutos = { ...prev };
         if (novosProdutos[produtoId]) {
@@ -882,6 +897,12 @@ const CardapioPublicoPage: React.FC = () => {
         }
       };
     });
+
+    // Efeito visual sutil quando remove adicional
+    if (quantidadeAtual > 0) {
+      setItemChacoalhando(produtoId);
+      setTimeout(() => setItemChacoalhando(null), 400);
+    }
   };
 
   const obterQuantidadeAdicional = (produtoId: string, itemId: string): number => {
@@ -898,40 +919,51 @@ const CardapioPublicoPage: React.FC = () => {
     try {
       const chaveCarrinho = `carrinho_${empresaId}`;
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
+      const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
 
       localStorage.setItem(chaveCarrinho, JSON.stringify(quantidades));
       localStorage.setItem(chaveOrdem, JSON.stringify(ordemAdicaoItens));
+      localStorage.setItem(chaveAdicionais, JSON.stringify(adicionaisSelecionados));
 
       console.log('🛒 Carrinho salvo no localStorage:', chaveCarrinho, quantidades);
       console.log('🛒 Ordem salva no localStorage:', chaveOrdem, ordemAdicaoItens);
+      console.log('🛒 Adicionais salvos no localStorage:', chaveAdicionais, adicionaisSelecionados);
     } catch (error) {
       console.error('Erro ao salvar carrinho no localStorage:', error);
     }
   };
 
-  const carregarCarrinhoLocalStorage = (): { quantidades: Record<string, number>, ordem: Record<string, number> } => {
+  const carregarCarrinhoLocalStorage = (): {
+    quantidades: Record<string, number>,
+    ordem: Record<string, number>,
+    adicionais: {[produtoId: string]: {[itemId: string]: number}}
+  } => {
     if (!empresaId) {
       console.log('🛒 Não carregando carrinho: empresaId não disponível');
-      return { quantidades: {}, ordem: {} };
+      return { quantidades: {}, ordem: {}, adicionais: {} };
     }
 
     try {
       const chaveCarrinho = `carrinho_${empresaId}`;
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
+      const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
 
       const carrinhoSalvo = localStorage.getItem(chaveCarrinho);
       const ordemSalva = localStorage.getItem(chaveOrdem);
+      const adicionaisSalvos = localStorage.getItem(chaveAdicionais);
 
       const quantidades = carrinhoSalvo ? JSON.parse(carrinhoSalvo) : {};
       const ordem = ordemSalva ? JSON.parse(ordemSalva) : {};
+      const adicionais = adicionaisSalvos ? JSON.parse(adicionaisSalvos) : {};
 
       console.log('🛒 Carrinho carregado do localStorage:', chaveCarrinho, quantidades);
       console.log('🛒 Ordem carregada do localStorage:', chaveOrdem, ordem);
+      console.log('🛒 Adicionais carregados do localStorage:', chaveAdicionais, adicionais);
 
-      return { quantidades, ordem };
+      return { quantidades, ordem, adicionais };
     } catch (error) {
       console.error('Erro ao carregar carrinho do localStorage:', error);
-      return { quantidades: {}, ordem: {} };
+      return { quantidades: {}, ordem: {}, adicionais: {} };
     }
   };
 
@@ -941,11 +973,13 @@ const CardapioPublicoPage: React.FC = () => {
     try {
       const chaveCarrinho = `carrinho_${empresaId}`;
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
+      const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
 
       localStorage.removeItem(chaveCarrinho);
       localStorage.removeItem(chaveOrdem);
+      localStorage.removeItem(chaveAdicionais);
 
-      console.log('🛒 Carrinho e ordem limpos do localStorage');
+      console.log('🛒 Carrinho, ordem e adicionais limpos do localStorage');
     } catch (error) {
       console.error('Erro ao limpar carrinho do localStorage:', error);
     }
@@ -1103,6 +1137,15 @@ const CardapioPublicoPage: React.FC = () => {
         novaQuantidade = Math.max(0, quantidadeAtual - 1);
       }
 
+      // Se a quantidade chegou a 0, limpar os adicionais deste produto
+      if (novaQuantidade === 0) {
+        setAdicionaisSelecionados(prev => {
+          const novosAdicionais = { ...prev };
+          delete novosAdicionais[produtoId];
+          return novosAdicionais;
+        });
+      }
+
       alterarQuantidadeProduto(produtoId, novaQuantidade);
     }
   };
@@ -1231,6 +1274,7 @@ const CardapioPublicoPage: React.FC = () => {
   const confirmarLimparCarrinho = () => {
     setQuantidadesProdutos({});
     setOrdemAdicaoItens({});
+    setAdicionaisSelecionados({});
     setCarrinhoAberto(false);
     setModalConfirmacaoAberto(false);
 
@@ -2448,22 +2492,41 @@ const CardapioPublicoPage: React.FC = () => {
                       <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
 
                       {/* Título dos adicionais */}
-                      <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Adicionais:
+                      <div className={`text-xs font-medium mb-2 flex items-center gap-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                        <span>Adicionais:</span>
+                        {obterQuantidadeProduto(produto.id) === 0 && (
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            config.modo_escuro
+                              ? 'bg-orange-900/30 text-orange-400 border border-orange-700'
+                              : 'bg-orange-100 text-orange-600 border border-orange-300'
+                          }`}>
+                            Adicione o produto primeiro
+                          </span>
+                        )}
                       </div>
 
                       {/* Lista de opções de adicionais */}
-                      <div className="space-y-2 w-full">
-                        {produto.opcoes_adicionais.map(opcao => (
+                      <div className={`space-y-2 w-full transition-opacity duration-200 ${
+                        obterQuantidadeProduto(produto.id) === 0 ? 'opacity-50' : 'opacity-100'
+                      }`}>
+                        {produto.opcoes_adicionais.map(opcao => {
+                          const adicionaisDesabilitados = obterQuantidadeProduto(produto.id) === 0;
+                          return (
                           <div key={opcao.id} className="w-full">
                             {/* Botão do grupo de adicional */}
                             <button
-                              onClick={() => toggleAdicionalOpcao(produto.id, opcao.id)}
+                              onClick={() => !adicionaisDesabilitados && toggleAdicionalOpcao(produto.id, opcao.id)}
+                              disabled={adicionaisDesabilitados}
                               className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
-                                config.modo_escuro
+                                adicionaisDesabilitados
+                                  ? 'cursor-not-allowed'
+                                  : config.modo_escuro
                                   ? 'bg-gray-700/50 hover:bg-gray-700 text-white'
                                   : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
+                              } ${
+                                config.modo_escuro ? 'text-white' : 'text-gray-800'
                               }`}
+                              title={adicionaisDesabilitados ? 'Adicione o produto principal primeiro' : ''}
                             >
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-medium">{opcao.nome}</span>
@@ -2504,39 +2567,55 @@ const CardapioPublicoPage: React.FC = () => {
                                       {/* Controles de quantidade do adicional */}
                                       {obterWhatsAppEmpresa() && lojaAberta !== false && (
                                         <div className="flex items-center gap-1">
-                                          {/* Botão Decrementar */}
-                                          <button
-                                            onClick={() => decrementarAdicional(produto.id, item.id)}
-                                            disabled={quantidade === 0}
-                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                              quantidade === 0
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                : config.modo_escuro
-                                                ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                            }`}
-                                          >
-                                            <Minus size={10} />
-                                          </button>
+                                          {(() => {
+                                            const quantidadeProdutoPrincipal = obterQuantidadeProduto(produto.id);
+                                            const adicionaisDesabilitados = quantidadeProdutoPrincipal === 0;
 
-                                          {/* Quantidade */}
-                                          <span className={`w-6 text-center text-xs font-semibold ${
-                                            config.modo_escuro ? 'text-white' : 'text-gray-800'
-                                          }`}>
-                                            {quantidade}
-                                          </span>
+                                            return (
+                                              <>
+                                                {/* Botão Decrementar */}
+                                                <button
+                                                  onClick={() => decrementarAdicional(produto.id, item.id)}
+                                                  disabled={quantidade === 0 || adicionaisDesabilitados}
+                                                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                                    quantidade === 0 || adicionaisDesabilitados
+                                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                      : config.modo_escuro
+                                                      ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                  }`}
+                                                  title={adicionaisDesabilitados ? 'Adicione o produto principal primeiro' : ''}
+                                                >
+                                                  <Minus size={10} />
+                                                </button>
 
-                                          {/* Botão Incrementar */}
-                                          <button
-                                            onClick={() => incrementarAdicional(produto.id, item.id)}
-                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                              config.modo_escuro
-                                                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                                : 'bg-blue-500 text-white hover:bg-blue-600'
-                                            }`}
-                                          >
-                                            <Plus size={10} />
-                                          </button>
+                                                {/* Quantidade */}
+                                                <span className={`w-6 text-center text-xs font-semibold ${
+                                                  adicionaisDesabilitados
+                                                    ? 'text-gray-400'
+                                                    : config.modo_escuro ? 'text-white' : 'text-gray-800'
+                                                }`}>
+                                                  {quantidade}
+                                                </span>
+
+                                                {/* Botão Incrementar */}
+                                                <button
+                                                  onClick={() => incrementarAdicional(produto.id, item.id)}
+                                                  disabled={adicionaisDesabilitados}
+                                                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                                    adicionaisDesabilitados
+                                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                      : config.modo_escuro
+                                                      ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                                                  }`}
+                                                  title={adicionaisDesabilitados ? 'Adicione o produto principal primeiro' : ''}
+                                                >
+                                                  <Plus size={10} />
+                                                </button>
+                                              </>
+                                            );
+                                          })()}
                                         </div>
                                       )}
                                     </div>
@@ -2545,7 +2624,8 @@ const CardapioPublicoPage: React.FC = () => {
                               </div>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
