@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, ChevronLeft, ChevronRight, Minus, Plus, ShoppingCart, X, Trash2 } from 'lucide-react';
+import { ChevronDown, Clock, ChevronLeft, ChevronRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -89,6 +89,9 @@ const CardapioPublicoPage: React.FC = () => {
   // Estados para o modal do carrinho
   const [carrinhoAberto, setCarrinhoAberto] = useState(false);
   const [itemEditandoCarrinho, setItemEditandoCarrinho] = useState<string | null>(null);
+  const [modalConfirmacaoAberto, setModalConfirmacaoAberto] = useState(false);
+  const [toastVisivel, setToastVisivel] = useState(false);
+  const [ordemAdicaoItens, setOrdemAdicaoItens] = useState<Record<string, number>>({});
 
   // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
   useEffect(() => {
@@ -462,6 +465,57 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [quantidadesProdutos, carrinhoAberto]);
 
+  // Carregar carrinho do localStorage quando empresa está disponível
+  useEffect(() => {
+    if (empresaId) {
+      console.log('🛒 Carregando carrinho do localStorage para empresa:', empresaId);
+      const { quantidades, ordem } = carregarCarrinhoLocalStorage();
+      console.log('🛒 Carrinho salvo encontrado:', quantidades);
+      console.log('🛒 Ordem salva encontrada:', ordem);
+
+      if (Object.keys(quantidades).length > 0) {
+        setQuantidadesProdutos(quantidades);
+        setOrdemAdicaoItens(ordem);
+        setCarrinhoAberto(true);
+        console.log('🛒 Carrinho carregado e aberto');
+      }
+    }
+  }, [empresaId]);
+
+  // Validar e filtrar carrinho quando produtos estão disponíveis
+  useEffect(() => {
+    if (produtos.length > 0 && Object.keys(quantidadesProdutos).length > 0) {
+      console.log('🛒 Validando itens do carrinho com produtos disponíveis');
+
+      const carrinhoFiltrado: Record<string, number> = {};
+      Object.entries(quantidadesProdutos).forEach(([produtoId, quantidade]) => {
+        const produtoExiste = produtos.some(p => p.id === produtoId);
+        if (produtoExiste && quantidade > 0) {
+          carrinhoFiltrado[produtoId] = quantidade;
+        } else {
+          console.log('🛒 Removendo produto inexistente do carrinho:', produtoId);
+        }
+      });
+
+      // Só atualizar se houve mudanças
+      if (JSON.stringify(carrinhoFiltrado) !== JSON.stringify(quantidadesProdutos)) {
+        setQuantidadesProdutos(carrinhoFiltrado);
+        console.log('🛒 Carrinho filtrado e atualizado');
+      }
+    }
+  }, [produtos]);
+
+  // Salvar carrinho no localStorage sempre que quantidades ou ordem mudarem
+  useEffect(() => {
+    if (empresaId) {
+      console.log('🛒 Salvando carrinho devido a mudança nas quantidades:', quantidadesProdutos);
+      console.log('🛒 Salvando ordem devido a mudança:', ordemAdicaoItens);
+      salvarCarrinhoLocalStorage(quantidadesProdutos);
+    }
+  }, [quantidadesProdutos, ordemAdicaoItens, empresaId]);
+
+
+
   const carregarDadosCardapio = async () => {
     try {
       setLoading(true);
@@ -644,6 +698,69 @@ const CardapioPublicoPage: React.FC = () => {
     }).format(preco);
   };
 
+  // Funções para localStorage do carrinho
+  const salvarCarrinhoLocalStorage = (quantidades: Record<string, number>) => {
+    if (!empresaId) {
+      console.log('🛒 Não salvando carrinho: empresaId não disponível');
+      return;
+    }
+
+    try {
+      const chaveCarrinho = `carrinho_${empresaId}`;
+      const chaveOrdem = `carrinho_ordem_${empresaId}`;
+
+      localStorage.setItem(chaveCarrinho, JSON.stringify(quantidades));
+      localStorage.setItem(chaveOrdem, JSON.stringify(ordemAdicaoItens));
+
+      console.log('🛒 Carrinho salvo no localStorage:', chaveCarrinho, quantidades);
+      console.log('🛒 Ordem salva no localStorage:', chaveOrdem, ordemAdicaoItens);
+    } catch (error) {
+      console.error('Erro ao salvar carrinho no localStorage:', error);
+    }
+  };
+
+  const carregarCarrinhoLocalStorage = (): { quantidades: Record<string, number>, ordem: Record<string, number> } => {
+    if (!empresaId) {
+      console.log('🛒 Não carregando carrinho: empresaId não disponível');
+      return { quantidades: {}, ordem: {} };
+    }
+
+    try {
+      const chaveCarrinho = `carrinho_${empresaId}`;
+      const chaveOrdem = `carrinho_ordem_${empresaId}`;
+
+      const carrinhoSalvo = localStorage.getItem(chaveCarrinho);
+      const ordemSalva = localStorage.getItem(chaveOrdem);
+
+      const quantidades = carrinhoSalvo ? JSON.parse(carrinhoSalvo) : {};
+      const ordem = ordemSalva ? JSON.parse(ordemSalva) : {};
+
+      console.log('🛒 Carrinho carregado do localStorage:', chaveCarrinho, quantidades);
+      console.log('🛒 Ordem carregada do localStorage:', chaveOrdem, ordem);
+
+      return { quantidades, ordem };
+    } catch (error) {
+      console.error('Erro ao carregar carrinho do localStorage:', error);
+      return { quantidades: {}, ordem: {} };
+    }
+  };
+
+  const limparCarrinhoLocalStorage = () => {
+    if (!empresaId) return;
+
+    try {
+      const chaveCarrinho = `carrinho_${empresaId}`;
+      const chaveOrdem = `carrinho_ordem_${empresaId}`;
+
+      localStorage.removeItem(chaveCarrinho);
+      localStorage.removeItem(chaveOrdem);
+
+      console.log('🛒 Carrinho e ordem limpos do localStorage');
+    } catch (error) {
+      console.error('Erro ao limpar carrinho do localStorage:', error);
+    }
+  };
+
   // Função para calcular quantas categorias cabem na tela
   const calcularCategoriasVisiveis = () => {
     const larguraTela = window.innerWidth;
@@ -719,10 +836,29 @@ const CardapioPublicoPage: React.FC = () => {
   const alterarQuantidadeProduto = (produtoId: string, novaQuantidade: number) => {
     if (novaQuantidade < 0) return;
 
+    const quantidadeAnterior = quantidadesProdutos[produtoId] || 0;
+
     setQuantidadesProdutos(prev => ({
       ...prev,
       [produtoId]: novaQuantidade
     }));
+
+    // Rastrear ordem de adição - quando item é adicionado pela primeira vez
+    if (quantidadeAnterior === 0 && novaQuantidade > 0) {
+      setOrdemAdicaoItens(prev => ({
+        ...prev,
+        [produtoId]: Date.now() // Timestamp como ordem
+      }));
+    }
+
+    // Remover da ordem quando quantidade chega a zero
+    if (novaQuantidade === 0) {
+      setOrdemAdicaoItens(prev => {
+        const nova = { ...prev };
+        delete nova[produtoId];
+        return nova;
+      });
+    }
   };
 
   const incrementarQuantidade = (produtoId: string) => {
@@ -758,9 +894,15 @@ const CardapioPublicoPage: React.FC = () => {
       .filter(([_, quantidade]) => quantidade > 0)
       .map(([produtoId, quantidade]) => {
         const produto = produtos.find(p => p.id === produtoId);
-        return produto ? { produto, quantidade } : null;
+        return produto ? {
+          produto,
+          quantidade,
+          ordemAdicao: ordemAdicaoItens[produtoId] || 0
+        } : null;
       })
-      .filter(Boolean) as Array<{ produto: Produto; quantidade: number }>;
+      .filter(Boolean)
+      .sort((a, b) => b!.ordemAdicao - a!.ordemAdicao) // Mais recentes primeiro
+      .map(({ produto, quantidade }) => ({ produto, quantidade })) as Array<{ produto: Produto; quantidade: number }>;
   };
 
   const obterTotalCarrinho = () => {
@@ -781,9 +923,40 @@ const CardapioPublicoPage: React.FC = () => {
     });
   };
 
-  const limparCarrinho = () => {
+  // Função para limpar itens do carrinho que não existem mais no cardápio
+  const limparItensInexistentes = () => {
+    setQuantidadesProdutos(prev => {
+      const carrinhoLimpo: Record<string, number> = {};
+      Object.entries(prev).forEach(([produtoId, quantidade]) => {
+        const produtoExiste = produtos.some(p => p.id === produtoId);
+        if (produtoExiste) {
+          carrinhoLimpo[produtoId] = quantidade;
+        }
+      });
+      return carrinhoLimpo;
+    });
+  };
+
+  const abrirModalConfirmacao = () => {
+    setModalConfirmacaoAberto(true);
+  };
+
+  const confirmarLimparCarrinho = () => {
     setQuantidadesProdutos({});
+    setOrdemAdicaoItens({});
     setCarrinhoAberto(false);
+    setModalConfirmacaoAberto(false);
+
+    // Limpar localStorage
+    limparCarrinhoLocalStorage();
+
+    // Mostrar toast de sucesso
+    setToastVisivel(true);
+    setTimeout(() => setToastVisivel(false), 3000); // Toast desaparece após 3 segundos
+  };
+
+  const cancelarLimparCarrinho = () => {
+    setModalConfirmacaoAberto(false);
   };
 
   // Função para obter o primeiro telefone com WhatsApp
@@ -1153,8 +1326,10 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Header com gradiente */}
-      <div className={`relative ${config.modo_escuro ? 'bg-gradient-to-r from-gray-800 via-gray-900 to-gray-800' : 'bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800'} shadow-xl`}>
+      {/* Header com gradiente - Oculto quando carrinho está aberto */}
+      <div className={`relative ${config.modo_escuro ? 'bg-gradient-to-r from-gray-800 via-gray-900 to-gray-800' : 'bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800'} shadow-xl transition-all duration-300 ${
+        carrinhoAberto && obterQuantidadeTotalItens() > 0 ? 'hidden' : ''
+      }`}>
         {/* Overlay pattern */}
         <div className="absolute inset-0 bg-black/10 backdrop-blur-sm"></div>
 
@@ -1301,7 +1476,7 @@ const CardapioPublicoPage: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={limparCarrinho}
+                  onClick={abrirModalConfirmacao}
                   className={`p-1.5 rounded-lg transition-colors ${
                     config.modo_escuro
                       ? 'text-red-400 hover:bg-red-900/20'
@@ -1349,8 +1524,11 @@ const CardapioPublicoPage: React.FC = () => {
                   <div className="flex items-center gap-2 ml-3">
                     <button
                       onClick={() => decrementarQuantidade(produto.id)}
+                      disabled={lojaAberta === false}
                       className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                        config.modo_escuro
+                        lojaAberta === false
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : config.modo_escuro
                           ? 'bg-gray-600 text-white hover:bg-gray-500'
                           : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
@@ -1358,7 +1536,7 @@ const CardapioPublicoPage: React.FC = () => {
                       <Minus size={12} />
                     </button>
 
-                    {itemEditandoCarrinho === produto.id ? (
+                    {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
                       <input
                         type="text"
                         value={quantidade}
@@ -1378,9 +1556,12 @@ const CardapioPublicoPage: React.FC = () => {
                       />
                     ) : (
                       <button
-                        onClick={() => setItemEditandoCarrinho(produto.id)}
+                        onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
+                        disabled={lojaAberta === false}
                         className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
-                          config.modo_escuro
+                          lojaAberta === false
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : config.modo_escuro
                             ? 'bg-gray-600 text-white hover:bg-gray-500'
                             : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                         }`}
@@ -1391,8 +1572,11 @@ const CardapioPublicoPage: React.FC = () => {
 
                     <button
                       onClick={() => incrementarQuantidade(produto.id)}
+                      disabled={lojaAberta === false}
                       className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                        config.modo_escuro
+                        lojaAberta === false
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : config.modo_escuro
                           ? 'bg-blue-600 text-white hover:bg-blue-500'
                           : 'bg-blue-500 text-white hover:bg-blue-600'
                       }`}
@@ -1654,9 +1838,9 @@ const CardapioPublicoPage: React.FC = () => {
                           {/* Botão Decrementar */}
                           <button
                             onClick={() => decrementarQuantidade(produto.id)}
-                            disabled={obterQuantidadeProduto(produto.id) === 0}
+                            disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
                             className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                              obterQuantidadeProduto(produto.id) === 0
+                              obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 : config.modo_escuro
                                 ? 'bg-gray-600 text-white hover:bg-gray-500'
@@ -1667,7 +1851,7 @@ const CardapioPublicoPage: React.FC = () => {
                           </button>
 
                           {/* Campo de Quantidade */}
-                          {produtoEditandoQuantidade === produto.id ? (
+                          {produtoEditandoQuantidade === produto.id && lojaAberta !== false ? (
                             <input
                               type="text"
                               value={obterQuantidadeProduto(produto.id)}
@@ -1687,9 +1871,12 @@ const CardapioPublicoPage: React.FC = () => {
                             />
                           ) : (
                             <button
-                              onClick={() => setProdutoEditandoQuantidade(produto.id)}
+                              onClick={() => lojaAberta !== false && setProdutoEditandoQuantidade(produto.id)}
+                              disabled={lojaAberta === false}
                               className={`w-12 h-8 text-center text-sm font-semibold rounded transition-colors ${
-                                config.modo_escuro
+                                lojaAberta === false
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : config.modo_escuro
                                   ? 'bg-gray-700 text-white hover:bg-gray-600'
                                   : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                               }`}
@@ -1701,8 +1888,11 @@ const CardapioPublicoPage: React.FC = () => {
                           {/* Botão Incrementar */}
                           <button
                             onClick={() => incrementarQuantidade(produto.id)}
+                            disabled={lojaAberta === false}
                             className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                              config.modo_escuro
+                              lojaAberta === false
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : config.modo_escuro
                                 ? 'bg-blue-600 text-white hover:bg-blue-500'
                                 : 'bg-blue-500 text-white hover:bg-blue-600'
                             }`}
@@ -1711,18 +1901,20 @@ const CardapioPublicoPage: React.FC = () => {
                           </button>
                         </div>
 
-                        {/* Botão Pedir */}
-                        <button
-                          onClick={() => handlePedirWhatsApp(produto)}
-                          disabled={lojaAberta === false}
-                          className={`group/btn relative overflow-hidden px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg ${
-                            lojaAberta === false
-                              ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
-                              : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 hover:shadow-xl cursor-pointer'
-                          }`}
-                        >
-                          <span>{lojaAberta === false ? 'Loja Fechada' : 'Pedir'}</span>
-                        </button>
+                        {/* Botão Pedir - OCULTO */}
+                        {false && (
+                          <button
+                            onClick={() => handlePedirWhatsApp(produto)}
+                            disabled={lojaAberta === false}
+                            className={`group/btn relative overflow-hidden px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg ${
+                              lojaAberta === false
+                                ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                                : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 hover:shadow-xl cursor-pointer'
+                            }`}
+                          >
+                            <span>{lojaAberta === false ? 'Loja Fechada' : 'Pedir'}</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1752,6 +1944,83 @@ const CardapioPublicoPage: React.FC = () => {
             </span>
           </div>
         </button>
+      )}
+
+      {/* Modal de Confirmação para Limpar Carrinho */}
+      {modalConfirmacaoAberto && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+                  <Trash2 size={24} className="text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className={`text-lg font-semibold ${config.modo_escuro ? 'text-white' : 'text-gray-900'}`}>
+                    Limpar Carrinho
+                  </h3>
+                  <p className={`text-sm ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Esta ação não pode ser desfeita
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <p className={`text-sm leading-relaxed ${config.modo_escuro ? 'text-gray-300' : 'text-gray-700'}`}>
+                Tem certeza que deseja remover <strong>todos os {obterQuantidadeTotalItens()} itens</strong> do seu carrinho?
+                {config.mostrar_precos && (
+                  <span> O valor total de <strong>{formatarPreco(obterTotalCarrinho())}</strong> será perdido.</span>
+                )}
+              </p>
+            </div>
+
+            {/* Botões do Modal */}
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                onClick={cancelarLimparCarrinho}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarLimparCarrinho}
+                className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+              >
+                Sim, Limpar Tudo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast de Sucesso */}
+      {toastVisivel && (
+        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top-2 duration-300">
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-sm ${
+            config.modo_escuro
+              ? 'bg-gray-800/95 border border-gray-700 text-white'
+              : 'bg-white/95 border border-gray-200 text-gray-900'
+          }`}>
+            <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center">
+              <CheckCircle size={18} className="text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <p className="font-medium text-sm">Carrinho limpo com sucesso!</p>
+              <p className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                Todos os itens foram removidos
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Footer moderno */}
