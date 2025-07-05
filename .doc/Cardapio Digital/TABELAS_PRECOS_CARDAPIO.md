@@ -21,6 +21,7 @@ Implementação do sistema de tabelas de preços no cardápio digital, permitind
 - **Filtro por Valor**: Apenas tabelas com preço > 0 são exibidas
 - **Ocultação do Preço Padrão**: Preço original é ocultado quando há tabelas
 - **Posicionamento**: Tabelas aparecem após descrição e antes dos adicionais
+- **Tags de Sabores**: Exibe quantidade de sabores quando > 1 em formato de tag
 
 ## 🔧 **IMPLEMENTAÇÃO TÉCNICA**
 
@@ -28,7 +29,7 @@ Implementação do sistema de tabelas de preços no cardápio digital, permitind
 ```typescript
 // Estados para tabelas de preços
 const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState(false);
-const [tabelasPrecos, setTabelasPrecos] = useState<Array<{id: string; nome: string}>>([]);
+const [tabelasPrecos, setTabelasPrecos] = useState<Array<{id: string; nome: string; quantidade_sabores: number}>>([]);
 const [produtoPrecos, setProdutoPrecos] = useState<{[produtoId: string]: {[tabelaId: string]: number}}>({});
 ```
 
@@ -44,7 +45,7 @@ const { data: tabelaPrecoConfig } = await supabase
 // 2. Carregar tabelas ativas
 const { data: tabelasData } = await supabase
   .from('tabela_de_preco')
-  .select('id, nome')
+  .select('id, nome, quantidade_sabores')
   .eq('empresa_id', empresaId)
   .eq('ativo', true)
   .eq('deletado', false);
@@ -59,7 +60,7 @@ const { data: precosData } = await supabase
 
 ### **Função de Filtro**
 ```typescript
-const obterTabelasComPrecos = (produtoId: string): Array<{id: string; nome: string; preco: number}> => {
+const obterTabelasComPrecos = (produtoId: string): Array<{id: string; nome: string; preco: number; quantidade_sabores: number}> => {
   if (!trabalhaComTabelaPrecos || !produtoPrecos[produtoId]) {
     return [];
   }
@@ -68,7 +69,8 @@ const obterTabelasComPrecos = (produtoId: string): Array<{id: string; nome: stri
     .map(tabela => ({
       id: tabela.id,
       nome: tabela.nome,
-      preco: produtoPrecos[produtoId][tabela.id] || 0
+      preco: produtoPrecos[produtoId][tabela.id] || 0,
+      quantidade_sabores: tabela.quantidade_sabores || 1
     }))
     .filter(tabela => tabela.preco > 0); // Apenas tabelas com preço > 0
 };
@@ -81,7 +83,7 @@ const obterTabelasComPrecos = (produtoId: string): Array<{id: string; nome: stri
 const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, config, formatarPreco }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
-  
+
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
     slides: {
@@ -106,6 +108,12 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
               <div className="text-sm font-bold text-green-600">
                 {formatarPreco(tabela.preco)}
               </div>
+              {/* Tag de quantidade de sabores */}
+              {tabela.quantidade_sabores > 1 && (
+                <div className="inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 bg-purple-100 text-purple-700 border border-purple-300">
+                  {tabela.quantidade_sabores} sabores
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -129,6 +137,32 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
   );
 };
 ```
+
+## 🏷️ **TAGS DE QUANTIDADE DE SABORES**
+
+### **Funcionalidade**
+- **Exibição Condicional**: Tags aparecem apenas quando `quantidade_sabores > 1`
+- **Posicionamento**: Abaixo do preço em cada tabela
+- **Formato**: "X sabores" (ex: "2 sabores", "4 sabores")
+- **Estilo**: Tag roxa com bordas arredondadas
+
+### **Implementação Visual**
+```jsx
+{/* Tag de quantidade de sabores */}
+{tabela.quantidade_sabores > 1 && (
+  <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
+    config.modo_escuro
+      ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
+      : 'bg-purple-100 text-purple-700 border border-purple-300'
+  }`}>
+    {tabela.quantidade_sabores} sabores
+  </div>
+)}
+```
+
+### **Cores por Tema**
+- **Modo Claro**: `bg-purple-100 text-purple-700 border-purple-300`
+- **Modo Escuro**: `bg-purple-900/50 text-purple-300 border-purple-700`
 
 ## 📱 **INTERFACE VISUAL**
 
@@ -159,6 +193,12 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
                   <div className="text-sm font-bold text-green-600">
                     {formatarPreco(tabela.preco)}
                   </div>
+                  {/* Tag de quantidade de sabores */}
+                  {tabela.quantidade_sabores > 1 && (
+                    <div className="inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 bg-purple-100 text-purple-700 border border-purple-300">
+                      {tabela.quantidade_sabores} sabores
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

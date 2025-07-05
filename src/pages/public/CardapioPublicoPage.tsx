@@ -9,7 +9,7 @@ import "keen-slider/keen-slider.min.css";
 
 // Componente para slider de tabelas de preços
 interface TabelasPrecosSliderProps {
-  tabelas: Array<{id: string; nome: string; preco: number}>;
+  tabelas: Array<{id: string; nome: string; preco: number; quantidade_sabores: number}>;
   config: {modo_escuro: boolean};
   formatarPreco: (preco: number) => string;
 }
@@ -50,6 +50,16 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
               }`}>
                 {formatarPreco(tabela.preco)}
               </div>
+              {/* Tag de quantidade de sabores */}
+              {tabela.quantidade_sabores > 1 && (
+                <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
+                  config.modo_escuro
+                    ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
+                    : 'bg-purple-100 text-purple-700 border border-purple-300'
+                }`}>
+                  {tabela.quantidade_sabores} sabores
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -233,7 +243,7 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Estados para tabelas de preços
   const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState(false);
-  const [tabelasPrecos, setTabelasPrecos] = useState<Array<{id: string; nome: string}>>([]);
+  const [tabelasPrecos, setTabelasPrecos] = useState<Array<{id: string; nome: string; quantidade_sabores: number}>>([]);
   const [produtoPrecos, setProdutoPrecos] = useState<{[produtoId: string]: {[tabelaId: string]: number}}>({});
 
   // Funções para observações
@@ -756,7 +766,7 @@ const CardapioPublicoPage: React.FC = () => {
         // Carregar tabelas de preços ativas
         const { data: tabelasData, error: tabelasError } = await supabase
           .from('tabela_de_preco')
-          .select('id, nome')
+          .select('id, nome, quantidade_sabores')
           .eq('empresa_id', empresaComLogo.id)
           .eq('ativo', true)
           .eq('deletado', false)
@@ -1177,7 +1187,7 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   // Função para obter tabelas de preços com valores válidos para um produto
-  const obterTabelasComPrecos = (produtoId: string): Array<{id: string; nome: string; preco: number}> => {
+  const obterTabelasComPrecos = (produtoId: string): Array<{id: string; nome: string; preco: number; quantidade_sabores: number}> => {
     console.log('🔍 obterTabelasComPrecos - produtoId:', produtoId);
     console.log('🔍 trabalhaComTabelaPrecos:', trabalhaComTabelaPrecos);
     console.log('🔍 produtoPrecos[produtoId]:', produtoPrecos[produtoId]);
@@ -1192,7 +1202,8 @@ const CardapioPublicoPage: React.FC = () => {
       .map(tabela => ({
         id: tabela.id,
         nome: tabela.nome,
-        preco: produtoPrecos[produtoId][tabela.id] || 0
+        preco: produtoPrecos[produtoId][tabela.id] || 0,
+        quantidade_sabores: tabela.quantidade_sabores || 1
       }))
       .filter(tabela => tabela.preco > 0); // Apenas tabelas com preço > 0
 
@@ -2937,6 +2948,16 @@ const CardapioPublicoPage: React.FC = () => {
                                     }`}>
                                       {formatarPreco(tabela.preco)}
                                     </div>
+                                    {/* Tag de quantidade de sabores */}
+                                    {tabela.quantidade_sabores > 1 && (
+                                      <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
+                                        config.modo_escuro
+                                          ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
+                                          : 'bg-purple-100 text-purple-700 border border-purple-300'
+                                      }`}>
+                                        {tabela.quantidade_sabores} sabores
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
