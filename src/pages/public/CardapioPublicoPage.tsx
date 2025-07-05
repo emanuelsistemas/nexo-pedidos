@@ -233,6 +233,20 @@ const CardapioPublicoPage: React.FC = () => {
   const [modalTodosItensAberto, setModalTodosItensAberto] = useState(false);
   const [modalRemoverItemAberto, setModalRemoverItemAberto] = useState(false);
   const [produtoParaRemover, setProdutoParaRemover] = useState<string | null>(null);
+
+  // Estados para modal de configuração individual
+  const [modalPerguntaAdicionais, setModalPerguntaAdicionais] = useState(false);
+  const [modalConfiguracaoItem, setModalConfiguracaoItem] = useState(false);
+  const [produtoConfiguracaoIndividual, setProdutoConfiguracaoIndividual] = useState<any>(null);
+  const [adicionaisOcultosParaProduto, setAdicionaisOcultosParaProduto] = useState<Record<string, boolean>>({});
+
+  // Estados para modal de configuração individual
+  const [modalConfiguracaoAberto, setModalConfiguracaoAberto] = useState(false);
+  const [produtoConfiguracaoAtual, setProdutoConfiguracaoAtual] = useState<any>(null);
+  const [quantidadeConfiguracao, setQuantidadeConfiguracao] = useState(1);
+  const [desejaAdicionais, setDesejaAdicionais] = useState<boolean | null>(null);
+  const [adicionaisConfiguracao, setAdicionaisConfiguracao] = useState<{[itemId: string]: number}>({});
+  const [observacaoConfiguracao, setObservacaoConfiguracao] = useState('');
   const [toastVisivel, setToastVisivel] = useState(false);
   const [ordemAdicaoItens, setOrdemAdicaoItens] = useState<Record<string, number>>({});
   const [itemChacoalhando, setItemChacoalhando] = useState<string | null>(null);
@@ -1677,6 +1691,17 @@ const CardapioPublicoPage: React.FC = () => {
       novaQuantidade = quantidadeAtual + 1;
     }
 
+    // Verificar se produto tem adicionais e se está passando de 1 para 2
+    const temAdicionais = produto?.opcoes_adicionais && produto.opcoes_adicionais.length > 0;
+    const passandoDe1Para2 = quantidadeAtual === 1 && novaQuantidade === 2;
+
+    if (temAdicionais && passandoDe1Para2 && !adicionaisOcultosParaProduto[produtoId]) {
+      // Abrir modal perguntando se deseja adicionar complementos ao primeiro item
+      setProdutoConfiguracaoIndividual(produto);
+      setModalPerguntaAdicionais(true);
+      return; // Não incrementar ainda
+    }
+
     alterarQuantidadeSelecionada(produtoId, novaQuantidade);
   };
 
@@ -1926,6 +1951,38 @@ const CardapioPublicoPage: React.FC = () => {
   const cancelarRemoverItem = () => {
     setModalRemoverItemAberto(false);
     setProdutoParaRemover(null);
+  };
+
+  // Funções para modal de configuração individual
+  const confirmarDesejaAdicionais = () => {
+    // Usuário quer adicionais - abrir modal de configuração
+    setModalPerguntaAdicionais(false);
+    setModalConfiguracaoItem(true);
+  };
+
+  const recusarAdicionais = () => {
+    // Usuário não quer adicionais - ocultar área e permitir incrementar
+    const produtoId = produtoConfiguracaoIndividual?.id;
+    if (produtoId) {
+      setAdicionaisOcultosParaProduto(prev => ({
+        ...prev,
+        [produtoId]: true
+      }));
+
+      // Incrementar a quantidade que estava pendente
+      const quantidadeAtual = obterQuantidadeSelecionada(produtoId);
+      alterarQuantidadeSelecionada(produtoId, quantidadeAtual + 1);
+    }
+
+    setModalPerguntaAdicionais(false);
+    setProdutoConfiguracaoIndividual(null);
+  };
+
+  const fecharModalConfiguracao = () => {
+    // Resetar tudo se sair do modal
+    setModalConfiguracaoItem(false);
+    setModalPerguntaAdicionais(false);
+    setProdutoConfiguracaoIndividual(null);
   };
 
   // Função para obter o primeiro telefone com WhatsApp
@@ -3354,8 +3411,8 @@ const CardapioPublicoPage: React.FC = () => {
                     return null;
                   })()}
 
-                  {/* Adicionais do produto - só aparece quando há quantidade selecionada */}
-                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && obterQuantidadeSelecionada(produto.id) > 0 && (
+                  {/* Adicionais do produto - só aparece quando há quantidade selecionada e não foi ocultado */}
+                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && obterQuantidadeSelecionada(produto.id) > 0 && !adicionaisOcultosParaProduto[produto.id] && (
                     <div className="mb-3 w-full">
                       {/* Divisória acima dos adicionais */}
                       <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
@@ -3710,6 +3767,65 @@ const CardapioPublicoPage: React.FC = () => {
                 className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
               >
                 Sim, Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Pergunta sobre Adicionais */}
+      {modalPerguntaAdicionais && produtoConfiguracaoIndividual && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <Plus size={20} className="text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className={`text-lg font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Adicionar Complementos?
+                  </h3>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    {produtoConfiguracaoIndividual.nome}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <p className={`text-center ${
+                config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                Deseja adicionar complementos ao primeiro item?
+              </p>
+            </div>
+
+            {/* Botões do Modal */}
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                onClick={recusarAdicionais}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                }`}
+              >
+                Não, obrigado
+              </button>
+              <button
+                onClick={confirmarDesejaAdicionais}
+                className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+              >
+                Sim, adicionar
               </button>
             </div>
           </div>
