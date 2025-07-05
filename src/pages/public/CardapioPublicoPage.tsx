@@ -2584,9 +2584,90 @@ const CardapioPublicoPage: React.FC = () => {
                     ) : (
                       /* Layout normal sem foto pequena */
                       <>
-                        <h3 className={`text-xl font-bold mb-2 ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                        <h3 className={`text-xl font-bold mb-2 truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                           {produto.nome}
                         </h3>
+                        {/* Preço e controles logo abaixo do nome quando não tem foto */}
+                        <div className="flex items-center justify-between mb-3">
+                          {config.mostrar_precos && (
+                            <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                              {formatarPreco(produto.preco)}
+                            </span>
+                          )}
+
+                          {obterWhatsAppEmpresa() && (
+                            <div className="flex items-center gap-3">
+                              {/* Controles de Quantidade */}
+                              <div className="flex items-center gap-2">
+                                {/* Botão Decrementar */}
+                                <button
+                                  onClick={() => decrementarQuantidade(produto.id)}
+                                  disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                    obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
+                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                      : config.modo_escuro
+                                      ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  }`}
+                                >
+                                  <Minus size={14} />
+                                </button>
+
+                                {/* Campo de Quantidade */}
+                                {produtoEditandoQuantidade === produto.id && lojaAberta !== false ? (
+                                  <input
+                                    type="text"
+                                    value={formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
+                                    onChange={(e) => handleQuantidadeChange(produto.id, e.target.value)}
+                                    onBlur={() => setProdutoEditandoQuantidade(null)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        setProdutoEditandoQuantidade(null);
+                                      }
+                                    }}
+                                    className={`w-12 h-8 text-center text-sm font-semibold rounded-lg border-2 transition-all duration-200 ${
+                                      config.modo_escuro
+                                        ? 'bg-gray-700 border-blue-500 text-white'
+                                        : 'bg-white border-blue-500 text-gray-800'
+                                    }`}
+                                    placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <button
+                                    onClick={() => lojaAberta !== false && setProdutoEditandoQuantidade(produto.id)}
+                                    disabled={lojaAberta === false}
+                                    className={`w-12 h-8 text-center text-sm font-semibold rounded-lg border-2 transition-all duration-200 ${
+                                      lojaAberta === false
+                                        ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
+                                        : config.modo_escuro
+                                        ? 'bg-gray-700 border-gray-600 text-white hover:border-gray-500'
+                                        : 'bg-white border-gray-300 text-gray-800 hover:border-gray-400'
+                                    }`}
+                                  >
+                                    {formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
+                                  </button>
+                                )}
+
+                                {/* Botão Incrementar */}
+                                <button
+                                  onClick={() => incrementarQuantidade(produto.id)}
+                                  disabled={lojaAberta === false}
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                    lojaAberta === false
+                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                      : config.modo_escuro
+                                      ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                                  }`}
+                                >
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
@@ -2745,106 +2826,7 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Preço e controles - Só mostra quando NÃO estiver usando fotos minimizadas */}
-                  {!config.cardapio_fotos_minimizadas && (
-                    <div className="flex items-center justify-between">
-                      {config.mostrar_precos && (
-                        <div className="flex flex-col">
-                          <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                            {formatarPreco(produto.preco)}
-                          </span>
-                        </div>
-                      )}
 
-                      {obterWhatsAppEmpresa() && (
-                        <div className="flex items-center gap-3">
-                        {/* Controles de Quantidade */}
-                        <div className="flex items-center gap-2">
-                          {/* Botão Decrementar */}
-                          <button
-                            onClick={() => decrementarQuantidade(produto.id)}
-                            disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                              obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            }`}
-                          >
-                            <Minus size={14} />
-                          </button>
-
-                          {/* Campo de Quantidade */}
-                          {produtoEditandoQuantidade === produto.id && lojaAberta !== false ? (
-                            <input
-                              type="text"
-                              value={formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
-                              onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
-                              onBlur={() => setProdutoEditandoQuantidade(null)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  setProdutoEditandoQuantidade(null);
-                                }
-                              }}
-                              className={`w-12 h-8 text-center text-sm font-semibold rounded border-2 focus:outline-none ${
-                                config.modo_escuro
-                                  ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
-                                  : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
-                              }`}
-                              placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              onClick={() => lojaAberta !== false && setProdutoEditandoQuantidade(produto.id)}
-                              disabled={lojaAberta === false}
-                              className={`w-12 h-8 text-center text-sm font-semibold rounded transition-colors ${
-                                lojaAberta === false
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : config.modo_escuro
-                                  ? 'bg-gray-700 text-white hover:bg-gray-600'
-                                  : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                              }`}
-                            >
-                              {formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
-                            </button>
-                          )}
-
-                          {/* Botão Incrementar */}
-                          <button
-                            onClick={() => incrementarQuantidade(produto.id)}
-                            disabled={lojaAberta === false}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                : 'bg-blue-500 text-white hover:bg-blue-600'
-                            }`}
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
-
-                        {/* Botão Pedir - OCULTO */}
-                        {false && (
-                          <button
-                            onClick={() => handlePedirWhatsApp(produto)}
-                            disabled={lojaAberta === false}
-                            className={`group/btn relative overflow-hidden px-6 py-3 rounded-xl font-medium transition-all duration-300 shadow-lg ${
-                              lojaAberta === false
-                                ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
-                                : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-105 hover:shadow-xl cursor-pointer'
-                            }`}
-                          >
-                            <span>{lojaAberta === false ? 'Loja Fechada' : 'Pedir'}</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  )}
                 </div>
               </div>
               );
