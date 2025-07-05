@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle } from 'lucide-react';
+import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -88,10 +88,13 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Estados para o modal do carrinho
   const [carrinhoAberto, setCarrinhoAberto] = useState(false);
+  const [carrinhoRecemAberto, setCarrinhoRecemAberto] = useState(false);
   const [itemEditandoCarrinho, setItemEditandoCarrinho] = useState<string | null>(null);
   const [modalConfirmacaoAberto, setModalConfirmacaoAberto] = useState(false);
+  const [modalTodosItensAberto, setModalTodosItensAberto] = useState(false);
   const [toastVisivel, setToastVisivel] = useState(false);
   const [ordemAdicaoItens, setOrdemAdicaoItens] = useState<Record<string, number>>({});
+  const [itemChacoalhando, setItemChacoalhando] = useState<string | null>(null);
 
   // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
   useEffect(() => {
@@ -903,9 +906,21 @@ const CardapioPublicoPage: React.FC = () => {
 
     alterarQuantidadeProduto(produtoId, novaQuantidade);
 
+    // Ativar efeito de chacoalhada no item
+    setItemChacoalhando(produtoId);
+    setTimeout(() => setItemChacoalhando(null), 600);
+
     // Abrir carrinho automaticamente quando adicionar primeiro item
     if (quantidadeAtual === 0) {
+      const carrinhoEstaviaFechado = !carrinhoAberto;
       setCarrinhoAberto(true);
+
+      // Se o carrinho estava fechado, marcar como recém aberto para animação especial
+      if (carrinhoEstaviaFechado) {
+        setCarrinhoRecemAberto(true);
+        // Remover o estado após a animação
+        setTimeout(() => setCarrinhoRecemAberto(false), 2000);
+      }
     }
   };
 
@@ -1327,7 +1342,26 @@ const CardapioPublicoPage: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen ${config.modo_escuro ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
+    <>
+      {/* Estilos CSS customizados para animação de entrada suave */}
+      <style>{`
+        @keyframes itemCaindo {
+          0% {
+            transform: translateY(-20px) scale(0.8);
+            opacity: 0;
+          }
+          50% {
+            transform: translateY(5px) scale(1.05);
+            opacity: 0.8;
+          }
+          100% {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
+
+      <div className={`min-h-screen ${config.modo_escuro ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100'}`}>
       {/* Área fixa para tarja de aviso de fechamento - sempre presente no DOM */}
       <div
         className={`transition-all duration-500 ease-in-out overflow-hidden ${
@@ -1533,8 +1567,47 @@ const CardapioPublicoPage: React.FC = () => {
 
       {/* Modal do Carrinho - ACIMA dos grupos */}
       {carrinhoAberto && obterQuantidadeTotalItens() > 0 && (
-        <div className={`${config.modo_escuro ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-30`}>
-          <div className="max-w-6xl mx-auto px-4 py-3">
+        <div className={`${config.modo_escuro ? 'bg-gray-800/95' : 'bg-white/95'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-30 transition-all duration-500 ${
+          carrinhoRecemAberto
+            ? 'animate-pulse shadow-2xl ring-4 ring-purple-500/50 ring-opacity-75'
+            : ''
+        }`}>
+          {/* Seta Indicativa - Aparece quando carrinho é aberto pela primeira vez */}
+          {carrinhoRecemAberto && (
+            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 z-40">
+              <div className="flex flex-col items-center animate-bounce">
+                <ArrowDown size={24} className="text-purple-500 animate-pulse" />
+                <span className={`text-xs font-bold mt-1 px-2 py-1 rounded ${
+                  config.modo_escuro ? 'bg-purple-900 text-purple-200' : 'bg-purple-100 text-purple-800'
+                }`}>
+                  Aqui!
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className={`max-w-6xl mx-auto px-4 py-3 transition-all duration-700 ${
+            carrinhoRecemAberto
+              ? 'transform translate-y-0 opacity-100 animate-bounce'
+              : 'transform translate-y-0 opacity-100'
+          }`}>
+            {/* Banner de Notificação - Aparece quando carrinho é aberto pela primeira vez */}
+            {carrinhoRecemAberto && (
+              <div className={`mb-3 p-3 rounded-lg border-2 border-dashed animate-pulse ${
+                config.modo_escuro
+                  ? 'bg-gradient-to-r from-purple-900/50 to-blue-900/50 border-purple-400 text-purple-200'
+                  : 'bg-gradient-to-r from-purple-100 to-blue-100 border-purple-500 text-purple-800'
+              }`}>
+                <div className="flex items-center gap-2 justify-center">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-ping"></div>
+                  <span className="text-sm font-semibold">
+                    🎉 Item adicionado ao carrinho! Seus pedidos aparecem aqui
+                  </span>
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-ping"></div>
+                </div>
+              </div>
+            )}
+
             {/* Header do Carrinho */}
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -1550,6 +1623,17 @@ const CardapioPublicoPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setModalTodosItensAberto(true)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    config.modo_escuro
+                      ? 'text-blue-400 hover:bg-blue-900/20'
+                      : 'text-blue-600 hover:bg-blue-100'
+                  }`}
+                  title="Ver todos os itens"
+                >
+                  <List size={16} />
+                </button>
                 <button
                   onClick={abrirModalConfirmacao}
                   className={`p-1.5 rounded-lg transition-colors ${
@@ -1579,9 +1663,18 @@ const CardapioPublicoPage: React.FC = () => {
               {obterItensCarrinho().map(({ produto, quantidade }) => (
                 <div
                   key={produto.id}
-                  className={`flex items-center justify-between p-2 rounded-lg ${
+                  className={`flex items-center justify-between p-2 rounded-lg transition-all duration-300 ${
                     config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-50'
+                  } ${
+                    itemChacoalhando === produto.id
+                      ? 'animate-pulse scale-105 shadow-lg ring-2 ring-blue-400/50 bg-blue-50 dark:bg-blue-900/20'
+                      : ''
                   }`}
+                  style={{
+                    animation: itemChacoalhando === produto.id
+                      ? 'shake 0.6s ease-in-out'
+                      : undefined
+                  }}
                 >
                   {/* Info do Produto */}
                   <div className="flex-1 min-w-0">
@@ -1686,7 +1779,7 @@ const CardapioPublicoPage: React.FC = () => {
                     : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg'
                 }`}
               >
-                {lojaAberta === false ? 'Loja Fechada' : 'Finalizar Pedido no WhatsApp'}
+                {lojaAberta === false ? 'Loja Fechada' : 'Finalizar Pedido'}
               </button>
             )}
           </div>
@@ -1880,15 +1973,37 @@ const CardapioPublicoPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {produtosFiltrados.map(produto => (
-              <div
-                key={produto.id}
-                className={`group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${
-                  config.modo_escuro
-                    ? 'bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700/50'
-                    : 'bg-white border border-gray-200 shadow-lg'
-                }`}
-              >
+            {produtosFiltrados.map(produto => {
+              const quantidadeSelecionada = obterQuantidadeProduto(produto.id);
+              const estaSelecionado = quantidadeSelecionada > 0;
+
+              return (
+                <div
+                  key={produto.id}
+                  className={`group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${
+                    estaSelecionado
+                      ? config.modo_escuro
+                        ? 'bg-gradient-to-br from-blue-900/80 to-purple-900/80 border-2 border-blue-500/50 shadow-xl shadow-blue-500/20'
+                        : 'bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-400/60 shadow-xl shadow-blue-400/20'
+                      : config.modo_escuro
+                      ? 'bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700/50'
+                      : 'bg-white border border-gray-200 shadow-lg'
+                  }`}
+                >
+                  {/* Badge de Selecionado */}
+                  {estaSelecionado && (
+                    <div className="absolute top-3 right-3 z-10">
+                      <div className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${
+                        config.modo_escuro
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-blue-500 text-white'
+                      }`}>
+                        <ShoppingCart size={10} />
+                        {formatarQuantidade(quantidadeSelecionada, produto.unidade_medida)}
+                      </div>
+                    </div>
+                  )}
+
                 {/* Imagem do produto - Condicional baseada na configuração */}
                 {config.mostrar_fotos && (
                   produto.foto_url ? (
@@ -2023,7 +2138,8 @@ const CardapioPublicoPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -2105,6 +2221,183 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       )}
 
+      {/* Modal de Visualização de Todos os Itens */}
+      {modalTodosItensAberto && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-2xl w-full max-h-[80vh] rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
+                    <List size={24} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className={`text-lg font-semibold ${config.modo_escuro ? 'text-white' : 'text-gray-900'}`}>
+                      Todos os Itens do Carrinho
+                    </h3>
+                    <p className={`text-sm ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {obterQuantidadeTotalItens()} {obterQuantidadeTotalItens() === 1 ? 'item' : 'itens'} • Total: {config.mostrar_precos ? formatarPreco(obterTotalCarrinho()) : 'Preços ocultos'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setModalTodosItensAberto(false)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:bg-gray-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Lista de Itens - Scrollável */}
+            <div className="p-6 max-h-96 overflow-y-auto">
+              <div className="space-y-4">
+                {obterItensCarrinho().map((produto, index) => {
+                  const quantidade = obterQuantidadeProduto(produto.id);
+                  return (
+                    <div
+                      key={produto.id}
+                      className={`p-4 rounded-xl border transition-all duration-200 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
+                          : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            {/* Número do item */}
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                              config.modo_escuro
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-blue-500 text-white'
+                            }`}>
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className={`font-semibold text-sm ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                                {produto.nome}
+                              </h4>
+                              {produto.descricao && (
+                                <p className={`text-xs mt-1 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  {produto.descricao}
+                                </p>
+                              )}
+                              {config.mostrar_precos && (
+                                <div className={`text-xs mt-1 ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                                  {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Quantidade e Controles */}
+                        <div className="flex items-center gap-3 ml-4">
+                          <div className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                            config.modo_escuro
+                              ? 'bg-gray-600 text-white'
+                              : 'bg-gray-200 text-gray-800'
+                          }`}>
+                            {formatarQuantidade(quantidade, produto.unidade_medida)}
+                            {produto.unidade_medida && (
+                              <span className="ml-1 text-xs opacity-75">
+                                {produto.unidade_medida.sigla}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Controles de Quantidade */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => decrementarQuantidade(produto.id)}
+                              disabled={lojaAberta === false}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                                lojaAberta === false
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : config.modo_escuro
+                                  ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              }`}
+                            >
+                              <Minus size={12} />
+                            </button>
+
+                            <button
+                              onClick={() => incrementarQuantidade(produto.id)}
+                              disabled={lojaAberta === false}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                                lojaAberta === false
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : config.modo_escuro
+                                  ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                  : 'bg-blue-500 text-white hover:bg-blue-600'
+                              }`}
+                            >
+                              <Plus size={12} />
+                            </button>
+
+                            <button
+                              onClick={() => removerItemCarrinho(produto.id)}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ml-1 ${
+                                config.modo_escuro
+                                  ? 'bg-red-600 text-white hover:bg-red-500'
+                                  : 'bg-red-500 text-white hover:bg-red-600'
+                              }`}
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer com Botões */}
+            <div className="p-6 pt-0 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setModalTodosItensAberto(false)}
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                    config.modo_escuro
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                  }`}
+                >
+                  Fechar
+                </button>
+                {obterWhatsAppEmpresa() && (
+                  <button
+                    onClick={() => {
+                      setModalTodosItensAberto(false);
+                      handleFinalizarPedido();
+                    }}
+                    disabled={lojaAberta === false}
+                    className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                      lojaAberta === false
+                        ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                        : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg'
+                    }`}
+                  >
+                    {lojaAberta === false ? 'Loja Fechada' : 'Finalizar Pedido'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast de Sucesso */}
       {toastVisivel && (
         <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 animate-in slide-in-from-top-2 duration-300">
@@ -2145,6 +2438,7 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       </footer>
     </div>
+    </>
   );
 };
 
