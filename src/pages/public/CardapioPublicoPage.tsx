@@ -37,6 +37,17 @@ interface Produto {
   }>;
 }
 
+interface ItemCarrinho {
+  produto: Produto;
+  quantidade: number;
+  adicionais?: Array<{
+    id: string;
+    nome: string;
+    preco: number;
+    quantidade: number;
+  }>;
+}
+
 interface Empresa {
   id: string;
   razao_social: string;
@@ -1131,25 +1142,59 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   // Funções para o carrinho
-  const obterItensCarrinho = () => {
+  const obterItensCarrinho = (): ItemCarrinho[] => {
     return Object.entries(quantidadesProdutos)
       .filter(([_, quantidade]) => quantidade > 0)
       .map(([produtoId, quantidade]) => {
         const produto = produtos.find(p => p.id === produtoId);
-        return produto ? {
+        if (!produto) return null;
+
+        // Coletar adicionais selecionados para este produto
+        const adicionaisItem: Array<{id: string; nome: string; preco: number; quantidade: number}> = [];
+        const adicionaisProduto = adicionaisSelecionados[produtoId];
+
+        if (adicionaisProduto && produto.opcoes_adicionais) {
+          produto.opcoes_adicionais.forEach(opcao => {
+            opcao.itens.forEach(item => {
+              const quantidadeAdicional = adicionaisProduto[item.id];
+              if (quantidadeAdicional && quantidadeAdicional > 0) {
+                adicionaisItem.push({
+                  id: item.id,
+                  nome: item.nome,
+                  preco: item.preco,
+                  quantidade: quantidadeAdicional
+                });
+              }
+            });
+          });
+        }
+
+        return {
           produto,
           quantidade,
+          adicionais: adicionaisItem.length > 0 ? adicionaisItem : undefined,
           ordemAdicao: ordemAdicaoItens[produtoId] || 0
-        } : null;
+        };
       })
       .filter(Boolean)
       .sort((a, b) => b!.ordemAdicao - a!.ordemAdicao) // Mais recentes primeiro
-      .map(({ produto, quantidade }) => ({ produto, quantidade })) as Array<{ produto: Produto; quantidade: number }>;
+      .map(({ produto, quantidade, adicionais }) => ({ produto, quantidade, adicionais })) as ItemCarrinho[];
   };
 
   const obterTotalCarrinho = () => {
     return obterItensCarrinho().reduce((total, item) => {
-      return total + (item.produto.preco * item.quantidade);
+      // Total do produto principal
+      let totalItem = item.produto.preco * item.quantidade;
+
+      // Adicionar total dos adicionais
+      if (item.adicionais) {
+        const totalAdicionais = item.adicionais.reduce((totalAd, adicional) => {
+          return totalAd + (adicional.preco * adicional.quantidade * item.quantidade);
+        }, 0);
+        totalItem += totalAdicionais;
+      }
+
+      return total + totalItem;
     }, 0);
   };
 
@@ -1812,7 +1857,9 @@ const CardapioPublicoPage: React.FC = () => {
 
             {/* Lista de Itens do Carrinho */}
             <div className="max-h-28 overflow-y-auto space-y-2 mb-3">
-              {obterItensCarrinho().map(({ produto, quantidade }) => (
+              {obterItensCarrinho().map((item) => {
+                const { produto, quantidade, adicionais } = item;
+                return (
                 <div
                   key={produto.id}
                   className={`flex items-center justify-between p-2 rounded-lg transition-all duration-500 ${
@@ -1859,6 +1906,32 @@ const CardapioPublicoPage: React.FC = () => {
                             {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
                           </div>
                         )}
+
+                        {/* Adicionais do item */}
+                        {adicionais && adicionais.length > 0 && (
+                          <div className={`text-xs mt-1 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {adicionais.map(adicional => (
+                              <div key={adicional.id} className="flex justify-between">
+                                <span>+ {adicional.nome} ({adicional.quantidade}x)</span>
+                                {config.mostrar_precos && (
+                                  <span>{formatarPreco(adicional.preco * adicional.quantidade * quantidade)}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Total do item (produto + adicionais) */}
+                        {config.mostrar_precos && adicionais && adicionais.length > 0 && (
+                          <div className={`text-xs font-semibold mt-1 pt-1 border-t ${
+                            config.modo_escuro ? 'border-gray-600 text-green-400' : 'border-gray-300 text-green-600'
+                          }`}>
+                            Total: {formatarPreco(
+                              (produto.preco * quantidade) +
+                              adicionais.reduce((total, adicional) => total + (adicional.preco * adicional.quantidade * quantidade), 0)
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -1870,6 +1943,32 @@ const CardapioPublicoPage: React.FC = () => {
                       {config.mostrar_precos && (
                         <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
                           {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                        </div>
+                      )}
+
+                      {/* Adicionais do item */}
+                      {adicionais && adicionais.length > 0 && (
+                        <div className={`text-xs mt-1 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                          {adicionais.map(adicional => (
+                            <div key={adicional.id} className="flex justify-between">
+                              <span>+ {adicional.nome} ({adicional.quantidade}x)</span>
+                              {config.mostrar_precos && (
+                                <span>{formatarPreco(adicional.preco * adicional.quantidade * quantidade)}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Total do item (produto + adicionais) */}
+                      {config.mostrar_precos && adicionais && adicionais.length > 0 && (
+                        <div className={`text-xs font-semibold mt-1 pt-1 border-t ${
+                          config.modo_escuro ? 'border-gray-600 text-green-400' : 'border-gray-300 text-green-600'
+                        }`}>
+                          Total: {formatarPreco(
+                            (produto.preco * quantidade) +
+                            adicionais.reduce((total, adicional) => total + (adicional.preco * adicional.quantidade * quantidade), 0)
+                          )}
                         </div>
                       )}
                     </div>
@@ -1952,7 +2051,8 @@ const CardapioPublicoPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Botão Finalizar Pedido */}
