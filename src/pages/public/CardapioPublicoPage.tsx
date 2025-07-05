@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp } from 'lucide-react';
+import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
@@ -46,6 +46,7 @@ interface ItemCarrinho {
     preco: number;
     quantidade: number;
   }>;
+  observacao?: string;
 }
 
 interface Empresa {
@@ -139,6 +140,44 @@ const CardapioPublicoPage: React.FC = () => {
   // Estados para adicionais
   const [adicionaisExpandidos, setAdicionaisExpandidos] = useState<{[produtoId: string]: {[opcaoId: string]: boolean}}>({});
   const [adicionaisSelecionados, setAdicionaisSelecionados] = useState<{[produtoId: string]: {[itemId: string]: number}}>({});
+
+  // Estados para observações
+  const [observacoesProdutos, setObservacoesProdutos] = useState<Record<string, string>>({});
+  const [modalObservacaoAberto, setModalObservacaoAberto] = useState(false);
+  const [produtoObservacaoAtual, setProdutoObservacaoAtual] = useState<string | null>(null);
+  const [observacaoTemp, setObservacaoTemp] = useState('');
+
+  // Funções para observações
+  const abrirModalObservacao = (produtoId: string) => {
+    setProdutoObservacaoAtual(produtoId);
+    setObservacaoTemp(observacoesProdutos[produtoId] || '');
+    setModalObservacaoAberto(true);
+  };
+
+  const salvarObservacao = () => {
+    if (produtoObservacaoAtual) {
+      if (observacaoTemp.trim()) {
+        setObservacoesProdutos(prev => ({
+          ...prev,
+          [produtoObservacaoAtual]: observacaoTemp.trim()
+        }));
+      } else {
+        // Remove observação se estiver vazia
+        setObservacoesProdutos(prev => {
+          const nova = { ...prev };
+          delete nova[produtoObservacaoAtual];
+          return nova;
+        });
+      }
+    }
+    fecharModalObservacao();
+  };
+
+  const fecharModalObservacao = () => {
+    setModalObservacaoAberto(false);
+    setProdutoObservacaoAtual(null);
+    setObservacaoTemp('');
+  };
 
 
 
@@ -520,15 +559,17 @@ const CardapioPublicoPage: React.FC = () => {
   useEffect(() => {
     if (empresaId) {
       console.log('🛒 Carregando carrinho do localStorage para empresa:', empresaId);
-      const { quantidades, ordem, adicionais } = carregarCarrinhoLocalStorage();
+      const { quantidades, ordem, adicionais, observacoes } = carregarCarrinhoLocalStorage();
       console.log('🛒 Carrinho salvo encontrado:', quantidades);
       console.log('🛒 Ordem salva encontrada:', ordem);
       console.log('🛒 Adicionais salvos encontrados:', adicionais);
+      console.log('🛒 Observações salvas encontradas:', observacoes);
 
       if (Object.keys(quantidades).length > 0) {
         setQuantidadesProdutos(quantidades);
         setOrdemAdicaoItens(ordem);
         setAdicionaisSelecionados(adicionais);
+        setObservacoesProdutos(observacoes);
         setCarrinhoAberto(true);
         console.log('🛒 Carrinho carregado e aberto');
       }
@@ -932,10 +973,12 @@ const CardapioPublicoPage: React.FC = () => {
       const chaveCarrinho = `carrinho_${empresaId}`;
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
       const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
+      const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
 
       localStorage.setItem(chaveCarrinho, JSON.stringify(quantidades));
       localStorage.setItem(chaveOrdem, JSON.stringify(ordemAdicaoItens));
       localStorage.setItem(chaveAdicionais, JSON.stringify(adicionaisSelecionados));
+      localStorage.setItem(chaveObservacoes, JSON.stringify(observacoesProdutos));
 
       console.log('🛒 Carrinho salvo no localStorage:', chaveCarrinho, quantidades);
       console.log('🛒 Ordem salva no localStorage:', chaveOrdem, ordemAdicaoItens);
@@ -959,20 +1002,24 @@ const CardapioPublicoPage: React.FC = () => {
       const chaveCarrinho = `carrinho_${empresaId}`;
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
       const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
+      const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
 
       const carrinhoSalvo = localStorage.getItem(chaveCarrinho);
       const ordemSalva = localStorage.getItem(chaveOrdem);
       const adicionaisSalvos = localStorage.getItem(chaveAdicionais);
+      const observacoesSalvas = localStorage.getItem(chaveObservacoes);
 
       const quantidades = carrinhoSalvo ? JSON.parse(carrinhoSalvo) : {};
       const ordem = ordemSalva ? JSON.parse(ordemSalva) : {};
       const adicionais = adicionaisSalvos ? JSON.parse(adicionaisSalvos) : {};
+      const observacoes = observacoesSalvas ? JSON.parse(observacoesSalvas) : {};
 
       console.log('🛒 Carrinho carregado do localStorage:', chaveCarrinho, quantidades);
       console.log('🛒 Ordem carregada do localStorage:', chaveOrdem, ordem);
       console.log('🛒 Adicionais carregados do localStorage:', chaveAdicionais, adicionais);
+      console.log('🛒 Observações carregadas do localStorage:', chaveObservacoes, observacoes);
 
-      return { quantidades, ordem, adicionais };
+      return { quantidades, ordem, adicionais, observacoes };
     } catch (error) {
       console.error('Erro ao carregar carrinho do localStorage:', error);
       return { quantidades: {}, ordem: {}, adicionais: {} };
@@ -986,12 +1033,14 @@ const CardapioPublicoPage: React.FC = () => {
       const chaveCarrinho = `carrinho_${empresaId}`;
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
       const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
+      const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
 
       localStorage.removeItem(chaveCarrinho);
       localStorage.removeItem(chaveOrdem);
       localStorage.removeItem(chaveAdicionais);
+      localStorage.removeItem(chaveObservacoes);
 
-      console.log('🛒 Carrinho, ordem e adicionais limpos do localStorage');
+      console.log('🛒 Carrinho, ordem, adicionais e observações limpos do localStorage');
     } catch (error) {
       console.error('Erro ao limpar carrinho do localStorage:', error);
     }
@@ -1087,9 +1136,16 @@ const CardapioPublicoPage: React.FC = () => {
       }));
     }
 
-    // Remover da ordem quando quantidade chega a zero
+    // Remover da ordem e observação quando quantidade chega a zero
     if (novaQuantidade === 0) {
       setOrdemAdicaoItens(prev => {
+        const nova = { ...prev };
+        delete nova[produtoId];
+        return nova;
+      });
+
+      // Limpar observação do produto
+      setObservacoesProdutos(prev => {
         const nova = { ...prev };
         delete nova[produtoId];
         return nova;
@@ -1150,12 +1206,19 @@ const CardapioPublicoPage: React.FC = () => {
         novaQuantidade = Math.max(0, quantidadeAtual - 1);
       }
 
-      // Se a quantidade chegou a 0, limpar os adicionais deste produto
+      // Se a quantidade chegou a 0, limpar os adicionais e observação deste produto
       if (novaQuantidade === 0) {
         setAdicionaisSelecionados(prev => {
           const novosAdicionais = { ...prev };
           delete novosAdicionais[produtoId];
           return novosAdicionais;
+        });
+
+        // Limpar observação do produto
+        setObservacoesProdutos(prev => {
+          const nova = { ...prev };
+          delete nova[produtoId];
+          return nova;
         });
       }
 
@@ -1231,12 +1294,13 @@ const CardapioPublicoPage: React.FC = () => {
           produto,
           quantidade,
           adicionais: adicionaisItem.length > 0 ? adicionaisItem : undefined,
+          observacao: observacoesProdutos[produtoId] || undefined,
           ordemAdicao: ordemAdicaoItens[produtoId] || 0
         };
       })
       .filter(Boolean)
       .sort((a, b) => b!.ordemAdicao - a!.ordemAdicao) // Mais recentes primeiro
-      .map(({ produto, quantidade, adicionais }) => ({ produto, quantidade, adicionais })) as ItemCarrinho[];
+      .map(({ produto, quantidade, adicionais, observacao }) => ({ produto, quantidade, adicionais, observacao })) as ItemCarrinho[];
   };
 
   const obterTotalCarrinho = () => {
@@ -1290,6 +1354,7 @@ const CardapioPublicoPage: React.FC = () => {
     setQuantidadesProdutos({});
     setOrdemAdicaoItens({});
     setAdicionaisSelecionados({});
+    setObservacoesProdutos({});
     setCarrinhoAberto(false);
     setModalConfirmacaoAberto(false);
 
@@ -1917,7 +1982,7 @@ const CardapioPublicoPage: React.FC = () => {
             {/* Lista de Itens do Carrinho */}
             <div className="max-h-28 overflow-y-auto space-y-2 mb-3">
               {obterItensCarrinho().map((item) => {
-                const { produto, quantidade, adicionais } = item;
+                const { produto, quantidade, adicionais, observacao } = item;
                 return (
                 <div
                   key={produto.id}
@@ -2208,6 +2273,24 @@ const CardapioPublicoPage: React.FC = () => {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Observação do Item */}
+                  {observacao && (
+                    <div className={`mt-2 p-2 rounded-lg ${
+                      config.modo_escuro ? 'bg-gray-800/50' : 'bg-gray-100'
+                    }`}>
+                      <div className={`text-xs font-medium mb-1 ${
+                        config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                      }`}>
+                        Observação:
+                      </div>
+                      <p className={`text-xs ${
+                        config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
+                        {observacao}
+                      </p>
                     </div>
                   )}
 
@@ -2841,6 +2924,60 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Seção de Observação - Apenas se produto estiver no carrinho */}
+                  {obterQuantidadeProduto(produto.id) > 0 && (
+                  <div className="mt-3 w-full">
+                    {observacoesProdutos[produto.id] ? (
+                      // Mostrar observação existente com ícone de editar
+                      <div className={`p-3 rounded-lg border ${
+                        config.modo_escuro
+                          ? 'bg-gray-800/50 border-gray-600'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className={`text-xs font-medium mb-1 ${
+                              config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                            }`}>
+                              Observação:
+                            </div>
+                            <p className={`text-sm ${
+                              config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                            }`}>
+                              {observacoesProdutos[produto.id]}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => abrirModalObservacao(produto.id)}
+                            className={`p-1.5 rounded-full transition-colors ${
+                              config.modo_escuro
+                                ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700'
+                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                            }`}
+                            title="Editar observação"
+                          >
+                            <Edit size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      // Mostrar botão para adicionar observação
+                      <button
+                        onClick={() => abrirModalObservacao(produto.id)}
+                        className={`w-full p-2 rounded-lg border-2 border-dashed transition-colors text-sm ${
+                          config.modo_escuro
+                            ? 'border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
+                            : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <MessageSquare size={16} />
+                          <span>Adicionar observação</span>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                  )}
 
                 </div>
               </div>
@@ -2966,7 +3103,7 @@ const CardapioPublicoPage: React.FC = () => {
             <div className="flex-1 p-4 overflow-y-auto">
               <div className="space-y-3">
                 {obterItensCarrinho().map((item, index) => {
-                  const { produto, quantidade, adicionais } = item;
+                  const { produto, quantidade, adicionais, observacao } = item;
                   return (
                     <div
                       key={produto.id}
@@ -3216,6 +3353,24 @@ const CardapioPublicoPage: React.FC = () => {
                           </div>
                         </div>
                       )}
+
+                      {/* Observação do Item */}
+                      {observacao && (
+                        <div className={`mt-3 p-3 rounded-lg ${
+                          config.modo_escuro ? 'bg-gray-800/50' : 'bg-gray-100'
+                        }`}>
+                          <div className={`text-xs font-medium mb-1 ${
+                            config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            Observação:
+                          </div>
+                          <p className={`text-sm ${
+                            config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                          }`}>
+                            {observacao}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -3296,6 +3451,90 @@ const CardapioPublicoPage: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Modal de Observação */}
+      {modalObservacaoAberto && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`text-lg font-semibold ${
+                  config.modo_escuro ? 'text-white' : 'text-gray-900'
+                }`}>
+                  {observacoesProdutos[produtoObservacaoAtual || ''] ? 'Editar Observação' : 'Adicionar Observação'}
+                </h3>
+                <button
+                  onClick={fecharModalObservacao}
+                  className={`p-2 rounded-full transition-colors ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6">
+              <div className="mb-4">
+                <label className={`block text-sm font-medium mb-2 ${
+                  config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  Observação para o produto
+                </label>
+                <textarea
+                  value={observacaoTemp}
+                  onChange={(e) => setObservacaoTemp(e.target.value)}
+                  placeholder="Ex: Sem cebola, bem passado, etc..."
+                  rows={4}
+                  className={`w-full px-3 py-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    config.modo_escuro
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                  }`}
+                  maxLength={200}
+                />
+                <div className={`text-xs mt-1 text-right ${
+                  config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                }`}>
+                  {observacaoTemp.length}/200
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex gap-3">
+                <button
+                  onClick={fecharModalObservacao}
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium transition-colors ${
+                    config.modo_escuro
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={salvarObservacao}
+                  className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+                >
+                  {observacoesProdutos[produtoObservacaoAtual || ''] ? 'Salvar' : 'Adicionar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Galeria de Fotos */}
       <FotoGaleria
