@@ -1922,7 +1922,7 @@ const CardapioPublicoPage: React.FC = () => {
                   {/* Layout com foto (quando configuração ativa) */}
                   {config.cardapio_fotos_minimizadas ? (
                     <>
-                      {/* Header do Item - Foto + Nome/Preço + Controles */}
+                      {/* Header do Item - Foto + Nome + Preço + Controles */}
                       <div className="flex items-center gap-3 mb-2">
                         {/* Foto do produto */}
                         <div
@@ -1952,86 +1952,88 @@ const CardapioPublicoPage: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Área central com Nome e Preço em 2 linhas */}
+                        {/* Info do Produto + Controles na mesma linha */}
                         <div className="flex-1 min-w-0">
-                          {/* Linha 1: Nome do produto */}
-                          <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                            {produto.nome}
-                          </h4>
-                          {/* Linha 2: Preço */}
-                          {config.mostrar_precos && (
-                            <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                              {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                                {produto.nome}
+                              </h4>
+                              {config.mostrar_precos && (
+                                <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                                  {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                                </div>
+                              )}
                             </div>
-                          )}
                         </div>
 
-                        {/* Controles de Quantidade do Produto Principal */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => decrementarQuantidade(produto.id)}
-                            disabled={lojaAberta === false}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            }`}
-                          >
-                            <Minus size={12} />
-                          </button>
+                            {/* Controles de Quantidade do Produto Principal */}
+                            <div className="flex items-center gap-2 ml-3">
+                              <button
+                                onClick={() => decrementarQuantidade(produto.id)}
+                                disabled={lojaAberta === false}
+                                className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                  lojaAberta === false
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : config.modo_escuro
+                                    ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                              >
+                                <Minus size={12} />
+                              </button>
 
-                          {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
-                            <input
-                              type="text"
-                              value={formatarQuantidade(quantidade, produto.unidade_medida)}
-                              onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
-                              onBlur={() => setItemEditandoCarrinho(null)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  setItemEditandoCarrinho(null);
-                                }
-                              }}
-                              className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
-                                config.modo_escuro
-                                  ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
-                                  : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
-                              }`}
-                              placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
-                              disabled={lojaAberta === false}
-                              className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
-                                lojaAberta === false
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : config.modo_escuro
-                                  ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                  : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                              }`}
-                            >
-                              {formatarQuantidade(quantidade, produto.unidade_medida)}
-                            </button>
-                          )}
+                              {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
+                                <input
+                                  type="text"
+                                  value={formatarQuantidade(quantidade, produto.unidade_medida)}
+                                  onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
+                                  onBlur={() => setItemEditandoCarrinho(null)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      setItemEditandoCarrinho(null);
+                                    }
+                                  }}
+                                  className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
+                                    config.modo_escuro
+                                      ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
+                                      : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                                  }`}
+                                  placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
+                                  autoFocus
+                                />
+                              ) : (
+                                <button
+                                  onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
+                                  disabled={lojaAberta === false}
+                                  className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
+                                    lojaAberta === false
+                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                      : config.modo_escuro
+                                      ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                                  }`}
+                                >
+                                  {formatarQuantidade(quantidade, produto.unidade_medida)}
+                                </button>
+                              )}
 
-                          <button
-                            onClick={() => incrementarQuantidade(produto.id)}
-                            disabled={lojaAberta === false}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                : 'bg-blue-500 text-white hover:bg-blue-600'
-                            }`}
-                          >
-                            <Plus size={12} />
-                          </button>
+                              <button
+                                onClick={() => incrementarQuantidade(produto.id)}
+                                disabled={lojaAberta === false}
+                                className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                  lojaAberta === false
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : config.modo_escuro
+                                    ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                                }`}
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
                     </>
                   ) : (
                     <>
