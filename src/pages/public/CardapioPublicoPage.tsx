@@ -1854,7 +1854,7 @@ const CardapioPublicoPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <ShoppingCart size={18} className={config.modo_escuro ? 'text-purple-400' : 'text-purple-600'} />
                 <h3 className={`font-semibold text-sm ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                  Carrinho ({obterQuantidadeTotalItens()} {obterQuantidadeTotalItens() === 1 ? 'item' : 'itens'})
+                  ({obterQuantidadeTotalItens()} {obterQuantidadeTotalItens() === 1 ? 'item' : 'itens'})
                 </h3>
                 {config.mostrar_precos && (
                   <span className={`text-sm font-bold ${config.modo_escuro ? 'text-green-400' : 'text-green-600'}`}>
