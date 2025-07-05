@@ -213,6 +213,15 @@ const CardapioPublicoPage: React.FC = () => {
   const [quantidadesProdutos, setQuantidadesProdutos] = useState<Record<string, number>>({});
   const [produtoEditandoQuantidade, setProdutoEditandoQuantidade] = useState<string | null>(null);
 
+  // Estado para itens separados no carrinho (cada adição é um item único)
+  const [itensCarrinhoSeparados, setItensCarrinhoSeparados] = useState<Record<string, {
+    produtoId: string;
+    quantidade: number;
+    adicionais: {[itemId: string]: number};
+    observacao?: string;
+    ordemAdicao: number;
+  }>>({});
+
   // Estados para quantidades selecionadas (antes de adicionar ao carrinho)
   const [quantidadesSelecionadas, setQuantidadesSelecionadas] = useState<Record<string, number>>({});
 
@@ -222,6 +231,8 @@ const CardapioPublicoPage: React.FC = () => {
   const [itemEditandoCarrinho, setItemEditandoCarrinho] = useState<string | null>(null);
   const [modalConfirmacaoAberto, setModalConfirmacaoAberto] = useState(false);
   const [modalTodosItensAberto, setModalTodosItensAberto] = useState(false);
+  const [modalRemoverItemAberto, setModalRemoverItemAberto] = useState(false);
+  const [produtoParaRemover, setProdutoParaRemover] = useState<string | null>(null);
   const [toastVisivel, setToastVisivel] = useState(false);
   const [ordemAdicaoItens, setOrdemAdicaoItens] = useState<Record<string, number>>({});
   const [itemChacoalhando, setItemChacoalhando] = useState<string | null>(null);
@@ -241,6 +252,7 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Estados para observações
   const [observacoesProdutos, setObservacoesProdutos] = useState<Record<string, string>>({});
+  const [observacoesSelecionadas, setObservacoesSelecionadas] = useState<Record<string, string>>({});
   const [modalObservacaoAberto, setModalObservacaoAberto] = useState(false);
   const [produtoObservacaoAtual, setProdutoObservacaoAtual] = useState<string | null>(null);
   const [observacaoTemp, setObservacaoTemp] = useState('');
@@ -251,26 +263,48 @@ const CardapioPublicoPage: React.FC = () => {
   const [produtoPrecos, setProdutoPrecos] = useState<{[produtoId: string]: {[tabelaId: string]: number}}>({});
 
   // Funções para observações
-  const abrirModalObservacao = (produtoId: string) => {
-    setProdutoObservacaoAtual(produtoId);
-    setObservacaoTemp(observacoesProdutos[produtoId] || '');
+  const abrirModalObservacao = (produtoId: string, itemId?: string) => {
+    setProdutoObservacaoAtual(itemId || produtoId);
+
+    if (itemId) {
+      // Observação do carrinho - buscar no item específico
+      const item = itensCarrinhoSeparados[itemId];
+      setObservacaoTemp(item?.observacao || '');
+    } else {
+      // Observação de seleção - buscar nas observações selecionadas
+      setObservacaoTemp(observacoesSelecionadas[produtoId] || '');
+    }
+
     setModalObservacaoAberto(true);
   };
 
   const salvarObservacao = () => {
     if (produtoObservacaoAtual) {
-      if (observacaoTemp.trim()) {
-        setObservacoesProdutos(prev => ({
+      // Verificar se é um itemId (carrinho) ou produtoId (seleção)
+      if (itensCarrinhoSeparados[produtoObservacaoAtual]) {
+        // Observação do carrinho - atualizar item específico
+        setItensCarrinhoSeparados(prev => ({
           ...prev,
-          [produtoObservacaoAtual]: observacaoTemp.trim()
+          [produtoObservacaoAtual]: {
+            ...prev[produtoObservacaoAtual],
+            observacao: observacaoTemp.trim() || undefined
+          }
         }));
       } else {
-        // Remove observação se estiver vazia
-        setObservacoesProdutos(prev => {
-          const nova = { ...prev };
-          delete nova[produtoObservacaoAtual];
-          return nova;
-        });
+        // Observação de seleção
+        if (observacaoTemp.trim()) {
+          setObservacoesSelecionadas(prev => ({
+            ...prev,
+            [produtoObservacaoAtual]: observacaoTemp.trim()
+          }));
+        } else {
+          // Remove observação se estiver vazia
+          setObservacoesSelecionadas(prev => {
+            const nova = { ...prev };
+            delete nova[produtoObservacaoAtual];
+            return nova;
+          });
+        }
       }
     }
     fecharModalObservacao();
@@ -637,7 +671,7 @@ const CardapioPublicoPage: React.FC = () => {
     if (totalItens === 0 && carrinhoAberto) {
       setCarrinhoAberto(false);
     }
-  }, [quantidadesProdutos, carrinhoAberto]);
+  }, [itensCarrinhoSeparados, carrinhoAberto]);
 
   // Carregar carrinho do localStorage quando empresa está disponível
   useEffect(() => {
@@ -657,6 +691,14 @@ const CardapioPublicoPage: React.FC = () => {
       setValidacaoQuantidadeMinima(validacaoMinima);
         setCarrinhoAberto(true);
         console.log('🛒 Carrinho carregado e aberto');
+      }
+
+      // Carregar seleções (estados intermediários)
+      const { quantidades: quantidadesSel, observacoes: observacoesSel } = carregarSelecaoLocalStorage();
+      if (Object.keys(quantidadesSel).length > 0 || Object.keys(observacoesSel).length > 0) {
+        setQuantidadesSelecionadas(quantidadesSel);
+        setObservacoesSelecionadas(observacoesSel);
+        console.log('📝 Seleções carregadas do localStorage');
       }
     }
   }, [empresaId]);
@@ -700,6 +742,13 @@ const CardapioPublicoPage: React.FC = () => {
       atualizarValidacaoQuantidadeMinima();
     }
   }, [adicionaisSelecionados, produtos]);
+
+  // Salvar seleções automaticamente quando mudam
+  useEffect(() => {
+    if (empresaId) {
+      salvarSelecaoLocalStorage();
+    }
+  }, [quantidadesSelecionadas, observacoesSelecionadas, empresaId]);
 
 
 
@@ -1311,6 +1360,53 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
+  // Funções para localStorage dos estados de seleção (antes do carrinho)
+  const salvarSelecaoLocalStorage = () => {
+    if (!empresaId) return;
+
+    try {
+      localStorage.setItem(`selecao_quantidades_${empresaId}`, JSON.stringify(quantidadesSelecionadas));
+      localStorage.setItem(`selecao_observacoes_${empresaId}`, JSON.stringify(observacoesSelecionadas));
+      console.log('📝 Salvando seleções no localStorage');
+    } catch (error) {
+      console.error('Erro ao salvar seleções no localStorage:', error);
+    }
+  };
+
+  const carregarSelecaoLocalStorage = (): {
+    quantidades: Record<string, number>,
+    observacoes: Record<string, string>
+  } => {
+    if (!empresaId) {
+      return { quantidades: {}, observacoes: {} };
+    }
+
+    try {
+      const quantidadesSalvas = localStorage.getItem(`selecao_quantidades_${empresaId}`);
+      const observacoesSalvas = localStorage.getItem(`selecao_observacoes_${empresaId}`);
+
+      return {
+        quantidades: quantidadesSalvas ? JSON.parse(quantidadesSalvas) : {},
+        observacoes: observacoesSalvas ? JSON.parse(observacoesSalvas) : {}
+      };
+    } catch (error) {
+      console.error('Erro ao carregar seleções do localStorage:', error);
+      return { quantidades: {}, observacoes: {} };
+    }
+  };
+
+  const limparSelecaoLocalStorage = () => {
+    if (!empresaId) return;
+
+    try {
+      localStorage.removeItem(`selecao_quantidades_${empresaId}`);
+      localStorage.removeItem(`selecao_observacoes_${empresaId}`);
+      console.log('📝 Seleções limpas do localStorage');
+    } catch (error) {
+      console.error('Erro ao limpar seleções do localStorage:', error);
+    }
+  };
+
 
 
 
@@ -1323,6 +1419,36 @@ const CardapioPublicoPage: React.FC = () => {
   // Funções para controle de quantidades selecionadas (antes do carrinho)
   const obterQuantidadeSelecionada = (produtoId: string): number => {
     return quantidadesSelecionadas[produtoId] || 0;
+  };
+
+  // Função para calcular valor total incluindo adicionais selecionados
+  const calcularValorTotalComAdicionais = (produtoId: string): number => {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto) return 0;
+
+    const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
+    if (quantidadeSelecionada === 0) return 0;
+
+    // Valor base do produto
+    let valorTotal = produto.preco * quantidadeSelecionada;
+
+    // Adicionar valor dos adicionais selecionados
+    const adicionaisItem = adicionaisSelecionados[produtoId];
+    if (adicionaisItem) {
+      Object.entries(adicionaisItem).forEach(([itemId, quantidade]) => {
+        if (quantidade > 0) {
+          // Encontrar o adicional e seu preço
+          produto.opcoes_adicionais?.forEach(opcao => {
+            const item = opcao.itens?.find(item => item.id === itemId);
+            if (item && item.preco) {
+              valorTotal += item.preco * quantidade * quantidadeSelecionada;
+            }
+          });
+        }
+      });
+    }
+
+    return valorTotal;
   };
 
   const alterarQuantidadeSelecionada = (produtoId: string, novaQuantidade: number) => {
@@ -1379,23 +1505,159 @@ const CardapioPublicoPage: React.FC = () => {
     const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
 
     if (quantidadeSelecionada > 0) {
-      // Adicionar ao carrinho com a quantidade selecionada
+      // Gerar ID único para este item no carrinho
+      const itemId = `${produtoId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Criar item separado no carrinho
+      const novoItem = {
+        produtoId,
+        quantidade: quantidadeSelecionada,
+        adicionais: adicionaisSelecionados[produtoId] ? { ...adicionaisSelecionados[produtoId] } : {},
+        observacao: observacoesSelecionadas[produtoId],
+        ordemAdicao: Date.now()
+      };
+
+      // Adicionar ao estado de itens separados
+      setItensCarrinhoSeparados(prev => ({
+        ...prev,
+        [itemId]: novoItem
+      }));
+
+      // Manter compatibilidade com sistema antigo (somar quantidades)
       alterarQuantidadeProduto(produtoId, quantidadeSelecionada);
 
-      // Limpar quantidade selecionada
+      // Limpar quantidade e observação selecionadas
       alterarQuantidadeSelecionada(produtoId, 0);
+      setObservacoesSelecionadas(prev => {
+        const nova = { ...prev };
+        delete nova[produtoId];
+        return nova;
+      });
+
+      // Salvar seleções atualizadas no localStorage
+      setTimeout(() => salvarSelecaoLocalStorage(), 100);
 
       // Ativar efeito de entrada suave no item
       setItemChacoalhando(produtoId);
       setTimeout(() => setItemChacoalhando(null), 800);
 
       // Abrir carrinho automaticamente quando adicionar primeiro item
-      const totalItensCarrinho = Object.keys(quantidadesProdutos).length;
+      const totalItensCarrinho = Object.keys(itensCarrinhoSeparados).length;
       if (totalItensCarrinho === 0) {
         setCarrinhoAberto(true);
       }
 
-      console.log(`🛒 Produto ${produtoId} adicionado ao carrinho com quantidade ${quantidadeSelecionada}`);
+      console.log(`🛒 Produto ${produtoId} adicionado ao carrinho como item separado ${itemId}`);
+    }
+  };
+
+  // Funções específicas para controles do carrinho
+  const incrementarQuantidadeCarrinho = (produtoId: string) => {
+    const quantidadeAtual = obterQuantidadeProduto(produtoId);
+
+    // Buscar informações do produto para verificar se é fracionado
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto) return;
+
+    let novaQuantidade: number;
+
+    if (produto.unidade_medida?.fracionado) {
+      // Para produtos fracionados, incrementar em 0.1
+      novaQuantidade = Math.round((quantidadeAtual + 0.1) * 1000) / 1000; // 3 casas decimais
+    } else {
+      // Para produtos inteiros, incrementar em 1
+      novaQuantidade = quantidadeAtual + 1;
+    }
+
+    alterarQuantidadeProduto(produtoId, novaQuantidade);
+  };
+
+  // Funções para controle de itens individuais do carrinho
+  const decrementarQuantidadeItemCarrinho = (itemId: string) => {
+    const item = itensCarrinhoSeparados[itemId];
+    if (!item) return;
+
+    if (item.quantidade <= 1) {
+      // Abrir modal de confirmação para remoção
+      setProdutoParaRemover(itemId);
+      setModalRemoverItemAberto(true);
+    } else {
+      // Decrementar normalmente
+      const produto = produtos.find(p => p.id === item.produtoId);
+      if (!produto) return;
+
+      let novaQuantidade: number;
+
+      if (produto.unidade_medida?.fracionado) {
+        // Para produtos fracionados, decrementar em 0.1
+        novaQuantidade = Math.round((item.quantidade - 0.1) * 1000) / 1000; // 3 casas decimais
+      } else {
+        // Para produtos inteiros, decrementar em 1
+        novaQuantidade = item.quantidade - 1;
+      }
+
+      // Atualizar item no carrinho
+      setItensCarrinhoSeparados(prev => ({
+        ...prev,
+        [itemId]: { ...item, quantidade: novaQuantidade }
+      }));
+
+      // Atualizar também o sistema antigo para compatibilidade
+      alterarQuantidadeProduto(item.produtoId, obterQuantidadeProduto(item.produtoId) - (item.quantidade - novaQuantidade));
+    }
+  };
+
+  const incrementarQuantidadeItemCarrinho = (itemId: string) => {
+    const item = itensCarrinhoSeparados[itemId];
+    if (!item) return;
+
+    const produto = produtos.find(p => p.id === item.produtoId);
+    if (!produto) return;
+
+    let novaQuantidade: number;
+
+    if (produto.unidade_medida?.fracionado) {
+      // Para produtos fracionados, incrementar em 0.1
+      novaQuantidade = Math.round((item.quantidade + 0.1) * 1000) / 1000; // 3 casas decimais
+    } else {
+      // Para produtos inteiros, incrementar em 1
+      novaQuantidade = item.quantidade + 1;
+    }
+
+    // Atualizar item no carrinho
+    setItensCarrinhoSeparados(prev => ({
+      ...prev,
+      [itemId]: { ...item, quantidade: novaQuantidade }
+    }));
+
+    // Atualizar também o sistema antigo para compatibilidade
+    alterarQuantidadeProduto(item.produtoId, obterQuantidadeProduto(item.produtoId) + (novaQuantidade - item.quantidade));
+  };
+
+  // Manter funções antigas para compatibilidade
+  const decrementarQuantidadeCarrinho = (produtoId: string) => {
+    const quantidadeAtual = obterQuantidadeProduto(produtoId);
+
+    if (quantidadeAtual <= 1) {
+      // Abrir modal de confirmação para remoção
+      setProdutoParaRemover(produtoId);
+      setModalRemoverItemAberto(true);
+    } else {
+      // Decrementar normalmente
+      const produto = produtos.find(p => p.id === produtoId);
+      if (!produto) return;
+
+      let novaQuantidade: number;
+
+      if (produto.unidade_medida?.fracionado) {
+        // Para produtos fracionados, decrementar em 0.1
+        novaQuantidade = Math.round((quantidadeAtual - 0.1) * 1000) / 1000; // 3 casas decimais
+      } else {
+        // Para produtos inteiros, decrementar em 1
+        novaQuantidade = quantidadeAtual - 1;
+      }
+
+      alterarQuantidadeProduto(produtoId, novaQuantidade);
     }
   };
 
@@ -1509,26 +1771,45 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Funções para o carrinho
   const obterItensCarrinho = (): ItemCarrinho[] => {
-    return Object.entries(quantidadesProdutos)
-      .filter(([_, quantidade]) => quantidade > 0)
-      .map(([produtoId, quantidade]) => {
-        const produto = produtos.find(p => p.id === produtoId);
+    return Object.entries(itensCarrinhoSeparados)
+      .map(([itemId, item]) => {
+        const produto = produtos.find(p => p.id === item.produtoId);
         if (!produto) return null;
 
-        // Buscar apenas adicionais válidos (que atingiram quantidade mínima)
-        const adicionaisItem = obterAdicionaisValidosParaCarrinho(produtoId);
+        // Converter adicionais do formato {[itemId]: quantidade} para array
+        const adicionaisArray: { id: string; nome: string; preco: number; quantidade: number; }[] = [];
+
+        if (item.adicionais) {
+          Object.entries(item.adicionais).forEach(([adicionalId, quantidade]) => {
+            if (quantidade > 0) {
+              // Encontrar o adicional nos dados do produto
+              produto.opcoes_adicionais?.forEach(opcao => {
+                const adicionalItem = opcao.itens?.find(adicionalItem => adicionalItem.id === adicionalId);
+                if (adicionalItem) {
+                  adicionaisArray.push({
+                    id: adicionalId,
+                    nome: adicionalItem.nome,
+                    preco: adicionalItem.preco || 0,
+                    quantidade
+                  });
+                }
+              });
+            }
+          });
+        }
 
         return {
           produto,
-          quantidade,
-          adicionais: adicionaisItem.length > 0 ? adicionaisItem : undefined,
-          observacao: observacoesProdutos[produtoId] || undefined,
-          ordemAdicao: ordemAdicaoItens[produtoId] || 0
+          quantidade: item.quantidade,
+          adicionais: adicionaisArray.length > 0 ? adicionaisArray : undefined,
+          observacao: item.observacao,
+          ordemAdicao: item.ordemAdicao,
+          itemId // Adicionar ID único para identificar o item
         };
       })
       .filter(Boolean)
       .sort((a, b) => b!.ordemAdicao - a!.ordemAdicao) // Mais recentes primeiro
-      .map(({ produto, quantidade, adicionais, observacao }) => ({ produto, quantidade, adicionais, observacao })) as ItemCarrinho[];
+      .map(({ produto, quantidade, adicionais, observacao, itemId }) => ({ produto, quantidade, adicionais, observacao, itemId })) as (ItemCarrinho & { itemId: string })[];
   };
 
   const obterTotalCarrinho = () => {
@@ -1549,7 +1830,8 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const obterQuantidadeTotalItens = () => {
-    return Object.values(quantidadesProdutos).reduce((total, quantidade) => total + quantidade, 0);
+    // Contar itens separados no carrinho
+    return Object.values(itensCarrinhoSeparados).reduce((total, item) => total + item.quantidade, 0);
   };
 
   const removerItemCarrinho = (produtoId: string) => {
@@ -1583,6 +1865,7 @@ const CardapioPublicoPage: React.FC = () => {
     setOrdemAdicaoItens({});
     setAdicionaisSelecionados({});
     setObservacoesProdutos({});
+    setItensCarrinhoSeparados({}); // Limpar itens separados
     setCarrinhoAberto(false);
     setModalConfirmacaoAberto(false);
 
@@ -1596,6 +1879,53 @@ const CardapioPublicoPage: React.FC = () => {
 
   const cancelarLimparCarrinho = () => {
     setModalConfirmacaoAberto(false);
+  };
+
+  // Funções para modal de remoção de item
+  const confirmarRemoverItem = () => {
+    if (produtoParaRemover) {
+      // Verificar se é um itemId (novo sistema) ou produtoId (sistema antigo)
+      if (itensCarrinhoSeparados[produtoParaRemover]) {
+        // Novo sistema - remover item específico
+        const item = itensCarrinhoSeparados[produtoParaRemover];
+
+        // Remover do carrinho separado
+        setItensCarrinhoSeparados(prev => {
+          const novo = { ...prev };
+          delete novo[produtoParaRemover];
+          return novo;
+        });
+
+        // Atualizar sistema antigo para compatibilidade
+        const quantidadeAtual = obterQuantidadeProduto(item.produtoId);
+        alterarQuantidadeProduto(item.produtoId, Math.max(0, quantidadeAtual - item.quantidade));
+      } else {
+        // Sistema antigo - remover completamente do carrinho
+        alterarQuantidadeProduto(produtoParaRemover, 0);
+
+        // Limpar adicionais e observação deste produto
+        setAdicionaisSelecionados(prev => {
+          const novosAdicionais = { ...prev };
+          delete novosAdicionais[produtoParaRemover];
+          return novosAdicionais;
+        });
+
+        setObservacoesProdutos(prev => {
+          const nova = { ...prev };
+          delete nova[produtoParaRemover];
+          return nova;
+        });
+      }
+
+      // Fechar modal e limpar estado
+      setModalRemoverItemAberto(false);
+      setProdutoParaRemover(null);
+    }
+  };
+
+  const cancelarRemoverItem = () => {
+    setModalRemoverItemAberto(false);
+    setProdutoParaRemover(null);
   };
 
   // Função para obter o primeiro telefone com WhatsApp
@@ -2210,10 +2540,10 @@ const CardapioPublicoPage: React.FC = () => {
             {/* Lista de Itens do Carrinho */}
             <div className="max-h-28 overflow-y-auto space-y-2 mb-3">
               {obterItensCarrinho().map((item) => {
-                const { produto, quantidade, adicionais, observacao } = item;
+                const { produto, quantidade, adicionais, observacao, itemId } = item as any;
                 return (
                 <div
-                  key={produto.id}
+                  key={itemId}
                   className={`p-2 rounded-lg transition-all duration-500 ${
                     config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-50'
                   } ${
@@ -2277,7 +2607,7 @@ const CardapioPublicoPage: React.FC = () => {
                         {/* Controles de Quantidade do Produto Principal */}
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => decrementarQuantidade(produto.id)}
+                            onClick={() => decrementarQuantidadeItemCarrinho(itemId)}
                             disabled={lojaAberta === false}
                             className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
                               lojaAberta === false
@@ -2326,7 +2656,7 @@ const CardapioPublicoPage: React.FC = () => {
                           )}
 
                           <button
-                            onClick={() => incrementarQuantidade(produto.id)}
+                            onClick={() => incrementarQuantidadeItemCarrinho(itemId)}
                             disabled={lojaAberta === false}
                             className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
                               lojaAberta === false
@@ -2360,7 +2690,7 @@ const CardapioPublicoPage: React.FC = () => {
                           {/* Controles de Quantidade do Produto Principal */}
                           <div className="flex items-center gap-2 ml-3">
                             <button
-                              onClick={() => decrementarQuantidade(produto.id)}
+                              onClick={() => decrementarQuantidadeItemCarrinho(itemId)}
                               disabled={lojaAberta === false}
                               className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
                                 lojaAberta === false
@@ -2409,7 +2739,7 @@ const CardapioPublicoPage: React.FC = () => {
                             )}
 
                             <button
-                              onClick={() => incrementarQuantidade(produto.id)}
+                              onClick={() => incrementarQuantidadeItemCarrinho(itemId)}
                               disabled={lojaAberta === false}
                               className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
                                 lojaAberta === false
@@ -2523,7 +2853,7 @@ const CardapioPublicoPage: React.FC = () => {
                           </p>
                         </div>
                         <button
-                          onClick={() => abrirModalObservacao(produto.id)}
+                          onClick={() => abrirModalObservacao(produto.id, itemId)}
                           className={`p-1 rounded-full transition-colors flex-shrink-0 ${
                             config.modo_escuro
                               ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700'
@@ -3165,7 +3495,7 @@ const CardapioPublicoPage: React.FC = () => {
                   {/* Botão Adicionar no Carrinho - Só aparece quando há quantidade selecionada */}
                   {(() => {
                     const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
-                    const valorTotal = produto.preco * quantidadeSelecionada;
+                    const valorTotal = calcularValorTotalComAdicionais(produto.id);
                     const temQuantidade = quantidadeSelecionada > 0;
                     const lojaFechada = lojaAberta === false;
 
@@ -3187,10 +3517,10 @@ const CardapioPublicoPage: React.FC = () => {
                     );
                   })()}
 
-                  {/* Seção de Observação - Apenas se produto estiver no carrinho */}
-                  {obterQuantidadeProduto(produto.id) > 0 && (
+                  {/* Seção de Observação - Apenas se produto tiver quantidade selecionada */}
+                  {obterQuantidadeSelecionada(produto.id) > 0 && (
                   <div className="mt-3 w-full">
-                    {observacoesProdutos[produto.id] ? (
+                    {observacoesSelecionadas[produto.id] ? (
                       // Mostrar observação existente com ícone de editar
                       <div className={`p-3 rounded-lg border ${
                         config.modo_escuro
@@ -3207,7 +3537,7 @@ const CardapioPublicoPage: React.FC = () => {
                             <p className={`text-sm ${
                               config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
                             }`}>
-                              {observacoesProdutos[produto.id]}
+                              {observacoesSelecionadas[produto.id]}
                             </p>
                           </div>
                           <button
@@ -3327,6 +3657,65 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       )}
 
+      {/* Modal de Confirmação para Remover Item */}
+      {modalRemoverItemAberto && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <Trash2 size={20} className="text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <h3 className={`text-lg font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Remover Item
+                  </h3>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    Esta ação não pode ser desfeita
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <p className={`text-center ${
+                config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                Deseja remover este item do carrinho?
+              </p>
+            </div>
+
+            {/* Botões do Modal */}
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                onClick={cancelarRemoverItem}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarRemoverItem}
+                className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+              >
+                Sim, Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Visualização de Todos os Itens */}
       {modalTodosItensAberto && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -3366,10 +3755,10 @@ const CardapioPublicoPage: React.FC = () => {
             <div className="flex-1 p-4 overflow-y-auto">
               <div className="space-y-3">
                 {obterItensCarrinho().map((item) => {
-                  const { produto, quantidade, adicionais, observacao } = item;
+                  const { produto, quantidade, adicionais, observacao, itemId } = item as any;
                   return (
                     <div
-                      key={produto.id}
+                      key={itemId}
                       className={`p-3 rounded-lg transition-all duration-200 ${
                         config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-50'
                       }`}
@@ -3636,7 +4025,7 @@ const CardapioPublicoPage: React.FC = () => {
                               </p>
                             </div>
                             <button
-                              onClick={() => abrirModalObservacao(produto.id)}
+                              onClick={() => abrirModalObservacao(produto.id, itemId)}
                               className={`p-1.5 rounded-full transition-colors flex-shrink-0 ${
                                 config.modo_escuro
                                   ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700'
@@ -3744,7 +4133,15 @@ const CardapioPublicoPage: React.FC = () => {
                 <h3 className={`text-lg font-semibold ${
                   config.modo_escuro ? 'text-white' : 'text-gray-900'
                 }`}>
-                  {observacoesProdutos[produtoObservacaoAtual || ''] ? 'Editar Observação' : 'Adicionar Observação'}
+                  {(() => {
+                    if (produtoObservacaoAtual && itensCarrinhoSeparados[produtoObservacaoAtual]) {
+                      // Item do carrinho
+                      return itensCarrinhoSeparados[produtoObservacaoAtual].observacao ? 'Editar Observação' : 'Adicionar Observação';
+                    } else {
+                      // Item de seleção
+                      return observacoesSelecionadas[produtoObservacaoAtual || ''] ? 'Editar Observação' : 'Adicionar Observação';
+                    }
+                  })()}
                 </h3>
                 <button
                   onClick={fecharModalObservacao}
@@ -3806,7 +4203,15 @@ const CardapioPublicoPage: React.FC = () => {
                   onClick={salvarObservacao}
                   className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
                 >
-                  {observacoesProdutos[produtoObservacaoAtual || ''] ? 'Salvar' : 'Adicionar'}
+                  {(() => {
+                    if (produtoObservacaoAtual && itensCarrinhoSeparados[produtoObservacaoAtual]) {
+                      // Item do carrinho
+                      return itensCarrinhoSeparados[produtoObservacaoAtual].observacao ? 'Salvar' : 'Adicionar';
+                    } else {
+                      // Item de seleção
+                      return observacoesSelecionadas[produtoObservacaoAtual || ''] ? 'Salvar' : 'Adicionar';
+                    }
+                  })()}
                 </button>
               </div>
             </div>
