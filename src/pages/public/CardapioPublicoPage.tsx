@@ -2281,16 +2281,31 @@ const CardapioPublicoPage: React.FC = () => {
                     <div className={`mt-2 p-2 rounded-lg ${
                       config.modo_escuro ? 'bg-gray-800/50' : 'bg-gray-100'
                     }`}>
-                      <div className={`text-xs font-medium mb-1 ${
-                        config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
-                      }`}>
-                        Observação:
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className={`text-xs font-medium mb-1 ${
+                            config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                          }`}>
+                            Observação:
+                          </div>
+                          <p className={`text-xs ${
+                            config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                          }`}>
+                            {observacao}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => abrirModalObservacao(produto.id)}
+                          className={`p-1 rounded-full transition-colors flex-shrink-0 ${
+                            config.modo_escuro
+                              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700'
+                              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                          }`}
+                          title="Editar observação"
+                        >
+                          <Edit size={12} />
+                        </button>
                       </div>
-                      <p className={`text-xs ${
-                        config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
-                      }`}>
-                        {observacao}
-                      </p>
                     </div>
                   )}
 
@@ -3359,16 +3374,31 @@ const CardapioPublicoPage: React.FC = () => {
                         <div className={`mt-3 p-3 rounded-lg ${
                           config.modo_escuro ? 'bg-gray-800/50' : 'bg-gray-100'
                         }`}>
-                          <div className={`text-xs font-medium mb-1 ${
-                            config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
-                          }`}>
-                            Observação:
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className={`text-xs font-medium mb-1 ${
+                                config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                              }`}>
+                                Observação:
+                              </div>
+                              <p className={`text-sm ${
+                                config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                              }`}>
+                                {observacao}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => abrirModalObservacao(produto.id)}
+                              className={`p-1.5 rounded-full transition-colors flex-shrink-0 ${
+                                config.modo_escuro
+                                  ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700'
+                                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                              }`}
+                              title="Editar observação"
+                            >
+                              <Edit size={14} />
+                            </button>
                           </div>
-                          <p className={`text-sm ${
-                            config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
-                          }`}>
-                            {observacao}
-                          </p>
                         </div>
                       )}
                     </div>
