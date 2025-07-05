@@ -31,6 +31,7 @@ interface Produto {
   opcoes_adicionais?: Array<{
     id: string;
     nome: string;
+    quantidade_minima?: number;
     itens: Array<{
       id: string;
       nome: string;
@@ -723,6 +724,7 @@ const CardapioPublicoPage: React.FC = () => {
             opcoes_adicionais!inner (
               id,
               nome,
+              quantidade_minima,
               opcoes_adicionais_itens (
                 id,
                 nome,
@@ -793,6 +795,7 @@ const CardapioPublicoPage: React.FC = () => {
         const opcoesAdicionais = adicionaisProduto.map(a => ({
           id: a.opcoes_adicionais.id,
           nome: a.opcoes_adicionais.nome,
+          quantidade_minima: a.opcoes_adicionais.quantidade_minima || 0,
           itens: a.opcoes_adicionais.opcoes_adicionais_itens || []
         }));
 
@@ -953,6 +956,58 @@ const CardapioPublicoPage: React.FC = () => {
 
   const obterQuantidadeAdicional = (produtoId: string, itemId: string): number => {
     return adicionaisSelecionados[produtoId]?.[itemId] || 0;
+  };
+
+  // Função para obter quantidade total selecionada de uma opção
+  const obterQuantidadeTotalOpcao = (produtoId: string, opcaoId: string): number => {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto?.opcoes_adicionais) return 0;
+
+    const opcao = produto.opcoes_adicionais.find(o => o.id === opcaoId);
+    if (!opcao) return 0;
+
+    return opcao.itens.reduce((total, item) => {
+      return total + obterQuantidadeAdicional(produtoId, item.id);
+    }, 0);
+  };
+
+  // Função para verificar se uma opção atingiu a quantidade mínima
+  const opcaoAtingiuMinimo = (produtoId: string, opcaoId: string): boolean => {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto?.opcoes_adicionais) return true;
+
+    const opcao = produto.opcoes_adicionais.find(o => o.id === opcaoId);
+    if (!opcao || !opcao.quantidade_minima || opcao.quantidade_minima <= 0) return true;
+
+    const quantidadeTotal = obterQuantidadeTotalOpcao(produtoId, opcaoId);
+    return quantidadeTotal >= opcao.quantidade_minima;
+  };
+
+  // Função para obter adicionais válidos para o carrinho (apenas os que atingiram quantidade mínima)
+  const obterAdicionaisValidosParaCarrinho = (produtoId: string): Array<{id: string; nome: string; preco: number; quantidade: number}> => {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto?.opcoes_adicionais) return [];
+
+    const adicionaisValidos: Array<{id: string; nome: string; preco: number; quantidade: number}> = [];
+
+    produto.opcoes_adicionais.forEach(opcao => {
+      // Só incluir adicionais de opções que atingiram a quantidade mínima
+      if (opcaoAtingiuMinimo(produtoId, opcao.id)) {
+        opcao.itens.forEach(item => {
+          const quantidade = obterQuantidadeAdicional(produtoId, item.id);
+          if (quantidade > 0) {
+            adicionaisValidos.push({
+              id: item.id,
+              nome: item.nome,
+              preco: item.preco,
+              quantidade: quantidade
+            });
+          }
+        });
+      }
+    });
+
+    return adicionaisValidos;
   };
 
   // Funções para localStorage do carrinho
@@ -1200,25 +1255,8 @@ const CardapioPublicoPage: React.FC = () => {
         const produto = produtos.find(p => p.id === produtoId);
         if (!produto) return null;
 
-        // Coletar adicionais selecionados para este produto
-        const adicionaisItem: Array<{id: string; nome: string; preco: number; quantidade: number}> = [];
-        const adicionaisProduto = adicionaisSelecionados[produtoId];
-
-        if (adicionaisProduto && produto.opcoes_adicionais) {
-          produto.opcoes_adicionais.forEach(opcao => {
-            opcao.itens.forEach(item => {
-              const quantidadeAdicional = adicionaisProduto[item.id];
-              if (quantidadeAdicional && quantidadeAdicional > 0) {
-                adicionaisItem.push({
-                  id: item.id,
-                  nome: item.nome,
-                  preco: item.preco,
-                  quantidade: quantidadeAdicional
-                });
-              }
-            });
-          });
-        }
+        // Buscar apenas adicionais válidos (que atingiram quantidade mínima)
+        const adicionaisItem = obterAdicionaisValidosParaCarrinho(produtoId);
 
         return {
           produto,
@@ -2712,6 +2750,33 @@ const CardapioPublicoPage: React.FC = () => {
                                 <span className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
                                   ({opcao.itens.length} {opcao.itens.length === 1 ? 'item' : 'itens'})
                                 </span>
+                                {/* Indicador de quantidade mínima */}
+                                {opcao.quantidade_minima && opcao.quantidade_minima > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    {(() => {
+                                      const quantidadeTotal = obterQuantidadeTotalOpcao(produto.id, opcao.id);
+                                      const atingiuMinimo = opcaoAtingiuMinimo(produto.id, opcao.id);
+                                      return (
+                                        <>
+                                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                            atingiuMinimo
+                                              ? config.modo_escuro
+                                                ? 'bg-green-900/30 text-green-400 border border-green-700'
+                                                : 'bg-green-100 text-green-600 border border-green-300'
+                                              : config.modo_escuro
+                                              ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700'
+                                              : 'bg-yellow-100 text-yellow-600 border border-yellow-300'
+                                          }`}>
+                                            {quantidadeTotal}/{opcao.quantidade_minima}
+                                          </span>
+                                          {atingiuMinimo && (
+                                            <CheckCircle size={14} className={config.modo_escuro ? 'text-green-400' : 'text-green-600'} />
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                )}
                               </div>
                               {adicionaisExpandidos[produto.id]?.[opcao.id] ? (
                                 <ChevronUp size={16} className={config.modo_escuro ? 'text-gray-400' : 'text-gray-500'} />
@@ -2987,7 +3052,7 @@ const CardapioPublicoPage: React.FC = () => {
             {/* Lista de Itens - Scrollável */}
             <div className="flex-1 p-4 overflow-y-auto">
               <div className="space-y-3">
-                {obterItensCarrinho().map((item, index) => {
+                {obterItensCarrinho().map((item) => {
                   const { produto, quantidade, adicionais, observacao } = item;
                   return (
                     <div
@@ -3294,7 +3359,7 @@ const CardapioPublicoPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setModalTodosItensAberto(false);
-                      handleFinalizarPedido();
+                      handlePedirCarrinhoCompleto();
                     }}
                     disabled={lojaAberta === false}
                     className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
