@@ -140,73 +140,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [adicionaisExpandidos, setAdicionaisExpandidos] = useState<{[produtoId: string]: {[opcaoId: string]: boolean}}>({});
   const [adicionaisSelecionados, setAdicionaisSelecionados] = useState<{[produtoId: string]: {[itemId: string]: number}}>({});
 
-  // Refs para controle de scroll do carrinho
-  const carrinhoContainerRef = useRef<HTMLDivElement>(null);
-  const modalCarrinhoContainerRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
-  const modalItemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
-  // Função para rolar para um item específico no carrinho
-  const rolarParaItem = useCallback((produtoId: string) => {
-    // Rolar no carrinho principal
-    if (carrinhoContainerRef.current && itemRefs.current[produtoId]) {
-      const container = carrinhoContainerRef.current;
-      const item = itemRefs.current[produtoId];
 
-      if (item) {
-        const itemTop = item.offsetTop;
-        const containerHeight = container.clientHeight;
-        const itemHeight = item.clientHeight;
 
-        // Rolar para que o item fique visível no centro do container
-        const targetScrollTop = itemTop - (containerHeight / 2) + (itemHeight / 2);
-
-        container.scrollTo({
-          top: Math.max(0, targetScrollTop),
-          behavior: 'smooth'
-        });
-      }
-    }
-
-    // Rolar no modal se estiver aberto
-    if (modalTodosItensAberto && modalCarrinhoContainerRef.current && modalItemRefs.current[produtoId]) {
-      const container = modalCarrinhoContainerRef.current;
-      const item = modalItemRefs.current[produtoId];
-
-      if (item) {
-        const itemTop = item.offsetTop;
-        const containerHeight = container.clientHeight;
-        const itemHeight = item.clientHeight;
-
-        // Rolar para que o item fique visível no centro do container
-        const targetScrollTop = itemTop - (containerHeight / 2) + (itemHeight / 2);
-
-        container.scrollTo({
-          top: Math.max(0, targetScrollTop),
-          behavior: 'smooth'
-        });
-      }
-    }
-  }, [modalTodosItensAberto]);
-
-  // Função para rolar para o topo do carrinho
-  const rolarParaTopo = useCallback(() => {
-    // Rolar no carrinho principal
-    if (carrinhoContainerRef.current) {
-      carrinhoContainerRef.current.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
-    }
-
-    // Rolar no modal se estiver aberto
-    if (modalTodosItensAberto && modalCarrinhoContainerRef.current) {
-      modalCarrinhoContainerRef.current.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
-    }
-  }, [modalTodosItensAberto]);
 
   // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
   useEffect(() => {
@@ -934,16 +870,17 @@ const CardapioPublicoPage: React.FC = () => {
     setItemChacoalhando(produtoId);
     setTimeout(() => setItemChacoalhando(null), 600);
 
+    // Mover produto para o topo quando adicional é incrementado
+    setOrdemAdicaoItens(prev => ({
+      ...prev,
+      [produtoId]: Date.now() // Atualiza timestamp para mover para topo
+    }));
+
     // Se o carrinho não estiver aberto, abrir automaticamente
     if (!carrinhoAberto) {
       setCarrinhoAberto(true);
       setCarrinhoRecemAberto(true);
       setTimeout(() => setCarrinhoRecemAberto(false), 2000);
-      // Rolar para o produto quando abrir carrinho
-      setTimeout(() => rolarParaItem(produtoId), 300);
-    } else {
-      // Carrinho já aberto, rolar para o produto que teve adicional modificado
-      setTimeout(() => rolarParaItem(produtoId), 100);
     }
   };
 
@@ -976,8 +913,7 @@ const CardapioPublicoPage: React.FC = () => {
       setItemChacoalhando(produtoId);
       setTimeout(() => setItemChacoalhando(null), 400);
 
-      // Rolar para o produto que teve adicional modificado
-      setTimeout(() => rolarParaItem(produtoId), 100);
+
     }
   };
 
@@ -1143,11 +1079,11 @@ const CardapioPublicoPage: React.FC = () => {
       [produtoId]: novaQuantidade
     }));
 
-    // Rastrear ordem de adição - quando item é adicionado pela primeira vez
-    if (quantidadeAnterior === 0 && novaQuantidade > 0) {
+    // Rastrear ordem de adição - SEMPRE que incrementar quantidade (mover para topo)
+    if (novaQuantidade > quantidadeAnterior && novaQuantidade > 0) {
       setOrdemAdicaoItens(prev => ({
         ...prev,
-        [produtoId]: Date.now() // Timestamp como ordem
+        [produtoId]: Date.now() // Timestamp como ordem - sempre atualiza para mover para topo
       }));
     }
 
@@ -1194,15 +1130,7 @@ const CardapioPublicoPage: React.FC = () => {
         // Remover o estado após a animação
         setTimeout(() => setCarrinhoRecemAberto(false), 2000);
 
-        // Rolar para o topo quando adicionar novo item
-        setTimeout(() => rolarParaTopo(), 300);
-      } else {
-        // Se carrinho já estava aberto, rolar para o topo (novo item)
-        setTimeout(() => rolarParaTopo(), 100);
       }
-    } else {
-      // Item já existe, rolar para o item específico
-      setTimeout(() => rolarParaItem(produtoId), 100);
     }
   };
 
@@ -1233,10 +1161,7 @@ const CardapioPublicoPage: React.FC = () => {
 
       alterarQuantidadeProduto(produtoId, novaQuantidade);
 
-      // Rolar para o item que foi modificado (se ainda tem quantidade > 0)
-      if (novaQuantidade > 0) {
-        setTimeout(() => rolarParaItem(produtoId), 100);
-      }
+
     }
   };
 
@@ -1990,17 +1915,12 @@ const CardapioPublicoPage: React.FC = () => {
             </div>
 
             {/* Lista de Itens do Carrinho */}
-            <div ref={carrinhoContainerRef} className="max-h-28 overflow-y-auto space-y-2 mb-3">
+            <div className="max-h-28 overflow-y-auto space-y-2 mb-3">
               {obterItensCarrinho().map((item) => {
                 const { produto, quantidade, adicionais } = item;
                 return (
                 <div
                   key={produto.id}
-                  ref={(el) => {
-                    if (el) {
-                      itemRefs.current[produto.id] = el;
-                    }
-                  }}
                   className={`p-2 rounded-lg transition-all duration-500 ${
                     config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-50'
                   } ${
@@ -3043,18 +2963,13 @@ const CardapioPublicoPage: React.FC = () => {
             </div>
 
             {/* Lista de Itens - Scrollável */}
-            <div ref={modalCarrinhoContainerRef} className="flex-1 p-4 overflow-y-auto">
+            <div className="flex-1 p-4 overflow-y-auto">
               <div className="space-y-3">
                 {obterItensCarrinho().map((item, index) => {
                   const { produto, quantidade, adicionais } = item;
                   return (
                     <div
                       key={produto.id}
-                      ref={(el) => {
-                        if (el) {
-                          modalItemRefs.current[produto.id] = el;
-                        }
-                      }}
                       className={`p-3 rounded-lg transition-all duration-200 ${
                         config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-50'
                       }`}
