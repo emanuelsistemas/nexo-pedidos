@@ -575,10 +575,24 @@ const CardapioPublicoPage: React.FC = () => {
         mostrar_fotos: pdvConfigData.exibir_fotos_itens_cardapio !== false // Default true se não definido
       }));
 
-      // 3. Buscar produtos ativos da empresa
+      // 3. Buscar produtos ativos da empresa com unidades de medida
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
-        .select('id, nome, descricao, preco, grupo_id, ativo')
+        .select(`
+          id,
+          nome,
+          descricao,
+          preco,
+          grupo_id,
+          ativo,
+          unidade_medida_id,
+          unidade_medida:unidade_medida_id (
+            id,
+            sigla,
+            nome,
+            fracionado
+          )
+        `)
         .eq('empresa_id', pdvConfigData.empresa_id)
         .eq('ativo', true)
         .order('nome');
@@ -696,6 +710,16 @@ const CardapioPublicoPage: React.FC = () => {
       style: 'currency',
       currency: 'BRL'
     }).format(preco);
+  };
+
+  // Função para formatar quantidade baseada na unidade de medida (similar ao PDV)
+  const formatarQuantidade = (quantidade: number, unidadeMedida?: any) => {
+    // Se a unidade de medida permite fracionamento, mostrar 3 casas decimais
+    if (unidadeMedida?.fracionado) {
+      return quantidade.toFixed(3);
+    }
+    // Se não permite fracionamento, mostrar como número inteiro
+    return quantidade.toString();
   };
 
   // Funções para localStorage do carrinho
@@ -863,7 +887,21 @@ const CardapioPublicoPage: React.FC = () => {
 
   const incrementarQuantidade = (produtoId: string) => {
     const quantidadeAtual = obterQuantidadeProduto(produtoId);
-    alterarQuantidadeProduto(produtoId, quantidadeAtual + 1);
+
+    // Buscar o produto para verificar se é fracionário
+    const produto = produtos.find(p => p.id === produtoId);
+    const isFracionado = produto?.unidade_medida?.fracionado || false;
+
+    let novaQuantidade;
+    if (isFracionado) {
+      // Para produtos fracionados, incrementar em 0.1 (100g, 100ml, etc.)
+      novaQuantidade = Math.round((quantidadeAtual + 0.1) * 1000) / 1000; // 3 casas decimais
+    } else {
+      // Para produtos inteiros, incrementar em 1
+      novaQuantidade = quantidadeAtual + 1;
+    }
+
+    alterarQuantidadeProduto(produtoId, novaQuantidade);
 
     // Abrir carrinho automaticamente quando adicionar primeiro item
     if (quantidadeAtual === 0) {
@@ -874,17 +912,54 @@ const CardapioPublicoPage: React.FC = () => {
   const decrementarQuantidade = (produtoId: string) => {
     const quantidadeAtual = obterQuantidadeProduto(produtoId);
     if (quantidadeAtual > 0) {
-      alterarQuantidadeProduto(produtoId, quantidadeAtual - 1);
+      // Buscar o produto para verificar se é fracionário
+      const produto = produtos.find(p => p.id === produtoId);
+      const isFracionado = produto?.unidade_medida?.fracionado || false;
+
+      let novaQuantidade;
+      if (isFracionado) {
+        // Para produtos fracionados, decrementar em 0.1, mínimo 0
+        novaQuantidade = Math.max(0, Math.round((quantidadeAtual - 0.1) * 1000) / 1000); // 3 casas decimais
+      } else {
+        // Para produtos inteiros, decrementar em 1, mínimo 0
+        novaQuantidade = Math.max(0, quantidadeAtual - 1);
+      }
+
+      alterarQuantidadeProduto(produtoId, novaQuantidade);
     }
   };
 
   const handleQuantidadeInputChange = (produtoId: string, valor: string) => {
-    // Permitir apenas números
-    const valorLimpo = valor.replace(/[^\d]/g, '');
-    const quantidade = valorLimpo === '' ? 0 : parseInt(valorLimpo);
+    // Buscar o produto para verificar se é fracionário
+    const produto = produtos.find(p => p.id === produtoId);
+    const isFracionado = produto?.unidade_medida?.fracionado || false;
 
-    if (!isNaN(quantidade)) {
-      alterarQuantidadeProduto(produtoId, quantidade);
+    if (isFracionado) {
+      // Para produtos fracionados, permitir números, vírgulas e pontos
+      const valorLimpo = valor.replace(/[^\d.,]/g, '');
+
+      if (valorLimpo === '') {
+        alterarQuantidadeProduto(produtoId, 0);
+        return;
+      }
+
+      // Converter vírgula para ponto para processamento
+      const valorConvertido = valorLimpo.replace(',', '.');
+
+      if (!isNaN(parseFloat(valorConvertido))) {
+        let quantidade = parseFloat(valorConvertido);
+        // Limitar a 3 casas decimais
+        quantidade = Math.round(quantidade * 1000) / 1000;
+        alterarQuantidadeProduto(produtoId, quantidade >= 0 ? quantidade : 0);
+      }
+    } else {
+      // Para produtos inteiros, permitir apenas números
+      const valorLimpo = valor.replace(/[^\d]/g, '');
+      const quantidade = valorLimpo === '' ? 0 : parseInt(valorLimpo);
+
+      if (!isNaN(quantidade)) {
+        alterarQuantidadeProduto(produtoId, quantidade);
+      }
     }
   };
 
@@ -1515,7 +1590,7 @@ const CardapioPublicoPage: React.FC = () => {
                     </h4>
                     {config.mostrar_precos && (
                       <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {formatarPreco(produto.preco)} × {quantidade} = {formatarPreco(produto.preco * quantidade)}
+                        {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
                       </div>
                     )}
                   </div>
@@ -1539,7 +1614,7 @@ const CardapioPublicoPage: React.FC = () => {
                     {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
                       <input
                         type="text"
-                        value={quantidade}
+                        value={formatarQuantidade(quantidade, produto.unidade_medida)}
                         onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
                         onBlur={() => setItemEditandoCarrinho(null)}
                         onKeyDown={(e) => {
@@ -1552,6 +1627,7 @@ const CardapioPublicoPage: React.FC = () => {
                             ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
                             : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
                         }`}
+                        placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
                         autoFocus
                       />
                     ) : (
@@ -1566,7 +1642,7 @@ const CardapioPublicoPage: React.FC = () => {
                             : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                         }`}
                       >
-                        {quantidade}
+                        {formatarQuantidade(quantidade, produto.unidade_medida)}
                       </button>
                     )}
 
@@ -1627,7 +1703,7 @@ const CardapioPublicoPage: React.FC = () => {
                 <button
                   onClick={navegarCategoriaAnterior}
                   disabled={isAnimating}
-                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-r ${
+                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-r relative ${
                     isAnimating
                       ? 'opacity-50 cursor-not-allowed'
                       : config.modo_escuro
@@ -1635,11 +1711,22 @@ const CardapioPublicoPage: React.FC = () => {
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
                   }`}
                 >
-                  {/* Seta dupla com animação de pulso para indicar mais itens à esquerda */}
-                  <ChevronsLeft
-                    size={20}
-                    className="animate-pulse"
-                  />
+                  {/* Efeito de pulsação suave de dentro para fora */}
+                  <div className="relative">
+                    <ChevronsLeft size={20} className="relative z-10" />
+                    {/* Onda de pulsação 1 - mais interna */}
+                    <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${
+                      config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                    }`} style={{ animationDuration: '2s', animationDelay: '0s' }}></div>
+                    {/* Onda de pulsação 2 - média */}
+                    <div className={`absolute inset-0 rounded-full animate-ping opacity-15 scale-110 ${
+                      config.modo_escuro ? 'bg-blue-400' : 'bg-blue-600'
+                    }`} style={{ animationDuration: '2s', animationDelay: '0.3s' }}></div>
+                    {/* Onda de pulsação 3 - mais externa */}
+                    <div className={`absolute inset-0 rounded-full animate-ping opacity-10 scale-125 ${
+                      config.modo_escuro ? 'bg-purple-300' : 'bg-purple-500'
+                    }`} style={{ animationDuration: '2s', animationDelay: '0.6s' }}></div>
+                  </div>
                 </button>
               )}
 
@@ -1692,7 +1779,7 @@ const CardapioPublicoPage: React.FC = () => {
                 <button
                   onClick={navegarCategoriaProxima}
                   disabled={isAnimating}
-                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-l ${
+                  className={`w-10 h-full flex items-center justify-center transition-all duration-200 border-l relative ${
                     isAnimating
                       ? 'opacity-50 cursor-not-allowed'
                       : config.modo_escuro
@@ -1700,11 +1787,22 @@ const CardapioPublicoPage: React.FC = () => {
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50 border-gray-300 hover:scale-110'
                   }`}
                 >
-                  {/* Seta dupla com animação de pulso para indicar mais itens */}
-                  <ChevronsRight
-                    size={20}
-                    className="animate-pulse"
-                  />
+                  {/* Efeito de pulsação suave de dentro para fora */}
+                  <div className="relative">
+                    <ChevronsRight size={20} className="relative z-10" />
+                    {/* Onda de pulsação 1 - mais interna */}
+                    <div className={`absolute inset-0 rounded-full animate-ping opacity-20 ${
+                      config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                    }`} style={{ animationDuration: '2s', animationDelay: '0s' }}></div>
+                    {/* Onda de pulsação 2 - média */}
+                    <div className={`absolute inset-0 rounded-full animate-ping opacity-15 scale-110 ${
+                      config.modo_escuro ? 'bg-blue-400' : 'bg-blue-600'
+                    }`} style={{ animationDuration: '2s', animationDelay: '0.3s' }}></div>
+                    {/* Onda de pulsação 3 - mais externa */}
+                    <div className={`absolute inset-0 rounded-full animate-ping opacity-10 scale-125 ${
+                      config.modo_escuro ? 'bg-purple-300' : 'bg-purple-500'
+                    }`} style={{ animationDuration: '2s', animationDelay: '0.6s' }}></div>
+                  </div>
                 </button>
               )}
             </div>
@@ -1858,7 +1956,7 @@ const CardapioPublicoPage: React.FC = () => {
                           {produtoEditandoQuantidade === produto.id && lojaAberta !== false ? (
                             <input
                               type="text"
-                              value={obterQuantidadeProduto(produto.id)}
+                              value={formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
                               onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
                               onBlur={() => setProdutoEditandoQuantidade(null)}
                               onKeyDown={(e) => {
@@ -1871,6 +1969,7 @@ const CardapioPublicoPage: React.FC = () => {
                                   ? 'bg-gray-700 border-gray-600 text-white focus:border-purple-500'
                                   : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
                               }`}
+                              placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
                               autoFocus
                             />
                           ) : (
@@ -1885,7 +1984,7 @@ const CardapioPublicoPage: React.FC = () => {
                                   : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                               }`}
                             >
-                              {obterQuantidadeProduto(produto.id)}
+                              {formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
                             </button>
                           )}
 
