@@ -3171,6 +3171,8 @@ const ProdutosPage: React.FC = () => {
           produto_id: produtoId,
           tabela_preco_id: tabelaId,
           preco: preco
+        }, {
+          onConflict: 'produto_id,tabela_preco_id'
         });
 
       if (error) throw error;
@@ -3221,11 +3223,13 @@ const ProdutosPage: React.FC = () => {
         }
       }
 
-      // Se há preços para salvar, fazer upsert em lote
+      // Se há preços para salvar, fazer upsert em lote com configuração explícita
       if (precosParaInserir.length > 0) {
         const { error } = await supabase
           .from('produto_precos')
-          .upsert(precosParaInserir);
+          .upsert(precosParaInserir, {
+            onConflict: 'produto_id,tabela_preco_id'
+          });
 
         if (error) throw error;
 
