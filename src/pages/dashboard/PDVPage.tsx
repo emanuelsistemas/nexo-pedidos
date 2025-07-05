@@ -4505,6 +4505,9 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
+    // ✅ CORREÇÃO: Verificar opções adicionais ANTES de qualquer outro fluxo
+    const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
+
     // ✅ FLUXO SEQUENCIAL: Verificar se precisa selecionar vendedor primeiro
     if (pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
       setProdutoAguardandoVendedor(produto);
@@ -4539,9 +4542,6 @@ const PDVPage: React.FC = () => {
       }
     }
 
-    // Verificar se o produto tem opções adicionais
-    const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
-
     // ✅ NOVO: Verificar se produto permite múltiplos sabores
     const permiteSabores = verificarPermiteSabores(produto);
 
@@ -4572,6 +4572,13 @@ const PDVPage: React.FC = () => {
         ? tabelasPrecos.find(t => t.id === tabelaPrecoSelecionada)?.nome
         : null
     };
+
+    // ✅ CORREÇÃO: Se o produto tem opções adicionais, abrir modal independentemente do fluxo
+    if (temOpcoesAdicionais) {
+      setItemParaAdicionais(novoItem);
+      setShowAdicionaisModal(true);
+      return; // Não continuar com adição normal
+    }
 
     // ✅ NOVO: Criar venda em andamento no primeiro item (adaptado do sistema de rascunhos NFe)
     const isFirstItem = carrinho.length === 0;

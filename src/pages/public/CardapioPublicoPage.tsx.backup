@@ -20,21 +20,6 @@ interface Produto {
     principal: boolean;
   }>;
   fotos_count?: number;
-  unidade_medida?: {
-    id: string;
-    sigla: string;
-    nome: string;
-    fracionado: boolean;
-  };
-  opcoes_adicionais?: Array<{
-    id: string;
-    nome: string;
-    itens: Array<{
-      id: string;
-      nome: string;
-      preco: number;
-    }>;
-  }>;
 }
 
 interface Empresa {
@@ -657,31 +642,6 @@ const CardapioPublicoPage: React.FC = () => {
         }
       }
 
-      // 5. Buscar adicionais dos produtos
-      let adicionaisData: any[] = [];
-      if (produtosIds.length > 0) {
-        const { data: adicionaisResult, error: adicionaisError } = await supabase
-          .from('produtos_opcoes_adicionais')
-          .select(`
-            produto_id,
-            opcoes_adicionais!inner (
-              id,
-              nome,
-              opcoes_adicionais_itens (
-                id,
-                nome,
-                preco
-              )
-            )
-          `)
-          .in('produto_id', produtosIds)
-          .eq('deletado', false);
-
-        if (!adicionaisError && adicionaisResult) {
-          adicionaisData = adicionaisResult;
-        }
-      }
-
       // 5. Buscar grupos dos produtos
       const gruposIds = [...new Set(produtosData?.map(p => p.grupo_id).filter(Boolean))];
       let gruposData: any[] = [];
@@ -726,19 +686,11 @@ const CardapioPublicoPage: React.FC = () => {
         setLojaAberta(null);
       }
 
-      // Processar produtos com nome do grupo, fotos e adicionais
+      // Processar produtos com nome do grupo e todas as fotos
       const produtosProcessados = produtosData?.map(produto => {
         const grupo = gruposData.find(g => g.id === produto.grupo_id);
         const fotosProduto = todasFotosData.filter(f => f.produto_id === produto.id);
         const fotoPrincipal = fotosProduto.find(f => f.principal) || fotosProduto[0];
-
-        // Buscar adicionais do produto
-        const adicionaisProduto = adicionaisData.filter(a => a.produto_id === produto.id);
-        const opcoesAdicionais = adicionaisProduto.map(a => ({
-          id: a.opcoes_adicionais.id,
-          nome: a.opcoes_adicionais.nome,
-          itens: a.opcoes_adicionais.opcoes_adicionais_itens || []
-        }));
 
         return {
           ...produto,
@@ -749,8 +701,7 @@ const CardapioPublicoPage: React.FC = () => {
             url: f.url,
             principal: f.principal
           })),
-          fotos_count: fotosProduto.length,
-          opcoes_adicionais: opcoesAdicionais
+          fotos_count: fotosProduto.length
         };
       }) || [];
 
@@ -2160,11 +2111,10 @@ const CardapioPublicoPage: React.FC = () => {
 
                 {/* Conteúdo do card */}
                 <div className="p-3">
-                  {/* Header do Produto */}
-                  <div className="mb-3">
+                  <div className="mb-2">
                     {/* Layout com foto pequena quando cardapio_fotos_minimizadas ativo */}
                     {config.cardapio_fotos_minimizadas ? (
-                      <div className="flex items-start gap-3 mb-2">
+                      <div className="flex items-start gap-2 mb-1">
                         {/* Foto pequena */}
                         <div
                           className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
@@ -2196,14 +2146,14 @@ const CardapioPublicoPage: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Nome e preço/controles */}
+                        {/* Nome, preço e descrição */}
                         <div className="flex-1 min-w-0">
                           <h3 className={`text-lg font-bold leading-tight truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                             {produto.nome}
                           </h3>
 
                           {/* Linha do preço com controles de quantidade */}
-                          <div className="flex items-center justify-between mt-1">
+                          <div className="flex items-center justify-between">
                             {config.mostrar_precos && (
                               <div className="text-lg font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
                                 {formatarPreco(produto.preco)}
@@ -2267,6 +2217,11 @@ const CardapioPublicoPage: React.FC = () => {
                             )}
                           </div>
 
+                          {produto.descricao && (
+                            <p className={`text-xs leading-tight mt-1 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                              {produto.descricao}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -2275,37 +2230,14 @@ const CardapioPublicoPage: React.FC = () => {
                         <h3 className={`text-xl font-bold mb-2 ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                           {produto.nome}
                         </h3>
+                        {produto.descricao && (
+                          <p className={`text-sm leading-relaxed ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                            {produto.descricao}
+                          </p>
+                        )}
                       </>
                     )}
                   </div>
-
-                  {/* Descrição do produto - largura total do card */}
-                  {produto.descricao && (
-                    <div className="mb-3 w-full">
-                      <p className={`text-sm leading-relaxed w-full ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {produto.descricao}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Adicionais do produto - largura total do card */}
-                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && (
-                    <div className="mb-3 w-full">
-                      <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Opções disponíveis:
-                      </div>
-                      <div className="space-y-1 w-full">
-                        {produto.opcoes_adicionais.map(opcao => (
-                          <div key={opcao.id} className={`text-xs w-full ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
-                            <span className="font-medium">{opcao.nome}:</span>
-                            <span className="ml-1">
-                              {opcao.itens.map(item => item.nome).join(', ')}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Preço e controles - Só mostra quando NÃO estiver usando fotos minimizadas */}
                   {!config.cardapio_fotos_minimizadas && (
