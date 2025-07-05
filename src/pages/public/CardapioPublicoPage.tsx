@@ -7,6 +7,74 @@ import FotoGaleria from '../../components/comum/FotoGaleria';
 import { useKeenSlider } from "keen-slider/react";
 import "keen-slider/keen-slider.min.css";
 
+// Componente para slider de tabelas de preços
+interface TabelasPrecosSliderProps {
+  tabelas: Array<{id: string; nome: string; preco: number}>;
+  config: {modo_escuro: boolean};
+  formatarPreco: (preco: number) => string;
+}
+
+const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, config, formatarPreco }) => {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  const [sliderRef, instanceRef] = useKeenSlider({
+    initial: 0,
+    slides: {
+      perView: 3,
+      spacing: 8,
+    },
+    slideChanged(slider) {
+      setCurrentSlide(slider.track.details.rel);
+    },
+    created() {
+      setLoaded(true);
+    },
+  });
+
+  return (
+    <div className="relative">
+      <div ref={sliderRef} className="keen-slider">
+        {tabelas.map((tabela) => (
+          <div key={tabela.id} className="keen-slider__slide" style={{ minWidth: '100px' }}>
+            <div
+              className={`p-2 rounded-lg border transition-all duration-200 h-full ${
+                config.modo_escuro
+                  ? 'bg-gray-700/50 border-gray-600 text-white'
+                  : 'bg-gray-50 border-gray-200 text-gray-800'
+              }`}
+            >
+              <div className="text-xs font-medium truncate">{tabela.nome}</div>
+              <div className={`text-sm font-bold ${
+                config.modo_escuro ? 'text-green-400' : 'text-green-600'
+              }`}>
+                {formatarPreco(tabela.preco)}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Indicadores */}
+      {loaded && instanceRef.current && tabelas.length > 3 && (
+        <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-1">
+          {Array.from({ length: Math.ceil(tabelas.length / 3) }).map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => instanceRef.current?.moveToIdx(idx)}
+              className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${
+                currentSlide === idx
+                  ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                  : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface Produto {
   id: string;
   nome: string;
@@ -162,6 +230,11 @@ const CardapioPublicoPage: React.FC = () => {
   const [modalObservacaoAberto, setModalObservacaoAberto] = useState(false);
   const [produtoObservacaoAtual, setProdutoObservacaoAtual] = useState<string | null>(null);
   const [observacaoTemp, setObservacaoTemp] = useState('');
+
+  // Estados para tabelas de preços
+  const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState(false);
+  const [tabelasPrecos, setTabelasPrecos] = useState<Array<{id: string; nome: string}>>([]);
+  const [produtoPrecos, setProdutoPrecos] = useState<{[produtoId: string]: {[tabelaId: string]: number}}>({});
 
   // Funções para observações
   const abrirModalObservacao = (produtoId: string) => {
@@ -668,6 +741,70 @@ const CardapioPublicoPage: React.FC = () => {
       // Definir o ID da empresa para o realtime
       setEmpresaId(empresaComLogo.id);
 
+      // 2.1. Carregar configuração de tabela de preços
+      console.log('💰 Carregando configuração de tabela de preços...');
+      const { data: tabelaPrecoConfig } = await supabase
+        .from('tabela_preco_config')
+        .select('trabalha_com_tabela_precos')
+        .eq('empresa_id', empresaComLogo.id)
+        .single();
+
+      if (tabelaPrecoConfig?.trabalha_com_tabela_precos) {
+        setTrabalhaComTabelaPrecos(true);
+        console.log('💰 Empresa trabalha com tabela de preços - carregando tabelas...');
+
+        // Carregar tabelas de preços ativas
+        const { data: tabelasData, error: tabelasError } = await supabase
+          .from('tabela_de_preco')
+          .select('id, nome')
+          .eq('empresa_id', empresaComLogo.id)
+          .eq('ativo', true)
+          .eq('deletado', false)
+          .order('created_at', { ascending: true });
+
+        console.log('💰 Query tabelas - Dados:', tabelasData);
+        console.log('💰 Query tabelas - Erro:', tabelasError);
+
+        if (tabelasData && tabelasData.length > 0) {
+          setTabelasPrecos(tabelasData);
+          console.log('💰 Tabelas de preços carregadas:', tabelasData);
+          console.log('💰 IDs das tabelas:', tabelasData.map(t => t.id));
+
+          // Carregar preços dos produtos para as tabelas
+          console.log('💰 Carregando preços dos produtos para as tabelas...');
+          console.log('💰 Empresa ID:', empresaComLogo.id);
+
+          const { data: precosData, error: precosError } = await supabase
+            .from('produto_precos')
+            .select('produto_id, tabela_preco_id, preco')
+            .eq('empresa_id', empresaComLogo.id)
+            .gt('preco', 0); // Apenas preços maiores que 0
+
+          console.log('💰 Query de preços - Dados:', precosData);
+          console.log('💰 Query de preços - Erro:', precosError);
+
+          if (precosData && precosData.length > 0) {
+            const precosMap: {[produtoId: string]: {[tabelaId: string]: number}} = {};
+
+            precosData.forEach(item => {
+              if (!precosMap[item.produto_id]) {
+                precosMap[item.produto_id] = {};
+              }
+              precosMap[item.produto_id][item.tabela_preco_id] = item.preco;
+            });
+
+            setProdutoPrecos(precosMap);
+            console.log('💰 Preços dos produtos carregados:', precosMap);
+          } else {
+            console.log('💰 Nenhum preço encontrado ou erro na consulta');
+          }
+        } else {
+          console.log('💰 Nenhuma tabela de preços encontrada');
+        }
+      } else {
+        console.log('💰 Empresa NÃO trabalha com tabela de preços');
+      }
+
       // Configurar tema e exibição de fotos baseado na configuração da empresa
       setConfig(prev => ({
         ...prev,
@@ -825,6 +962,8 @@ const CardapioPublicoPage: React.FC = () => {
       }) || [];
 
       setProdutos(produtosProcessados);
+
+
 
       // 6. Definir grupos únicos
       const gruposUnicos = gruposData.map(grupo => ({
@@ -1035,6 +1174,30 @@ const CardapioPublicoPage: React.FC = () => {
     });
 
     setValidacaoQuantidadeMinima(novaValidacao);
+  };
+
+  // Função para obter tabelas de preços com valores válidos para um produto
+  const obterTabelasComPrecos = (produtoId: string): Array<{id: string; nome: string; preco: number}> => {
+    console.log('🔍 obterTabelasComPrecos - produtoId:', produtoId);
+    console.log('🔍 trabalhaComTabelaPrecos:', trabalhaComTabelaPrecos);
+    console.log('🔍 produtoPrecos[produtoId]:', produtoPrecos[produtoId]);
+    console.log('🔍 tabelasPrecos:', tabelasPrecos);
+
+    if (!trabalhaComTabelaPrecos || !produtoPrecos[produtoId]) {
+      console.log('🔍 Retornando array vazio - condições não atendidas');
+      return [];
+    }
+
+    const resultado = tabelasPrecos
+      .map(tabela => ({
+        id: tabela.id,
+        nome: tabela.nome,
+        preco: produtoPrecos[produtoId][tabela.id] || 0
+      }))
+      .filter(tabela => tabela.preco > 0); // Apenas tabelas com preço > 0
+
+    console.log('🔍 Resultado final:', resultado);
+    return resultado;
   };
 
   // Funções para localStorage do carrinho
@@ -2575,7 +2738,7 @@ const CardapioPublicoPage: React.FC = () => {
 
                           {/* Linha do preço com controles de quantidade */}
                           <div className="flex items-center justify-between mt-1">
-                            {config.mostrar_precos && (
+                            {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (
                               <div className="text-lg font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
                                 {formatarPreco(produto.preco)}
                               </div>
@@ -2648,7 +2811,7 @@ const CardapioPublicoPage: React.FC = () => {
                         </h3>
                         {/* Preço e controles logo abaixo do nome quando não tem foto */}
                         <div className="flex items-center justify-between mb-3">
-                          {config.mostrar_precos && (
+                          {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (
                             <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
                               {formatarPreco(produto.preco)}
                             </span>
@@ -2739,6 +2902,58 @@ const CardapioPublicoPage: React.FC = () => {
                       </p>
                     </div>
                   )}
+
+                  {/* Tabelas de Preços - largura total do card */}
+                  {(() => {
+                    const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                    if (tabelasComPrecos.length > 0) {
+                      return (
+                        <div className="mb-3 w-full">
+                          {/* Divisória acima das tabelas */}
+                          <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
+
+                          {/* Título das tabelas */}
+                          <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Tabelas de Preços:
+                          </div>
+
+                          {/* Slider horizontal das tabelas */}
+                          <div className="relative">
+                            {tabelasComPrecos.length <= 3 ? (
+                              // Se tem 3 ou menos tabelas, mostrar sem slider
+                              <div className="flex gap-2 w-full">
+                                {tabelasComPrecos.map(tabela => (
+                                  <div
+                                    key={tabela.id}
+                                    className={`flex-1 p-2 rounded-lg border transition-all duration-200 ${
+                                      config.modo_escuro
+                                        ? 'bg-gray-700/50 border-gray-600 text-white'
+                                        : 'bg-gray-50 border-gray-200 text-gray-800'
+                                    }`}
+                                  >
+                                    <div className="text-xs font-medium truncate">{tabela.nome}</div>
+                                    <div className={`text-sm font-bold ${
+                                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                    }`}>
+                                      {formatarPreco(tabela.preco)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              // Se tem mais de 3 tabelas, usar Keen Slider
+                              <TabelasPrecosSlider
+                                tabelas={tabelasComPrecos}
+                                config={config}
+                                formatarPreco={formatarPreco}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   {/* Adicionais do produto - largura total do card */}
                   {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && (
