@@ -281,6 +281,7 @@ const ConfiguracoesPage: React.FC = () => {
     venda_sem_produto_csosn: '500',
     modo_escuro_cardapio: false,
     exibir_fotos_itens_cardapio: false,
+    cardapio_fotos_minimizadas: false,
     cardapio_abertura_tipo: 'automatico',
     cardapio_loja_aberta: true
   });
@@ -2867,6 +2868,7 @@ const ConfiguracoesPage: React.FC = () => {
           venda_sem_produto_peso_liquido: config.venda_sem_produto_peso_liquido !== undefined ? config.venda_sem_produto_peso_liquido : 0,
           modo_escuro_cardapio: config.modo_escuro_cardapio || false,
           exibir_fotos_itens_cardapio: config.exibir_fotos_itens_cardapio || false,
+          cardapio_fotos_minimizadas: config.cardapio_fotos_minimizadas || false,
           cardapio_abertura_tipo: config.cardapio_abertura_tipo || 'automatico',
           cardapio_loja_aberta: config.cardapio_loja_aberta !== undefined ? config.cardapio_loja_aberta : true
         });
@@ -2929,7 +2931,8 @@ const ConfiguracoesPage: React.FC = () => {
           venda_sem_produto_cst: '60',
           venda_sem_produto_csosn: '500',
           modo_escuro_cardapio: false,
-          exibir_fotos_itens_cardapio: false
+          exibir_fotos_itens_cardapio: false,
+          cardapio_fotos_minimizadas: false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -2985,6 +2988,7 @@ const ConfiguracoesPage: React.FC = () => {
         venda_sem_produto_csosn: '500',
         modo_escuro_cardapio: false,
         exibir_fotos_itens_cardapio: false,
+        cardapio_fotos_minimizadas: false,
         cardapio_abertura_tipo: 'automatico',
         cardapio_loja_aberta: true
       });
@@ -6688,6 +6692,21 @@ const ConfiguracoesPage: React.FC = () => {
                           </div>
                         </label>
 
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={pdvConfig.cardapio_fotos_minimizadas}
+                            onChange={(e) => handlePdvConfigChange('cardapio_fotos_minimizadas', e.target.checked)}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h5 className="text-white font-medium">Exibir Fotos ao LADO e minimizado nos Itens</h5>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Mostra fotos pequenas ao lado dos itens no carrinho do cardápio digital, similar ao PDV.
+                            </p>
+                          </div>
+                        </label>
 
                       </div>
                     </div>

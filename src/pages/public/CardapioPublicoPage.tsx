@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List } from 'lucide-react';
+import { ChevronDown, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 
@@ -45,6 +45,7 @@ interface CardapioConfig {
   permitir_pedidos: boolean;
   modo_escuro: boolean;
   mostrar_fotos: boolean;
+  cardapio_fotos_minimizadas?: boolean;
 }
 
 const CardapioPublicoPage: React.FC = () => {
@@ -95,6 +96,7 @@ const CardapioPublicoPage: React.FC = () => {
   const [toastVisivel, setToastVisivel] = useState(false);
   const [ordemAdicaoItens, setOrdemAdicaoItens] = useState<Record<string, number>>({});
   const [itemChacoalhando, setItemChacoalhando] = useState<string | null>(null);
+  const [itemEditandoQuantidade, setItemEditandoQuantidade] = useState<string | null>(null);
 
   // Atualizar meta tags para preview do WhatsApp quando empresa for carregada
   useEffect(() => {
@@ -528,7 +530,7 @@ const CardapioPublicoPage: React.FC = () => {
       console.log('🔍 Buscando configuração PDV para slug:', slug);
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, logo_url, cardapio_digital')
+        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital')
         .eq('cardapio_url_personalizada', slug)
         .single();
 
@@ -575,7 +577,8 @@ const CardapioPublicoPage: React.FC = () => {
       setConfig(prev => ({
         ...prev,
         modo_escuro: pdvConfigData.modo_escuro_cardapio || false,
-        mostrar_fotos: pdvConfigData.exibir_fotos_itens_cardapio !== false // Default true se não definido
+        mostrar_fotos: pdvConfigData.exibir_fotos_itens_cardapio !== false, // Default true se não definido
+        cardapio_fotos_minimizadas: pdvConfigData.cardapio_fotos_minimizadas || false
       }));
 
       // 3. Buscar produtos ativos da empresa com unidades de medida
@@ -594,6 +597,11 @@ const CardapioPublicoPage: React.FC = () => {
             sigla,
             nome,
             fracionado
+          ),
+          produto_fotos (
+            id,
+            url,
+            principal
           )
         `)
         .eq('empresa_id', pdvConfigData.empresa_id)
@@ -723,6 +731,19 @@ const CardapioPublicoPage: React.FC = () => {
     }
     // Se não permite fracionamento, mostrar como número inteiro
     return quantidade.toString();
+  };
+
+  // Função para obter a foto principal do produto (similar ao PDV)
+  const getFotoPrincipal = (produto: any) => {
+    if (!produto?.produto_fotos || produto.produto_fotos.length === 0) {
+      return null;
+    }
+
+    // Buscar foto marcada como principal
+    const fotoPrincipal = produto.produto_fotos.find((foto: any) => foto.principal);
+
+    // Se não encontrar foto principal, retornar a primeira
+    return fotoPrincipal || produto.produto_fotos[0];
   };
 
   // Funções para localStorage do carrinho
@@ -1676,17 +1697,52 @@ const CardapioPublicoPage: React.FC = () => {
                       : undefined
                   }}
                 >
-                  {/* Info do Produto */}
-                  <div className="flex-1 min-w-0">
-                    <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                      {produto.nome}
-                    </h4>
-                    {config.mostrar_precos && (
-                      <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                  {/* Layout com foto (quando configuração ativa) */}
+                  {config.cardapio_fotos_minimizadas ? (
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* Foto do produto */}
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                        {(() => {
+                          const fotoItem = getFotoPrincipal(produto);
+                          return fotoItem ? (
+                            <img
+                              src={fotoItem.url}
+                              alt={produto.nome}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package size={16} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
+                            </div>
+                          );
+                        })()}
                       </div>
-                    )}
-                  </div>
+
+                      {/* Info do Produto */}
+                      <div className="flex-1 min-w-0">
+                        <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                          {produto.nome}
+                        </h4>
+                        {config.mostrar_precos && (
+                          <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                            {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Layout sem foto (padrão) */
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                        {produto.nome}
+                      </h4>
+                      {config.mostrar_precos && (
+                        <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                          {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Controles de Quantidade */}
                   <div className="flex items-center gap-2 ml-3">
@@ -2004,12 +2060,13 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   )}
 
-                {/* Imagem do produto - Condicional baseada na configuração */}
-                {config.mostrar_fotos && (
-                  produto.foto_url ? (
+                {/* Imagem do produto - Apenas para config.mostrar_fotos (fotos grandes) */}
+                {config.mostrar_fotos && !config.cardapio_fotos_minimizadas && (() => {
+                  const fotoItem = getFotoPrincipal(produto);
+                  return fotoItem ? (
                     <div className="relative h-48 overflow-hidden">
                       <img
-                        src={produto.foto_url}
+                        src={fotoItem.url}
                         alt={produto.nome}
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                         onError={(e) => {
@@ -2020,36 +2077,144 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   ) : (
                     <div className={`h-48 flex items-center justify-center ${config.modo_escuro ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                      <svg className={`w-16 h-16 ${config.modo_escuro ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                      <Package className={`w-16 h-16 ${config.modo_escuro ? 'text-gray-600' : 'text-gray-400'}`} />
                     </div>
-                  )
-                )}
+                  );
+                })()}
 
                 {/* Conteúdo do card */}
-                <div className="p-6">
+                <div className="p-3">
                   <div className="mb-4">
-                    <h3 className={`text-xl font-bold mb-2 ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                      {produto.nome}
-                    </h3>
-                    {produto.descricao && (
-                      <p className={`text-sm leading-relaxed ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                        {produto.descricao}
-                      </p>
+                    {/* Layout com foto pequena quando cardapio_fotos_minimizadas ativo */}
+                    {config.cardapio_fotos_minimizadas ? (
+                      <div className="flex items-start gap-3 mb-2">
+                        {/* Foto pequena */}
+                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                          {(() => {
+                            const fotoItem = getFotoPrincipal(produto);
+                            return fotoItem ? (
+                              <img
+                                src={fotoItem.url}
+                                alt={produto.nome}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={20} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Nome, preço e descrição */}
+                        <div className="flex-1 min-w-0">
+                          <h3 className={`text-xl font-bold ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                            {produto.nome}
+                          </h3>
+
+                          {/* Linha do preço com controles de quantidade */}
+                          <div className="flex items-center justify-between mb-1">
+                            {config.mostrar_precos && (
+                              <div className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                                {formatarPreco(produto.preco)}
+                              </div>
+                            )}
+
+                            {/* Controles de quantidade na mesma linha do preço */}
+                            {obterWhatsAppEmpresa() && (
+                              <div className="flex items-center gap-2">
+                                {/* Botão Decrementar */}
+                                <button
+                                  onClick={() => decrementarQuantidade(produto.id)}
+                                  disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                    obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
+                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                      : config.modo_escuro
+                                      ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                  }`}
+                                >
+                                  <Minus size={14} />
+                                </button>
+
+                                {/* Campo de Quantidade */}
+                                <input
+                                  type="text"
+                                  value={formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
+                                  onChange={(e) => handleQuantidadeChange(produto.id, e.target.value)}
+                                  onBlur={() => setItemEditandoQuantidade(null)}
+                                  onFocus={() => setItemEditandoQuantidade(produto.id)}
+                                  disabled={lojaAberta === false}
+                                  className={`w-12 h-8 text-center text-sm font-semibold rounded-lg border-2 transition-all duration-200 ${
+                                    lojaAberta === false
+                                      ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
+                                      : itemEditandoQuantidade === produto.id
+                                      ? config.modo_escuro
+                                        ? 'bg-gray-700 border-blue-500 text-white'
+                                        : 'bg-white border-blue-500 text-gray-800'
+                                      : config.modo_escuro
+                                      ? 'bg-gray-700 border-gray-600 text-white hover:border-gray-500'
+                                      : 'bg-white border-gray-300 text-gray-800 hover:border-gray-400'
+                                  }`}
+                                />
+
+                                {/* Botão Incrementar */}
+                                <button
+                                  onClick={() => incrementarQuantidade(produto.id)}
+                                  disabled={lojaAberta === false}
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                    lojaAberta === false
+                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                      : config.modo_escuro
+                                      ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                                  }`}
+                                >
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {produto.descricao && (
+                            <p className={`text-sm leading-relaxed ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                              {produto.descricao}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Layout normal sem foto pequena */
+                      <>
+                        <h3 className={`text-xl font-bold mb-2 ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                          {produto.nome}
+                        </h3>
+                        {produto.descricao && (
+                          <p className={`text-sm leading-relaxed ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                            {produto.descricao}
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
 
-                  {/* Preço e controles */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                        {formatarPreco(produto.preco)}
-                      </span>
-                    </div>
+                  {/* Preço e controles - Só mostra quando NÃO estiver usando fotos minimizadas */}
+                  {!config.cardapio_fotos_minimizadas && (
+                    <div className="flex items-center justify-between">
+                      {config.mostrar_precos && (
+                        <div className="flex flex-col">
+                          <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                            {formatarPreco(produto.preco)}
+                          </span>
+                        </div>
+                      )}
 
-                    {obterWhatsAppEmpresa() && (
-                      <div className="flex items-center gap-3">
+                      {obterWhatsAppEmpresa() && (
+                        <div className="flex items-center gap-3">
                         {/* Controles de Quantidade */}
                         <div className="flex items-center gap-2">
                           {/* Botão Decrementar */}
@@ -2136,6 +2301,7 @@ const CardapioPublicoPage: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               </div>
               );
@@ -2281,6 +2447,27 @@ const CardapioPublicoPage: React.FC = () => {
                             }`}>
                               {index + 1}
                             </div>
+
+                            {/* Foto do produto (quando configuração ativa) */}
+                            {config.cardapio_fotos_minimizadas && (
+                              <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                                {(() => {
+                                  const fotoItem = getFotoPrincipal(produto);
+                                  return fotoItem ? (
+                                    <img
+                                      src={fotoItem.url}
+                                      alt={produto.nome}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                      <Package size={20} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
+
                             <div className="flex-1">
                               <h4 className={`font-semibold text-sm ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                                 {produto.nome}
