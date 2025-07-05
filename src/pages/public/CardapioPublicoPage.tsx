@@ -906,9 +906,9 @@ const CardapioPublicoPage: React.FC = () => {
 
     alterarQuantidadeProduto(produtoId, novaQuantidade);
 
-    // Ativar efeito de chacoalhada no item
+    // Ativar efeito de entrada suave no item
     setItemChacoalhando(produtoId);
-    setTimeout(() => setItemChacoalhando(null), 600);
+    setTimeout(() => setItemChacoalhando(null), 800);
 
     // Abrir carrinho automaticamente quando adicionar primeiro item
     if (quantidadeAtual === 0) {
@@ -1663,16 +1663,16 @@ const CardapioPublicoPage: React.FC = () => {
               {obterItensCarrinho().map(({ produto, quantidade }) => (
                 <div
                   key={produto.id}
-                  className={`flex items-center justify-between p-2 rounded-lg transition-all duration-300 ${
+                  className={`flex items-center justify-between p-2 rounded-lg transition-all duration-500 ${
                     config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-50'
                   } ${
                     itemChacoalhando === produto.id
-                      ? 'animate-pulse scale-105 shadow-lg ring-2 ring-blue-400/50 bg-blue-50 dark:bg-blue-900/20'
+                      ? 'shadow-lg ring-2 ring-blue-400/50 bg-blue-50 dark:bg-blue-900/20'
                       : ''
                   }`}
                   style={{
                     animation: itemChacoalhando === produto.id
-                      ? 'shake 0.6s ease-in-out'
+                      ? 'itemCaindo 0.6s ease-out'
                       : undefined
                   }}
                 >
