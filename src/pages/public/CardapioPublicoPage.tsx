@@ -209,9 +209,12 @@ const CardapioPublicoPage: React.FC = () => {
     },
   });
 
-  // Estados para controle de quantidade dos produtos
+  // Estados para controle de quantidade dos produtos (carrinho)
   const [quantidadesProdutos, setQuantidadesProdutos] = useState<Record<string, number>>({});
   const [produtoEditandoQuantidade, setProdutoEditandoQuantidade] = useState<string | null>(null);
+
+  // Estados para quantidades selecionadas (antes de adicionar ao carrinho)
+  const [quantidadesSelecionadas, setQuantidadesSelecionadas] = useState<Record<string, number>>({});
 
   // Estados para o modal do carrinho
   const [carrinhoAberto, setCarrinhoAberto] = useState(false);
@@ -1312,9 +1315,28 @@ const CardapioPublicoPage: React.FC = () => {
 
 
 
-  // Funções para controle de quantidade dos produtos
+  // Funções para controle de quantidade dos produtos (carrinho)
   const obterQuantidadeProduto = (produtoId: string): number => {
     return quantidadesProdutos[produtoId] || 0;
+  };
+
+  // Funções para controle de quantidades selecionadas (antes do carrinho)
+  const obterQuantidadeSelecionada = (produtoId: string): number => {
+    return quantidadesSelecionadas[produtoId] || 0;
+  };
+
+  const alterarQuantidadeSelecionada = (produtoId: string, novaQuantidade: number) => {
+    setQuantidadesSelecionadas(prev => {
+      if (novaQuantidade <= 0) {
+        const nova = { ...prev };
+        delete nova[produtoId];
+        return nova;
+      }
+      return {
+        ...prev,
+        [produtoId]: novaQuantidade
+      };
+    });
   };
 
   const alterarQuantidadeProduto = (produtoId: string, novaQuantidade: number) => {
@@ -1352,8 +1374,33 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
+  // Função para adicionar produto ao carrinho
+  const adicionarAoCarrinho = (produtoId: string) => {
+    const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
+
+    if (quantidadeSelecionada > 0) {
+      // Adicionar ao carrinho com a quantidade selecionada
+      alterarQuantidadeProduto(produtoId, quantidadeSelecionada);
+
+      // Limpar quantidade selecionada
+      alterarQuantidadeSelecionada(produtoId, 0);
+
+      // Ativar efeito de entrada suave no item
+      setItemChacoalhando(produtoId);
+      setTimeout(() => setItemChacoalhando(null), 800);
+
+      // Abrir carrinho automaticamente quando adicionar primeiro item
+      const totalItensCarrinho = Object.keys(quantidadesProdutos).length;
+      if (totalItensCarrinho === 0) {
+        setCarrinhoAberto(true);
+      }
+
+      console.log(`🛒 Produto ${produtoId} adicionado ao carrinho com quantidade ${quantidadeSelecionada}`);
+    }
+  };
+
   const incrementarQuantidade = (produtoId: string) => {
-    const quantidadeAtual = obterQuantidadeProduto(produtoId);
+    const quantidadeAtual = obterQuantidadeSelecionada(produtoId);
 
     // Buscar o produto para verificar se é fracionário
     const produto = produtos.find(p => p.id === produtoId);
@@ -1368,29 +1415,11 @@ const CardapioPublicoPage: React.FC = () => {
       novaQuantidade = quantidadeAtual + 1;
     }
 
-    alterarQuantidadeProduto(produtoId, novaQuantidade);
-
-    // Ativar efeito de entrada suave no item
-    setItemChacoalhando(produtoId);
-    setTimeout(() => setItemChacoalhando(null), 800);
-
-    // Abrir carrinho automaticamente quando adicionar primeiro item
-    if (quantidadeAtual === 0) {
-      const carrinhoEstaviaFechado = !carrinhoAberto;
-      setCarrinhoAberto(true);
-
-      // Se o carrinho estava fechado, marcar como recém aberto para animação especial
-      if (carrinhoEstaviaFechado) {
-        setCarrinhoRecemAberto(true);
-        // Remover o estado após a animação
-        setTimeout(() => setCarrinhoRecemAberto(false), 2000);
-
-      }
-    }
+    alterarQuantidadeSelecionada(produtoId, novaQuantidade);
   };
 
   const decrementarQuantidade = (produtoId: string) => {
-    const quantidadeAtual = obterQuantidadeProduto(produtoId);
+    const quantidadeAtual = obterQuantidadeSelecionada(produtoId);
     if (quantidadeAtual > 0) {
       // Buscar o produto para verificar se é fracionário
       const produto = produtos.find(p => p.id === produtoId);
@@ -1405,25 +1434,42 @@ const CardapioPublicoPage: React.FC = () => {
         novaQuantidade = Math.max(0, quantidadeAtual - 1);
       }
 
-      // Se a quantidade chegou a 0, limpar os adicionais e observação deste produto
-      if (novaQuantidade === 0) {
-        setAdicionaisSelecionados(prev => {
-          const novosAdicionais = { ...prev };
-          delete novosAdicionais[produtoId];
-          return novosAdicionais;
-        });
+      alterarQuantidadeSelecionada(produtoId, novaQuantidade);
+    }
+  };
 
-        // Limpar observação do produto
-        setObservacoesProdutos(prev => {
-          const nova = { ...prev };
-          delete nova[produtoId];
-          return nova;
-        });
+  // Função para alterar quantidade selecionada via input
+  const handleQuantidadeChange = (produtoId: string, valor: string) => {
+    // Buscar o produto para verificar se é fracionário
+    const produto = produtos.find(p => p.id === produtoId);
+    const isFracionado = produto?.unidade_medida?.fracionado || false;
+
+    if (isFracionado) {
+      // Para produtos fracionados, permitir números, vírgulas e pontos
+      const valorLimpo = valor.replace(/[^\d.,]/g, '');
+
+      if (valorLimpo === '') {
+        alterarQuantidadeSelecionada(produtoId, 0);
+        return;
       }
 
-      alterarQuantidadeProduto(produtoId, novaQuantidade);
+      // Converter vírgula para ponto para processamento
+      const valorConvertido = valorLimpo.replace(',', '.');
 
+      if (!isNaN(parseFloat(valorConvertido))) {
+        let quantidade = parseFloat(valorConvertido);
+        // Limitar a 3 casas decimais
+        quantidade = Math.round(quantidade * 1000) / 1000;
+        alterarQuantidadeSelecionada(produtoId, quantidade >= 0 ? quantidade : 0);
+      }
+    } else {
+      // Para produtos inteiros, permitir apenas números
+      const valorLimpo = valor.replace(/[^\d]/g, '');
+      const quantidade = valorLimpo === '' ? 0 : parseInt(valorLimpo);
 
+      if (!isNaN(quantidade)) {
+        alterarQuantidadeSelecionada(produtoId, quantidade);
+      }
     }
   };
 
@@ -2655,7 +2701,7 @@ const CardapioPublicoPage: React.FC = () => {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {produtosFiltrados.map(produto => {
-              const quantidadeSelecionada = obterQuantidadeProduto(produto.id);
+              const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
               const estaSelecionado = quantidadeSelecionada > 0;
 
               return (
@@ -2763,9 +2809,9 @@ const CardapioPublicoPage: React.FC = () => {
                                 {/* Botão Decrementar */}
                                 <button
                                   onClick={() => decrementarQuantidade(produto.id)}
-                                  disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
+                                  disabled={obterQuantidadeSelecionada(produto.id) === 0 || lojaAberta === false}
                                   className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                    obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
+                                    obterQuantidadeSelecionada(produto.id) === 0 || lojaAberta === false
                                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                       : config.modo_escuro
                                       ? 'bg-gray-600 text-white hover:bg-gray-500'
@@ -2778,7 +2824,7 @@ const CardapioPublicoPage: React.FC = () => {
                                 {/* Campo de Quantidade */}
                                 <input
                                   type="text"
-                                  value={formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
+                                  value={formatarQuantidade(obterQuantidadeSelecionada(produto.id), produto.unidade_medida)}
                                   onChange={(e) => handleQuantidadeChange(produto.id, e.target.value)}
                                   onBlur={() => setItemEditandoQuantidade(null)}
                                   onFocus={() => setItemEditandoQuantidade(produto.id)}
@@ -2978,48 +3024,30 @@ const CardapioPublicoPage: React.FC = () => {
                     return null;
                   })()}
 
-                  {/* Adicionais do produto - largura total do card */}
-                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && (
+                  {/* Adicionais do produto - só aparece quando há quantidade selecionada */}
+                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && obterQuantidadeSelecionada(produto.id) > 0 && (
                     <div className="mb-3 w-full">
                       {/* Divisória acima dos adicionais */}
                       <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
 
                       {/* Título dos adicionais */}
-                      <div className={`text-xs font-medium mb-2 flex items-center gap-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
                         <span>Adicionais:</span>
-                        {obterQuantidadeProduto(produto.id) === 0 && (
-                          <span className={`text-xs px-2 py-1 rounded-full ${
-                            config.modo_escuro
-                              ? 'bg-orange-900/30 text-orange-400 border border-orange-700'
-                              : 'bg-orange-100 text-orange-600 border border-orange-300'
-                          }`}>
-                            Adicione o produto primeiro
-                          </span>
-                        )}
                       </div>
 
                       {/* Lista de opções de adicionais */}
-                      <div className={`space-y-2 w-full transition-opacity duration-200 ${
-                        obterQuantidadeProduto(produto.id) === 0 ? 'opacity-50' : 'opacity-100'
-                      }`}>
+                      <div className="space-y-2 w-full">
                         {produto.opcoes_adicionais.map(opcao => {
-                          const adicionaisDesabilitados = obterQuantidadeProduto(produto.id) === 0;
                           return (
                           <div key={opcao.id} className="w-full">
                             {/* Botão do grupo de adicional */}
                             <button
-                              onClick={() => !adicionaisDesabilitados && toggleAdicionalOpcao(produto.id, opcao.id)}
-                              disabled={adicionaisDesabilitados}
+                              onClick={() => toggleAdicionalOpcao(produto.id, opcao.id)}
                               className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
-                                adicionaisDesabilitados
-                                  ? 'cursor-not-allowed'
-                                  : config.modo_escuro
+                                config.modo_escuro
                                   ? 'bg-gray-700/50 hover:bg-gray-700 text-white'
                                   : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-                              } ${
-                                config.modo_escuro ? 'text-white' : 'text-gray-800'
                               }`}
-                              title={adicionaisDesabilitados ? 'Adicione o produto principal primeiro' : ''}
                             >
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-medium">{opcao.nome}</span>
@@ -3087,55 +3115,39 @@ const CardapioPublicoPage: React.FC = () => {
                                       {/* Controles de quantidade do adicional */}
                                       {obterWhatsAppEmpresa() && lojaAberta !== false && (
                                         <div className="flex items-center gap-1">
-                                          {(() => {
-                                            const quantidadeProdutoPrincipal = obterQuantidadeProduto(produto.id);
-                                            const adicionaisDesabilitados = quantidadeProdutoPrincipal === 0;
+                                          {/* Botão Decrementar */}
+                                          <button
+                                            onClick={() => decrementarAdicional(produto.id, item.id)}
+                                            disabled={quantidade === 0}
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                              quantidade === 0
+                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                : config.modo_escuro
+                                                ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                            }`}
+                                          >
+                                            <Minus size={10} />
+                                          </button>
 
-                                            return (
-                                              <>
-                                                {/* Botão Decrementar */}
-                                                <button
-                                                  onClick={() => decrementarAdicional(produto.id, item.id)}
-                                                  disabled={quantidade === 0 || adicionaisDesabilitados}
-                                                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                                    quantidade === 0 || adicionaisDesabilitados
-                                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                      : config.modo_escuro
-                                                      ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                  }`}
-                                                  title={adicionaisDesabilitados ? 'Adicione o produto principal primeiro' : ''}
-                                                >
-                                                  <Minus size={10} />
-                                                </button>
+                                          {/* Quantidade */}
+                                          <span className={`w-6 text-center text-xs font-semibold ${
+                                            config.modo_escuro ? 'text-white' : 'text-gray-800'
+                                          }`}>
+                                            {quantidade}
+                                          </span>
 
-                                                {/* Quantidade */}
-                                                <span className={`w-6 text-center text-xs font-semibold ${
-                                                  adicionaisDesabilitados
-                                                    ? 'text-gray-400'
-                                                    : config.modo_escuro ? 'text-white' : 'text-gray-800'
-                                                }`}>
-                                                  {quantidade}
-                                                </span>
-
-                                                {/* Botão Incrementar */}
-                                                <button
-                                                  onClick={() => incrementarAdicional(produto.id, item.id)}
-                                                  disabled={adicionaisDesabilitados}
-                                                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                                    adicionaisDesabilitados
-                                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                      : config.modo_escuro
-                                                      ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                                      : 'bg-blue-500 text-white hover:bg-blue-600'
-                                                  }`}
-                                                  title={adicionaisDesabilitados ? 'Adicione o produto principal primeiro' : ''}
-                                                >
-                                                  <Plus size={10} />
-                                                </button>
-                                              </>
-                                            );
-                                          })()}
+                                          {/* Botão Incrementar */}
+                                          <button
+                                            onClick={() => incrementarAdicional(produto.id, item.id)}
+                                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                              config.modo_escuro
+                                                ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                                : 'bg-blue-500 text-white hover:bg-blue-600'
+                                            }`}
+                                          >
+                                            <Plus size={10} />
+                                          </button>
                                         </div>
                                       )}
                                     </div>
@@ -3150,20 +3162,30 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Botão Pedir - Linha completa acima da observação */}
-                  <div className="mt-4 w-full">
-                    <button
-                      onClick={() => handlePedirWhatsApp(produto)}
-                      disabled={lojaAberta === false}
-                      className={`w-full py-3 px-4 rounded-xl text-base font-semibold transition-all duration-200 ${
-                        lojaAberta === false
-                          ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
-                          : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg hover:shadow-xl'
-                      }`}
-                    >
-                      {lojaAberta === false ? 'Loja Fechada' : 'Pedir via WhatsApp'}
-                    </button>
-                  </div>
+                  {/* Botão Adicionar no Carrinho - Só aparece quando há quantidade selecionada */}
+                  {(() => {
+                    const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
+                    const valorTotal = produto.preco * quantidadeSelecionada;
+                    const temQuantidade = quantidadeSelecionada > 0;
+                    const lojaFechada = lojaAberta === false;
+
+                    // Só mostrar o botão se há quantidade selecionada e loja está aberta
+                    if (!temQuantidade || lojaFechada) {
+                      return null;
+                    }
+
+                    return (
+                      <div className="mt-4 w-full">
+                        <button
+                          onClick={() => adicionarAoCarrinho(produto.id)}
+                          className="w-full py-3 px-4 rounded-xl text-base font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg hover:shadow-xl"
+                        >
+                          <ShoppingBag size={18} />
+                          <span>{formatarPreco(valorTotal)} - Adicionar no carrinho</span>
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {/* Seção de Observação - Apenas se produto estiver no carrinho */}
                   {obterQuantidadeProduto(produto.id) > 0 && (
