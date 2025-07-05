@@ -164,9 +164,99 @@ FROM produtos_opcoes_adicionais
 - **Menos erros**: Validação preventiva evita problemas
 - **Manutenibilidade**: Código organizado e reutilizável
 
+## 💾 **PERSISTÊNCIA NO LOCALSTORAGE**
+
+### **Dados Salvos Automaticamente**
+O sistema agora persiste todos os estados relacionados aos adicionais no localStorage, garantindo que o usuário não perca o progresso ao atualizar a página.
+
+**Chaves do localStorage por empresa:**
+```javascript
+// Estados persistidos
+carrinho_${empresaId}                    // Quantidades dos produtos
+carrinho_ordem_${empresaId}              // Ordem de adição dos itens
+carrinho_adicionais_${empresaId}         // Adicionais selecionados
+carrinho_observacoes_${empresaId}        // Observações dos produtos
+carrinho_validacao_minima_${empresaId}   // Status de validação de quantidade mínima
+```
+
+### **Funcionalidades de Persistência**
+
+**1. Salvamento Automático:**
+- ✅ **Trigger**: Sempre que quantidades, adicionais ou validações mudam
+- ✅ **Dados**: Estado completo do carrinho + validações de quantidade mínima
+- ✅ **Isolamento**: Dados separados por empresa (multi-tenant)
+
+**2. Carregamento na Inicialização:**
+- ✅ **Restaura quantidades**: Produtos no carrinho
+- ✅ **Restaura adicionais**: Itens selecionados com quantidades
+- ✅ **Restaura validações**: Status de quantidade mínima por opção
+- ✅ **Restaura observações**: Notas dos produtos
+
+**3. Limpeza Automática:**
+- ✅ **Ao finalizar pedido**: Remove todos os dados do localStorage
+- ✅ **Por empresa**: Apenas dados da empresa atual são limpos
+- ✅ **Logs detalhados**: Console mostra operações de save/load
+
+### **Implementação Técnica da Persistência**
+
+```typescript
+// Estado para validação de quantidade mínima
+const [validacaoQuantidadeMinima, setValidacaoQuantidadeMinima] =
+  useState<{[produtoId: string]: {[opcaoId: string]: boolean}}>({});
+
+// Função para atualizar validação automaticamente
+const atualizarValidacaoQuantidadeMinima = () => {
+  const novaValidacao = {};
+  produtos.forEach(produto => {
+    if (produto.opcoes_adicionais) {
+      novaValidacao[produto.id] = {};
+      produto.opcoes_adicionais.forEach(opcao => {
+        novaValidacao[produto.id][opcao.id] = opcaoAtingiuMinimo(produto.id, opcao.id);
+      });
+    }
+  });
+  setValidacaoQuantidadeMinima(novaValidacao);
+};
+
+// useEffect para salvar sempre que estados mudarem
+useEffect(() => {
+  if (empresaId) {
+    salvarCarrinhoLocalStorage(quantidadesProdutos);
+  }
+}, [quantidadesProdutos, adicionaisSelecionados, validacaoQuantidadeMinima, empresaId]);
+```
+
+### **Benefícios da Persistência**
+
+**Para o Cliente:**
+- 🔄 **Não perde progresso**: Pode atualizar a página sem perder o carrinho
+- ✅ **Mantém validações**: Status de quantidade mínima é preservado
+- 📱 **Experiência contínua**: Pode fechar e reabrir o navegador
+- 🎯 **Estado consistente**: Indicadores visuais corretos após reload
+
+**Para o Sistema:**
+- 🛡️ **Dados seguros**: Isolamento por empresa no localStorage
+- 📊 **Performance**: Carregamento rápido do estado salvo
+- 🔧 **Debugging**: Logs detalhados para troubleshooting
+- 🧹 **Limpeza automática**: Remove dados ao finalizar pedido
+
+### **Fluxo Completo com Persistência**
+
+1. **Cliente adiciona produtos e adicionais**
+2. **Sistema salva automaticamente no localStorage**
+3. **Cliente atualiza a página (F5)**
+4. **Sistema carrega estado salvo:**
+   - ✅ Produtos no carrinho
+   - ✅ Adicionais selecionados
+   - ✅ Status de validação de quantidade mínima
+   - ✅ Indicadores visuais (1/2, ✓, cores)
+5. **Cliente continua de onde parou**
+6. **Ao finalizar pedido, localStorage é limpo**
+
 ## 🔮 **PRÓXIMAS MELHORIAS**
 
 - **Quantidade máxima**: Implementar limite superior para opções
 - **Dependências entre opções**: Opções que dependem de outras
 - **Preços dinâmicos**: Desconto quando atingir quantidade mínima
 - **Analytics**: Tracking de abandono por não atingir mínimo
+- **Backup na nuvem**: Sincronizar carrinho entre dispositivos (opcional)

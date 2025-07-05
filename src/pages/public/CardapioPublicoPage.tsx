@@ -154,6 +154,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [adicionaisExpandidos, setAdicionaisExpandidos] = useState<{[produtoId: string]: {[opcaoId: string]: boolean}}>({});
   const [adicionaisSelecionados, setAdicionaisSelecionados] = useState<{[produtoId: string]: {[itemId: string]: number}}>({});
 
+  // Estado para controlar validação de quantidade mínima por opção
+  const [validacaoQuantidadeMinima, setValidacaoQuantidadeMinima] = useState<{[produtoId: string]: {[opcaoId: string]: boolean}}>({});
+
   // Estados para observações
   const [observacoesProdutos, setObservacoesProdutos] = useState<Record<string, string>>({});
   const [modalObservacaoAberto, setModalObservacaoAberto] = useState(false);
@@ -553,7 +556,7 @@ const CardapioPublicoPage: React.FC = () => {
   useEffect(() => {
     if (empresaId) {
       console.log('🛒 Carregando carrinho do localStorage para empresa:', empresaId);
-      const { quantidades, ordem, adicionais, observacoes } = carregarCarrinhoLocalStorage();
+      const { quantidades, ordem, adicionais, observacoes, validacaoMinima } = carregarCarrinhoLocalStorage();
       console.log('🛒 Carrinho salvo encontrado:', quantidades);
       console.log('🛒 Ordem salva encontrada:', ordem);
       console.log('🛒 Adicionais salvos encontrados:', adicionais);
@@ -564,6 +567,7 @@ const CardapioPublicoPage: React.FC = () => {
         setOrdemAdicaoItens(ordem);
         setAdicionaisSelecionados(adicionais);
         setObservacoesProdutos(observacoes);
+      setValidacaoQuantidadeMinima(validacaoMinima);
         setCarrinhoAberto(true);
         console.log('🛒 Carrinho carregado e aberto');
       }
@@ -601,7 +605,14 @@ const CardapioPublicoPage: React.FC = () => {
       console.log('🛒 Salvando adicionais devido a mudança:', adicionaisSelecionados);
       salvarCarrinhoLocalStorage(quantidadesProdutos);
     }
-  }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, empresaId]);
+  }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, empresaId]);
+
+  // Atualizar validação de quantidade mínima sempre que adicionais mudarem
+  useEffect(() => {
+    if (produtos.length > 0) {
+      atualizarValidacaoQuantidadeMinima();
+    }
+  }, [adicionaisSelecionados, produtos]);
 
 
 
@@ -1010,6 +1021,22 @@ const CardapioPublicoPage: React.FC = () => {
     return adicionaisValidos;
   };
 
+  // Função para atualizar validação de quantidade mínima
+  const atualizarValidacaoQuantidadeMinima = () => {
+    const novaValidacao: {[produtoId: string]: {[opcaoId: string]: boolean}} = {};
+
+    produtos.forEach(produto => {
+      if (produto.opcoes_adicionais) {
+        novaValidacao[produto.id] = {};
+        produto.opcoes_adicionais.forEach(opcao => {
+          novaValidacao[produto.id][opcao.id] = opcaoAtingiuMinimo(produto.id, opcao.id);
+        });
+      }
+    });
+
+    setValidacaoQuantidadeMinima(novaValidacao);
+  };
+
   // Funções para localStorage do carrinho
   const salvarCarrinhoLocalStorage = (quantidades: Record<string, number>) => {
     if (!empresaId) {
@@ -1022,15 +1049,18 @@ const CardapioPublicoPage: React.FC = () => {
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
       const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
       const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
+      const chaveValidacaoMinima = `carrinho_validacao_minima_${empresaId}`;
 
       localStorage.setItem(chaveCarrinho, JSON.stringify(quantidades));
       localStorage.setItem(chaveOrdem, JSON.stringify(ordemAdicaoItens));
       localStorage.setItem(chaveAdicionais, JSON.stringify(adicionaisSelecionados));
       localStorage.setItem(chaveObservacoes, JSON.stringify(observacoesProdutos));
+      localStorage.setItem(chaveValidacaoMinima, JSON.stringify(validacaoQuantidadeMinima));
 
       console.log('🛒 Carrinho salvo no localStorage:', chaveCarrinho, quantidades);
       console.log('🛒 Ordem salva no localStorage:', chaveOrdem, ordemAdicaoItens);
       console.log('🛒 Adicionais salvos no localStorage:', chaveAdicionais, adicionaisSelecionados);
+      console.log('🛒 Validação mínima salva no localStorage:', chaveValidacaoMinima, validacaoQuantidadeMinima);
     } catch (error) {
       console.error('Erro ao salvar carrinho no localStorage:', error);
     }
@@ -1039,11 +1069,13 @@ const CardapioPublicoPage: React.FC = () => {
   const carregarCarrinhoLocalStorage = (): {
     quantidades: Record<string, number>,
     ordem: Record<string, number>,
-    adicionais: {[produtoId: string]: {[itemId: string]: number}}
+    adicionais: {[produtoId: string]: {[itemId: string]: number}},
+    observacoes: Record<string, string>,
+    validacaoMinima: {[produtoId: string]: {[opcaoId: string]: boolean}}
   } => {
     if (!empresaId) {
       console.log('🛒 Não carregando carrinho: empresaId não disponível');
-      return { quantidades: {}, ordem: {}, adicionais: {} };
+      return { quantidades: {}, ordem: {}, adicionais: {}, observacoes: {}, validacaoMinima: {} };
     }
 
     try {
@@ -1051,26 +1083,30 @@ const CardapioPublicoPage: React.FC = () => {
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
       const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
       const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
+      const chaveValidacaoMinima = `carrinho_validacao_minima_${empresaId}`;
 
       const carrinhoSalvo = localStorage.getItem(chaveCarrinho);
       const ordemSalva = localStorage.getItem(chaveOrdem);
       const adicionaisSalvos = localStorage.getItem(chaveAdicionais);
       const observacoesSalvas = localStorage.getItem(chaveObservacoes);
+      const validacaoMinimaSalva = localStorage.getItem(chaveValidacaoMinima);
 
       const quantidades = carrinhoSalvo ? JSON.parse(carrinhoSalvo) : {};
       const ordem = ordemSalva ? JSON.parse(ordemSalva) : {};
       const adicionais = adicionaisSalvos ? JSON.parse(adicionaisSalvos) : {};
       const observacoes = observacoesSalvas ? JSON.parse(observacoesSalvas) : {};
+      const validacaoMinima = validacaoMinimaSalva ? JSON.parse(validacaoMinimaSalva) : {};
 
       console.log('🛒 Carrinho carregado do localStorage:', chaveCarrinho, quantidades);
       console.log('🛒 Ordem carregada do localStorage:', chaveOrdem, ordem);
       console.log('🛒 Adicionais carregados do localStorage:', chaveAdicionais, adicionais);
       console.log('🛒 Observações carregadas do localStorage:', chaveObservacoes, observacoes);
+      console.log('🛒 Validação mínima carregada do localStorage:', chaveValidacaoMinima, validacaoMinima);
 
-      return { quantidades, ordem, adicionais, observacoes };
+      return { quantidades, ordem, adicionais, observacoes, validacaoMinima };
     } catch (error) {
       console.error('Erro ao carregar carrinho do localStorage:', error);
-      return { quantidades: {}, ordem: {}, adicionais: {} };
+      return { quantidades: {}, ordem: {}, adicionais: {}, observacoes: {}, validacaoMinima: {} };
     }
   };
 
@@ -1082,13 +1118,15 @@ const CardapioPublicoPage: React.FC = () => {
       const chaveOrdem = `carrinho_ordem_${empresaId}`;
       const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
       const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
+      const chaveValidacaoMinima = `carrinho_validacao_minima_${empresaId}`;
 
       localStorage.removeItem(chaveCarrinho);
       localStorage.removeItem(chaveOrdem);
       localStorage.removeItem(chaveAdicionais);
       localStorage.removeItem(chaveObservacoes);
+      localStorage.removeItem(chaveValidacaoMinima);
 
-      console.log('🛒 Carrinho, ordem, adicionais e observações limpos do localStorage');
+      console.log('🛒 Carrinho, ordem, adicionais, observações e validação mínima limpos do localStorage');
     } catch (error) {
       console.error('Erro ao limpar carrinho do localStorage:', error);
     }
