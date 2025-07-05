@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
-import ScrollContainer from 'react-indiana-drag-scroll';
+import { useKeenSlider } from "keen-slider/react";
+import "keen-slider/keen-slider.min.css";
 
 interface Produto {
   id: string;
@@ -109,8 +110,24 @@ const CardapioPublicoPage: React.FC = () => {
   const [termoPesquisa, setTermoPesquisa] = useState<string>('');
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
-  // Ref para o container de categorias (mantido para compatibilidade)
-  const categoriaContainerRef = useRef<HTMLDivElement>(null);
+  // Estados para o Keen Slider
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  // Configuração do Keen Slider para modo normal (não free) para ter indicadores funcionais
+  const [sliderRef, instanceRef] = useKeenSlider({
+    initial: 0,
+    slides: {
+      perView: 4, // Mostrar 4 categorias por vez
+      spacing: 8,
+    },
+    slideChanged(slider) {
+      setCurrentSlide(slider.track.details.rel);
+    },
+    created() {
+      setLoaded(true);
+    },
+  });
 
   // Estados para controle de quantidade dos produtos
   const [quantidadesProdutos, setQuantidadesProdutos] = useState<Record<string, number>>({});
@@ -2265,17 +2282,9 @@ const CardapioPublicoPage: React.FC = () => {
             <div className="h-14 flex items-center">
 
 
-              {/* Container de Categorias com Scroll Suave usando biblioteca */}
-              <ScrollContainer
-                className="flex items-center h-full flex-1 overflow-hidden"
-                horizontal={true}
-                vertical={false}
-                hideScrollbars={true}
-                style={{
-                  cursor: 'grab'
-                }}
-              >
-                <div className="flex items-center h-full gap-2 px-2">
+              {/* Container de Categorias com Keen Slider */}
+              <div className="flex-1 h-full relative overflow-hidden">
+                <div ref={sliderRef} className="keen-slider h-full">
                   {(() => {
                     const todasCategorias = [
                       { id: 'todos', nome: '🍽️ Todos' },
@@ -2283,28 +2292,41 @@ const CardapioPublicoPage: React.FC = () => {
                     ];
 
                     return todasCategorias.map((categoria) => (
-                      <button
-                        key={categoria.id}
-                        onClick={() => setGrupoSelecionado(categoria.id)}
-                        className={`flex items-center justify-center transition-all duration-200 h-full px-4 font-medium text-sm whitespace-nowrap ${
-                          grupoSelecionado === categoria.id
-                            ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                            : config.modo_escuro
-                            ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-                            : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
-                        }`}
-                        style={{
-                          width: '120px',
-                          minWidth: '120px',
-                          flexShrink: 0
-                        }}
-                      >
-                        {categoria.nome}
-                      </button>
+                      <div key={categoria.id} className="keen-slider__slide" style={{ minWidth: '120px', width: '120px' }}>
+                        <button
+                          onClick={() => setGrupoSelecionado(categoria.id)}
+                          className={`flex items-center justify-center transition-all duration-200 h-full px-4 font-medium text-sm whitespace-nowrap w-full ${
+                            grupoSelecionado === categoria.id
+                              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                              : config.modo_escuro
+                              ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                              : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
+                          }`}
+                        >
+                          {categoria.nome}
+                        </button>
+                      </div>
                     ));
                   })()}
                 </div>
-              </ScrollContainer>
+
+                {/* Indicadores de Dots */}
+                {loaded && instanceRef.current && grupos.length > 3 && (
+                  <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 flex space-x-1">
+                    {Array.from({ length: Math.ceil((grupos.length + 1) / 4) }).map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => instanceRef.current?.moveToIdx(idx)}
+                        className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                          currentSlide === idx
+                            ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                            : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
