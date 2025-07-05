@@ -3163,19 +3163,57 @@ const CardapioPublicoPage: React.FC = () => {
                               >
                                 <div className="flex-1">
                                   <div className="flex items-center justify-between">
-                                    <span className={`text-xs font-medium ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                                      + {adicional.nome} ({adicional.quantidade}x)
-                                    </span>
+                                    <div>
+                                      <span className={`text-xs font-medium ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                                        + {adicional.nome}
+                                      </span>
+                                      <div className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        {adicional.preco > 0 ? `${formatarPreco(adicional.preco)} cada` : 'Grátis'}
+                                      </div>
+                                    </div>
                                     {config.mostrar_precos && (
                                       <span className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
                                         {formatarPreco(adicional.preco * adicional.quantidade * quantidade)}
                                       </span>
                                     )}
                                   </div>
-                                  <div className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                                    {adicional.preco > 0 ? `${formatarPreco(adicional.preco)} cada` : 'Grátis'}
-                                  </div>
                                 </div>
+
+                                {/* Controles de Quantidade do Adicional */}
+                                {obterWhatsAppEmpresa() && lojaAberta !== false && (
+                                  <div className="flex items-center gap-1 ml-3">
+                                    <button
+                                      onClick={() => decrementarAdicional(produto.id, adicional.id)}
+                                      disabled={adicional.quantidade === 0}
+                                      className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                                        adicional.quantidade === 0
+                                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                          : config.modo_escuro
+                                          ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                      }`}
+                                    >
+                                      <Minus size={8} />
+                                    </button>
+
+                                    <span className={`w-5 text-center text-xs font-semibold ${
+                                      config.modo_escuro ? 'text-white' : 'text-gray-800'
+                                    }`}>
+                                      {adicional.quantidade}
+                                    </span>
+
+                                    <button
+                                      onClick={() => incrementarAdicional(produto.id, adicional.id)}
+                                      className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                                        config.modo_escuro
+                                          ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                          : 'bg-blue-500 text-white hover:bg-blue-600'
+                                      }`}
+                                    >
+                                      <Plus size={8} />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>

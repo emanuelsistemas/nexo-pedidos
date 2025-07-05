@@ -6676,21 +6676,24 @@ const ConfiguracoesPage: React.FC = () => {
                           </div>
                         </label>
 
-                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={pdvConfig.exibir_fotos_itens_cardapio}
-                            onChange={(e) => handlePdvConfigChange('exibir_fotos_itens_cardapio', e.target.checked)}
-                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
-                            style={{ borderRadius: '50%' }}
-                          />
-                          <div>
-                            <h5 className="text-white font-medium">Exibir Fotos nos Itens Principal</h5>
-                            <p className="text-sm text-gray-400 mt-1">
-                              Mostra as fotos dos produtos na página principal do cardápio digital.
-                            </p>
-                          </div>
-                        </label>
+                        {/* Opção "Exibir Fotos nos Itens Principal" ocultada conforme solicitado */}
+                        {false && (
+                          <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={pdvConfig.exibir_fotos_itens_cardapio}
+                              onChange={(e) => handlePdvConfigChange('exibir_fotos_itens_cardapio', e.target.checked)}
+                              className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                              style={{ borderRadius: '50%' }}
+                            />
+                            <div>
+                              <h5 className="text-white font-medium">Exibir Fotos nos Itens Principal</h5>
+                              <p className="text-sm text-gray-400 mt-1">
+                                Mostra as fotos dos produtos na página principal do cardápio digital.
+                              </p>
+                            </div>
+                          </label>
+                        )}
 
                         <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                           <input
