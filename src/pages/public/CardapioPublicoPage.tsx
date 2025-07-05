@@ -2278,7 +2278,7 @@ const CardapioPublicoPage: React.FC = () => {
       {/* Filtros de Categoria com navegação horizontal */}
       {grupos.length > 0 && (
         <div className={`${config.modo_escuro ? 'bg-gray-800/50' : 'bg-white/80'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-10`}>
-          <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="max-w-6xl mx-auto px-1 py-4">
             <div className="h-14 flex items-center">
 
 
