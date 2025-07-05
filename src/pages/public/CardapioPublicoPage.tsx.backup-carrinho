@@ -1906,7 +1906,7 @@ const CardapioPublicoPage: React.FC = () => {
                 return (
                 <div
                   key={produto.id}
-                  className={`p-2 rounded-lg transition-all duration-500 ${
+                  className={`flex items-center justify-between p-2 rounded-lg transition-all duration-500 ${
                     config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-50'
                   } ${
                     itemChacoalhando === produto.id
@@ -1921,292 +1921,179 @@ const CardapioPublicoPage: React.FC = () => {
                 >
                   {/* Layout com foto (quando configuração ativa) */}
                   {config.cardapio_fotos_minimizadas ? (
-                    <>
-                      {/* Header do Item - Foto + Nome + Preço + Controles */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {/* Foto do produto */}
-                          <div
-                            className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
-                            onClick={() => abrirGaleriaFotos(produto, 0)}
-                          >
-                            {(() => {
-                              const fotoItem = getFotoPrincipal(produto);
-                              return fotoItem ? (
-                                <img
-                                  src={fotoItem.url}
-                                  alt={produto.nome}
-                                  className="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <Package size={16} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
-                                </div>
-                              );
-                            })()}
-
-                            {/* Contador de fotos */}
-                            {produto.fotos_count && produto.fotos_count > 1 && (
-                              <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium">
-                                {produto.fotos_count}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Info do Produto */}
-                          <div className="flex-1 min-w-0">
-                            <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                              {produto.nome}
-                            </h4>
-                            {config.mostrar_precos && (
-                              <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                                {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        </div>
-
-                        {/* Controles de Quantidade do Produto Principal */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => decrementarQuantidade(produto.id)}
-                            disabled={lojaAberta === false}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            }`}
-                          >
-                            <Minus size={12} />
-                          </button>
-
-                          {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
-                            <input
-                              type="text"
-                              value={formatarQuantidade(quantidade, produto.unidade_medida)}
-                              onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
-                              onBlur={() => setItemEditandoCarrinho(null)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  setItemEditandoCarrinho(null);
-                                }
-                              }}
-                              className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
-                                config.modo_escuro
-                                  ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
-                                  : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
-                              }`}
-                              placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
-                              autoFocus
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* Foto do produto */}
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                        {(() => {
+                          const fotoItem = getFotoPrincipal(produto);
+                          return fotoItem ? (
+                            <img
+                              src={fotoItem.url}
+                              alt={produto.nome}
+                              className="w-full h-full object-cover"
                             />
                           ) : (
-                            <button
-                              onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
-                              disabled={lojaAberta === false}
-                              className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
-                                lojaAberta === false
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : config.modo_escuro
-                                  ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                  : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                              }`}
-                            >
-                              {formatarQuantidade(quantidade, produto.unidade_medida)}
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => incrementarQuantidade(produto.id)}
-                            disabled={lojaAberta === false}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                : 'bg-blue-500 text-white hover:bg-blue-600'
-                            }`}
-                          >
-                            <Plus size={12} />
-                          </button>
-                        </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* Header do Item - Nome + Preço + Controles (sem foto) */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex-1 min-w-0">
-                          <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                            {produto.nome}
-                          </h4>
-                          {config.mostrar_precos && (
-                            <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                              {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package size={16} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
                             </div>
-                          )}
-                        </div>
-
-                        {/* Controles de Quantidade do Produto Principal */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => decrementarQuantidade(produto.id)}
-                            disabled={lojaAberta === false}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            }`}
-                          >
-                            <Minus size={12} />
-                          </button>
-
-                          {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
-                            <input
-                              type="text"
-                              value={formatarQuantidade(quantidade, produto.unidade_medida)}
-                              onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
-                              onBlur={() => setItemEditandoCarrinho(null)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  setItemEditandoCarrinho(null);
-                                }
-                              }}
-                              className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
-                                config.modo_escuro
-                                  ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
-                                  : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
-                              }`}
-                              placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
-                              disabled={lojaAberta === false}
-                              className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
-                                lojaAberta === false
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : config.modo_escuro
-                                  ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                  : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                              }`}
-                            >
-                              {formatarQuantidade(quantidade, produto.unidade_medida)}
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => incrementarQuantidade(produto.id)}
-                            disabled={lojaAberta === false}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                : 'bg-blue-500 text-white hover:bg-blue-600'
-                            }`}
-                          >
-                            <Plus size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Seção de Adicionais - Largura Total */}
-                  {adicionais && adicionais.length > 0 && (
-                    <div className="mb-2">
-                      {/* Divisória */}
-                      <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
-
-                      {/* Título */}
-                      <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Adicionais:
+                          );
+                        })()}
                       </div>
 
-                      {/* Lista de Adicionais com Controles */}
-                      <div className="space-y-1">
-                        {adicionais.map(adicional => (
-                          <div
-                            key={adicional.id}
-                            className={`flex items-center justify-between p-2 rounded-lg ${
-                              config.modo_escuro ? 'bg-gray-800/50' : 'bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <span className={`text-xs font-medium ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                                  + {adicional.nome}
-                                </span>
+                      {/* Info do Produto */}
+                      <div className="flex-1 min-w-0">
+                        <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                          {produto.nome}
+                        </h4>
+                        {config.mostrar_precos && (
+                          <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                            {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                          </div>
+                        )}
+
+                        {/* Adicionais do item */}
+                        {adicionais && adicionais.length > 0 && (
+                          <div className={`text-xs mt-1 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {adicionais.map(adicional => (
+                              <div key={adicional.id} className="flex justify-between">
+                                <span>+ {adicional.nome} ({adicional.quantidade}x)</span>
                                 {config.mostrar_precos && (
-                                  <span className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                                    {formatarPreco(adicional.preco * adicional.quantidade * quantidade)}
-                                  </span>
+                                  <span>{formatarPreco(adicional.preco * adicional.quantidade * quantidade)}</span>
                                 )}
                               </div>
-                              <div className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                                {adicional.preco > 0 ? `${formatarPreco(adicional.preco)} cada` : 'Grátis'}
-                              </div>
-                            </div>
+                            ))}
+                          </div>
+                        )}
 
-                            {/* Controles de Quantidade do Adicional */}
-                            {obterWhatsAppEmpresa() && lojaAberta !== false && (
-                              <div className="flex items-center gap-1 ml-3">
-                                <button
-                                  onClick={() => decrementarAdicional(produto.id, adicional.id)}
-                                  disabled={adicional.quantidade === 0}
-                                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
-                                    adicional.quantidade === 0
-                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                      : config.modo_escuro
-                                      ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                  }`}
-                                >
-                                  <Minus size={8} />
-                                </button>
-
-                                <span className={`w-5 text-center text-xs font-semibold ${
-                                  config.modo_escuro ? 'text-white' : 'text-gray-800'
-                                }`}>
-                                  {adicional.quantidade}
-                                </span>
-
-                                <button
-                                  onClick={() => incrementarAdicional(produto.id, adicional.id)}
-                                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
-                                    config.modo_escuro
-                                      ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                      : 'bg-blue-500 text-white hover:bg-blue-600'
-                                  }`}
-                                >
-                                  <Plus size={8} />
-                                </button>
-                              </div>
+                        {/* Total do item (produto + adicionais) */}
+                        {config.mostrar_precos && adicionais && adicionais.length > 0 && (
+                          <div className={`text-xs font-semibold mt-1 pt-1 border-t ${
+                            config.modo_escuro ? 'border-gray-600 text-green-400' : 'border-gray-300 text-green-600'
+                          }`}>
+                            Total: {formatarPreco(
+                              (produto.preco * quantidade) +
+                              adicionais.reduce((total, adicional) => total + (adicional.preco * adicional.quantidade * quantidade), 0)
                             )}
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
-                  )}
+                  ) : (
+                    /* Layout sem foto (padrão) */
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                        {produto.nome}
+                      </h4>
+                      {config.mostrar_precos && (
+                        <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                          {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                        </div>
+                      )}
 
-                  {/* Total do Item */}
-                  {config.mostrar_precos && adicionais && adicionais.length > 0 && (
-                    <div className={`text-xs font-semibold pt-2 border-t ${
-                      config.modo_escuro ? 'border-gray-600 text-green-400' : 'border-gray-300 text-green-600'
-                    }`}>
-                      Total do Item: {formatarPreco(
-                        (produto.preco * quantidade) +
-                        adicionais.reduce((total, adicional) => total + (adicional.preco * adicional.quantidade * quantidade), 0)
+                      {/* Adicionais do item */}
+                      {adicionais && adicionais.length > 0 && (
+                        <div className={`text-xs mt-1 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                          {adicionais.map(adicional => (
+                            <div key={adicional.id} className="flex justify-between">
+                              <span>+ {adicional.nome} ({adicional.quantidade}x)</span>
+                              {config.mostrar_precos && (
+                                <span>{formatarPreco(adicional.preco * adicional.quantidade * quantidade)}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Total do item (produto + adicionais) */}
+                      {config.mostrar_precos && adicionais && adicionais.length > 0 && (
+                        <div className={`text-xs font-semibold mt-1 pt-1 border-t ${
+                          config.modo_escuro ? 'border-gray-600 text-green-400' : 'border-gray-300 text-green-600'
+                        }`}>
+                          Total: {formatarPreco(
+                            (produto.preco * quantidade) +
+                            adicionais.reduce((total, adicional) => total + (adicional.preco * adicional.quantidade * quantidade), 0)
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
 
+                  {/* Controles de Quantidade */}
+                  <div className="flex items-center gap-2 ml-3">
+                    <button
+                      onClick={() => decrementarQuantidade(produto.id)}
+                      disabled={lojaAberta === false}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                        lojaAberta === false
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : config.modo_escuro
+                          ? 'bg-gray-600 text-white hover:bg-gray-500'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      <Minus size={12} />
+                    </button>
 
+                    {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
+                      <input
+                        type="text"
+                        value={formatarQuantidade(quantidade, produto.unidade_medida)}
+                        onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
+                        onBlur={() => setItemEditandoCarrinho(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setItemEditandoCarrinho(null);
+                          }
+                        }}
+                        className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
+                          config.modo_escuro
+                            ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
+                            : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                        }`}
+                        placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
+                        autoFocus
+                      />
+                    ) : (
+                      <button
+                        onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
+                        disabled={lojaAberta === false}
+                        className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
+                          lojaAberta === false
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : config.modo_escuro
+                            ? 'bg-gray-600 text-white hover:bg-gray-500'
+                            : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                        }`}
+                      >
+                        {formatarQuantidade(quantidade, produto.unidade_medida)}
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => incrementarQuantidade(produto.id)}
+                      disabled={lojaAberta === false}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                        lojaAberta === false
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : config.modo_escuro
+                          ? 'bg-blue-600 text-white hover:bg-blue-500'
+                          : 'bg-blue-500 text-white hover:bg-blue-600'
+                      }`}
+                    >
+                      <Plus size={12} />
+                    </button>
+
+                    <button
+                      onClick={() => removerItemCarrinho(produto.id)}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ml-1 ${
+                        config.modo_escuro
+                          ? 'bg-red-600 text-white hover:bg-red-500'
+                          : 'bg-red-500 text-white hover:bg-red-600'
+                      }`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 </div>
                 );
               })}
