@@ -2755,15 +2755,14 @@ const ProdutosPage: React.FC = () => {
       return;
     }
 
-    // Validação de duplicação de ordenação entre produtos do mesmo grupo
-    console.log('🔍 DEBUG VALIDAÇÃO:', {
+    // ✅ VALIDAÇÃO CORRIGIDA: Posição única por empresa (independente do grupo)
+    console.log('🔍 DEBUG VALIDAÇÃO POSIÇÃO:', {
       produtoOrdenacaoCardapioHabilitada,
       produtoOrdenacaoCardapioDigital,
-      selectedGrupo: selectedGrupo?.id,
       editingProduto: editingProduto?.id
     });
 
-    if (produtoOrdenacaoCardapioHabilitada && produtoOrdenacaoCardapioDigital && selectedGrupo) {
+    if (produtoOrdenacaoCardapioHabilitada && produtoOrdenacaoCardapioDigital) {
       // Obter dados do usuário para a validação
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
@@ -2782,38 +2781,58 @@ const ProdutosPage: React.FC = () => {
         return;
       }
 
-      // Buscar TODOS os produtos do grupo para verificar duplicação
-      const { data: produtosGrupo, error: produtosError } = await supabase
+      // ✅ CORREÇÃO: Buscar TODOS os produtos da EMPRESA (não apenas do grupo)
+      const { data: produtosEmpresa, error: produtosError } = await supabase
         .from('produtos')
-        .select('id, nome, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
-        .eq('grupo_id', selectedGrupo.id)
+        .select('id, nome, grupo_id, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('deletado', false);
+        .eq('deletado', false)
+        .eq('ordenacao_cardapio_habilitada', true)
+        .not('ordenacao_cardapio_digital', 'is', null);
 
       if (produtosError) {
-        console.error('Erro ao verificar duplicação de ordenação:', produtosError);
-        showMessage('error', 'Erro ao validar ordenação. Tente novamente.');
+        console.error('Erro ao verificar duplicação de posição:', produtosError);
+        showMessage('error', 'Erro ao validar posição. Tente novamente.');
         return;
       }
 
-      // Verificar se já existe outro produto com a mesma ordenação
-      console.log('🔍 PRODUTOS DO GRUPO:', produtosGrupo);
+      // Converter para número para comparação correta
+      const posicaoNumber = Number(produtoOrdenacaoCardapioDigital);
 
-      const produtoComMesmaOrdenacao = produtosGrupo?.find(produto =>
-        produto.id !== editingProduto?.id && // Excluir o próprio produto se estiver editando
-        produto.ordenacao_cardapio_habilitada === true &&
-        produto.ordenacao_cardapio_digital === Number(produtoOrdenacaoCardapioDigital)
-      );
+      console.log('🔍 DADOS PARA VALIDAÇÃO:', {
+        posicaoNumber,
+        editingProdutoId: editingProduto?.id,
+        empresaId: usuarioData.empresa_id,
+        totalProdutosComPosicao: produtosEmpresa?.length
+      });
 
-      console.log('🔍 PRODUTO COM MESMA ORDENAÇÃO:', produtoComMesmaOrdenacao);
+      // Verificar se já existe outro produto com a mesma posição
+      const produtoComMesmaPosicao = produtosEmpresa?.find(produto => {
+        const isNotSameProduct = produto.id !== editingProduto?.id;
+        const hasSamePosicao = Number(produto.ordenacao_cardapio_digital) === posicaoNumber;
 
-      if (produtoComMesmaOrdenacao) {
-        console.log('❌ BLOQUEANDO SALVAMENTO - ORDENAÇÃO DUPLICADA');
-        showMessage('error', `A ordenação ${produtoOrdenacaoCardapioDigital} já está sendo usada pelo produto "${produtoComMesmaOrdenacao.nome}" neste grupo. Escolha uma numeração diferente.`);
+        console.log(`🔍 Verificando produto ${produto.nome}:`, {
+          id: produto.id,
+          isNotSameProduct,
+          posicao_atual: produto.ordenacao_cardapio_digital,
+          posicaoNumber: Number(produto.ordenacao_cardapio_digital),
+          hasSamePosicao,
+          shouldBlock: isNotSameProduct && hasSamePosicao
+        });
+
+        return isNotSameProduct && hasSamePosicao;
+      });
+
+      console.log('🔍 PRODUTO COM MESMA POSIÇÃO:', produtoComMesmaPosicao);
+
+      if (produtoComMesmaPosicao) {
+        console.log('❌ BLOQUEANDO SALVAMENTO - POSIÇÃO DUPLICADA');
+        showMessage('error', `A posição ${produtoOrdenacaoCardapioDigital} já está sendo usada pelo produto "${produtoComMesmaPosicao.nome}". Escolha uma posição diferente.`);
+        setIsLoading(false); // ✅ IMPORTANTE: Resetar loading state
         return;
       }
 
-      console.log('✅ VALIDAÇÃO PASSOU - NENHUMA DUPLICAÇÃO ENCONTRADA');
+      console.log('✅ VALIDAÇÃO PASSOU - POSIÇÃO DISPONÍVEL');
     }
 
     setIsLoading(true);

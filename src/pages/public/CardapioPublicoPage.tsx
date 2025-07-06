@@ -941,8 +941,7 @@ const CardapioPublicoPage: React.FC = () => {
         `)
         .eq('empresa_id', pdvConfigData.empresa_id)
         .eq('ativo', true)
-        .eq('cardapio_digital', true)
-        .order('nome');
+        .eq('cardapio_digital', true);
 
       if (produtosError) {
         console.error('Erro ao carregar produtos:', produtosError);
