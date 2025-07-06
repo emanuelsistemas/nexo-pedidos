@@ -794,7 +794,7 @@ const CardapioPublicoPage: React.FC = () => {
       console.log('🔍 Buscando configuração PDV para slug:', slug);
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas')
+        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas, ocultar_grupos_cardapio')
         .eq('cardapio_url_personalizada', slug)
         .single();
 
@@ -907,7 +907,8 @@ const CardapioPublicoPage: React.FC = () => {
         modo_escuro: pdvConfigData.modo_escuro_cardapio || false,
         mostrar_fotos: pdvConfigData.exibir_fotos_itens_cardapio !== false, // Default true se não definido
         cardapio_fotos_minimizadas: pdvConfigData.cardapio_fotos_minimizadas || false,
-        trabalha_com_pizzas: pdvConfigData.trabalha_com_pizzas || false
+        trabalha_com_pizzas: pdvConfigData.trabalha_com_pizzas || false,
+        ocultar_grupos_cardapio: pdvConfigData.ocultar_grupos_cardapio || false
       }));
 
       // 3. Buscar produtos ativos da empresa com unidades de medida
