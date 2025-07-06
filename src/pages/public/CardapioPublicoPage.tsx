@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag } from 'lucide-react';
+import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
@@ -236,9 +236,11 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Estados para modal de configuração individual
   const [modalPerguntaAdicionais, setModalPerguntaAdicionais] = useState(false);
-  const [modalConfiguracaoItem, setModalConfiguracaoItem] = useState(false);
+  const [modalAvisoAdicionais, setModalAvisoAdicionais] = useState(false);
+  const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
   const [produtoConfiguracaoIndividual, setProdutoConfiguracaoIndividual] = useState<any>(null);
   const [adicionaisOcultosParaProduto, setAdicionaisOcultosParaProduto] = useState<Record<string, boolean>>({});
+  const [produtosComAdicionaisPendentes, setProdutosComAdicionaisPendentes] = useState<Record<string, boolean>>({});
 
   // Estados para modal de configuração individual
   const [modalConfiguracaoAberto, setModalConfiguracaoAberto] = useState(false);
@@ -708,11 +710,28 @@ const CardapioPublicoPage: React.FC = () => {
       }
 
       // Carregar seleções (estados intermediários)
-      const { quantidades: quantidadesSel, observacoes: observacoesSel } = carregarSelecaoLocalStorage();
+      const {
+        quantidades: quantidadesSel,
+        observacoes: observacoesSel,
+        adicionaisOcultos: adicionaisOcultosSel,
+        adicionaisPendentes: adicionaisPendentesSel
+      } = carregarSelecaoLocalStorage();
+
       if (Object.keys(quantidadesSel).length > 0 || Object.keys(observacoesSel).length > 0) {
         setQuantidadesSelecionadas(quantidadesSel);
         setObservacoesSelecionadas(observacoesSel);
         console.log('📝 Seleções carregadas do localStorage');
+      }
+
+      // Carregar estados de fluxo de configuração
+      if (Object.keys(adicionaisOcultosSel).length > 0) {
+        setAdicionaisOcultosParaProduto(adicionaisOcultosSel);
+        console.log('🔒 Estados de adicionais ocultos carregados');
+      }
+
+      if (Object.keys(adicionaisPendentesSel).length > 0) {
+        setProdutosComAdicionaisPendentes(adicionaisPendentesSel);
+        console.log('⏳ Estados de adicionais pendentes carregados');
       }
     }
   }, [empresaId]);
@@ -892,6 +911,7 @@ const CardapioPublicoPage: React.FC = () => {
       }));
 
       // 3. Buscar produtos ativos da empresa com unidades de medida
+      // ✅ FILTRO: Apenas produtos com cardapio_digital = true
       const { data: produtosData, error: produtosError } = await supabase
         .from('produtos')
         .select(`
@@ -901,6 +921,7 @@ const CardapioPublicoPage: React.FC = () => {
           preco,
           grupo_id,
           ativo,
+          cardapio_digital,
           unidade_medida_id,
           unidade_medida:unidade_medida_id (
             id,
@@ -916,6 +937,7 @@ const CardapioPublicoPage: React.FC = () => {
         `)
         .eq('empresa_id', pdvConfigData.empresa_id)
         .eq('ativo', true)
+        .eq('cardapio_digital', true)
         .order('nome');
 
       if (produtosError) {
@@ -923,6 +945,8 @@ const CardapioPublicoPage: React.FC = () => {
         setError('Erro ao carregar produtos do cardápio.');
         return;
       }
+
+      console.log('📦 Produtos carregados (apenas com cardapio_digital=true):', produtosData?.length || 0);
 
       // 4. Buscar todas as fotos dos produtos
       const produtosIds = produtosData?.map(p => p.id) || [];
@@ -1381,7 +1405,10 @@ const CardapioPublicoPage: React.FC = () => {
     try {
       localStorage.setItem(`selecao_quantidades_${empresaId}`, JSON.stringify(quantidadesSelecionadas));
       localStorage.setItem(`selecao_observacoes_${empresaId}`, JSON.stringify(observacoesSelecionadas));
-      console.log('📝 Salvando seleções no localStorage');
+      // Salvar estados de fluxo de configuração
+      localStorage.setItem(`adicionais_ocultos_${empresaId}`, JSON.stringify(adicionaisOcultosParaProduto));
+      localStorage.setItem(`adicionais_pendentes_${empresaId}`, JSON.stringify(produtosComAdicionaisPendentes));
+      console.log('📝 Salvando seleções e estados de fluxo no localStorage');
     } catch (error) {
       console.error('Erro ao salvar seleções no localStorage:', error);
     }
@@ -1389,23 +1416,29 @@ const CardapioPublicoPage: React.FC = () => {
 
   const carregarSelecaoLocalStorage = (): {
     quantidades: Record<string, number>,
-    observacoes: Record<string, string>
+    observacoes: Record<string, string>,
+    adicionaisOcultos: Record<string, boolean>,
+    adicionaisPendentes: Record<string, boolean>
   } => {
     if (!empresaId) {
-      return { quantidades: {}, observacoes: {} };
+      return { quantidades: {}, observacoes: {}, adicionaisOcultos: {}, adicionaisPendentes: {} };
     }
 
     try {
       const quantidadesSalvas = localStorage.getItem(`selecao_quantidades_${empresaId}`);
       const observacoesSalvas = localStorage.getItem(`selecao_observacoes_${empresaId}`);
+      const adicionaisOcultosSalvos = localStorage.getItem(`adicionais_ocultos_${empresaId}`);
+      const adicionaisPendentesSalvos = localStorage.getItem(`adicionais_pendentes_${empresaId}`);
 
       return {
         quantidades: quantidadesSalvas ? JSON.parse(quantidadesSalvas) : {},
-        observacoes: observacoesSalvas ? JSON.parse(observacoesSalvas) : {}
+        observacoes: observacoesSalvas ? JSON.parse(observacoesSalvas) : {},
+        adicionaisOcultos: adicionaisOcultosSalvos ? JSON.parse(adicionaisOcultosSalvos) : {},
+        adicionaisPendentes: adicionaisPendentesSalvos ? JSON.parse(adicionaisPendentesSalvos) : {}
       };
     } catch (error) {
       console.error('Erro ao carregar seleções do localStorage:', error);
-      return { quantidades: {}, observacoes: {} };
+      return { quantidades: {}, observacoes: {}, adicionaisOcultos: {}, adicionaisPendentes: {} };
     }
   };
 
@@ -1415,7 +1448,9 @@ const CardapioPublicoPage: React.FC = () => {
     try {
       localStorage.removeItem(`selecao_quantidades_${empresaId}`);
       localStorage.removeItem(`selecao_observacoes_${empresaId}`);
-      console.log('📝 Seleções limpas do localStorage');
+      localStorage.removeItem(`adicionais_ocultos_${empresaId}`);
+      localStorage.removeItem(`adicionais_pendentes_${empresaId}`);
+      console.log('🗑️ Seleções e estados de fluxo removidos do localStorage');
     } catch (error) {
       console.error('Erro ao limpar seleções do localStorage:', error);
     }
@@ -1470,6 +1505,10 @@ const CardapioPublicoPage: React.FC = () => {
       if (novaQuantidade <= 0) {
         const nova = { ...prev };
         delete nova[produtoId];
+
+        // Limpar TODOS os estados relacionados ao produto quando quantidade for 0
+        limparEstadosProduto(produtoId);
+
         return nova;
       }
       return {
@@ -1477,6 +1516,57 @@ const CardapioPublicoPage: React.FC = () => {
         [produtoId]: novaQuantidade
       };
     });
+  };
+
+  // Função para limpar todos os estados de um produto
+  const limparEstadosProduto = (produtoId: string) => {
+    console.log(`🧹 Limpando todos os estados do produto: ${produtoId}`);
+
+    // Limpar adicionais selecionados
+    setAdicionaisSelecionados(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+
+    // Limpar observações
+    setObservacoesSelecionadas(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+
+    // Limpar estados de fluxo de configuração
+    setAdicionaisOcultosParaProduto(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+
+    setProdutosComAdicionaisPendentes(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+
+    // Limpar validação mínima de adicionais
+    setValidacaoQuantidadeMinima(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+
+    // Limpar ordem de adição
+    setOrdemAdicaoItens(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+
+    console.log(`✅ Estados do produto ${produtoId} limpos - produto resetado como novo`);
+
+    // Salvar no localStorage após limpeza
+    setTimeout(() => salvarSelecaoLocalStorage(), 100);
   };
 
   const alterarQuantidadeProduto = (produtoId: string, novaQuantidade: number) => {
@@ -1546,6 +1636,13 @@ const CardapioPublicoPage: React.FC = () => {
         const nova = { ...prev };
         delete nova[produtoId];
         return nova;
+      });
+
+      // Resetar estado de adicionais pendentes
+      setProdutosComAdicionaisPendentes(prev => {
+        const novo = { ...prev };
+        delete novo[produtoId];
+        return novo;
       });
 
       // Salvar seleções atualizadas no localStorage
@@ -1694,11 +1791,20 @@ const CardapioPublicoPage: React.FC = () => {
     // Verificar se produto tem adicionais e se está passando de 1 para 2
     const temAdicionais = produto?.opcoes_adicionais && produto.opcoes_adicionais.length > 0;
     const passandoDe1Para2 = quantidadeAtual === 1 && novaQuantidade === 2;
+    const temAdicionaisPendentes = produtosComAdicionaisPendentes[produtoId];
 
     if (temAdicionais && passandoDe1Para2 && !adicionaisOcultosParaProduto[produtoId]) {
-      // Abrir modal perguntando se deseja adicionar complementos ao primeiro item
+      // Primeira vez - perguntar se deseja adicionar complementos
       setProdutoConfiguracaoIndividual(produto);
       setModalPerguntaAdicionais(true);
+      return; // Não incrementar ainda
+    }
+
+    if (temAdicionais && temAdicionaisPendentes && quantidadeAtual >= 1) {
+      // Usuário escolheu SIM antes e está tentando incrementar novamente
+      // Mostrar modal para adicionar ao carrinho
+      setProdutoConfiguracaoIndividual(produto);
+      setModalAdicionarCarrinho(true);
       return; // Não incrementar ainda
     }
 
@@ -1955,9 +2061,20 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Funções para modal de configuração individual
   const confirmarDesejaAdicionais = () => {
-    // Usuário quer adicionais - abrir modal de configuração
+    // Usuário quer adicionais - marcar como pendente e fechar modal
+    const produtoId = produtoConfiguracaoIndividual?.id;
+    if (produtoId) {
+      setProdutosComAdicionaisPendentes(prev => ({
+        ...prev,
+        [produtoId]: true
+      }));
+
+      // NÃO incrementar quantidade - deixar em 1 para ele configurar o primeiro item
+      // Os adicionais ficam visíveis para configuração
+    }
+
     setModalPerguntaAdicionais(false);
-    setModalConfiguracaoItem(true);
+    setProdutoConfiguracaoIndividual(null);
   };
 
   const recusarAdicionais = () => {
@@ -1978,11 +2095,121 @@ const CardapioPublicoPage: React.FC = () => {
     setProdutoConfiguracaoIndividual(null);
   };
 
-  const fecharModalConfiguracao = () => {
-    // Resetar tudo se sair do modal
-    setModalConfiguracaoItem(false);
-    setModalPerguntaAdicionais(false);
+  // Funções para modal de aviso
+  const continuarConfigurandoAdicionais = () => {
+    // Usuário quer continuar configurando - apenas fechar modal
+    setModalAvisoAdicionais(false);
     setProdutoConfiguracaoIndividual(null);
+  };
+
+  const desistirAdicionais = () => {
+    // Usuário desistiu dos adicionais - ocultar área e permitir incrementar
+    const produtoId = produtoConfiguracaoIndividual?.id;
+    if (produtoId) {
+      setAdicionaisOcultosParaProduto(prev => ({
+        ...prev,
+        [produtoId]: true
+      }));
+
+      setProdutosComAdicionaisPendentes(prev => {
+        const novo = { ...prev };
+        delete novo[produtoId];
+        return novo;
+      });
+
+      // Incrementar a quantidade que estava pendente
+      const quantidadeAtual = obterQuantidadeSelecionada(produtoId);
+      alterarQuantidadeSelecionada(produtoId, quantidadeAtual + 1);
+    }
+
+    setModalAvisoAdicionais(false);
+    setProdutoConfiguracaoIndividual(null);
+  };
+
+  // Funções para modal de adicionar ao carrinho
+  const confirmarAdicionarAoCarrinho = () => {
+    // Adicionar item ao carrinho com configurações atuais
+    const produtoId = produtoConfiguracaoIndividual?.id;
+    if (produtoId) {
+      adicionarAoCarrinho(produtoId);
+    }
+
+    setModalAdicionarCarrinho(false);
+    setProdutoConfiguracaoIndividual(null);
+  };
+
+  const cancelarAdicionarAoCarrinho = () => {
+    // Apenas fechar modal sem adicionar
+    setModalAdicionarCarrinho(false);
+    setProdutoConfiguracaoIndividual(null);
+  };
+
+  // Funções auxiliares para o modal de configuração
+  const calcularValorAdicionaisConfigurados = (produtoId: string): number => {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto) return 0;
+
+    let valorTotal = 0;
+    const adicionaisItem = adicionaisSelecionados[produtoId];
+
+    if (adicionaisItem) {
+      Object.entries(adicionaisItem).forEach(([itemId, quantidade]) => {
+        if (quantidade > 0) {
+          produto.opcoes_adicionais?.forEach(opcao => {
+            const item = opcao.itens?.find(item => item.id === itemId);
+            if (item && item.preco) {
+              valorTotal += item.preco * quantidade;
+            }
+          });
+        }
+      });
+    }
+
+    return valorTotal;
+  };
+
+  const adicionarItemConfiguradoAoCarrinho = () => {
+    if (!produtoConfiguracaoIndividual) return;
+
+    // Gerar ID único para este item no carrinho
+    const itemId = `${produtoConfiguracaoIndividual.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Criar item separado no carrinho
+    const novoItem = {
+      produtoId: produtoConfiguracaoIndividual.id,
+      quantidade: 1, // Sempre 1 para configuração individual
+      adicionais: adicionaisSelecionados[produtoConfiguracaoIndividual.id] ? { ...adicionaisSelecionados[produtoConfiguracaoIndividual.id] } : {},
+      observacao: undefined,
+      ordemAdicao: Date.now()
+    };
+
+    // Adicionar ao estado de itens separados
+    setItensCarrinhoSeparados(prev => ({
+      ...prev,
+      [itemId]: novoItem
+    }));
+
+    // Manter compatibilidade com sistema antigo (somar quantidades)
+    alterarQuantidadeProduto(produtoConfiguracaoIndividual.id, 1);
+
+    // Limpar adicionais selecionados para este produto
+    setAdicionaisSelecionados(prev => {
+      const novo = { ...prev };
+      delete novo[produtoConfiguracaoIndividual.id];
+      return novo;
+    });
+
+    // Incrementar a quantidade selecionada que estava pendente
+    const quantidadeAtual = obterQuantidadeSelecionada(produtoConfiguracaoIndividual.id);
+    alterarQuantidadeSelecionada(produtoConfiguracaoIndividual.id, quantidadeAtual + 1);
+
+    // Fechar modal
+    fecharModalConfiguracao();
+
+    // Abrir carrinho automaticamente
+    setCarrinhoAberto(true);
+
+    console.log(`🛒 Item configurado adicionado ao carrinho: ${itemId}`);
   };
 
   // Função para obter o primeiro telefone com WhatsApp
@@ -3411,8 +3638,8 @@ const CardapioPublicoPage: React.FC = () => {
                     return null;
                   })()}
 
-                  {/* Adicionais do produto - só aparece quando há quantidade selecionada e não foi ocultado */}
-                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && obterQuantidadeSelecionada(produto.id) > 0 && !adicionaisOcultosParaProduto[produto.id] && (
+                  {/* Adicionais do produto - aparece quando há quantidade selecionada E (não foi ocultado OU tem adicionais pendentes) */}
+                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && obterQuantidadeSelecionada(produto.id) > 0 && (!adicionaisOcultosParaProduto[produto.id] || produtosComAdicionaisPendentes[produto.id]) && (
                     <div className="mb-3 w-full">
                       {/* Divisória acima dos adicionais */}
                       <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
@@ -3824,6 +4051,124 @@ const CardapioPublicoPage: React.FC = () => {
               <button
                 onClick={confirmarDesejaAdicionais}
                 className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+              >
+                Sim, adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Aviso sobre Adicionais */}
+      {modalAvisoAdicionais && produtoConfiguracaoIndividual && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                  <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400" />
+                </div>
+                <div>
+                  <h3 className={`text-lg font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Finalize a Configuração
+                  </h3>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    {produtoConfiguracaoIndividual.nome}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <p className={`text-center ${
+                config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                Você decidiu adicionar complementos neste item. Finalize primeiro incluindo os adicionais ou desistiu de ter complementos?
+              </p>
+            </div>
+
+            {/* Botões do Modal */}
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                onClick={desistirAdicionais}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                }`}
+              >
+                Desistir dos complementos
+              </button>
+              <button
+                onClick={continuarConfigurandoAdicionais}
+                className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+              >
+                OK, continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Adicionar ao Carrinho */}
+      {modalAdicionarCarrinho && produtoConfiguracaoIndividual && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <ShoppingCart size={20} className="text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <h3 className={`text-lg font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Adicionar ao Carrinho?
+                  </h3>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    {produtoConfiguracaoIndividual.nome}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <p className={`text-center ${
+                config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+              }`}>
+                Deseja adicionar este item ao carrinho com os complementos configurados?
+              </p>
+            </div>
+
+            {/* Botões do Modal */}
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                onClick={cancelarAdicionarAoCarrinho}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                }`}
+              >
+                Não
+              </button>
+              <button
+                onClick={confirmarAdicionarAoCarrinho}
+                className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
               >
                 Sim, adicionar
               </button>

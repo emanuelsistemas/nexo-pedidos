@@ -15,3 +15,12 @@ ADD COLUMN IF NOT EXISTS pizza BOOLEAN DEFAULT FALSE;
 
 -- Comentário para documentar o campo
 COMMENT ON COLUMN produtos.pizza IS 'Indica se o produto é uma pizza';
+
+-- Adicionar campo "cardapio_digital" na tabela produtos
+-- Este campo será usado para controlar se o produto aparece no cardápio digital
+
+ALTER TABLE produtos
+ADD COLUMN IF NOT EXISTS cardapio_digital BOOLEAN DEFAULT FALSE;
+
+-- Comentário para documentar o campo
+COMMENT ON COLUMN produtos.cardapio_digital IS 'Indica se o produto aparece no cardápio digital';

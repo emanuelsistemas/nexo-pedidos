@@ -38,6 +38,8 @@ export interface Produto {
   peso_liquido?: number;
   // Campos específicos para pizzas
   pizza?: boolean;
+  // Campo para controle do cardápio digital
+  cardapio_digital?: boolean;
 }
 
 export interface Grupo {

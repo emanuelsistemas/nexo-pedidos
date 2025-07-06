@@ -3584,6 +3584,19 @@ const ConfiguracoesPage: React.FC = () => {
         console.log('🚀 Evento lojaStatusChanged disparado:', { lojaAberta: value, empresaId: usuarioData.empresa_id });
       }
 
+      // Disparar evento específico para mudanças no cardápio digital
+      if (field === 'cardapio_digital') {
+        const cardapioDigitalEvent = new CustomEvent('cardapioDigitalChanged', {
+          detail: {
+            cardapioDigital: value,
+            empresaId: usuarioData.empresa_id,
+            timestamp: Date.now()
+          }
+        });
+        window.dispatchEvent(cardapioDigitalEvent);
+        console.log('📱 Evento cardapioDigitalChanged disparado:', { cardapioDigital: value, empresaId: usuarioData.empresa_id });
+      }
+
       // Mostrar mensagem de sucesso
       const fieldNames: { [key: string]: string } = {
         comandas: 'Comandas',

@@ -144,6 +144,7 @@ const ProdutosPage: React.FC = () => {
   const [isDataReady, setIsDataReady] = useState(false); // Novo estado para controlar quando os dados estão prontos
   const [isGrupoForm, setIsGrupoForm] = useState(true);
   const [trabalhaComPizzas, setTrabalhaComPizzas] = useState(false);
+  const [cardapioDigitalHabilitado, setCardapioDigitalHabilitado] = useState(false);
 
   // Estados para controlar o carregamento de cada parte dos dados
   const [loadingStates, setLoadingStates] = useState({
@@ -207,6 +208,7 @@ const ProdutosPage: React.FC = () => {
     preco_custo: 0,
     margem_percentual: 0,
     pizza: false,
+    cardapio_digital: false,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -463,6 +465,41 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
+  const carregarConfiguracaoCardapioDigital = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      // Buscar empresa_id da tabela usuarios (mesmo padrão das outras funções)
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      console.log('📱 Carregando configuração de cardápio digital para empresa:', usuarioData.empresa_id);
+
+      // Buscar configuração de cardápio digital
+      const { data: configData } = await supabase
+        .from('pdv_config')
+        .select('cardapio_digital')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      console.log('📱 Configuração encontrada:', configData);
+
+      if (configData) {
+        const cardapioDigitalValue = configData.cardapio_digital || false;
+        console.log('📱 Definindo cardapioDigitalHabilitado como:', cardapioDigitalValue);
+        setCardapioDigitalHabilitado(cardapioDigitalValue);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configuração de cardápio digital:', error);
+    }
+  };
+
   useEffect(() => {
     loadGrupos();
     loadAvailableOpcoes();
@@ -473,6 +510,7 @@ const ProdutosPage: React.FC = () => {
     loadRegimeTributario();
     carregarConfiguracoesTabelaPrecos();
     carregarConfiguracaoPizzas();
+    carregarConfiguracaoCardapioDigital();
   }, []);
 
   // useEffect separado para configurar event listener de pizzas
@@ -486,6 +524,20 @@ const ProdutosPage: React.FC = () => {
 
     return () => {
       window.removeEventListener('pizzasChanged', handlePizzasChange as EventListener);
+    };
+  }, []);
+
+  // useEffect separado para configurar event listener de cardápio digital
+  useEffect(() => {
+    const handleCardapioDigitalChange = (event: CustomEvent) => {
+      console.log('📱 Evento cardapioDigitalChanged recebido:', event.detail);
+      setCardapioDigitalHabilitado(event.detail.cardapioDigital);
+    };
+
+    window.addEventListener('cardapioDigitalChanged', handleCardapioDigitalChange as EventListener);
+
+    return () => {
+      window.removeEventListener('cardapioDigitalChanged', handleCardapioDigitalChange as EventListener);
     };
   }, []);
 
@@ -1659,6 +1711,7 @@ const ProdutosPage: React.FC = () => {
       preco_custo: 0,
       margem_percentual: 0,
       pizza: false,
+      cardapio_digital: false,
     });
 
     // Inicializa o preço formatado
@@ -1853,6 +1906,7 @@ const ProdutosPage: React.FC = () => {
       preco_custo: produto.preco_custo || 0,
       margem_percentual: produto.margem_percentual || 0,
       pizza: produto.pizza || false,
+      cardapio_digital: produto.cardapio_digital || false,
     };
 
     // Definir o estado do novo produto
@@ -2702,6 +2756,7 @@ const ProdutosPage: React.FC = () => {
           preco_custo: novoProduto.preco_custo || 0,
           margem_percentual: novoProduto.margem_percentual || 0,
           pizza: novoProduto.pizza || false,
+          cardapio_digital: novoProduto.cardapio_digital || false,
           empresa_id: usuarioData.empresa_id
         };
 
@@ -2988,6 +3043,7 @@ const ProdutosPage: React.FC = () => {
         preco_custo: produtoOriginal.preco_custo || 0,
         margem_percentual: produtoOriginal.margem_percentual || 0,
         pizza: produtoOriginal.pizza || false,
+        cardapio_digital: produtoOriginal.cardapio_digital || false,
       };
 
       // Configurar para edição
@@ -4200,6 +4256,23 @@ const ProdutosPage: React.FC = () => {
                             </label>
                           </div>
                         </div>
+
+                        {cardapioDigitalHabilitado && (
+                          <div className="mb-4">
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                id="cardapio_digital"
+                                checked={novoProduto.cardapio_digital || false}
+                                onChange={(e) => setNovoProduto({ ...novoProduto, cardapio_digital: e.target.checked })}
+                                className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                              />
+                              <label htmlFor="cardapio_digital" className="text-sm font-medium text-white cursor-pointer">
+                                Cardápio Digital
+                              </label>
+                            </div>
+                          </div>
+                        )}
 
 
 
