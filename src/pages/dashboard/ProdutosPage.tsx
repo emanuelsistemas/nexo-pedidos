@@ -172,6 +172,10 @@ const ProdutosPage: React.FC = () => {
   const [selectedGrupo, setSelectedGrupo] = useState<Grupo | null>(null);
   const [comissaoPorGrupo, setComissaoPorGrupo] = useState(false);
   const [percentualComissao, setPercentualComissao] = useState(0);
+  const [ordenacaoCardapioHabilitada, setOrdenacaoCardapioHabilitada] = useState(false);
+  const [ordenacaoCardapioDigital, setOrdenacaoCardapioDigital] = useState<number | ''>('');
+  const [produtoOrdenacaoCardapioHabilitada, setProdutoOrdenacaoCardapioHabilitada] = useState(false);
+  const [produtoOrdenacaoCardapioDigital, setProdutoOrdenacaoCardapioDigital] = useState<number | ''>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [productSearchTerms, setProductSearchTerms] = useState<Record<string, string>>({});
@@ -209,6 +213,7 @@ const ProdutosPage: React.FC = () => {
     margem_percentual: 0,
     pizza: false,
     cardapio_digital: false,
+    exibir_promocao_cardapio: false,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -1481,7 +1486,7 @@ const ProdutosPage: React.FC = () => {
 
       const { data: gruposData, error: gruposError } = await supabase
         .from('grupos')
-        .select('*, comissao_percentual')
+        .select('*, comissao_percentual, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false);
 
@@ -1495,7 +1500,9 @@ const ProdutosPage: React.FC = () => {
             id,
             sigla,
             nome
-          )
+          ),
+          ordenacao_cardapio_habilitada,
+          ordenacao_cardapio_digital
         `)
         .eq('deletado', false)
         .eq('empresa_id', usuarioData.empresa_id);
@@ -1661,6 +1668,8 @@ const ProdutosPage: React.FC = () => {
     setNovoGrupoNome(grupo.nome);
     setComissaoPorGrupo((grupo as any).comissao_percentual > 0);
     setPercentualComissao((grupo as any).comissao_percentual || 0);
+    setOrdenacaoCardapioHabilitada((grupo as any).ordenacao_cardapio_habilitada || false);
+    setOrdenacaoCardapioDigital((grupo as any).ordenacao_cardapio_digital || '');
     setShowSidebar(true);
   };
 
@@ -1712,6 +1721,7 @@ const ProdutosPage: React.FC = () => {
       margem_percentual: 0,
       pizza: false,
       cardapio_digital: false,
+      exibir_promocao_cardapio: false,
     });
 
     // Inicializa o preço formatado
@@ -1868,6 +1878,39 @@ const ProdutosPage: React.FC = () => {
       await carregarPrecosTabelas(produto.id);
     }
 
+    // ✅ CORREÇÃO: Buscar dados atualizados do produto no banco de dados
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Buscar dados atualizados do produto no banco
+      const { data: produtoAtualizado, error: produtoError } = await supabase
+        .from('produtos')
+        .select('*, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
+        .eq('id', produto.id)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (produtoError) {
+        console.error('Erro ao carregar produto atualizado:', produtoError);
+        // Se der erro, usar dados do cache local
+      } else {
+        // Usar dados atualizados do banco
+        produto = produtoAtualizado;
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados atualizados:', error);
+      // Se der erro, continuar com dados do cache local
+    }
+
     // Definir o estado do novo produto com os valores do produto existente
     const produtoState = {
       nome: produto.nome,
@@ -1907,10 +1950,15 @@ const ProdutosPage: React.FC = () => {
       margem_percentual: produto.margem_percentual || 0,
       pizza: produto.pizza || false,
       cardapio_digital: produto.cardapio_digital || false,
+      exibir_promocao_cardapio: produto.exibir_promocao_cardapio || false,
     };
 
     // Definir o estado do novo produto
     setNovoProduto(produtoState);
+
+    // ✅ CORREÇÃO: Carregar campos de ordenação do cardápio digital com dados atualizados
+    setProdutoOrdenacaoCardapioHabilitada((produto as any).ordenacao_cardapio_habilitada || false);
+    setProdutoOrdenacaoCardapioDigital((produto as any).ordenacao_cardapio_digital || '');
 
     // Garantir que os códigos CST/CSOSN estejam preenchidos
     if (produtoState.situacao_tributaria && (!produtoState.cst_icms || !produtoState.csosn_icms)) {
@@ -2507,6 +2555,26 @@ const ProdutosPage: React.FC = () => {
       return;
     }
 
+    // Validação da ordenação do cardápio digital
+    if (ordenacaoCardapioHabilitada && (!ordenacaoCardapioDigital || ordenacaoCardapioDigital <= 0)) {
+      showMessage('error', 'Ordenação deve ser um número maior que 0 quando "Ordenação cardápio digital" estiver marcada');
+      return;
+    }
+
+    // Validação de duplicação de ordenação
+    if (ordenacaoCardapioHabilitada && ordenacaoCardapioDigital) {
+      const grupoComMesmaOrdenacao = grupos.find(grupo =>
+        (grupo as any).ordenacao_cardapio_habilitada === true &&
+        (grupo as any).ordenacao_cardapio_digital === Number(ordenacaoCardapioDigital) &&
+        grupo.id !== selectedGrupo?.id // Excluir o próprio grupo se estiver editando
+      );
+
+      if (grupoComMesmaOrdenacao) {
+        showMessage('error', `A ordenação ${ordenacaoCardapioDigital} já está sendo usada pelo grupo "${grupoComMesmaOrdenacao.nome}". Escolha uma numeração diferente.`);
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const { data: userData } =await supabase.auth.getUser();
@@ -2527,7 +2595,9 @@ const ProdutosPage: React.FC = () => {
           .from('grupos')
           .update({
             nome: novoGrupoNome,
-            comissao_percentual: novoPercentual
+            comissao_percentual: novoPercentual,
+            ordenacao_cardapio_habilitada: ordenacaoCardapioHabilitada,
+            ordenacao_cardapio_digital: ordenacaoCardapioHabilitada ? Number(ordenacaoCardapioDigital) : null
           })
           .eq('id', selectedGrupo.id)
           .select()
@@ -2550,7 +2620,9 @@ const ProdutosPage: React.FC = () => {
           .insert([{
             nome: novoGrupoNome,
             empresa_id: usuarioData.empresa_id,
-            comissao_percentual: comissaoPorGrupo ? percentualComissao : 0
+            comissao_percentual: comissaoPorGrupo ? percentualComissao : 0,
+            ordenacao_cardapio_habilitada: ordenacaoCardapioHabilitada,
+            ordenacao_cardapio_digital: ordenacaoCardapioHabilitada ? Number(ordenacaoCardapioDigital) : null
           }])
           .select()
           .single();
@@ -2642,7 +2714,58 @@ const ProdutosPage: React.FC = () => {
       }
     }
 
+    // Validação da ordenação do cardápio digital
+    if (produtoOrdenacaoCardapioHabilitada && (!produtoOrdenacaoCardapioDigital || produtoOrdenacaoCardapioDigital <= 0)) {
+      showMessage('error', 'Ordenação deve ser um número maior que 0 quando "Ordenação no cardápio digital" estiver marcada');
+      return;
+    }
 
+    // Validação de duplicação de ordenação entre produtos do mesmo grupo
+    if (produtoOrdenacaoCardapioHabilitada && produtoOrdenacaoCardapioDigital && selectedGrupo) {
+      // Obter dados do usuário para a validação
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        showMessage('error', 'Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showMessage('error', 'Empresa não encontrada');
+        return;
+      }
+
+      // Buscar no banco de dados para garantir dados atualizados
+      const { data: produtosGrupo, error: produtosError } = await supabase
+        .from('produtos')
+        .select('id, nome, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
+        .eq('grupo_id', selectedGrupo.id)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false)
+        .eq('ordenacao_cardapio_habilitada', true)
+        .eq('ordenacao_cardapio_digital', Number(produtoOrdenacaoCardapioDigital));
+
+      if (produtosError) {
+        console.error('Erro ao verificar duplicação de ordenação:', produtosError);
+        showMessage('error', 'Erro ao validar ordenação. Tente novamente.');
+        return;
+      }
+
+      // Se estiver editando, excluir o próprio produto da verificação
+      const produtoComMesmaOrdenacao = produtosGrupo?.find(produto =>
+        produto.id !== editingProduto?.id
+      );
+
+      if (produtoComMesmaOrdenacao) {
+        showMessage('error', `A ordenação ${produtoOrdenacaoCardapioDigital} já está sendo usada pelo produto "${produtoComMesmaOrdenacao.nome}" neste grupo. Escolha uma numeração diferente.`);
+        return;
+      }
+    }
 
     setIsLoading(true);
     try {
@@ -2757,6 +2880,9 @@ const ProdutosPage: React.FC = () => {
           margem_percentual: novoProduto.margem_percentual || 0,
           pizza: novoProduto.pizza || false,
           cardapio_digital: novoProduto.cardapio_digital || false,
+          exibir_promocao_cardapio: novoProduto.exibir_promocao_cardapio || false,
+          ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
+          ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
           empresa_id: usuarioData.empresa_id
         };
 
@@ -2819,6 +2945,8 @@ const ProdutosPage: React.FC = () => {
           preco_custo: novoProduto.preco_custo || 0,
           margem_percentual: novoProduto.margem_percentual || 0,
           pizza: novoProduto.pizza || false,
+          ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
+          ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
         };
 
         // Log para confirmar que os dados fiscais estão sendo salvos
@@ -3044,6 +3172,7 @@ const ProdutosPage: React.FC = () => {
         margem_percentual: produtoOriginal.margem_percentual || 0,
         pizza: produtoOriginal.pizza || false,
         cardapio_digital: produtoOriginal.cardapio_digital || false,
+        exibir_promocao_cardapio: produtoOriginal.exibir_promocao_cardapio || false,
       };
 
       // Configurar para edição
@@ -3061,6 +3190,10 @@ const ProdutosPage: React.FC = () => {
       // ✅ NOVOS CAMPOS: Formatar preço de custo e margem
       setPrecoCustoFormatado(formatarPreco(produtoClonado.preco_custo));
       setMargemFormatada(formatarPreco(produtoClonado.margem_percentual));
+
+      // ✅ CLONAR CAMPOS DE ORDENAÇÃO: Carregar campos de ordenação do produto original
+      setProdutoOrdenacaoCardapioHabilitada((produtoOriginal as any).ordenacao_cardapio_habilitada || false);
+      setProdutoOrdenacaoCardapioDigital((produtoOriginal as any).ordenacao_cardapio_digital || '');
 
       // ✅ CLONAR PREÇOS DAS TABELAS: Carregar preços das tabelas do produto original
       if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
@@ -3389,6 +3522,18 @@ const ProdutosPage: React.FC = () => {
       descricao: '',
       erro: ''
     });
+
+    // Resetar campos de grupo
+    setNovoGrupoNome('');
+    setComissaoPorGrupo(false);
+    setPercentualComissao(0);
+    setOrdenacaoCardapioHabilitada(false);
+    setOrdenacaoCardapioDigital('');
+    setSelectedGrupo(null);
+
+    // Resetar campos de ordenação do produto
+    setProdutoOrdenacaoCardapioHabilitada(false);
+    setProdutoOrdenacaoCardapioDigital('');
 
     // Definir uma flag para indicar que o formulário foi resetado
     setFormularioResetado(true);
@@ -4145,6 +4290,47 @@ const ProdutosPage: React.FC = () => {
                       )}
                     </div>
 
+                    {/* Configurações de Ordenação Cardápio Digital - só aparece se cardápio digital estiver habilitado */}
+                    {cardapioDigitalHabilitado && (
+                      <div className="space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+                        <h4 className="text-sm font-medium text-gray-300">Ordenação cardápio digital</h4>
+
+                        <div>
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={ordenacaoCardapioHabilitada}
+                              onChange={(e) => {
+                                setOrdenacaoCardapioHabilitada(e.target.checked);
+                                if (!e.target.checked) {
+                                  setOrdenacaoCardapioDigital('');
+                                }
+                              }}
+                              className="mr-2 text-primary-500 focus:ring-primary-500"
+                            />
+                            <span className="text-gray-300">Ordenação cardápio digital</span>
+                          </label>
+                        </div>
+
+                        {ordenacaoCardapioHabilitada && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2">
+                              Posição (número inteiro)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={ordenacaoCardapioDigital}
+                              onChange={(e) => setOrdenacaoCardapioDigital(e.target.value === '' ? '' : parseInt(e.target.value) || '')}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="Ex: 1, 2, 3..."
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex gap-4 pt-4">
                       <Button
                         type="button"
@@ -4869,7 +5055,7 @@ const ProdutosPage: React.FC = () => {
                                 )}
                               </div>
 
-                              <div className="mb-2">
+                              <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-400 mb-2">
                                   Valor Final
                                 </label>
@@ -4885,6 +5071,24 @@ const ProdutosPage: React.FC = () => {
                                   />
                                 </div>
                               </div>
+
+                              {/* Checkbox para exibir promoção no cardápio digital - só aparece se cardápio digital estiver habilitado */}
+                              {cardapioDigitalHabilitado && (
+                                <div className="mb-2">
+                                  <div className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      id="exibir_promocao_cardapio"
+                                      checked={novoProduto.exibir_promocao_cardapio || false}
+                                      onChange={(e) => setNovoProduto({ ...novoProduto, exibir_promocao_cardapio: e.target.checked })}
+                                      className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                    />
+                                    <label htmlFor="exibir_promocao_cardapio" className="text-sm font-medium text-white cursor-pointer">
+                                      Exibir promoção no cardápio digital
+                                    </label>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -5121,6 +5325,51 @@ const ProdutosPage: React.FC = () => {
                               <div className="pl-7 border-l-2 border-primary-500/30 ml-1.5">
                                 <p className="text-sm text-gray-400">
                                   🍕 Produto marcado como pizza. Funcionalidades específicas para pizzarias estarão disponíveis no cardápio digital.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Ordenação no Cardápio Digital - só aparece se cardápio digital estiver habilitado */}
+                        {cardapioDigitalHabilitado && (
+                          <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-gray-800/30">
+                            <div className="flex items-center mb-4">
+                              <input
+                                type="checkbox"
+                                id="ordenacao-cardapio"
+                                checked={produtoOrdenacaoCardapioHabilitada}
+                                onChange={(e) => {
+                                  setProdutoOrdenacaoCardapioHabilitada(e.target.checked);
+                                  if (!e.target.checked) {
+                                    setProdutoOrdenacaoCardapioDigital('');
+                                  }
+                                }}
+                                className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                              />
+                              <label htmlFor="ordenacao-cardapio" className="text-sm font-medium text-white cursor-pointer">
+                                Ordenação no cardápio digital
+                              </label>
+                            </div>
+
+                            {produtoOrdenacaoCardapioHabilitada && (
+                              <div className="pl-7 border-l-2 border-primary-500/30 ml-1.5">
+                                <div className="mb-3">
+                                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                                    Posição (número inteiro)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={produtoOrdenacaoCardapioDigital}
+                                    onChange={(e) => setProdutoOrdenacaoCardapioDigital(e.target.value === '' ? '' : parseInt(e.target.value) || '')}
+                                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                    placeholder="Ex: 1, 2, 3..."
+                                  />
+                                </div>
+                                <p className="text-sm text-gray-400">
+                                  📋 Define a ordem de exibição deste produto no cardápio digital.
                                 </p>
                               </div>
                             )}

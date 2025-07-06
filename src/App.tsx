@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import ErrorBoundary from './components/comum/ErrorBoundary';
+import ScrollToTop from './components/comum/ScrollToTop';
 import EntrarPage from './pages/EntrarPage';
 import CadastrarPage from './pages/CadastrarPage';
 import DashboardLayout from './components/dashboard/DashboardLayout';
@@ -44,6 +45,7 @@ import CardapioPublicoPage from './pages/public/CardapioPublicoPage';
 function App() {
   return (
     <ErrorBoundary>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<Navigate to="/entrar" replace />} />
         <Route path="/entrar" element={<EntrarPage />} />

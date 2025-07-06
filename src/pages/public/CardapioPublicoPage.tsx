@@ -162,6 +162,7 @@ interface CardapioConfig {
   mostrar_fotos: boolean;
   cardapio_fotos_minimizadas?: boolean;
   trabalha_com_pizzas?: boolean;
+  ocultar_grupos_cardapio?: boolean;
 }
 
 const CardapioPublicoPage: React.FC = () => {
@@ -3348,13 +3349,15 @@ const CardapioPublicoPage: React.FC = () => {
           <div className="space-y-12">
             {produtosAgrupados().map(({ grupo, produtos }) => (
               <div key={grupo.id} className="space-y-6">
-                {/* Cabeçalho do Grupo */}
-                <div className="text-left">
-                  <h2 className={`text-2xl font-bold mb-2 ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                    {grupo.nome}
-                  </h2>
-                  <div className={`w-24 h-1 rounded-full bg-gradient-to-r from-purple-600 to-blue-600`}></div>
-                </div>
+                {/* Cabeçalho do Grupo - Oculto se configuração estiver ativa */}
+                {!config.ocultar_grupos_cardapio && (
+                  <div className="text-left">
+                    <h2 className={`text-2xl font-bold mb-2 ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                      {grupo.nome}
+                    </h2>
+                    <div className={`w-24 h-1 rounded-full bg-gradient-to-r from-purple-600 to-blue-600`}></div>
+                  </div>
+                )}
 
                 {/* Grid de Produtos do Grupo */}
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

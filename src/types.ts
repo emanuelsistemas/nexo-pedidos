@@ -40,6 +40,8 @@ export interface Produto {
   pizza?: boolean;
   // Campo para controle do cardápio digital
   cardapio_digital?: boolean;
+  // Campo para exibir promoção no cardápio digital
+  exibir_promocao_cardapio?: boolean;
 }
 
 export interface Grupo {
