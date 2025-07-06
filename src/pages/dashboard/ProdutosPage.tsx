@@ -1662,9 +1662,44 @@ const ProdutosPage: React.FC = () => {
     setShowSidebar(true);
   };
 
-  const handleEditGrupo = (grupo: Grupo) => {
+  const handleEditGrupo = async (grupo: Grupo) => {
     setIsGrupoForm(true);
     setSelectedGrupo(grupo);
+
+    // ✅ CORREÇÃO: Buscar dados atualizados do grupo no banco de dados
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Buscar dados atualizados do grupo no banco
+      const { data: grupoAtualizado, error: grupoError } = await supabase
+        .from('grupos')
+        .select('*, comissao_percentual, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
+        .eq('id', grupo.id)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (grupoError) {
+        console.error('Erro ao carregar grupo atualizado:', grupoError);
+        // Se der erro, usar dados do cache local
+      } else {
+        // Usar dados atualizados do banco
+        grupo = grupoAtualizado;
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados atualizados do grupo:', error);
+      // Se der erro, continuar com dados do cache local
+    }
+
+    // Carregar dados do formulário com valores atualizados
     setNovoGrupoNome(grupo.nome);
     setComissaoPorGrupo((grupo as any).comissao_percentual > 0);
     setPercentualComissao((grupo as any).comissao_percentual || 0);
@@ -2721,6 +2756,13 @@ const ProdutosPage: React.FC = () => {
     }
 
     // Validação de duplicação de ordenação entre produtos do mesmo grupo
+    console.log('🔍 DEBUG VALIDAÇÃO:', {
+      produtoOrdenacaoCardapioHabilitada,
+      produtoOrdenacaoCardapioDigital,
+      selectedGrupo: selectedGrupo?.id,
+      editingProduto: editingProduto?.id
+    });
+
     if (produtoOrdenacaoCardapioHabilitada && produtoOrdenacaoCardapioDigital && selectedGrupo) {
       // Obter dados do usuário para a validação
       const { data: userData } = await supabase.auth.getUser();
@@ -2740,15 +2782,13 @@ const ProdutosPage: React.FC = () => {
         return;
       }
 
-      // Buscar no banco de dados para garantir dados atualizados
+      // Buscar TODOS os produtos do grupo para verificar duplicação
       const { data: produtosGrupo, error: produtosError } = await supabase
         .from('produtos')
         .select('id, nome, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
         .eq('grupo_id', selectedGrupo.id)
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('deletado', false)
-        .eq('ordenacao_cardapio_habilitada', true)
-        .eq('ordenacao_cardapio_digital', Number(produtoOrdenacaoCardapioDigital));
+        .eq('deletado', false);
 
       if (produtosError) {
         console.error('Erro ao verificar duplicação de ordenação:', produtosError);
@@ -2756,15 +2796,24 @@ const ProdutosPage: React.FC = () => {
         return;
       }
 
-      // Se estiver editando, excluir o próprio produto da verificação
+      // Verificar se já existe outro produto com a mesma ordenação
+      console.log('🔍 PRODUTOS DO GRUPO:', produtosGrupo);
+
       const produtoComMesmaOrdenacao = produtosGrupo?.find(produto =>
-        produto.id !== editingProduto?.id
+        produto.id !== editingProduto?.id && // Excluir o próprio produto se estiver editando
+        produto.ordenacao_cardapio_habilitada === true &&
+        produto.ordenacao_cardapio_digital === Number(produtoOrdenacaoCardapioDigital)
       );
 
+      console.log('🔍 PRODUTO COM MESMA ORDENAÇÃO:', produtoComMesmaOrdenacao);
+
       if (produtoComMesmaOrdenacao) {
+        console.log('❌ BLOQUEANDO SALVAMENTO - ORDENAÇÃO DUPLICADA');
         showMessage('error', `A ordenação ${produtoOrdenacaoCardapioDigital} já está sendo usada pelo produto "${produtoComMesmaOrdenacao.nome}" neste grupo. Escolha uma numeração diferente.`);
         return;
       }
+
+      console.log('✅ VALIDAÇÃO PASSOU - NENHUMA DUPLICAÇÃO ENCONTRADA');
     }
 
     setIsLoading(true);
@@ -4137,7 +4186,7 @@ const ProdutosPage: React.FC = () => {
                       </button>
                       <button
                         className="p-1 text-gray-400 hover:text-white transition-colors"
-                        onClick={() => handleEditGrupo(grupo)}
+                        onClick={async () => await handleEditGrupo(grupo)}
                       >
                         <Pencil size={14} />
                       </button>

@@ -924,6 +924,8 @@ const CardapioPublicoPage: React.FC = () => {
           grupo_id,
           ativo,
           cardapio_digital,
+          ordenacao_cardapio_habilitada,
+          ordenacao_cardapio_digital,
           unidade_medida_id,
           unidade_medida:unidade_medida_id (
             id,
@@ -949,6 +951,11 @@ const CardapioPublicoPage: React.FC = () => {
       }
 
       console.log('📦 Produtos carregados (apenas com cardapio_digital=true):', produtosData?.length || 0);
+      console.log('📦 Produtos com dados de ordenação:', produtosData?.map(p => ({
+        nome: p.nome,
+        ordenacao_habilitada: p.ordenacao_cardapio_habilitada,
+        ordenacao_digital: p.ordenacao_cardapio_digital
+      })));
 
       // 4. Buscar todas as fotos dos produtos
       const produtosIds = produtosData?.map(p => p.id) || [];
@@ -999,11 +1006,18 @@ const CardapioPublicoPage: React.FC = () => {
       if (gruposIds.length > 0) {
         const { data: gruposResult, error: gruposError } = await supabase
           .from('grupos')
-          .select('id, nome')
+          .select('id, nome, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
           .in('id', gruposIds);
 
         if (!gruposError && gruposResult) {
           gruposData = gruposResult;
+          console.log('🗂️ Grupos carregados com ordenação:', gruposData);
+          console.log('🗂️ Detalhes dos grupos:', gruposData.map(g => ({
+            id: g.id,
+            nome: g.nome,
+            ordenacao_cardapio_habilitada: g.ordenacao_cardapio_habilitada,
+            ordenacao_cardapio_digital: g.ordenacao_cardapio_digital
+          })));
         }
       }
 
@@ -1098,35 +1112,123 @@ const CardapioPublicoPage: React.FC = () => {
     return passaFiltroGrupo && passaFiltroPesquisa;
   });
 
-  // Agrupar produtos por categoria
+  // Agrupar produtos por categoria com ordenação personalizada
   const produtosAgrupados = () => {
+    console.log('🔄 Função produtosAgrupados chamada');
+    console.log('🔄 Configuração ocultar_grupos_cardapio:', config.ocultar_grupos_cardapio);
+    console.log('🔄 Grupo selecionado:', grupoSelecionado);
     if (grupoSelecionado !== 'todos') {
       // Se um grupo específico está selecionado, retornar apenas esse grupo
       const grupoAtual = grupos.find(g => g.id === grupoSelecionado);
       if (!grupoAtual) return [];
 
+      // Ordenar produtos do grupo selecionado
+      const produtosOrdenados = produtosFiltrados.sort((a, b) => {
+        const aTemOrdenacao = a.ordenacao_cardapio_habilitada && a.ordenacao_cardapio_digital;
+        const bTemOrdenacao = b.ordenacao_cardapio_habilitada && b.ordenacao_cardapio_digital;
+
+        if (aTemOrdenacao && bTemOrdenacao) {
+          return a.ordenacao_cardapio_digital - b.ordenacao_cardapio_digital;
+        }
+        if (aTemOrdenacao && !bTemOrdenacao) return -1;
+        if (!aTemOrdenacao && bTemOrdenacao) return 1;
+        return a.nome.localeCompare(b.nome);
+      });
+
       return [{
         grupo: grupoAtual,
-        produtos: produtosFiltrados
+        produtos: produtosOrdenados
       }];
     }
 
-    // Se "todos" está selecionado, agrupar por categoria
-    const gruposComProdutos = grupos.map(grupo => ({
-      grupo,
-      produtos: produtosFiltrados.filter(produto => produto.grupo_id === grupo.id)
-    })).filter(item => item.produtos.length > 0); // Apenas grupos com produtos
+    // Se "todos" está selecionado, aplicar lógica de ordenação baseada na configuração
 
-    // Adicionar produtos sem categoria
-    const produtosSemCategoria = produtosFiltrados.filter(produto => !produto.grupo_id);
-    if (produtosSemCategoria.length > 0) {
-      gruposComProdutos.push({
-        grupo: { id: 'sem-categoria', nome: 'Sem categoria' },
-        produtos: produtosSemCategoria
+    // Se "Remover nome dos grupos" estiver ATIVADO - ignora ordenação de grupos
+    if (config.ocultar_grupos_cardapio) {
+      // Coleta todos os produtos de todos os grupos em uma única lista
+      const todosProdutos = produtosFiltrados.map(produto => {
+        const grupo = grupos.find(g => g.id === produto.grupo_id);
+        return { ...produto, grupo };
       });
+
+      // Ordena produtos: primeiro por ordenação personalizada, depois alfabética
+      const produtosOrdenados = todosProdutos.sort((a, b) => {
+        const aTemOrdenacao = a.ordenacao_cardapio_habilitada && a.ordenacao_cardapio_digital;
+        const bTemOrdenacao = b.ordenacao_cardapio_habilitada && b.ordenacao_cardapio_digital;
+
+        if (aTemOrdenacao && bTemOrdenacao) {
+          return a.ordenacao_cardapio_digital - b.ordenacao_cardapio_digital;
+        }
+        if (aTemOrdenacao && !bTemOrdenacao) return -1;
+        if (!aTemOrdenacao && bTemOrdenacao) return 1;
+        return a.nome.localeCompare(b.nome);
+      });
+
+      // Retorna como um único "grupo" virtual
+      return [{
+        grupo: { id: 'todos', nome: 'Todos os Produtos' },
+        produtos: produtosOrdenados
+      }];
     }
 
-    return gruposComProdutos;
+    // Se "Remover nome dos grupos" estiver DESATIVADO - considera ordenação de grupos
+    else {
+      // Agrupar produtos por categoria
+      const gruposComProdutos = grupos.map(grupo => ({
+        grupo,
+        produtos: produtosFiltrados.filter(produto => produto.grupo_id === grupo.id)
+      })).filter(item => item.produtos.length > 0);
+
+      // Adicionar produtos sem categoria
+      const produtosSemCategoria = produtosFiltrados.filter(produto => !produto.grupo_id);
+      if (produtosSemCategoria.length > 0) {
+        gruposComProdutos.push({
+          grupo: { id: 'sem-categoria', nome: 'Sem categoria' },
+          produtos: produtosSemCategoria
+        });
+      }
+
+      // Ordena grupos: primeiro por ordenação personalizada, depois alfabética
+      const gruposOrdenados = gruposComProdutos.sort((a, b) => {
+        const aTemOrdenacao = a.grupo.ordenacao_cardapio_habilitada && a.grupo.ordenacao_cardapio_digital;
+        const bTemOrdenacao = b.grupo.ordenacao_cardapio_habilitada && b.grupo.ordenacao_cardapio_digital;
+
+        console.log(`🔄 Ordenando grupos:`, {
+          grupoA: a.grupo.nome,
+          aHabilitada: a.grupo.ordenacao_cardapio_habilitada,
+          aDigital: a.grupo.ordenacao_cardapio_digital,
+          aTemOrdenacao,
+          grupoB: b.grupo.nome,
+          bHabilitada: b.grupo.ordenacao_cardapio_habilitada,
+          bDigital: b.grupo.ordenacao_cardapio_digital,
+          bTemOrdenacao
+        });
+
+        if (aTemOrdenacao && bTemOrdenacao) {
+          return a.grupo.ordenacao_cardapio_digital - b.grupo.ordenacao_cardapio_digital;
+        }
+        if (aTemOrdenacao && !bTemOrdenacao) return -1;
+        if (!aTemOrdenacao && bTemOrdenacao) return 1;
+        return a.grupo.nome.localeCompare(b.grupo.nome);
+      });
+
+      // Ordena produtos dentro de cada grupo
+      gruposOrdenados.forEach(item => {
+        item.produtos.sort((a, b) => {
+          const aTemOrdenacao = a.ordenacao_cardapio_habilitada && a.ordenacao_cardapio_digital;
+          const bTemOrdenacao = b.ordenacao_cardapio_habilitada && b.ordenacao_cardapio_digital;
+
+          if (aTemOrdenacao && bTemOrdenacao) {
+            return a.ordenacao_cardapio_digital - b.ordenacao_cardapio_digital;
+          }
+          if (aTemOrdenacao && !bTemOrdenacao) return -1;
+          if (!aTemOrdenacao && bTemOrdenacao) return 1;
+          return a.nome.localeCompare(b.nome);
+        });
+      });
+
+      return gruposOrdenados;
+    }
   };
 
   const formatarPreco = (preco: number) => {
