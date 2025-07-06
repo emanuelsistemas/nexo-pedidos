@@ -1096,6 +1096,37 @@ const CardapioPublicoPage: React.FC = () => {
     return passaFiltroGrupo && passaFiltroPesquisa;
   });
 
+  // Agrupar produtos por categoria
+  const produtosAgrupados = () => {
+    if (grupoSelecionado !== 'todos') {
+      // Se um grupo específico está selecionado, retornar apenas esse grupo
+      const grupoAtual = grupos.find(g => g.id === grupoSelecionado);
+      if (!grupoAtual) return [];
+
+      return [{
+        grupo: grupoAtual,
+        produtos: produtosFiltrados
+      }];
+    }
+
+    // Se "todos" está selecionado, agrupar por categoria
+    const gruposComProdutos = grupos.map(grupo => ({
+      grupo,
+      produtos: produtosFiltrados.filter(produto => produto.grupo_id === grupo.id)
+    })).filter(item => item.produtos.length > 0); // Apenas grupos com produtos
+
+    // Adicionar produtos sem categoria
+    const produtosSemCategoria = produtosFiltrados.filter(produto => !produto.grupo_id);
+    if (produtosSemCategoria.length > 0) {
+      gruposComProdutos.push({
+        grupo: { id: 'sem-categoria', nome: 'Sem categoria' },
+        produtos: produtosSemCategoria
+      });
+    }
+
+    return gruposComProdutos;
+  };
+
   const formatarPreco = (preco: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -3313,8 +3344,20 @@ const CardapioPublicoPage: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {produtosFiltrados.map(produto => {
+          <div className="space-y-12">
+            {produtosAgrupados().map(({ grupo, produtos }) => (
+              <div key={grupo.id} className="space-y-6">
+                {/* Cabeçalho do Grupo */}
+                <div className="text-left">
+                  <h2 className={`text-2xl font-bold mb-2 ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                    {grupo.nome}
+                  </h2>
+                  <div className={`w-24 h-1 rounded-full bg-gradient-to-r from-purple-600 to-blue-600`}></div>
+                </div>
+
+                {/* Grid de Produtos do Grupo */}
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {produtos.map(produto => {
               const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
               const estaSelecionado = quantidadeSelecionada > 0;
 
@@ -3858,8 +3901,11 @@ const CardapioPublicoPage: React.FC = () => {
 
                 </div>
               </div>
-              );
-            })}
+                  );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
