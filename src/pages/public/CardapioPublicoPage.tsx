@@ -1082,12 +1082,15 @@ const CardapioPublicoPage: React.FC = () => {
 
 
 
-      // 6. Definir grupos únicos
+      // ✅ CORREÇÃO: Manter TODOS os campos de ordenação dos grupos
       const gruposUnicos = gruposData.map(grupo => ({
         id: grupo.id,
-        nome: grupo.nome
+        nome: grupo.nome,
+        ordenacao_cardapio_habilitada: grupo.ordenacao_cardapio_habilitada,
+        ordenacao_cardapio_digital: grupo.ordenacao_cardapio_digital
       }));
 
+      console.log('🗂️ Grupos únicos com ordenação preservada:', gruposUnicos);
       setGrupos(gruposUnicos);
 
     } catch (error: any) {
@@ -1150,13 +1153,32 @@ const CardapioPublicoPage: React.FC = () => {
         return { ...produto, grupo };
       });
 
-      // Ordena produtos: primeiro por ordenação personalizada, depois alfabética
+      // ✅ CORREÇÃO: Ordena produtos com validação correta (grupos ocultos)
       const produtosOrdenados = todosProdutos.sort((a, b) => {
-        const aTemOrdenacao = a.ordenacao_cardapio_habilitada && a.ordenacao_cardapio_digital;
-        const bTemOrdenacao = b.ordenacao_cardapio_habilitada && b.ordenacao_cardapio_digital;
+        const aTemOrdenacao = a.ordenacao_cardapio_habilitada &&
+                             a.ordenacao_cardapio_digital !== null &&
+                             a.ordenacao_cardapio_digital !== undefined;
+        const bTemOrdenacao = b.ordenacao_cardapio_habilitada &&
+                             b.ordenacao_cardapio_digital !== null &&
+                             b.ordenacao_cardapio_digital !== undefined;
+
+        console.log(`🔄 Ordenando produtos (grupos ocultos):`, {
+          produtoA: a.nome,
+          aHabilitada: a.ordenacao_cardapio_habilitada,
+          aDigital: a.ordenacao_cardapio_digital,
+          aTemOrdenacao,
+          produtoB: b.nome,
+          bHabilitada: b.ordenacao_cardapio_habilitada,
+          bDigital: b.ordenacao_cardapio_digital,
+          bTemOrdenacao
+        });
 
         if (aTemOrdenacao && bTemOrdenacao) {
-          return a.ordenacao_cardapio_digital - b.ordenacao_cardapio_digital;
+          const posicaoA = Number(a.ordenacao_cardapio_digital);
+          const posicaoB = Number(b.ordenacao_cardapio_digital);
+          const resultado = posicaoA - posicaoB;
+          console.log(`🔢 Ordenação produtos: ${a.nome}(${posicaoA}) vs ${b.nome}(${posicaoB}) = ${resultado}`);
+          return resultado;
         }
         if (aTemOrdenacao && !bTemOrdenacao) return -1;
         if (!aTemOrdenacao && bTemOrdenacao) return 1;
@@ -1187,10 +1209,15 @@ const CardapioPublicoPage: React.FC = () => {
         });
       }
 
-      // Ordena grupos: primeiro por ordenação personalizada, depois alfabética
+      // ✅ CORREÇÃO: Ordena grupos com validação correta de ordenação
       const gruposOrdenados = gruposComProdutos.sort((a, b) => {
-        const aTemOrdenacao = a.grupo.ordenacao_cardapio_habilitada && a.grupo.ordenacao_cardapio_digital;
-        const bTemOrdenacao = b.grupo.ordenacao_cardapio_habilitada && b.grupo.ordenacao_cardapio_digital;
+        // ✅ CORREÇÃO: Verificar se ordenacao_cardapio_digital não é null/undefined
+        const aTemOrdenacao = a.grupo.ordenacao_cardapio_habilitada &&
+                             a.grupo.ordenacao_cardapio_digital !== null &&
+                             a.grupo.ordenacao_cardapio_digital !== undefined;
+        const bTemOrdenacao = b.grupo.ordenacao_cardapio_habilitada &&
+                             b.grupo.ordenacao_cardapio_digital !== null &&
+                             b.grupo.ordenacao_cardapio_digital !== undefined;
 
         console.log(`🔄 Ordenando grupos:`, {
           grupoA: a.grupo.nome,
@@ -1200,16 +1227,47 @@ const CardapioPublicoPage: React.FC = () => {
           grupoB: b.grupo.nome,
           bHabilitada: b.grupo.ordenacao_cardapio_habilitada,
           bDigital: b.grupo.ordenacao_cardapio_digital,
-          bTemOrdenacao
+          bTemOrdenacao,
+          resultado: aTemOrdenacao && bTemOrdenacao ?
+            `${a.grupo.nome}(${a.grupo.ordenacao_cardapio_digital}) vs ${b.grupo.nome}(${b.grupo.ordenacao_cardapio_digital}) = ${a.grupo.ordenacao_cardapio_digital - b.grupo.ordenacao_cardapio_digital}` :
+            aTemOrdenacao ? `${a.grupo.nome} vai primeiro (tem ordenação)` :
+            bTemOrdenacao ? `${b.grupo.nome} vai primeiro (tem ordenação)` :
+            `Ordem alfabética: ${a.grupo.nome} vs ${b.grupo.nome}`
         });
 
+        // Se ambos têm ordenação, ordenar por número (MENOR número = PRIMEIRO no topo)
         if (aTemOrdenacao && bTemOrdenacao) {
-          return a.grupo.ordenacao_cardapio_digital - b.grupo.ordenacao_cardapio_digital;
+          const posicaoA = Number(a.grupo.ordenacao_cardapio_digital);
+          const posicaoB = Number(b.grupo.ordenacao_cardapio_digital);
+          const resultado = posicaoA - posicaoB; // Posição 1 vem antes de posição 2
+          console.log(`🔢 Ordenação numérica: ${a.grupo.nome}(posição ${posicaoA}) vs ${b.grupo.nome}(posição ${posicaoB}) = ${resultado}`);
+          console.log(`🔢 Resultado: ${resultado < 0 ? a.grupo.nome + ' vem PRIMEIRO' : resultado > 0 ? b.grupo.nome + ' vem PRIMEIRO' : 'EMPATE'}`);
+          return resultado;
         }
-        if (aTemOrdenacao && !bTemOrdenacao) return -1;
-        if (!aTemOrdenacao && bTemOrdenacao) return 1;
-        return a.grupo.nome.localeCompare(b.grupo.nome);
+        // Se apenas A tem ordenação, A vem primeiro
+        if (aTemOrdenacao && !bTemOrdenacao) {
+          console.log(`📌 ${a.grupo.nome} vem primeiro (tem ordenação)`);
+          return -1;
+        }
+        // Se apenas B tem ordenação, B vem primeiro
+        if (!aTemOrdenacao && bTemOrdenacao) {
+          console.log(`📌 ${b.grupo.nome} vem primeiro (tem ordenação)`);
+          return 1;
+        }
+        // Se nenhum tem ordenação, ordem alfabética
+        const resultado = a.grupo.nome.localeCompare(b.grupo.nome);
+        console.log(`🔤 Ordem alfabética: ${a.grupo.nome} vs ${b.grupo.nome} = ${resultado}`);
+        return resultado;
       });
+
+      // ✅ LOG: Verificar ordem final dos grupos
+      console.log('🎯 ORDEM FINAL DOS GRUPOS:', gruposOrdenados.map((item, index) => ({
+        posicao_na_lista: index + 1,
+        nome: item.grupo.nome,
+        tem_ordenacao: item.grupo.ordenacao_cardapio_habilitada,
+        posicao_configurada: item.grupo.ordenacao_cardapio_digital,
+        total_produtos: item.produtos.length
+      })));
 
       // Ordena produtos dentro de cada grupo
       gruposOrdenados.forEach(item => {
