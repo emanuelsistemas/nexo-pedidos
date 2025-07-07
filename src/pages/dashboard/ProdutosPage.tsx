@@ -3309,7 +3309,8 @@ const ProdutosPage: React.FC = () => {
     const { data: addons } = await supabase
       .from('produtos_opcoes_adicionais')
       .select('id')
-      .eq('produto_id', produtoId);
+      .eq('produto_id', produtoId)
+      .eq('deletado', false);
 
     if (addons && addons.length > 0) {
       setWarningMessage('Este produto possui opções adicionais vinculadas. Remova todas as opções adicionais primeiro.');
