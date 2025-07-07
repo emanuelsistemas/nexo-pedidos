@@ -3371,45 +3371,45 @@ const ProdutosPage: React.FC = () => {
       setEditingProduto(produtoCriado);
       setSelectedOpcoes(opcoesOriginais?.map(o => o.opcao_id) || []);
 
-      // Limpar novoProduto (usado apenas para criação)
+      // ✅ CORREÇÃO: Copiar dados do produto criado para novoProduto (usado pelo formulário)
       setNovoProduto({
-        nome: '',
-        preco: 0,
-        descricao: '',
-        codigo: '',
-        codigo_barras: '',
-        promocao: false,
-        tipo_desconto: 'percentual',
-        valor_desconto: 0,
-        ativo: true,
-        unidade_medida_id: '',
-        desconto_quantidade: false,
-        quantidade_minima: 5,
-        tipo_desconto_quantidade: 'percentual',
-        percentual_desconto_quantidade: 10,
-        valor_desconto_quantidade: 0,
-        estoque_inicial: 0,
-        estoque_minimo: 0,
-        estoque_minimo_ativo: false,
-        ncm: '',
-        cfop: '5102',
-        origem_produto: 0,
-        situacao_tributaria: 'tributado_integral',
-        cst_icms: '',
-        csosn_icms: '',
-        cst_pis: '01',
-        cst_cofins: '01',
-        aliquota_icms: 0,
-        aliquota_pis: 1.65,
-        aliquota_cofins: 7.60,
-        cest: '',
-        margem_st: null,
-        peso_liquido: 0,
-        preco_custo: 0,
-        margem_percentual: 0,
-        pizza: false,
-        cardapio_digital: false,
-        exibir_promocao_cardapio: false,
+        nome: produtoCriado.nome,
+        preco: produtoCriado.preco,
+        descricao: produtoCriado.descricao,
+        codigo: produtoCriado.codigo,
+        codigo_barras: produtoCriado.codigo_barras,
+        promocao: produtoCriado.promocao,
+        tipo_desconto: produtoCriado.tipo_desconto,
+        valor_desconto: produtoCriado.valor_desconto,
+        ativo: produtoCriado.ativo,
+        unidade_medida_id: produtoCriado.unidade_medida_id,
+        desconto_quantidade: produtoCriado.desconto_quantidade,
+        quantidade_minima: produtoCriado.quantidade_minima,
+        tipo_desconto_quantidade: produtoCriado.tipo_desconto_quantidade,
+        percentual_desconto_quantidade: produtoCriado.percentual_desconto_quantidade,
+        valor_desconto_quantidade: produtoCriado.valor_desconto_quantidade,
+        estoque_inicial: produtoCriado.estoque_inicial,
+        estoque_minimo: produtoCriado.estoque_minimo,
+        estoque_minimo_ativo: produtoCriado.estoque_minimo_ativo,
+        ncm: produtoCriado.ncm,
+        cfop: produtoCriado.cfop,
+        origem_produto: produtoCriado.origem_produto,
+        situacao_tributaria: produtoCriado.situacao_tributaria,
+        cst_icms: produtoCriado.cst_icms,
+        csosn_icms: produtoCriado.csosn_icms,
+        cst_pis: produtoCriado.cst_pis,
+        cst_cofins: produtoCriado.cst_cofins,
+        aliquota_icms: produtoCriado.aliquota_icms,
+        aliquota_pis: produtoCriado.aliquota_pis,
+        aliquota_cofins: produtoCriado.aliquota_cofins,
+        cest: produtoCriado.cest,
+        margem_st: produtoCriado.margem_st,
+        peso_liquido: produtoCriado.peso_liquido,
+        preco_custo: produtoCriado.preco_custo,
+        margem_percentual: produtoCriado.margem_percentual,
+        pizza: produtoCriado.pizza,
+        cardapio_digital: produtoCriado.cardapio_digital,
+        exibir_promocao_cardapio: produtoCriado.exibir_promocao_cardapio,
       });
 
       // Atualizar os campos formatados com os valores clonados
@@ -6912,22 +6912,31 @@ const ProdutosPage: React.FC = () => {
                 Uma cópia será criada com um novo código e o nome será alterado para incluir "- COPIA".
               </p>
               <div className="flex gap-4">
-                <Button
-                  type="button"
-                  variant="text"
-                  className="flex-1"
-                  onClick={() => setCloneConfirmation({ isOpen: false, produto: null, grupo: null })}
-                >
-                  Cancelar
-                </Button>
+                {!isLoading && (
+                  <Button
+                    type="button"
+                    variant="text"
+                    className="flex-1"
+                    onClick={() => setCloneConfirmation({ isOpen: false, produto: null, grupo: null })}
+                  >
+                    Cancelar
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="primary"
-                  className="flex-1"
+                  className={isLoading ? "w-full" : "flex-1"}
                   onClick={handleConfirmClone}
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Clonando...' : 'Clonar'}
+                  {isLoading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                      Clonando, aguarde...
+                    </div>
+                  ) : (
+                    'Clonar'
+                  )}
                 </Button>
               </div>
             </motion.div>
