@@ -7,6 +7,144 @@ import FotoGaleria from '../../components/comum/FotoGaleria';
 import { useKeenSlider } from "keen-slider/react";
 import "keen-slider/keen-slider.min.css";
 
+// Componente para slider de promoções
+interface PromocoesSliderProps {
+  promocoes: Array<{
+    id: string;
+    nome: string;
+    preco: number;
+    tipo_desconto?: string;
+    valor_desconto?: number;
+    foto_url?: string;
+  }>;
+  config: {modo_escuro: boolean};
+  formatarPreco: (preco: number) => string;
+  calcularValorFinal: (preco: number, tipo: string, desconto: number) => number;
+}
+
+const PromocoesSlider: React.FC<PromocoesSliderProps> = ({ promocoes, config, formatarPreco, calcularValorFinal }) => {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  const [sliderRef, instanceRef] = useKeenSlider({
+    initial: 0,
+    slides: {
+      perView: 2.5, // Mostrar 2.5 cards por vez para dar sensação de continuidade
+      spacing: 12,
+    },
+    breakpoints: {
+      "(min-width: 768px)": {
+        slides: { perView: 3.5, spacing: 16 }
+      },
+      "(min-width: 1024px)": {
+        slides: { perView: 4.5, spacing: 20 }
+      }
+    },
+    slideChanged(slider) {
+      setCurrentSlide(slider.track.details.rel);
+    },
+    created() {
+      setLoaded(true);
+    },
+  });
+
+  return (
+    <div className="relative">
+      <div ref={sliderRef} className="keen-slider">
+        {promocoes.map((produto) => {
+          // Calcular valor final se tiver desconto
+          let valorFinal = produto.preco;
+          let descontoExibicao = '';
+
+          if (produto.tipo_desconto && produto.valor_desconto !== undefined) {
+            valorFinal = calcularValorFinal(produto.preco, produto.tipo_desconto, produto.valor_desconto);
+
+            if (produto.tipo_desconto === 'percentual') {
+              descontoExibicao = `${produto.valor_desconto}% OFF`;
+            } else {
+              descontoExibicao = `- ${formatarPreco(produto.valor_desconto)}`;
+            }
+          }
+
+          return (
+            <div key={produto.id} className="keen-slider__slide" style={{ minWidth: '160px' }}>
+              <div
+                className={`relative p-3 rounded-xl border transition-all duration-200 h-full ${
+                  config.modo_escuro
+                    ? 'bg-gray-800/50 border-gray-600 text-white'
+                    : 'bg-white border-gray-200 text-gray-800 shadow-sm'
+                }`}
+              >
+                {/* Badge de promoção */}
+                <div className="absolute -top-2 -right-2 z-10">
+                  <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
+                    🔥 PROMO
+                  </div>
+                </div>
+
+                {/* Imagem do produto */}
+                {produto.foto_url && (
+                  <div className="w-full h-20 mb-2 rounded-lg overflow-hidden bg-gray-100">
+                    <img
+                      src={produto.foto_url}
+                      alt={produto.nome}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+
+                {/* Nome do produto */}
+                <div className="text-sm font-medium truncate mb-1">{produto.nome}</div>
+
+                {/* Preços */}
+                <div className="space-y-1">
+                  {/* Preço original riscado */}
+                  <div className={`text-xs line-through ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    {formatarPreco(produto.preco)}
+                  </div>
+
+                  {/* Preço promocional */}
+                  <div className="text-sm font-bold text-green-500">
+                    {formatarPreco(valorFinal)}
+                  </div>
+
+                  {/* Badge de desconto */}
+                  {descontoExibicao && (
+                    <div className="inline-block px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                      {descontoExibicao}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Indicadores de navegação */}
+      {loaded && instanceRef.current && promocoes.length > 3 && (
+        <div className="flex justify-center mt-3 space-x-1">
+          {Array.from({ length: Math.ceil(promocoes.length / 3) }).map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => instanceRef.current?.moveToIdx(idx * 3)}
+              className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                Math.floor(currentSlide / 3) === idx
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600'
+                  : config.modo_escuro
+                  ? 'bg-gray-600'
+                  : 'bg-gray-300'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Componente para slider de tabelas de preços
 interface TabelasPrecosSliderProps {
   tabelas: Array<{id: string; nome: string; preco: number; quantidade_sabores: number}>;
@@ -209,6 +347,31 @@ const CardapioPublicoPage: React.FC = () => {
       setLoaded(true);
     },
   });
+
+  // Função para calcular valor final com desconto
+  const calcularValorFinal = (preco: number, tipoDesconto: string, valorDesconto: number): number => {
+    if (tipoDesconto === 'percentual') {
+      return preco - (preco * valorDesconto / 100);
+    } else {
+      return Math.max(0, preco - valorDesconto);
+    }
+  };
+
+  // Filtrar produtos em promoção
+  const produtosEmPromocao = produtos.filter(produto =>
+    produto.promocao &&
+    produto.exibir_promocao_cardapio &&
+    produto.tipo_desconto &&
+    produto.valor_desconto !== undefined &&
+    produto.valor_desconto > 0
+  ).map(produto => ({
+    id: produto.id,
+    nome: produto.nome,
+    preco: produto.preco,
+    tipo_desconto: produto.tipo_desconto,
+    valor_desconto: produto.valor_desconto,
+    foto_url: produto.foto_url
+  }));
 
   // Estados para controle de quantidade dos produtos (carrinho)
   const [quantidadesProdutos, setQuantidadesProdutos] = useState<Record<string, number>>({});
@@ -926,6 +1089,10 @@ const CardapioPublicoPage: React.FC = () => {
           cardapio_digital,
           ordenacao_cardapio_habilitada,
           ordenacao_cardapio_digital,
+          promocao,
+          tipo_desconto,
+          valor_desconto,
+          exibir_promocao_cardapio,
           unidade_medida_id,
           unidade_medida:unidade_medida_id (
             id,
@@ -3477,6 +3644,38 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Seção de Promoções */}
+      {produtosEmPromocao.length > 0 && (
+        <div className={`${config.modo_escuro ? 'bg-gray-800/20' : 'bg-gradient-to-r from-red-50 to-pink-50'} border-b ${config.modo_escuro ? 'border-gray-700' : 'border-red-100'}`}>
+          <div className="max-w-6xl mx-auto px-4 py-6">
+            {/* Cabeçalho da seção */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <div className="text-2xl">🔥</div>
+                <h2 className={`text-xl font-bold ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                  Promoções Especiais
+                </h2>
+              </div>
+              <div className={`text-sm font-medium px-3 py-1 rounded-full ${
+                config.modo_escuro
+                  ? 'bg-red-900/50 text-red-300 border border-red-700'
+                  : 'bg-red-100 text-red-700 border border-red-200'
+              }`}>
+                {produtosEmPromocao.length} {produtosEmPromocao.length === 1 ? 'item' : 'itens'}
+              </div>
+            </div>
+
+            {/* Slider de promoções */}
+            <PromocoesSlider
+              promocoes={produtosEmPromocao}
+              config={config}
+              formatarPreco={formatarPreco}
+              calcularValorFinal={calcularValorFinal}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Lista de Produtos com design moderno */}
       <div className="max-w-6xl mx-auto px-4 py-8">
         {produtosFiltrados.length === 0 ? (
@@ -3537,6 +3736,14 @@ const CardapioPublicoPage: React.FC = () => {
                       : 'bg-white border border-gray-200 shadow-lg'
                   }`}
                 >
+                  {/* Badge de promoção no canto superior direito */}
+                  {produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto && (
+                    <div className="absolute top-3 right-3 z-10">
+                      <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
+                        🔥 PROMO
+                      </div>
+                    </div>
+                  )}
 
 
                 {/* Imagem do produto - Apenas para config.mostrar_fotos (fotos grandes) */}
@@ -3617,11 +3824,46 @@ const CardapioPublicoPage: React.FC = () => {
 
                           {/* Linha do preço com controles de quantidade */}
                           <div className="flex items-center justify-between mt-1">
-                            {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (
-                              <div className="text-lg font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                                {formatarPreco(produto.preco)}
-                              </div>
-                            )}
+                            {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (() => {
+                              // Verificar se produto está em promoção
+                              const temPromocao = produto.promocao &&
+                                                produto.exibir_promocao_cardapio &&
+                                                produto.tipo_desconto &&
+                                                produto.valor_desconto !== undefined &&
+                                                produto.valor_desconto > 0;
+
+                              if (temPromocao) {
+                                // Calcular valor final e desconto
+                                const valorFinal = calcularValorFinal(produto.preco, produto.tipo_desconto, produto.valor_desconto);
+                                const descontoExibicao = produto.tipo_desconto === 'percentual'
+                                  ? `${produto.valor_desconto}% OFF`
+                                  : `- ${formatarPreco(produto.valor_desconto)}`;
+
+                                return (
+                                  <div className="flex flex-col">
+                                    {/* Preço original riscado */}
+                                    <div className={`text-sm line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                      {formatarPreco(produto.preco)}
+                                    </div>
+                                    {/* Preço promocional */}
+                                    <div className="text-lg font-bold text-green-500">
+                                      {formatarPreco(valorFinal)}
+                                    </div>
+                                    {/* Badge de desconto */}
+                                    <div className="inline-block px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 w-fit">
+                                      {descontoExibicao}
+                                    </div>
+                                  </div>
+                                );
+                              } else {
+                                // Preço normal sem promoção
+                                return (
+                                  <div className="text-lg font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                                    {formatarPreco(produto.preco)}
+                                  </div>
+                                );
+                              }
+                            })()}
 
                             {/* Controles de quantidade na mesma linha do preço */}
                             {obterWhatsAppEmpresa() && (
@@ -3690,11 +3932,46 @@ const CardapioPublicoPage: React.FC = () => {
                         </h3>
                         {/* Preço e controles logo abaixo do nome quando não tem foto */}
                         <div className="flex items-center justify-between mb-3">
-                          {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (
-                            <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                              {formatarPreco(produto.preco)}
-                            </span>
-                          )}
+                          {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (() => {
+                            // Verificar se produto está em promoção
+                            const temPromocao = produto.promocao &&
+                                              produto.exibir_promocao_cardapio &&
+                                              produto.tipo_desconto &&
+                                              produto.valor_desconto !== undefined &&
+                                              produto.valor_desconto > 0;
+
+                            if (temPromocao) {
+                              // Calcular valor final e desconto
+                              const valorFinal = calcularValorFinal(produto.preco, produto.tipo_desconto, produto.valor_desconto);
+                              const descontoExibicao = produto.tipo_desconto === 'percentual'
+                                ? `${produto.valor_desconto}% OFF`
+                                : `- ${formatarPreco(produto.valor_desconto)}`;
+
+                              return (
+                                <div className="flex flex-col">
+                                  {/* Preço original riscado */}
+                                  <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    {formatarPreco(produto.preco)}
+                                  </div>
+                                  {/* Preço promocional */}
+                                  <div className="text-2xl font-bold text-green-500">
+                                    {formatarPreco(valorFinal)}
+                                  </div>
+                                  {/* Badge de desconto */}
+                                  <div className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 w-fit mt-1">
+                                    {descontoExibicao}
+                                  </div>
+                                </div>
+                              );
+                            } else {
+                              // Preço normal sem promoção
+                              return (
+                                <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                                  {formatarPreco(produto.preco)}
+                                </span>
+                              );
+                            }
+                          })()}
 
                           {obterWhatsAppEmpresa() && (
                             <div className="flex items-center gap-3">
