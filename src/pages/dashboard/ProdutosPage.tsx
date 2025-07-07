@@ -3370,6 +3370,8 @@ const ProdutosPage: React.FC = () => {
       setSelectedGrupo(grupo);
       setEditingProduto(produtoCriado);
       setSelectedOpcoes(opcoesOriginais?.map(o => o.opcao_id) || []);
+
+      // Limpar novoProduto (usado apenas para criação)
       setNovoProduto({
         nome: '',
         preco: 0,
@@ -3452,7 +3454,7 @@ const ProdutosPage: React.FC = () => {
 
       // Abrir sidebar para edição do produto clonado
       setShowSidebar(true);
-      setActiveTab('fotos'); // Abrir na aba de fotos para mostrar que foram clonadas
+      setActiveTab('dados'); // Abrir na aba de dados gerais
 
       showMessage('success', 'Produto clonado com sucesso! Fotos e configurações foram copiadas.');
 
