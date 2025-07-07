@@ -5564,12 +5564,12 @@ const ProdutosPage: React.FC = () => {
                                     className="w-full py-2 px-4 border border-dashed border-gray-600 rounded-lg flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:border-gray-500 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                                   >
                                     {isUploadingFoto ? (
-                                      <div>
+                                      <div className="flex items-center justify-center gap-2">
                                         <div className="w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin"></div>
                                         <span>Enviando...</span>
                                       </div>
                                     ) : (
-                                      <div>
+                                      <div className="flex items-center justify-center gap-2">
                                         <Upload size={18} />
                                         <span>Adicionar Foto</span>
                                       </div>
