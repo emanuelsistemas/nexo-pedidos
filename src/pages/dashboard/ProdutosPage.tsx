@@ -3197,6 +3197,18 @@ const ProdutosPage: React.FC = () => {
       const produtoOriginal = cloneConfirmation.produto;
       const grupo = cloneConfirmation.grupo;
 
+      // Obter dados do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
       // Obter o próximo código disponível
       const nextCode = await getNextAvailableCode();
 
@@ -3233,40 +3245,184 @@ const ProdutosPage: React.FC = () => {
         aliquota_pis: produtoOriginal.aliquota_pis || 1.65,
         aliquota_cofins: produtoOriginal.aliquota_cofins || 7.60,
         cest: produtoOriginal.cest || '',
-        margem_st: produtoOriginal.margem_st || null, // ✅ CORREÇÃO: Incluir margem ST na clonagem
+        margem_st: produtoOriginal.margem_st || null,
         peso_liquido: produtoOriginal.peso_liquido || 0,
-        // ✅ NOVOS CAMPOS: Preço de custo e margem percentual
         preco_custo: produtoOriginal.preco_custo || 0,
         margem_percentual: produtoOriginal.margem_percentual || 0,
         pizza: produtoOriginal.pizza || false,
         cardapio_digital: produtoOriginal.cardapio_digital || false,
         exibir_promocao_cardapio: produtoOriginal.exibir_promocao_cardapio || false,
+        // Campos obrigatórios
+        grupo_id: grupo.id,
+        empresa_id: usuarioData.empresa_id,
+        // Limpar campos de posicionamento
+        ordenacao_cardapio_habilitada: false,
+        ordenacao_cardapio_digital: null,
       };
 
-      // Configurar para edição
+      // ✅ CRIAR O PRODUTO IMEDIATAMENTE NO BANCO
+      const { data: produtoCriado, error: produtoError } = await supabase
+        .from('produtos')
+        .insert(produtoClonado)
+        .select()
+        .single();
+
+      if (produtoError) throw produtoError;
+
+      // ✅ CLONAR FOTOS DO PRODUTO ORIGINAL
+      const { data: fotosOriginais, error: fotosError } = await supabase
+        .from('produto_fotos')
+        .select('*')
+        .eq('produto_id', produtoOriginal.id)
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      if (!fotosError && fotosOriginais && fotosOriginais.length > 0) {
+        // Clonar cada foto
+        for (const fotoOriginal of fotosOriginais) {
+          try {
+            // Baixar a imagem original
+            const response = await fetch(fotoOriginal.url);
+            const blob = await response.blob();
+
+            // Criar novo nome de arquivo
+            const fileExt = fotoOriginal.storage_path.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const filePath = `produtos/${produtoCriado.id}/${fileName}`;
+
+            // Upload da nova imagem
+            const { error: uploadError } = await supabase.storage
+              .from('fotos')
+              .upload(filePath, blob);
+
+            if (uploadError) {
+              console.error('Erro ao fazer upload da foto clonada:', uploadError);
+              continue; // Continua com as outras fotos
+            }
+
+            // Obter URL pública da nova imagem
+            const { data: urlData } = supabase.storage
+              .from('fotos')
+              .getPublicUrl(filePath);
+
+            // Salvar registro da nova foto
+            const novaFoto = {
+              produto_id: produtoCriado.id,
+              url: urlData.publicUrl,
+              storage_path: filePath,
+              principal: fotoOriginal.principal,
+              empresa_id: usuarioData.empresa_id
+            };
+
+            await supabase
+              .from('produto_fotos')
+              .insert(novaFoto);
+
+          } catch (error) {
+            console.error('Erro ao clonar foto:', error);
+            // Continua com as outras fotos mesmo se uma falhar
+          }
+        }
+      }
+
+      // ✅ CLONAR OPÇÕES ADICIONAIS
+      const { data: opcoesOriginais, error: opcoesError } = await supabase
+        .from('produtos_opcoes_adicionais')
+        .select('opcao_id')
+        .eq('produto_id', produtoOriginal.id)
+        .eq('deletado', false);
+
+      if (!opcoesError && opcoesOriginais && opcoesOriginais.length > 0) {
+        const opcoesInsert = opcoesOriginais.map(opcao => ({
+          produto_id: produtoCriado.id,
+          opcao_id: opcao.opcao_id,
+          empresa_id: usuarioData.empresa_id
+        }));
+
+        await supabase
+          .from('produtos_opcoes_adicionais')
+          .insert(opcoesInsert);
+      }
+
+      // ✅ CLONAR PREÇOS DAS TABELAS
+      if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+        const { data: precosOriginais, error: precosError } = await supabase
+          .from('tabela_de_preco')
+          .select('*')
+          .eq('produto_id', produtoOriginal.id);
+
+        if (!precosError && precosOriginais && precosOriginais.length > 0) {
+          const precosInsert = precosOriginais.map(preco => {
+            const { id, created_at, updated_at, ...precoSemIds } = preco;
+            return {
+              ...precoSemIds,
+              produto_id: produtoCriado.id
+            };
+          });
+
+          await supabase
+            .from('tabela_de_preco')
+            .insert(precosInsert);
+        }
+      }
+
+      // Configurar para edição do produto criado
       setIsGrupoForm(false);
       setSelectedGrupo(grupo);
-      setEditingProduto(null);
-      setSelectedOpcoes([]);
-      setNovoProduto(produtoClonado);
+      setEditingProduto(produtoCriado);
+      setSelectedOpcoes(opcoesOriginais?.map(o => o.opcao_id) || []);
+      setNovoProduto({
+        nome: '',
+        preco: 0,
+        descricao: '',
+        codigo: '',
+        codigo_barras: '',
+        promocao: false,
+        tipo_desconto: 'percentual',
+        valor_desconto: 0,
+        ativo: true,
+        unidade_medida_id: '',
+        desconto_quantidade: false,
+        quantidade_minima: 5,
+        tipo_desconto_quantidade: 'percentual',
+        percentual_desconto_quantidade: 10,
+        valor_desconto_quantidade: 0,
+        estoque_inicial: 0,
+        estoque_minimo: 0,
+        estoque_minimo_ativo: false,
+        ncm: '',
+        cfop: '5102',
+        origem_produto: 0,
+        situacao_tributaria: 'tributado_integral',
+        cst_icms: '',
+        csosn_icms: '',
+        cst_pis: '01',
+        cst_cofins: '01',
+        aliquota_icms: 0,
+        aliquota_pis: 1.65,
+        aliquota_cofins: 7.60,
+        cest: '',
+        margem_st: null,
+        peso_liquido: 0,
+        preco_custo: 0,
+        margem_percentual: 0,
+        pizza: false,
+        cardapio_digital: false,
+        exibir_promocao_cardapio: false,
+      });
 
       // Atualizar os campos formatados com os valores clonados
-      setPrecoFormatado(formatarPreco(produtoClonado.preco));
-      setDescontoFormatado(produtoClonado.valor_desconto?.toString() || '0');
-      setDescontoQuantidadeFormatado(produtoClonado.percentual_desconto_quantidade?.toString() || '10');
+      setPrecoFormatado(formatarPreco(produtoCriado.preco));
+      setDescontoFormatado(produtoCriado.valor_desconto?.toString() || '0');
+      setDescontoQuantidadeFormatado(produtoCriado.percentual_desconto_quantidade?.toString() || '10');
+      setPrecoCustoFormatado(formatarPreco(produtoCriado.preco_custo));
+      setMargemFormatada(formatarPreco(produtoCriado.margem_percentual));
 
-      // ✅ NOVOS CAMPOS: Formatar preço de custo e margem
-      setPrecoCustoFormatado(formatarPreco(produtoClonado.preco_custo));
-      setMargemFormatada(formatarPreco(produtoClonado.margem_percentual));
+      // Limpar campos de ordenação
+      setProdutoOrdenacaoCardapioHabilitada(false);
+      setProdutoOrdenacaoCardapioDigital('');
 
-      // ✅ CLONAR CAMPOS DE ORDENAÇÃO: Carregar campos de ordenação do produto original
-      setProdutoOrdenacaoCardapioHabilitada((produtoOriginal as any).ordenacao_cardapio_habilitada || false);
-      setProdutoOrdenacaoCardapioDigital((produtoOriginal as any).ordenacao_cardapio_digital || '');
-
-      // ✅ CLONAR PREÇOS DAS TABELAS: Carregar preços das tabelas do produto original
-      if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
-        await carregarPrecosTabelas(produtoOriginal.id);
-      }
+      // Carregar fotos do produto clonado
+      await loadProdutoFotos(produtoCriado.id);
 
       // Resetar estados de validação
       setEstoqueInputVazio(false);
@@ -3284,6 +3440,9 @@ const ProdutosPage: React.FC = () => {
       });
       setCestOpcoes([]);
 
+      // Recarregar a lista de produtos para mostrar o produto clonado
+      await loadGrupos();
+
       // Fechar modal de confirmação
       setCloneConfirmation({
         isOpen: false,
@@ -3291,11 +3450,11 @@ const ProdutosPage: React.FC = () => {
         grupo: null,
       });
 
-      // Abrir sidebar para edição
+      // Abrir sidebar para edição do produto clonado
       setShowSidebar(true);
-      setActiveTab('dados');
+      setActiveTab('fotos'); // Abrir na aba de fotos para mostrar que foram clonadas
 
-      showMessage('success', 'Produto clonado! Ajuste os dados conforme necessário.');
+      showMessage('success', 'Produto clonado com sucesso! Fotos e configurações foram copiadas.');
 
     } catch (error) {
       console.error('Erro ao clonar produto:', error);
