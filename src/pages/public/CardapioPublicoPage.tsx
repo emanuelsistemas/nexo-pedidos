@@ -83,15 +83,19 @@ const PromocoesSlider: React.FC<PromocoesSliderProps> = ({ promocoes, config, fo
                 </div>
 
                 {/* Imagem do produto */}
-                {produto.foto_url && (
-                  <div className="w-full h-20 mb-2 rounded-lg overflow-hidden bg-gray-100">
+                <div className="w-full h-20 mb-2 rounded-lg overflow-hidden bg-gray-100">
+                  {produto.foto_url ? (
                     <img
                       src={produto.foto_url}
                       alt={produto.nome}
                       className="w-full h-full object-cover"
                     />
-                  </div>
-                )}
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center ${config.modo_escuro ? 'bg-gray-700' : 'bg-gray-100'}`}>
+                      <Package className={`w-8 h-8 ${config.modo_escuro ? 'text-gray-600' : 'text-gray-400'}`} />
+                    </div>
+                  )}
+                </div>
 
                 {/* Nome do produto */}
                 <div className="text-sm font-medium truncate mb-1">{produto.nome}</div>
