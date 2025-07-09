@@ -661,7 +661,7 @@ const ProdutosPage: React.FC = () => {
       return false;
     }
 
-    // Usar a ordem atual da grid (alfabética) como base se ainda não há ordem personalizada
+    // Usar a ordem atual da grid
     const currentOrder = gruposOrder.length > 0 && gruposOrder.join(',') !== grupos.map(g => g.id).join(',')
       ? gruposOrder
       : filteredAndSortedGrupos.map(g => g.id);
@@ -670,53 +670,47 @@ const ProdutosPage: React.FC = () => {
 
     if (currentIndex === -1) return false;
 
-    // Verificar se o destino do movimento tem um grupo com posicionamento fixo
-    let targetIndex = currentIndex;
+    // Função auxiliar para verificar se um grupo é fixo
+    const isGrupoFixo = (gId: string) => {
+      const g = grupos.find(gr => gr.id === gId);
+      return g &&
+             (g as any).ordenacao_cardapio_habilitada === true &&
+             (g as any).ordenacao_cardapio_digital !== null &&
+             (g as any).ordenacao_cardapio_digital !== undefined &&
+             (g as any).ordenacao_cardapio_digital !== '';
+    };
+
+    // Verificações específicas por direção
     switch (direction) {
       case 'up':
-        targetIndex = Math.max(0, currentIndex - 2);
-        break;
+        // Precisa ter pelo menos 2 posições acima E a posição de destino não pode ser fixa
+        if (currentIndex < 2) return false;
+        const upTargetIndex = currentIndex - 2;
+        const upTargetGrupoId = currentOrder[upTargetIndex];
+        return !isGrupoFixo(upTargetGrupoId);
+
       case 'down':
-        targetIndex = Math.min(currentOrder.length - 1, currentIndex + 2);
-        break;
+        // Precisa ter pelo menos 2 posições abaixo (próxima linha) E a posição de destino não pode ser fixa
+        const downTargetIndex = currentIndex + 2;
+        if (downTargetIndex >= currentOrder.length) return false; // Não existe posição 2 posições abaixo
+        const downTargetGrupoId = currentOrder[downTargetIndex];
+        return !isGrupoFixo(downTargetGrupoId);
+
       case 'left':
-        if (currentIndex % 2 === 1) {
-          targetIndex = currentIndex - 1;
-        }
-        break;
+        // Só pode mover para esquerda se está na coluna direita (índice ímpar) E a posição à esquerda não é fixa
+        if (currentIndex % 2 !== 1) return false;
+        const leftTargetIndex = currentIndex - 1;
+        const leftTargetGrupoId = currentOrder[leftTargetIndex];
+        return !isGrupoFixo(leftTargetGrupoId);
+
       case 'right':
-        if (currentIndex % 2 === 0 && currentIndex < currentOrder.length - 1) {
-          targetIndex = currentIndex + 1;
-        }
-        break;
-    }
+        // Só pode mover para direita se está na coluna esquerda (índice par) E existe uma posição à direita E essa posição não é fixa
+        if (currentIndex % 2 !== 0) return false; // Não está na coluna esquerda
+        const rightTargetIndex = currentIndex + 1;
+        if (rightTargetIndex >= currentOrder.length) return false; // Não existe posição à direita
+        const rightTargetGrupoId = currentOrder[rightTargetIndex];
+        return !isGrupoFixo(rightTargetGrupoId);
 
-    // Se o índice de destino é diferente, verificar se há grupo fixo nessa posição
-    if (targetIndex !== currentIndex) {
-      const targetGrupoId = currentOrder[targetIndex];
-      const targetGrupo = grupos.find(g => g.id === targetGrupoId);
-      const targetTemPosicionamentoFixo = targetGrupo &&
-                                           (targetGrupo as any).ordenacao_cardapio_habilitada === true &&
-                                           (targetGrupo as any).ordenacao_cardapio_digital !== null &&
-                                           (targetGrupo as any).ordenacao_cardapio_digital !== undefined &&
-                                           (targetGrupo as any).ordenacao_cardapio_digital !== '';
-
-      // Não pode mover para posição ocupada por grupo com posicionamento fixo
-      if (targetTemPosicionamentoFixo) {
-        return false;
-      }
-    }
-
-    // Verificações normais de movimento
-    switch (direction) {
-      case 'up':
-        return currentIndex >= 2; // Pode mover para cima se não está nas duas primeiras posições
-      case 'down':
-        return currentIndex < currentOrder.length - 2; // Pode mover para baixo se não está nas duas últimas posições
-      case 'left':
-        return currentIndex % 2 === 1; // Pode mover para esquerda se está na coluna direita
-      case 'right':
-        return currentIndex % 2 === 0 && currentIndex < currentOrder.length - 1; // Pode mover para direita se está na coluna esquerda e não é o último
       default:
         return false;
     }
@@ -6830,15 +6824,17 @@ const ProdutosPage: React.FC = () => {
                           )}
                         </div>
 
-                        <div className="flex gap-4 pt-4">
-                          <Button
-                            type="button"
-                            variant="text"
-                            className="flex-1"
-                            onClick={() => setActiveTab('dados')}
-                          >
-                            Voltar
-                          </Button>
+                        <div className={`flex pt-4 ${isLoading ? '' : 'gap-4'}`}>
+                          {!isLoading && (
+                            <Button
+                              type="button"
+                              variant="text"
+                              className="flex-1"
+                              onClick={() => setActiveTab('dados')}
+                            >
+                              Voltar
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             variant="primary"
@@ -6850,7 +6846,14 @@ const ProdutosPage: React.FC = () => {
                             }}
                             disabled={isLoading}
                           >
-                            {isLoading ? 'Salvando...' : 'Concluir'}
+                            {isLoading ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <span>Salvando, aguarde...</span>
+                              </div>
+                            ) : (
+                              'Concluir'
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -7405,15 +7408,17 @@ const ProdutosPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="flex gap-4 pt-4">
-                          <Button
-                            type="button"
-                            variant="text"
-                            className="flex-1"
-                            onClick={() => setActiveTab('dados')}
-                          >
-                            Voltar
-                          </Button>
+                        <div className={`flex pt-4 ${isLoading ? '' : 'gap-4'}`}>
+                          {!isLoading && (
+                            <Button
+                              type="button"
+                              variant="text"
+                              className="flex-1"
+                              onClick={() => setActiveTab('dados')}
+                            >
+                              Voltar
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             variant="primary"
@@ -7456,7 +7461,14 @@ const ProdutosPage: React.FC = () => {
                             }}
                             disabled={isLoading}
                           >
-                            {isLoading ? 'Salvando...' : 'Concluir'}
+                            {isLoading ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <span>Salvando, aguarde...</span>
+                              </div>
+                            ) : (
+                              'Concluir'
+                            )}
                           </Button>
                         </div>
                       </div>
