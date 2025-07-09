@@ -235,7 +235,6 @@ const ProdutosPage: React.FC = () => {
 
   // Estados para preço de custo e margem
   const [precoCustoFormatado, setPrecoCustoFormatado] = useState<string>('0,00');
-  const [margemFormatada, setMargemFormatada] = useState<string>('0,00');
 
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -560,6 +559,95 @@ const ProdutosPage: React.FC = () => {
     const updatedOrder = { ...produtosOrder, [grupoId]: newOrder };
     setProdutosOrder(updatedOrder);
     localStorage.setItem('nexo-produtos-order', JSON.stringify(updatedOrder));
+  };
+
+  // ✅ FUNÇÕES DE FORMATAÇÃO DE PREÇO (sem símbolo R$ - para campos com R$ fixo)
+  const formatarValorMonetario = (valor: string): string => {
+    // Remove todos os caracteres não numéricos
+    let valorLimpo = valor.replace(/\D/g, '');
+
+    // Se não houver valor, retorna vazio
+    if (!valorLimpo) return '';
+
+    // Converte para número (centavos)
+    const valorNumerico = parseInt(valorLimpo) / 100;
+
+    // Formata apenas o número, sem símbolo da moeda (pois o campo já tem R$ fixo)
+    return valorNumerico.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  const desformatarValorMonetario = (valorFormatado: string): number => {
+    // Remove todos os caracteres não numéricos
+    const valorLimpo = valorFormatado.replace(/\D/g, '');
+
+    // Se não houver valor, retorna 0
+    if (!valorLimpo) return 0;
+
+    // Converte de centavos para reais
+    return parseInt(valorLimpo) / 100;
+  };
+
+  // ✅ FUNÇÃO PARA LIDAR COM MUDANÇAS NO PREÇO PADRÃO
+  const handlePrecoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+
+    // Se o campo estiver vazio, limpa tudo
+    if (!valor) {
+      setPrecoFormatado('');
+      setNovoProduto({ ...novoProduto, preco: 0 });
+      return;
+    }
+
+    // Formata o valor
+    const valorFormatado = formatarValorMonetario(valor);
+    setPrecoFormatado(valorFormatado);
+
+    // Atualiza o valor numérico no estado
+    const valorNumerico = desformatarValorMonetario(valorFormatado);
+    setNovoProduto({ ...novoProduto, preco: valorNumerico });
+  };
+
+  // ✅ FUNÇÃO PARA LIDAR COM MUDANÇAS NO PREÇO DE CUSTO
+  const handlePrecoCustoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+
+    // Se o campo estiver vazio, limpa tudo
+    if (!valor) {
+      setPrecoCustoFormatado('');
+      setNovoProduto({ ...novoProduto, preco_custo: 0 });
+      return;
+    }
+
+    // Formata o valor
+    const valorFormatado = formatarValorMonetario(valor);
+    setPrecoCustoFormatado(valorFormatado);
+
+    // Atualiza o valor numérico no estado
+    const valorNumerico = desformatarValorMonetario(valorFormatado);
+    setNovoProduto({ ...novoProduto, preco_custo: valorNumerico });
+
+    // Se tem margem definida, calcular preço final
+    if (novoProduto.margem_percentual > 0) {
+      atualizarPrecoComCustoMargem(valorNumerico, novoProduto.margem_percentual);
+    }
+  };
+
+  // ✅ FUNÇÃO PARA LIDAR COM MUDANÇAS NO PREÇO DE TABELA
+  const handlePrecoTabelaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+
+    // Se o campo estiver vazio, limpa tudo
+    if (!valor) {
+      setPrecoTabelaFormatado('');
+      return;
+    }
+
+    // Formata o valor
+    const valorFormatado = formatarValorMonetario(valor);
+    setPrecoTabelaFormatado(valorFormatado);
   };
 
   // Salvar ordem dos grupos no localStorage
@@ -2002,7 +2090,10 @@ const ProdutosPage: React.FC = () => {
     const precoFinal = calcularPrecoFinal(custo, margem);
     if (precoFinal > 0) {
       setNovoProduto(prev => ({ ...prev, preco: precoFinal }));
-      setPrecoFormatado(formatarPreco(precoFinal));
+      // ✅ CORREÇÃO: Converter para centavos corretamente
+      const precoEmCentavos = Math.round(precoFinal * 100).toString();
+      const precoFormatado = formatarValorMonetario(precoEmCentavos);
+      setPrecoFormatado(precoFormatado);
     }
   };
 
@@ -2011,7 +2102,6 @@ const ProdutosPage: React.FC = () => {
     const margem = calcularMargem(custo, preco);
     if (margem > 0) {
       setNovoProduto(prev => ({ ...prev, margem_percentual: margem }));
-      setMargemFormatada(formatarPreco(margem));
     }
   };
 
@@ -2148,11 +2238,10 @@ const ProdutosPage: React.FC = () => {
     });
 
     // Inicializa o preço formatado
-    setPrecoFormatado(formatarPreco(0));
+    setPrecoFormatado('');
 
-    // Inicializa preço de custo e margem formatados
-    setPrecoCustoFormatado(formatarPreco(0));
-    setMargemFormatada(formatarPreco(0));
+    // Inicializa preço de custo formatado
+    setPrecoCustoFormatado('');
 
     // Inicializa o valor do desconto formatado
     setDescontoFormatado('0');
@@ -2398,12 +2487,21 @@ const ProdutosPage: React.FC = () => {
       console.log('Códigos fiscais aplicados automaticamente na edição:', codigosFiscais);
     }
 
-    // Definir o preço formatado
-    setPrecoFormatado(formatarPreco(produto.preco));
+    // Definir o preço formatado usando formatação monetária
+    if (produto.preco > 0) {
+      const precoFormatado = formatarValorMonetario((produto.preco * 100).toString());
+      setPrecoFormatado(precoFormatado);
+    } else {
+      setPrecoFormatado('');
+    }
 
-    // Definir preço de custo e margem formatados
-    setPrecoCustoFormatado(formatarPreco(produto.preco_custo || 0));
-    setMargemFormatada(formatarPreco(produto.margem_percentual || 0));
+    // Definir preço de custo formatado usando formatação monetária
+    if (produto.preco_custo && produto.preco_custo > 0) {
+      const custoFormatado = formatarValorMonetario((produto.preco_custo * 100).toString());
+      setPrecoCustoFormatado(custoFormatado);
+    } else {
+      setPrecoCustoFormatado('');
+    }
 
     // Definir o desconto formatado
     if (produto.valor_desconto !== undefined) {
@@ -3902,11 +4000,22 @@ const ProdutosPage: React.FC = () => {
       });
 
       // Atualizar os campos formatados com os valores clonados
-      setPrecoFormatado(formatarPreco(produtoCriado.preco));
+      if (produtoCriado.preco > 0) {
+        const precoFormatado = formatarValorMonetario((produtoCriado.preco * 100).toString());
+        setPrecoFormatado(precoFormatado);
+      } else {
+        setPrecoFormatado('');
+      }
+
       setDescontoFormatado(produtoCriado.valor_desconto?.toString() || '0');
       setDescontoQuantidadeFormatado(produtoCriado.percentual_desconto_quantidade?.toString() || '10');
-      setPrecoCustoFormatado(formatarPreco(produtoCriado.preco_custo));
-      setMargemFormatada(formatarPreco(produtoCriado.margem_percentual));
+
+      if (produtoCriado.preco_custo && produtoCriado.preco_custo > 0) {
+        const custoFormatado = formatarValorMonetario((produtoCriado.preco_custo * 100).toString());
+        setPrecoCustoFormatado(custoFormatado);
+      } else {
+        setPrecoCustoFormatado('');
+      }
 
       // Limpar campos de ordenação
       setProdutoOrdenacaoCardapioHabilitada(false);
@@ -4216,7 +4325,7 @@ const ProdutosPage: React.FC = () => {
     // Isso será feito na função handleAddProduto quando o formulário for aberto novamente
 
     // Resetar outros estados relacionados ao formulário
-    setPrecoFormatado(formatarPreco(0));
+    setPrecoFormatado('');
     setDescontoFormatado('0');
     setDescontoQuantidadeFormatado('10');
     setEstoqueInputVazio(false);
@@ -4233,9 +4342,8 @@ const ProdutosPage: React.FC = () => {
     setPrecosTabelas({});
     setPrecoTabelaFormatado('0,00');
 
-    // Resetar estados de custo e margem
+    // Resetar estados de custo
     setPrecoCustoFormatado('0,00');
-    setMargemFormatada('0,00');
 
     // Resetar validação de NCM
     setNcmValidacao({
@@ -5660,26 +5768,11 @@ const ProdutosPage: React.FC = () => {
                                 <input
                                   type="text"
                                   value={precoCustoFormatado}
-                                  onChange={(e) => {
-                                    setPrecoCustoFormatado(e.target.value);
-                                    const valorNumerico = desformatarPreco(e.target.value);
-                                    setNovoProduto({ ...novoProduto, preco_custo: valorNumerico });
-
-                                    // Se tem margem definida, calcular preço final
-                                    if (novoProduto.margem_percentual > 0) {
-                                      atualizarPrecoComCustoMargem(valorNumerico, novoProduto.margem_percentual);
-                                    }
-                                  }}
-                                  onFocus={() => {
-                                    // Não limpar automaticamente - preservar valor para edição
-                                  }}
+                                  onChange={handlePrecoCustoChange}
                                   onBlur={() => {
-                                    const valorNumerico = desformatarPreco(precoCustoFormatado);
-                                    setPrecoCustoFormatado(formatarPreco(valorNumerico));
-
                                     // Se não tem margem mas tem preço final, calcular margem
                                     if (novoProduto.margem_percentual === 0 && novoProduto.preco > 0) {
-                                      atualizarMargemComCustoPreco(valorNumerico, novoProduto.preco);
+                                      atualizarMargemComCustoPreco(novoProduto.preco_custo, novoProduto.preco);
                                     }
                                   }}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
@@ -5695,27 +5788,21 @@ const ProdutosPage: React.FC = () => {
                               </label>
                               <div className="relative">
                                 <input
-                                  type="text"
-                                  value={margemFormatada}
+                                  type="number"
+                                  value={novoProduto.margem_percentual || ''}
                                   onChange={(e) => {
-                                    setMargemFormatada(e.target.value);
-                                    const valorNumerico = desformatarPreco(e.target.value);
-                                    setNovoProduto({ ...novoProduto, margem_percentual: valorNumerico });
+                                    const valor = parseFloat(e.target.value) || 0;
+                                    setNovoProduto({ ...novoProduto, margem_percentual: valor });
 
                                     // Se tem custo definido, calcular preço final
-                                    if (novoProduto.preco_custo > 0) {
-                                      atualizarPrecoComCustoMargem(novoProduto.preco_custo, valorNumerico);
+                                    if (novoProduto.preco_custo > 0 && valor > 0) {
+                                      atualizarPrecoComCustoMargem(novoProduto.preco_custo, valor);
                                     }
                                   }}
-                                  onFocus={() => {
-                                    // Não limpar automaticamente - preservar valor para edição
-                                  }}
-                                  onBlur={() => {
-                                    const valorNumerico = desformatarPreco(margemFormatada);
-                                    setMargemFormatada(formatarPreco(valorNumerico));
-                                  }}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-3 pr-8 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                                  placeholder="0,00"
+                                  placeholder="10"
+                                  min="0"
+                                  step="0.01"
                                 />
                                 <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
                                   %
@@ -5797,25 +5884,16 @@ const ProdutosPage: React.FC = () => {
                                   value={abaPrecoAtiva === 'padrao' ? precoFormatado : precoTabelaFormatado}
                                   onChange={(e) => {
                                     if (abaPrecoAtiva === 'padrao') {
-                                      setPrecoFormatado(e.target.value);
-                                      const valorNumerico = desformatarPreco(e.target.value);
-                                      setNovoProduto({ ...novoProduto, preco: valorNumerico });
+                                      handlePrecoChange(e);
                                     } else {
-                                      setPrecoTabelaFormatado(e.target.value);
+                                      handlePrecoTabelaChange(e);
                                     }
-                                  }}
-                                  onFocus={() => {
-                                    // Não limpar o campo automaticamente para preservar valores calculados
-                                    // O usuário pode selecionar tudo com Ctrl+A se quiser substituir
                                   }}
                                   onBlur={async () => {
                                     if (abaPrecoAtiva === 'padrao') {
-                                      const valorNumerico = desformatarPreco(precoFormatado);
-                                      setPrecoFormatado(formatarPreco(valorNumerico));
-
                                       // Se tem preço de custo definido, recalcular margem automaticamente
-                                      if (novoProduto.preco_custo > 0 && valorNumerico > 0) {
-                                        atualizarMargemComCustoPreco(novoProduto.preco_custo, valorNumerico);
+                                      if (novoProduto.preco_custo > 0 && novoProduto.preco > 0) {
+                                        atualizarMargemComCustoPreco(novoProduto.preco_custo, novoProduto.preco);
                                       }
                                     } else {
                                       const valorNumerico = desformatarPreco(precoTabelaFormatado);
