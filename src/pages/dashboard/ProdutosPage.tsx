@@ -524,19 +524,14 @@ const ProdutosPage: React.FC = () => {
     loadGruposOrder();
   }, []);
 
-  // Debug: monitorar mudanças no gruposOrder
-  useEffect(() => {
-    console.log('🔄 Estado gruposOrder mudou:', gruposOrder);
-  }, [gruposOrder]);
+
 
   // Carregar ordem dos grupos do localStorage
   const loadGruposOrder = () => {
     const savedOrder = localStorage.getItem('nexo-grupos-order');
-    console.log('📥 Carregando ordem do localStorage:', savedOrder);
     if (savedOrder) {
       try {
         const parsedOrder = JSON.parse(savedOrder);
-        console.log('📋 Ordem carregada:', parsedOrder);
         setGruposOrder(parsedOrder);
       } catch (error) {
         console.error('Erro ao carregar ordem dos grupos:', error);
@@ -546,15 +541,28 @@ const ProdutosPage: React.FC = () => {
 
   // Salvar ordem dos grupos no localStorage
   const saveGruposOrder = (order: string[]) => {
-    console.log('🔄 Salvando nova ordem dos grupos:', order);
     localStorage.setItem('nexo-grupos-order', JSON.stringify(order));
     setGruposOrder(order);
-    console.log('✅ Ordem salva no localStorage e estado atualizado');
   };
 
   // Função para mover grupo
   const moveGrupo = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
     console.log(`🚀 Movendo grupo ${grupoId} para ${direction}`);
+
+    // Verificar se o grupo tem posicionamento fixo
+    const grupo = grupos.find(g => g.id === grupoId);
+    const temPosicionamentoFixo = grupo &&
+                                 (grupo as any).ordenacao_cardapio_habilitada === true &&
+                                 (grupo as any).ordenacao_cardapio_digital !== null &&
+                                 (grupo as any).ordenacao_cardapio_digital !== undefined &&
+                                 (grupo as any).ordenacao_cardapio_digital !== '';
+
+    if (temPosicionamentoFixo) {
+      const nomeGrupo = grupo?.nome || 'Grupo';
+      const posicao = (grupo as any).ordenacao_cardapio_digital;
+      showMessage('error', `O grupo "${nomeGrupo}" não pode ser movido pois tem posição fixa definida (Posição ${posicao})`);
+      return;
+    }
 
     // Usar a ordem atual da grid (alfabética) como base se ainda não há ordem personalizada
     const currentOrder = gruposOrder.length > 0 && gruposOrder.join(',') !== grupos.map(g => g.id).join(',')
@@ -596,6 +604,22 @@ const ProdutosPage: React.FC = () => {
     console.log(`🎯 Novo índice calculado: ${newIndex}`);
 
     if (newIndex !== currentIndex) {
+      // Verificar se o destino tem um grupo com posicionamento fixo
+      const targetGrupoId = currentOrder[newIndex];
+      const targetGrupo = grupos.find(g => g.id === targetGrupoId);
+      const targetTemPosicionamentoFixo = targetGrupo &&
+                                         (targetGrupo as any).ordenacao_cardapio_habilitada === true &&
+                                         (targetGrupo as any).ordenacao_cardapio_digital !== null &&
+                                         (targetGrupo as any).ordenacao_cardapio_digital !== undefined &&
+                                         (targetGrupo as any).ordenacao_cardapio_digital !== '';
+
+      if (targetTemPosicionamentoFixo) {
+        const nomeGrupoDestino = targetGrupo?.nome || 'Grupo';
+        const posicaoDestino = (targetGrupo as any).ordenacao_cardapio_digital;
+        showMessage('error', `Não é possível mover para esta posição. O grupo "${nomeGrupoDestino}" tem posição fixa definida (Posição ${posicaoDestino})`);
+        return;
+      }
+
       console.log('✅ Movimento válido, aplicando mudança...');
       const newOrder = [...currentOrder];
       const [movedItem] = newOrder.splice(currentIndex, 1);
@@ -624,6 +648,19 @@ const ProdutosPage: React.FC = () => {
 
   // Função para verificar se um movimento é possível
   const canMove = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    // Verificar se o grupo tem posicionamento fixo
+    const grupo = grupos.find(g => g.id === grupoId);
+    const temPosicionamentoFixo = grupo &&
+                                 (grupo as any).ordenacao_cardapio_habilitada === true &&
+                                 (grupo as any).ordenacao_cardapio_digital !== null &&
+                                 (grupo as any).ordenacao_cardapio_digital !== undefined &&
+                                 (grupo as any).ordenacao_cardapio_digital !== '';
+
+    // Grupos com posicionamento fixo não podem ser movidos
+    if (temPosicionamentoFixo) {
+      return false;
+    }
+
     // Usar a ordem atual da grid (alfabética) como base se ainda não há ordem personalizada
     const currentOrder = gruposOrder.length > 0 && gruposOrder.join(',') !== grupos.map(g => g.id).join(',')
       ? gruposOrder
@@ -633,6 +670,44 @@ const ProdutosPage: React.FC = () => {
 
     if (currentIndex === -1) return false;
 
+    // Verificar se o destino do movimento tem um grupo com posicionamento fixo
+    let targetIndex = currentIndex;
+    switch (direction) {
+      case 'up':
+        targetIndex = Math.max(0, currentIndex - 2);
+        break;
+      case 'down':
+        targetIndex = Math.min(currentOrder.length - 1, currentIndex + 2);
+        break;
+      case 'left':
+        if (currentIndex % 2 === 1) {
+          targetIndex = currentIndex - 1;
+        }
+        break;
+      case 'right':
+        if (currentIndex % 2 === 0 && currentIndex < currentOrder.length - 1) {
+          targetIndex = currentIndex + 1;
+        }
+        break;
+    }
+
+    // Se o índice de destino é diferente, verificar se há grupo fixo nessa posição
+    if (targetIndex !== currentIndex) {
+      const targetGrupoId = currentOrder[targetIndex];
+      const targetGrupo = grupos.find(g => g.id === targetGrupoId);
+      const targetTemPosicionamentoFixo = targetGrupo &&
+                                           (targetGrupo as any).ordenacao_cardapio_habilitada === true &&
+                                           (targetGrupo as any).ordenacao_cardapio_digital !== null &&
+                                           (targetGrupo as any).ordenacao_cardapio_digital !== undefined &&
+                                           (targetGrupo as any).ordenacao_cardapio_digital !== '';
+
+      // Não pode mover para posição ocupada por grupo com posicionamento fixo
+      if (targetTemPosicionamentoFixo) {
+        return false;
+      }
+    }
+
+    // Verificações normais de movimento
     switch (direction) {
       case 'up':
         return currentIndex >= 2; // Pode mover para cima se não está nas duas primeiras posições
@@ -4031,10 +4106,58 @@ const ProdutosPage: React.FC = () => {
     console.log('- Ordem personalizada:', gruposOrderStr);
     console.log('- São diferentes?', gruposOrder.length > 0 && gruposOrderStr !== gruposIds);
 
-    // Se houver ordem personalizada E ela foi realmente modificada pelo usuário, usar essa ordem
-    if (gruposOrder.length > 0 && gruposOrderStr !== gruposIds) {
-      console.log('✅ Usando ordem personalizada');
-      return filtered.sort((a, b) => {
+    // Log detalhado dos grupos com posicionamento
+    console.log('📋 Grupos com posicionamento:', filtered.map(g => ({
+      nome: g.nome,
+      id: g.id,
+      ordenacao_cardapio_habilitada: (g as any).ordenacao_cardapio_habilitada,
+      ordenacao_cardapio_digital: (g as any).ordenacao_cardapio_digital
+    })));
+
+    // PRIORIDADE ABSOLUTA: Grupos com posicionamento fixo sempre vêm primeiro, independente de qualquer outra ordenação
+    return filtered.sort((a, b) => {
+      const aTemPosicao = (a as any).ordenacao_cardapio_habilitada === true &&
+                         (a as any).ordenacao_cardapio_digital !== null &&
+                         (a as any).ordenacao_cardapio_digital !== undefined &&
+                         (a as any).ordenacao_cardapio_digital !== '';
+      const bTemPosicao = (b as any).ordenacao_cardapio_habilitada === true &&
+                         (b as any).ordenacao_cardapio_digital !== null &&
+                         (b as any).ordenacao_cardapio_digital !== undefined &&
+                         (b as any).ordenacao_cardapio_digital !== '';
+
+      console.log('🔍 Comparando grupos:', {
+        grupoA: a.nome,
+        aHabilitada: (a as any).ordenacao_cardapio_habilitada,
+        aPosicao: (a as any).ordenacao_cardapio_digital,
+        aTemPosicao,
+        grupoB: b.nome,
+        bHabilitada: (b as any).ordenacao_cardapio_habilitada,
+        bPosicao: (b as any).ordenacao_cardapio_digital,
+        bTemPosicao
+      });
+
+      // Se ambos têm posicionamento fixo, ordenar por posição numérica (menor número = primeiro)
+      if (aTemPosicao && bTemPosicao) {
+        const posicaoA = Number((a as any).ordenacao_cardapio_digital);
+        const posicaoB = Number((b as any).ordenacao_cardapio_digital);
+        console.log(`📌 Ambos fixos: ${a.nome}(${posicaoA}) vs ${b.nome}(${posicaoB}) = ${posicaoA - posicaoB}`);
+        return posicaoA - posicaoB;
+      }
+
+      // Se apenas A tem posicionamento fixo, A vem SEMPRE primeiro
+      if (aTemPosicao && !bTemPosicao) {
+        console.log(`📌 ${a.nome} vem primeiro (tem posição fixa)`);
+        return -1;
+      }
+
+      // Se apenas B tem posicionamento fixo, B vem SEMPRE primeiro
+      if (!aTemPosicao && bTemPosicao) {
+        console.log(`📌 ${b.nome} vem primeiro (tem posição fixa)`);
+        return 1;
+      }
+
+      // PRIORIDADE 2: Para grupos sem posicionamento fixo, usar ordem personalizada se existir
+      if (gruposOrder.length > 0 && gruposOrderStr !== gruposIds) {
         const indexA = gruposOrder.indexOf(a.id);
         const indexB = gruposOrder.indexOf(b.id);
 
@@ -4046,16 +4169,9 @@ const ProdutosPage: React.FC = () => {
         // Se apenas um está na ordem personalizada, ele vem primeiro
         if (indexA !== -1) return -1;
         if (indexB !== -1) return 1;
+      }
 
-        // Se nenhum está na ordem personalizada, usar ordem alfabética
-        const comparison = a.nome.localeCompare(b.nome);
-        return sortOrder === 'asc' ? comparison : -comparison;
-      });
-    }
-
-    console.log('📝 Usando ordem alfabética');
-    // Caso contrário, usar ordenação alfabética normal
-    return filtered.sort((a, b) => {
+      // PRIORIDADE 3: Ordem alfabética para grupos sem posicionamento e sem ordem personalizada
       const comparison = a.nome.localeCompare(b.nome);
       return sortOrder === 'asc' ? comparison : -comparison;
     });
@@ -4678,30 +4794,43 @@ const ProdutosPage: React.FC = () => {
                 <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                   <div className="flex items-center gap-2 text-blue-400">
                     <Move size={16} />
-                    <span className="text-sm font-medium">
-                      Modo de organização ativo - Use as setas para reorganizar os grupos e clique em "Salvar alterações" para confirmar
-                    </span>
+                    <div className="text-sm">
+                      <div className="font-medium mb-1">
+                        Modo de organização ativo - Use as setas para reorganizar os grupos e clique em "Salvar alterações" para confirmar
+                      </div>
+                      <div className="text-xs text-blue-300">
+                        📌 Grupos com posição fixa (verde) não podem ser movidos e têm prioridade na ordenação
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {filteredAndSortedGrupos.map((grupo) => (
-                  <div
-                    key={grupo.id}
-                    className={`bg-background-card rounded border ${
-                      isOrganizingMode
-                        ? 'border-blue-500/50 shadow-lg shadow-blue-500/10'
-                        : 'border-gray-800'
-                    }`}
-                  >
+                {filteredAndSortedGrupos.map((grupo) => {
+                  const temPosicionamentoFixo = (grupo as any).ordenacao_cardapio_habilitada === true &&
+                                               (grupo as any).ordenacao_cardapio_digital !== null &&
+                                               (grupo as any).ordenacao_cardapio_digital !== undefined &&
+                                               (grupo as any).ordenacao_cardapio_digital !== '';
+
+                  return (
+                    <div
+                      key={grupo.id}
+                      className={`bg-background-card rounded border ${
+                        isOrganizingMode
+                          ? temPosicionamentoFixo
+                            ? 'border-green-500/50 shadow-lg shadow-green-500/10'
+                            : 'border-blue-500/50 shadow-lg shadow-blue-500/10'
+                          : 'border-gray-800'
+                      }`}
+                    >
                   <div className="p-3 border-b border-gray-800 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <h3 className="text-base font-medium text-white">{grupo.nome}</h3>
                       {/* Tag de posição do grupo no cardápio digital */}
-                      {(grupo as any).ordenacao_cardapio_habilitada && (grupo as any).ordenacao_cardapio_digital && (
-                        <span className="inline-block bg-green-600/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-medium">
-                          Posição {(grupo as any).ordenacao_cardapio_digital}
+                      {temPosicionamentoFixo && (
+                        <span className="inline-flex items-center gap-1 bg-green-600/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                          📌 Posição {(grupo as any).ordenacao_cardapio_digital} (Fixo)
                         </span>
                       )}
                     </div>
@@ -4813,8 +4942,18 @@ const ProdutosPage: React.FC = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Mensagem informativa para grupos com posicionamento fixo no modo de organização */}
+                  {isOrganizingMode && temPosicionamentoFixo && (
+                    <div className="px-3 pb-3">
+                      <div className="p-2 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-xs">
+                        🔒 Este grupo tem posição fixa e não pode ser reorganizado
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -4830,8 +4969,11 @@ const ProdutosPage: React.FC = () => {
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-40"
               onClick={() => {
-                resetFormularioProduto();
-                setShowSidebar(false);
+                // Não permitir fechar o modal se estiver salvando
+                if (!isLoading) {
+                  resetFormularioProduto();
+                  setShowSidebar(false);
+                }
               }}
             />
             <motion.div
@@ -4853,10 +4995,18 @@ const ProdutosPage: React.FC = () => {
                   </h2>
                   <button
                     onClick={() => {
-                      resetFormularioProduto();
-                      setShowSidebar(false);
+                      // Não permitir fechar o modal se estiver salvando
+                      if (!isLoading) {
+                        resetFormularioProduto();
+                        setShowSidebar(false);
+                      }
                     }}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className={`transition-colors ${
+                      isLoading
+                        ? 'text-gray-600 cursor-not-allowed'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                    disabled={isLoading}
                   >
                     <X size={24} />
                   </button>
@@ -6033,25 +6183,34 @@ const ProdutosPage: React.FC = () => {
 
                         {/* Seção de Opções Adicionais ocultada conforme solicitado */}
 
-                        <div className="flex gap-4 pt-4">
-                          <Button
-                            type="button"
-                            variant="text"
-                            className="flex-1"
-                            onClick={() => {
-                              resetFormularioProduto();
-                              setShowSidebar(false);
-                            }}
-                          >
-                            Cancelar
-                          </Button>
+                        <div className={`flex pt-4 ${isLoading ? '' : 'gap-4'}`}>
+                          {!isLoading && (
+                            <Button
+                              type="button"
+                              variant="text"
+                              className="flex-1"
+                              onClick={() => {
+                                resetFormularioProduto();
+                                setShowSidebar(false);
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                          )}
                           <Button
                             type="submit"
                             variant="primary"
                             className="flex-1"
                             disabled={isLoading}
                           >
-                            {isLoading ? 'Salvando...' : editingProduto ? 'Salvar' : 'Criar'}
+                            {isLoading ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                <span>Salvando, aguarde...</span>
+                              </div>
+                            ) : (
+                              editingProduto ? 'Salvar' : 'Criar'
+                            )}
                           </Button>
                         </div>
 
@@ -6165,15 +6324,17 @@ const ProdutosPage: React.FC = () => {
                               )}
                             </div>
 
-                            <div className="flex gap-4 pt-4">
-                              <Button
-                                type="button"
-                                variant="text"
-                                className="flex-1"
-                                onClick={() => setActiveTab('dados')}
-                              >
-                                Voltar
-                              </Button>
+                            <div className={`flex pt-4 ${isLoading ? '' : 'gap-4'}`}>
+                              {!isLoading && (
+                                <Button
+                                  type="button"
+                                  variant="text"
+                                  className="flex-1"
+                                  onClick={() => setActiveTab('dados')}
+                                >
+                                  Voltar
+                                </Button>
+                              )}
                               <Button
                                 type="button"
                                 variant="primary"
@@ -6185,7 +6346,14 @@ const ProdutosPage: React.FC = () => {
                                 }}
                                 disabled={isLoading}
                               >
-                                {isLoading ? 'Salvando...' : 'Concluir'}
+                                {isLoading ? (
+                                  <div className="flex items-center justify-center gap-2">
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    <span>Salvando, aguarde...</span>
+                                  </div>
+                                ) : (
+                                  'Concluir'
+                                )}
                               </Button>
                             </div>
                           </div>
