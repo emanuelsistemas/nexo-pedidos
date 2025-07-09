@@ -549,6 +549,13 @@ const ProdutosPage: React.FC = () => {
   const moveGrupo = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
     console.log(`🚀 Movendo grupo ${grupoId} para ${direction}`);
 
+    // Primeiro verificar se o movimento é possível usando a função canMove
+    if (!canMove(grupoId, direction)) {
+      console.log(`❌ Movimento ${direction} não é possível para o grupo ${grupoId}`);
+      showMessage('error', 'Movimento não permitido');
+      return;
+    }
+
     // Verificar se o grupo tem posicionamento fixo
     const grupo = grupos.find(g => g.id === grupoId);
     const temPosicionamentoFixo = grupo &&
@@ -582,22 +589,19 @@ const ProdutosPage: React.FC = () => {
     let newIndex = currentIndex;
 
     // Calcular nova posição baseada na direção e layout de 2 colunas
+    // Usar a mesma lógica da função canMove para consistência
     switch (direction) {
       case 'up':
-        newIndex = Math.max(0, currentIndex - 2); // Move 2 posições para cima (linha anterior)
+        newIndex = currentIndex - 2; // Move 2 posições para cima (linha anterior)
         break;
       case 'down':
-        newIndex = Math.min(currentOrder.length - 1, currentIndex + 2); // Move 2 posições para baixo (próxima linha)
+        newIndex = currentIndex + 2; // Move 2 posições para baixo (próxima linha)
         break;
       case 'left':
-        if (currentIndex % 2 === 1) { // Se está na coluna direita
-          newIndex = currentIndex - 1; // Move para a esquerda
-        }
+        newIndex = currentIndex - 1; // Move para a esquerda
         break;
       case 'right':
-        if (currentIndex % 2 === 0 && currentIndex < currentOrder.length - 1) { // Se está na coluna esquerda e não é o último
-          newIndex = currentIndex + 1; // Move para a direita
-        }
+        newIndex = currentIndex + 1; // Move para a direita
         break;
     }
 
@@ -648,6 +652,8 @@ const ProdutosPage: React.FC = () => {
 
   // Função para verificar se um movimento é possível
   const canMove = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    console.log(`🔍 [v2.0] Verificando movimento ${direction} para grupo ${grupoId}`);
+
     // Verificar se o grupo tem posicionamento fixo
     const grupo = grupos.find(g => g.id === grupoId);
     const temPosicionamentoFixo = grupo &&
@@ -658,6 +664,7 @@ const ProdutosPage: React.FC = () => {
 
     // Grupos com posicionamento fixo não podem ser movidos
     if (temPosicionamentoFixo) {
+      console.log(`❌ Grupo ${grupoId} é fixo, não pode ser movido`);
       return false;
     }
 
@@ -667,11 +674,16 @@ const ProdutosPage: React.FC = () => {
       : filteredAndSortedGrupos.map(g => g.id);
 
     const currentIndex = currentOrder.indexOf(grupoId);
+    console.log(`📍 Posição atual: ${currentIndex} de ${currentOrder.length} total`);
 
-    if (currentIndex === -1) return false;
+    if (currentIndex === -1) {
+      console.log(`❌ Grupo ${grupoId} não encontrado na ordem atual`);
+      return false;
+    }
 
     // Função auxiliar para verificar se um grupo é fixo
     const isGrupoFixo = (gId: string) => {
+      if (!gId) return false;
       const g = grupos.find(gr => gr.id === gId);
       return g &&
              (g as any).ordenacao_cardapio_habilitada === true &&
@@ -680,38 +692,75 @@ const ProdutosPage: React.FC = () => {
              (g as any).ordenacao_cardapio_digital !== '';
     };
 
+    // Grid de 2 colunas: posições pares = coluna esquerda, ímpares = coluna direita
+    // Linha = Math.floor(index / 2), Coluna = index % 2
+
+    const isLeftColumn = currentIndex % 2 === 0;  // Par = coluna esquerda
+    const isRightColumn = currentIndex % 2 === 1; // Ímpar = coluna direita
+    const currentRow = Math.floor(currentIndex / 2);
+
+    console.log(`🏗️ Layout: linha ${currentRow}, coluna ${isLeftColumn ? 'esquerda' : 'direita'}`);
+
     // Verificações específicas por direção
     switch (direction) {
       case 'up':
-        // Precisa ter pelo menos 2 posições acima E a posição de destino não pode ser fixa
-        if (currentIndex < 2) return false;
-        const upTargetIndex = currentIndex - 2;
+        // Só pode subir se não está na primeira linha (linha 0)
+        if (currentRow === 0) {
+          console.log(`❌ UP: Já está na primeira linha`);
+          return false;
+        }
+        const upTargetIndex = currentIndex - 2; // Sobe uma linha (2 posições)
+        if (upTargetIndex < 0) {
+          console.log(`❌ UP: Índice de destino inválido (${upTargetIndex})`);
+          return false;
+        }
         const upTargetGrupoId = currentOrder[upTargetIndex];
-        return !isGrupoFixo(upTargetGrupoId);
+        const canMoveUp = !isGrupoFixo(upTargetGrupoId);
+        console.log(`${canMoveUp ? '✅' : '❌'} UP: Destino ${upTargetIndex} ${canMoveUp ? 'livre' : 'ocupado por grupo fixo'}`);
+        return canMoveUp;
 
       case 'down':
-        // Precisa ter pelo menos 2 posições abaixo (próxima linha) E a posição de destino não pode ser fixa
-        const downTargetIndex = currentIndex + 2;
-        if (downTargetIndex >= currentOrder.length) return false; // Não existe posição 2 posições abaixo
+        // Só pode descer se existe uma linha abaixo
+        const downTargetIndex = currentIndex + 2; // Desce uma linha (2 posições)
+        if (downTargetIndex >= currentOrder.length) {
+          console.log(`❌ DOWN: Não existe linha abaixo (${downTargetIndex} >= ${currentOrder.length})`);
+          return false;
+        }
         const downTargetGrupoId = currentOrder[downTargetIndex];
-        return !isGrupoFixo(downTargetGrupoId);
+        const canMoveDown = !isGrupoFixo(downTargetGrupoId);
+        console.log(`${canMoveDown ? '✅' : '❌'} DOWN: Destino ${downTargetIndex} ${canMoveDown ? 'livre' : 'ocupado por grupo fixo'}`);
+        return canMoveDown;
 
       case 'left':
-        // Só pode mover para esquerda se está na coluna direita (índice ímpar) E a posição à esquerda não é fixa
-        if (currentIndex % 2 !== 1) return false;
+        // Só pode ir para esquerda se está na coluna direita
+        if (!isRightColumn) {
+          console.log(`❌ LEFT: Já está na coluna esquerda`);
+          return false;
+        }
         const leftTargetIndex = currentIndex - 1;
         const leftTargetGrupoId = currentOrder[leftTargetIndex];
-        return !isGrupoFixo(leftTargetGrupoId);
+        const canMoveLeft = !isGrupoFixo(leftTargetGrupoId);
+        console.log(`${canMoveLeft ? '✅' : '❌'} LEFT: Destino ${leftTargetIndex} ${canMoveLeft ? 'livre' : 'ocupado por grupo fixo'}`);
+        return canMoveLeft;
 
       case 'right':
-        // Só pode mover para direita se está na coluna esquerda (índice par) E existe uma posição à direita E essa posição não é fixa
-        if (currentIndex % 2 !== 0) return false; // Não está na coluna esquerda
+        // Só pode ir para direita se está na coluna esquerda E existe posição à direita
+        if (!isLeftColumn) {
+          console.log(`❌ RIGHT: Já está na coluna direita`);
+          return false;
+        }
         const rightTargetIndex = currentIndex + 1;
-        if (rightTargetIndex >= currentOrder.length) return false; // Não existe posição à direita
+        if (rightTargetIndex >= currentOrder.length) {
+          console.log(`❌ RIGHT: Não existe posição à direita (${rightTargetIndex} >= ${currentOrder.length})`);
+          return false;
+        }
         const rightTargetGrupoId = currentOrder[rightTargetIndex];
-        return !isGrupoFixo(rightTargetGrupoId);
+        const canMoveRight = !isGrupoFixo(rightTargetGrupoId);
+        console.log(`${canMoveRight ? '✅' : '❌'} RIGHT: Destino ${rightTargetIndex} ${canMoveRight ? 'livre' : 'ocupado por grupo fixo'}`);
+        return canMoveRight;
 
       default:
+        console.log(`❌ Direção inválida: ${direction}`);
         return false;
     }
   };
