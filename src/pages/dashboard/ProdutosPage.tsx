@@ -544,7 +544,11 @@ const ProdutosPage: React.FC = () => {
 
   // Função para mover grupo
   const moveGrupo = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
-    const currentOrder = gruposOrder.length > 0 ? gruposOrder : grupos.map(g => g.id);
+    // Usar a ordem atual da grid (alfabética) como base se ainda não há ordem personalizada
+    const currentOrder = gruposOrder.length > 0 && gruposOrder.join(',') !== grupos.map(g => g.id).join(',')
+      ? gruposOrder
+      : filteredAndSortedGrupos.map(g => g.id);
+
     const currentIndex = currentOrder.indexOf(grupoId);
 
     if (currentIndex === -1) return;
@@ -581,7 +585,11 @@ const ProdutosPage: React.FC = () => {
 
   // Função para verificar se um movimento é possível
   const canMove = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
-    const currentOrder = gruposOrder.length > 0 ? gruposOrder : grupos.map(g => g.id);
+    // Usar a ordem atual da grid (alfabética) como base se ainda não há ordem personalizada
+    const currentOrder = gruposOrder.length > 0 && gruposOrder.join(',') !== grupos.map(g => g.id).join(',')
+      ? gruposOrder
+      : filteredAndSortedGrupos.map(g => g.id);
+
     const currentIndex = currentOrder.indexOf(grupoId);
 
     if (currentIndex === -1) return false;
@@ -3976,12 +3984,11 @@ const ProdutosPage: React.FC = () => {
       grupo.nome.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Se estiver no modo de organização ou houver ordem personalizada, usar essa ordem
-    if (isOrganizingMode || gruposOrder.length > 0) {
-      const currentOrder = gruposOrder.length > 0 ? gruposOrder : grupos.map(g => g.id);
+    // Se houver ordem personalizada E ela foi realmente modificada pelo usuário, usar essa ordem
+    if (gruposOrder.length > 0 && gruposOrder.join(',') !== grupos.map(g => g.id).join(',')) {
       return filtered.sort((a, b) => {
-        const indexA = currentOrder.indexOf(a.id);
-        const indexB = currentOrder.indexOf(b.id);
+        const indexA = gruposOrder.indexOf(a.id);
+        const indexB = gruposOrder.indexOf(b.id);
 
         // Se ambos estão na ordem personalizada, usar essa ordem
         if (indexA !== -1 && indexB !== -1) {
@@ -4556,7 +4563,18 @@ const ProdutosPage: React.FC = () => {
               type="button"
               variant={isOrganizingMode ? "primary" : "text"}
               className="flex items-center gap-2"
-              onClick={() => setIsOrganizingMode(!isOrganizingMode)}
+              onClick={() => {
+                if (isOrganizingMode) {
+                  // Ao finalizar, manter apenas se houve mudanças reais
+                  const currentAlphabeticalOrder = filteredAndSortedGrupos.map(g => g.id);
+                  if (gruposOrder.join(',') === currentAlphabeticalOrder.join(',')) {
+                    // Se a ordem personalizada é igual à alfabética, limpar
+                    localStorage.removeItem('nexo-grupos-order');
+                    setGruposOrder([]);
+                  }
+                }
+                setIsOrganizingMode(!isOrganizingMode);
+              }}
             >
               <Move size={18} />
               {isOrganizingMode ? 'Finalizar' : 'Organizar'}
