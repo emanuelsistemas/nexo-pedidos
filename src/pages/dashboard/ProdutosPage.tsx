@@ -149,6 +149,8 @@ const ProdutosPage: React.FC = () => {
   // Estados para organização visual dos grupos
   const [isOrganizingMode, setIsOrganizingMode] = useState(false);
   const [gruposOrder, setGruposOrder] = useState<string[]>([]);
+  const [isOrganizingProducts, setIsOrganizingProducts] = useState<Record<string, boolean>>({});
+  const [produtosOrder, setProdutosOrder] = useState<Record<string, string[]>>({});
 
   // Estados para controlar o carregamento de cada parte dos dados
   const [loadingStates, setLoadingStates] = useState({
@@ -522,6 +524,7 @@ const ProdutosPage: React.FC = () => {
     carregarConfiguracaoPizzas();
     carregarConfiguracaoCardapioDigital();
     loadGruposOrder();
+    loadProdutosOrder();
   }, []);
 
 
@@ -537,6 +540,26 @@ const ProdutosPage: React.FC = () => {
         console.error('Erro ao carregar ordem dos grupos:', error);
       }
     }
+  };
+
+  // Carregar ordem dos produtos do localStorage
+  const loadProdutosOrder = () => {
+    const savedOrder = localStorage.getItem('nexo-produtos-order');
+    if (savedOrder) {
+      try {
+        const parsedOrder = JSON.parse(savedOrder);
+        setProdutosOrder(parsedOrder);
+      } catch (error) {
+        console.error('Erro ao carregar ordem dos produtos:', error);
+      }
+    }
+  };
+
+  // Salvar ordem dos produtos no localStorage
+  const saveProdutosOrder = (grupoId: string, newOrder: string[]) => {
+    const updatedOrder = { ...produtosOrder, [grupoId]: newOrder };
+    setProdutosOrder(updatedOrder);
+    localStorage.setItem('nexo-produtos-order', JSON.stringify(updatedOrder));
   };
 
   // Salvar ordem dos grupos no localStorage
@@ -763,6 +786,119 @@ const ProdutosPage: React.FC = () => {
         console.log(`❌ Direção inválida: ${direction}`);
         return false;
     }
+  };
+
+  // Função para verificar se um produto pode ser movido
+  const canMoveProduto = (grupoId: string, produtoId: string, direction: 'up' | 'down'): boolean => {
+    console.log(`🔍 [PRODUTO] Verificando movimento ${direction} para produto ${produtoId} no grupo ${grupoId}`);
+
+    // Verificar se o produto tem posicionamento fixo
+    const grupo = grupos.find(g => g.id === grupoId);
+    if (!grupo) return false;
+
+    const produto = grupo.produtos.find(p => p.id === produtoId);
+    const temPosicionamentoFixo = produto &&
+                                 (produto as any).ordenacao_cardapio_habilitada === true &&
+                                 (produto as any).ordenacao_cardapio_digital !== null &&
+                                 (produto as any).ordenacao_cardapio_digital !== undefined &&
+                                 (produto as any).ordenacao_cardapio_digital !== '';
+
+    if (temPosicionamentoFixo) {
+      console.log(`❌ Produto ${produtoId} é fixo, não pode ser movido`);
+      return false;
+    }
+
+    // Obter ordem atual dos produtos no grupo
+    const currentOrder = produtosOrder[grupoId] || getFilteredAndSortedProducts(grupo).map(p => p.id);
+    const currentIndex = currentOrder.indexOf(produtoId);
+
+    if (currentIndex === -1) {
+      console.log(`❌ Produto ${produtoId} não encontrado na ordem atual`);
+      return false;
+    }
+
+    // Função auxiliar para verificar se um produto é fixo
+    const isProdutoFixo = (pId: string) => {
+      if (!pId) return false;
+      const p = grupo.produtos.find(pr => pr.id === pId);
+      return p &&
+             (p as any).ordenacao_cardapio_habilitada === true &&
+             (p as any).ordenacao_cardapio_digital !== null &&
+             (p as any).ordenacao_cardapio_digital !== undefined &&
+             (p as any).ordenacao_cardapio_digital !== '';
+    };
+
+    // Verificações específicas por direção
+    switch (direction) {
+      case 'up':
+        if (currentIndex === 0) {
+          console.log(`❌ UP: Produto já está no topo`);
+          return false;
+        }
+        const upTargetIndex = currentIndex - 1;
+        const upTargetProdutoId = currentOrder[upTargetIndex];
+        const canMoveUp = !isProdutoFixo(upTargetProdutoId);
+        console.log(`${canMoveUp ? '✅' : '❌'} UP: Destino ${upTargetIndex} ${canMoveUp ? 'livre' : 'ocupado por produto fixo'}`);
+        return canMoveUp;
+
+      case 'down':
+        if (currentIndex >= currentOrder.length - 1) {
+          console.log(`❌ DOWN: Produto já está no final`);
+          return false;
+        }
+        const downTargetIndex = currentIndex + 1;
+        const downTargetProdutoId = currentOrder[downTargetIndex];
+        const canMoveDown = !isProdutoFixo(downTargetProdutoId);
+        console.log(`${canMoveDown ? '✅' : '❌'} DOWN: Destino ${downTargetIndex} ${canMoveDown ? 'livre' : 'ocupado por produto fixo'}`);
+        return canMoveDown;
+
+      default:
+        console.log(`❌ Direção inválida: ${direction}`);
+        return false;
+    }
+  };
+
+  // Função para mover produto
+  const moveProduto = (grupoId: string, produtoId: string, direction: 'up' | 'down') => {
+    console.log(`🚀 [PRODUTO] Movendo produto ${produtoId} para ${direction} no grupo ${grupoId}`);
+
+    if (!canMoveProduto(grupoId, produtoId, direction)) {
+      console.log(`❌ Movimento ${direction} não é possível para o produto ${produtoId}`);
+      showMessage('error', 'Movimento não permitido - posição ocupada por produto fixo');
+      return;
+    }
+
+    const grupo = grupos.find(g => g.id === grupoId);
+    if (!grupo) return;
+
+    // Obter ordem atual
+    const currentOrder = produtosOrder[grupoId] || getFilteredAndSortedProducts(grupo).map(p => p.id);
+    const currentIndex = currentOrder.indexOf(produtoId);
+
+    let targetIndex = currentIndex;
+    switch (direction) {
+      case 'up':
+        targetIndex = currentIndex - 1;
+        break;
+      case 'down':
+        targetIndex = currentIndex + 1;
+        break;
+    }
+
+    if (targetIndex < 0 || targetIndex >= currentOrder.length) {
+      console.log(`❌ Índice de destino inválido: ${targetIndex}`);
+      return;
+    }
+
+    // Trocar posições
+    const newOrder = [...currentOrder];
+    [newOrder[currentIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[currentIndex]];
+
+    // Salvar nova ordem
+    saveProdutosOrder(grupoId, newOrder);
+
+    console.log('✅ Movimento de produto realizado com sucesso');
+    showMessage('success', 'Organização salva com sucesso!');
   };
 
   // useEffect separado para configurar event listener de pizzas
@@ -4224,40 +4360,59 @@ const ProdutosPage: React.FC = () => {
     const searchTerm = productSearchTerms[grupo.id] || '';
     const sortOrder = productSortOrders[grupo.id] || 'asc';
 
-    return grupo.produtos
-      .filter(produto =>
-        produto.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        produto.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-      .sort((a, b) => {
-        // ✅ PRIORIDADE: Produtos com posicionamento fixo sempre vêm primeiro
-        const aTemPosicao = (a as any).ordenacao_cardapio_habilitada === true &&
-                           (a as any).ordenacao_cardapio_digital !== null &&
-                           (a as any).ordenacao_cardapio_digital !== undefined &&
-                           (a as any).ordenacao_cardapio_digital !== '';
-        const bTemPosicao = (b as any).ordenacao_cardapio_habilitada === true &&
-                           (b as any).ordenacao_cardapio_digital !== null &&
-                           (b as any).ordenacao_cardapio_digital !== undefined &&
-                           (b as any).ordenacao_cardapio_digital !== '';
+    // Filtrar produtos
+    const filteredProducts = grupo.produtos.filter(produto =>
+      produto.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      produto.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
 
-        // Se ambos têm posicionamento fixo, ordenar por posição numérica (menor número = primeiro)
-        if (aTemPosicao && bTemPosicao) {
-          const posicaoA = Number((a as any).ordenacao_cardapio_digital);
-          const posicaoB = Number((b as any).ordenacao_cardapio_digital);
-          return posicaoA - posicaoB; // Posição 1 vem antes de posição 2
-        }
+    // Separar produtos fixos e móveis
+    const produtosFixos = filteredProducts.filter(produto => {
+      const temPosicionamentoFixo = (produto as any).ordenacao_cardapio_habilitada === true &&
+                                   (produto as any).ordenacao_cardapio_digital !== null &&
+                                   (produto as any).ordenacao_cardapio_digital !== undefined &&
+                                   (produto as any).ordenacao_cardapio_digital !== '';
+      return temPosicionamentoFixo;
+    }).sort((a, b) => {
+      const posicaoA = Number((a as any).ordenacao_cardapio_digital);
+      const posicaoB = Number((b as any).ordenacao_cardapio_digital);
+      return posicaoA - posicaoB; // Posição 1 vem antes de posição 2
+    });
 
-        // Se apenas A tem posicionamento, A vem primeiro
-        if (aTemPosicao && !bTemPosicao) return -1;
+    const produtosMoveis = filteredProducts.filter(produto => {
+      const temPosicionamentoFixo = (produto as any).ordenacao_cardapio_habilitada === true &&
+                                   (produto as any).ordenacao_cardapio_digital !== null &&
+                                   (produto as any).ordenacao_cardapio_digital !== undefined &&
+                                   (produto as any).ordenacao_cardapio_digital !== '';
+      return !temPosicionamentoFixo;
+    });
 
-        // Se apenas B tem posicionamento, B vem primeiro
-        if (!aTemPosicao && bTemPosicao) return 1;
+    // Se há ordem personalizada para produtos móveis, aplicá-la
+    const customOrder = produtosOrder[grupo.id];
+    if (customOrder && customOrder.length > 0) {
+      // Ordenar produtos móveis conforme ordem personalizada
+      const orderedMoveis = customOrder
+        .map(id => produtosMoveis.find(p => p.id === id))
+        .filter(p => p !== undefined) as Produto[];
 
-        // Se nenhum tem posicionamento, ordenar alfabeticamente
+      // Adicionar produtos que não estão na ordem personalizada (novos produtos)
+      const remainingMoveis = produtosMoveis.filter(p => !customOrder.includes(p.id));
+      remainingMoveis.sort((a, b) => {
         const comparison = a.nome.localeCompare(b.nome);
         return sortOrder === 'asc' ? comparison : -comparison;
       });
+
+      return [...produtosFixos, ...orderedMoveis, ...remainingMoveis];
+    }
+
+    // Ordem padrão: fixos primeiro (por posição), depois móveis (alfabético)
+    produtosMoveis.sort((a, b) => {
+      const comparison = a.nome.localeCompare(b.nome);
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    return [...produtosFixos, ...produtosMoveis];
   };
 
   const renderProdutoOpcoes = (produto: Produto) => {
@@ -4659,6 +4814,47 @@ const ProdutosPage: React.FC = () => {
 
         {/* Opções do produto - Largura completa */}
         {renderProdutoOpcoes(produto)}
+
+        {/* Setas de organização de produtos */}
+        {isOrganizingProducts[grupo.id] && (
+          <div className="mt-2 pt-2 border-t border-gray-700/50">
+            {/* Verificar se o produto tem posicionamento fixo */}
+            {(produto as any).ordenacao_cardapio_habilitada === true &&
+             (produto as any).ordenacao_cardapio_digital !== null &&
+             (produto as any).ordenacao_cardapio_digital !== undefined &&
+             (produto as any).ordenacao_cardapio_digital !== '' ? (
+              <div className="text-center">
+                <span className="inline-block bg-green-500/10 text-green-400 text-xs px-2 py-1 rounded-full font-medium">
+                  🔒 Produto fixo - não pode ser movido
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2">
+                {/* Seta para cima */}
+                {canMoveProduto(grupo.id, produto.id, 'up') && (
+                  <button
+                    onClick={() => moveProduto(grupo.id, produto.id, 'up')}
+                    className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                    title="Mover para cima"
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                )}
+
+                {/* Seta para baixo */}
+                {canMoveProduto(grupo.id, produto.id, 'down') && (
+                  <button
+                    onClick={() => moveProduto(grupo.id, produto.id, 'down')}
+                    className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                    title="Mover para baixo"
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -4992,6 +5188,18 @@ const ProdutosPage: React.FC = () => {
                       >
                         <ArrowUpDown size={18} />
                         {(productSortOrders[grupo.id] || 'asc') === 'asc' ? 'A-Z' : 'Z-A'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={isOrganizingProducts[grupo.id] ? "primary" : "text"}
+                        className="flex items-center gap-2"
+                        onClick={() => setIsOrganizingProducts(prev => ({
+                          ...prev,
+                          [grupo.id]: !prev[grupo.id]
+                        }))}
+                      >
+                        <Move size={18} />
+                        {isOrganizingProducts[grupo.id] ? 'Finalizar' : 'Organizar'}
                       </Button>
                     </div>
 
