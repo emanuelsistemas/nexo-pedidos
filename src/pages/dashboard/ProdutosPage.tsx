@@ -2755,11 +2755,12 @@ const ProdutosPage: React.FC = () => {
       return;
     }
 
-    // ✅ VALIDAÇÃO CORRIGIDA: Posição única por empresa (independente do grupo)
+    // ✅ VALIDAÇÃO CORRIGIDA: Posição única por GRUPO (não global)
     console.log('🔍 DEBUG VALIDAÇÃO POSIÇÃO:', {
       produtoOrdenacaoCardapioHabilitada,
       produtoOrdenacaoCardapioDigital,
-      editingProduto: editingProduto?.id
+      editingProduto: editingProduto?.id,
+      selectedGrupo: selectedGrupo?.id
     });
 
     if (produtoOrdenacaoCardapioHabilitada && produtoOrdenacaoCardapioDigital) {
@@ -2781,12 +2782,13 @@ const ProdutosPage: React.FC = () => {
         return;
       }
 
-      // ✅ CORREÇÃO: Buscar TODOS os produtos da EMPRESA (não apenas do grupo)
-      const { data: produtosEmpresa, error: produtosError } = await supabase
+      // ✅ CORREÇÃO: Buscar produtos do MESMO GRUPO da EMPRESA (não global)
+      const { data: produtosGrupo, error: produtosError } = await supabase
         .from('produtos')
         .select('id, nome, grupo_id, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('deletado', false)
+        .eq('grupo_id', selectedGrupo?.id) // ✅ FILTRAR POR GRUPO
+        .eq('deletado', false) // ✅ EXCLUIR PRODUTOS DELETADOS
         .eq('ordenacao_cardapio_habilitada', true)
         .not('ordenacao_cardapio_digital', 'is', null);
 
@@ -2803,16 +2805,18 @@ const ProdutosPage: React.FC = () => {
         posicaoNumber,
         editingProdutoId: editingProduto?.id,
         empresaId: usuarioData.empresa_id,
-        totalProdutosComPosicao: produtosEmpresa?.length
+        grupoId: selectedGrupo?.id,
+        totalProdutosComPosicaoNoGrupo: produtosGrupo?.length
       });
 
-      // Verificar se já existe outro produto com a mesma posição
-      const produtoComMesmaPosicao = produtosEmpresa?.find(produto => {
+      // Verificar se já existe outro produto com a mesma posição NO MESMO GRUPO
+      const produtoComMesmaPosicao = produtosGrupo?.find(produto => {
         const isNotSameProduct = produto.id !== editingProduto?.id;
         const hasSamePosicao = Number(produto.ordenacao_cardapio_digital) === posicaoNumber;
 
-        console.log(`🔍 Verificando produto ${produto.nome}:`, {
+        console.log(`🔍 Verificando produto ${produto.nome} no grupo:`, {
           id: produto.id,
+          grupo_id: produto.grupo_id,
           isNotSameProduct,
           posicao_atual: produto.ordenacao_cardapio_digital,
           posicaoNumber: Number(produto.ordenacao_cardapio_digital),
@@ -2823,16 +2827,16 @@ const ProdutosPage: React.FC = () => {
         return isNotSameProduct && hasSamePosicao;
       });
 
-      console.log('🔍 PRODUTO COM MESMA POSIÇÃO:', produtoComMesmaPosicao);
+      console.log('🔍 PRODUTO COM MESMA POSIÇÃO NO GRUPO:', produtoComMesmaPosicao);
 
       if (produtoComMesmaPosicao) {
-        console.log('❌ BLOQUEANDO SALVAMENTO - POSIÇÃO DUPLICADA');
-        showMessage('error', `A posição ${produtoOrdenacaoCardapioDigital} já está sendo usada pelo produto "${produtoComMesmaPosicao.nome}". Escolha uma posição diferente.`);
+        console.log('❌ BLOQUEANDO SALVAMENTO - POSIÇÃO DUPLICADA NO GRUPO');
+        showMessage('error', `A posição ${produtoOrdenacaoCardapioDigital} já está sendo usada pelo produto "${produtoComMesmaPosicao.nome}" neste grupo. Escolha uma posição diferente.`);
         setIsLoading(false); // ✅ IMPORTANTE: Resetar loading state
         return;
       }
 
-      console.log('✅ VALIDAÇÃO PASSOU - POSIÇÃO DISPONÍVEL');
+      console.log('✅ VALIDAÇÃO PASSOU - POSIÇÃO DISPONÍVEL NO GRUPO');
     }
 
     setIsLoading(true);
@@ -4030,26 +4034,37 @@ const ProdutosPage: React.FC = () => {
           {/* Coluna Esquerda - Foto e Nome */}
           <div className="flex items-start gap-3 flex-1 min-w-0">
             {/* Foto principal do produto */}
-            <div
-              className="w-16 h-16 rounded overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer relative"
-              onClick={() => handleOpenProdutoGaleria(produto)}
-            >
-              {fotoPrincipal ? (
-                <img
-                  src={fotoPrincipal.url}
-                  alt={produto.nome}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-500">
-                  <Image size={16} />
-                </div>
-              )}
+            <div className="flex flex-col gap-1">
+              <div
+                className="w-16 h-16 rounded overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer relative"
+                onClick={() => handleOpenProdutoGaleria(produto)}
+              >
+                {fotoPrincipal ? (
+                  <img
+                    src={fotoPrincipal.url}
+                    alt={produto.nome}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-500">
+                    <Image size={16} />
+                  </div>
+                )}
 
-              {/* Contador de fotos */}
-              {produtosFotosCount[produto.id] > 0 && (
-                <div className="absolute top-0.5 right-0.5 bg-background-dark px-1 py-0.5 rounded-full text-xs font-medium text-white">
-                  {produtosFotosCount[produto.id]}
+                {/* Contador de fotos */}
+                {produtosFotosCount[produto.id] > 0 && (
+                  <div className="absolute top-0.5 right-0.5 bg-background-dark px-1 py-0.5 rounded-full text-xs font-medium text-white">
+                    {produtosFotosCount[produto.id]}
+                  </div>
+                )}
+              </div>
+
+              {/* Tag de posição do cardápio digital */}
+              {produto.ordenacao_cardapio_habilitada && produto.ordenacao_cardapio_digital && (
+                <div className="text-center">
+                  <span className="inline-block bg-blue-600/20 text-blue-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                    Posição {produto.ordenacao_cardapio_digital}
+                  </span>
                 </div>
               )}
             </div>
@@ -4356,7 +4371,15 @@ const ProdutosPage: React.FC = () => {
                   className="bg-background-card rounded border border-gray-800"
                 >
                   <div className="p-3 border-b border-gray-800 flex items-center justify-between">
-                    <h3 className="text-base font-medium text-white">{grupo.nome}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-medium text-white">{grupo.nome}</h3>
+                      {/* Tag de posição do grupo no cardápio digital */}
+                      {(grupo as any).ordenacao_cardapio_habilitada && (grupo as any).ordenacao_cardapio_digital && (
+                        <span className="inline-block bg-green-600/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                          Posição {(grupo as any).ordenacao_cardapio_digital}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleAddProduto(grupo)}

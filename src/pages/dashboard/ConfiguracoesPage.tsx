@@ -6733,7 +6733,7 @@ const ConfiguracoesPage: React.FC = () => {
                             style={{ borderRadius: '50%' }}
                           />
                           <div>
-                            <h5 className="text-white font-medium">Exibir Fotos ao LADO e minimizado nos Itens</h5>
+                            <h5 className="text-white font-medium">Exibir fotos dos produtos nos itens</h5>
                             <p className="text-sm text-gray-400 mt-1">
                               Mostra fotos pequenas ao lado dos itens no carrinho do cardápio digital, similar ao PDV.
                             </p>
@@ -6756,6 +6756,8 @@ const ConfiguracoesPage: React.FC = () => {
                           </div>
                         </label>
 
+                        {/* OPÇÃO OCULTA: Remover nome dos grupos no cardápio */}
+                        {/*
                         <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                           <input
                             type="checkbox"
@@ -6771,6 +6773,7 @@ const ConfiguracoesPage: React.FC = () => {
                             </p>
                           </div>
                         </label>
+                        */}
 
                       </div>
                     </div>
