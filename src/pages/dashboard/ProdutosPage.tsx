@@ -1998,6 +1998,9 @@ const ProdutosPage: React.FC = () => {
     setProdutoOrdenacaoCardapioHabilitada((produto as any).ordenacao_cardapio_habilitada || false);
     setProdutoOrdenacaoCardapioDigital((produto as any).ordenacao_cardapio_digital || '');
 
+    // ✅ CORREÇÃO: Atualizar estado do checkbox cardápio digital na edição
+    setCardapioDigitalHabilitado(produto.cardapio_digital || false);
+
     // Garantir que os códigos CST/CSOSN estejam preenchidos
     if (produtoState.situacao_tributaria && (!produtoState.cst_icms || !produtoState.csosn_icms)) {
       const codigosFiscais = obterCodigosFiscais(produtoState.situacao_tributaria);
@@ -3522,6 +3525,9 @@ const ProdutosPage: React.FC = () => {
       // Limpar campos de ordenação
       setProdutoOrdenacaoCardapioHabilitada(false);
       setProdutoOrdenacaoCardapioDigital('');
+
+      // ✅ CORREÇÃO: Atualizar estado do checkbox cardápio digital
+      setCardapioDigitalHabilitado(produtoCriado.cardapio_digital || false);
 
       // Carregar fotos do produto clonado
       await loadProdutoFotos(produtoCriado.id);
