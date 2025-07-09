@@ -236,6 +236,7 @@ interface Produto {
   grupo_id: string;
   grupo_nome?: string;
   ativo: boolean;
+  produto_alcoolico?: boolean;
   produto_fotos?: Array<{
     id: string;
     url: string;
@@ -409,6 +410,10 @@ const CardapioPublicoPage: React.FC = () => {
   const [produtoConfiguracaoIndividual, setProdutoConfiguracaoIndividual] = useState<any>(null);
   const [adicionaisOcultosParaProduto, setAdicionaisOcultosParaProduto] = useState<Record<string, boolean>>({});
   const [produtosComAdicionaisPendentes, setProdutosComAdicionaisPendentes] = useState<Record<string, boolean>>({});
+
+  // ✅ NOVO: Modal de conscientização para produtos alcoólicos
+  const [modalProdutoAlcoolico, setModalProdutoAlcoolico] = useState(false);
+  const [produtoAlcoolicoPendente, setProdutoAlcoolicoPendente] = useState<string | null>(null);
 
   // Estados para modal de configuração individual
   const [modalConfiguracaoAberto, setModalConfiguracaoAberto] = useState(false);
@@ -1097,6 +1102,7 @@ const CardapioPublicoPage: React.FC = () => {
           tipo_desconto,
           valor_desconto,
           exibir_promocao_cardapio,
+          produto_alcoolico,
           unidade_medida_id,
           unidade_medida:unidade_medida_id (
             id,
@@ -1969,6 +1975,15 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Função para adicionar produto ao carrinho
   const adicionarAoCarrinho = (produtoId: string) => {
+    // ✅ VERIFICAR SE É PRODUTO ALCOÓLICO
+    const produto = produtos.find(p => p.id === produtoId);
+    if (produto?.produto_alcoolico) {
+      // Abrir modal de conscientização para produtos alcoólicos
+      setProdutoAlcoolicoPendente(produtoId);
+      setModalProdutoAlcoolico(true);
+      return;
+    }
+
     const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
 
     if (quantidadeSelecionada > 0) {
@@ -2505,6 +2520,86 @@ const CardapioPublicoPage: React.FC = () => {
     // Apenas fechar modal sem adicionar
     setModalAdicionarCarrinho(false);
     setProdutoConfiguracaoIndividual(null);
+  };
+
+  // ✅ NOVO: Funções para modal de produto alcoólico
+  const confirmarProdutoAlcoolico = () => {
+    // Fechar modal de conscientização
+    setModalProdutoAlcoolico(false);
+
+    // Prosseguir com a adição normal do produto
+    if (produtoAlcoolicoPendente) {
+      const quantidadeSelecionada = obterQuantidadeSelecionada(produtoAlcoolicoPendente);
+
+      if (quantidadeSelecionada > 0) {
+        // Gerar ID único para este item no carrinho
+        const itemId = `${produtoAlcoolicoPendente}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Criar item separado no carrinho
+        const novoItem = {
+          produtoId: produtoAlcoolicoPendente,
+          quantidade: quantidadeSelecionada,
+          adicionais: adicionaisSelecionados[produtoAlcoolicoPendente] ? { ...adicionaisSelecionados[produtoAlcoolicoPendente] } : {},
+          observacao: observacoesSelecionadas[produtoAlcoolicoPendente],
+          ordemAdicao: Date.now()
+        };
+
+        // Adicionar ao estado de itens separados
+        setItensCarrinhoSeparados(prev => ({
+          ...prev,
+          [itemId]: novoItem
+        }));
+
+        // Manter compatibilidade com sistema antigo (somar quantidades)
+        alterarQuantidadeProduto(produtoAlcoolicoPendente, quantidadeSelecionada);
+
+        // Limpar quantidade e observação selecionadas
+        alterarQuantidadeSelecionada(produtoAlcoolicoPendente, 0);
+        setObservacoesSelecionadas(prev => {
+          const nova = { ...prev };
+          delete nova[produtoAlcoolicoPendente];
+          return nova;
+        });
+
+        // Resetar estado de adicionais pendentes
+        setProdutosComAdicionaisPendentes(prev => {
+          const novo = { ...prev };
+          delete novo[produtoAlcoolicoPendente];
+          return novo;
+        });
+
+        // Salvar seleções atualizadas no localStorage
+        setTimeout(() => salvarSelecaoLocalStorage(), 100);
+
+        // Ativar efeito de entrada suave no item
+        setItemChacoalhando(produtoAlcoolicoPendente);
+        setTimeout(() => setItemChacoalhando(null), 800);
+
+        // Abrir carrinho automaticamente quando adicionar primeiro item
+        const totalItensCarrinho = Object.keys(itensCarrinhoSeparados).length;
+        if (totalItensCarrinho === 0) {
+          const carrinhoEstaviaFechado = !carrinhoAberto;
+          setCarrinhoAberto(true);
+
+          // Se o carrinho estava fechado, marcar como recém aberto para animação especial
+          if (carrinhoEstaviaFechado) {
+            setCarrinhoRecemAberto(true);
+            setTimeout(() => setCarrinhoRecemAberto(false), 3000);
+          }
+        }
+
+        console.log(`🍷 Produto alcoólico adicionado ao carrinho: ${produtoAlcoolicoPendente}`);
+      }
+    }
+
+    // Limpar estado
+    setProdutoAlcoolicoPendente(null);
+  };
+
+  const cancelarProdutoAlcoolico = () => {
+    // Fechar modal sem adicionar
+    setModalProdutoAlcoolico(false);
+    setProdutoAlcoolicoPendente(null);
   };
 
   // Funções auxiliares para o modal de configuração
@@ -5165,6 +5260,83 @@ const CardapioPublicoPage: React.FC = () => {
                   })()}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Conscientização - Produto Alcoólico */}
+      {modalProdutoAlcoolico && produtoAlcoolicoPendente && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <span className="text-2xl">⚠️</span>
+                </div>
+                <div>
+                  <h3 className={`text-lg font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Produto Alcoólico
+                  </h3>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Conscientização sobre consumo responsável
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <div className="text-center space-y-4">
+                <div className="text-6xl mb-4">🍷</div>
+
+                <h4 className={`text-xl font-bold ${
+                  config.modo_escuro ? 'text-white' : 'text-gray-900'
+                }`}>
+                  Apenas para maiores de 18 anos
+                </h4>
+
+                <p className={`text-sm leading-relaxed ${
+                  config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  Este produto contém álcool e é destinado exclusivamente para pessoas maiores de 18 anos.
+                </p>
+
+                <div className={`bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 ${
+                  config.modo_escuro ? 'text-yellow-200' : 'text-yellow-800'
+                }`}>
+                  <p className="text-sm font-medium">
+                    ⚠️ Beba com moderação. Venda proibida para menores de 18 anos.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer do Modal */}
+            <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+              <button
+                onClick={cancelarProdutoAlcoolico}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-colors ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarProdutoAlcoolico}
+                className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
+              >
+                Sou maior de 18 anos
+              </button>
             </div>
           </div>
         </div>
