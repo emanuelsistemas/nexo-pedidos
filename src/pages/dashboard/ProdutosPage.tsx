@@ -2101,7 +2101,9 @@ const ProdutosPage: React.FC = () => {
   const atualizarMargemComCustoPreco = (custo: number, preco: number) => {
     const margem = calcularMargem(custo, preco);
     if (margem > 0) {
-      setNovoProduto(prev => ({ ...prev, margem_percentual: margem }));
+      // ✅ ARREDONDAR MARGEM PARA CIMA (sempre número inteiro)
+      const margemInteira = Math.ceil(margem);
+      setNovoProduto(prev => ({ ...prev, margem_percentual: margemInteira }));
     }
   };
 
@@ -5789,9 +5791,11 @@ const ProdutosPage: React.FC = () => {
                               <div className="relative">
                                 <input
                                   type="number"
-                                  value={novoProduto.margem_percentual || ''}
+                                  value={Math.ceil(novoProduto.margem_percentual || 0)}
                                   onChange={(e) => {
-                                    const valor = parseFloat(e.target.value) || 0;
+                                    // ✅ APENAS NÚMEROS INTEIROS - arredonda para cima
+                                    let valor = parseFloat(e.target.value) || 0;
+                                    valor = Math.ceil(valor); // Sempre arredonda para cima
                                     setNovoProduto({ ...novoProduto, margem_percentual: valor });
 
                                     // Se tem custo definido, calcular preço final
@@ -5799,10 +5803,16 @@ const ProdutosPage: React.FC = () => {
                                       atualizarPrecoComCustoMargem(novoProduto.preco_custo, valor);
                                     }
                                   }}
+                                  onBlur={(e) => {
+                                    // ✅ GARANTIR QUE SEJA INTEIRO NO BLUR TAMBÉM
+                                    let valor = parseFloat(e.target.value) || 0;
+                                    valor = Math.ceil(valor);
+                                    setNovoProduto({ ...novoProduto, margem_percentual: valor });
+                                  }}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-3 pr-8 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   placeholder="10"
                                   min="0"
-                                  step="0.01"
+                                  step="1"
                                 />
                                 <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
                                   %
