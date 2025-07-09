@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode, Copy } from 'lucide-react';
+import { X, Pencil, Trash2, Search, ArrowUpDown, AlertCircle, Plus, ChevronDown, ChevronUp, Image, Upload, Star, StarOff, Camera, QrCode, Copy, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Grupo, Produto, OpcaoAdicional, ProdutoOpcao } from '../../types';
 import { showMessage } from '../../utils/toast';
@@ -145,6 +145,10 @@ const ProdutosPage: React.FC = () => {
   const [isGrupoForm, setIsGrupoForm] = useState(true);
   const [trabalhaComPizzas, setTrabalhaComPizzas] = useState(false);
   const [cardapioDigitalHabilitado, setCardapioDigitalHabilitado] = useState(false);
+
+  // Estados para organização visual dos grupos
+  const [isOrganizingMode, setIsOrganizingMode] = useState(false);
+  const [gruposOrder, setGruposOrder] = useState<string[]>([]);
 
   // Estados para controlar o carregamento de cada parte dos dados
   const [loadingStates, setLoadingStates] = useState({
@@ -517,7 +521,84 @@ const ProdutosPage: React.FC = () => {
     carregarConfiguracoesTabelaPrecos();
     carregarConfiguracaoPizzas();
     carregarConfiguracaoCardapioDigital();
+    loadGruposOrder();
   }, []);
+
+  // Carregar ordem dos grupos do localStorage
+  const loadGruposOrder = () => {
+    const savedOrder = localStorage.getItem('nexo-grupos-order');
+    if (savedOrder) {
+      try {
+        setGruposOrder(JSON.parse(savedOrder));
+      } catch (error) {
+        console.error('Erro ao carregar ordem dos grupos:', error);
+      }
+    }
+  };
+
+  // Salvar ordem dos grupos no localStorage
+  const saveGruposOrder = (order: string[]) => {
+    localStorage.setItem('nexo-grupos-order', JSON.stringify(order));
+    setGruposOrder(order);
+  };
+
+  // Função para mover grupo
+  const moveGrupo = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    const currentOrder = gruposOrder.length > 0 ? gruposOrder : grupos.map(g => g.id);
+    const currentIndex = currentOrder.indexOf(grupoId);
+
+    if (currentIndex === -1) return;
+
+    let newIndex = currentIndex;
+
+    // Calcular nova posição baseada na direção e layout de 2 colunas
+    switch (direction) {
+      case 'up':
+        newIndex = Math.max(0, currentIndex - 2); // Move 2 posições para cima (linha anterior)
+        break;
+      case 'down':
+        newIndex = Math.min(currentOrder.length - 1, currentIndex + 2); // Move 2 posições para baixo (próxima linha)
+        break;
+      case 'left':
+        if (currentIndex % 2 === 1) { // Se está na coluna direita
+          newIndex = currentIndex - 1; // Move para a esquerda
+        }
+        break;
+      case 'right':
+        if (currentIndex % 2 === 0 && currentIndex < currentOrder.length - 1) { // Se está na coluna esquerda e não é o último
+          newIndex = currentIndex + 1; // Move para a direita
+        }
+        break;
+    }
+
+    if (newIndex !== currentIndex) {
+      const newOrder = [...currentOrder];
+      const [movedItem] = newOrder.splice(currentIndex, 1);
+      newOrder.splice(newIndex, 0, movedItem);
+      saveGruposOrder(newOrder);
+    }
+  };
+
+  // Função para verificar se um movimento é possível
+  const canMove = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    const currentOrder = gruposOrder.length > 0 ? gruposOrder : grupos.map(g => g.id);
+    const currentIndex = currentOrder.indexOf(grupoId);
+
+    if (currentIndex === -1) return false;
+
+    switch (direction) {
+      case 'up':
+        return currentIndex >= 2; // Pode mover para cima se não está nas duas primeiras posições
+      case 'down':
+        return currentIndex < currentOrder.length - 2; // Pode mover para baixo se não está nas duas últimas posições
+      case 'left':
+        return currentIndex % 2 === 1; // Pode mover para esquerda se está na coluna direita
+      case 'right':
+        return currentIndex % 2 === 0 && currentIndex < currentOrder.length - 1; // Pode mover para direita se está na coluna esquerda e não é o último
+      default:
+        return false;
+    }
+  };
 
   // useEffect separado para configurar event listener de pizzas
   useEffect(() => {
@@ -1714,6 +1795,10 @@ const ProdutosPage: React.FC = () => {
     setSelectedGrupo(grupo);
     setEditingProduto(null);
     setSelectedOpcoes([]);
+
+    // Sempre resetar para a aba "Dados Gerais" ao adicionar novo produto
+    setActiveTab('dados');
+
     const nextCode = await getNextAvailableCode();
 
     // Verificar se há unidades de medida disponíveis
@@ -3885,14 +3970,40 @@ const ProdutosPage: React.FC = () => {
     });
   };
 
-  const filteredAndSortedGrupos = grupos
-    .filter(grupo =>
+  const filteredAndSortedGrupos = (() => {
+    // Primeiro filtrar por termo de busca
+    const filtered = grupos.filter(grupo =>
       grupo.nome.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => {
+    );
+
+    // Se estiver no modo de organização ou houver ordem personalizada, usar essa ordem
+    if (isOrganizingMode || gruposOrder.length > 0) {
+      const currentOrder = gruposOrder.length > 0 ? gruposOrder : grupos.map(g => g.id);
+      return filtered.sort((a, b) => {
+        const indexA = currentOrder.indexOf(a.id);
+        const indexB = currentOrder.indexOf(b.id);
+
+        // Se ambos estão na ordem personalizada, usar essa ordem
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+
+        // Se apenas um está na ordem personalizada, ele vem primeiro
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+
+        // Se nenhum está na ordem personalizada, usar ordem alfabética
+        const comparison = a.nome.localeCompare(b.nome);
+        return sortOrder === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    // Caso contrário, usar ordenação alfabética normal
+    return filtered.sort((a, b) => {
       const comparison = a.nome.localeCompare(b.nome);
       return sortOrder === 'asc' ? comparison : -comparison;
     });
+  })();
 
   const getFilteredAndSortedProducts = (grupo: Grupo) => {
     const searchTerm = productSearchTerms[grupo.id] || '';
@@ -4441,6 +4552,15 @@ const ProdutosPage: React.FC = () => {
               <ArrowUpDown size={18} />
               {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
             </Button>
+            <Button
+              type="button"
+              variant={isOrganizingMode ? "primary" : "text"}
+              className="flex items-center gap-2"
+              onClick={() => setIsOrganizingMode(!isOrganizingMode)}
+            >
+              <Move size={18} />
+              {isOrganizingMode ? 'Finalizar' : 'Organizar'}
+            </Button>
           </div>
 
           {filteredAndSortedGrupos.length === 0 ? (
@@ -4466,12 +4586,29 @@ const ProdutosPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {filteredAndSortedGrupos.map((grupo) => (
-                <div
-                  key={grupo.id}
-                  className="bg-background-card rounded border border-gray-800"
-                >
+            <div>
+              {/* Indicador do modo de organização */}
+              {isOrganizingMode && (
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-400">
+                    <Move size={16} />
+                    <span className="text-sm font-medium">
+                      Modo de organização ativo - Use as setas para reorganizar os grupos
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {filteredAndSortedGrupos.map((grupo) => (
+                  <div
+                    key={grupo.id}
+                    className={`bg-background-card rounded border ${
+                      isOrganizingMode
+                        ? 'border-blue-500/50 shadow-lg shadow-blue-500/10'
+                        : 'border-gray-800'
+                    }`}
+                  >
                   <div className="p-3 border-b border-gray-800 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <h3 className="text-base font-medium text-white">{grupo.nome}</h3>
@@ -4483,6 +4620,54 @@ const ProdutosPage: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      {/* Setas de organização - só aparecem no modo de organização */}
+                      {isOrganizingMode && (
+                        <div className="flex items-center gap-1 mr-2">
+                          {/* Seta para cima */}
+                          {canMove(grupo.id, 'up') && (
+                            <button
+                              onClick={() => moveGrupo(grupo.id, 'up')}
+                              className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                              title="Mover para cima"
+                            >
+                              <ArrowUp size={14} />
+                            </button>
+                          )}
+
+                          {/* Seta para esquerda */}
+                          {canMove(grupo.id, 'left') && (
+                            <button
+                              onClick={() => moveGrupo(grupo.id, 'left')}
+                              className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                              title="Mover para esquerda"
+                            >
+                              <ArrowLeft size={14} />
+                            </button>
+                          )}
+
+                          {/* Seta para direita */}
+                          {canMove(grupo.id, 'right') && (
+                            <button
+                              onClick={() => moveGrupo(grupo.id, 'right')}
+                              className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                              title="Mover para direita"
+                            >
+                              <ArrowRight size={14} />
+                            </button>
+                          )}
+
+                          {/* Seta para baixo */}
+                          {canMove(grupo.id, 'down') && (
+                            <button
+                              onClick={() => moveGrupo(grupo.id, 'down')}
+                              className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <button
                         onClick={() => handleAddProduto(grupo)}
                         className="flex items-center gap-1 px-2 py-1 text-sm bg-primary-500/10 rounded text-primary-400 hover:text-primary-300 hover:bg-primary-500/20 transition-colors"
@@ -4544,6 +4729,7 @@ const ProdutosPage: React.FC = () => {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           )}
         </div>
