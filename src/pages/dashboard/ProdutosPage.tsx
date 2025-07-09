@@ -4231,6 +4231,30 @@ const ProdutosPage: React.FC = () => {
         (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase()))
       )
       .sort((a, b) => {
+        // ✅ PRIORIDADE: Produtos com posicionamento fixo sempre vêm primeiro
+        const aTemPosicao = (a as any).ordenacao_cardapio_habilitada === true &&
+                           (a as any).ordenacao_cardapio_digital !== null &&
+                           (a as any).ordenacao_cardapio_digital !== undefined &&
+                           (a as any).ordenacao_cardapio_digital !== '';
+        const bTemPosicao = (b as any).ordenacao_cardapio_habilitada === true &&
+                           (b as any).ordenacao_cardapio_digital !== null &&
+                           (b as any).ordenacao_cardapio_digital !== undefined &&
+                           (b as any).ordenacao_cardapio_digital !== '';
+
+        // Se ambos têm posicionamento fixo, ordenar por posição numérica (menor número = primeiro)
+        if (aTemPosicao && bTemPosicao) {
+          const posicaoA = Number((a as any).ordenacao_cardapio_digital);
+          const posicaoB = Number((b as any).ordenacao_cardapio_digital);
+          return posicaoA - posicaoB; // Posição 1 vem antes de posição 2
+        }
+
+        // Se apenas A tem posicionamento, A vem primeiro
+        if (aTemPosicao && !bTemPosicao) return -1;
+
+        // Se apenas B tem posicionamento, B vem primeiro
+        if (!aTemPosicao && bTemPosicao) return 1;
+
+        // Se nenhum tem posicionamento, ordenar alfabeticamente
         const comparison = a.nome.localeCompare(b.nome);
         return sortOrder === 'asc' ? comparison : -comparison;
       });
