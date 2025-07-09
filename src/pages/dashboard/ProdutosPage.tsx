@@ -524,12 +524,20 @@ const ProdutosPage: React.FC = () => {
     loadGruposOrder();
   }, []);
 
+  // Debug: monitorar mudanças no gruposOrder
+  useEffect(() => {
+    console.log('🔄 Estado gruposOrder mudou:', gruposOrder);
+  }, [gruposOrder]);
+
   // Carregar ordem dos grupos do localStorage
   const loadGruposOrder = () => {
     const savedOrder = localStorage.getItem('nexo-grupos-order');
+    console.log('📥 Carregando ordem do localStorage:', savedOrder);
     if (savedOrder) {
       try {
-        setGruposOrder(JSON.parse(savedOrder));
+        const parsedOrder = JSON.parse(savedOrder);
+        console.log('📋 Ordem carregada:', parsedOrder);
+        setGruposOrder(parsedOrder);
       } catch (error) {
         console.error('Erro ao carregar ordem dos grupos:', error);
       }
@@ -538,20 +546,30 @@ const ProdutosPage: React.FC = () => {
 
   // Salvar ordem dos grupos no localStorage
   const saveGruposOrder = (order: string[]) => {
+    console.log('🔄 Salvando nova ordem dos grupos:', order);
     localStorage.setItem('nexo-grupos-order', JSON.stringify(order));
     setGruposOrder(order);
+    console.log('✅ Ordem salva no localStorage e estado atualizado');
   };
 
   // Função para mover grupo
   const moveGrupo = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
+    console.log(`🚀 Movendo grupo ${grupoId} para ${direction}`);
+
     // Usar a ordem atual da grid (alfabética) como base se ainda não há ordem personalizada
     const currentOrder = gruposOrder.length > 0 && gruposOrder.join(',') !== grupos.map(g => g.id).join(',')
       ? gruposOrder
       : filteredAndSortedGrupos.map(g => g.id);
 
-    const currentIndex = currentOrder.indexOf(grupoId);
+    console.log('📋 Ordem atual sendo usada:', currentOrder);
 
-    if (currentIndex === -1) return;
+    const currentIndex = currentOrder.indexOf(grupoId);
+    console.log(`📍 Índice atual do grupo: ${currentIndex}`);
+
+    if (currentIndex === -1) {
+      console.log('❌ Grupo não encontrado na ordem atual');
+      return;
+    }
 
     let newIndex = currentIndex;
 
@@ -575,11 +593,32 @@ const ProdutosPage: React.FC = () => {
         break;
     }
 
+    console.log(`🎯 Novo índice calculado: ${newIndex}`);
+
     if (newIndex !== currentIndex) {
+      console.log('✅ Movimento válido, aplicando mudança...');
       const newOrder = [...currentOrder];
       const [movedItem] = newOrder.splice(currentIndex, 1);
       newOrder.splice(newIndex, 0, movedItem);
+
+      console.log('📦 Nova ordem:', newOrder);
       saveGruposOrder(newOrder);
+
+      // Encontrar o nome do grupo movido para mostrar no toast
+      const grupoMovido = grupos.find(g => g.id === grupoId);
+      const nomeGrupo = grupoMovido?.nome || 'Grupo';
+
+      // Determinar a direção do movimento para o toast
+      const direcaoTexto = {
+        'up': 'para cima',
+        'down': 'para baixo',
+        'left': 'para a esquerda',
+        'right': 'para a direita'
+      }[direction];
+
+      showMessage('success', `${nomeGrupo} movido ${direcaoTexto} com sucesso!`);
+    } else {
+      console.log('❌ Movimento inválido - mesmo índice');
     }
   };
 
@@ -3984,8 +4023,17 @@ const ProdutosPage: React.FC = () => {
       grupo.nome.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const gruposIds = grupos.map(g => g.id).join(',');
+    const gruposOrderStr = gruposOrder.join(',');
+
+    console.log('🔍 Debug ordenação:');
+    console.log('- Grupos originais:', gruposIds);
+    console.log('- Ordem personalizada:', gruposOrderStr);
+    console.log('- São diferentes?', gruposOrder.length > 0 && gruposOrderStr !== gruposIds);
+
     // Se houver ordem personalizada E ela foi realmente modificada pelo usuário, usar essa ordem
-    if (gruposOrder.length > 0 && gruposOrder.join(',') !== grupos.map(g => g.id).join(',')) {
+    if (gruposOrder.length > 0 && gruposOrderStr !== gruposIds) {
+      console.log('✅ Usando ordem personalizada');
       return filtered.sort((a, b) => {
         const indexA = gruposOrder.indexOf(a.id);
         const indexB = gruposOrder.indexOf(b.id);
@@ -4005,6 +4053,7 @@ const ProdutosPage: React.FC = () => {
       });
     }
 
+    console.log('📝 Usando ordem alfabética');
     // Caso contrário, usar ordenação alfabética normal
     return filtered.sort((a, b) => {
       const comparison = a.nome.localeCompare(b.nome);
@@ -4565,19 +4614,38 @@ const ProdutosPage: React.FC = () => {
               className="flex items-center gap-2"
               onClick={() => {
                 if (isOrganizingMode) {
-                  // Ao finalizar, manter apenas se houve mudanças reais
-                  const currentAlphabeticalOrder = filteredAndSortedGrupos.map(g => g.id);
-                  if (gruposOrder.join(',') === currentAlphabeticalOrder.join(',')) {
-                    // Se a ordem personalizada é igual à alfabética, limpar
+                  console.log('💾 Salvando alterações...');
+                  // Ao salvar alterações, comparar com a ordem alfabética ORIGINAL dos grupos
+                  const originalAlphabeticalOrder = grupos
+                    .filter(grupo => grupo.nome.toLowerCase().includes(searchTerm.toLowerCase()))
+                    .sort((a, b) => {
+                      const comparison = a.nome.localeCompare(b.nome);
+                      return sortOrder === 'asc' ? comparison : -comparison;
+                    })
+                    .map(g => g.id);
+
+                  console.log('📊 Comparando ordens para salvar:');
+                  console.log('- Ordem personalizada:', gruposOrder.join(','));
+                  console.log('- Ordem alfabética ORIGINAL:', originalAlphabeticalOrder.join(','));
+
+                  if (gruposOrder.length === 0 || gruposOrder.join(',') === originalAlphabeticalOrder.join(',')) {
+                    // Se não há ordem personalizada ou ela é igual à alfabética, limpar
+                    console.log('🗑️ Limpando ordem personalizada (igual à alfabética ou vazia)');
                     localStorage.removeItem('nexo-grupos-order');
                     setGruposOrder([]);
+                    showMessage('info', 'Nenhuma alteração foi detectada para salvar');
+                  } else {
+                    console.log('✅ Mantendo ordem personalizada');
+                    showMessage('success', 'Alterações na organização dos grupos salvas com sucesso!');
                   }
+                } else {
+                  showMessage('info', 'Modo de organização ativado - use as setas para reorganizar os grupos');
                 }
                 setIsOrganizingMode(!isOrganizingMode);
               }}
             >
               <Move size={18} />
-              {isOrganizingMode ? 'Finalizar' : 'Organizar'}
+              {isOrganizingMode ? 'Salvar alterações' : 'Organizar'}
             </Button>
           </div>
 
@@ -4611,7 +4679,7 @@ const ProdutosPage: React.FC = () => {
                   <div className="flex items-center gap-2 text-blue-400">
                     <Move size={16} />
                     <span className="text-sm font-medium">
-                      Modo de organização ativo - Use as setas para reorganizar os grupos
+                      Modo de organização ativo - Use as setas para reorganizar os grupos e clique em "Salvar alterações" para confirmar
                     </span>
                   </div>
                 </div>
