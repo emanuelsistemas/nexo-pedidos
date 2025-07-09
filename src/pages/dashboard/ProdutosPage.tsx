@@ -2676,11 +2676,100 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
+  // Função para validar campos obrigatórios com detalhes específicos
+  const validarCamposObrigatorios = () => {
+    const camposObrigatorios = [];
+    const camposComErro = [];
+
+    // Validar grupo selecionado
+    if (!selectedGrupo) {
+      camposObrigatorios.push('Grupo do produto');
+      camposComErro.push({ campo: 'grupo', aba: 'dados' });
+    }
+
+    // Validar campos da aba "Dados Gerais"
+    if (!novoProduto.codigo?.trim()) {
+      camposObrigatorios.push('Código do produto');
+      camposComErro.push({ campo: 'codigo', aba: 'dados' });
+    }
+
+    if (!novoProduto.nome?.trim()) {
+      camposObrigatorios.push('Nome do produto');
+      camposComErro.push({ campo: 'nome', aba: 'dados' });
+    }
+
+    if (!novoProduto.unidade_medida_id) {
+      camposObrigatorios.push('Unidade de medida');
+      camposComErro.push({ campo: 'unidade_medida_id', aba: 'dados' });
+    }
+
+    if (!novoProduto.preco || novoProduto.preco <= 0) {
+      camposObrigatorios.push('Preço do produto');
+      camposComErro.push({ campo: 'preco', aba: 'dados' });
+    }
+
+    // Validar campos da aba "Impostos" (obrigatórios para NFe)
+    if (!novoProduto.ncm?.trim() || novoProduto.ncm.length !== 8) {
+      camposObrigatorios.push('NCM (8 dígitos)');
+      camposComErro.push({ campo: 'ncm', aba: 'impostos' });
+    }
+
+    // Validar CEST e Margem ST se situação tributária tem ST
+    if (situacaoTributariaTemST(novoProduto.situacao_tributaria || '')) {
+      if (!novoProduto.cest?.trim() || novoProduto.cest.length !== 7) {
+        camposObrigatorios.push('CEST (7 dígitos) - obrigatório para ST');
+        camposComErro.push({ campo: 'cest', aba: 'impostos' });
+      }
+
+      if (!novoProduto.margem_st || novoProduto.margem_st <= 0) {
+        camposObrigatorios.push('Margem ST - obrigatória para ST');
+        camposComErro.push({ campo: 'margem_st', aba: 'impostos' });
+      }
+    }
+
+    return { camposObrigatorios, camposComErro };
+  };
+
+  // Função para destacar campos com erro
+  const destacarCamposComErro = (camposComErro: Array<{ campo: string; aba: string }>) => {
+    camposComErro.forEach(({ campo }) => {
+      const elemento = document.querySelector(`[data-field="${campo}"]`) as HTMLElement;
+      if (elemento) {
+        elemento.classList.add('border-red-500', 'border-2');
+        elemento.classList.remove('border-gray-700');
+
+        // Remover destaque após 5 segundos
+        setTimeout(() => {
+          elemento.classList.remove('border-red-500', 'border-2');
+          elemento.classList.add('border-gray-700');
+        }, 5000);
+      }
+    });
+  };
+
   const handleSubmitProduto = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedGrupo || !novoProduto.nome || !novoProduto.preco || !novoProduto.codigo || !novoProduto.unidade_medida_id) {
-      showMessage('error', 'Preencha todos os campos obrigatórios');
+    // Validar campos obrigatórios com detalhes específicos
+    const { camposObrigatorios, camposComErro } = validarCamposObrigatorios();
+
+    if (camposObrigatorios.length > 0) {
+      // Encontrar a primeira aba que contém erro
+      const primeiraAbaComErro = camposComErro[0]?.aba;
+
+      // Navegar para a aba com erro
+      if (primeiraAbaComErro && primeiraAbaComErro !== activeTab) {
+        setActiveTab(primeiraAbaComErro);
+      }
+
+      // Destacar campos com erro
+      setTimeout(() => {
+        destacarCamposComErro(camposComErro);
+      }, 100);
+
+      // Mostrar mensagem específica
+      const mensagem = `Os seguintes campos são obrigatórios:\n• ${camposObrigatorios.join('\n• ')}`;
+      showMessage('error', mensagem);
       return;
     }
 
@@ -4717,10 +4806,11 @@ const ProdutosPage: React.FC = () => {
 
                         <div>
                           <label className="block text-sm font-medium text-gray-400 mb-2">
-                            Código do Produto
+                            Código do Produto <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
+                            data-field="codigo"
                             value={novoProduto.codigo}
                             onChange={(e) => {
                               const valor = e.target.value;
@@ -4763,6 +4853,7 @@ const ProdutosPage: React.FC = () => {
                           </label>
                           <input
                             type="text"
+                            data-field="nome"
                             value={novoProduto.nome}
                             onChange={(e) => {
                               const valor = e.target.value;
@@ -4795,6 +4886,7 @@ const ProdutosPage: React.FC = () => {
                           <div className="flex gap-2">
                             <div className="flex-1">
                               <select
+                                data-field="unidade_medida_id"
                                 value={novoProduto.unidade_medida_id || ''}
                                 onChange={(e) => {
                                   const novaUnidadeId = e.target.value;
@@ -4983,7 +5075,7 @@ const ProdutosPage: React.FC = () => {
                                 {abaPrecoAtiva === 'padrao'
                                   ? 'Preço Padrão'
                                   : `Preço - ${tabelasPrecos.find(t => t.id === abaPrecoAtiva)?.nome || ''}`
-                                }
+                                } <span className="text-red-500">*</span>
                               </label>
                               <div className="relative">
                                 <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
@@ -4991,6 +5083,7 @@ const ProdutosPage: React.FC = () => {
                                 </span>
                                 <input
                                   type="text"
+                                  data-field="preco"
                                   value={abaPrecoAtiva === 'padrao' ? precoFormatado : precoTabelaFormatado}
                                   onChange={(e) => {
                                     if (abaPrecoAtiva === 'padrao') {
@@ -6312,6 +6405,7 @@ const ProdutosPage: React.FC = () => {
                               <div className="relative">
                                 <input
                                   type="text"
+                                  data-field="ncm"
                                   value={aplicarMascaraNCM(novoProduto.ncm || '')}
                                   onChange={(e) => {
                                     // Remover máscara e permitir apenas números, limitando a 8 dígitos
@@ -6717,6 +6811,7 @@ const ProdutosPage: React.FC = () => {
                                   <div className="relative">
                                     <input
                                       type="text"
+                                      data-field="cest"
                                       value={novoProduto.cest || ''}
                                       onChange={(e) => {
                                         // Permitir apenas números e limitar a 7 dígitos
@@ -6763,6 +6858,7 @@ const ProdutosPage: React.FC = () => {
                                   </label>
                                   <input
                                     type="number"
+                                    data-field="margem_st"
                                     step="0.01"
                                     min="0"
                                     max="100"
