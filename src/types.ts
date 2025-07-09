@@ -42,6 +42,8 @@ export interface Produto {
   cardapio_digital?: boolean;
   // Campo para exibir promoção no cardápio digital
   exibir_promocao_cardapio?: boolean;
+  // Campo para produtos alcoólicos
+  produto_alcoolico?: boolean;
 }
 
 export interface Grupo {

@@ -194,6 +194,7 @@ const ProdutosPage: React.FC = () => {
     valor_desconto_quantidade: 0,
     estoque_inicial: 0,
     estoque_minimo: 0,
+    produto_alcoolico: false, // ✅ NOVO CAMPO: Produto Alcoólico
     // Campos fiscais NFe
     ncm: '',
     cfop: '5102',
@@ -1738,6 +1739,7 @@ const ProdutosPage: React.FC = () => {
       estoque_inicial: 0,
       estoque_minimo: 0,
       estoque_minimo_ativo: false,
+      produto_alcoolico: false, // ✅ NOVO CAMPO: Produto Alcoólico
       // Campos fiscais NFe com valores padrão
       ncm: '',
       cfop: '5102',
@@ -1966,6 +1968,7 @@ const ProdutosPage: React.FC = () => {
       estoque_inicial: produto.estoque_inicial || 0,
       estoque_minimo: produto.estoque_minimo || 0,
       estoque_minimo_ativo: produto.estoque_minimo_ativo || false,
+      produto_alcoolico: produto.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
       // Campos fiscais NFe
       ncm: produto.ncm || '',
       cfop: produto.cfop || '5102',
@@ -3040,6 +3043,7 @@ const ProdutosPage: React.FC = () => {
           preco_custo: novoProduto.preco_custo || 0,
           margem_percentual: novoProduto.margem_percentual || 0,
           pizza: novoProduto.pizza || false,
+          produto_alcoolico: novoProduto.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
           cardapio_digital: novoProduto.cardapio_digital || false,
           exibir_promocao_cardapio: novoProduto.exibir_promocao_cardapio || false,
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
@@ -3106,6 +3110,7 @@ const ProdutosPage: React.FC = () => {
           preco_custo: novoProduto.preco_custo || 0,
           margem_percentual: novoProduto.margem_percentual || 0,
           pizza: novoProduto.pizza || false,
+          produto_alcoolico: novoProduto.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
         };
@@ -3325,6 +3330,7 @@ const ProdutosPage: React.FC = () => {
         estoque_inicial: produtoOriginal.estoque_inicial || 0,
         estoque_minimo: produtoOriginal.estoque_minimo || 0,
         estoque_minimo_ativo: produtoOriginal.estoque_minimo_ativo || false,
+        produto_alcoolico: produtoOriginal.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
         // Campos fiscais NFe
         ncm: produtoOriginal.ncm || '',
         cfop: produtoOriginal.cfop || '5102',
@@ -3503,6 +3509,7 @@ const ProdutosPage: React.FC = () => {
         pizza: produtoCriado.pizza,
         cardapio_digital: produtoCriado.cardapio_digital,
         exibir_promocao_cardapio: produtoCriado.exibir_promocao_cardapio,
+        produto_alcoolico: produtoCriado.produto_alcoolico, // ✅ NOVO CAMPO: Produto Alcoólico
       });
 
       // Atualizar os campos formatados com os valores clonados
@@ -5646,6 +5653,30 @@ const ProdutosPage: React.FC = () => {
                                   </p>
                                 )}
                               </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Seção de Produto Alcoólico */}
+                        <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-red-900/10">
+                          <div className="flex items-center mb-4">
+                            <input
+                              type="checkbox"
+                              id="produto_alcoolico"
+                              checked={novoProduto.produto_alcoolico || false}
+                              onChange={(e) => setNovoProduto({ ...novoProduto, produto_alcoolico: e.target.checked })}
+                              className="mr-3 rounded border-gray-700 text-red-500 focus:ring-red-500/20"
+                            />
+                            <label htmlFor="produto_alcoolico" className="text-sm font-medium text-white cursor-pointer">
+                              Produto Alcoólico
+                            </label>
+                          </div>
+
+                          {novoProduto.produto_alcoolico && (
+                            <div className="pl-7 border-l-2 border-red-500/30 ml-1.5">
+                              <p className="text-sm text-red-300">
+                                🍷 Produto marcado como alcoólico. Sujeito a regulamentações específicas de venda e distribuição.
+                              </p>
                             </div>
                           )}
                         </div>
