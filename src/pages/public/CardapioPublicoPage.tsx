@@ -2807,28 +2807,41 @@ const CardapioPublicoPage: React.FC = () => {
         adicionaisFormatados[adicional.originalId] = (adicionaisFormatados[adicional.originalId] || 0) + 1;
       });
 
-      // Adicionar ao carrinho (quantidade do produto)
+      // ✅ ADICIONAR AO SISTEMA NOVO (itensCarrinhoSeparados) - PRINCIPAL
+      const novoItemCarrinho = {
+        produtoId: produtoOrganizacao.id,
+        quantidade: 1,
+        adicionais: adicionaisFormatados,
+        observacao: undefined,
+        ordemAdicao: Date.now() + index
+      };
+
+      setItensCarrinhoSeparados(prev => ({
+        ...prev,
+        [itemId]: novoItemCarrinho
+      }));
+
+      // ✅ MANTER COMPATIBILIDADE COM SISTEMA ANTIGO
       setQuantidadesProdutos(prev => ({
         ...prev,
         [itemId]: 1
       }));
 
-      // Adicionar adicionais ao carrinho
       setAdicionaisSelecionados(prev => ({
         ...prev,
         [itemId]: adicionaisFormatados
       }));
 
-      // Definir ordem de adição
       setOrdemAdicaoItens(prev => ({
         ...prev,
-        [itemId]: Date.now() + index // Adicionar index para garantir ordem
+        [itemId]: Date.now() + index
       }));
 
       console.log(`🛒 Item ${index + 1} adicionado ao carrinho:`, {
         itemId,
         produto: produtoOrganizacao.nome,
-        adicionais: adicionaisFormatados
+        adicionais: adicionaisFormatados,
+        sistemaNovoAdicionado: true
       });
     });
 
