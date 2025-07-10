@@ -2589,6 +2589,16 @@ const CardapioPublicoPage: React.FC = () => {
     return quantidadeExcedenteTemp[originalId] || 0;
   };
 
+  // ✅ FUNÇÃO PARA VERIFICAR SE TODOS OS EXCEDENTES FORAM DISTRIBUÍDOS
+  const todosExcedentesDistribuidos = (): boolean => {
+    // Verifica se há excedentes agrupados com quantidade disponível > 0
+    const temExcedentesDisponiveis = Object.values(excedentesAgrupados).some(
+      excedente => excedente.quantidadeTotal > 0
+    );
+
+    return !temExcedentesDisponiveis;
+  };
+
   // ✅ FUNÇÃO PARA ABRIR MODAL DE VINCULAÇÃO DE EXCEDENTE COM QUANTIDADE
   const abrirModalVincularExcedente = (originalId: string) => {
     const quantidadeSelecionada = obterQuantidadeExcedenteTemp(originalId);
@@ -4442,16 +4452,17 @@ const CardapioPublicoPage: React.FC = () => {
                             }
                           })()}
 
-                          {obterWhatsAppEmpresa() && (
+                          {obterWhatsAppEmpresa() && !semEstoque && (
                             <div className="flex items-center gap-3">
                               {/* Controles de Quantidade */}
+                              {/* ✅ CONTROLADOR OCULTO QUANDO SEM ESTOQUE */}
                               <div className="flex items-center gap-2">
                                 {/* Botão Decrementar */}
                                 <button
                                   onClick={() => decrementarQuantidade(produto.id)}
-                                  disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false || semEstoque}
+                                  disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
                                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                    obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false || semEstoque
+                                    obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
                                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                       : config.modo_escuro
                                       ? 'bg-gray-600 text-white hover:bg-gray-500'
@@ -4462,7 +4473,7 @@ const CardapioPublicoPage: React.FC = () => {
                                 </button>
 
                                 {/* Campo de Quantidade */}
-                                {produtoEditandoQuantidade === produto.id && lojaAberta !== false && !semEstoque ? (
+                                {produtoEditandoQuantidade === produto.id && lojaAberta !== false ? (
                                   <input
                                     type="text"
                                     value={formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
@@ -4483,10 +4494,10 @@ const CardapioPublicoPage: React.FC = () => {
                                   />
                                 ) : (
                                   <button
-                                    onClick={() => lojaAberta !== false && !semEstoque && setProdutoEditandoQuantidade(produto.id)}
-                                    disabled={lojaAberta === false || semEstoque}
+                                    onClick={() => lojaAberta !== false && setProdutoEditandoQuantidade(produto.id)}
+                                    disabled={lojaAberta === false}
                                     className={`w-12 h-8 text-center text-sm font-semibold rounded-lg border-2 transition-all duration-200 ${
-                                      lojaAberta === false || semEstoque
+                                      lojaAberta === false
                                         ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
                                         : config.modo_escuro
                                         ? 'bg-gray-700 border-gray-600 text-white hover:border-gray-500'
@@ -4500,9 +4511,9 @@ const CardapioPublicoPage: React.FC = () => {
                                 {/* Botão Incrementar */}
                                 <button
                                   onClick={() => incrementarQuantidade(produto.id)}
-                                  disabled={lojaAberta === false || semEstoque}
+                                  disabled={lojaAberta === false}
                                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                    lojaAberta === false || semEstoque
+                                    lojaAberta === false
                                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                       : config.modo_escuro
                                       ? 'bg-blue-600 text-white hover:bg-blue-500'
@@ -5122,72 +5133,9 @@ const CardapioPublicoPage: React.FC = () => {
                             </div>
 
                             {/* Controles de Quantidade do Produto Principal */}
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => decrementarQuantidade(produto.id)}
-                                disabled={lojaAberta === false}
-                                className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                                  lojaAberta === false
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : config.modo_escuro
-                                    ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                }`}
-                              >
-                                <Minus size={12} />
-                              </button>
-
-                              <span className={`w-8 text-center text-xs font-semibold ${
-                                config.modo_escuro ? 'text-white' : 'text-gray-800'
-                              }`}>
-                                {formatarQuantidade(quantidade, produto.unidade_medida)}
-                              </span>
-
-                              <button
-                                onClick={() => incrementarQuantidade(produto.id)}
-                                disabled={lojaAberta === false}
-                                className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                                  lojaAberta === false
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : config.modo_escuro
-                                    ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                    : 'bg-blue-500 text-white hover:bg-blue-600'
-                                }`}
-                              >
-                                <Plus size={12} />
-                              </button>
-
-                              <button
-                                onClick={() => removerItemCarrinho(produto.id)}
-                                className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ml-1 ${
-                                  config.modo_escuro
-                                    ? 'bg-red-600 text-white hover:bg-red-500'
-                                    : 'bg-red-500 text-white hover:bg-red-600'
-                                }`}
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {/* Header do Item - Nome + Preço + Controles (sem foto) */}
-                          <div className="mb-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                                  {produto.nome}
-                                </h4>
-                                {config.mostrar_precos && (
-                                  <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                                    {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Controles de Quantidade do Produto Principal */}
-                              <div className="flex items-center gap-2 ml-3">
+                            {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
+                            {!semEstoque && (
+                              <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => decrementarQuantidade(produto.id)}
                                   disabled={lojaAberta === false}
@@ -5221,18 +5169,87 @@ const CardapioPublicoPage: React.FC = () => {
                                 >
                                   <Plus size={12} />
                                 </button>
-
-                                <button
-                                  onClick={() => removerItemCarrinho(produto.id)}
-                                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ml-1 ${
-                                    config.modo_escuro
-                                      ? 'bg-red-600 text-white hover:bg-red-500'
-                                      : 'bg-red-500 text-white hover:bg-red-600'
-                                  }`}
-                                >
-                                  <X size={12} />
-                                </button>
                               </div>
+                            )}
+
+                            <button
+                              onClick={() => removerItemCarrinho(produto.id)}
+                              className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ml-1 ${
+                                config.modo_escuro
+                                  ? 'bg-red-600 text-white hover:bg-red-500'
+                                  : 'bg-red-500 text-white hover:bg-red-600'
+                              }`}
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Header do Item - Nome + Preço + Controles (sem foto) */}
+                          <div className="mb-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                                  {produto.nome}
+                                </h4>
+                                {config.mostrar_precos && (
+                                  <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Controles de Quantidade do Produto Principal */}
+                              {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
+                              {!semEstoque && (
+                                <div className="flex items-center gap-2 ml-3">
+                                  <button
+                                    onClick={() => decrementarQuantidade(produto.id)}
+                                    disabled={lojaAberta === false}
+                                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                      lojaAberta === false
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : config.modo_escuro
+                                        ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                  >
+                                    <Minus size={12} />
+                                  </button>
+
+                                  <span className={`w-8 text-center text-xs font-semibold ${
+                                    config.modo_escuro ? 'text-white' : 'text-gray-800'
+                                  }`}>
+                                    {formatarQuantidade(quantidade, produto.unidade_medida)}
+                                  </span>
+
+                                  <button
+                                    onClick={() => incrementarQuantidade(produto.id)}
+                                    disabled={lojaAberta === false}
+                                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                      lojaAberta === false
+                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        : config.modo_escuro
+                                        ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                        : 'bg-blue-500 text-white hover:bg-blue-600'
+                                    }`}
+                                  >
+                                    <Plus size={12} />
+                                  </button>
+
+                                  <button
+                                    onClick={() => removerItemCarrinho(produto.id)}
+                                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ml-1 ${
+                                      config.modo_escuro
+                                        ? 'bg-red-600 text-white hover:bg-red-500'
+                                        : 'bg-red-500 text-white hover:bg-red-600'
+                                    }`}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </>
@@ -5596,7 +5613,7 @@ const CardapioPublicoPage: React.FC = () => {
                     <h4 className={`text-lg font-medium mb-4 flex-shrink-0 ${
                       config.modo_escuro ? 'text-white' : 'text-gray-900'
                     }`}>
-                      Excedentes para Distribuir ({Object.keys(excedentesAgrupados).filter(key => excedentesAgrupados[key].quantidadeTotal > 0).length})
+                      Excedentes para Distribuir ({Object.values(excedentesAgrupados).reduce((total, excedente) => total + excedente.quantidadeTotal, 0)})
                     </h4>
 
                     <div className="flex-1 overflow-y-auto pr-2 min-h-0">
@@ -5637,7 +5654,7 @@ const CardapioPublicoPage: React.FC = () => {
                                     ? 'bg-yellow-700 text-yellow-300'
                                     : 'bg-yellow-200 text-yellow-700'
                                 }`}>
-                                  {excedente.quantidadeTotal} disponível{excedente.quantidadeTotal > 1 ? 'is' : ''}
+                                  {excedente.quantidadeTotal - obterQuantidadeExcedenteTemp(originalId)} disponível{(excedente.quantidadeTotal - obterQuantidadeExcedenteTemp(originalId)) !== 1 ? 'is' : ''}
                                 </div>
                               </div>
 
@@ -5705,15 +5722,6 @@ const CardapioPublicoPage: React.FC = () => {
                                   Vincular ({obterQuantidadeExcedenteTemp(originalId)})
                                 </button>
                               </div>
-
-                              {/* Valor Total */}
-                              {obterQuantidadeExcedenteTemp(originalId) > 0 && (
-                                <div className={`mt-2 text-right text-sm ${
-                                  config.modo_escuro ? 'text-yellow-400' : 'text-yellow-700'
-                                }`}>
-                                  Total: {formatarPreco(excedente.preco * obterQuantidadeExcedenteTemp(originalId))}
-                                </div>
-                              )}
                             </div>
                           ))}
                         </div>
@@ -5736,45 +5744,47 @@ const CardapioPublicoPage: React.FC = () => {
             <div className={`flex-shrink-0 p-4 sm:p-6 border-t ${
               config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
             }`}>
-              <div className="flex items-center justify-between">
-                <div className={`text-sm ${
-                  config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                }`}>
-                  {excedentesDisponiveis.length > 0 ? (
-                    <span className="text-yellow-600">
-                      {excedentesDisponiveis.length} excedente(s) ainda não distribuído(s)
+              {/* Mensagem de Status */}
+              <div className="mb-4">
+                {!todosExcedentesDistribuidos() ? (
+                  <div className={`text-center p-3 rounded-lg ${
+                    config.modo_escuro
+                      ? 'bg-red-900/20 border border-red-700'
+                      : 'bg-red-50 border border-red-200'
+                  }`}>
+                    <span className={`text-sm font-medium ${
+                      config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                    }`}>
+                      Faltam {Object.values(excedentesAgrupados).reduce((total, excedente) => total + excedente.quantidadeTotal, 0)} adicional{Object.values(excedentesAgrupados).reduce((total, excedente) => total + excedente.quantidadeTotal, 0) !== 1 ? 'is' : ''} excedente{Object.values(excedentesAgrupados).reduce((total, excedente) => total + excedente.quantidadeTotal, 0) !== 1 ? 's' : ''} a {Object.values(excedentesAgrupados).reduce((total, excedente) => total + excedente.quantidadeTotal, 0) !== 1 ? 'serem distribuídos' : 'ser distribuído'}
                     </span>
-                  ) : (
-                    <span className="text-green-600">
+                  </div>
+                ) : (
+                  <div className={`text-center p-3 rounded-lg ${
+                    config.modo_escuro
+                      ? 'bg-green-900/20 border border-green-700'
+                      : 'bg-green-50 border border-green-200'
+                  }`}>
+                    <span className={`text-sm font-medium ${
+                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                    }`}>
                       ✓ Todos os excedentes foram distribuídos
                     </span>
-                  )}
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setModalOrganizacao(false)}
-                    className={`px-4 py-2 rounded-lg transition-colors ${
-                      config.modo_escuro
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={finalizarOrganizacao}
-                    disabled={excedentesDisponiveis.length > 0}
-                    className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-                      excedentesDisponiveis.length === 0
-                        ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    Adicionar ao Carrinho
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
+
+              {/* Botão Adicionar ao Carrinho - Largura Total */}
+              <button
+                onClick={finalizarOrganizacao}
+                disabled={!todosExcedentesDistribuidos()}
+                className={`w-full py-3 rounded-lg font-medium transition-colors ${
+                  todosExcedentesDistribuidos()
+                    ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Adicionar ao Carrinho
+              </button>
             </div>
           </div>
         </div>
