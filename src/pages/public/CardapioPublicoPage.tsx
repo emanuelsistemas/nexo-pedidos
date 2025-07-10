@@ -2787,66 +2787,61 @@ const CardapioPublicoPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA FINALIZAR ORGANIZAÇÃO
   const finalizarOrganizacao = () => {
-    if (excedentesDisponiveis.length > 0) {
+    // Verificar se todos os excedentes foram distribuídos usando a nova lógica
+    if (!todosExcedentesDistribuidos()) {
       showMessage('error', 'Todos os excedentes devem ser distribuídos');
       return;
     }
 
     if (!produtoOrganizacao) return;
 
-    // Adicionar cada item individual ao carrinho
-    itensOrganizados.forEach(item => {
-      // Agrupar adicionais por ID original e contar quantidades
-      const adicionaisAgrupados = {};
+    // Adicionar cada item individual ao carrinho exatamente como foi organizado
+    itensOrganizados.forEach((item, index) => {
+      // Gerar ID único para o carrinho com delay para garantir unicidade
+      const itemId = `${produtoOrganizacao.id}_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Preparar adicionais no formato esperado pelo sistema de carrinho
+      const adicionaisFormatados: {[itemId: string]: number} = {};
       item.adicionais.forEach(adicional => {
-        if (!adicionaisAgrupados[adicional.originalId]) {
-          adicionaisAgrupados[adicional.originalId] = {
-            id: adicional.originalId,
-            nome: adicional.nome,
-            preco: adicional.preco,
-            quantidade: 0
-          };
-        }
-        adicionaisAgrupados[adicional.originalId].quantidade += 1;
+        // Cada adicional individual tem quantidade 1
+        adicionaisFormatados[adicional.originalId] = (adicionaisFormatados[adicional.originalId] || 0) + 1;
       });
 
-      // Gerar ID único para o carrinho
-      const itemId = `${produtoOrganizacao.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      // Criar item para o carrinho
-      const novoItem = {
-        produtoId: produtoOrganizacao.id,
-        produto: {
-          id: produtoOrganizacao.id,
-          nome: produtoOrganizacao.nome,
-          preco: produtoOrganizacao.preco,
-          unidade_medida: produtoOrganizacao.unidade_medida
-        },
-        quantidade: 1, // Cada item individual tem quantidade 1
-        observacoes: '',
-        adicionais: Object.values(adicionaisAgrupados)
-      };
-
-      // Adicionar ao carrinho
+      // Adicionar ao carrinho (quantidade do produto)
       setQuantidadesProdutos(prev => ({
         ...prev,
         [itemId]: 1
       }));
 
+      // Adicionar adicionais ao carrinho
+      setAdicionaisSelecionados(prev => ({
+        ...prev,
+        [itemId]: adicionaisFormatados
+      }));
+
+      // Definir ordem de adição
       setOrdemAdicaoItens(prev => ({
         ...prev,
-        [itemId]: Date.now()
+        [itemId]: Date.now() + index // Adicionar index para garantir ordem
       }));
+
+      console.log(`🛒 Item ${index + 1} adicionado ao carrinho:`, {
+        itemId,
+        produto: produtoOrganizacao.nome,
+        adicionais: adicionaisFormatados
+      });
     });
 
     // Limpar estados do produto original
     limparEstadosProduto(produtoOrganizacao.id);
 
-    // Fechar modal
+    // Fechar modal e limpar todos os estados
     setModalOrganizacao(false);
     setProdutoOrganizacao(null);
     setItensOrganizados([]);
     setExcedentesDisponiveis([]);
+    setExcedentesAgrupados({});
+    setQuantidadeExcedenteTemp({});
 
     // Abrir carrinho
     if (!carrinhoAberto) {
@@ -5551,8 +5546,8 @@ const CardapioPublicoPage: React.FC = () => {
 
       {/* Modal de Organização de Adicionais */}
       {modalOrganizacao && produtoOrganizacao && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className={`w-full max-w-6xl h-full max-h-[90vh] flex flex-col rounded-lg shadow-2xl ${
+        <div className="fixed inset-0 bg-black/50 z-50">
+          <div className={`w-full h-full flex flex-col ${
             config.modo_escuro ? 'bg-gray-800' : 'bg-white'
           }`}>
             {/* Header */}
