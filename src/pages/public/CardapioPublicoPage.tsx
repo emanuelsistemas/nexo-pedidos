@@ -4465,7 +4465,7 @@ const CardapioPublicoPage: React.FC = () => {
                 })()}
 
                 {/* Conteúdo do card */}
-                <div className="p-3">
+                <div className={`p-3 ${produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null ? 'pt-6' : ''}`}>
                   {/* Header do Produto */}
                   <div className="mb-3">
                     {/* Layout com foto pequena quando cardapio_fotos_minimizadas ativo */}
