@@ -2845,16 +2845,42 @@ const CardapioPublicoPage: React.FC = () => {
       });
     });
 
-    // Limpar estados do produto original
+    // Limpar estados do produto original no card
     limparEstadosProduto(produtoOrganizacao.id);
 
-    // Fechar modal e limpar todos os estados
+    // Limpar quantidade selecionada do produto no card
+    setQuantidadesSelecionadas(prev => {
+      const novo = { ...prev };
+      delete novo[produtoOrganizacao.id];
+      return novo;
+    });
+
+    // Limpar adicionais selecionados do produto no card
+    setAdicionaisSelecionados(prev => {
+      const novo = { ...prev };
+      delete novo[produtoOrganizacao.id];
+      return novo;
+    });
+
+    // Limpar observações selecionadas do produto no card
+    setObservacoesSelecionadas(prev => {
+      const novo = { ...prev };
+      delete novo[produtoOrganizacao.id];
+      return novo;
+    });
+
+    // Fechar modal e limpar todos os estados do modal
     setModalOrganizacao(false);
     setProdutoOrganizacao(null);
     setItensOrganizados([]);
     setExcedentesDisponiveis([]);
     setExcedentesAgrupados({});
     setQuantidadeExcedenteTemp({});
+
+    console.log(`🧹 Estados do produto ${produtoOrganizacao.nome} limpos do card`);
+
+    // Abrir carrinho automaticamente após adicionar
+    setCarrinhoAberto(true);
 
     // Abrir carrinho
     if (!carrinhoAberto) {
