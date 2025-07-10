@@ -2589,6 +2589,65 @@ const CardapioPublicoPage: React.FC = () => {
     return quantidadeExcedenteTemp[originalId] || 0;
   };
 
+  // ✅ FUNÇÕES PARA CONTROLAR QUANTIDADE DE ADICIONAIS NOS ITENS
+  const obterQuantidadeAdicionalNoItem = (itemId: string, originalId: string): number => {
+    const item = itensOrganizados.find(i => i.id === itemId);
+    if (!item) return 0;
+
+    return item.adicionais.filter(a => a.originalId === originalId).length;
+  };
+
+  const incrementarAdicionalNoItem = (itemId: string, originalId: string) => {
+    // Verificar se há excedentes disponíveis
+    const excedente = excedentesAgrupados[originalId];
+    if (!excedente || excedente.quantidadeTotal <= 0) {
+      showMessage('error', 'Não há mais excedentes disponíveis deste adicional');
+      return;
+    }
+
+    // Adicionar ao item
+    setItensOrganizados(prev => prev.map(item => {
+      if (item.id === itemId) {
+        const novoAdicional = {
+          id: `${originalId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          originalId,
+          nome: excedente.nome,
+          preco: excedente.preco,
+          tipo: 'excedente'
+        };
+        return {
+          ...item,
+          adicionais: [...item.adicionais, novoAdicional]
+        };
+      }
+      return item;
+    }));
+
+    // Reduzir quantidade disponível nos excedentes
+    setExcedentesAgrupados(prev => ({
+      ...prev,
+      [originalId]: {
+        ...prev[originalId],
+        quantidadeTotal: prev[originalId].quantidadeTotal - 1
+      }
+    }));
+  };
+
+  const decrementarAdicionalNoItem = (itemId: string, originalId: string) => {
+    const item = itensOrganizados.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Encontrar o último adicional deste tipo no item
+    const adicionalParaRemover = item.adicionais
+      .filter(a => a.originalId === originalId)
+      .pop();
+
+    if (!adicionalParaRemover) return;
+
+    // Remover do item usando a função existente que já cuida da lógica de excedentes
+    desvincularExcedente(adicionalParaRemover.id, itemId);
+  };
+
   // ✅ FUNÇÃO PARA VERIFICAR SE TODOS OS EXCEDENTES FORAM DISTRIBUÍDOS
   const todosExcedentesDistribuidos = (): boolean => {
     // Verifica se há excedentes agrupados com quantidade disponível > 0
@@ -2666,36 +2725,64 @@ const CardapioPublicoPage: React.FC = () => {
     setExcedenteAtual(null);
   };
 
-  // ✅ FUNÇÃO PARA DESVINCULAR EXCEDENTE
+  // ✅ FUNÇÃO PARA DESVINCULAR ADICIONAL (EXCEDENTE OU MÍNIMO)
   const desvincularExcedente = (adicionalId: string, itemId: string) => {
-    let excedenteDesvinculado = null;
+    let adicionalDesvinculado = null;
 
-    // Remover do item (só excedentes, não mínimos)
-    setItensOrganizados(prev => prev.map(item => {
-      if (item.id === itemId) {
-        const novosAdicionais = item.adicionais.filter(a => {
-          if (a.id === adicionalId && a.tipo === 'excedente') {
-            excedenteDesvinculado = a;
-            return false;
-          }
-          return true;
-        });
-        return { ...item, adicionais: novosAdicionais };
-      }
-      return item;
-    }));
-
-    // Adicionar de volta aos excedentes agrupados
-    if (excedenteDesvinculado) {
-      const { originalId } = excedenteDesvinculado;
-      setExcedentesAgrupados(prev => ({
-        ...prev,
-        [originalId]: {
-          ...prev[originalId],
-          quantidadeTotal: prev[originalId].quantidadeTotal + 1
+    // Remover do item (excedentes e mínimos)
+    setItensOrganizados(prev => {
+      const novosItens = prev.map(item => {
+        if (item.id === itemId) {
+          const novosAdicionais = item.adicionais.filter(a => {
+            if (a.id === adicionalId) {
+              adicionalDesvinculado = a;
+              return false;
+            }
+            return true;
+          });
+          return { ...item, adicionais: novosAdicionais };
         }
-      }));
-    }
+        return item;
+      });
+
+      // Adicionar de volta aos excedentes agrupados imediatamente após a remoção
+      if (adicionalDesvinculado) {
+        const { originalId } = adicionalDesvinculado;
+
+        setExcedentesAgrupados(prevExcedentes => {
+          console.log('Adicionando de volta aos excedentes:', {
+            originalId,
+            nome: adicionalDesvinculado.nome,
+            excedentesAtuais: prevExcedentes[originalId]?.quantidadeTotal || 0
+          });
+
+          if (prevExcedentes[originalId]) {
+            // Se já existe, apenas incrementar a quantidade
+            return {
+              ...prevExcedentes,
+              [originalId]: {
+                ...prevExcedentes[originalId],
+                quantidadeTotal: prevExcedentes[originalId].quantidadeTotal + 1
+              }
+            };
+          } else {
+            // Se não existe, criar novo grupo
+            return {
+              ...prevExcedentes,
+              [originalId]: {
+                originalId: adicionalDesvinculado.originalId,
+                nome: adicionalDesvinculado.nome,
+                preco: adicionalDesvinculado.preco,
+                quantidadeTotal: 1,
+                quantidadeSelecionada: 0
+              }
+            };
+          }
+        });
+      }
+
+      return novosItens;
+    });
   };
 
   // ✅ FUNÇÃO PARA FINALIZAR ORGANIZAÇÃO
@@ -5547,58 +5634,109 @@ const CardapioPublicoPage: React.FC = () => {
                                 Adicionais:
                               </p>
                               <div className="space-y-2">
-                                {item.adicionais.map(adicional => (
-                                  <div
-                                    key={adicional.id}
-                                    className={`flex items-center justify-between p-2 rounded border ${
-                                      adicional.tipo === 'minimo'
-                                        ? config.modo_escuro
-                                          ? 'bg-green-900/30 border-green-700'
-                                          : 'bg-green-50 border-green-200'
-                                        : config.modo_escuro
-                                        ? 'bg-blue-900/30 border-blue-700'
-                                        : 'bg-blue-50 border-blue-200'
-                                    }`}
-                                  >
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <span className={`text-sm font-medium ${
-                                          config.modo_escuro ? 'text-white' : 'text-gray-800'
+                                {/* Agrupar adicionais por originalId para mostrar com controles de quantidade */}
+                                {(() => {
+                                  const adicionaisAgrupados = {};
+                                  item.adicionais.forEach(adicional => {
+                                    if (!adicionaisAgrupados[adicional.originalId]) {
+                                      adicionaisAgrupados[adicional.originalId] = {
+                                        originalId: adicional.originalId,
+                                        nome: adicional.nome,
+                                        preco: adicional.preco,
+                                        tipo: adicional.tipo,
+                                        quantidade: 0
+                                      };
+                                    }
+                                    adicionaisAgrupados[adicional.originalId].quantidade += 1;
+                                  });
+
+                                  return Object.values(adicionaisAgrupados).map((adicionalAgrupado: any) => (
+                                    <div
+                                      key={adicionalAgrupado.originalId}
+                                      className={`flex items-center justify-between p-3 rounded border ${
+                                        adicionalAgrupado.tipo === 'minimo'
+                                          ? config.modo_escuro
+                                            ? 'bg-green-900/30 border-green-700'
+                                            : 'bg-green-50 border-green-200'
+                                          : config.modo_escuro
+                                          ? 'bg-blue-900/30 border-blue-700'
+                                          : 'bg-blue-50 border-blue-200'
+                                      }`}
+                                    >
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1">
+                                          <span className={`text-sm font-medium ${
+                                            config.modo_escuro ? 'text-white' : 'text-gray-800'
+                                          }`}>
+                                            + {adicionalAgrupado.nome}
+                                          </span>
+                                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                            adicionalAgrupado.tipo === 'minimo'
+                                              ? config.modo_escuro
+                                                ? 'bg-green-700 text-green-300'
+                                                : 'bg-green-200 text-green-700'
+                                              : config.modo_escuro
+                                              ? 'bg-blue-700 text-blue-300'
+                                              : 'bg-blue-200 text-blue-700'
+                                          }`}>
+                                            {adicionalAgrupado.tipo === 'minimo' ? 'Mínimo' : 'Extra'}
+                                          </span>
+                                        </div>
+                                        <p className={`text-xs ${
+                                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                                         }`}>
-                                          + {adicional.nome}
-                                        </span>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                          adicional.tipo === 'minimo'
-                                            ? config.modo_escuro
-                                              ? 'bg-green-700 text-green-300'
-                                              : 'bg-green-200 text-green-700'
-                                            : config.modo_escuro
-                                            ? 'bg-blue-700 text-blue-300'
-                                            : 'bg-blue-200 text-blue-700'
-                                        }`}>
-                                          {adicional.tipo === 'minimo' ? 'Mínimo' : 'Extra'}
-                                        </span>
+                                          {formatarPreco(adicionalAgrupado.preco)} cada
+                                          {adicionalAgrupado.quantidade > 1 && (
+                                            <span className="ml-2 font-medium">
+                                              Total: {formatarPreco(adicionalAgrupado.preco * adicionalAgrupado.quantidade)}
+                                            </span>
+                                          )}
+                                        </p>
                                       </div>
-                                      <p className={`text-xs ${
-                                        config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                                      }`}>
-                                        {formatarPreco(adicional.preco)}
-                                      </p>
+
+                                      {/* Controles de Quantidade */}
+                                      <div className="flex items-center gap-2 ml-3">
+                                        <button
+                                          onClick={() => decrementarAdicionalNoItem(item.id, adicionalAgrupado.originalId)}
+                                          disabled={adicionalAgrupado.quantidade <= 0}
+                                          className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                            adicionalAgrupado.quantidade <= 0
+                                              ? config.modo_escuro
+                                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                              : config.modo_escuro
+                                              ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                              : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                                          }`}
+                                        >
+                                          <Minus size={12} />
+                                        </button>
+
+                                        <span className={`w-8 text-center text-sm font-medium ${
+                                          config.modo_escuro ? 'text-white' : 'text-gray-900'
+                                        }`}>
+                                          {adicionalAgrupado.quantidade}
+                                        </span>
+
+                                        <button
+                                          onClick={() => incrementarAdicionalNoItem(item.id, adicionalAgrupado.originalId)}
+                                          disabled={!excedentesAgrupados[adicionalAgrupado.originalId] || excedentesAgrupados[adicionalAgrupado.originalId]?.quantidadeTotal <= 0}
+                                          className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                            !excedentesAgrupados[adicionalAgrupado.originalId] || excedentesAgrupados[adicionalAgrupado.originalId]?.quantidadeTotal <= 0
+                                              ? config.modo_escuro
+                                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                              : config.modo_escuro
+                                              ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                              : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                                          }`}
+                                        >
+                                          <Plus size={12} />
+                                        </button>
+                                      </div>
                                     </div>
-                                    {adicional.tipo === 'excedente' && (
-                                      <button
-                                        onClick={() => desvincularExcedente(adicional.id, item.id)}
-                                        className={`p-1 rounded-full transition-colors ${
-                                          config.modo_escuro
-                                            ? 'hover:bg-gray-500 text-gray-400 hover:text-white'
-                                            : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
-                                        }`}
-                                      >
-                                        <X size={16} />
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
+                                  ));
+                                })()}
                               </div>
                             </div>
                           )}
