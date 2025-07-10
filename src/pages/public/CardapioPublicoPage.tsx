@@ -3189,8 +3189,7 @@ const CardapioPublicoPage: React.FC = () => {
 
     // Verificar se tem promoção para ajustar posição
     const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
-    // Posicionar mais acima, com bastante espaço dos controles
-    const posicaoTop = temPromocao ? 'top-14' : 'top-8'; // Mais afastado dos controles
+    const posicaoTop = temPromocao ? 'top-12' : 'top-3'; // Se tem promoção, fica mais abaixo
 
     return (
       <div className={`absolute ${posicaoTop} right-3 z-10 px-2 py-1 rounded-md border text-xs font-medium flex items-center gap-1 ${estilo.bg} ${estilo.text} ${estilo.border}`}>
@@ -5358,12 +5357,12 @@ const CardapioPublicoPage: React.FC = () => {
 
       {/* Modal de Organização de Adicionais */}
       {modalOrganizacao && produtoOrganizacao && (
-        <div className="fixed inset-0 bg-black/50 z-50">
-          <div className={`w-full h-full flex flex-col overflow-hidden ${
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className={`w-full max-w-6xl h-full max-h-[90vh] flex flex-col rounded-lg shadow-2xl ${
             config.modo_escuro ? 'bg-gray-800' : 'bg-white'
           }`}>
             {/* Header */}
-            <div className={`flex-shrink-0 p-6 border-b ${
+            <div className={`flex-shrink-0 p-4 sm:p-6 border-b ${
               config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
             }`}>
               <div className="flex items-center justify-between">
@@ -5394,18 +5393,19 @@ const CardapioPublicoPage: React.FC = () => {
 
             {/* Conteúdo */}
             <div className="flex-1 overflow-hidden">
-              <div className="h-full p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+              <div className="p-4 sm:p-6 h-full">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 h-full">
 
                   {/* Coluna Esquerda - Itens Individuais */}
-                  <div className="flex flex-col h-full">
+                  <div className="flex flex-col h-full min-h-0">
                     <h4 className={`text-lg font-medium mb-4 flex-shrink-0 ${
                       config.modo_escuro ? 'text-white' : 'text-gray-900'
                     }`}>
                       Itens Individuais ({itensOrganizados.length})
                     </h4>
 
-                    <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                    <div className="flex-1 overflow-y-auto pr-2 min-h-0">
+                      <div className="space-y-4 pb-4">
                       {itensOrganizados.map(item => (
                         <div
                           key={item.id}
@@ -5497,20 +5497,21 @@ const CardapioPublicoPage: React.FC = () => {
                           )}
                         </div>
                       ))}
+                      </div>
                     </div>
                   </div>
 
                   {/* Coluna Direita - Excedentes */}
-                  <div className="flex flex-col h-full">
+                  <div className="flex flex-col h-full min-h-0">
                     <h4 className={`text-lg font-medium mb-4 flex-shrink-0 ${
                       config.modo_escuro ? 'text-white' : 'text-gray-900'
                     }`}>
                       Excedentes para Distribuir ({excedentesDisponiveis.length})
                     </h4>
 
-                    <div className="flex-1 overflow-y-auto pr-2">
+                    <div className="flex-1 overflow-y-auto pr-2 min-h-0">
                       {excedentesDisponiveis.length > 0 ? (
-                        <div className="space-y-3">
+                      <div className="space-y-3 pb-4">
                           <p className={`text-sm mb-4 ${
                             config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                           }`}>
@@ -5566,7 +5567,7 @@ const CardapioPublicoPage: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className={`flex-shrink-0 p-6 border-t ${
+            <div className={`flex-shrink-0 p-4 sm:p-6 border-t ${
               config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
             }`}>
               <div className="flex items-center justify-between">
