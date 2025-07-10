@@ -2835,6 +2835,47 @@ const CardapioPublicoPage: React.FC = () => {
     );
   }
 
+  // Componente da tag de estoque
+  const TagEstoque = ({ produto }: { produto: Produto }) => {
+    if (!config.controla_estoque_cardapio) {
+      return null;
+    }
+
+    const status = obterStatusEstoque(produto);
+
+    if (status === 'disponivel') {
+      return null; // Não mostrar tag quando há estoque normal
+    }
+
+    const estilos = {
+      baixo: {
+        bg: config.modo_escuro ? 'bg-yellow-900/80' : 'bg-yellow-100',
+        text: config.modo_escuro ? 'text-yellow-300' : 'text-yellow-800',
+        border: config.modo_escuro ? 'border-yellow-700' : 'border-yellow-300',
+        icon: '⚠️'
+      },
+      indisponivel: {
+        bg: config.modo_escuro ? 'bg-red-900/80' : 'bg-red-100',
+        text: config.modo_escuro ? 'text-red-300' : 'text-red-800',
+        border: config.modo_escuro ? 'border-red-700' : 'border-red-300',
+        icon: '❌'
+      }
+    };
+
+    const estilo = estilos[status];
+    const texto = status === 'baixo' ? 'Estoque baixo' : 'Sem estoque';
+
+    return (
+      <div className={`absolute top-2 left-2 z-10 px-2 py-1 rounded-md border text-xs font-medium flex items-center gap-1 ${estilo.bg} ${estilo.text} ${estilo.border}`}>
+        <span>{estilo.icon}</span>
+        <span>{texto}</span>
+        {status === 'baixo' && produto.estoque_atual !== undefined && (
+          <span className="ml-1">({produto.estoque_atual})</span>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       {/* Estilos CSS customizados para animação de entrada suave */}
@@ -3529,9 +3570,36 @@ const CardapioPublicoPage: React.FC = () => {
               <div className="flex-1 h-full relative overflow-hidden">
                 <div ref={sliderRef} className="keen-slider h-full">
                   {(() => {
+                    // ✅ APLICAR A MESMA LÓGICA DE ORDENAÇÃO DOS GRUPOS
+                    const gruposOrdenados = [...grupos].sort((a, b) => {
+                      // Verificar se tem ordenação configurada
+                      const aTemOrdenacao = a.ordenacao_cardapio_habilitada &&
+                                           a.ordenacao_cardapio_digital !== null &&
+                                           a.ordenacao_cardapio_digital !== undefined;
+                      const bTemOrdenacao = b.ordenacao_cardapio_habilitada &&
+                                           b.ordenacao_cardapio_digital !== null &&
+                                           b.ordenacao_cardapio_digital !== undefined;
+
+                      // Se ambos têm ordenação, ordenar por número (MENOR número = PRIMEIRO)
+                      if (aTemOrdenacao && bTemOrdenacao) {
+                        const posicaoA = Number(a.ordenacao_cardapio_digital);
+                        const posicaoB = Number(b.ordenacao_cardapio_digital);
+                        return posicaoA - posicaoB;
+                      }
+
+                      // Se apenas A tem ordenação, A vem primeiro
+                      if (aTemOrdenacao && !bTemOrdenacao) return -1;
+
+                      // Se apenas B tem ordenação, B vem primeiro
+                      if (!aTemOrdenacao && bTemOrdenacao) return 1;
+
+                      // Se nenhum tem ordenação, ordem alfabética
+                      return a.nome.localeCompare(b.nome);
+                    });
+
                     const todasCategorias = [
                       { id: 'todos', nome: '🍽️ Todos' },
-                      ...grupos
+                      ...gruposOrdenados
                     ];
 
                     return todasCategorias.map((categoria) => (
