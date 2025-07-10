@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag, AlertTriangle } from 'lucide-react';
+import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
@@ -306,6 +306,7 @@ interface CardapioConfig {
   cardapio_fotos_minimizadas?: boolean;
   trabalha_com_pizzas?: boolean;
   ocultar_grupos_cardapio?: boolean;
+  controla_estoque_cardapio?: boolean;
 }
 
 const CardapioPublicoPage: React.FC = () => {
@@ -403,13 +404,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [modalRemoverItemAberto, setModalRemoverItemAberto] = useState(false);
   const [produtoParaRemover, setProdutoParaRemover] = useState<string | null>(null);
 
-  // Estados para modal de configuração individual
-  const [modalPerguntaAdicionais, setModalPerguntaAdicionais] = useState(false);
-  const [modalAvisoAdicionais, setModalAvisoAdicionais] = useState(false);
+  // Estados para modal de configuração individual (mantendo apenas os necessários)
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
   const [produtoConfiguracaoIndividual, setProdutoConfiguracaoIndividual] = useState<any>(null);
-  const [adicionaisOcultosParaProduto, setAdicionaisOcultosParaProduto] = useState<Record<string, boolean>>({});
-  const [produtosComAdicionaisPendentes, setProdutosComAdicionaisPendentes] = useState<Record<string, boolean>>({});
 
   // ✅ NOVO: Modal de conscientização para produtos alcoólicos
   const [modalProdutoAlcoolico, setModalProdutoAlcoolico] = useState(false);
@@ -885,9 +882,7 @@ const CardapioPublicoPage: React.FC = () => {
       // Carregar seleções (estados intermediários)
       const {
         quantidades: quantidadesSel,
-        observacoes: observacoesSel,
-        adicionaisOcultos: adicionaisOcultosSel,
-        adicionaisPendentes: adicionaisPendentesSel
+        observacoes: observacoesSel
       } = carregarSelecaoLocalStorage();
 
       if (Object.keys(quantidadesSel).length > 0 || Object.keys(observacoesSel).length > 0) {
@@ -896,16 +891,7 @@ const CardapioPublicoPage: React.FC = () => {
         console.log('📝 Seleções carregadas do localStorage');
       }
 
-      // Carregar estados de fluxo de configuração
-      if (Object.keys(adicionaisOcultosSel).length > 0) {
-        setAdicionaisOcultosParaProduto(adicionaisOcultosSel);
-        console.log('🔒 Estados de adicionais ocultos carregados');
-      }
-
-      if (Object.keys(adicionaisPendentesSel).length > 0) {
-        setProdutosComAdicionaisPendentes(adicionaisPendentesSel);
-        console.log('⏳ Estados de adicionais pendentes carregados');
-      }
+      // Estados de fluxo de configuração removidos - não são mais necessários
     }
   }, [empresaId]);
 
@@ -967,7 +953,7 @@ const CardapioPublicoPage: React.FC = () => {
       console.log('🔍 Buscando configuração PDV para slug:', slug);
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas, ocultar_grupos_cardapio')
+        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas, ocultar_grupos_cardapio, controla_estoque_cardapio')
         .eq('cardapio_url_personalizada', slug)
         .single();
 
@@ -1081,7 +1067,8 @@ const CardapioPublicoPage: React.FC = () => {
         mostrar_fotos: pdvConfigData.exibir_fotos_itens_cardapio !== false, // Default true se não definido
         cardapio_fotos_minimizadas: pdvConfigData.cardapio_fotos_minimizadas || false,
         trabalha_com_pizzas: pdvConfigData.trabalha_com_pizzas || false,
-        ocultar_grupos_cardapio: pdvConfigData.ocultar_grupos_cardapio || false
+        ocultar_grupos_cardapio: pdvConfigData.ocultar_grupos_cardapio || false,
+        controla_estoque_cardapio: pdvConfigData.controla_estoque_cardapio || false
       }));
 
       // 3. Buscar produtos ativos da empresa com unidades de medida
@@ -1774,10 +1761,7 @@ const CardapioPublicoPage: React.FC = () => {
     try {
       localStorage.setItem(`selecao_quantidades_${empresaId}`, JSON.stringify(quantidadesSelecionadas));
       localStorage.setItem(`selecao_observacoes_${empresaId}`, JSON.stringify(observacoesSelecionadas));
-      // Salvar estados de fluxo de configuração
-      localStorage.setItem(`adicionais_ocultos_${empresaId}`, JSON.stringify(adicionaisOcultosParaProduto));
-      localStorage.setItem(`adicionais_pendentes_${empresaId}`, JSON.stringify(produtosComAdicionaisPendentes));
-      console.log('📝 Salvando seleções e estados de fluxo no localStorage');
+      console.log('📝 Salvando seleções no localStorage');
     } catch (error) {
       console.error('Erro ao salvar seleções no localStorage:', error);
     }
@@ -1790,24 +1774,20 @@ const CardapioPublicoPage: React.FC = () => {
     adicionaisPendentes: Record<string, boolean>
   } => {
     if (!empresaId) {
-      return { quantidades: {}, observacoes: {}, adicionaisOcultos: {}, adicionaisPendentes: {} };
+      return { quantidades: {}, observacoes: {} };
     }
 
     try {
       const quantidadesSalvas = localStorage.getItem(`selecao_quantidades_${empresaId}`);
       const observacoesSalvas = localStorage.getItem(`selecao_observacoes_${empresaId}`);
-      const adicionaisOcultosSalvos = localStorage.getItem(`adicionais_ocultos_${empresaId}`);
-      const adicionaisPendentesSalvos = localStorage.getItem(`adicionais_pendentes_${empresaId}`);
 
       return {
         quantidades: quantidadesSalvas ? JSON.parse(quantidadesSalvas) : {},
-        observacoes: observacoesSalvas ? JSON.parse(observacoesSalvas) : {},
-        adicionaisOcultos: adicionaisOcultosSalvos ? JSON.parse(adicionaisOcultosSalvos) : {},
-        adicionaisPendentes: adicionaisPendentesSalvos ? JSON.parse(adicionaisPendentesSalvos) : {}
+        observacoes: observacoesSalvas ? JSON.parse(observacoesSalvas) : {}
       };
     } catch (error) {
       console.error('Erro ao carregar seleções do localStorage:', error);
-      return { quantidades: {}, observacoes: {}, adicionaisOcultos: {}, adicionaisPendentes: {} };
+      return { quantidades: {}, observacoes: {} };
     }
   };
 
@@ -1817,9 +1797,7 @@ const CardapioPublicoPage: React.FC = () => {
     try {
       localStorage.removeItem(`selecao_quantidades_${empresaId}`);
       localStorage.removeItem(`selecao_observacoes_${empresaId}`);
-      localStorage.removeItem(`adicionais_ocultos_${empresaId}`);
-      localStorage.removeItem(`adicionais_pendentes_${empresaId}`);
-      console.log('🗑️ Seleções e estados de fluxo removidos do localStorage');
+      console.log('🗑️ Seleções removidas do localStorage');
     } catch (error) {
       console.error('Erro ao limpar seleções do localStorage:', error);
     }
@@ -1905,18 +1883,7 @@ const CardapioPublicoPage: React.FC = () => {
       return novo;
     });
 
-    // Limpar estados de fluxo de configuração
-    setAdicionaisOcultosParaProduto(prev => {
-      const novo = { ...prev };
-      delete novo[produtoId];
-      return novo;
-    });
-
-    setProdutosComAdicionaisPendentes(prev => {
-      const novo = { ...prev };
-      delete novo[produtoId];
-      return novo;
-    });
+    // Estados de fluxo de configuração removidos - não são mais necessários
 
     // Limpar validação mínima de adicionais
     setValidacaoQuantidadeMinima(prev => {
@@ -2016,12 +1983,7 @@ const CardapioPublicoPage: React.FC = () => {
         return nova;
       });
 
-      // Resetar estado de adicionais pendentes
-      setProdutosComAdicionaisPendentes(prev => {
-        const novo = { ...prev };
-        delete novo[produtoId];
-        return novo;
-      });
+      // Estado de adicionais pendentes removido - não é mais necessário
 
       // Salvar seleções atualizadas no localStorage
       setTimeout(() => salvarSelecaoLocalStorage(), 100);
@@ -2166,26 +2128,7 @@ const CardapioPublicoPage: React.FC = () => {
       novaQuantidade = quantidadeAtual + 1;
     }
 
-    // Verificar se produto tem adicionais e se está passando de 1 para 2
-    const temAdicionais = produto?.opcoes_adicionais && produto.opcoes_adicionais.length > 0;
-    const passandoDe1Para2 = quantidadeAtual === 1 && novaQuantidade === 2;
-    const temAdicionaisPendentes = produtosComAdicionaisPendentes[produtoId];
-
-    if (temAdicionais && passandoDe1Para2 && !adicionaisOcultosParaProduto[produtoId]) {
-      // Primeira vez - perguntar se deseja adicionar complementos
-      setProdutoConfiguracaoIndividual(produto);
-      setModalPerguntaAdicionais(true);
-      return; // Não incrementar ainda
-    }
-
-    if (temAdicionais && temAdicionaisPendentes && quantidadeAtual >= 1) {
-      // Usuário escolheu SIM antes e está tentando incrementar novamente
-      // Mostrar modal para adicionar ao carrinho
-      setProdutoConfiguracaoIndividual(produto);
-      setModalAdicionarCarrinho(true);
-      return; // Não incrementar ainda
-    }
-
+    // Incrementar a quantidade diretamente - popup de adicionais removido
     alterarQuantidadeSelecionada(produtoId, novaQuantidade);
   };
 
@@ -2437,72 +2380,7 @@ const CardapioPublicoPage: React.FC = () => {
     setProdutoParaRemover(null);
   };
 
-  // Funções para modal de configuração individual
-  const confirmarDesejaAdicionais = () => {
-    // Usuário quer adicionais - marcar como pendente e fechar modal
-    const produtoId = produtoConfiguracaoIndividual?.id;
-    if (produtoId) {
-      setProdutosComAdicionaisPendentes(prev => ({
-        ...prev,
-        [produtoId]: true
-      }));
-
-      // NÃO incrementar quantidade - deixar em 1 para ele configurar o primeiro item
-      // Os adicionais ficam visíveis para configuração
-    }
-
-    setModalPerguntaAdicionais(false);
-    setProdutoConfiguracaoIndividual(null);
-  };
-
-  const recusarAdicionais = () => {
-    // Usuário não quer adicionais - ocultar área e permitir incrementar
-    const produtoId = produtoConfiguracaoIndividual?.id;
-    if (produtoId) {
-      setAdicionaisOcultosParaProduto(prev => ({
-        ...prev,
-        [produtoId]: true
-      }));
-
-      // Incrementar a quantidade que estava pendente
-      const quantidadeAtual = obterQuantidadeSelecionada(produtoId);
-      alterarQuantidadeSelecionada(produtoId, quantidadeAtual + 1);
-    }
-
-    setModalPerguntaAdicionais(false);
-    setProdutoConfiguracaoIndividual(null);
-  };
-
-  // Funções para modal de aviso
-  const continuarConfigurandoAdicionais = () => {
-    // Usuário quer continuar configurando - apenas fechar modal
-    setModalAvisoAdicionais(false);
-    setProdutoConfiguracaoIndividual(null);
-  };
-
-  const desistirAdicionais = () => {
-    // Usuário desistiu dos adicionais - ocultar área e permitir incrementar
-    const produtoId = produtoConfiguracaoIndividual?.id;
-    if (produtoId) {
-      setAdicionaisOcultosParaProduto(prev => ({
-        ...prev,
-        [produtoId]: true
-      }));
-
-      setProdutosComAdicionaisPendentes(prev => {
-        const novo = { ...prev };
-        delete novo[produtoId];
-        return novo;
-      });
-
-      // Incrementar a quantidade que estava pendente
-      const quantidadeAtual = obterQuantidadeSelecionada(produtoId);
-      alterarQuantidadeSelecionada(produtoId, quantidadeAtual + 1);
-    }
-
-    setModalAvisoAdicionais(false);
-    setProdutoConfiguracaoIndividual(null);
-  };
+  // Funções para modal de configuração individual (simplificadas)
 
   // Funções para modal de adicionar ao carrinho
   const confirmarAdicionarAoCarrinho = () => {
@@ -2561,12 +2439,7 @@ const CardapioPublicoPage: React.FC = () => {
           return nova;
         });
 
-        // Resetar estado de adicionais pendentes
-        setProdutosComAdicionaisPendentes(prev => {
-          const novo = { ...prev };
-          delete novo[produtoAlcoolicoPendente];
-          return novo;
-        });
+        // Estado de adicionais pendentes removido - não é mais necessário
 
         // Salvar seleções atualizadas no localStorage
         setTimeout(() => salvarSelecaoLocalStorage(), 100);
@@ -4220,8 +4093,8 @@ const CardapioPublicoPage: React.FC = () => {
                     return null;
                   })()}
 
-                  {/* Adicionais do produto - aparece quando há quantidade selecionada E (não foi ocultado OU tem adicionais pendentes) */}
-                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && obterQuantidadeSelecionada(produto.id) > 0 && (!adicionaisOcultosParaProduto[produto.id] || produtosComAdicionaisPendentes[produto.id]) && (
+                  {/* Adicionais do produto - aparece quando há quantidade selecionada */}
+                  {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && obterQuantidadeSelecionada(produto.id) > 0 && (
                     <div className="mb-3 w-full">
                       {/* Divisória acima dos adicionais */}
                       <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
@@ -4585,123 +4458,9 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Pergunta sobre Adicionais */}
-      {modalPerguntaAdicionais && produtoConfiguracaoIndividual && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
-            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
-          }`}>
-            {/* Header do Modal */}
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                  <Plus size={20} className="text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <h3 className={`text-lg font-semibold ${
-                    config.modo_escuro ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Adicionar Complementos?
-                  </h3>
-                  <p className={`text-sm ${
-                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
-                    {produtoConfiguracaoIndividual.nome}
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {/* Conteúdo do Modal */}
-            <div className="p-6">
-              <p className={`text-center ${
-                config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                Deseja adicionar complementos ao primeiro item?
-              </p>
-            </div>
 
-            {/* Botões do Modal */}
-            <div className="p-6 pt-0 flex gap-3">
-              <button
-                onClick={recusarAdicionais}
-                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
-                  config.modo_escuro
-                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
-                }`}
-              >
-                Não, obrigado
-              </button>
-              <button
-                onClick={confirmarDesejaAdicionais}
-                className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
-              >
-                Sim, adicionar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Modal de Aviso sobre Adicionais */}
-      {modalAvisoAdicionais && produtoConfiguracaoIndividual && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
-            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
-          }`}>
-            {/* Header do Modal */}
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                  <AlertTriangle size={20} className="text-yellow-600 dark:text-yellow-400" />
-                </div>
-                <div>
-                  <h3 className={`text-lg font-semibold ${
-                    config.modo_escuro ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Finalize a Configuração
-                  </h3>
-                  <p className={`text-sm ${
-                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
-                    {produtoConfiguracaoIndividual.nome}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Conteúdo do Modal */}
-            <div className="p-6">
-              <p className={`text-center ${
-                config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
-              }`}>
-                Você decidiu adicionar complementos neste item. Finalize primeiro incluindo os adicionais ou desistiu de ter complementos?
-              </p>
-            </div>
-
-            {/* Botões do Modal */}
-            <div className="p-6 pt-0 flex gap-3">
-              <button
-                onClick={desistirAdicionais}
-                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
-                  config.modo_escuro
-                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
-                }`}
-              >
-                Desistir dos complementos
-              </button>
-              <button
-                onClick={continuarConfigurandoAdicionais}
-                className="flex-1 py-3 px-4 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
-              >
-                OK, continuar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal de Adicionar ao Carrinho */}
       {modalAdicionarCarrinho && produtoConfiguracaoIndividual && (
