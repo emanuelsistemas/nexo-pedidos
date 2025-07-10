@@ -264,6 +264,11 @@ interface Produto {
   estoque_atual?: number;
   estoque_minimo?: number;
   controla_estoque_cardapio?: boolean;
+  // Campos de promoção
+  promocao?: boolean;
+  exibir_promocao_cardapio?: boolean;
+  tipo_desconto?: string;
+  valor_desconto?: number;
 }
 
 interface ItemCarrinho {
@@ -4466,7 +4471,8 @@ const CardapioPublicoPage: React.FC = () => {
                             })()}
 
                             {/* Controles de quantidade na mesma linha do preço */}
-                            {obterWhatsAppEmpresa() && (
+                            {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
+                            {obterWhatsAppEmpresa() && !semEstoque && (
                               <div className="flex items-center gap-1">
                                 {/* Botão Decrementar */}
                                 <button
