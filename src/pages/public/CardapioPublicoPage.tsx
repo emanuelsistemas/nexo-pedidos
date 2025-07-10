@@ -2088,24 +2088,10 @@ const CardapioPublicoPage: React.FC = () => {
     if (produto && produto.controla_estoque_cardapio) {
       const quantidadeSolicitada = obterQuantidadeSelecionada(produtoId);
 
-      console.log('🔍 DEBUG ESTOQUE:', {
-        produtoNome: produto.nome,
-        controla_estoque_cardapio: produto.controla_estoque_cardapio,
-        quantidadeSolicitada: quantidadeSolicitada,
-        estoqueAtualProduto: produto.estoque_atual
-      });
-
       if (quantidadeSolicitada > 0) {
         const { temEstoque, estoqueAtual } = await verificarEstoqueTempoReal(produtoId, quantidadeSolicitada);
 
-        console.log('🔍 DEBUG VERIFICAÇÃO:', {
-          temEstoque,
-          estoqueAtual,
-          quantidadeSolicitada
-        });
-
         if (!temEstoque) {
-          console.log('❌ ESTOQUE INSUFICIENTE - Abrindo modal');
           // Abrir modal de estoque insuficiente
           setDadosEstoqueInsuficiente({
             nomeProduto: produto.nome,
@@ -2114,8 +2100,6 @@ const CardapioPublicoPage: React.FC = () => {
           });
           setModalEstoqueInsuficiente(true);
           return;
-        } else {
-          console.log('✅ ESTOQUE SUFICIENTE - Continuando...');
         }
       }
     }
@@ -3014,7 +2998,6 @@ const CardapioPublicoPage: React.FC = () => {
         const { temEstoque, estoqueAtual } = await verificarEstoqueTempoReal(produtoAlcoolicoPendente, quantidadeSelecionada);
 
         if (!temEstoque) {
-          console.log('❌ ESTOQUE INSUFICIENTE (PRODUTO ALCOÓLICO) - Abrindo modal');
           // Abrir modal de estoque insuficiente
           setDadosEstoqueInsuficiente({
             nomeProduto: produto.nome,
