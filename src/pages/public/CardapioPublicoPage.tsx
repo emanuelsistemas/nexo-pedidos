@@ -422,6 +422,16 @@ const CardapioPublicoPage: React.FC = () => {
   const [modalVincularExcedente, setModalVincularExcedente] = useState(false);
   const [excedenteAtual, setExcedenteAtual] = useState<any>(null);
 
+  // Estados para controle de quantidade dos excedentes agrupados
+  const [excedentesAgrupados, setExcedentesAgrupados] = useState<{[originalId: string]: {
+    originalId: string;
+    nome: string;
+    preco: number;
+    quantidadeTotal: number;
+    quantidadeSelecionada: number;
+  }}>({});
+  const [quantidadeExcedenteTemp, setQuantidadeExcedenteTemp] = useState<{[originalId: string]: number}>({});
+
 
 
   // ✅ NOVO: Modal de conscientização para produtos alcoólicos
@@ -2508,8 +2518,9 @@ const CardapioPublicoPage: React.FC = () => {
       adicionais: []
     }));
 
-    // Distribuir adicionais mínimos automaticamente
+    // Distribuir adicionais mínimos automaticamente e agrupar excedentes
     const excedentesDisponiveis = [];
+    const excedentesAgrupadosTemp = {};
 
     adicionaisValidos.forEach(adicional => {
       // Para cada item, adicionar 1 adicional (quantidade mínima)
@@ -2525,47 +2536,119 @@ const CardapioPublicoPage: React.FC = () => {
 
       // Calcular excedentes (quantidade total - quantidade mínima distribuída)
       const quantidadeExcedente = adicional.quantidade - quantidadeProduto;
-      for (let i = 0; i < quantidadeExcedente; i++) {
-        excedentesDisponiveis.push({
-          id: `${adicional.id}_excedente_${i}`,
-          originalId: adicional.id,
-          nome: adicional.nome,
-          preco: adicional.preco
-        });
+
+      if (quantidadeExcedente > 0) {
+        // Agrupar excedentes por originalId
+        if (!excedentesAgrupadosTemp[adicional.id]) {
+          excedentesAgrupadosTemp[adicional.id] = {
+            originalId: adicional.id,
+            nome: adicional.nome,
+            preco: adicional.preco,
+            quantidadeTotal: quantidadeExcedente,
+            quantidadeSelecionada: 0
+          };
+        } else {
+          excedentesAgrupadosTemp[adicional.id].quantidadeTotal += quantidadeExcedente;
+        }
       }
     });
 
     setProdutoOrganizacao(produto);
     setItensOrganizados(itensOrganizados);
     setExcedentesDisponiveis(excedentesDisponiveis);
+    setExcedentesAgrupados(excedentesAgrupadosTemp);
+    setQuantidadeExcedenteTemp({});
     setModalOrganizacao(true);
   };
 
-  // ✅ FUNÇÃO PARA ABRIR MODAL DE VINCULAÇÃO DE EXCEDENTE
-  const abrirModalVincularExcedente = (excedente: any) => {
-    setExcedenteAtual(excedente);
+  // ✅ FUNÇÕES PARA CONTROLE DE QUANTIDADE DOS EXCEDENTES AGRUPADOS
+  const incrementarQuantidadeExcedente = (originalId: string) => {
+    const excedente = excedentesAgrupados[originalId];
+    if (!excedente) return;
+
+    const quantidadeAtual = quantidadeExcedenteTemp[originalId] || 0;
+    if (quantidadeAtual < excedente.quantidadeTotal) {
+      setQuantidadeExcedenteTemp(prev => ({
+        ...prev,
+        [originalId]: quantidadeAtual + 1
+      }));
+    }
+  };
+
+  const decrementarQuantidadeExcedente = (originalId: string) => {
+    const quantidadeAtual = quantidadeExcedenteTemp[originalId] || 0;
+    if (quantidadeAtual > 0) {
+      setQuantidadeExcedenteTemp(prev => ({
+        ...prev,
+        [originalId]: quantidadeAtual - 1
+      }));
+    }
+  };
+
+  const obterQuantidadeExcedenteTemp = (originalId: string): number => {
+    return quantidadeExcedenteTemp[originalId] || 0;
+  };
+
+  // ✅ FUNÇÃO PARA ABRIR MODAL DE VINCULAÇÃO DE EXCEDENTE COM QUANTIDADE
+  const abrirModalVincularExcedente = (originalId: string) => {
+    const quantidadeSelecionada = obterQuantidadeExcedenteTemp(originalId);
+    if (quantidadeSelecionada === 0) {
+      showMessage('error', 'Selecione uma quantidade para vincular');
+      return;
+    }
+
+    const excedente = excedentesAgrupados[originalId];
+    if (!excedente) return;
+
+    setExcedenteAtual({
+      originalId,
+      nome: excedente.nome,
+      preco: excedente.preco,
+      quantidade: quantidadeSelecionada
+    });
     setModalVincularExcedente(true);
   };
 
-  // ✅ FUNÇÃO PARA VINCULAR EXCEDENTE A UM ITEM
+  // ✅ FUNÇÃO PARA VINCULAR EXCEDENTE A UM ITEM COM QUANTIDADE
   const vincularExcedenteAItem = (itemId: string) => {
     if (!excedenteAtual) return;
 
-    // Remover da lista de excedentes
-    setExcedentesDisponiveis(prev => prev.filter(e => e.id !== excedenteAtual.id));
+    const { originalId, nome, preco, quantidade } = excedenteAtual;
 
-    // Adicionar ao item específico
+    // Adicionar ao item específico (múltiplas vezes conforme a quantidade)
     setItensOrganizados(prev => prev.map(item => {
       if (item.id === itemId) {
+        const novosAdicionais = [];
+        for (let i = 0; i < quantidade; i++) {
+          novosAdicionais.push({
+            id: `${originalId}_excedente_${Date.now()}_${i}`,
+            originalId,
+            nome,
+            preco,
+            tipo: 'excedente'
+          });
+        }
         return {
           ...item,
-          adicionais: [...item.adicionais, {
-            ...excedenteAtual,
-            tipo: 'excedente'
-          }]
+          adicionais: [...item.adicionais, ...novosAdicionais]
         };
       }
       return item;
+    }));
+
+    // Atualizar quantidade disponível nos excedentes agrupados
+    setExcedentesAgrupados(prev => ({
+      ...prev,
+      [originalId]: {
+        ...prev[originalId],
+        quantidadeTotal: prev[originalId].quantidadeTotal - quantidade
+      }
+    }));
+
+    // Resetar quantidade temporária
+    setQuantidadeExcedenteTemp(prev => ({
+      ...prev,
+      [originalId]: 0
     }));
 
     // Fechar modal de vinculação
@@ -2592,9 +2675,16 @@ const CardapioPublicoPage: React.FC = () => {
       return item;
     }));
 
-    // Adicionar de volta aos excedentes
+    // Adicionar de volta aos excedentes agrupados
     if (excedenteDesvinculado) {
-      setExcedentesDisponiveis(prev => [...prev, excedenteDesvinculado]);
+      const { originalId } = excedenteDesvinculado;
+      setExcedentesAgrupados(prev => ({
+        ...prev,
+        [originalId]: {
+          ...prev[originalId],
+          quantidadeTotal: prev[originalId].quantidadeTotal + 1
+        }
+      }));
     }
   };
 
@@ -5501,33 +5591,35 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Coluna Direita - Excedentes */}
+                  {/* Coluna Direita - Excedentes Agrupados */}
                   <div className="flex flex-col h-full min-h-0">
                     <h4 className={`text-lg font-medium mb-4 flex-shrink-0 ${
                       config.modo_escuro ? 'text-white' : 'text-gray-900'
                     }`}>
-                      Excedentes para Distribuir ({excedentesDisponiveis.length})
+                      Excedentes para Distribuir ({Object.keys(excedentesAgrupados).filter(key => excedentesAgrupados[key].quantidadeTotal > 0).length})
                     </h4>
 
                     <div className="flex-1 overflow-y-auto pr-2 min-h-0">
-                      {excedentesDisponiveis.length > 0 ? (
-                      <div className="space-y-3 pb-4">
+                      {Object.keys(excedentesAgrupados).filter(key => excedentesAgrupados[key].quantidadeTotal > 0).length > 0 ? (
+                      <div className="space-y-4 pb-4">
                           <p className={`text-sm mb-4 ${
                             config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                           }`}>
-                            Clique em um excedente para escolher onde adicionar:
+                            Selecione a quantidade e clique em "Vincular" para escolher onde adicionar:
                           </p>
-                          {excedentesDisponiveis.map(excedente => (
+                          {Object.entries(excedentesAgrupados)
+                            .filter(([_, excedente]) => excedente.quantidadeTotal > 0)
+                            .map(([originalId, excedente]) => (
                             <div
-                              key={excedente.id}
-                              onClick={() => abrirModalVincularExcedente(excedente)}
-                              className={`p-3 rounded-lg border cursor-pointer transition-all hover:scale-105 ${
+                              key={originalId}
+                              className={`p-4 rounded-lg border ${
                                 config.modo_escuro
-                                  ? 'bg-yellow-900/20 border-yellow-700 hover:bg-yellow-900/30'
-                                  : 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100'
+                                  ? 'bg-yellow-900/20 border-yellow-700'
+                                  : 'bg-yellow-50 border-yellow-200'
                               }`}
                             >
-                              <div className="flex items-center justify-between">
+                              {/* Informações do Adicional */}
+                              <div className="flex items-center justify-between mb-3">
                                 <div>
                                   <span className={`font-medium ${
                                     config.modo_escuro ? 'text-yellow-400' : 'text-yellow-800'
@@ -5537,7 +5629,7 @@ const CardapioPublicoPage: React.FC = () => {
                                   <p className={`text-sm ${
                                     config.modo_escuro ? 'text-yellow-500' : 'text-yellow-600'
                                   }`}>
-                                    {formatarPreco(excedente.preco)}
+                                    {formatarPreco(excedente.preco)} cada
                                   </p>
                                 </div>
                                 <div className={`text-xs px-2 py-1 rounded-full ${
@@ -5545,9 +5637,83 @@ const CardapioPublicoPage: React.FC = () => {
                                     ? 'bg-yellow-700 text-yellow-300'
                                     : 'bg-yellow-200 text-yellow-700'
                                 }`}>
-                                  Clique para vincular
+                                  {excedente.quantidadeTotal} disponível{excedente.quantidadeTotal > 1 ? 'is' : ''}
                                 </div>
                               </div>
+
+                              {/* Controle de Quantidade */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-sm font-medium ${
+                                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                                  }`}>
+                                    Quantidade:
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => decrementarQuantidadeExcedente(originalId)}
+                                      disabled={obterQuantidadeExcedenteTemp(originalId) <= 0}
+                                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                                        obterQuantidadeExcedenteTemp(originalId) <= 0
+                                          ? config.modo_escuro
+                                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                          : config.modo_escuro
+                                          ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                          : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                                      }`}
+                                    >
+                                      <Minus size={16} />
+                                    </button>
+                                    <span className={`w-12 text-center font-medium ${
+                                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                                    }`}>
+                                      {obterQuantidadeExcedenteTemp(originalId)}
+                                    </span>
+                                    <button
+                                      onClick={() => incrementarQuantidadeExcedente(originalId)}
+                                      disabled={obterQuantidadeExcedenteTemp(originalId) >= excedente.quantidadeTotal}
+                                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                                        obterQuantidadeExcedenteTemp(originalId) >= excedente.quantidadeTotal
+                                          ? config.modo_escuro
+                                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                          : config.modo_escuro
+                                          ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                          : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                                      }`}
+                                    >
+                                      <Plus size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Botão Vincular */}
+                                <button
+                                  onClick={() => abrirModalVincularExcedente(originalId)}
+                                  disabled={obterQuantidadeExcedenteTemp(originalId) <= 0}
+                                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                                    obterQuantidadeExcedenteTemp(originalId) <= 0
+                                      ? config.modo_escuro
+                                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                      : config.modo_escuro
+                                      ? 'bg-yellow-600 text-white hover:bg-yellow-500'
+                                      : 'bg-yellow-500 text-white hover:bg-yellow-600'
+                                  }`}
+                                >
+                                  Vincular ({obterQuantidadeExcedenteTemp(originalId)})
+                                </button>
+                              </div>
+
+                              {/* Valor Total */}
+                              {obterQuantidadeExcedenteTemp(originalId) > 0 && (
+                                <div className={`mt-2 text-right text-sm ${
+                                  config.modo_escuro ? 'text-yellow-400' : 'text-yellow-700'
+                                }`}>
+                                  Total: {formatarPreco(excedente.preco * obterQuantidadeExcedenteTemp(originalId))}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
