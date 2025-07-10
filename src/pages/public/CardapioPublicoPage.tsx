@@ -259,6 +259,10 @@ interface Produto {
       preco: number;
     }>;
   }>;
+  // Campos de estoque
+  estoque_atual?: number;
+  estoque_minimo?: number;
+  controla_estoque_cardapio?: boolean;
 }
 
 interface ItemCarrinho {
@@ -306,7 +310,6 @@ interface CardapioConfig {
   cardapio_fotos_minimizadas?: boolean;
   trabalha_com_pizzas?: boolean;
   ocultar_grupos_cardapio?: boolean;
-  controla_estoque_cardapio?: boolean;
 }
 
 const CardapioPublicoPage: React.FC = () => {
@@ -953,7 +956,7 @@ const CardapioPublicoPage: React.FC = () => {
       console.log('🔍 Buscando configuração PDV para slug:', slug);
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas, ocultar_grupos_cardapio, controla_estoque_cardapio')
+        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas, ocultar_grupos_cardapio')
         .eq('cardapio_url_personalizada', slug)
         .single();
 
@@ -1067,8 +1070,7 @@ const CardapioPublicoPage: React.FC = () => {
         mostrar_fotos: pdvConfigData.exibir_fotos_itens_cardapio !== false, // Default true se não definido
         cardapio_fotos_minimizadas: pdvConfigData.cardapio_fotos_minimizadas || false,
         trabalha_com_pizzas: pdvConfigData.trabalha_com_pizzas || false,
-        ocultar_grupos_cardapio: pdvConfigData.ocultar_grupos_cardapio || false,
-        controla_estoque_cardapio: pdvConfigData.controla_estoque_cardapio || false
+        ocultar_grupos_cardapio: pdvConfigData.ocultar_grupos_cardapio || false
       }));
 
       // 3. Buscar produtos ativos da empresa com unidades de medida
@@ -1090,6 +1092,9 @@ const CardapioPublicoPage: React.FC = () => {
           valor_desconto,
           exibir_promocao_cardapio,
           produto_alcoolico,
+          estoque_atual,
+          estoque_minimo,
+          controla_estoque_cardapio,
           unidade_medida_id,
           unidade_medida:unidade_medida_id (
             id,
@@ -1503,11 +1508,17 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const incrementarAdicional = (produtoId: string, itemId: string) => {
+    const quantidadeProduto = obterQuantidadeSelecionada(produtoId);
+    const quantidadeAtualAdicional = obterQuantidadeAdicional(produtoId, itemId);
+
+    // Se é a primeira vez clicando no adicional, começar com a quantidade do produto
+    const novaQuantidade = quantidadeAtualAdicional === 0 ? quantidadeProduto : quantidadeAtualAdicional + 1;
+
     setAdicionaisSelecionados(prev => ({
       ...prev,
       [produtoId]: {
         ...prev[produtoId],
-        [itemId]: (prev[produtoId]?.[itemId] || 0) + 1
+        [itemId]: novaQuantidade
       }
     }));
 
@@ -1531,9 +1542,11 @@ const CardapioPublicoPage: React.FC = () => {
 
   const decrementarAdicional = (produtoId: string, itemId: string) => {
     const quantidadeAtual = obterQuantidadeAdicional(produtoId, itemId);
+    const quantidadeProduto = obterQuantidadeSelecionada(produtoId);
 
     setAdicionaisSelecionados(prev => {
-      if (quantidadeAtual <= 1) {
+      // Se a quantidade atual for igual à quantidade do produto, remover o adicional
+      if (quantidadeAtual <= quantidadeProduto) {
         const novosProdutos = { ...prev };
         if (novosProdutos[produtoId]) {
           delete novosProdutos[produtoId][itemId];
@@ -1544,6 +1557,7 @@ const CardapioPublicoPage: React.FC = () => {
         return novosProdutos;
       }
 
+      // Caso contrário, decrementar normalmente
       return {
         ...prev,
         [produtoId]: {
@@ -1564,6 +1578,15 @@ const CardapioPublicoPage: React.FC = () => {
 
   const obterQuantidadeAdicional = (produtoId: string, itemId: string): number => {
     return adicionaisSelecionados[produtoId]?.[itemId] || 0;
+  };
+
+  // ✅ FUNÇÃO PARA VERIFICAR SE PODE DECREMENTAR ADICIONAL
+  const podeDecrementarAdicional = (produtoId: string, itemId: string): boolean => {
+    const quantidadeAdicional = obterQuantidadeAdicional(produtoId, itemId);
+    const quantidadeProduto = obterQuantidadeSelecionada(produtoId);
+
+    // Só pode decrementar se a quantidade do adicional for maior que a quantidade do produto
+    return quantidadeAdicional > quantidadeProduto;
   };
 
   // Função para obter quantidade total selecionada de uma opção
@@ -1848,6 +1871,8 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const alterarQuantidadeSelecionada = (produtoId: string, novaQuantidade: number) => {
+    const quantidadeAnterior = obterQuantidadeSelecionada(produtoId);
+
     setQuantidadesSelecionadas(prev => {
       if (novaQuantidade <= 0) {
         const nova = { ...prev };
@@ -1863,6 +1888,28 @@ const CardapioPublicoPage: React.FC = () => {
         [produtoId]: novaQuantidade
       };
     });
+
+    // ✅ AJUSTAR ADICIONAIS AUTOMATICAMENTE quando quantidade do produto mudar
+    if (novaQuantidade > 0 && novaQuantidade !== quantidadeAnterior) {
+      setAdicionaisSelecionados(prev => {
+        const adicionaisAtuais = prev[produtoId] || {};
+        const novosAdicionais = { ...adicionaisAtuais };
+
+        // Para cada adicional existente, ajustar para no mínimo a nova quantidade do produto
+        Object.keys(novosAdicionais).forEach(itemId => {
+          const quantidadeAtualAdicional = novosAdicionais[itemId];
+          // Se a quantidade do adicional for menor que a nova quantidade do produto, ajustar
+          if (quantidadeAtualAdicional < novaQuantidade) {
+            novosAdicionais[itemId] = novaQuantidade;
+          }
+        });
+
+        return {
+          ...prev,
+          [produtoId]: novosAdicionais
+        };
+      });
+    }
   };
 
   // Função para limpar todos os estados de um produto
@@ -1948,6 +1995,15 @@ const CardapioPublicoPage: React.FC = () => {
       // Abrir modal de conscientização para produtos alcoólicos
       setProdutoAlcoolicoPendente(produtoId);
       setModalProdutoAlcoolico(true);
+      return;
+    }
+
+    // ✅ VERIFICAR ESTOQUE SE CONTROLE ESTIVER ATIVO (individual por produto)
+    if (produto && produto.controla_estoque_cardapio &&
+        produto.estoque_atual !== undefined &&
+        produto.estoque_atual !== null &&
+        produto.estoque_atual <= 0) {
+      showMessage('error', 'Produto sem estoque disponível');
       return;
     }
 
@@ -2837,11 +2893,20 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Componente da tag de estoque
   const TagEstoque = ({ produto }: { produto: Produto }) => {
-    if (!config.controla_estoque_cardapio) {
+    if (!produto.controla_estoque_cardapio) {
       return null;
     }
 
-    const status = obterStatusEstoque(produto);
+    // Verificar status do estoque
+    let status: 'disponivel' | 'baixo' | 'indisponivel' = 'disponivel';
+
+    if (produto.estoque_atual !== undefined && produto.estoque_atual !== null) {
+      if (produto.estoque_atual <= 0) {
+        status = 'indisponivel';
+      } else if (produto.estoque_minimo && produto.estoque_atual <= produto.estoque_minimo) {
+        status = 'baixo';
+      }
+    }
 
     if (status === 'disponivel') {
       return null; // Não mostrar tag quando há estoque normal
@@ -3763,10 +3828,18 @@ const CardapioPublicoPage: React.FC = () => {
               const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
               const estaSelecionado = quantidadeSelecionada > 0;
 
+              // Verificar estoque do produto (agora individual por produto)
+              const semEstoque = produto.controla_estoque_cardapio &&
+                                produto.estoque_atual !== undefined &&
+                                produto.estoque_atual !== null &&
+                                produto.estoque_atual <= 0;
+
               return (
                 <div
                   key={produto.id}
-                  className={`group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${
+                  className={`group relative overflow-hidden rounded-2xl transition-all duration-300 ${
+                    semEstoque ? 'opacity-60 cursor-not-allowed' : 'hover:scale-[1.02] hover:shadow-2xl cursor-pointer'
+                  } ${
                     estaSelecionado
                       ? config.modo_escuro
                         ? 'bg-gradient-to-br from-blue-900/80 to-purple-900/80 border-2 border-blue-500/50 shadow-xl shadow-blue-500/20'
@@ -3784,6 +3857,9 @@ const CardapioPublicoPage: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Tag de estoque */}
+                  <TagEstoque produto={produto} />
 
 
                 {/* Imagem do produto - Apenas para config.mostrar_fotos (fotos grandes) */}
@@ -4020,9 +4096,9 @@ const CardapioPublicoPage: React.FC = () => {
                                 {/* Botão Decrementar */}
                                 <button
                                   onClick={() => decrementarQuantidade(produto.id)}
-                                  disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
+                                  disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false || semEstoque}
                                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                    obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
+                                    obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false || semEstoque
                                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                       : config.modo_escuro
                                       ? 'bg-gray-600 text-white hover:bg-gray-500'
@@ -4033,7 +4109,7 @@ const CardapioPublicoPage: React.FC = () => {
                                 </button>
 
                                 {/* Campo de Quantidade */}
-                                {produtoEditandoQuantidade === produto.id && lojaAberta !== false ? (
+                                {produtoEditandoQuantidade === produto.id && lojaAberta !== false && !semEstoque ? (
                                   <input
                                     type="text"
                                     value={formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
@@ -4054,10 +4130,10 @@ const CardapioPublicoPage: React.FC = () => {
                                   />
                                 ) : (
                                   <button
-                                    onClick={() => lojaAberta !== false && setProdutoEditandoQuantidade(produto.id)}
-                                    disabled={lojaAberta === false}
+                                    onClick={() => lojaAberta !== false && !semEstoque && setProdutoEditandoQuantidade(produto.id)}
+                                    disabled={lojaAberta === false || semEstoque}
                                     className={`w-12 h-8 text-center text-sm font-semibold rounded-lg border-2 transition-all duration-200 ${
-                                      lojaAberta === false
+                                      lojaAberta === false || semEstoque
                                         ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
                                         : config.modo_escuro
                                         ? 'bg-gray-700 border-gray-600 text-white hover:border-gray-500'
@@ -4071,9 +4147,9 @@ const CardapioPublicoPage: React.FC = () => {
                                 {/* Botão Incrementar */}
                                 <button
                                   onClick={() => incrementarQuantidade(produto.id)}
-                                  disabled={lojaAberta === false}
+                                  disabled={lojaAberta === false || semEstoque}
                                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                    lojaAberta === false
+                                    lojaAberta === false || semEstoque
                                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                       : config.modo_escuro
                                       ? 'bg-blue-600 text-white hover:bg-blue-500'
@@ -4245,7 +4321,16 @@ const CardapioPublicoPage: React.FC = () => {
                                           {item.nome}
                                         </p>
                                         <p className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
-                                          {item.preco > 0 ? `+ ${formatarPreco(item.preco)}` : 'Grátis'}
+                                          {item.preco > 0 ? (
+                                            quantidade > 1 ? (
+                                              <>
+                                                {formatarPreco(item.preco * quantidade)}
+                                                <span className="opacity-70"> ({quantidade}x {formatarPreco(item.preco)})</span>
+                                              </>
+                                            ) : (
+                                              `+ ${formatarPreco(item.preco)}`
+                                            )
+                                          ) : 'Grátis'}
                                         </p>
                                       </div>
 
@@ -4255,9 +4340,9 @@ const CardapioPublicoPage: React.FC = () => {
                                           {/* Botão Decrementar */}
                                           <button
                                             onClick={() => decrementarAdicional(produto.id, item.id)}
-                                            disabled={quantidade === 0}
+                                            disabled={quantidade === 0 || !podeDecrementarAdicional(produto.id, item.id)}
                                             className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                              quantidade === 0
+                                              quantidade === 0 || !podeDecrementarAdicional(produto.id, item.id)
                                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                                 : config.modo_escuro
                                                 ? 'bg-gray-600 text-white hover:bg-gray-500'
@@ -4306,8 +4391,8 @@ const CardapioPublicoPage: React.FC = () => {
                     const temQuantidade = quantidadeSelecionada > 0;
                     const lojaFechada = lojaAberta === false;
 
-                    // Só mostrar o botão se há quantidade selecionada e loja está aberta
-                    if (!temQuantidade || lojaFechada) {
+                    // Só mostrar o botão se há quantidade selecionada, loja está aberta e tem estoque
+                    if (!temQuantidade || lojaFechada || semEstoque) {
                       return null;
                     }
 
@@ -4827,7 +4912,16 @@ const CardapioPublicoPage: React.FC = () => {
                                         + {adicional.nome}
                                       </span>
                                       <div className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                                        {adicional.preco > 0 ? `${formatarPreco(adicional.preco)} cada` : 'Grátis'}
+                                        {adicional.preco > 0 ? (
+                                          adicional.quantidade > 1 ? (
+                                            <>
+                                              {formatarPreco(adicional.preco * adicional.quantidade)}
+                                              <span className="opacity-70"> ({adicional.quantidade}x {formatarPreco(adicional.preco)})</span>
+                                            </>
+                                          ) : (
+                                            `${formatarPreco(adicional.preco)} cada`
+                                          )
+                                        ) : 'Grátis'}
                                       </div>
                                     </div>
                                     {config.mostrar_precos && (
@@ -4843,9 +4937,9 @@ const CardapioPublicoPage: React.FC = () => {
                                   <div className="flex items-center gap-1 ml-3">
                                     <button
                                       onClick={() => decrementarAdicional(produto.id, adicional.id)}
-                                      disabled={adicional.quantidade === 0}
+                                      disabled={adicional.quantidade === 0 || !podeDecrementarAdicional(produto.id, adicional.id)}
                                       className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
-                                        adicional.quantidade === 0
+                                        adicional.quantidade === 0 || !podeDecrementarAdicional(produto.id, adicional.id)
                                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                           : config.modo_escuro
                                           ? 'bg-gray-600 text-white hover:bg-gray-500'

@@ -201,6 +201,7 @@ const ProdutosPage: React.FC = () => {
     estoque_inicial: 0,
     estoque_minimo: 0,
     produto_alcoolico: false, // ✅ NOVO CAMPO: Produto Alcoólico
+    controla_estoque_cardapio: false, // ✅ NOVO CAMPO: Controla estoque no cardápio digital
     // Campos fiscais NFe
     ncm: '',
     cfop: '5102',
@@ -2218,6 +2219,7 @@ const ProdutosPage: React.FC = () => {
       estoque_minimo: 0,
       estoque_minimo_ativo: false,
       produto_alcoolico: false, // ✅ NOVO CAMPO: Produto Alcoólico
+      controla_estoque_cardapio: false, // ✅ NOVO CAMPO: Controla estoque no cardápio digital
       // Campos fiscais NFe com valores padrão
       ncm: '',
       cfop: '5102',
@@ -2466,6 +2468,7 @@ const ProdutosPage: React.FC = () => {
       pizza: produto.pizza || false,
       cardapio_digital: produto.cardapio_digital || false,
       exibir_promocao_cardapio: produto.exibir_promocao_cardapio || false,
+      controla_estoque_cardapio: produto.controla_estoque_cardapio || false,
     };
 
     // Definir o estado do novo produto
@@ -3535,6 +3538,7 @@ const ProdutosPage: React.FC = () => {
           produto_alcoolico: novoProduto.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
           cardapio_digital: novoProduto.cardapio_digital || false,
           exibir_promocao_cardapio: novoProduto.exibir_promocao_cardapio || false,
+          controla_estoque_cardapio: novoProduto.controla_estoque_cardapio || false,
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
           empresa_id: usuarioData.empresa_id
@@ -3600,6 +3604,9 @@ const ProdutosPage: React.FC = () => {
           margem_percentual: novoProduto.margem_percentual || 0,
           pizza: novoProduto.pizza || false,
           produto_alcoolico: novoProduto.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
+          cardapio_digital: novoProduto.cardapio_digital || false,
+          exibir_promocao_cardapio: novoProduto.exibir_promocao_cardapio || false,
+          controla_estoque_cardapio: novoProduto.controla_estoque_cardapio || false,
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
         };
@@ -3840,6 +3847,7 @@ const ProdutosPage: React.FC = () => {
         pizza: produtoOriginal.pizza || false,
         cardapio_digital: produtoOriginal.cardapio_digital || false,
         exibir_promocao_cardapio: produtoOriginal.exibir_promocao_cardapio || false,
+        controla_estoque_cardapio: produtoOriginal.controla_estoque_cardapio || false,
         // Campos obrigatórios
         grupo_id: grupo.id,
         empresa_id: usuarioData.empresa_id,
@@ -3998,6 +4006,7 @@ const ProdutosPage: React.FC = () => {
         pizza: produtoCriado.pizza,
         cardapio_digital: produtoCriado.cardapio_digital,
         exibir_promocao_cardapio: produtoCriado.exibir_promocao_cardapio,
+        controla_estoque_cardapio: produtoCriado.controla_estoque_cardapio,
         produto_alcoolico: produtoCriado.produto_alcoolico, // ✅ NOVO CAMPO: Produto Alcoólico
       });
 
@@ -5606,7 +5615,7 @@ const ProdutosPage: React.FC = () => {
                         </div>
 
                         {cardapioDigitalHabilitado && (
-                          <div className="mb-4">
+                          <div className="mb-4 space-y-3">
                             <div className="flex items-center">
                               <input
                                 type="checkbox"
@@ -5619,6 +5628,22 @@ const ProdutosPage: React.FC = () => {
                                 Cardápio Digital
                               </label>
                             </div>
+
+                            {/* Controla estoque no cardápio digital - só aparece se cardápio digital estiver marcado */}
+                            {novoProduto.cardapio_digital && (
+                              <div className="ml-6 flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id="controla_estoque_cardapio"
+                                  checked={novoProduto.controla_estoque_cardapio || false}
+                                  onChange={(e) => setNovoProduto({ ...novoProduto, controla_estoque_cardapio: e.target.checked })}
+                                  className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                />
+                                <label htmlFor="controla_estoque_cardapio" className="text-sm font-medium text-gray-300 cursor-pointer">
+                                  Controla estoque no cardápio digital
+                                </label>
+                              </div>
+                            )}
                           </div>
                         )}
 

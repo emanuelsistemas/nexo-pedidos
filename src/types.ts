@@ -14,6 +14,7 @@ export interface Produto {
   estoque_atual?: number;
   estoque_minimo?: number;
   estoque_minimo_ativo?: boolean;
+  controla_estoque_cardapio?: boolean;
   desconto_quantidade?: boolean;
   quantidade_minima?: number;
   tipo_desconto_quantidade?: 'percentual' | 'valor';
