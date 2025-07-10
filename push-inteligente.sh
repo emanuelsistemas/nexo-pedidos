@@ -87,16 +87,73 @@ case $CURRENT_BRANCH in
         ;;
 esac
 
-# Realizar o commit
-log "$EMOJI Realizando commit na branch $CURRENT_BRANCH..."
-git commit -m "$COMMIT_MSG"
+# Verificar se o primeiro parâmetro é "push" para fazer commit automático
+if [ "$1" = "push" ]; then
+    # Realizar o commit automaticamente
+    log "$EMOJI Realizando commit na branch $CURRENT_BRANCH..."
+    git commit -m "$COMMIT_MSG"
 
-if [ $? -ne 0 ]; then
-    error "Falha no commit"
-    exit 1
+    if [ $? -ne 0 ]; then
+        error "Falha no commit"
+        exit 1
+    fi
+
+    # Realizar o push
+    log "🚀 Enviando para origin/$CURRENT_BRANCH..."
+else
+    # Mostrar preview e pedir confirmação
+    echo -e "\n${YELLOW}📋 PREVIEW DO COMMIT:${NC}"
+    echo -e "   • Branch: ${GREEN}$CURRENT_BRANCH${NC}"
+    echo -e "   • Mensagem: ${GREEN}$COMMIT_MSG${NC}"
+    echo -e "   • Arquivos: $(git diff --cached --name-only | wc -l) arquivo(s) modificado(s)"
+
+    echo -e "\n${BLUE}🤔 O que deseja fazer?${NC}"
+    echo -e "   ${GREEN}1)${NC} Fazer commit e push agora"
+    echo -e "   ${YELLOW}2)${NC} Apenas fazer commit (sem push)"
+    echo -e "   ${RED}3)${NC} Cancelar (não fazer nada)"
+    echo -e "\n${BLUE}💡 Dica:${NC} Use ${GREEN}./push-inteligente.sh push${NC} para commit automático"
+
+    read -p "Escolha uma opção [1-3]: " opcao
+
+    case $opcao in
+        1)
+            # Commit e push
+            log "$EMOJI Realizando commit na branch $CURRENT_BRANCH..."
+            git commit -m "$COMMIT_MSG"
+
+            if [ $? -ne 0 ]; then
+                error "Falha no commit"
+                exit 1
+            fi
+
+            log "🚀 Enviando para origin/$CURRENT_BRANCH..."
+            ;;
+        2)
+            # Apenas commit
+            log "$EMOJI Realizando commit na branch $CURRENT_BRANCH..."
+            git commit -m "$COMMIT_MSG"
+
+            if [ $? -ne 0 ]; then
+                error "Falha no commit"
+                exit 1
+            fi
+
+            log "✅ Commit realizado com sucesso!"
+            log "💡 Para fazer push, execute: git push"
+            exit 0
+            ;;
+        3)
+            warn "Operação cancelada pelo usuário"
+            exit 0
+            ;;
+        *)
+            error "Opção inválida. Operação cancelada."
+            exit 1
+            ;;
+    esac
 fi
 
-# Realizar o push
+# Continuar com o push (se chegou até aqui)
 log "🚀 Enviando para origin/$CURRENT_BRANCH..."
 git push
 
