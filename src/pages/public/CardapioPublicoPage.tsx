@@ -412,6 +412,16 @@ const CardapioPublicoPage: React.FC = () => {
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
   const [produtoConfiguracaoIndividual, setProdutoConfiguracaoIndividual] = useState<any>(null);
 
+  // Estados para modal de organização de adicionais
+  const [modalOrganizacao, setModalOrganizacao] = useState(false);
+  const [produtoOrganizacao, setProdutoOrganizacao] = useState<any>(null);
+  const [itensOrganizados, setItensOrganizados] = useState<any[]>([]);
+  const [excedentesDisponiveis, setExcedentesDisponiveis] = useState<any[]>([]);
+
+  // Estados para modal secundário de vinculação
+  const [modalVincularExcedente, setModalVincularExcedente] = useState(false);
+  const [excedenteAtual, setExcedenteAtual] = useState<any>(null);
+
 
 
   // ✅ NOVO: Modal de conscientização para produtos alcoólicos
@@ -2044,7 +2054,15 @@ const CardapioPublicoPage: React.FC = () => {
 
     const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
 
+    // ✅ VERIFICAR SE PRECISA ABRIR MODAL DE ORGANIZAÇÃO
+    const temAdicionais = produto?.opcoes_adicionais && produto.opcoes_adicionais.length > 0;
+    const adicionaisValidos = obterAdicionaisValidosProduto(produtoId);
 
+    if (temAdicionais && quantidadeSelecionada > 1 && adicionaisValidos.length > 0) {
+      // Abrir modal de organização
+      abrirModalOrganizacao(produtoId);
+      return;
+    }
 
     if (quantidadeSelecionada > 0) {
       // Gerar ID único para este item no carrinho
@@ -2471,6 +2489,186 @@ const CardapioPublicoPage: React.FC = () => {
   const cancelarRemoverItem = () => {
     setModalRemoverItemAberto(false);
     setProdutoParaRemover(null);
+  };
+
+  // ✅ FUNÇÃO PARA ABRIR MODAL DE ORGANIZAÇÃO
+  const abrirModalOrganizacao = (produtoId: string) => {
+    const produto = produtos.find(p => p.id === produtoId);
+    const quantidadeProduto = obterQuantidadeSelecionada(produtoId);
+    const adicionaisValidos = obterAdicionaisValidosProduto(produtoId);
+
+    if (!produto) return;
+
+    // Criar itens individuais com adicionais mínimos já distribuídos
+    const itensOrganizados = Array.from({ length: quantidadeProduto }, (_, index) => ({
+      id: `item_${index + 1}`,
+      numero: index + 1,
+      nome: produto.nome,
+      preco: produto.preco,
+      adicionais: []
+    }));
+
+    // Distribuir adicionais mínimos automaticamente
+    const excedentesDisponiveis = [];
+
+    adicionaisValidos.forEach(adicional => {
+      // Para cada item, adicionar 1 adicional (quantidade mínima)
+      itensOrganizados.forEach((item, index) => {
+        item.adicionais.push({
+          id: `${adicional.id}_minimo_${index}`,
+          originalId: adicional.id,
+          nome: adicional.nome,
+          preco: adicional.preco,
+          tipo: 'minimo'
+        });
+      });
+
+      // Calcular excedentes (quantidade total - quantidade mínima distribuída)
+      const quantidadeExcedente = adicional.quantidade - quantidadeProduto;
+      for (let i = 0; i < quantidadeExcedente; i++) {
+        excedentesDisponiveis.push({
+          id: `${adicional.id}_excedente_${i}`,
+          originalId: adicional.id,
+          nome: adicional.nome,
+          preco: adicional.preco
+        });
+      }
+    });
+
+    setProdutoOrganizacao(produto);
+    setItensOrganizados(itensOrganizados);
+    setExcedentesDisponiveis(excedentesDisponiveis);
+    setModalOrganizacao(true);
+  };
+
+  // ✅ FUNÇÃO PARA ABRIR MODAL DE VINCULAÇÃO DE EXCEDENTE
+  const abrirModalVincularExcedente = (excedente: any) => {
+    setExcedenteAtual(excedente);
+    setModalVincularExcedente(true);
+  };
+
+  // ✅ FUNÇÃO PARA VINCULAR EXCEDENTE A UM ITEM
+  const vincularExcedenteAItem = (itemId: string) => {
+    if (!excedenteAtual) return;
+
+    // Remover da lista de excedentes
+    setExcedentesDisponiveis(prev => prev.filter(e => e.id !== excedenteAtual.id));
+
+    // Adicionar ao item específico
+    setItensOrganizados(prev => prev.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          adicionais: [...item.adicionais, {
+            ...excedenteAtual,
+            tipo: 'excedente'
+          }]
+        };
+      }
+      return item;
+    }));
+
+    // Fechar modal de vinculação
+    setModalVincularExcedente(false);
+    setExcedenteAtual(null);
+  };
+
+  // ✅ FUNÇÃO PARA DESVINCULAR EXCEDENTE
+  const desvincularExcedente = (adicionalId: string, itemId: string) => {
+    let excedenteDesvinculado = null;
+
+    // Remover do item (só excedentes, não mínimos)
+    setItensOrganizados(prev => prev.map(item => {
+      if (item.id === itemId) {
+        const novosAdicionais = item.adicionais.filter(a => {
+          if (a.id === adicionalId && a.tipo === 'excedente') {
+            excedenteDesvinculado = a;
+            return false;
+          }
+          return true;
+        });
+        return { ...item, adicionais: novosAdicionais };
+      }
+      return item;
+    }));
+
+    // Adicionar de volta aos excedentes
+    if (excedenteDesvinculado) {
+      setExcedentesDisponiveis(prev => [...prev, excedenteDesvinculado]);
+    }
+  };
+
+  // ✅ FUNÇÃO PARA FINALIZAR ORGANIZAÇÃO
+  const finalizarOrganizacao = () => {
+    if (excedentesDisponiveis.length > 0) {
+      showMessage('error', 'Todos os excedentes devem ser distribuídos');
+      return;
+    }
+
+    if (!produtoOrganizacao) return;
+
+    // Adicionar cada item individual ao carrinho
+    itensOrganizados.forEach(item => {
+      // Agrupar adicionais por ID original e contar quantidades
+      const adicionaisAgrupados = {};
+      item.adicionais.forEach(adicional => {
+        if (!adicionaisAgrupados[adicional.originalId]) {
+          adicionaisAgrupados[adicional.originalId] = {
+            id: adicional.originalId,
+            nome: adicional.nome,
+            preco: adicional.preco,
+            quantidade: 0
+          };
+        }
+        adicionaisAgrupados[adicional.originalId].quantidade += 1;
+      });
+
+      // Gerar ID único para o carrinho
+      const itemId = `${produtoOrganizacao.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Criar item para o carrinho
+      const novoItem = {
+        produtoId: produtoOrganizacao.id,
+        produto: {
+          id: produtoOrganizacao.id,
+          nome: produtoOrganizacao.nome,
+          preco: produtoOrganizacao.preco,
+          unidade_medida: produtoOrganizacao.unidade_medida
+        },
+        quantidade: 1, // Cada item individual tem quantidade 1
+        observacoes: '',
+        adicionais: Object.values(adicionaisAgrupados)
+      };
+
+      // Adicionar ao carrinho
+      setQuantidadesProdutos(prev => ({
+        ...prev,
+        [itemId]: 1
+      }));
+
+      setOrdemAdicaoItens(prev => ({
+        ...prev,
+        [itemId]: Date.now()
+      }));
+    });
+
+    // Limpar estados do produto original
+    limparEstadosProduto(produtoOrganizacao.id);
+
+    // Fechar modal
+    setModalOrganizacao(false);
+    setProdutoOrganizacao(null);
+    setItensOrganizados([]);
+    setExcedentesDisponiveis([]);
+
+    // Abrir carrinho
+    if (!carrinhoAberto) {
+      setCarrinhoAberto(true);
+      setCarrinhoRecemAberto(true);
+      setTimeout(() => setCarrinhoRecemAberto(false), 2000);
+    }
+
+    showMessage('success', 'Itens organizados e adicionados ao carrinho!');
   };
 
   // Funções para modal de configuração individual (simplificadas)
@@ -2989,8 +3187,12 @@ const CardapioPublicoPage: React.FC = () => {
         break;
     }
 
+    // Verificar se tem promoção para ajustar posição
+    const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+    const posicaoTop = temPromocao ? 'top-12' : 'top-3'; // Se tem promoção, fica mais abaixo
+
     return (
-      <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs font-medium ${estilo.bg} ${estilo.text} ${estilo.border}`}>
+      <div className={`absolute ${posicaoTop} right-3 z-10 px-2 py-1 rounded-md border text-xs font-medium flex items-center gap-1 ${estilo.bg} ${estilo.text} ${estilo.border}`}>
         <span>{estilo.icon}</span>
         <span>{texto}</span>
         {produto.estoque_atual !== undefined && (
@@ -3917,6 +4119,9 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Tag de estoque */}
+                  <TagEstoque produto={produto} />
+
 
 
 
@@ -4094,11 +4299,6 @@ const CardapioPublicoPage: React.FC = () => {
                                 </button>
                               </div>
                             )}
-
-                            {/* Tag de estoque abaixo do preço */}
-                            <div className="mt-2">
-                              <TagEstoque produto={produto} />
-                            </div>
                           </div>
 
                         </div>
@@ -4224,11 +4424,6 @@ const CardapioPublicoPage: React.FC = () => {
                               </div>
                             </div>
                           )}
-                        </div>
-
-                        {/* Tag de estoque abaixo do preço */}
-                        <div className="mt-2">
-                          <TagEstoque produto={produto} />
                         </div>
                       </>
                     )}
@@ -5159,6 +5354,357 @@ const CardapioPublicoPage: React.FC = () => {
 
 
 
+
+      {/* Modal de Organização de Adicionais */}
+      {modalOrganizacao && produtoOrganizacao && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className={`w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`flex-shrink-0 p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={`text-xl font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Organizar Adicionais
+                  </h3>
+                  <p className={`text-sm mt-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Cada item já vem com adicionais mínimos. Distribua apenas os excedentes.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setModalOrganizacao(false)}
+                  className={`p-2 rounded-full transition-colors ${
+                    config.modo_escuro
+                      ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                      : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="flex-1 overflow-hidden">
+              <div className="h-full p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+
+                  {/* Coluna Esquerda - Itens Individuais */}
+                  <div className="flex flex-col h-full">
+                    <h4 className={`text-lg font-medium mb-4 flex-shrink-0 ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Itens Individuais ({itensOrganizados.length})
+                    </h4>
+
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                      {itensOrganizados.map(item => (
+                        <div
+                          key={item.id}
+                          className={`p-4 rounded-lg border ${
+                            config.modo_escuro
+                              ? 'bg-gray-700/50 border-gray-600'
+                              : 'bg-gray-50 border-gray-200'
+                          }`}
+                        >
+                          {/* Header do Item */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <h5 className={`font-medium ${
+                                config.modo_escuro ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                {item.nome} #{item.numero}
+                              </h5>
+                              <p className={`text-sm ${
+                                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                {formatarPreco(item.preco)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Adicionais do Item */}
+                          {item.adicionais.length > 0 && (
+                            <div className="mt-3">
+                              <p className={`text-xs font-medium mb-2 ${
+                                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                Adicionais:
+                              </p>
+                              <div className="space-y-2">
+                                {item.adicionais.map(adicional => (
+                                  <div
+                                    key={adicional.id}
+                                    className={`flex items-center justify-between p-2 rounded border ${
+                                      adicional.tipo === 'minimo'
+                                        ? config.modo_escuro
+                                          ? 'bg-green-900/30 border-green-700'
+                                          : 'bg-green-50 border-green-200'
+                                        : config.modo_escuro
+                                        ? 'bg-blue-900/30 border-blue-700'
+                                        : 'bg-blue-50 border-blue-200'
+                                    }`}
+                                  >
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className={`text-sm font-medium ${
+                                          config.modo_escuro ? 'text-white' : 'text-gray-800'
+                                        }`}>
+                                          + {adicional.nome}
+                                        </span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                          adicional.tipo === 'minimo'
+                                            ? config.modo_escuro
+                                              ? 'bg-green-700 text-green-300'
+                                              : 'bg-green-200 text-green-700'
+                                            : config.modo_escuro
+                                            ? 'bg-blue-700 text-blue-300'
+                                            : 'bg-blue-200 text-blue-700'
+                                        }`}>
+                                          {adicional.tipo === 'minimo' ? 'Mínimo' : 'Extra'}
+                                        </span>
+                                      </div>
+                                      <p className={`text-xs ${
+                                        config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                                      }`}>
+                                        {formatarPreco(adicional.preco)}
+                                      </p>
+                                    </div>
+                                    {adicional.tipo === 'excedente' && (
+                                      <button
+                                        onClick={() => desvincularExcedente(adicional.id, item.id)}
+                                        className={`p-1 rounded-full transition-colors ${
+                                          config.modo_escuro
+                                            ? 'hover:bg-gray-500 text-gray-400 hover:text-white'
+                                            : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                                        }`}
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Coluna Direita - Excedentes */}
+                  <div className="flex flex-col h-full">
+                    <h4 className={`text-lg font-medium mb-4 flex-shrink-0 ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Excedentes para Distribuir ({excedentesDisponiveis.length})
+                    </h4>
+
+                    <div className="flex-1 overflow-y-auto pr-2">
+                      {excedentesDisponiveis.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className={`text-sm mb-4 ${
+                            config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                          }`}>
+                            Clique em um excedente para escolher onde adicionar:
+                          </p>
+                          {excedentesDisponiveis.map(excedente => (
+                            <div
+                              key={excedente.id}
+                              onClick={() => abrirModalVincularExcedente(excedente)}
+                              className={`p-3 rounded-lg border cursor-pointer transition-all hover:scale-105 ${
+                                config.modo_escuro
+                                  ? 'bg-yellow-900/20 border-yellow-700 hover:bg-yellow-900/30'
+                                  : 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className={`font-medium ${
+                                    config.modo_escuro ? 'text-yellow-400' : 'text-yellow-800'
+                                  }`}>
+                                    {excedente.nome}
+                                  </span>
+                                  <p className={`text-sm ${
+                                    config.modo_escuro ? 'text-yellow-500' : 'text-yellow-600'
+                                  }`}>
+                                    {formatarPreco(excedente.preco)}
+                                  </p>
+                                </div>
+                                <div className={`text-xs px-2 py-1 rounded-full ${
+                                  config.modo_escuro
+                                    ? 'bg-yellow-700 text-yellow-300'
+                                    : 'bg-yellow-200 text-yellow-700'
+                                }`}>
+                                  Clique para vincular
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={`text-center py-8 ${
+                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          <CheckCircle size={48} className="mx-auto mb-3 text-green-500" />
+                          <p className="font-medium">Todos os excedentes foram distribuídos!</p>
+                          <p className="text-sm">Você pode finalizar a organização.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`flex-shrink-0 p-6 border-t ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className={`text-sm ${
+                  config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  {excedentesDisponiveis.length > 0 ? (
+                    <span className="text-yellow-600">
+                      {excedentesDisponiveis.length} excedente(s) ainda não distribuído(s)
+                    </span>
+                  ) : (
+                    <span className="text-green-600">
+                      ✓ Todos os excedentes foram distribuídos
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setModalOrganizacao(false)}
+                    className={`px-4 py-2 rounded-lg transition-colors ${
+                      config.modo_escuro
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={finalizarOrganizacao}
+                    disabled={excedentesDisponiveis.length > 0}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                      excedentesDisponiveis.length === 0
+                        ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    Adicionar ao Carrinho
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Vinculação de Excedente */}
+      {modalVincularExcedente && excedenteAtual && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={`text-lg font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Vincular Excedente
+                  </h3>
+                  <p className={`text-sm mt-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Escolha a qual item adicionar: {excedenteAtual.nome}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setModalVincularExcedente(false)}
+                  className={`p-2 rounded-full transition-colors ${
+                    config.modo_escuro
+                      ? 'hover:bg-gray-700 text-gray-400 hover:text-white'
+                      : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6">
+              <div className="space-y-3">
+                {itensOrganizados.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => vincularExcedenteAItem(item.id)}
+                    className={`w-full p-4 rounded-lg border text-left transition-all hover:scale-105 ${
+                      config.modo_escuro
+                        ? 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
+                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className={`font-medium ${
+                          config.modo_escuro ? 'text-white' : 'text-gray-900'
+                        }`}>
+                          {item.nome} #{item.numero}
+                        </h4>
+                        <p className={`text-sm ${
+                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          {item.adicionais.length} adicional(is) atual(is)
+                        </p>
+                      </div>
+                      <div className={`text-xs px-3 py-1 rounded-full ${
+                        config.modo_escuro
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-blue-500 text-white'
+                      }`}>
+                        Selecionar
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={() => setModalVincularExcedente(false)}
+                className={`w-full py-2 rounded-lg transition-colors ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Observação */}
       {modalObservacaoAberto && (
