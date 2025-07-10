@@ -443,6 +443,14 @@ const CardapioPublicoPage: React.FC = () => {
   const [modalProdutoAlcoolico, setModalProdutoAlcoolico] = useState(false);
   const [produtoAlcoolicoPendente, setProdutoAlcoolicoPendente] = useState<string | null>(null);
 
+  // Estados para modal de estoque insuficiente
+  const [modalEstoqueInsuficiente, setModalEstoqueInsuficiente] = useState(false);
+  const [dadosEstoqueInsuficiente, setDadosEstoqueInsuficiente] = useState<{
+    nomeProduto: string;
+    quantidadeSolicitada: number;
+    estoqueDisponivel: number;
+  } | null>(null);
+
   // Estados para modal de configuração individual
   const [modalConfiguracaoAberto, setModalConfiguracaoAberto] = useState(false);
   const [produtoConfiguracaoAtual, setProdutoConfiguracaoAtual] = useState<any>(null);
@@ -2047,23 +2055,76 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
+  // Função para verificar estoque em tempo real
+  const verificarEstoqueTempoReal = async (produtoId: string, quantidadeSolicitada: number): Promise<{ temEstoque: boolean; estoqueAtual: number }> => {
+    try {
+      const { data: produtoData, error } = await supabase
+        .from('produtos')
+        .select('estoque_atual, nome')
+        .eq('id', produtoId)
+        .single();
+
+      if (error) {
+        console.error('Erro ao verificar estoque:', error);
+        return { temEstoque: false, estoqueAtual: 0 };
+      }
+
+      const estoqueAtual = produtoData?.estoque_atual || 0;
+      return {
+        temEstoque: estoqueAtual >= quantidadeSolicitada,
+        estoqueAtual: estoqueAtual
+      };
+    } catch (error) {
+      console.error('Erro ao verificar estoque:', error);
+      return { temEstoque: false, estoqueAtual: 0 };
+    }
+  };
+
   // Função para adicionar produto ao carrinho
-  const adicionarAoCarrinho = (produtoId: string) => {
-    // ✅ VERIFICAR SE É PRODUTO ALCOÓLICO
+  const adicionarAoCarrinho = async (produtoId: string) => {
     const produto = produtos.find(p => p.id === produtoId);
+
+    // ✅ VERIFICAR ESTOQUE EM TEMPO REAL SE CONTROLE ESTIVER ATIVO (PRIMEIRA VALIDAÇÃO)
+    if (produto && produto.controla_estoque_cardapio) {
+      const quantidadeSolicitada = obterQuantidadeSelecionada(produtoId);
+
+      console.log('🔍 DEBUG ESTOQUE:', {
+        produtoNome: produto.nome,
+        controla_estoque_cardapio: produto.controla_estoque_cardapio,
+        quantidadeSolicitada: quantidadeSolicitada,
+        estoqueAtualProduto: produto.estoque_atual
+      });
+
+      if (quantidadeSolicitada > 0) {
+        const { temEstoque, estoqueAtual } = await verificarEstoqueTempoReal(produtoId, quantidadeSolicitada);
+
+        console.log('🔍 DEBUG VERIFICAÇÃO:', {
+          temEstoque,
+          estoqueAtual,
+          quantidadeSolicitada
+        });
+
+        if (!temEstoque) {
+          console.log('❌ ESTOQUE INSUFICIENTE - Abrindo modal');
+          // Abrir modal de estoque insuficiente
+          setDadosEstoqueInsuficiente({
+            nomeProduto: produto.nome,
+            quantidadeSolicitada: quantidadeSolicitada,
+            estoqueDisponivel: estoqueAtual
+          });
+          setModalEstoqueInsuficiente(true);
+          return;
+        } else {
+          console.log('✅ ESTOQUE SUFICIENTE - Continuando...');
+        }
+      }
+    }
+
+    // ✅ VERIFICAR SE É PRODUTO ALCOÓLICO (SEGUNDA VALIDAÇÃO)
     if (produto?.produto_alcoolico) {
       // Abrir modal de conscientização para produtos alcoólicos
       setProdutoAlcoolicoPendente(produtoId);
       setModalProdutoAlcoolico(true);
-      return;
-    }
-
-    // ✅ VERIFICAR ESTOQUE SE CONTROLE ESTIVER ATIVO (individual por produto)
-    if (produto && produto.controla_estoque_cardapio &&
-        produto.estoque_atual !== undefined &&
-        produto.estoque_atual !== null &&
-        produto.estoque_atual <= 0) {
-      showMessage('error', 'Produto sem estoque disponível');
       return;
     }
 
@@ -2791,7 +2852,7 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   // ✅ FUNÇÃO PARA FINALIZAR ORGANIZAÇÃO
-  const finalizarOrganizacao = () => {
+  const finalizarOrganizacao = async () => {
     // Verificar se todos os excedentes foram distribuídos usando a nova lógica
     if (!todosExcedentesDistribuidos()) {
       showMessage('error', 'Todos os excedentes devem ser distribuídos');
@@ -2799,6 +2860,24 @@ const CardapioPublicoPage: React.FC = () => {
     }
 
     if (!produtoOrganizacao) return;
+
+    // ✅ VERIFICAR ESTOQUE EM TEMPO REAL SE CONTROLE ESTIVER ATIVO
+    if (produtoOrganizacao.controla_estoque_cardapio) {
+      const quantidadeTotalSolicitada = itensOrganizados.length;
+
+      const { temEstoque, estoqueAtual } = await verificarEstoqueTempoReal(produtoOrganizacao.id, quantidadeTotalSolicitada);
+
+      if (!temEstoque) {
+        // Abrir modal de estoque insuficiente
+        setDadosEstoqueInsuficiente({
+          nomeProduto: produtoOrganizacao.nome,
+          quantidadeSolicitada: quantidadeTotalSolicitada,
+          estoqueDisponivel: estoqueAtual
+        });
+        setModalEstoqueInsuficiente(true);
+        return;
+      }
+    }
 
     // Adicionar cada item individual ao carrinho exatamente como foi organizado
     itensOrganizados.forEach((item, index) => {
@@ -2921,13 +3000,32 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   // ✅ NOVO: Funções para modal de produto alcoólico
-  const confirmarProdutoAlcoolico = () => {
+  const confirmarProdutoAlcoolico = async () => {
     // Fechar modal de conscientização
     setModalProdutoAlcoolico(false);
 
     // Prosseguir com a adição normal do produto
     if (produtoAlcoolicoPendente) {
+      const produto = produtos.find(p => p.id === produtoAlcoolicoPendente);
       const quantidadeSelecionada = obterQuantidadeSelecionada(produtoAlcoolicoPendente);
+
+      // ✅ VERIFICAR ESTOQUE EM TEMPO REAL SE CONTROLE ESTIVER ATIVO (PARA PRODUTOS ALCOÓLICOS)
+      if (produto && produto.controla_estoque_cardapio && quantidadeSelecionada > 0) {
+        const { temEstoque, estoqueAtual } = await verificarEstoqueTempoReal(produtoAlcoolicoPendente, quantidadeSelecionada);
+
+        if (!temEstoque) {
+          console.log('❌ ESTOQUE INSUFICIENTE (PRODUTO ALCOÓLICO) - Abrindo modal');
+          // Abrir modal de estoque insuficiente
+          setDadosEstoqueInsuficiente({
+            nomeProduto: produto.nome,
+            quantidadeSolicitada: quantidadeSelecionada,
+            estoqueDisponivel: estoqueAtual
+          });
+          setModalEstoqueInsuficiente(true);
+          setProdutoAlcoolicoPendente(null);
+          return;
+        }
+      }
 
       if (quantidadeSelecionada > 0) {
         // Gerar ID único para este item no carrinho
@@ -6157,6 +6255,77 @@ const CardapioPublicoPage: React.FC = () => {
                   })()}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Estoque Insuficiente */}
+      {modalEstoqueInsuficiente && dadosEstoqueInsuficiente && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <span className="text-2xl">📦</span>
+                </div>
+                <div>
+                  <h3 className={`text-lg font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Estoque Insuficiente
+                  </h3>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Quantidade solicitada não disponível
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <div className="text-center space-y-4">
+                <div className="text-6xl mb-4">⚠️</div>
+
+                <h4 className={`text-xl font-bold ${
+                  config.modo_escuro ? 'text-white' : 'text-gray-900'
+                }`}>
+                  {dadosEstoqueInsuficiente.nomeProduto}
+                </h4>
+
+                <div className={`bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 space-y-2`}>
+                  <p className={`text-sm font-medium ${
+                    config.modo_escuro ? 'text-red-200' : 'text-red-800'
+                  }`}>
+                    <span className="block">Quantidade solicitada: <strong>{dadosEstoqueInsuficiente.quantidadeSolicitada}</strong></span>
+                    <span className="block">Estoque disponível: <strong>{dadosEstoqueInsuficiente.estoqueDisponivel}</strong></span>
+                  </p>
+                </div>
+
+                <p className={`text-sm leading-relaxed ${
+                  config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  A quantidade que você selecionou não está disponível no momento. Por favor, ajuste a quantidade ou tente novamente mais tarde.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer do Modal */}
+            <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
+              <button
+                onClick={() => {
+                  setModalEstoqueInsuficiente(false);
+                  setDadosEstoqueInsuficiente(null);
+                }}
+                className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              >
+                Entendi
+              </button>
             </div>
           </div>
         </div>
