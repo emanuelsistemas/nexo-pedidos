@@ -3189,7 +3189,8 @@ const CardapioPublicoPage: React.FC = () => {
 
     // Verificar se tem promoção para ajustar posição
     const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
-    const posicaoTop = temPromocao ? 'top-12' : 'top-3'; // Se tem promoção, fica mais abaixo
+    // Posicionar mais acima, com bastante espaço dos controles
+    const posicaoTop = temPromocao ? 'top-14' : 'top-8'; // Mais afastado dos controles
 
     return (
       <div className={`absolute ${posicaoTop} right-3 z-10 px-2 py-1 rounded-md border text-xs font-medium flex items-center gap-1 ${estilo.bg} ${estilo.text} ${estilo.border}`}>
@@ -5357,8 +5358,8 @@ const CardapioPublicoPage: React.FC = () => {
 
       {/* Modal de Organização de Adicionais */}
       {modalOrganizacao && produtoOrganizacao && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className={`w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden ${
+        <div className="fixed inset-0 bg-black/50 z-50">
+          <div className={`w-full h-full flex flex-col overflow-hidden ${
             config.modo_escuro ? 'bg-gray-800' : 'bg-white'
           }`}>
             {/* Header */}
