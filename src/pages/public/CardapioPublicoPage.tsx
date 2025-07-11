@@ -4082,18 +4082,23 @@ const CardapioPublicoPage: React.FC = () => {
 
                         return pages.map((pageCategories, pageIndex) => (
                           <div key={pageIndex} className="keen-slider__slide">
-                            <div className="flex gap-2 w-full">
+                            <div className="flex gap-2 w-full h-full">
                               {pageCategories.map((categoria) => (
                                 <button
                                   key={categoria.id}
                                   onClick={() => setGrupoSelecionado(categoria.id)}
-                                  className={`flex-1 px-4 py-2 font-medium text-sm whitespace-nowrap rounded-lg transition-all duration-200 ${
+                                  className={`flex-1 px-3 py-2 font-medium text-sm whitespace-nowrap rounded-lg transition-all duration-200 min-w-0 ${
                                     grupoSelecionado === categoria.id
                                       ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
                                       : config.modo_escuro
                                       ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                                       : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
                                   }`}
+                                  style={{
+                                    maxWidth: `${100 / pageCategories.length}%`,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                  }}
                                 >
                                   {categoria.nome}
                                 </button>

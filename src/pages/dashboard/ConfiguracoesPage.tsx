@@ -3031,7 +3031,7 @@ const ConfiguracoesPage: React.FC = () => {
 
     switch (tipo) {
       case 'telefone':
-        // Formato: (11) 99999-9999
+        // Formato: (11) 99999-9999 - apenas os dígitos brasileiros
         if (apenasNumeros.length <= 11) {
           return apenasNumeros
             .replace(/(\d{2})(\d)/, '($1) $2')
@@ -3072,6 +3072,16 @@ const ConfiguracoesPage: React.FC = () => {
   const removerMascaraChavePix = (valor: string, tipo: string): string => {
     switch (tipo) {
       case 'telefone':
+        // Para telefone PIX, salvar apenas os 11 dígitos sem +55
+        // O formato internacional será aplicado apenas na geração do QR Code
+        let numeroLimpo = valor.replace(/\D/g, '');
+
+        // Se tem +55 no início, remover
+        if (numeroLimpo.startsWith('55') && numeroLimpo.length > 11) {
+          numeroLimpo = numeroLimpo.substring(2);
+        }
+
+        return numeroLimpo;
       case 'cpf':
       case 'cnpj':
         return valor.replace(/\D/g, '');
@@ -3088,6 +3098,7 @@ const ConfiguracoesPage: React.FC = () => {
 
     switch (tipo) {
       case 'telefone':
+        // Validar 10 ou 11 dígitos (formato brasileiro)
         return valorLimpo.length >= 10 && valorLimpo.length <= 11;
       case 'cpf':
         return valorLimpo.length === 11;

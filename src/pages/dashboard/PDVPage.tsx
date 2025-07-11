@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -6643,31 +6644,129 @@ const PDVPage: React.FC = () => {
     setParcelasSelecionadas(1);
   };
 
-  // Função para gerar QR Code PIX
-  const gerarQrCodePix = (valor: number, chave: string, tipoChave: string) => {
-    // Gerar payload PIX baseado no padrão EMV
+  // Função para gerar QR Code PIX conforme padrão BR Code do Banco Central
+  const gerarQrCodePix = (valor: number, chave: string, tipoChave: string, nomeRecebedor: string = 'ESTABELECIMENTO') => {
+    console.log('🔍 GERANDO PIX BR CODE:', { valor, chave, tipoChave, nomeRecebedor });
+
+    // Formatar chave PIX conforme o tipo - VERSÃO SIMPLIFICADA
     const formatarChave = (chave: string, tipo: string) => {
       switch (tipo) {
         case 'telefone':
-          return `+55${chave.replace(/\D/g, '')}`;
+          // Para telefone, usar apenas os números sem +55
+          // O banco espera apenas os 11 dígitos: 12974060613
+          let numeroLimpo = chave.replace(/\D/g, '');
+
+          // Se tem +55 no início, remover
+          if (numeroLimpo.startsWith('55') && numeroLimpo.length > 11) {
+            numeroLimpo = numeroLimpo.substring(2);
+          }
+
+          console.log('📱 FORMATAÇÃO TELEFONE:', {
+            original: chave,
+            limpo: numeroLimpo,
+            tamanho: numeroLimpo.length
+          });
+
+          return numeroLimpo;
+
         case 'email':
-          return chave.toLowerCase();
+          return chave.toLowerCase().trim();
         case 'cpf':
+          return chave.replace(/\D/g, '');
         case 'cnpj':
           return chave.replace(/\D/g, '');
         case 'chave_aleatoria':
-          return chave;
+          return chave.trim();
         default:
-          return chave;
+          return chave.trim();
       }
+    };
+
+    // Função auxiliar para criar campo EMV (ID + Length + Value)
+    const criarCampo = (id: string, valor: string) => {
+      const tamanho = valor.length.toString().padStart(2, '0');
+      return `${id}${tamanho}${valor}`;
+    };
+
+    // Função para calcular CRC16 CCITT conforme especificação BR Code
+    const calcularCRC16 = (payload: string) => {
+      const polynomial = 0x1021;
+      let crc = 0xFFFF;
+
+      for (let i = 0; i < payload.length; i++) {
+        crc ^= (payload.charCodeAt(i) << 8);
+        for (let j = 0; j < 8; j++) {
+          if (crc & 0x8000) {
+            crc = (crc << 1) ^ polynomial;
+          } else {
+            crc <<= 1;
+          }
+          crc &= 0xFFFF;
+        }
+      }
+
+      return crc.toString(16).toUpperCase().padStart(4, '0');
     };
 
     const chaveFormatada = formatarChave(chave, tipoChave);
     const valorFormatado = valor.toFixed(2);
+    const nomeFormatado = nomeRecebedor.toUpperCase().replace(/[^A-Z0-9\s]/g, '').substring(0, 25);
 
-    // Payload PIX simplificado (para demonstração)
-    // Em produção, usar biblioteca específica para gerar PIX
-    const payload = `00020126${chaveFormatada.length.toString().padStart(2, '0')}${chaveFormatada}5204000053039865802BR5925NOME_BENEFICIARIO_AQUI6009SAO_PAULO62070503***6304`;
+    console.log('🔍 DADOS FORMATADOS BR CODE:', {
+      chaveOriginal: chave,
+      tipoChave,
+      chaveFormatada,
+      valorFormatado,
+      nomeFormatado,
+      chaveLength: chaveFormatada.length
+    });
+
+    // Construir payload PIX conforme padrão BR Code EMV
+    let payload = '';
+
+    // 00 - Payload Format Indicator
+    payload += criarCampo('00', '01');
+
+    // 01 - Point of Initiation Method
+    payload += criarCampo('01', '12');
+
+    // 26 - Merchant Account Information (PIX)
+    const gui = 'br.gov.bcb.pix';
+    const pixInfo = criarCampo('00', gui) + criarCampo('01', chaveFormatada);
+    payload += criarCampo('26', pixInfo);
+
+    // 52 - Merchant Category Code
+    payload += criarCampo('52', '0000');
+
+    // 53 - Transaction Currency
+    payload += criarCampo('53', '986');
+
+    // 54 - Transaction Amount
+    if (valor > 0) {
+      payload += criarCampo('54', valorFormatado);
+    }
+
+    // 58 - Country Code
+    payload += criarCampo('58', 'BR');
+
+    // 59 - Merchant Name
+    payload += criarCampo('59', nomeFormatado);
+
+    // 60 - Merchant City
+    payload += criarCampo('60', 'SAO PAULO');
+
+    // 62 - Additional Data Field Template
+    const txId = Date.now().toString().slice(-10);
+    const additionalData = criarCampo('05', txId);
+    payload += criarCampo('62', additionalData);
+
+    // 63 - CRC16
+    payload += '6304';
+    const crc = calcularCRC16(payload);
+    payload += crc;
+
+    console.log('✅ PAYLOAD PIX GERADO:', payload);
+    console.log('📏 TAMANHO:', payload.length);
 
     return payload;
   };
@@ -19262,24 +19361,37 @@ const PDVPage: React.FC = () => {
 
                 {/* QR Code */}
                 <div className="bg-white p-4 rounded-lg mb-4 mx-auto w-fit">
-                  <div className="w-48 h-48 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
-                    {qrCodePix ? (
-                      <div className="text-center">
-                        <div className="text-xs text-gray-600 mb-2">QR Code PIX</div>
-                        <div className="text-xs text-gray-500 break-all p-2 bg-gray-50 rounded">
-                          {qrCodePix.substring(0, 50)}...
-                        </div>
-                      </div>
-                    ) : (
+                  {qrCodePix ? (
+                    <QRCodeSVG
+                      value={qrCodePix}
+                      size={200}
+                      level="M"
+                      includeMargin={true}
+                      className="mx-auto"
+                    />
+                  ) : (
+                    <div className="w-48 h-48 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
                       <div className="text-gray-400 text-sm">Gerando QR Code...</div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Informações da chave PIX */}
                 <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
                   <div className="text-sm text-gray-400 mb-1">Chave PIX:</div>
-                  <div className="text-white font-mono text-sm break-all">{chavePix}</div>
+                  <div className="text-white font-mono text-sm break-all mb-2">{chavePix}</div>
+
+                  {/* Botão para copiar código PIX */}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(qrCodePix);
+                      // Aqui você pode adicionar um toast de sucesso
+                      console.log('Código PIX copiado!');
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 px-3 rounded transition-colors"
+                  >
+                    Copiar Código PIX
+                  </button>
                 </div>
 
                 {/* Instruções */}
