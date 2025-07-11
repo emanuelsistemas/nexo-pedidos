@@ -319,6 +319,12 @@ const PDVPage: React.FC = () => {
   const [formasPagamento, setFormasPagamento] = useState<any[]>([]);
   const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<string | null>(null);
 
+  // Estados para modal de parcelas
+  const [showModalParcelas, setShowModalParcelas] = useState(false);
+  const [parcelasSelecionadas, setParcelasSelecionadas] = useState(1);
+  const [formaPagamentoPendente, setFormaPagamentoPendente] = useState<any>(null);
+  const [parcelasFormaPagamento, setParcelasFormaPagamento] = useState<{[key: string]: number}>({});
+
   // ✅ NOVO: Estado para ambiente NFe (homologação/produção)
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
 
@@ -1550,12 +1556,12 @@ const PDVPage: React.FC = () => {
     };
   }, []);
 
-  // ✅ NOVO: Recarregar formas de pagamento quando configuração PDV mudar
+  // Recarregar formas de pagamento quando necessário
   useEffect(() => {
     if (pdvConfig !== null) { // Só executa depois que pdvConfig foi carregado
       loadFormasPagamento();
     }
-  }, [pdvConfig?.fiado]); // Recarrega quando a configuração de fiado mudar
+  }, [pdvConfig]); // Recarrega quando a configuração PDV mudar
 
   // Atualizar data e hora a cada segundo
   useEffect(() => {
@@ -2478,28 +2484,68 @@ const PDVPage: React.FC = () => {
 
   const loadFormasPagamento = async () => {
     try {
+      // Obter dados do usuário para pegar empresa_id
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        console.error('Empresa não encontrada para o usuário');
+        return;
+      }
+
+      // Buscar formas de pagamento configuradas para esta empresa
       const { data, error } = await supabase
-        .from('formas_pag_pdv')
-        .select('*')
-        .eq('ativo', true)
-        .order('ordem');
+        .from('formas_pagamento_empresa')
+        .select(`
+          id,
+          cardapio_digital,
+          max_parcelas,
+          juros_por_parcela,
+          utilizar_chave_pix,
+          tipo_chave_pix,
+          chave_pix,
+          forma_pagamento_opcoes:forma_pagamento_opcao_id (
+            id,
+            nome,
+            tipo
+          )
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('created_at');
 
       if (error) throw error;
 
-      // ✅ NOVO: Filtrar "Fiado" baseado na configuração PDV
-      let formasFiltradas = data || [];
-      if (!pdvConfig?.fiado) {
-        formasFiltradas = formasFiltradas.filter(forma =>
-          forma.nome?.toLowerCase() !== 'fiado'
-        );
-      }
+      // Transformar dados para o formato esperado pelo PDV
+      const formasTransformadas = (data || []).map(forma => ({
+        id: forma.id,
+        nome: forma.forma_pagamento_opcoes?.nome || 'Forma de Pagamento',
+        tipo: forma.forma_pagamento_opcoes?.tipo || 'outros',
+        ativo: true,
+        // Dados adicionais para funcionalidades específicas
+        cardapio_digital: forma.cardapio_digital,
+        max_parcelas: forma.max_parcelas,
+        juros_por_parcela: forma.juros_por_parcela,
+        utilizar_chave_pix: forma.utilizar_chave_pix,
+        tipo_chave_pix: forma.tipo_chave_pix,
+        chave_pix: forma.chave_pix
+      }));
 
-      setFormasPagamento(formasFiltradas);
+      console.log('✅ Formas de pagamento carregadas da empresa:', formasTransformadas);
+      setFormasPagamento(formasTransformadas);
 
-      // ✅ CORREÇÃO: Selecionar "Dinheiro" como padrão, se não encontrar, usar a primeira
-      if (formasFiltradas && formasFiltradas.length > 0) {
+      // Selecionar primeira forma como padrão
+      if (formasTransformadas && formasTransformadas.length > 0) {
         // Procurar por "Dinheiro" primeiro
-        const dinheiro = formasFiltradas.find(forma =>
+        const dinheiro = formasTransformadas.find(forma =>
           forma.nome?.toLowerCase() === 'dinheiro'
         );
 
@@ -2508,12 +2554,19 @@ const PDVPage: React.FC = () => {
           setFormaPagamentoSelecionada(dinheiro.id);
         } else {
           // Se não encontrar "Dinheiro", usar a primeira forma disponível
-          console.log('⚠️ Dinheiro não encontrado, usando primeira forma de pagamento:', formasFiltradas[0].nome);
-          setFormaPagamentoSelecionada(formasFiltradas[0].id);
+          console.log('⚠️ Dinheiro não encontrado, usando primeira forma de pagamento:', formasTransformadas[0].nome);
+          setFormaPagamentoSelecionada(formasTransformadas[0].id);
         }
+      } else {
+        console.warn('⚠️ Nenhuma forma de pagamento configurada para esta empresa');
+        setFormasPagamento([]);
+        setFormaPagamentoSelecionada('');
       }
     } catch (error) {
       console.error('Erro ao carregar formas de pagamento:', error);
+      // Em caso de erro, manter array vazio para não quebrar a interface
+      setFormasPagamento([]);
+      setFormaPagamentoSelecionada('');
     }
   };
 
@@ -6550,17 +6603,51 @@ const PDVPage: React.FC = () => {
            !pdvConfig?.ocultar_nfce_producao;
   };
 
+  // Função para lidar com seleção de forma de pagamento
+  const handleSelecionarFormaPagamento = (forma: any) => {
+    // Verificar se é cartão de crédito com mais de 1 parcela
+    if (forma.tipo === 'cartao_credito' && forma.max_parcelas > 1) {
+      setFormaPagamentoPendente(forma);
+      setParcelasSelecionadas(1);
+      setShowModalParcelas(true);
+    } else {
+      // Para outras formas de pagamento, selecionar diretamente
+      setFormaPagamentoSelecionada(forma.id);
+    }
+  };
+
+  // Função para confirmar seleção de parcelas
+  const handleConfirmarParcelas = () => {
+    if (formaPagamentoPendente) {
+      setFormaPagamentoSelecionada(formaPagamentoPendente.id);
+      // Salvar quantidade de parcelas para esta forma de pagamento
+      setParcelasFormaPagamento(prev => ({
+        ...prev,
+        [formaPagamentoPendente.id]: parcelasSelecionadas
+      }));
+      setShowModalParcelas(false);
+      setFormaPagamentoPendente(null);
+    }
+  };
+
+  // Função para cancelar seleção de parcelas
+  const handleCancelarParcelas = () => {
+    setShowModalParcelas(false);
+    setFormaPagamentoPendente(null);
+    setParcelasSelecionadas(1);
+  };
+
   // Função para verificar se há pagamento com cartão
   const temPagamentoCartao = () => {
     if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
       const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
-      return forma && (forma.nome === 'Crédito' || forma.nome === 'Débito');
+      return forma && (forma.tipo === 'cartao_credito' || forma.tipo === 'cartao_debito');
     }
 
     if (tipoPagamento === 'parcial') {
       return pagamentosParciais.some(p => {
         const forma = formasPagamento.find(f => f.id === p.forma);
-        return forma && (forma.nome === 'Crédito' || forma.nome === 'Débito');
+        return forma && (forma.tipo === 'cartao_credito' || forma.tipo === 'cartao_debito');
       });
     }
 
@@ -12230,7 +12317,7 @@ const PDVPage: React.FC = () => {
                         {formasPagamento.map((forma) => (
                           <button
                             key={forma.id}
-                            onClick={() => setFormaPagamentoSelecionada(forma.id)}
+                            onClick={() => handleSelecionarFormaPagamento(forma)}
                             className={`p-2 rounded border transition-colors text-sm ${
                               formaPagamentoSelecionada === forma.id
                                 ? 'bg-gray-700 border-gray-600 text-white'
@@ -12238,6 +12325,14 @@ const PDVPage: React.FC = () => {
                             }`}
                           >
                             {forma.nome}
+                            {forma.tipo === 'cartao_credito' && forma.max_parcelas > 1 && (
+                              <span className="text-xs text-gray-400 block">
+                                {parcelasFormaPagamento[forma.id]
+                                  ? `${parcelasFormaPagamento[forma.id]}x selecionado`
+                                  : `até ${forma.max_parcelas}x`
+                                }
+                              </span>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -12404,7 +12499,7 @@ const PDVPage: React.FC = () => {
                         {formasPagamento.map((forma) => (
                           <button
                             key={forma.id}
-                            onClick={() => setFormaPagamentoSelecionada(forma.id)}
+                            onClick={() => handleSelecionarFormaPagamento(forma)}
                             className={`p-2 rounded border transition-colors text-sm ${
                               formaPagamentoSelecionada === forma.id
                                 ? 'bg-gray-700 border-gray-600 text-white'
@@ -12412,6 +12507,14 @@ const PDVPage: React.FC = () => {
                             }`}
                           >
                             {forma.nome}
+                            {forma.tipo === 'cartao_credito' && forma.max_parcelas > 1 && (
+                              <span className="text-xs text-gray-400 block">
+                                {parcelasFormaPagamento[forma.id]
+                                  ? `${parcelasFormaPagamento[forma.id]}x selecionado`
+                                  : `até ${forma.max_parcelas}x`
+                                }
+                              </span>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -18870,6 +18973,117 @@ const PDVPage: React.FC = () => {
         tipoPreco={tipoPrecoSabores}
         produtoAtual={produtoParaSabores} // ✅ NOVO: Passar produto atual para filtrar
       />
+
+      {/* Modal de Seleção de Parcelas */}
+      <AnimatePresence>
+        {showModalParcelas && formaPagamentoPendente && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card p-6 rounded-lg shadow-xl max-w-md mx-4 w-full border border-gray-800"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-white">
+                  Selecionar Parcelas
+                </h3>
+                <button
+                  onClick={handleCancelarParcelas}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <div className="text-center mb-4">
+                  <h4 className="text-lg font-medium text-white mb-2">
+                    {formaPagamentoPendente.nome}
+                  </h4>
+                  <p className="text-gray-400 text-sm">
+                    Escolha a quantidade de parcelas para o pagamento
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Quantidade de Parcelas
+                  </label>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: formaPagamentoPendente.max_parcelas }, (_, i) => i + 1).map(parcela => (
+                      <button
+                        key={parcela}
+                        onClick={() => setParcelasSelecionadas(parcela)}
+                        className={`p-3 rounded-lg border transition-colors text-sm font-medium ${
+                          parcelasSelecionadas === parcela
+                            ? 'bg-primary-600 border-primary-500 text-white'
+                            : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-750'
+                        }`}
+                      >
+                        {parcela}x
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Informações sobre juros */}
+                  {formaPagamentoPendente.juros_por_parcela > 0 && parcelasSelecionadas > 1 && (
+                    <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-3 mt-4">
+                      <div className="flex items-start gap-2">
+                        <svg className="w-4 h-4 text-yellow-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.232 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <div>
+                          <p className="text-yellow-400 text-sm font-medium">Juros Aplicados</p>
+                          <p className="text-yellow-300 text-xs">
+                            {formaPagamentoPendente.juros_por_parcela}% de juros por parcela será aplicado
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Valor por parcela */}
+                  <div className="bg-gray-800/50 rounded-lg p-3 mt-4">
+                    <div className="text-center">
+                      <p className="text-gray-400 text-sm">Valor por parcela</p>
+                      <p className="text-xl font-bold text-primary-400">
+                        {formatCurrency(calcularTotal() / parcelasSelecionadas)}
+                      </p>
+                      {formaPagamentoPendente.juros_por_parcela > 0 && parcelasSelecionadas > 1 && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          (sem juros - valor final pode variar)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCancelarParcelas}
+                  className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmarParcelas}
+                  className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                >
+                  Confirmar {parcelasSelecionadas}x
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
