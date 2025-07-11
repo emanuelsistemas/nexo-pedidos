@@ -2471,7 +2471,6 @@ const ProdutosPage: React.FC = () => {
       pizza: produto.pizza || false,
       cardapio_digital: produto.cardapio_digital || false,
       exibir_promocao_cardapio: produto.exibir_promocao_cardapio || false,
-      exibir_desconto_qtd_minimo_no_cardapio_digital: produto.exibir_desconto_qtd_minimo_no_cardapio_digital || false,
       controla_estoque_cardapio: produto.controla_estoque_cardapio || false,
     };
 
@@ -4523,19 +4522,24 @@ const ProdutosPage: React.FC = () => {
         .filter(p => p !== undefined) as Produto[];
 
       // Adicionar produtos que não estão na ordem personalizada (novos produtos)
+      // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
       const remainingMoveis = produtosMoveis.filter(p => !customOrder.includes(p.id));
       remainingMoveis.sort((a, b) => {
-        const comparison = a.nome.localeCompare(b.nome);
-        return sortOrder === 'asc' ? comparison : -comparison;
+        // Ordenar por created_at (mais novos primeiro)
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA; // Mais novos primeiro (ordem decrescente)
       });
 
       return [...produtosFixos, ...orderedMoveis, ...remainingMoveis];
     }
 
-    // Ordem padrão: fixos primeiro (por posição), depois móveis (alfabético)
+    // Ordem padrão: fixos primeiro (por posição), depois móveis (por data de criação - mais novos primeiro)
     produtosMoveis.sort((a, b) => {
-      const comparison = a.nome.localeCompare(b.nome);
-      return sortOrder === 'asc' ? comparison : -comparison;
+      // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA; // Mais novos primeiro (ordem decrescente)
     });
 
     return [...produtosFixos, ...produtosMoveis];

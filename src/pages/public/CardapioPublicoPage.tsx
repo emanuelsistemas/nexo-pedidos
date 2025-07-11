@@ -1191,6 +1191,7 @@ const CardapioPublicoPage: React.FC = () => {
           estoque_atual,
           estoque_minimo,
           controla_estoque_cardapio,
+          created_at,
           unidade_medida_id,
           unidade_medida:unidade_medida_id (
             id,
@@ -1400,7 +1401,10 @@ const CardapioPublicoPage: React.FC = () => {
         }
         if (aTemOrdenacao && !bTemOrdenacao) return -1;
         if (!aTemOrdenacao && bTemOrdenacao) return 1;
-        return a.nome.localeCompare(b.nome);
+        // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA; // Mais novos primeiro
       });
 
       return [{
@@ -1448,7 +1452,10 @@ const CardapioPublicoPage: React.FC = () => {
         }
         if (aTemOrdenacao && !bTemOrdenacao) return -1;
         if (!aTemOrdenacao && bTemOrdenacao) return 1;
-        return a.nome.localeCompare(b.nome);
+        // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA; // Mais novos primeiro
       });
 
       // Retorna como um único "grupo" virtual
@@ -1546,7 +1553,10 @@ const CardapioPublicoPage: React.FC = () => {
           }
           if (aTemOrdenacao && !bTemOrdenacao) return -1;
           if (!aTemOrdenacao && bTemOrdenacao) return 1;
-          return a.nome.localeCompare(b.nome);
+          // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
+          const dateA = new Date(a.created_at || 0).getTime();
+          const dateB = new Date(b.created_at || 0).getTime();
+          return dateB - dateA; // Mais novos primeiro
         });
       });
 
@@ -4214,8 +4224,10 @@ const CardapioPublicoPage: React.FC = () => {
                       // Se apenas B tem ordenação, B vem primeiro
                       if (!aTemOrdenacao && bTemOrdenacao) return 1;
 
-                      // Se nenhum tem ordenação, ordem alfabética
-                      return a.nome.localeCompare(b.nome);
+                      // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
+                      const dateA = new Date(a.created_at || 0).getTime();
+                      const dateB = new Date(b.created_at || 0).getTime();
+                      return dateB - dateA; // Mais novos primeiro
                     });
 
                     const todasCategorias = [
@@ -4410,14 +4422,24 @@ const CardapioPublicoPage: React.FC = () => {
                     {/* Badge de promoção tradicional */}
                     {produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto && (
                       <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg whitespace-nowrap">
-                        🔥 PROMO
+                        🔥 {produto.tipo_desconto === 'percentual'
+                          ? `${produto.valor_desconto}% OFF`
+                          : `${formatarPreco(produto.valor_desconto)} OFF`}
                       </div>
                     )}
 
                     {/* Badge de desconto por quantidade */}
                     {produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima && (
                       <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg whitespace-nowrap">
-                        📦 QTD
+                        📦 {(() => {
+                          if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+                            return `${produto.percentual_desconto_quantidade}% OFF (mín. ${produto.quantidade_minima})`;
+                          } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+                            return `${formatarPreco(produto.valor_desconto_quantidade)} OFF (mín. ${produto.quantidade_minima})`;
+                          } else {
+                            return `QTD (mín. ${produto.quantidade_minima})`;
+                          }
+                        })()}
                       </div>
                     )}
 
@@ -4573,10 +4595,6 @@ const CardapioPublicoPage: React.FC = () => {
                                     <div className="text-lg font-bold text-green-500">
                                       {formatarPreco(valorFinal)}
                                     </div>
-                                    {/* Badge de desconto */}
-                                    <div className="inline-block px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 w-fit">
-                                      {descontoExibicao}
-                                    </div>
                                   </div>
                                 );
                               } else {
@@ -4690,10 +4708,6 @@ const CardapioPublicoPage: React.FC = () => {
                                   {/* Preço promocional */}
                                   <div className="text-2xl font-bold text-green-500">
                                     {formatarPreco(valorFinal)}
-                                  </div>
-                                  {/* Badge de desconto */}
-                                  <div className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 w-fit mt-1">
-                                    {descontoExibicao}
                                   </div>
                                 </div>
                               );
