@@ -1657,13 +1657,7 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Função para obter tabelas de preços com valores válidos para um produto
   const obterTabelasComPrecos = (produtoId: string): Array<{id: string; nome: string; preco: number; quantidade_sabores: number}> => {
-    console.log('🔍 obterTabelasComPrecos - produtoId:', produtoId);
-    console.log('🔍 trabalhaComTabelaPrecos:', trabalhaComTabelaPrecos);
-    console.log('🔍 produtoPrecos[produtoId]:', produtoPrecos[produtoId]);
-    console.log('🔍 tabelasPrecos:', tabelasPrecos);
-
     if (!trabalhaComTabelaPrecos || !produtoPrecos[produtoId]) {
-      console.log('🔍 Retornando array vazio - condições não atendidas');
       return [];
     }
 
@@ -1676,7 +1670,6 @@ const CardapioPublicoPage: React.FC = () => {
       }))
       .filter(tabela => tabela.preco > 0); // Apenas tabelas com preço > 0
 
-    console.log('🔍 Resultado final:', resultado);
     return resultado;
   };
 
@@ -1700,10 +1693,7 @@ const CardapioPublicoPage: React.FC = () => {
       localStorage.setItem(chaveObservacoes, JSON.stringify(observacoesProdutos));
       localStorage.setItem(chaveValidacaoMinima, JSON.stringify(validacaoQuantidadeMinima));
 
-      console.log('🛒 Carrinho salvo no localStorage:', chaveCarrinho, quantidades);
-      console.log('🛒 Ordem salva no localStorage:', chaveOrdem, ordemAdicaoItens);
-      console.log('🛒 Adicionais salvos no localStorage:', chaveAdicionais, adicionaisSelecionados);
-      console.log('🛒 Validação mínima salva no localStorage:', chaveValidacaoMinima, validacaoQuantidadeMinima);
+
     } catch (error) {
       console.error('Erro ao salvar carrinho no localStorage:', error);
     }
@@ -1717,7 +1707,6 @@ const CardapioPublicoPage: React.FC = () => {
     validacaoMinima: {[produtoId: string]: {[opcaoId: string]: boolean}}
   } => {
     if (!empresaId) {
-      console.log('🛒 Não carregando carrinho: empresaId não disponível');
       return { quantidades: {}, ordem: {}, adicionais: {}, observacoes: {}, validacaoMinima: {} };
     }
 
@@ -1740,11 +1729,7 @@ const CardapioPublicoPage: React.FC = () => {
       const observacoes = observacoesSalvas ? JSON.parse(observacoesSalvas) : {};
       const validacaoMinima = validacaoMinimaSalva ? JSON.parse(validacaoMinimaSalva) : {};
 
-      console.log('🛒 Carrinho carregado do localStorage:', chaveCarrinho, quantidades);
-      console.log('🛒 Ordem carregada do localStorage:', chaveOrdem, ordem);
-      console.log('🛒 Adicionais carregados do localStorage:', chaveAdicionais, adicionais);
-      console.log('🛒 Observações carregadas do localStorage:', chaveObservacoes, observacoes);
-      console.log('🛒 Validação mínima carregada do localStorage:', chaveValidacaoMinima, validacaoMinima);
+
 
       return { quantidades, ordem, adicionais, observacoes, validacaoMinima };
     } catch (error) {
@@ -1769,7 +1754,7 @@ const CardapioPublicoPage: React.FC = () => {
       localStorage.removeItem(chaveObservacoes);
       localStorage.removeItem(chaveValidacaoMinima);
 
-      console.log('🛒 Carrinho, ordem, adicionais, observações e validação mínima limpos do localStorage');
+
     } catch (error) {
       console.error('Erro ao limpar carrinho do localStorage:', error);
     }
@@ -1782,7 +1767,7 @@ const CardapioPublicoPage: React.FC = () => {
     try {
       localStorage.setItem(`selecao_quantidades_${empresaId}`, JSON.stringify(quantidadesSelecionadas));
       localStorage.setItem(`selecao_observacoes_${empresaId}`, JSON.stringify(observacoesSelecionadas));
-      console.log('📝 Salvando seleções no localStorage');
+
     } catch (error) {
       console.error('Erro ao salvar seleções no localStorage:', error);
     }
@@ -1818,7 +1803,7 @@ const CardapioPublicoPage: React.FC = () => {
     try {
       localStorage.removeItem(`selecao_quantidades_${empresaId}`);
       localStorage.removeItem(`selecao_observacoes_${empresaId}`);
-      console.log('🗑️ Seleções removidas do localStorage');
+
     } catch (error) {
       console.error('Erro ao limpar seleções do localStorage:', error);
     }
@@ -1912,7 +1897,6 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Função para limpar todos os estados de um produto
   const limparEstadosProduto = (produtoId: string) => {
-    console.log(`🧹 Limpando todos os estados do produto: ${produtoId}`);
 
     // Limpar adicionais selecionados
     setAdicionaisSelecionados(prev => {
@@ -1944,7 +1928,7 @@ const CardapioPublicoPage: React.FC = () => {
       return novo;
     });
 
-    console.log(`✅ Estados do produto ${produtoId} limpos - produto resetado como novo`);
+
 
     // Salvar no localStorage após limpeza
     setTimeout(() => salvarSelecaoLocalStorage(), 100);
