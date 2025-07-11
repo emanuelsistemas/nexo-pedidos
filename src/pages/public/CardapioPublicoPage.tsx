@@ -383,12 +383,23 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // ✅ CONFIGURAÇÃO CORRETA SEGUINDO DOCUMENTAÇÃO
+  // ✅ CONFIGURAÇÃO RESPONSIVA PARA NOMES COMPLETOS
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
     slides: {
-      perView: 4, // ✅ FIXO: 4 categorias por slide (conforme documentação)
+      perView: 2.5, // ✅ RESPONSIVO: Permite nomes mais longos
       spacing: 8,
+    },
+    breakpoints: {
+      "(min-width: 640px)": {
+        slides: { perView: 3.5, spacing: 12 }
+      },
+      "(min-width: 768px)": {
+        slides: { perView: 4, spacing: 16 }
+      },
+      "(min-width: 1024px)": {
+        slides: { perView: 5, spacing: 20 }
+      }
     },
     slideChanged(slider) {
       setCurrentSlide(slider.track.details.rel); // ✅ Atualiza indicador ativo
@@ -4125,19 +4136,28 @@ const CardapioPublicoPage: React.FC = () => {
                   })()}
                 </div>
 
-                {/* ✅ INDICADORES SEMPRE VISÍVEIS QUANDO NECESSÁRIO */}
+                {/* ✅ INDICADORES RESPONSIVOS BASEADOS NO SLIDER REAL */}
                 {(() => {
                   const totalCategorias = grupos.length + 1; // +1 para "Todos"
-                  const totalSlides = Math.ceil(totalCategorias / 4);
+
+                  // Calcular slides baseado no viewport atual
+                  let slidesPerView = 2.5; // Mobile default
+                  if (window.innerWidth >= 1024) slidesPerView = 5;
+                  else if (window.innerWidth >= 768) slidesPerView = 4;
+                  else if (window.innerWidth >= 640) slidesPerView = 3.5;
+
+                  const totalSlides = Math.ceil(totalCategorias / Math.floor(slidesPerView));
                   const mostrarIndicadores = loaded && instanceRef.current && totalSlides > 1;
 
-                  console.log('🎯 DEBUG INDICADORES:', {
+                  console.log('🎯 DEBUG INDICADORES RESPONSIVOS:', {
                     totalCategorias,
+                    slidesPerView,
                     totalSlides,
                     currentSlide,
                     loaded,
                     hasInstance: !!instanceRef.current,
-                    mostrarIndicadores
+                    mostrarIndicadores,
+                    windowWidth: window.innerWidth
                   });
 
                   if (!mostrarIndicadores) return null;
@@ -4147,9 +4167,9 @@ const CardapioPublicoPage: React.FC = () => {
                       {Array.from({ length: totalSlides }).map((_, idx) => (
                       <button
                         key={idx}
-                        onClick={() => instanceRef.current?.moveToIdx(idx * 4)}
+                        onClick={() => instanceRef.current?.moveToIdx(idx * Math.floor(slidesPerView))}
                         className={`w-3 h-3 rounded-full transition-all duration-200 border-2 shadow-sm ${
-                          Math.floor(currentSlide / 4) === idx
+                          Math.floor(currentSlide / Math.floor(slidesPerView)) === idx
                             ? config.modo_escuro
                               ? 'bg-purple-400 border-purple-400 shadow-purple-400/50'
                               : 'bg-purple-600 border-purple-600 shadow-purple-600/50'
