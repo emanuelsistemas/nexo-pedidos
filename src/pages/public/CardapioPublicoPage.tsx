@@ -4042,12 +4042,28 @@ const CardapioPublicoPage: React.FC = () => {
       {/* Filtros de Categoria com navegação horizontal */}
       {grupos.length > 0 && (
         <div className={`${config.modo_escuro ? 'bg-gray-800/50' : 'bg-white/80'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-10`}>
-          <div className="max-w-6xl mx-auto px-1 py-4">
-            <div className="h-14 flex items-center">
-
+          <div className="max-w-6xl mx-auto px-4 py-3">
+            <div className="flex flex-col space-y-3">
+              {/* Cabeçalho das Categorias */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="text-xl">🏷️</div>
+                  <h3 className={`text-lg font-semibold ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                    Categorias
+                  </h3>
+                </div>
+                <div className={`text-sm font-medium px-3 py-1 rounded-full ${
+                  config.modo_escuro
+                    ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
+                    : 'bg-purple-100 text-purple-700 border border-purple-200'
+                }`}>
+                  {grupos.length + 1} {grupos.length + 1 === 1 ? 'categoria' : 'categorias'}
+                </div>
+              </div>
 
               {/* Container de Categorias com Keen Slider */}
-              <div className="flex-1 h-full relative overflow-hidden">
+              <div className="h-12 flex items-center">
+                <div className="flex-1 h-full relative overflow-hidden">
                 <div ref={sliderRef} className="keen-slider h-full">
                   {(() => {
                     // ✅ APLICAR A MESMA LÓGICA DE ORDENAÇÃO DOS GRUPOS
@@ -4109,37 +4125,44 @@ const CardapioPublicoPage: React.FC = () => {
                   })()}
                 </div>
 
-                {/* ✅ INDICADORES CORRETOS - Mostrar quando há mais categorias que cabem em um slide */}
-                {loaded && instanceRef.current && (grupos.length + 1) > 4 && (() => {
+                {/* ✅ INDICADORES SEMPRE VISÍVEIS QUANDO NECESSÁRIO */}
+                {(() => {
                   const totalCategorias = grupos.length + 1; // +1 para "Todos"
                   const totalSlides = Math.ceil(totalCategorias / 4);
+                  const mostrarIndicadores = loaded && instanceRef.current && totalSlides > 1;
+
                   console.log('🎯 DEBUG INDICADORES:', {
                     totalCategorias,
                     totalSlides,
                     currentSlide,
                     loaded,
-                    hasInstance: !!instanceRef.current
+                    hasInstance: !!instanceRef.current,
+                    mostrarIndicadores
                   });
+
+                  if (!mostrarIndicadores) return null;
+
                   return (
-                    <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                    <div className="flex justify-center mt-2 space-x-2 pb-2">
                       {Array.from({ length: totalSlides }).map((_, idx) => (
                       <button
                         key={idx}
-                        onClick={() => instanceRef.current?.moveToIdx(idx)}
-                        className={`w-3 h-3 rounded-full transition-all duration-200 border-2 ${
-                          currentSlide === idx
+                        onClick={() => instanceRef.current?.moveToIdx(idx * 4)}
+                        className={`w-3 h-3 rounded-full transition-all duration-200 border-2 shadow-sm ${
+                          Math.floor(currentSlide / 4) === idx
                             ? config.modo_escuro
-                              ? 'bg-purple-400 border-purple-400'
-                              : 'bg-purple-600 border-purple-600'
+                              ? 'bg-purple-400 border-purple-400 shadow-purple-400/50'
+                              : 'bg-purple-600 border-purple-600 shadow-purple-600/50'
                             : config.modo_escuro
-                              ? 'bg-transparent border-gray-600 hover:border-gray-500'
-                              : 'bg-transparent border-gray-300 hover:border-gray-400'
+                              ? 'bg-gray-700 border-gray-600 hover:border-gray-500'
+                              : 'bg-gray-200 border-gray-300 hover:border-gray-400'
                         }`}
                       />
                     ))}
                   </div>
                   );
                 })()}
+                </div>
               </div>
             </div>
           </div>
