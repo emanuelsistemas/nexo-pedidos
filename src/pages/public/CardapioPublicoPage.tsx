@@ -4591,10 +4591,10 @@ const CardapioPublicoPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Controles de quantidade posicionados no canto inferior direito */}
+                        {/* Controles de quantidade posicionados centralizados verticalmente à direita */}
                         {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
                         {obterWhatsAppEmpresa() && !semEstoque && (
-                          <div className="absolute bottom-3 right-3 flex items-center gap-1">
+                          <div className="absolute top-1/2 right-3 transform -translate-y-1/2 flex items-center gap-1">
                             {/* Botão Decrementar */}
                             <button
                               onClick={() => decrementarQuantidade(produto.id)}
@@ -4708,10 +4708,10 @@ const CardapioPublicoPage: React.FC = () => {
                           })()}
                         </div>
 
-                        {/* Controles de quantidade posicionados no canto inferior direito */}
+                        {/* Controles de quantidade posicionados centralizados verticalmente à direita */}
                         {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
                         {obterWhatsAppEmpresa() && !semEstoque && (
-                          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                          <div className="absolute top-1/2 right-3 transform -translate-y-1/2 flex items-center gap-2">
                             {/* Botão Decrementar */}
                             <button
                               onClick={() => decrementarQuantidade(produto.id)}
