@@ -383,29 +383,18 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // ✅ CONFIGURAÇÃO RESPONSIVA PARA NOMES COMPLETOS
+  // ✅ CONFIGURAÇÃO CORRIGIDA PARA CATEGORIAS - LARGURA AUTOMÁTICA
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
     slides: {
-      perView: 2.5, // ✅ RESPONSIVO: Permite nomes mais longos
+      perView: "auto", // Largura automática baseada no conteúdo
       spacing: 8,
     },
-    breakpoints: {
-      "(min-width: 640px)": {
-        slides: { perView: 3.5, spacing: 12 }
-      },
-      "(min-width: 768px)": {
-        slides: { perView: 4, spacing: 16 }
-      },
-      "(min-width: 1024px)": {
-        slides: { perView: 5, spacing: 20 }
-      }
-    },
     slideChanged(slider) {
-      setCurrentSlide(slider.track.details.rel); // ✅ Atualiza indicador ativo
+      setCurrentSlide(slider.track.details.rel);
     },
     created() {
-      setLoaded(true); // ✅ Habilita renderização dos dots
+      setLoaded(true);
     },
   });
 
@@ -4072,117 +4061,92 @@ const CardapioPublicoPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Container de Categorias com Keen Slider */}
-              <div className="h-12 flex items-center">
-                <div className="flex-1 h-full relative overflow-hidden">
-                <div ref={sliderRef} className="keen-slider h-full">
-                  {(() => {
-                    // ✅ APLICAR A MESMA LÓGICA DE ORDENAÇÃO DOS GRUPOS
-                    const gruposOrdenados = [...grupos].sort((a, b) => {
-                      // Verificar se tem ordenação configurada
-                      const aTemOrdenacao = a.ordenacao_cardapio_habilitada &&
-                                           a.ordenacao_cardapio_digital !== null &&
-                                           a.ordenacao_cardapio_digital !== undefined;
-                      const bTemOrdenacao = b.ordenacao_cardapio_habilitada &&
-                                           b.ordenacao_cardapio_digital !== null &&
-                                           b.ordenacao_cardapio_digital !== undefined;
+              {/* Container de Categorias com Keen Slider - ESTRUTURA CORRIGIDA */}
+              <div className="relative">
+                {/* Slider Container */}
+                <div className="h-12 flex items-center">
+                  <div className="flex-1 h-full">
+                    <div ref={sliderRef} className="keen-slider h-full">
+                      {(() => {
+                        // ✅ APLICAR A MESMA LÓGICA DE ORDENAÇÃO DOS GRUPOS
+                        const gruposOrdenados = [...grupos].sort((a, b) => {
+                          // Verificar se tem ordenação configurada
+                          const aTemOrdenacao = a.ordenacao_cardapio_habilitada &&
+                                               a.ordenacao_cardapio_digital !== null &&
+                                               a.ordenacao_cardapio_digital !== undefined;
+                          const bTemOrdenacao = b.ordenacao_cardapio_habilitada &&
+                                               b.ordenacao_cardapio_digital !== null &&
+                                               b.ordenacao_cardapio_digital !== undefined;
 
-                      // Se ambos têm ordenação, ordenar por número (MENOR número = PRIMEIRO)
-                      if (aTemOrdenacao && bTemOrdenacao) {
-                        const posicaoA = Number(a.ordenacao_cardapio_digital);
-                        const posicaoB = Number(b.ordenacao_cardapio_digital);
-                        return posicaoA - posicaoB;
-                      }
+                          // Se ambos têm ordenação, ordenar por número (MENOR número = PRIMEIRO)
+                          if (aTemOrdenacao && bTemOrdenacao) {
+                            const posicaoA = Number(a.ordenacao_cardapio_digital);
+                            const posicaoB = Number(b.ordenacao_cardapio_digital);
+                            return posicaoA - posicaoB;
+                          }
 
-                      // Se apenas A tem ordenação, A vem primeiro
-                      if (aTemOrdenacao && !bTemOrdenacao) return -1;
+                          // Se apenas A tem ordenação, A vem primeiro
+                          if (aTemOrdenacao && !bTemOrdenacao) return -1;
 
-                      // Se apenas B tem ordenação, B vem primeiro
-                      if (!aTemOrdenacao && bTemOrdenacao) return 1;
+                          // Se apenas B tem ordenação, B vem primeiro
+                          if (!aTemOrdenacao && bTemOrdenacao) return 1;
 
-                      // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
-                      const dateA = new Date(a.created_at || 0).getTime();
-                      const dateB = new Date(b.created_at || 0).getTime();
-                      return dateB - dateA; // Mais novos primeiro
-                    });
+                          // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
+                          const dateA = new Date(a.created_at || 0).getTime();
+                          const dateB = new Date(b.created_at || 0).getTime();
+                          return dateB - dateA; // Mais novos primeiro
+                        });
 
-                    const todasCategorias = [
-                      { id: 'todos', nome: '🍽️ Todos' },
-                      ...gruposOrdenados
-                    ];
+                        const todasCategorias = [
+                          { id: 'todos', nome: '🍽️ Todos' },
+                          ...gruposOrdenados
+                        ];
 
-                    // ✅ DEBUG: Verificar ordem final das categorias
-                    console.log('🏷️ DEBUG - Categorias na ordem final:', todasCategorias.map(c => ({
-                      id: c.id,
-                      nome: c.nome
-                    })));
+                        // ✅ DEBUG: Verificar ordem final das categorias
+                        console.log('🏷️ DEBUG - Categorias na ordem final:', todasCategorias.map(c => ({
+                          id: c.id,
+                          nome: c.nome
+                        })));
 
-                    return todasCategorias.map((categoria) => (
-                      <div key={categoria.id} className="keen-slider__slide" style={{ minWidth: '120px', width: '120px' }}>
-                        <button
-                          onClick={() => setGrupoSelecionado(categoria.id)}
-                          className={`flex items-center justify-center transition-all duration-200 h-full px-4 font-medium text-sm whitespace-nowrap w-full ${
-                            grupoSelecionado === categoria.id
-                              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                              : config.modo_escuro
-                              ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-                              : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
-                          }`}
-                        >
-                          {categoria.nome}
-                        </button>
-                      </div>
-                    ));
-                  })()}
+                        return todasCategorias.map((categoria) => (
+                          <div key={categoria.id} className="keen-slider__slide" style={{ minWidth: '120px', width: '120px' }}>
+                            <button
+                              onClick={() => setGrupoSelecionado(categoria.id)}
+                              className={`flex items-center justify-center transition-all duration-200 h-full px-4 font-medium text-sm whitespace-nowrap w-full ${
+                                grupoSelecionado === categoria.id
+                                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                                  : config.modo_escuro
+                                  ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                                  : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
+                              }`}
+                            >
+                              {categoria.nome}
+                            </button>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
                 </div>
 
-                {/* ✅ INDICADORES RESPONSIVOS BASEADOS NO SLIDER REAL */}
-                {(() => {
-                  const totalCategorias = grupos.length + 1; // +1 para "Todos"
-
-                  // Calcular slides baseado no viewport atual
-                  let slidesPerView = 2.5; // Mobile default
-                  if (window.innerWidth >= 1024) slidesPerView = 5;
-                  else if (window.innerWidth >= 768) slidesPerView = 4;
-                  else if (window.innerWidth >= 640) slidesPerView = 3.5;
-
-                  const totalSlides = Math.ceil(totalCategorias / Math.floor(slidesPerView));
-                  const mostrarIndicadores = loaded && instanceRef.current && totalSlides > 1;
-
-                  console.log('🎯 DEBUG INDICADORES RESPONSIVOS:', {
-                    totalCategorias,
-                    slidesPerView,
-                    totalSlides,
-                    currentSlide,
-                    loaded,
-                    hasInstance: !!instanceRef.current,
-                    mostrarIndicadores,
-                    windowWidth: window.innerWidth
-                  });
-
-                  if (!mostrarIndicadores) return null;
-
-                  return (
-                    <div className="flex justify-center mt-2 space-x-2 pb-2">
-                      {Array.from({ length: totalSlides }).map((_, idx) => (
+                {/* ✅ INDICADORES SIMPLIFICADOS - IGUAL ÀS PROMOÇÕES QUE FUNCIONAM */}
+                {loaded && instanceRef.current && (grupos.length + 1) > 3 && (
+                  <div className="flex justify-center mt-3 space-x-1">
+                    {Array.from({ length: Math.ceil((grupos.length + 1) / 3) }).map((_, idx) => (
                       <button
                         key={idx}
-                        onClick={() => instanceRef.current?.moveToIdx(idx * Math.floor(slidesPerView))}
-                        className={`w-3 h-3 rounded-full transition-all duration-200 border-2 shadow-sm ${
-                          Math.floor(currentSlide / Math.floor(slidesPerView)) === idx
-                            ? config.modo_escuro
-                              ? 'bg-purple-400 border-purple-400 shadow-purple-400/50'
-                              : 'bg-purple-600 border-purple-600 shadow-purple-600/50'
+                        onClick={() => instanceRef.current?.moveToIdx(idx * 3)}
+                        className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                          Math.floor(currentSlide / 3) === idx
+                            ? 'bg-gradient-to-r from-purple-600 to-blue-600'
                             : config.modo_escuro
-                              ? 'bg-gray-700 border-gray-600 hover:border-gray-500'
-                              : 'bg-gray-200 border-gray-300 hover:border-gray-400'
+                            ? 'bg-gray-600'
+                            : 'bg-gray-300'
                         }`}
                       />
                     ))}
                   </div>
-                  );
-                })()}
-                </div>
+                )}
               </div>
             </div>
           </div>

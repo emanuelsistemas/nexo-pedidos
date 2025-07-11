@@ -2499,7 +2499,7 @@ const ProdutosPage: React.FC = () => {
 
     // Definir o preço formatado usando formatação monetária
     if (produto.preco > 0) {
-      const precoFormatado = formatarValorMonetario((produto.preco * 100).toString());
+      const precoFormatado = formatarValorMonetario(Math.round(produto.preco * 100).toString());
       setPrecoFormatado(precoFormatado);
     } else {
       setPrecoFormatado('');
@@ -2507,7 +2507,7 @@ const ProdutosPage: React.FC = () => {
 
     // Definir preço de custo formatado usando formatação monetária
     if (produto.preco_custo && produto.preco_custo > 0) {
-      const custoFormatado = formatarValorMonetario((produto.preco_custo * 100).toString());
+      const custoFormatado = formatarValorMonetario(Math.round(produto.preco_custo * 100).toString());
       setPrecoCustoFormatado(custoFormatado);
     } else {
       setPrecoCustoFormatado('');
@@ -4025,7 +4025,7 @@ const ProdutosPage: React.FC = () => {
 
       // Atualizar os campos formatados com os valores clonados
       if (produtoCriado.preco > 0) {
-        const precoFormatado = formatarValorMonetario((produtoCriado.preco * 100).toString());
+        const precoFormatado = formatarValorMonetario(Math.round(produtoCriado.preco * 100).toString());
         setPrecoFormatado(precoFormatado);
       } else {
         setPrecoFormatado('');
@@ -4035,7 +4035,7 @@ const ProdutosPage: React.FC = () => {
       setDescontoQuantidadeFormatado(produtoCriado.percentual_desconto_quantidade?.toString() || '10');
 
       if (produtoCriado.preco_custo && produtoCriado.preco_custo > 0) {
-        const custoFormatado = formatarValorMonetario((produtoCriado.preco_custo * 100).toString());
+        const custoFormatado = formatarValorMonetario(Math.round(produtoCriado.preco_custo * 100).toString());
         setPrecoCustoFormatado(custoFormatado);
       } else {
         setPrecoCustoFormatado('');
@@ -5442,14 +5442,7 @@ const ProdutosPage: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => {
-                // Não permitir fechar o modal se estiver salvando
-                if (!isLoading) {
-                  resetFormularioProduto();
-                  setShowSidebar(false);
-                }
-              }}
+              className="fixed inset-0 bg-black/80 z-40"
             />
             <motion.div
               initial={{ x: '100%' }}
