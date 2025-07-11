@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS formas_pagamento_empresa (
     -- Configurações para cartão de crédito
     max_parcelas INTEGER DEFAULT 1,
     juros_por_parcela NUMERIC(5,2) DEFAULT 0.00, -- Percentual de juros por parcela
+
+    -- Configurações para PIX
+    utilizar_chave_pix BOOLEAN DEFAULT FALSE,
+    tipo_chave_pix VARCHAR(20), -- telefone, email, cpf, cnpj, chave_aleatoria
+    chave_pix TEXT, -- Valor da chave PIX (sem formatação)
     
     -- Controle
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -36,3 +41,6 @@ COMMENT ON TABLE formas_pagamento_empresa IS 'Formas de pagamento configuradas p
 COMMENT ON COLUMN formas_pagamento_empresa.cardapio_digital IS 'Se esta forma de pagamento deve aparecer no cardápio digital';
 COMMENT ON COLUMN formas_pagamento_empresa.max_parcelas IS 'Número máximo de parcelas permitidas (usado principalmente para cartão de crédito)';
 COMMENT ON COLUMN formas_pagamento_empresa.juros_por_parcela IS 'Percentual de juros aplicado por parcela (ex: 2.5 para 2,5% ao mês)';
+COMMENT ON COLUMN formas_pagamento_empresa.utilizar_chave_pix IS 'Se deve utilizar chave PIX para esta forma de pagamento';
+COMMENT ON COLUMN formas_pagamento_empresa.tipo_chave_pix IS 'Tipo da chave PIX: telefone, email, cpf, cnpj, chave_aleatoria';
+COMMENT ON COLUMN formas_pagamento_empresa.chave_pix IS 'Valor da chave PIX (sem formatação)';

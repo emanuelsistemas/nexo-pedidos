@@ -306,7 +306,10 @@ const ConfiguracoesPage: React.FC = () => {
     forma_pagamento_opcao_id: '',
     cardapio_digital: false,
     max_parcelas: 1,
-    juros_por_parcela: 0
+    juros_por_parcela: 0,
+    utilizar_chave_pix: false,
+    tipo_chave_pix: '',
+    chave_pix: ''
   });
 
   // Estado para o QR Code do cardápio
@@ -3020,6 +3023,102 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
+  // Funções para formatação de chave PIX
+  const formatarChavePix = (valor: string, tipo: string): string => {
+    // Remove tudo que não é número ou letra
+    const apenasNumeros = valor.replace(/\D/g, '');
+    const apenasCaracteres = valor.replace(/[^a-zA-Z0-9@.-]/g, '');
+
+    switch (tipo) {
+      case 'telefone':
+        // Formato: (11) 99999-9999
+        if (apenasNumeros.length <= 11) {
+          return apenasNumeros
+            .replace(/(\d{2})(\d)/, '($1) $2')
+            .replace(/(\d{4,5})(\d{4})$/, '$1-$2');
+        }
+        return valor.slice(0, 15); // Limita o tamanho
+
+      case 'cpf':
+        // Formato: 999.999.999-99
+        return apenasNumeros
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+          .slice(0, 14);
+
+      case 'cnpj':
+        // Formato: 99.999.999/9999-99
+        return apenasNumeros
+          .replace(/(\d{2})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d)/, '$1.$2')
+          .replace(/(\d{3})(\d)/, '$1/$2')
+          .replace(/(\d{4})(\d{1,2})$/, '$1-$2')
+          .slice(0, 18);
+
+      case 'email':
+        // Sem formatação especial, apenas validação básica
+        return apenasCaracteres.toLowerCase().slice(0, 100);
+
+      case 'chave_aleatoria':
+        // Formato UUID: 8-4-4-4-12 caracteres
+        return valor.replace(/[^a-fA-F0-9-]/g, '').slice(0, 36);
+
+      default:
+        return valor;
+    }
+  };
+
+  const removerMascaraChavePix = (valor: string, tipo: string): string => {
+    switch (tipo) {
+      case 'telefone':
+      case 'cpf':
+      case 'cnpj':
+        return valor.replace(/\D/g, '');
+      case 'email':
+      case 'chave_aleatoria':
+        return valor;
+      default:
+        return valor;
+    }
+  };
+
+  const validarChavePix = (valor: string, tipo: string): boolean => {
+    const valorLimpo = removerMascaraChavePix(valor, tipo);
+
+    switch (tipo) {
+      case 'telefone':
+        return valorLimpo.length >= 10 && valorLimpo.length <= 11;
+      case 'cpf':
+        return valorLimpo.length === 11;
+      case 'cnpj':
+        return valorLimpo.length === 14;
+      case 'email':
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor);
+      case 'chave_aleatoria':
+        return valor.length >= 32;
+      default:
+        return false;
+    }
+  };
+
+  const getPlaceholderChavePix = (tipo: string): string => {
+    switch (tipo) {
+      case 'telefone':
+        return '(11) 99999-9999';
+      case 'cpf':
+        return '999.999.999-99';
+      case 'cnpj':
+        return '99.999.999/9999-99';
+      case 'email':
+        return 'exemplo@email.com';
+      case 'chave_aleatoria':
+        return 'Cole aqui sua chave PIX aleatória';
+      default:
+        return '';
+    }
+  };
+
   // Função para carregar opções de formas de pagamento
   const loadFormasPagamentoOpcoes = async () => {
     try {
@@ -3087,6 +3186,11 @@ const ConfiguracoesPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
+      // Preparar dados PIX (remover máscara se necessário)
+      const chavePix = novaFormaPagamento.utilizar_chave_pix && novaFormaPagamento.chave_pix
+        ? removerMascaraChavePix(novaFormaPagamento.chave_pix, novaFormaPagamento.tipo_chave_pix)
+        : null;
+
       if (editingFormaPagamento) {
         // Editar forma de pagamento existente
         const { error } = await supabase
@@ -3094,7 +3198,10 @@ const ConfiguracoesPage: React.FC = () => {
           .update({
             cardapio_digital: novaFormaPagamento.cardapio_digital,
             max_parcelas: novaFormaPagamento.max_parcelas,
-            juros_por_parcela: novaFormaPagamento.juros_por_parcela
+            juros_por_parcela: novaFormaPagamento.juros_por_parcela,
+            utilizar_chave_pix: novaFormaPagamento.utilizar_chave_pix,
+            tipo_chave_pix: novaFormaPagamento.utilizar_chave_pix ? novaFormaPagamento.tipo_chave_pix : null,
+            chave_pix: chavePix
           })
           .eq('id', editingFormaPagamento.id);
 
@@ -3109,7 +3216,10 @@ const ConfiguracoesPage: React.FC = () => {
             forma_pagamento_opcao_id: novaFormaPagamento.forma_pagamento_opcao_id,
             cardapio_digital: novaFormaPagamento.cardapio_digital,
             max_parcelas: novaFormaPagamento.max_parcelas,
-            juros_por_parcela: novaFormaPagamento.juros_por_parcela
+            juros_por_parcela: novaFormaPagamento.juros_por_parcela,
+            utilizar_chave_pix: novaFormaPagamento.utilizar_chave_pix,
+            tipo_chave_pix: novaFormaPagamento.utilizar_chave_pix ? novaFormaPagamento.tipo_chave_pix : null,
+            chave_pix: chavePix
           });
 
         if (error) throw error;
@@ -3122,7 +3232,10 @@ const ConfiguracoesPage: React.FC = () => {
         forma_pagamento_opcao_id: '',
         cardapio_digital: false,
         max_parcelas: 1,
-        juros_por_parcela: 0
+        juros_por_parcela: 0,
+        utilizar_chave_pix: false,
+        tipo_chave_pix: '',
+        chave_pix: ''
       });
       await loadFormasPagamentoEmpresa();
     } catch (error) {
@@ -3140,7 +3253,10 @@ const ConfiguracoesPage: React.FC = () => {
       forma_pagamento_opcao_id: forma.forma_pagamento_opcao_id,
       cardapio_digital: forma.cardapio_digital,
       max_parcelas: forma.max_parcelas,
-      juros_por_parcela: forma.juros_por_parcela
+      juros_por_parcela: forma.juros_por_parcela,
+      utilizar_chave_pix: forma.utilizar_chave_pix || false,
+      tipo_chave_pix: forma.tipo_chave_pix || '',
+      chave_pix: forma.chave_pix ? formatarChavePix(forma.chave_pix, forma.tipo_chave_pix) : ''
     });
     setShowModalFormaPagamento(true);
   };
@@ -7124,6 +7240,9 @@ const ConfiguracoesPage: React.FC = () => {
                                       )}
                                     </>
                                   )}
+                                  {forma.forma_pagamento_opcoes?.tipo === 'pix' && forma.utilizar_chave_pix && (
+                                    <span className="text-blue-400">• PIX: {forma.tipo_chave_pix?.replace('_', ' ')}</span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -9593,6 +9712,97 @@ const ConfiguracoesPage: React.FC = () => {
                     </>
                   );
                 })()}
+
+                {/* Campos específicos para PIX */}
+                {(() => {
+                  const opcaoSelecionada = formasPagamentoOpcoes.find(op => op.id === novaFormaPagamento.forma_pagamento_opcao_id);
+                  return opcaoSelecionada?.tipo === 'pix' && (
+                    <>
+                      {/* Checkbox Utilizar Chave PIX */}
+                      <div>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={novaFormaPagamento.utilizar_chave_pix}
+                            onChange={(e) => {
+                              setNovaFormaPagamento(prev => ({
+                                ...prev,
+                                utilizar_chave_pix: e.target.checked,
+                                tipo_chave_pix: e.target.checked ? prev.tipo_chave_pix : '',
+                                chave_pix: e.target.checked ? prev.chave_pix : ''
+                              }));
+                            }}
+                            className="w-4 h-4 text-primary-500 bg-gray-700 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
+                          />
+                          <span className="text-white">Utilizar chave PIX</span>
+                        </label>
+                        <p className="text-sm text-gray-400 mt-1 ml-7">
+                          Configure uma chave PIX para facilitar os pagamentos dos clientes.
+                        </p>
+                      </div>
+
+                      {/* Dropdown Tipo de Chave PIX */}
+                      {novaFormaPagamento.utilizar_chave_pix && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                              Tipo de Chave PIX *
+                            </label>
+                            <select
+                              value={novaFormaPagamento.tipo_chave_pix}
+                              onChange={(e) => {
+                                setNovaFormaPagamento(prev => ({
+                                  ...prev,
+                                  tipo_chave_pix: e.target.value,
+                                  chave_pix: '' // Limpa o campo quando muda o tipo
+                                }));
+                              }}
+                              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            >
+                              <option value="">Selecione o tipo de chave</option>
+                              <option value="telefone">Telefone</option>
+                              <option value="email">Email</option>
+                              <option value="cpf">CPF</option>
+                              <option value="cnpj">CNPJ</option>
+                              <option value="chave_aleatoria">Chave Aleatória</option>
+                            </select>
+                          </div>
+
+                          {/* Campo Chave PIX */}
+                          {novaFormaPagamento.tipo_chave_pix && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-300 mb-2">
+                                Chave PIX *
+                              </label>
+                              <input
+                                type="text"
+                                value={novaFormaPagamento.chave_pix}
+                                onChange={(e) => {
+                                  const valorFormatado = formatarChavePix(e.target.value, novaFormaPagamento.tipo_chave_pix);
+                                  setNovaFormaPagamento(prev => ({
+                                    ...prev,
+                                    chave_pix: valorFormatado
+                                  }));
+                                }}
+                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                placeholder={getPlaceholderChavePix(novaFormaPagamento.tipo_chave_pix)}
+                              />
+                              <p className="text-sm text-gray-400 mt-1">
+                                {novaFormaPagamento.tipo_chave_pix === 'chave_aleatoria'
+                                  ? 'Cole aqui a chave PIX aleatória gerada pelo seu banco.'
+                                  : `Digite ${novaFormaPagamento.tipo_chave_pix === 'telefone' ? 'o telefone' :
+                                      novaFormaPagamento.tipo_chave_pix === 'email' ? 'o email' :
+                                      novaFormaPagamento.tipo_chave_pix === 'cpf' ? 'o CPF' : 'o CNPJ'}
+                                    cadastrado como chave PIX.`
+                                }
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -9604,7 +9814,10 @@ const ConfiguracoesPage: React.FC = () => {
                       forma_pagamento_opcao_id: '',
                       cardapio_digital: false,
                       max_parcelas: 1,
-                      juros_por_parcela: 0
+                      juros_por_parcela: 0,
+                      utilizar_chave_pix: false,
+                      tipo_chave_pix: '',
+                      chave_pix: ''
                     });
                   }}
                   className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
@@ -9613,7 +9826,15 @@ const ConfiguracoesPage: React.FC = () => {
                 </button>
                 <button
                   onClick={handleSalvarFormaPagamento}
-                  disabled={!novaFormaPagamento.forma_pagamento_opcao_id || isLoading}
+                  disabled={
+                    !novaFormaPagamento.forma_pagamento_opcao_id ||
+                    isLoading ||
+                    (novaFormaPagamento.utilizar_chave_pix && (
+                      !novaFormaPagamento.tipo_chave_pix ||
+                      !novaFormaPagamento.chave_pix ||
+                      !validarChavePix(novaFormaPagamento.chave_pix, novaFormaPagamento.tipo_chave_pix)
+                    ))
+                  }
                   className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                 >
                   {isLoading ? 'Salvando...' : (editingFormaPagamento ? 'Salvar' : 'Adicionar')}
