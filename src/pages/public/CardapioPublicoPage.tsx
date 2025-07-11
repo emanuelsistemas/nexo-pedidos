@@ -4500,7 +4500,7 @@ const CardapioPublicoPage: React.FC = () => {
                   <div className="mb-3">
                     {/* Layout com foto pequena quando cardapio_fotos_minimizadas ativo */}
                     {config.cardapio_fotos_minimizadas ? (
-                      <div className="flex items-start gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-2">
                         {/* Foto pequena */}
                         <div
                           className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
