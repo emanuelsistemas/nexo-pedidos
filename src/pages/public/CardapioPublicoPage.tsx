@@ -383,7 +383,7 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // ✅ CONFIGURAÇÃO BASEADA NO EXEMPLO OFICIAL "AUTO WIDTH"
+  // ✅ CONFIGURAÇÃO SIMPLES E FUNCIONAL
   const [sliderRef, instanceRef] = useKeenSlider({
     slides: {
       perView: "auto",
@@ -4108,17 +4108,23 @@ const CardapioPublicoPage: React.FC = () => {
                         })));
 
                         return todasCategorias.map((categoria) => (
-                          <div key={categoria.id} className="keen-slider__slide">
+                          <div
+                            key={categoria.id}
+                            className="keen-slider__slide"
+                            style={{
+                              minWidth: 'fit-content',
+                              width: 'auto'
+                            }}
+                          >
                             <button
                               onClick={() => setGrupoSelecionado(categoria.id)}
-                              className={`flex items-center justify-center transition-all duration-200 h-full px-4 py-2 font-medium text-sm whitespace-nowrap rounded-lg ${
+                              className={`px-4 py-2 font-medium text-sm whitespace-nowrap rounded-lg transition-all duration-200 ${
                                 grupoSelecionado === categoria.id
                                   ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
                                   : config.modo_escuro
                                   ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                                   : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
                               }`}
-                              style={{ minWidth: '100px' }}
                             >
                               {categoria.nome}
                             </button>
@@ -4129,27 +4135,34 @@ const CardapioPublicoPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ✅ INDICADORES SIMPLIFICADOS - BASEADOS NO TOTAL DE CATEGORIAS */}
+                {/* ✅ INDICADORES SIMPLES - SÓ QUANDO NECESSÁRIO */}
                 {loaded && instanceRef.current && (() => {
-                  const totalCategorias = grupos.length + 1; // +1 para "Todos"
-                  const categoriasVisiveis = Math.floor((window.innerWidth - 100) / 130); // Aproximadamente quantas cabem na tela
+                  const slider = instanceRef.current;
+                  const details = slider.track.details;
 
-                  // Só mostra indicadores se há mais categorias do que cabem na tela
-                  if (totalCategorias <= categoriasVisiveis) return null;
+                  // Verificar se há slides que não estão totalmente visíveis
+                  const hasHiddenSlides = details.slides.some(slide => slide.portion < 1);
 
-                  const totalDots = Math.ceil(totalCategorias / categoriasVisiveis);
+                  if (!hasHiddenSlides) return null;
 
-                  return totalDots > 1 && (
+                  // Calcular número de "páginas" baseado em slides visíveis
+                  const slidesVisible = details.slides.filter(slide => slide.portion > 0.5).length;
+                  const totalSlides = details.slides.length;
+                  const totalPages = Math.ceil(totalSlides / Math.max(1, slidesVisible));
+
+                  if (totalPages <= 1) return null;
+
+                  return (
                     <div className="flex justify-center mt-3 space-x-1">
-                      {Array.from({ length: totalDots }).map((_, idx) => (
+                      {Array.from({ length: totalPages }).map((_, idx) => (
                         <button
                           key={idx}
                           onClick={() => {
-                            const targetSlide = idx * categoriasVisiveis;
-                            instanceRef.current?.moveToIdx(Math.min(targetSlide, totalCategorias - 1));
+                            const targetSlide = idx * Math.max(1, slidesVisible);
+                            slider.moveToIdx(Math.min(targetSlide, totalSlides - 1));
                           }}
                           className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                            Math.floor(currentSlide / categoriasVisiveis) === idx
+                            Math.floor(currentSlide / Math.max(1, slidesVisible)) === idx
                               ? 'bg-gradient-to-r from-purple-600 to-blue-600'
                               : config.modo_escuro
                               ? 'bg-gray-600'

@@ -330,6 +330,9 @@ const PDVPage: React.FC = () => {
   const [qrCodePix, setQrCodePix] = useState('');
   const [chavePix, setChavePix] = useState('');
 
+  // Log para debug do estado PIX
+  console.log('🔄 Estado atual showModalPix:', showModalPix);
+
   // ✅ NOVO: Estado para ambiente NFe (homologação/produção)
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
 
@@ -6673,14 +6676,27 @@ const PDVPage: React.FC = () => {
 
   // Função para abrir modal PIX
   const abrirModalPix = () => {
+    console.log('🚀 INICIANDO abrirModalPix()');
     const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+    console.log('🔍 Forma encontrada em abrirModalPix:', forma);
+
     if (forma && forma.utilizar_chave_pix && forma.chave_pix) {
+      console.log('✅ Condições PIX atendidas, gerando QR Code');
       const valorTotal = calcularTotalComDesconto();
+      console.log('💰 Valor total:', valorTotal);
+
       const qrCode = gerarQrCodePix(valorTotal, forma.chave_pix, forma.tipo_chave_pix);
+      console.log('📱 QR Code gerado:', qrCode.substring(0, 50) + '...');
 
       setQrCodePix(qrCode);
       setChavePix(forma.chave_pix);
       setShowModalPix(true);
+      console.log('✅ Modal PIX definido como true');
+    } else {
+      console.log('❌ Condições PIX não atendidas em abrirModalPix');
+      console.log('- Forma existe:', !!forma);
+      console.log('- Utilizar chave PIX:', forma?.utilizar_chave_pix);
+      console.log('- Chave PIX:', forma?.chave_pix);
     }
   };
 
@@ -13448,20 +13464,37 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
+                    console.log('🚀 BOTÃO CONFIRMAR CLICADO!');
+
                     // Proteção contra duplo clique
                     if (showProcessandoVenda) {
                       console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                       return;
                     }
 
+                    console.log('🔍 Estado antes de fechar modal pagamento:', {
+                      showPagamentoModal: true,
+                      formaPagamentoSelecionada,
+                      showModalPix
+                    });
+
                     setShowPagamentoModal(false);
 
                     // Verificar se é PIX com chave configurada
                     const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+                    console.log('🔍 DEBUG PIX - Forma selecionada:', forma);
+                    console.log('🔍 DEBUG PIX - ID selecionado:', formaPagamentoSelecionada);
+                    console.log('🔍 DEBUG PIX - Todas as formas:', formasPagamento);
+
                     if (forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix) {
+                      console.log('✅ PIX detectado - abrindo modal');
                       // Abrir modal PIX
                       abrirModalPix();
                     } else {
+                      console.log('❌ PIX não detectado - finalizando normalmente');
+                      console.log('- Tipo:', forma?.tipo);
+                      console.log('- Utilizar chave PIX:', forma?.utilizar_chave_pix);
+                      console.log('- Chave PIX:', forma?.chave_pix);
                       // Finalizar normalmente
                       finalizarVendaCompleta('finalizar_sem_impressao');
                     }
@@ -19192,7 +19225,10 @@ const PDVPage: React.FC = () => {
 
       {/* Modal PIX QR Code */}
       <AnimatePresence>
-        {showModalPix && (
+        {(() => {
+          console.log('🎭 RENDERIZANDO Modal PIX - showModalPix:', showModalPix);
+          return showModalPix;
+        })() && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
