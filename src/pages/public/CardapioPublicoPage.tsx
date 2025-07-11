@@ -16,6 +16,13 @@ interface PromocoesSliderProps {
     tipo_desconto?: string;
     valor_desconto?: number;
     foto_url?: string;
+    // Campos de desconto por quantidade
+    desconto_quantidade?: boolean;
+    quantidade_minima?: number;
+    tipo_desconto_quantidade?: string;
+    percentual_desconto_quantidade?: number;
+    valor_desconto_quantidade?: number;
+    exibir_desconto_qtd_minimo_no_cardapio_digital?: boolean;
   }>;
   config: {modo_escuro: boolean};
   formatarPreco: (preco: number) => string;
@@ -52,11 +59,28 @@ const PromocoesSlider: React.FC<PromocoesSliderProps> = ({ promocoes, config, fo
     <div className="relative">
       <div ref={sliderRef} className="keen-slider">
         {promocoes.map((produto) => {
-          // Calcular valor final se tiver desconto
+          // Determinar tipo de promoção e calcular valores
           let valorFinal = produto.preco;
           let descontoExibicao = '';
+          let tipoPromocao = 'PROMO'; // Padrão para promoções tradicionais
+          let iconePromocao = '🔥'; // Padrão para promoções tradicionais
 
-          if (produto.tipo_desconto && produto.valor_desconto !== undefined) {
+          // Verificar se é desconto por quantidade
+          if (produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital) {
+            tipoPromocao = 'QTD';
+            iconePromocao = '📦';
+
+            // Calcular desconto por quantidade
+            if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+              const valorDesconto = (produto.preco * produto.percentual_desconto_quantidade) / 100;
+              valorFinal = produto.preco - valorDesconto;
+              descontoExibicao = `${produto.percentual_desconto_quantidade}% OFF (min. ${produto.quantidade_minima})`;
+            } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+              valorFinal = produto.preco - produto.valor_desconto_quantidade;
+              descontoExibicao = `- ${formatarPreco(produto.valor_desconto_quantidade)} (min. ${produto.quantidade_minima})`;
+            }
+          } else if (produto.tipo_desconto && produto.valor_desconto !== undefined) {
+            // Promoção tradicional
             valorFinal = calcularValorFinal(produto.preco, produto.tipo_desconto, produto.valor_desconto);
 
             if (produto.tipo_desconto === 'percentual') {
@@ -77,8 +101,12 @@ const PromocoesSlider: React.FC<PromocoesSliderProps> = ({ promocoes, config, fo
               >
                 {/* Badge de promoção */}
                 <div className="absolute -top-2 -right-2 z-10">
-                  <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
-                    🔥 PROMO
+                  <div className={`text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-lg ${
+                    tipoPromocao === 'QTD'
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-500'
+                      : 'bg-gradient-to-r from-red-500 to-pink-500'
+                  }`}>
+                    {iconePromocao}
                   </div>
                 </div>
 
@@ -269,6 +297,13 @@ interface Produto {
   exibir_promocao_cardapio?: boolean;
   tipo_desconto?: string;
   valor_desconto?: number;
+  // Campos de desconto por quantidade
+  desconto_quantidade?: boolean;
+  quantidade_minima?: number;
+  tipo_desconto_quantidade?: string;
+  percentual_desconto_quantidade?: number;
+  valor_desconto_quantidade?: number;
+  exibir_desconto_qtd_minimo_no_cardapio_digital?: boolean;
 }
 
 interface ItemCarrinho {
@@ -372,20 +407,38 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
-  // Filtrar produtos em promoção
-  const produtosEmPromocao = produtos.filter(produto =>
-    produto.promocao &&
-    produto.exibir_promocao_cardapio &&
-    produto.tipo_desconto &&
-    produto.valor_desconto !== undefined &&
-    produto.valor_desconto > 0
-  ).map(produto => ({
+  // Filtrar produtos em promoção (incluindo promoções tradicionais e desconto por quantidade)
+  const produtosEmPromocao = produtos.filter(produto => {
+    // Promoções tradicionais
+    const temPromocaoTradicional = produto.promocao &&
+      produto.exibir_promocao_cardapio &&
+      produto.tipo_desconto &&
+      produto.valor_desconto !== undefined &&
+      produto.valor_desconto > 0;
+
+    // Desconto por quantidade mínima
+    const temDescontoQuantidade = produto.desconto_quantidade &&
+      produto.exibir_desconto_qtd_minimo_no_cardapio_digital &&
+      produto.quantidade_minima &&
+      produto.quantidade_minima > 0 &&
+      ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade && produto.percentual_desconto_quantidade > 0) ||
+       (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade && produto.valor_desconto_quantidade > 0));
+
+    return temPromocaoTradicional || temDescontoQuantidade;
+  }).map(produto => ({
     id: produto.id,
     nome: produto.nome,
     preco: produto.preco,
     tipo_desconto: produto.tipo_desconto,
     valor_desconto: produto.valor_desconto,
-    foto_url: produto.foto_url
+    foto_url: produto.foto_url,
+    // Campos de desconto por quantidade
+    desconto_quantidade: produto.desconto_quantidade,
+    quantidade_minima: produto.quantidade_minima,
+    tipo_desconto_quantidade: produto.tipo_desconto_quantidade,
+    percentual_desconto_quantidade: produto.percentual_desconto_quantidade,
+    valor_desconto_quantidade: produto.valor_desconto_quantidade,
+    exibir_desconto_qtd_minimo_no_cardapio_digital: produto.exibir_desconto_qtd_minimo_no_cardapio_digital
   }));
 
   // Estados para controle de quantidade dos produtos (carrinho)
@@ -1128,6 +1181,12 @@ const CardapioPublicoPage: React.FC = () => {
           tipo_desconto,
           valor_desconto,
           exibir_promocao_cardapio,
+          desconto_quantidade,
+          quantidade_minima,
+          tipo_desconto_quantidade,
+          percentual_desconto_quantidade,
+          valor_desconto_quantidade,
+          exibir_desconto_qtd_minimo_no_cardapio_digital,
           produto_alcoolico,
           estoque_atual,
           estoque_minimo,
@@ -3436,78 +3495,7 @@ const CardapioPublicoPage: React.FC = () => {
     );
   }
 
-  // Componente da tag de estoque
-  const TagEstoque = ({ produto }: { produto: Produto }) => {
-    if (!produto.controla_estoque_cardapio) {
-      return null;
-    }
 
-    // Verificar status do estoque
-    let status: 'disponivel' | 'baixo' | 'indisponivel' = 'disponivel';
-
-    if (produto.estoque_atual !== undefined && produto.estoque_atual !== null) {
-      if (produto.estoque_atual <= 0) {
-        status = 'indisponivel';
-      } else if (produto.estoque_minimo && produto.estoque_atual <= produto.estoque_minimo) {
-        status = 'baixo';
-      }
-    }
-
-    // Se não tem informação de estoque, não mostrar tag
-    if (produto.estoque_atual === undefined || produto.estoque_atual === null) {
-      return null;
-    }
-
-    const estilos = {
-      disponivel: {
-        bg: config.modo_escuro ? 'bg-green-900/80' : 'bg-green-100',
-        text: config.modo_escuro ? 'text-green-300' : 'text-green-800',
-        border: config.modo_escuro ? 'border-green-700' : 'border-green-300',
-        icon: '✅'
-      },
-      baixo: {
-        bg: config.modo_escuro ? 'bg-yellow-900/80' : 'bg-yellow-100',
-        text: config.modo_escuro ? 'text-yellow-300' : 'text-yellow-800',
-        border: config.modo_escuro ? 'border-yellow-700' : 'border-yellow-300',
-        icon: '⚠️'
-      },
-      indisponivel: {
-        bg: config.modo_escuro ? 'bg-red-900/80' : 'bg-red-100',
-        text: config.modo_escuro ? 'text-red-300' : 'text-red-800',
-        border: config.modo_escuro ? 'border-red-700' : 'border-red-300',
-        icon: '❌'
-      }
-    };
-
-    const estilo = estilos[status];
-    let texto = '';
-
-    switch (status) {
-      case 'disponivel':
-        texto = 'Disponível';
-        break;
-      case 'baixo':
-        texto = 'Estoque baixo';
-        break;
-      case 'indisponivel':
-        texto = 'Sem estoque';
-        break;
-    }
-
-    // Verificar se tem promoção para ajustar posição
-    const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
-    const posicaoTop = temPromocao ? 'top-12' : 'top-3'; // Se tem promoção, fica mais abaixo
-
-    return (
-      <div className={`absolute ${posicaoTop} right-3 z-10 px-2 py-1 rounded-md border text-xs font-medium flex items-center gap-1 ${estilo.bg} ${estilo.text} ${estilo.border}`}>
-        <span>{estilo.icon}</span>
-        <span>{texto}</span>
-        {produto.estoque_atual !== undefined && (
-          <span className="ml-1">({produto.estoque_atual})</span>
-        )}
-      </div>
-    );
-  };
 
   return (
     <>
@@ -4417,17 +4405,66 @@ const CardapioPublicoPage: React.FC = () => {
                       : 'bg-white border border-gray-200 shadow-lg'
                   }`}
                 >
-                  {/* Badge de promoção no canto superior direito */}
-                  {produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto && (
-                    <div className="absolute top-3 right-3 z-10">
-                      <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
-                        🔥 PROMO
+                  {/* Todas as tags no canto superior direito */}
+                  <div className="absolute top-3 right-3 z-10 flex flex-row gap-1 flex-nowrap items-center">
+                    {/* Badge de promoção tradicional */}
+                    {produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto && (
+                      <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-lg whitespace-nowrap">
+                        🔥
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Tag de estoque */}
-                  <TagEstoque produto={produto} />
+                    {/* Badge de desconto por quantidade */}
+                    {produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima && (
+                      <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-lg whitespace-nowrap">
+                        📦
+                      </div>
+                    )}
+
+                    {/* Tag de estoque integrada */}
+                    {(() => {
+                      // Verificar se deve mostrar tag de estoque
+                      if (!produto.controla_estoque_cardapio || produto.estoque_atual === undefined || produto.estoque_atual === null) {
+                        return null;
+                      }
+
+                      let estilo = { bg: '', text: '', border: '', icon: '' };
+                      let texto = '';
+
+                      if (produto.estoque_atual <= 0) {
+                        estilo = {
+                          bg: 'bg-red-500/90',
+                          text: 'text-white',
+                          border: 'border-red-600',
+                          icon: '❌'
+                        };
+                        texto = 'Sem estoque';
+                      } else if (produto.estoque_atual <= (produto.estoque_minimo || 5)) {
+                        estilo = {
+                          bg: 'bg-yellow-500/90',
+                          text: 'text-white',
+                          border: 'border-yellow-600',
+                          icon: '⚠️'
+                        };
+                        texto = 'Baixo';
+                      } else {
+                        estilo = {
+                          bg: 'bg-green-500/90',
+                          text: 'text-white',
+                          border: 'border-green-600',
+                          icon: '✅'
+                        };
+                        texto = 'Disponível';
+                      }
+
+                      return (
+                        <div className={`px-1.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg whitespace-nowrap ${estilo.bg} ${estilo.text} ${estilo.border}`}>
+                          <span>{estilo.icon}</span>
+                          <span>({produto.estoque_atual})</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
 
 
 
@@ -4503,7 +4540,7 @@ const CardapioPublicoPage: React.FC = () => {
                         </div>
 
                         {/* Nome e preço/controles */}
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 pr-12">
                           <h3 className={`text-lg font-bold leading-tight truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                             {produto.nome}
                           </h3>
@@ -4614,9 +4651,11 @@ const CardapioPublicoPage: React.FC = () => {
                     ) : (
                       /* Layout normal sem foto pequena */
                       <>
-                        <h3 className={`text-xl font-bold mb-2 truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                          {produto.nome}
-                        </h3>
+                        <div className="pr-12">
+                          <h3 className={`text-xl font-bold mb-2 truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                            {produto.nome}
+                          </h3>
+                        </div>
                         {/* Preço e controles logo abaixo do nome quando não tem foto */}
                         <div className="flex items-center justify-between mb-3">
                           {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (() => {
