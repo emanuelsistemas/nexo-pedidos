@@ -101,12 +101,12 @@ const PromocoesSlider: React.FC<PromocoesSliderProps> = ({ promocoes, config, fo
               >
                 {/* Badge de promoção */}
                 <div className="absolute -top-2 -right-2 z-10">
-                  <div className={`text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-lg ${
+                  <div className={`text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg ${
                     tipoPromocao === 'QTD'
                       ? 'bg-gradient-to-r from-blue-500 to-purple-500'
                       : 'bg-gradient-to-r from-red-500 to-pink-500'
                   }`}>
-                    {iconePromocao}
+                    {iconePromocao} {tipoPromocao}
                   </div>
                 </div>
 
@@ -4409,15 +4409,15 @@ const CardapioPublicoPage: React.FC = () => {
                   <div className="absolute top-3 right-3 z-10 flex flex-row gap-1 flex-nowrap items-center">
                     {/* Badge de promoção tradicional */}
                     {produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto && (
-                      <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-lg whitespace-nowrap">
-                        🔥
+                      <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg whitespace-nowrap">
+                        🔥 PROMO
                       </div>
                     )}
 
                     {/* Badge de desconto por quantidade */}
                     {produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima && (
-                      <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-lg whitespace-nowrap">
-                        📦
+                      <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg whitespace-nowrap">
+                        📦 QTD
                       </div>
                     )}
 
@@ -4428,6 +4428,7 @@ const CardapioPublicoPage: React.FC = () => {
                         return null;
                       }
 
+                      const unidadeSigla = produto.unidade_medida?.sigla || 'Un';
                       let estilo = { bg: '', text: '', border: '', icon: '' };
                       let texto = '';
 
@@ -4439,14 +4440,6 @@ const CardapioPublicoPage: React.FC = () => {
                           icon: '❌'
                         };
                         texto = 'Sem estoque';
-                      } else if (produto.estoque_atual <= (produto.estoque_minimo || 5)) {
-                        estilo = {
-                          bg: 'bg-yellow-500/90',
-                          text: 'text-white',
-                          border: 'border-yellow-600',
-                          icon: '⚠️'
-                        };
-                        texto = 'Baixo';
                       } else {
                         estilo = {
                           bg: 'bg-green-500/90',
@@ -4454,13 +4447,13 @@ const CardapioPublicoPage: React.FC = () => {
                           border: 'border-green-600',
                           icon: '✅'
                         };
-                        texto = 'Disponível';
+                        texto = `Disponível (${produto.estoque_atual} ${unidadeSigla})`;
                       }
 
                       return (
-                        <div className={`px-1.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg whitespace-nowrap ${estilo.bg} ${estilo.text} ${estilo.border}`}>
+                        <div className={`px-2 py-1 rounded-md text-xs font-medium flex items-center gap-1 shadow-lg whitespace-nowrap ${estilo.bg} ${estilo.text} ${estilo.border}`}>
                           <span>{estilo.icon}</span>
-                          <span>({produto.estoque_atual})</span>
+                          <span>{texto}</span>
                         </div>
                       );
                     })()}
@@ -4540,7 +4533,7 @@ const CardapioPublicoPage: React.FC = () => {
                         </div>
 
                         {/* Nome e preço/controles */}
-                        <div className="flex-1 min-w-0 pr-12">
+                        <div className="flex-1 min-w-0 pr-32">
                           <h3 className={`text-lg font-bold leading-tight truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                             {produto.nome}
                           </h3>
@@ -4651,7 +4644,7 @@ const CardapioPublicoPage: React.FC = () => {
                     ) : (
                       /* Layout normal sem foto pequena */
                       <>
-                        <div className="pr-12">
+                        <div className="pr-32">
                           <h3 className={`text-xl font-bold mb-2 truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                             {produto.nome}
                           </h3>
