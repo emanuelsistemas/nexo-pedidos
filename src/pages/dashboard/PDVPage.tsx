@@ -12671,26 +12671,32 @@ const PDVPage: React.FC = () => {
                           <span className="text-white">{formatCurrency(subtotalSemDescontos)}</span>
                         </div>
 
-                        {/* Área de Descontos - Só aparece se alguma configuração estiver habilitada */}
-                        {(pdvConfig?.desconto_no_item || pdvConfig?.desconto_no_total) && (
-                          <>
-                            {/* Desconto no Item - Só aparece se configuração estiver habilitada */}
-                            {pdvConfig?.desconto_no_item && (
-                              <div className="flex justify-between items-center text-xs mb-1.5">
-                                <span className="text-orange-400">Desconto no Item:</span>
-                                <span className="text-orange-400">-{formatCurrency(calcularDescontoItens())}</span>
-                              </div>
-                            )}
+                        {/* Área de Descontos */}
+                        {(() => {
+                          const descontoItens = calcularDescontoItens();
+                          const temDescontoItens = descontoItens > 0;
+                          const temDescontoTotal = descontoGlobal > 0;
 
-                            {/* Desconto no Total - Só aparece se configuração estiver habilitada E desconto aplicado */}
-                            {pdvConfig?.desconto_no_total && descontoGlobal > 0 && (
-                              <div className="flex justify-between items-center text-xs mb-1.5">
-                                <span className="text-red-400">Desconto no Total:</span>
-                                <span className="text-red-400">-{formatCurrency(descontoGlobal)}</span>
-                              </div>
-                            )}
-                          </>
-                        )}
+                          return (temDescontoItens || temDescontoTotal) && (
+                            <>
+                              {/* Desconto no Item - Aparece sempre que houver desconto (manual ou automático) */}
+                              {temDescontoItens && (
+                                <div className="flex justify-between items-center text-xs mb-1.5">
+                                  <span className="text-orange-400">Desconto no Item:</span>
+                                  <span className="text-orange-400">-{formatCurrency(descontoItens)}</span>
+                                </div>
+                              )}
+
+                              {/* Desconto no Total - Só aparece se configuração estiver habilitada E desconto aplicado */}
+                              {pdvConfig?.desconto_no_total && temDescontoTotal && (
+                                <div className="flex justify-between items-center text-xs mb-1.5">
+                                  <span className="text-red-400">Desconto no Total:</span>
+                                  <span className="text-red-400">-{formatCurrency(descontoGlobal)}</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
 
                         {/* Desconto por Prazo (se aplicável) - Compacto */}
                         {descontoPrazo && (
