@@ -383,18 +383,18 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // Configuração do Keen Slider para modo normal (não free) para ter indicadores funcionais
+  // ✅ CONFIGURAÇÃO CORRETA SEGUINDO DOCUMENTAÇÃO
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
     slides: {
-      perView: 4, // Mostrar 4 categorias por vez
+      perView: 4, // ✅ FIXO: 4 categorias por slide (conforme documentação)
       spacing: 8,
     },
     slideChanged(slider) {
-      setCurrentSlide(slider.track.details.rel);
+      setCurrentSlide(slider.track.details.rel); // ✅ Atualiza indicador ativo
     },
     created() {
-      setLoaded(true);
+      setLoaded(true); // ✅ Habilita renderização dos dots
     },
   });
 
@@ -1182,6 +1182,15 @@ const CardapioPublicoPage: React.FC = () => {
             ordenacao_cardapio_habilitada: g.ordenacao_cardapio_habilitada,
             ordenacao_cardapio_digital: g.ordenacao_cardapio_digital
           })));
+
+          // ✅ DEBUG ESPECÍFICO: Verificar se existe grupo "Cervejas"
+          const grupoCervejas = gruposData.find(g => g.nome.toLowerCase().includes('cerveja'));
+          if (grupoCervejas) {
+            console.log('🍺 GRUPO CERVEJAS ENCONTRADO:', grupoCervejas);
+          } else {
+            console.log('❌ GRUPO CERVEJAS NÃO ENCONTRADO nos grupos carregados');
+            console.log('🔍 Nomes dos grupos encontrados:', gruposData.map(g => g.nome));
+          }
         } else {
           console.error('🗂️ Erro ao carregar grupos:', gruposError);
         }
@@ -2083,7 +2092,7 @@ const CardapioPublicoPage: React.FC = () => {
         setCarrinhoAberto(true);
       }
 
-      console.log(`🛒 Produto ${produtoId} adicionado ao carrinho como item separado ${itemId}`);
+
     }
   };
 
@@ -2819,12 +2828,7 @@ const CardapioPublicoPage: React.FC = () => {
         [itemId]: Date.now() + index
       }));
 
-      console.log(`🛒 Item ${index + 1} adicionado ao carrinho:`, {
-        itemId,
-        produto: produtoOrganizacao.nome,
-        adicionais: adicionaisFormatados,
-        sistemaNovoAdicionado: true
-      });
+
     });
 
     // Limpar estados do produto original no card
@@ -2859,7 +2863,7 @@ const CardapioPublicoPage: React.FC = () => {
     setExcedentesAgrupados({});
     setQuantidadeExcedenteTemp({});
 
-    console.log(`🧹 Estados do produto ${produtoOrganizacao.nome} limpos do card`);
+
 
     // Abrir carrinho automaticamente após adicionar
     setCarrinhoAberto(true);
@@ -2976,7 +2980,7 @@ const CardapioPublicoPage: React.FC = () => {
           }
         }
 
-        console.log(`🍷 Produto alcoólico adicionado ao carrinho: ${produtoAlcoolicoPendente}`);
+
       }
     }
 
@@ -3055,7 +3059,7 @@ const CardapioPublicoPage: React.FC = () => {
     // Abrir carrinho automaticamente
     setCarrinhoAberto(true);
 
-    console.log(`🛒 Item configurado adicionado ao carrinho: ${itemId}`);
+
   };
 
   // Função para obter o primeiro telefone com WhatsApp
@@ -4080,6 +4084,12 @@ const CardapioPublicoPage: React.FC = () => {
                       ...gruposOrdenados
                     ];
 
+                    // ✅ DEBUG: Verificar ordem final das categorias
+                    console.log('🏷️ DEBUG - Categorias na ordem final:', todasCategorias.map(c => ({
+                      id: c.id,
+                      nome: c.nome
+                    })));
+
                     return todasCategorias.map((categoria) => (
                       <div key={categoria.id} className="keen-slider__slide" style={{ minWidth: '120px', width: '120px' }}>
                         <button
@@ -4099,7 +4109,7 @@ const CardapioPublicoPage: React.FC = () => {
                   })()}
                 </div>
 
-                {/* Indicadores de Dots */}
+                {/* ✅ INDICADORES CORRETOS SEGUINDO DOCUMENTAÇÃO */}
                 {loaded && instanceRef.current && grupos.length > 3 && (
                   <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 flex space-x-1">
                     {Array.from({ length: Math.ceil((grupos.length + 1) / 4) }).map((_, idx) => (

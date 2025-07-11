@@ -186,6 +186,8 @@ const ProdutosPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [productSearchTerms, setProductSearchTerms] = useState<Record<string, string>>({});
   const [productSortOrders, setProductSortOrders] = useState<Record<string, 'asc' | 'desc'>>({});
+  const [produtoChacoalhando, setProdutoChacoalhando] = useState<string | null>(null);
+  const [imagensCarregando, setImagensCarregando] = useState<Record<string, boolean>>({});
   const [novoProduto, setNovoProduto] = useState<Partial<Produto>>({
     nome: '',
     preco: 0,
@@ -3725,10 +3727,15 @@ const ProdutosPage: React.FC = () => {
 
       if (editingProduto) {
         showMessage('success', 'Produto atualizado com sucesso!');
+        // ✅ ATIVAR EFEITO DE CHACOALHADA NO PRODUTO EDITADO
+        ativarChacoalhadaProduto(editingProduto.id);
         setShowSidebar(false);
       } else {
         // Se for um novo produto, mantém o sidebar aberto e muda para a aba de fotos
         showMessage('success', 'Produto adicionado com sucesso! Agora você pode adicionar fotos.');
+
+        // ✅ ATIVAR EFEITO DE CHACOALHADA NO PRODUTO CRIADO
+        ativarChacoalhadaProduto(productId);
 
         // Atualiza o editingProduto com o produto recém-criado
         const novoProdutoCriado = {
@@ -4224,6 +4231,21 @@ const ProdutosPage: React.FC = () => {
     }));
   };
 
+  // ✅ FUNÇÃO PARA ATIVAR EFEITO DE CHACOALHADA NO PRODUTO
+  const ativarChacoalhadaProduto = (produtoId: string) => {
+    setProdutoChacoalhando(produtoId);
+    setTimeout(() => setProdutoChacoalhando(null), 800); // 800ms para efeito mais visível
+  };
+
+  // ✅ FUNÇÕES PARA CONTROLAR LOADING DAS IMAGENS
+  const iniciarLoadingImagem = (produtoId: string) => {
+    setImagensCarregando(prev => ({ ...prev, [produtoId]: true }));
+  };
+
+  const finalizarLoadingImagem = (produtoId: string) => {
+    setImagensCarregando(prev => ({ ...prev, [produtoId]: false }));
+  };
+
   // Função para carregar preços das tabelas de um produto
   const carregarPrecosTabelas = async (produtoId: string) => {
     try {
@@ -4650,8 +4672,18 @@ const ProdutosPage: React.FC = () => {
   // Estado para armazenar a contagem de fotos por produto
   const [produtosFotosCount, setProdutosFotosCount] = useState<Record<string, number>>({});
 
+  // Estado para controlar quando as fotos estão sendo carregadas do banco
+  const [fotosCarregandoDoBanco, setFotosCarregandoDoBanco] = useState<Record<string, boolean>>({});
+
   // Função para carregar as fotos principais de todos os produtos
   const loadProdutosFotosPrincipais = async (produtos: Produto[]) => {
+    // Marcar todos os produtos como carregando fotos
+    const loadingMap: Record<string, boolean> = {};
+    produtos.forEach(produto => {
+      loadingMap[produto.id] = true;
+    });
+    setFotosCarregandoDoBanco(loadingMap);
+
     const fotosMap: Record<string, ProdutoFoto | null> = {};
 
     for (const produto of produtos) {
@@ -4660,6 +4692,13 @@ const ProdutosPage: React.FC = () => {
     }
 
     setProdutosFotosPrincipais(fotosMap);
+
+    // Marcar todos os produtos como não carregando mais
+    const notLoadingMap: Record<string, boolean> = {};
+    produtos.forEach(produto => {
+      notLoadingMap[produto.id] = false;
+    });
+    setFotosCarregandoDoBanco(notLoadingMap);
   };
 
   // Função para carregar a contagem de fotos de cada produto
@@ -4762,7 +4801,18 @@ const ProdutosPage: React.FC = () => {
     return (
       <div
         key={produto.id}
-        className={`p-2.5 bg-gray-800/50 rounded ${produto.ativo === false ? 'opacity-60' : ''}`}
+        className={`p-2.5 bg-gray-800/50 rounded transition-all duration-300 ${
+          produto.ativo === false ? 'opacity-60' : ''
+        } ${
+          produtoChacoalhando === produto.id
+            ? 'shadow-lg ring-2 ring-blue-400/50 bg-blue-900/20'
+            : ''
+        }`}
+        style={{
+          animation: produtoChacoalhando === produto.id
+            ? 'produtoChacoalhada 0.8s ease-out'
+            : undefined
+        }}
       >
         {/* Layout em três colunas - Compacto */}
         <div className="flex items-start gap-3">
@@ -4774,20 +4824,39 @@ const ProdutosPage: React.FC = () => {
                 className="w-16 h-16 rounded overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer relative"
                 onClick={() => handleOpenProdutoGaleria(produto)}
               >
-                {fotoPrincipal ? (
-                  <img
-                    src={fotoPrincipal.url}
-                    alt={produto.nome}
-                    className="w-full h-full object-cover"
-                  />
+                {fotosCarregandoDoBanco[produto.id] ? (
+                  // Loading enquanto carrega fotos do banco
+                  <div className="w-full h-full flex items-center justify-center bg-gray-700">
+                    <div className="w-4 h-4 border-2 border-gray-500 border-t-blue-500 rounded-full animate-spin"></div>
+                  </div>
+                ) : fotoPrincipal ? (
+                  <>
+                    {/* Loading spinner enquanto a imagem carrega */}
+                    {imagensCarregando[produto.id] && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-700">
+                        <div className="w-4 h-4 border-2 border-gray-500 border-t-blue-500 rounded-full animate-spin"></div>
+                      </div>
+                    )}
+                    <img
+                      src={fotoPrincipal.url}
+                      alt={produto.nome}
+                      className={`w-full h-full object-cover transition-opacity duration-300 ${
+                        imagensCarregando[produto.id] ? 'opacity-0' : 'opacity-100'
+                      }`}
+                      onLoadStart={() => iniciarLoadingImagem(produto.id)}
+                      onLoad={() => finalizarLoadingImagem(produto.id)}
+                      onError={() => finalizarLoadingImagem(produto.id)}
+                    />
+                  </>
                 ) : (
+                  // Ícone de "sem foto" apenas quando não há foto mesmo
                   <div className="w-full h-full flex items-center justify-center text-gray-500">
                     <Image size={16} />
                   </div>
                 )}
 
-                {/* Contador de fotos */}
-                {produtosFotosCount[produto.id] > 0 && (
+                {/* Contador de fotos - só mostra se tiver 2 ou mais fotos */}
+                {produtosFotosCount[produto.id] > 1 && (
                   <div className="absolute top-0.5 right-0.5 bg-background-dark px-1 py-0.5 rounded-full text-xs font-medium text-white">
                     {produtosFotosCount[produto.id]}
                   </div>
