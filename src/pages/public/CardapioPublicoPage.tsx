@@ -383,11 +383,10 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // ✅ CONFIGURAÇÃO CORRIGIDA PARA CATEGORIAS - LARGURA AUTOMÁTICA
+  // ✅ CONFIGURAÇÃO PADRÃO DA BIBLIOTECA KEEN SLIDER
   const [sliderRef, instanceRef] = useKeenSlider({
-    initial: 0,
     slides: {
-      perView: "auto", // Largura automática baseada no conteúdo
+      perView: "auto",
       spacing: 8,
     },
     slideChanged(slider) {
@@ -4129,15 +4128,17 @@ const CardapioPublicoPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ✅ INDICADORES SIMPLIFICADOS - IGUAL ÀS PROMOÇÕES QUE FUNCIONAM */}
-                {loaded && instanceRef.current && (grupos.length + 1) > 3 && (
+                {/* ✅ INDICADORES PADRÃO DA BIBLIOTECA */}
+                {loaded && instanceRef.current && (grupos.length + 1) > 4 && (
                   <div className="flex justify-center mt-3 space-x-1">
-                    {Array.from({ length: Math.ceil((grupos.length + 1) / 3) }).map((_, idx) => (
+                    {Array.from({
+                      length: instanceRef.current.track.details.slides.length
+                    }).map((_, idx) => (
                       <button
                         key={idx}
-                        onClick={() => instanceRef.current?.moveToIdx(idx * 3)}
+                        onClick={() => instanceRef.current?.moveToIdx(idx)}
                         className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                          Math.floor(currentSlide / 3) === idx
+                          currentSlide === idx
                             ? 'bg-gradient-to-r from-purple-600 to-blue-600'
                             : config.modo_escuro
                             ? 'bg-gray-600'

@@ -2272,6 +2272,9 @@ const ProdutosPage: React.FC = () => {
       erro: ''
     });
 
+    // ✅ LIMPAR CACHE DE FOTOS para novo produto (não clonado)
+    setProdutoFotos([]);
+
     setShowSidebar(true);
   };
 
@@ -3751,6 +3754,10 @@ const ProdutosPage: React.FC = () => {
         // Carrega os movimentos de estoque para o novo produto
         // Isso garante que o estoque inicial seja exibido na aba de estoque
         await loadEstoqueMovimentos(productId);
+
+        // ✅ LIMPAR CACHE DE FOTOS para produto novo (não clonado)
+        // Isso evita que fotos de produtos clonados anteriormente apareçam
+        setProdutoFotos([]);
 
         // Muda para a aba de fotos
         setActiveTab('fotos');
