@@ -289,13 +289,25 @@ const ConfiguracoesPage: React.FC = () => {
   });
 
   // Estado para controlar as abas do PDV
-  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto' | 'cardapio-digital'>('geral');
+  const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto' | 'cardapio-digital' | 'formas-pagamento'>('geral');
 
   // Estado para rodapé personalizado das impressões
   const [rodapePersonalizado, setRodapePersonalizado] = useState('Obrigado pela preferencia volte sempre!');
 
   // Estado para URL personalizada do cardápio digital
   const [cardapioUrlPersonalizada, setCardapioUrlPersonalizada] = useState('');
+
+  // Estados para formas de pagamento
+  const [formasPagamentoOpcoes, setFormasPagamentoOpcoes] = useState<any[]>([]);
+  const [formasPagamentoEmpresa, setFormasPagamentoEmpresa] = useState<any[]>([]);
+  const [showModalFormaPagamento, setShowModalFormaPagamento] = useState(false);
+  const [editingFormaPagamento, setEditingFormaPagamento] = useState<any>(null);
+  const [novaFormaPagamento, setNovaFormaPagamento] = useState({
+    forma_pagamento_opcao_id: '',
+    cardapio_digital: false,
+    max_parcelas: 1,
+    juros_por_parcela: 0
+  });
 
   // Estado para o QR Code do cardápio
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
@@ -1100,6 +1112,8 @@ const ConfiguracoesPage: React.FC = () => {
 
       if (activeSection === 'pdv') {
         carregarConfiguracoesPdv();
+        await loadFormasPagamentoOpcoes();
+        await loadFormasPagamentoEmpresa();
       }
 
       if (activeSection === 'certificado') {
@@ -3003,6 +3017,153 @@ const ConfiguracoesPage: React.FC = () => {
 
       // Atualizar também o estado separado do rodapé
       setRodapePersonalizado('Obrigado pela preferencia volte sempre!');
+    }
+  };
+
+  // Função para carregar opções de formas de pagamento
+  const loadFormasPagamentoOpcoes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('forma_pagamento_opcoes')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
+
+      if (error) throw error;
+      setFormasPagamentoOpcoes(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar opções de formas de pagamento:', error);
+    }
+  };
+
+  // Função para carregar formas de pagamento da empresa
+  const loadFormasPagamentoEmpresa = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data, error } = await supabase
+        .from('formas_pagamento_empresa')
+        .select(`
+          *,
+          forma_pagamento_opcoes:forma_pagamento_opcao_id (
+            id,
+            nome,
+            tipo
+          )
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .order('created_at');
+
+      if (error) throw error;
+      setFormasPagamentoEmpresa(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar formas de pagamento da empresa:', error);
+    }
+  };
+
+  // Função para salvar/editar forma de pagamento
+  const handleSalvarFormaPagamento = async () => {
+    try {
+      setIsLoading(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      if (editingFormaPagamento) {
+        // Editar forma de pagamento existente
+        const { error } = await supabase
+          .from('formas_pagamento_empresa')
+          .update({
+            cardapio_digital: novaFormaPagamento.cardapio_digital,
+            max_parcelas: novaFormaPagamento.max_parcelas,
+            juros_por_parcela: novaFormaPagamento.juros_por_parcela
+          })
+          .eq('id', editingFormaPagamento.id);
+
+        if (error) throw error;
+        showMessage('success', 'Forma de pagamento atualizada com sucesso!');
+      } else {
+        // Criar nova forma de pagamento
+        const { error } = await supabase
+          .from('formas_pagamento_empresa')
+          .insert({
+            empresa_id: usuarioData.empresa_id,
+            forma_pagamento_opcao_id: novaFormaPagamento.forma_pagamento_opcao_id,
+            cardapio_digital: novaFormaPagamento.cardapio_digital,
+            max_parcelas: novaFormaPagamento.max_parcelas,
+            juros_por_parcela: novaFormaPagamento.juros_por_parcela
+          });
+
+        if (error) throw error;
+        showMessage('success', 'Forma de pagamento adicionada com sucesso!');
+      }
+
+      setShowModalFormaPagamento(false);
+      setEditingFormaPagamento(null);
+      setNovaFormaPagamento({
+        forma_pagamento_opcao_id: '',
+        cardapio_digital: false,
+        max_parcelas: 1,
+        juros_por_parcela: 0
+      });
+      await loadFormasPagamentoEmpresa();
+    } catch (error) {
+      console.error('Erro ao salvar forma de pagamento:', error);
+      showMessage('error', 'Erro ao salvar forma de pagamento');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Função para abrir modal de edição
+  const handleEditarFormaPagamento = (forma: any) => {
+    setEditingFormaPagamento(forma);
+    setNovaFormaPagamento({
+      forma_pagamento_opcao_id: forma.forma_pagamento_opcao_id,
+      cardapio_digital: forma.cardapio_digital,
+      max_parcelas: forma.max_parcelas,
+      juros_por_parcela: forma.juros_por_parcela
+    });
+    setShowModalFormaPagamento(true);
+  };
+
+  // Função para deletar forma de pagamento
+  const handleDeletarFormaPagamento = async (id: string) => {
+    try {
+      setIsLoading(true);
+
+      const { error } = await supabase
+        .from('formas_pagamento_empresa')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      showMessage('success', 'Forma de pagamento removida com sucesso!');
+      await loadFormasPagamentoEmpresa();
+    } catch (error) {
+      console.error('Erro ao deletar forma de pagamento:', error);
+      showMessage('error', 'Erro ao remover forma de pagamento');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -5184,6 +5345,16 @@ const ConfiguracoesPage: React.FC = () => {
                   >
                     Venda sem Produto
                   </button>
+                  <button
+                    onClick={() => setPdvActiveTab('formas-pagamento')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                      pdvActiveTab === 'formas-pagamento'
+                        ? 'border-primary-500 text-primary-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    Formas de Pagamentos
+                  </button>
                   {/* Aba Cardápio Digital - só aparece quando a opção estiver ativa */}
                   {pdvConfig.cardapio_digital && (
                     <button
@@ -6894,6 +7065,101 @@ const ConfiguracoesPage: React.FC = () => {
                           </p>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Nova aba: Formas de Pagamentos */}
+                {pdvActiveTab === 'formas-pagamento' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        Formas de Pagamentos
+                      </h3>
+                      <p className="text-sm text-gray-400 mb-6">
+                        Configure as formas de pagamento que sua empresa aceita no PDV e cardápio digital.
+                      </p>
+                    </div>
+
+                    {/* Botão Adicionar */}
+                    <div className="flex justify-end mb-4">
+                      <button
+                        onClick={() => setShowModalFormaPagamento(true)}
+                        className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Adicionar Forma de Pagamento
+                      </button>
+                    </div>
+
+                    {/* Lista de Formas de Pagamento */}
+                    <div className="space-y-4">
+                      {formasPagamentoEmpresa.map(forma => (
+                        <div
+                          key={forma.id}
+                          className="bg-gray-800/50 p-4 rounded-lg border border-gray-700"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                              </svg>
+                              <div>
+                                <h4 className="text-white font-medium">{forma.forma_pagamento_opcoes?.nome}</h4>
+                                <div className="flex items-center gap-4 text-sm text-gray-400 mt-1">
+                                  <span>Tipo: {forma.forma_pagamento_opcoes?.tipo}</span>
+                                  {forma.cardapio_digital && (
+                                    <span className="text-green-400">• Cardápio Digital</span>
+                                  )}
+                                  {forma.forma_pagamento_opcoes?.tipo === 'cartao_credito' && (
+                                    <>
+                                      <span>• Max. {forma.max_parcelas}x</span>
+                                      {forma.juros_por_parcela > 0 && (
+                                        <span>• Juros: {forma.juros_por_parcela}%</span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleEditarFormaPagamento(forma)}
+                                className="p-2 text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Editar forma de pagamento"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDeletarFormaPagamento(forma.id)}
+                                className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                                title="Remover forma de pagamento"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {formasPagamentoEmpresa.length === 0 && (
+                        <div className="text-center py-8 bg-gray-800/30 rounded-lg border border-gray-700">
+                          <svg className="w-12 h-12 text-gray-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                          </svg>
+                          <p className="text-gray-400">Nenhuma forma de pagamento configurada</p>
+                          <p className="text-sm text-gray-500 mt-1">Clique em "Adicionar Forma de Pagamento" para começar</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -9182,6 +9448,176 @@ const ConfiguracoesPage: React.FC = () => {
                 >
                   {tabelaPrecosSelecionada ? 'Atualizar' : 'Criar'}
                 </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal para Adicionar Forma de Pagamento */}
+      <AnimatePresence>
+        {showModalFormaPagamento && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card p-6 rounded-lg shadow-xl max-w-md mx-4 w-full border border-gray-800"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-white">
+                  {editingFormaPagamento ? 'Editar Forma de Pagamento' : 'Adicionar Forma de Pagamento'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowModalFormaPagamento(false);
+                    setEditingFormaPagamento(null);
+                    setNovaFormaPagamento({
+                      forma_pagamento_opcao_id: '',
+                      cardapio_digital: false,
+                      max_parcelas: 1,
+                      juros_por_parcela: 0
+                    });
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Dropdown Forma de Pagamento */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Forma de Pagamento *
+                  </label>
+                  <select
+                    value={novaFormaPagamento.forma_pagamento_opcao_id}
+                    onChange={(e) => {
+                      const opcaoSelecionada = formasPagamentoOpcoes.find(op => op.id === e.target.value);
+                      setNovaFormaPagamento(prev => ({
+                        ...prev,
+                        forma_pagamento_opcao_id: e.target.value,
+                        max_parcelas: opcaoSelecionada?.tipo === 'cartao_credito' ? opcaoSelecionada.max_parcelas || 12 : 1
+                      }));
+                    }}
+                    disabled={editingFormaPagamento}
+                    className={`w-full px-3 py-2 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent ${
+                      editingFormaPagamento ? 'bg-gray-600 cursor-not-allowed' : 'bg-gray-700'
+                    }`}
+                  >
+                    <option value="">Selecione uma forma de pagamento</option>
+                    {formasPagamentoOpcoes
+                      .filter(opcao => !formasPagamentoEmpresa.some(emp => emp.forma_pagamento_opcao_id === opcao.id))
+                      .map(opcao => (
+                        <option key={opcao.id} value={opcao.id}>
+                          {opcao.nome}
+                        </option>
+                      ))
+                    }
+                  </select>
+                </div>
+
+                {/* Checkbox Cardápio Digital */}
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={novaFormaPagamento.cardapio_digital}
+                      onChange={(e) => setNovaFormaPagamento(prev => ({
+                        ...prev,
+                        cardapio_digital: e.target.checked
+                      }))}
+                      className="w-4 h-4 text-primary-500 bg-gray-700 border-gray-600 rounded focus:ring-primary-500 focus:ring-2"
+                    />
+                    <span className="text-white">Disponível no Cardápio Digital</span>
+                  </label>
+                  <p className="text-sm text-gray-400 mt-1 ml-7">
+                    Quando marcado, esta forma de pagamento aparecerá como opção no cardápio digital.
+                  </p>
+                </div>
+
+                {/* Campos específicos para Cartão de Crédito */}
+                {(() => {
+                  const opcaoSelecionada = formasPagamentoOpcoes.find(op => op.id === novaFormaPagamento.forma_pagamento_opcao_id);
+                  return opcaoSelecionada?.tipo === 'cartao_credito' && (
+                    <>
+                      {/* Máximo de Parcelas */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Máximo de Parcelas
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="24"
+                          value={novaFormaPagamento.max_parcelas}
+                          onChange={(e) => setNovaFormaPagamento(prev => ({
+                            ...prev,
+                            max_parcelas: parseInt(e.target.value) || 1
+                          }))}
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          placeholder="12"
+                        />
+                      </div>
+
+                      {/* Juros por Parcela */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Juros por Parcela (%)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={novaFormaPagamento.juros_por_parcela}
+                          onChange={(e) => setNovaFormaPagamento(prev => ({
+                            ...prev,
+                            juros_por_parcela: parseFloat(e.target.value) || 0
+                          }))}
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          placeholder="0.00"
+                        />
+                        <p className="text-sm text-gray-400 mt-1">
+                          Percentual de juros aplicado por parcela. Deixe 0 para sem juros.
+                        </p>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowModalFormaPagamento(false);
+                    setEditingFormaPagamento(null);
+                    setNovaFormaPagamento({
+                      forma_pagamento_opcao_id: '',
+                      cardapio_digital: false,
+                      max_parcelas: 1,
+                      juros_por_parcela: 0
+                    });
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSalvarFormaPagamento}
+                  disabled={!novaFormaPagamento.forma_pagamento_opcao_id || isLoading}
+                  className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  {isLoading ? 'Salvando...' : (editingFormaPagamento ? 'Salvar' : 'Adicionar')}
+                </button>
               </div>
             </motion.div>
           </motion.div>
