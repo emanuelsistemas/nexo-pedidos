@@ -4495,7 +4495,7 @@ const CardapioPublicoPage: React.FC = () => {
                 })()}
 
                 {/* Conteúdo do card */}
-                <div className={`p-3 ${produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null ? 'pt-6' : ''}`}>
+                <div className="p-3">
                   {/* Header do Produto */}
                   <div className="mb-3">
                     {/* Layout com foto pequena quando cardapio_fotos_minimizadas ativo */}
@@ -4534,7 +4534,15 @@ const CardapioPublicoPage: React.FC = () => {
 
                         {/* Nome e preço/controles */}
                         <div className="flex-1 min-w-0 pr-32">
-                          <h3 className={`text-lg font-bold leading-tight truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                          <h3 className={`text-lg font-bold leading-tight truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'} ${(() => {
+                            // Verificar se tem alguma tag para adicionar margin-top no nome
+                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+                            const temDescontoQtd = produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima;
+                            const temEstoque = produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null;
+
+                            const temAlgumTag = temPromocao || temDescontoQtd || temEstoque;
+                            return temAlgumTag ? 'mt-8' : '';
+                          })()}`}>
                             {produto.nome}
                           </h3>
 
@@ -4645,7 +4653,15 @@ const CardapioPublicoPage: React.FC = () => {
                       /* Layout normal sem foto pequena */
                       <>
                         <div className="pr-32">
-                          <h3 className={`text-xl font-bold mb-2 truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                          <h3 className={`text-xl font-bold mb-2 truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'} ${(() => {
+                            // Verificar se tem alguma tag para adicionar margin-top no nome
+                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+                            const temDescontoQtd = produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima;
+                            const temEstoque = produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null;
+
+                            const temAlgumTag = temPromocao || temDescontoQtd || temEstoque;
+                            return temAlgumTag ? 'mt-8' : '';
+                          })()}`}>
                             {produto.nome}
                           </h3>
                         </div>
