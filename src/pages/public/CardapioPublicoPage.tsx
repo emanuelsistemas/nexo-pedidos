@@ -4109,22 +4109,37 @@ const CardapioPublicoPage: React.FC = () => {
                   })()}
                 </div>
 
-                {/* ✅ INDICADORES CORRETOS SEGUINDO DOCUMENTAÇÃO */}
-                {loaded && instanceRef.current && grupos.length > 3 && (
-                  <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 flex space-x-1">
-                    {Array.from({ length: Math.ceil((grupos.length + 1) / 4) }).map((_, idx) => (
+                {/* ✅ INDICADORES CORRETOS - Mostrar quando há mais categorias que cabem em um slide */}
+                {loaded && instanceRef.current && (grupos.length + 1) > 4 && (() => {
+                  const totalCategorias = grupos.length + 1; // +1 para "Todos"
+                  const totalSlides = Math.ceil(totalCategorias / 4);
+                  console.log('🎯 DEBUG INDICADORES:', {
+                    totalCategorias,
+                    totalSlides,
+                    currentSlide,
+                    loaded,
+                    hasInstance: !!instanceRef.current
+                  });
+                  return (
+                    <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                      {Array.from({ length: totalSlides }).map((_, idx) => (
                       <button
                         key={idx}
                         onClick={() => instanceRef.current?.moveToIdx(idx)}
-                        className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                        className={`w-3 h-3 rounded-full transition-all duration-200 border-2 ${
                           currentSlide === idx
-                            ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                            : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
+                            ? config.modo_escuro
+                              ? 'bg-purple-400 border-purple-400'
+                              : 'bg-purple-600 border-purple-600'
+                            : config.modo_escuro
+                              ? 'bg-transparent border-gray-600 hover:border-gray-500'
+                              : 'bg-transparent border-gray-300 hover:border-gray-400'
                         }`}
                       />
                     ))}
                   </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           </div>

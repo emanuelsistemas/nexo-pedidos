@@ -4876,10 +4876,13 @@ const ProdutosPage: React.FC = () => {
             {/* Nome e códigos */}
             <div className="flex-1 min-w-0">
               <h4 className="text-white font-medium text-sm truncate">{produto.nome}</h4>
-              <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                <span>Código {produto.codigo}</span>
+              {/* Códigos em linhas separadas para evitar sobreposição */}
+              <div className="space-y-0.5 mt-0.5">
+                <div className="text-xs text-gray-400">
+                  <span>Código {produto.codigo}</span>
+                </div>
                 {produto.codigo_barras && produto.codigo_barras.trim() !== '' && (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 text-xs text-gray-400">
                     <QrCode size={10} className="text-gray-500" />
                     <span>{produto.codigo_barras}</span>
                   </div>
