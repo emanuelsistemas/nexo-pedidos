@@ -383,12 +383,11 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // ✅ CONFIGURAÇÃO SIMPLES E FUNCIONAL
+  // ✅ CONFIGURAÇÃO ULTRA SIMPLES - SEM COMPLICAÇÕES
   const [sliderRef, instanceRef] = useKeenSlider({
-    slides: {
-      perView: "auto",
-      spacing: 8,
-    },
+    loop: false,
+    mode: "snap",
+    slides: { perView: 1, spacing: 0 },
     slideChanged(slider) {
       setCurrentSlide(slider.track.details.rel);
     },
@@ -702,7 +701,7 @@ const CardapioPublicoPage: React.FC = () => {
           setLojaAberta(statusData.cardapio_loja_aberta);
         }
       } catch (error) {
-        console.error('❌ Erro no polling:', error);
+        // Erro no polling removido
       }
     }, 3000); // Verificar a cada 3 segundos
 
@@ -774,7 +773,7 @@ const CardapioPublicoPage: React.FC = () => {
                 }
               }
             } catch (error) {
-              console.error('Erro ao verificar horários:', error);
+              // Erro ao verificar horários removido
             }
           }, 1000);
         }
@@ -805,7 +804,7 @@ const CardapioPublicoPage: React.FC = () => {
           calcularProximaAbertura();
         }
       } catch (error) {
-        console.error('Erro ao carregar modo automático:', error);
+        // Erro ao carregar modo automático removido
       }
     };
 
@@ -1092,29 +1091,12 @@ const CardapioPublicoPage: React.FC = () => {
         .neq('deletado', true); // ✅ FILTRO: Excluir produtos deletados (soft delete)
 
       if (produtosError) {
-        console.error('Erro ao carregar produtos:', produtosError);
+        // Erro ao carregar produtos removido
         setError('Erro ao carregar produtos do cardápio.');
         return;
       }
 
-      console.log('📦 Produtos carregados (apenas com cardapio_digital=true):', produtosData?.length || 0);
-
-      // ✅ DEBUG: Verificar produtos por grupo
-      const produtosPorGrupo = produtosData?.reduce((acc: any, produto: any) => {
-        const grupoId = produto.grupo_id || 'sem-grupo';
-        if (!acc[grupoId]) {
-          acc[grupoId] = [];
-        }
-        acc[grupoId].push({
-          nome: produto.nome,
-          cardapio_digital: produto.cardapio_digital,
-          ativo: produto.ativo,
-          deletado: produto.deletado
-        });
-        return acc;
-      }, {});
-
-      console.log('📦 DEBUG - Produtos por grupo:', produtosPorGrupo);
+      // Logs de produtos removidos
 
 
 
@@ -1162,7 +1144,7 @@ const CardapioPublicoPage: React.FC = () => {
 
       // 5. Buscar grupos dos produtos
       const gruposIds = [...new Set(produtosData?.map(p => p.grupo_id).filter(Boolean))];
-      console.log('🗂️ DEBUG - IDs dos grupos encontrados nos produtos:', gruposIds);
+      // Log de grupos removido
 
       let gruposData: any[] = [];
 
@@ -1174,27 +1156,12 @@ const CardapioPublicoPage: React.FC = () => {
 
         if (!gruposError && gruposResult) {
           gruposData = gruposResult;
-          console.log('🗂️ Grupos carregados com ordenação:', gruposData);
-          console.log('🗂️ Detalhes dos grupos:', gruposData.map(g => ({
-            id: g.id,
-            nome: g.nome,
-            ordenacao_cardapio_habilitada: g.ordenacao_cardapio_habilitada,
-            ordenacao_cardapio_digital: g.ordenacao_cardapio_digital
-          })));
-
-          // ✅ DEBUG ESPECÍFICO: Verificar se existe grupo "Cervejas"
-          const grupoCervejas = gruposData.find(g => g.nome.toLowerCase().includes('cerveja'));
-          if (grupoCervejas) {
-            console.log('🍺 GRUPO CERVEJAS ENCONTRADO:', grupoCervejas);
-          } else {
-            console.log('❌ GRUPO CERVEJAS NÃO ENCONTRADO nos grupos carregados');
-            console.log('🔍 Nomes dos grupos encontrados:', gruposData.map(g => g.nome));
-          }
+          // Logs de grupos removidos
         } else {
-          console.error('🗂️ Erro ao carregar grupos:', gruposError);
+          // Erro ao carregar grupos removido
         }
       } else {
-        console.log('🗂️ Nenhum grupo encontrado nos produtos filtrados');
+        // Log de grupos removido
       }
 
       // 6. Buscar horários de atendimento
@@ -1265,7 +1232,7 @@ const CardapioPublicoPage: React.FC = () => {
         ordenacao_cardapio_digital: grupo.ordenacao_cardapio_digital
       }));
 
-      console.log('🗂️ Grupos únicos com ordenação preservada:', gruposUnicos);
+      // Log de grupos únicos removido
       setGrupos(gruposUnicos);
 
     } catch (error: any) {
@@ -1684,7 +1651,7 @@ const CardapioPublicoPage: React.FC = () => {
   // Funções para localStorage do carrinho
   const salvarCarrinhoLocalStorage = (quantidades: Record<string, number>) => {
     if (!empresaId) {
-      console.log('🛒 Não salvando carrinho: empresaId não disponível');
+      // Log de carrinho removido
       return;
     }
 
@@ -1703,7 +1670,7 @@ const CardapioPublicoPage: React.FC = () => {
 
 
     } catch (error) {
-      console.error('Erro ao salvar carrinho no localStorage:', error);
+      // Erro localStorage removido
     }
   };
 
@@ -4101,33 +4068,37 @@ const CardapioPublicoPage: React.FC = () => {
                           ...gruposOrdenados
                         ];
 
-                        // ✅ DEBUG: Verificar ordem final das categorias
-                        console.log('🏷️ DEBUG - Categorias na ordem final:', todasCategorias.map(c => ({
-                          id: c.id,
-                          nome: c.nome
-                        })));
+                        // ✅ LOG KEEN SLIDER: Verificar categorias para o slider
+                        console.log('🏷️ KEEN SLIDER - Total de categorias:', todasCategorias.length);
+                        console.log('🏷️ KEEN SLIDER - Categorias:', todasCategorias.map(c => c.nome));
 
-                        return todasCategorias.map((categoria) => (
-                          <div
-                            key={categoria.id}
-                            className="keen-slider__slide"
-                            style={{
-                              minWidth: 'fit-content',
-                              width: 'auto'
-                            }}
-                          >
-                            <button
-                              onClick={() => setGrupoSelecionado(categoria.id)}
-                              className={`px-4 py-2 font-medium text-sm whitespace-nowrap rounded-lg transition-all duration-200 ${
-                                grupoSelecionado === categoria.id
-                                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                                  : config.modo_escuro
-                                  ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-                                  : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
-                              }`}
-                            >
-                              {categoria.nome}
-                            </button>
+                        // Agrupar categorias em "páginas" de 4 (desktop) ou 3 (mobile)
+                        const categoriasPerPage = window.innerWidth <= 768 ? 3 : 4;
+                        const pages = [];
+
+                        for (let i = 0; i < todasCategorias.length; i += categoriasPerPage) {
+                          pages.push(todasCategorias.slice(i, i + categoriasPerPage));
+                        }
+
+                        return pages.map((pageCategories, pageIndex) => (
+                          <div key={pageIndex} className="keen-slider__slide">
+                            <div className="flex gap-2 w-full">
+                              {pageCategories.map((categoria) => (
+                                <button
+                                  key={categoria.id}
+                                  onClick={() => setGrupoSelecionado(categoria.id)}
+                                  className={`flex-1 px-4 py-2 font-medium text-sm whitespace-nowrap rounded-lg transition-all duration-200 ${
+                                    grupoSelecionado === categoria.id
+                                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                                      : config.modo_escuro
+                                      ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                                      : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
+                                  }`}
+                                >
+                                  {categoria.nome}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         ));
                       })()}
@@ -4135,34 +4106,21 @@ const CardapioPublicoPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ✅ INDICADORES SIMPLES - SÓ QUANDO NECESSÁRIO */}
+                {/* ✅ INDICADORES SIMPLES - 1 POR PÁGINA */}
                 {loaded && instanceRef.current && (() => {
-                  const slider = instanceRef.current;
-                  const details = slider.track.details;
+                  const totalSlides = instanceRef.current.track.details.slides.length;
 
-                  // Verificar se há slides que não estão totalmente visíveis
-                  const hasHiddenSlides = details.slides.some(slide => slide.portion < 1);
-
-                  if (!hasHiddenSlides) return null;
-
-                  // Calcular número de "páginas" baseado em slides visíveis
-                  const slidesVisible = details.slides.filter(slide => slide.portion > 0.5).length;
-                  const totalSlides = details.slides.length;
-                  const totalPages = Math.ceil(totalSlides / Math.max(1, slidesVisible));
-
-                  if (totalPages <= 1) return null;
+                  // Só mostra indicadores se há mais de 1 página
+                  if (totalSlides <= 1) return null;
 
                   return (
                     <div className="flex justify-center mt-3 space-x-1">
-                      {Array.from({ length: totalPages }).map((_, idx) => (
+                      {Array.from({ length: totalSlides }).map((_, idx) => (
                         <button
                           key={idx}
-                          onClick={() => {
-                            const targetSlide = idx * Math.max(1, slidesVisible);
-                            slider.moveToIdx(Math.min(targetSlide, totalSlides - 1));
-                          }}
+                          onClick={() => instanceRef.current?.moveToIdx(idx)}
                           className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                            Math.floor(currentSlide / Math.max(1, slidesVisible)) === idx
+                            currentSlide === idx
                               ? 'bg-gradient-to-r from-purple-600 to-blue-600'
                               : config.modo_escuro
                               ? 'bg-gray-600'

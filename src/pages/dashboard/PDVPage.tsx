@@ -329,9 +329,7 @@ const PDVPage: React.FC = () => {
   const [showModalPix, setShowModalPix] = useState(false);
   const [qrCodePix, setQrCodePix] = useState('');
   const [chavePix, setChavePix] = useState('');
-
-  // Log para debug do estado PIX
-  console.log('🔄 Estado atual showModalPix:', showModalPix);
+  const [tipoFinalizacaoPendente, setTipoFinalizacaoPendente] = useState<string | null>(null);
 
   // ✅ NOVO: Estado para ambiente NFe (homologação/produção)
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
@@ -6676,42 +6674,68 @@ const PDVPage: React.FC = () => {
 
   // Função para abrir modal PIX
   const abrirModalPix = () => {
-    console.log('🚀 INICIANDO abrirModalPix()');
+    console.log('🚀 ABRINDO MODAL PIX');
     const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
-    console.log('🔍 Forma encontrada em abrirModalPix:', forma);
 
     if (forma && forma.utilizar_chave_pix && forma.chave_pix) {
-      console.log('✅ Condições PIX atendidas, gerando QR Code');
       const valorTotal = calcularTotalComDesconto();
-      console.log('💰 Valor total:', valorTotal);
-
       const qrCode = gerarQrCodePix(valorTotal, forma.chave_pix, forma.tipo_chave_pix);
-      console.log('📱 QR Code gerado:', qrCode.substring(0, 50) + '...');
 
       setQrCodePix(qrCode);
       setChavePix(forma.chave_pix);
       setShowModalPix(true);
-      console.log('✅ Modal PIX definido como true');
+      console.log('✅ MODAL PIX ABERTO');
     } else {
-      console.log('❌ Condições PIX não atendidas em abrirModalPix');
-      console.log('- Forma existe:', !!forma);
-      console.log('- Utilizar chave PIX:', forma?.utilizar_chave_pix);
-      console.log('- Chave PIX:', forma?.chave_pix);
+      console.log('❌ PIX não configurado:', {
+        forma: !!forma,
+        utilizar_chave_pix: forma?.utilizar_chave_pix,
+        chave_pix: !!forma?.chave_pix
+      });
+    }
+  };
+
+  // Função intermediária para verificar PIX antes de finalizar
+  const verificarPixEFinalizar = (tipoFinalizacao: string) => {
+    console.log('🔍 VERIFICANDO PIX ANTES DE FINALIZAR:', tipoFinalizacao);
+
+    // Verificar se é PIX com chave configurada
+    const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+    console.log('🔍 PIX CHECK FINALIZAÇÃO:', {
+      forma_nome: forma?.nome,
+      tipo: forma?.tipo,
+      utilizar_chave_pix: forma?.utilizar_chave_pix,
+      tem_chave_pix: !!forma?.chave_pix
+    });
+
+    if (forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix) {
+      console.log('✅ PIX DETECTADO - Salvando tipo de finalização e abrindo modal PIX');
+      setTipoFinalizacaoPendente(tipoFinalizacao);
+      abrirModalPix();
+    } else {
+      console.log('❌ PIX não detectado - Finalizando diretamente');
+      finalizarVendaCompleta(tipoFinalizacao);
     }
   };
 
   // Função para confirmar recebimento PIX
   const confirmarRecebimentoPix = () => {
+    console.log('✅ PIX CONFIRMADO - Continuando finalização:', tipoFinalizacaoPendente);
     setShowModalPix(false);
-    // Continuar com a finalização normal
-    finalizarVendaCompleta('finalizar_sem_impressao');
+
+    // Continuar com a finalização usando o tipo salvo
+    if (tipoFinalizacaoPendente) {
+      finalizarVendaCompleta(tipoFinalizacaoPendente);
+      setTipoFinalizacaoPendente(null);
+    }
   };
 
   // Função para cancelar PIX
   const cancelarPix = () => {
+    console.log('❌ PIX CANCELADO');
     setShowModalPix(false);
     setQrCodePix('');
     setChavePix('');
+    setTipoFinalizacaoPendente(null);
   };
 
   // Função para verificar se há pagamento com cartão
@@ -13104,7 +13128,7 @@ const PDVPage: React.FC = () => {
                             console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                             return;
                           }
-                          finalizarVendaCompleta('finalizar_com_impressao');
+                          verificarPixEFinalizar('finalizar_com_impressao');
                         }}
                         disabled={showProcessandoVenda}
                         className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
@@ -13126,7 +13150,7 @@ const PDVPage: React.FC = () => {
                             console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                             return;
                           }
-                          finalizarVendaCompleta('finalizar_sem_impressao');
+                          verificarPixEFinalizar('finalizar_sem_impressao');
                         }}
                         disabled={showProcessandoVenda}
                         className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
@@ -13156,7 +13180,7 @@ const PDVPage: React.FC = () => {
                           console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                           return;
                         }
-                        finalizarVendaCompleta('nfce_com_impressao');
+                        verificarPixEFinalizar('nfce_com_impressao');
                       }}
                       disabled={isDocumentoInvalido() || showProcessandoVenda}
                       className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
@@ -13187,7 +13211,7 @@ const PDVPage: React.FC = () => {
                           console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                           return;
                         }
-                        finalizarVendaCompleta('nfce_sem_impressao');
+                        verificarPixEFinalizar('nfce_sem_impressao');
                       }}
                       disabled={isDocumentoInvalido() || showProcessandoVenda}
                       className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
@@ -13464,40 +13488,16 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    console.log('🚀 BOTÃO CONFIRMAR CLICADO!');
+                    console.log('🚀 CONFIRMAR VENDA CLICADO');
 
                     // Proteção contra duplo clique
                     if (showProcessandoVenda) {
-                      console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
+                      console.log('🛑 Venda já sendo processada');
                       return;
                     }
 
-                    console.log('🔍 Estado antes de fechar modal pagamento:', {
-                      showPagamentoModal: true,
-                      formaPagamentoSelecionada,
-                      showModalPix
-                    });
-
                     setShowPagamentoModal(false);
-
-                    // Verificar se é PIX com chave configurada
-                    const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
-                    console.log('🔍 DEBUG PIX - Forma selecionada:', forma);
-                    console.log('🔍 DEBUG PIX - ID selecionado:', formaPagamentoSelecionada);
-                    console.log('🔍 DEBUG PIX - Todas as formas:', formasPagamento);
-
-                    if (forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix) {
-                      console.log('✅ PIX detectado - abrindo modal');
-                      // Abrir modal PIX
-                      abrirModalPix();
-                    } else {
-                      console.log('❌ PIX não detectado - finalizando normalmente');
-                      console.log('- Tipo:', forma?.tipo);
-                      console.log('- Utilizar chave PIX:', forma?.utilizar_chave_pix);
-                      console.log('- Chave PIX:', forma?.chave_pix);
-                      // Finalizar normalmente
-                      finalizarVendaCompleta('finalizar_sem_impressao');
-                    }
+                    verificarPixEFinalizar('finalizar_sem_impressao');
                   }}
                   disabled={showProcessandoVenda}
                   className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
@@ -19225,10 +19225,7 @@ const PDVPage: React.FC = () => {
 
       {/* Modal PIX QR Code */}
       <AnimatePresence>
-        {(() => {
-          console.log('🎭 RENDERIZANDO Modal PIX - showModalPix:', showModalPix);
-          return showModalPix;
-        })() && (
+        {showModalPix && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
