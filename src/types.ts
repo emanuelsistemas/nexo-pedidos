@@ -45,6 +45,8 @@ export interface Produto {
   exibir_promocao_cardapio?: boolean;
   // Campo para produtos alcoólicos
   produto_alcoolico?: boolean;
+  // Campo para exibir desconto por quantidade mínima no cardápio digital
+  exibir_desconto_qtd_minimo_no_cardapio_digital?: boolean;
 }
 
 export interface Grupo {

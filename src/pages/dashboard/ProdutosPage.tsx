@@ -202,6 +202,7 @@ const ProdutosPage: React.FC = () => {
     estoque_minimo: 0,
     produto_alcoolico: false, // ✅ NOVO CAMPO: Produto Alcoólico
     controla_estoque_cardapio: false, // ✅ NOVO CAMPO: Controla estoque no cardápio digital
+    exibir_desconto_qtd_minimo_no_cardapio_digital: false, // ✅ NOVO CAMPO: Exibir no cardápio digital
     // Campos fiscais NFe
     ncm: '',
     cfop: '5102',
@@ -2220,6 +2221,7 @@ const ProdutosPage: React.FC = () => {
       estoque_minimo_ativo: false,
       produto_alcoolico: false, // ✅ NOVO CAMPO: Produto Alcoólico
       controla_estoque_cardapio: false, // ✅ NOVO CAMPO: Controla estoque no cardápio digital
+      exibir_desconto_qtd_minimo_no_cardapio_digital: false, // ✅ NOVO CAMPO: Exibir no cardápio digital
       // Campos fiscais NFe com valores padrão
       ncm: '',
       cfop: '5102',
@@ -2448,6 +2450,7 @@ const ProdutosPage: React.FC = () => {
       estoque_minimo: produto.estoque_minimo || 0,
       estoque_minimo_ativo: produto.estoque_minimo_ativo || false,
       produto_alcoolico: produto.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
+      exibir_desconto_qtd_minimo_no_cardapio_digital: produto.exibir_desconto_qtd_minimo_no_cardapio_digital || false, // ✅ NOVO CAMPO: Exibir no cardápio digital
       // Campos fiscais NFe
       ncm: produto.ncm || '',
       cfop: produto.cfop || '5102',
@@ -2468,6 +2471,7 @@ const ProdutosPage: React.FC = () => {
       pizza: produto.pizza || false,
       cardapio_digital: produto.cardapio_digital || false,
       exibir_promocao_cardapio: produto.exibir_promocao_cardapio || false,
+      exibir_desconto_qtd_minimo_no_cardapio_digital: produto.exibir_desconto_qtd_minimo_no_cardapio_digital || false,
       controla_estoque_cardapio: produto.controla_estoque_cardapio || false,
     };
 
@@ -3538,6 +3542,7 @@ const ProdutosPage: React.FC = () => {
           produto_alcoolico: novoProduto.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
           cardapio_digital: novoProduto.cardapio_digital || false,
           exibir_promocao_cardapio: novoProduto.exibir_promocao_cardapio || false,
+          exibir_desconto_qtd_minimo_no_cardapio_digital: novoProduto.exibir_desconto_qtd_minimo_no_cardapio_digital || false, // ✅ NOVO CAMPO: Exibir no cardápio digital
           controla_estoque_cardapio: novoProduto.controla_estoque_cardapio || false,
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
@@ -3606,6 +3611,7 @@ const ProdutosPage: React.FC = () => {
           produto_alcoolico: novoProduto.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
           cardapio_digital: novoProduto.cardapio_digital || false,
           exibir_promocao_cardapio: novoProduto.exibir_promocao_cardapio || false,
+          exibir_desconto_qtd_minimo_no_cardapio_digital: novoProduto.exibir_desconto_qtd_minimo_no_cardapio_digital || false, // ✅ NOVO CAMPO: Exibir no cardápio digital
           controla_estoque_cardapio: novoProduto.controla_estoque_cardapio || false,
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
@@ -3827,6 +3833,7 @@ const ProdutosPage: React.FC = () => {
         estoque_minimo: produtoOriginal.estoque_minimo || 0,
         estoque_minimo_ativo: produtoOriginal.estoque_minimo_ativo || false,
         produto_alcoolico: produtoOriginal.produto_alcoolico || false, // ✅ NOVO CAMPO: Produto Alcoólico
+        exibir_desconto_qtd_minimo_no_cardapio_digital: produtoOriginal.exibir_desconto_qtd_minimo_no_cardapio_digital || false, // ✅ NOVO CAMPO: Exibir no cardápio digital
         // Campos fiscais NFe
         ncm: produtoOriginal.ncm || '',
         cfop: produtoOriginal.cfop || '5102',
@@ -6469,9 +6476,28 @@ const ProdutosPage: React.FC = () => {
                                   </p>
                                 )}
                               </div>
+
+                              {/* Checkbox para exibir no cardápio digital - só aparece se cardápio digital estiver habilitado */}
+                              {cardapioDigitalHabilitado && (
+                                <div className="mb-2">
+                                  <div className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      id="exibir_desconto_qtd_minimo_no_cardapio_digital"
+                                      checked={novoProduto.exibir_desconto_qtd_minimo_no_cardapio_digital || false}
+                                      onChange={(e) => setNovoProduto({ ...novoProduto, exibir_desconto_qtd_minimo_no_cardapio_digital: e.target.checked })}
+                                      className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                    />
+                                    <label htmlFor="exibir_desconto_qtd_minimo_no_cardapio_digital" className="text-sm font-medium text-white cursor-pointer">
+                                      Exibir no cardápio digital
+                                    </label>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
+
 
                         {/* Seção de Produto Alcoólico */}
                         <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-red-900/10">
