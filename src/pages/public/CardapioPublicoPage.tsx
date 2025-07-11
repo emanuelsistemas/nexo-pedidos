@@ -641,7 +641,7 @@ const CardapioPublicoPage: React.FC = () => {
         updateMetaTag('twitter:image', logoUrl);
       }
 
-      console.log('🔗 Meta tags atualizadas para:', nomeEmpresa);
+
     }
   }, [empresa, slug]);
 
@@ -654,8 +654,6 @@ const CardapioPublicoPage: React.FC = () => {
   // Configurar realtime para monitorar mudanças no status da loja
   useEffect(() => {
     if (!empresaId) return;
-
-    console.log('🔔 Configurando realtime para empresa:', empresaId);
 
     // Criar canal único para esta empresa
     const channelName = `cardapio_loja_status_${empresaId}`;
@@ -676,27 +674,15 @@ const CardapioPublicoPage: React.FC = () => {
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🔄 Cardápio: Atualização realtime recebida:', payload);
-          console.log('🔄 Payload completo:', JSON.stringify(payload, null, 2));
-
           if (payload.new && payload.new.cardapio_loja_aberta !== undefined) {
             const novoStatus = payload.new.cardapio_loja_aberta;
-            console.log('✅ Atualizando status da loja de', lojaAberta, 'para', novoStatus);
             setLojaAberta(novoStatus);
           }
         }
       )
-      .subscribe((status) => {
-        console.log('📡 Status da subscrição realtime:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime conectado com sucesso para empresa:', empresaId);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ Erro na conexão realtime');
-        }
-      });
+      .subscribe();
 
     return () => {
-      console.log('🔔 Removendo canal realtime');
       supabase.removeChannel(channel);
     };
   }, [empresaId]);
@@ -704,8 +690,6 @@ const CardapioPublicoPage: React.FC = () => {
   // Polling como backup para garantir sincronização
   useEffect(() => {
     if (!empresaId) return;
-
-    console.log('⏰ Configurando polling de backup para empresa:', empresaId);
 
     const interval = setInterval(async () => {
       try {
@@ -716,7 +700,6 @@ const CardapioPublicoPage: React.FC = () => {
           .single();
 
         if (!error && statusData && statusData.cardapio_loja_aberta !== lojaAberta) {
-          console.log('🔄 Polling: Status diferente detectado, atualizando de', lojaAberta, 'para', statusData.cardapio_loja_aberta);
           setLojaAberta(statusData.cardapio_loja_aberta);
         }
       } catch (error) {
@@ -725,38 +708,15 @@ const CardapioPublicoPage: React.FC = () => {
     }, 3000); // Verificar a cada 3 segundos
 
     return () => {
-      console.log('⏰ Removendo polling de backup');
       clearInterval(interval);
     };
   }, [empresaId, lojaAberta]);
 
-  // Monitor para mudanças no estado lojaAberta
-  useEffect(() => {
-    console.log('🔄 Estado lojaAberta mudou para:', lojaAberta);
-    if (lojaAberta === false) {
-      console.log('🔴 Tarja deve aparecer agora');
-    } else if (lojaAberta === true) {
-      console.log('🟢 Tarja deve desaparecer agora');
-    } else {
-      console.log('⚪ Status ainda carregando');
-    }
-  }, [lojaAberta]);
 
-  // Monitor para mudanças no estado da empresa
-  useEffect(() => {
-    console.log('🏢 Estado da empresa mudou:', empresa);
-    if (empresa) {
-      console.log('🏢 Nome da empresa:', empresa.nome_fantasia || empresa.razao_social);
-    } else {
-      console.log('❌ Empresa está null/undefined');
-    }
-  }, [empresa]);
 
-  // Teste simples de realtime para horários de atendimento
+  // Realtime para horários de atendimento
   useEffect(() => {
     if (!empresaId) return;
-
-    console.log('🧪 TESTE: Configurando realtime para horários - empresa:', empresaId);
 
     const channel = supabase
       .channel(`teste_horarios_${empresaId}_${Date.now()}`, {
@@ -773,13 +733,7 @@ const CardapioPublicoPage: React.FC = () => {
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🧪 TESTE: REALTIME FUNCIONOU! Mudança detectada:', payload);
-          console.log('🧪 TESTE: Tipo de evento:', payload.eventType);
-          console.log('🧪 TESTE: Dados novos:', payload.new);
-          console.log('🧪 TESTE: Dados antigos:', payload.old);
-
-          // Forçar atualização do status da loja para testar
-          console.log('🧪 TESTE: Forçando verificação de status...');
+          // Forçar atualização do status da loja
           setTimeout(async () => {
             try {
               // Buscar configuração atual
@@ -789,10 +743,7 @@ const CardapioPublicoPage: React.FC = () => {
                 .eq('empresa_id', empresaId)
                 .single();
 
-              console.log('🧪 TESTE: Configuração atual:', config);
-
               if (config?.cardapio_abertura_tipo === 'automatico') {
-                console.log('🧪 TESTE: Modo automático - verificando horários...');
 
                 const now = new Date();
                 const currentDay = now.getDay();
@@ -805,7 +756,7 @@ const CardapioPublicoPage: React.FC = () => {
                   .eq('dia_semana', currentDay)
                   .single();
 
-                console.log('🧪 TESTE: Horário para hoje:', horario);
+
 
                 if (horario) {
                   const [horaAbertura, minutoAbertura] = horario.hora_abertura.split(':').map(Number);
@@ -814,46 +765,24 @@ const CardapioPublicoPage: React.FC = () => {
                   const fechamentoMinutos = horaFechamento * 60 + minutoFechamento;
                   const shouldBeOpen = currentTime >= aberturaMinutos && currentTime <= fechamentoMinutos;
 
-                  console.log('🧪 TESTE: Análise:', {
-                    horaAtual: currentTime,
-                    abertura: aberturaMinutos,
-                    fechamento: fechamentoMinutos,
-                    deveEstarAberto: shouldBeOpen,
-                    statusAtual: lojaAberta
-                  });
-
                   if (shouldBeOpen !== lojaAberta) {
-                    console.log('🧪 TESTE: Mudando status da loja para:', shouldBeOpen);
                     setLojaAberta(shouldBeOpen);
-                  } else {
-                    console.log('🧪 TESTE: Status já está correto');
                   }
                 } else {
-                  console.log('🧪 TESTE: Sem horário para hoje, fechando loja');
                   if (lojaAberta) {
                     setLojaAberta(false);
                   }
                 }
-              } else {
-                console.log('🧪 TESTE: Modo manual - ignorando mudança');
               }
             } catch (error) {
-              console.error('🧪 TESTE: Erro:', error);
+              console.error('Erro ao verificar horários:', error);
             }
           }, 1000);
         }
       )
-      .subscribe((status) => {
-        console.log('🧪 TESTE: Status da subscrição:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ TESTE: Realtime conectado com sucesso!');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ TESTE: Erro na conexão realtime');
-        }
-      });
+      .subscribe();
 
     return () => {
-      console.log('🧪 TESTE: Removendo canal realtime');
       supabase.removeChannel(channel);
     };
   }, [empresaId]);
@@ -954,12 +883,7 @@ const CardapioPublicoPage: React.FC = () => {
   // Carregar carrinho do localStorage quando empresa está disponível
   useEffect(() => {
     if (empresaId) {
-      console.log('🛒 Carregando carrinho do localStorage para empresa:', empresaId);
       const { quantidades, ordem, adicionais, observacoes, validacaoMinima } = carregarCarrinhoLocalStorage();
-      console.log('🛒 Carrinho salvo encontrado:', quantidades);
-      console.log('🛒 Ordem salva encontrada:', ordem);
-      console.log('🛒 Adicionais salvos encontrados:', adicionais);
-      console.log('🛒 Observações salvas encontradas:', observacoes);
 
       if (Object.keys(quantidades).length > 0) {
         setQuantidadesProdutos(quantidades);
@@ -968,7 +892,6 @@ const CardapioPublicoPage: React.FC = () => {
         setObservacoesProdutos(observacoes);
       setValidacaoQuantidadeMinima(validacaoMinima);
         setCarrinhoAberto(true);
-        console.log('🛒 Carrinho carregado e aberto');
       }
 
       // Carregar seleções (estados intermediários)
@@ -980,7 +903,6 @@ const CardapioPublicoPage: React.FC = () => {
       if (Object.keys(quantidadesSel).length > 0 || Object.keys(observacoesSel).length > 0) {
         setQuantidadesSelecionadas(quantidadesSel);
         setObservacoesSelecionadas(observacoesSel);
-        console.log('📝 Seleções carregadas do localStorage');
       }
 
       // Estados de fluxo de configuração removidos - não são mais necessários
@@ -990,22 +912,17 @@ const CardapioPublicoPage: React.FC = () => {
   // Validar e filtrar carrinho quando produtos estão disponíveis
   useEffect(() => {
     if (produtos.length > 0 && Object.keys(quantidadesProdutos).length > 0) {
-      console.log('🛒 Validando itens do carrinho com produtos disponíveis');
-
       const carrinhoFiltrado: Record<string, number> = {};
       Object.entries(quantidadesProdutos).forEach(([produtoId, quantidade]) => {
         const produtoExiste = produtos.some(p => p.id === produtoId);
         if (produtoExiste && quantidade > 0) {
           carrinhoFiltrado[produtoId] = quantidade;
-        } else {
-          console.log('🛒 Removendo produto inexistente do carrinho:', produtoId);
         }
       });
 
       // Só atualizar se houve mudanças
       if (JSON.stringify(carrinhoFiltrado) !== JSON.stringify(quantidadesProdutos)) {
         setQuantidadesProdutos(carrinhoFiltrado);
-        console.log('🛒 Carrinho filtrado e atualizado');
       }
     }
   }, [produtos]);
@@ -1013,9 +930,6 @@ const CardapioPublicoPage: React.FC = () => {
   // Salvar carrinho no localStorage sempre que quantidades, ordem ou adicionais mudarem
   useEffect(() => {
     if (empresaId) {
-      console.log('🛒 Salvando carrinho devido a mudança nas quantidades:', quantidadesProdutos);
-      console.log('🛒 Salvando ordem devido a mudança:', ordemAdicaoItens);
-      console.log('🛒 Salvando adicionais devido a mudança:', adicionaisSelecionados);
       salvarCarrinhoLocalStorage(quantidadesProdutos);
     }
   }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, empresaId]);
@@ -1042,35 +956,25 @@ const CardapioPublicoPage: React.FC = () => {
       setError(null);
 
       // 1. Buscar configuração PDV pelo slug personalizado
-      console.log('🔍 Buscando configuração PDV para slug:', slug);
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
         .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas, ocultar_grupos_cardapio')
         .eq('cardapio_url_personalizada', slug)
         .single();
 
-      console.log('🔍 Resultado da consulta PDV config:', { pdvConfigData, configError });
-
       if (configError || !pdvConfigData) {
-        console.error('❌ Erro ao buscar configuração PDV:', configError);
         setError('Cardápio não encontrado ou não está disponível.');
         return;
       }
 
       // 2. Buscar dados da empresa
-      console.log('🏢 Buscando dados da empresa ID:', pdvConfigData.empresa_id);
       const { data: empresaData, error: empresaError } = await supabase
         .from('empresas')
         .select('id, razao_social, nome_fantasia, whatsapp, telefones, endereco, numero, bairro, cidade, estado')
         .eq('id', pdvConfigData.empresa_id)
         .single();
 
-      console.log('🏢 Dados da empresa carregados:', empresaData);
-      console.log('🏢 Nome fantasia:', empresaData?.nome_fantasia);
-      console.log('🏢 Razão social:', empresaData?.razao_social);
-
       if (empresaError || !empresaData) {
-        console.error('❌ Erro ao buscar empresa:', empresaError);
         setError('Dados da empresa não encontrados.');
         return;
       }
@@ -1081,15 +985,12 @@ const CardapioPublicoPage: React.FC = () => {
         logo_url: pdvConfigData.logo_url || ''
       };
 
-      console.log('🏢 Definindo empresa no estado:', empresaComLogo);
-      console.log('🏢 Nome que será exibido:', empresaComLogo.nome_fantasia || empresaComLogo.razao_social);
       setEmpresa(empresaComLogo);
 
       // Definir o ID da empresa para o realtime
       setEmpresaId(empresaComLogo.id);
 
       // 2.1. Carregar configuração de tabela de preços
-      console.log('💰 Carregando configuração de tabela de preços...');
       const { data: tabelaPrecoConfig } = await supabase
         .from('tabela_preco_config')
         .select('trabalha_com_tabela_precos')
@@ -1098,7 +999,6 @@ const CardapioPublicoPage: React.FC = () => {
 
       if (tabelaPrecoConfig?.trabalha_com_tabela_precos) {
         setTrabalhaComTabelaPrecos(true);
-        console.log('💰 Empresa trabalha com tabela de preços - carregando tabelas...');
 
         // Carregar tabelas de preços ativas
         const { data: tabelasData, error: tabelasError } = await supabase
@@ -1109,26 +1009,15 @@ const CardapioPublicoPage: React.FC = () => {
           .eq('deletado', false)
           .order('created_at', { ascending: true });
 
-        console.log('💰 Query tabelas - Dados:', tabelasData);
-        console.log('💰 Query tabelas - Erro:', tabelasError);
-
         if (tabelasData && tabelasData.length > 0) {
           setTabelasPrecos(tabelasData);
-          console.log('💰 Tabelas de preços carregadas:', tabelasData);
-          console.log('💰 IDs das tabelas:', tabelasData.map(t => t.id));
 
           // Carregar preços dos produtos para as tabelas
-          console.log('💰 Carregando preços dos produtos para as tabelas...');
-          console.log('💰 Empresa ID:', empresaComLogo.id);
-
           const { data: precosData, error: precosError } = await supabase
             .from('produto_precos')
             .select('produto_id, tabela_preco_id, preco')
             .eq('empresa_id', empresaComLogo.id)
             .gt('preco', 0); // Apenas preços maiores que 0
-
-          console.log('💰 Query de preços - Dados:', precosData);
-          console.log('💰 Query de preços - Erro:', precosError);
 
           if (precosData && precosData.length > 0) {
             const precosMap: {[produtoId: string]: {[tabelaId: string]: number}} = {};
@@ -1141,15 +1030,8 @@ const CardapioPublicoPage: React.FC = () => {
             });
 
             setProdutoPrecos(precosMap);
-            console.log('💰 Preços dos produtos carregados:', precosMap);
-          } else {
-            console.log('💰 Nenhum preço encontrado ou erro na consulta');
           }
-        } else {
-          console.log('💰 Nenhuma tabela de preços encontrada');
         }
-      } else {
-        console.log('💰 Empresa NÃO trabalha com tabela de preços');
       }
 
       // Configurar tema e exibição de fotos baseado na configuração da empresa
@@ -1217,11 +1099,25 @@ const CardapioPublicoPage: React.FC = () => {
       }
 
       console.log('📦 Produtos carregados (apenas com cardapio_digital=true):', produtosData?.length || 0);
-      console.log('📦 Produtos com dados de ordenação:', produtosData?.map(p => ({
-        nome: p.nome,
-        ordenacao_habilitada: p.ordenacao_cardapio_habilitada,
-        ordenacao_digital: p.ordenacao_cardapio_digital
-      })));
+
+      // ✅ DEBUG: Verificar produtos por grupo
+      const produtosPorGrupo = produtosData?.reduce((acc: any, produto: any) => {
+        const grupoId = produto.grupo_id || 'sem-grupo';
+        if (!acc[grupoId]) {
+          acc[grupoId] = [];
+        }
+        acc[grupoId].push({
+          nome: produto.nome,
+          cardapio_digital: produto.cardapio_digital,
+          ativo: produto.ativo,
+          deletado: produto.deletado
+        });
+        return acc;
+      }, {});
+
+      console.log('📦 DEBUG - Produtos por grupo:', produtosPorGrupo);
+
+
 
       // 4. Buscar todas as fotos dos produtos
       const produtosIds = produtosData?.map(p => p.id) || [];
@@ -1267,6 +1163,8 @@ const CardapioPublicoPage: React.FC = () => {
 
       // 5. Buscar grupos dos produtos
       const gruposIds = [...new Set(produtosData?.map(p => p.grupo_id).filter(Boolean))];
+      console.log('🗂️ DEBUG - IDs dos grupos encontrados nos produtos:', gruposIds);
+
       let gruposData: any[] = [];
 
       if (gruposIds.length > 0) {
@@ -1284,7 +1182,11 @@ const CardapioPublicoPage: React.FC = () => {
             ordenacao_cardapio_habilitada: g.ordenacao_cardapio_habilitada,
             ordenacao_cardapio_digital: g.ordenacao_cardapio_digital
           })));
+        } else {
+          console.error('🗂️ Erro ao carregar grupos:', gruposError);
         }
+      } else {
+        console.log('🗂️ Nenhum grupo encontrado nos produtos filtrados');
       }
 
       // 6. Buscar horários de atendimento
@@ -1308,10 +1210,8 @@ const CardapioPublicoPage: React.FC = () => {
       if (!statusLojaError && statusLojaData) {
         // Usar exatamente o valor do banco, sem fallbacks
         const statusInicial = statusLojaData.cardapio_loja_aberta;
-        console.log('🏪 Status inicial da loja carregado:', statusInicial);
         setLojaAberta(statusInicial);
       } else {
-        console.error('❌ Erro ao carregar status da loja:', statusLojaError);
         // Se não conseguir carregar, não assumir nenhum valor padrão
         setLojaAberta(null);
       }
@@ -1383,9 +1283,6 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Agrupar produtos por categoria com ordenação personalizada
   const produtosAgrupados = () => {
-    console.log('🔄 Função produtosAgrupados chamada');
-    console.log('🔄 Configuração ocultar_grupos_cardapio:', config.ocultar_grupos_cardapio);
-    console.log('🔄 Grupo selecionado:', grupoSelecionado);
     if (grupoSelecionado !== 'todos') {
       // Se um grupo específico está selecionado, retornar apenas esse grupo
       const grupoAtual = grupos.find(g => g.id === grupoSelecionado);
@@ -1432,22 +1329,12 @@ const CardapioPublicoPage: React.FC = () => {
                              b.ordenacao_cardapio_digital !== null &&
                              b.ordenacao_cardapio_digital !== undefined;
 
-        console.log(`🔄 Ordenando produtos (grupos ocultos):`, {
-          produtoA: a.nome,
-          aHabilitada: a.ordenacao_cardapio_habilitada,
-          aDigital: a.ordenacao_cardapio_digital,
-          aTemOrdenacao,
-          produtoB: b.nome,
-          bHabilitada: b.ordenacao_cardapio_habilitada,
-          bDigital: b.ordenacao_cardapio_digital,
-          bTemOrdenacao
-        });
+
 
         if (aTemOrdenacao && bTemOrdenacao) {
           const posicaoA = Number(a.ordenacao_cardapio_digital);
           const posicaoB = Number(b.ordenacao_cardapio_digital);
           const resultado = posicaoA - posicaoB;
-          console.log(`🔢 Ordenação produtos: ${a.nome}(${posicaoA}) vs ${b.nome}(${posicaoB}) = ${resultado}`);
           return resultado;
         }
         if (aTemOrdenacao && !bTemOrdenacao) return -1;
@@ -1492,55 +1379,29 @@ const CardapioPublicoPage: React.FC = () => {
                              b.grupo.ordenacao_cardapio_digital !== null &&
                              b.grupo.ordenacao_cardapio_digital !== undefined;
 
-        console.log(`🔄 Ordenando grupos:`, {
-          grupoA: a.grupo.nome,
-          aHabilitada: a.grupo.ordenacao_cardapio_habilitada,
-          aDigital: a.grupo.ordenacao_cardapio_digital,
-          aTemOrdenacao,
-          grupoB: b.grupo.nome,
-          bHabilitada: b.grupo.ordenacao_cardapio_habilitada,
-          bDigital: b.grupo.ordenacao_cardapio_digital,
-          bTemOrdenacao,
-          resultado: aTemOrdenacao && bTemOrdenacao ?
-            `${a.grupo.nome}(${a.grupo.ordenacao_cardapio_digital}) vs ${b.grupo.nome}(${b.grupo.ordenacao_cardapio_digital}) = ${a.grupo.ordenacao_cardapio_digital - b.grupo.ordenacao_cardapio_digital}` :
-            aTemOrdenacao ? `${a.grupo.nome} vai primeiro (tem ordenação)` :
-            bTemOrdenacao ? `${b.grupo.nome} vai primeiro (tem ordenação)` :
-            `Ordem alfabética: ${a.grupo.nome} vs ${b.grupo.nome}`
-        });
+
 
         // Se ambos têm ordenação, ordenar por número (MENOR número = PRIMEIRO no topo)
         if (aTemOrdenacao && bTemOrdenacao) {
           const posicaoA = Number(a.grupo.ordenacao_cardapio_digital);
           const posicaoB = Number(b.grupo.ordenacao_cardapio_digital);
           const resultado = posicaoA - posicaoB; // Posição 1 vem antes de posição 2
-          console.log(`🔢 Ordenação numérica: ${a.grupo.nome}(posição ${posicaoA}) vs ${b.grupo.nome}(posição ${posicaoB}) = ${resultado}`);
-          console.log(`🔢 Resultado: ${resultado < 0 ? a.grupo.nome + ' vem PRIMEIRO' : resultado > 0 ? b.grupo.nome + ' vem PRIMEIRO' : 'EMPATE'}`);
           return resultado;
         }
         // Se apenas A tem ordenação, A vem primeiro
         if (aTemOrdenacao && !bTemOrdenacao) {
-          console.log(`📌 ${a.grupo.nome} vem primeiro (tem ordenação)`);
           return -1;
         }
         // Se apenas B tem ordenação, B vem primeiro
         if (!aTemOrdenacao && bTemOrdenacao) {
-          console.log(`📌 ${b.grupo.nome} vem primeiro (tem ordenação)`);
           return 1;
         }
         // Se nenhum tem ordenação, ordem alfabética
         const resultado = a.grupo.nome.localeCompare(b.grupo.nome);
-        console.log(`🔤 Ordem alfabética: ${a.grupo.nome} vs ${b.grupo.nome} = ${resultado}`);
         return resultado;
       });
 
-      // ✅ LOG: Verificar ordem final dos grupos
-      console.log('🎯 ORDEM FINAL DOS GRUPOS:', gruposOrdenados.map((item, index) => ({
-        posicao_na_lista: index + 1,
-        nome: item.grupo.nome,
-        tem_ordenacao: item.grupo.ordenacao_cardapio_habilitada,
-        posicao_configurada: item.grupo.ordenacao_cardapio_digital,
-        total_produtos: item.produtos.length
-      })));
+
 
       // Ordena produtos dentro de cada grupo
       gruposOrdenados.forEach(item => {
@@ -4609,10 +4470,20 @@ const CardapioPublicoPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Controles de quantidade posicionados centralizados verticalmente à direita */}
+                        {/* Controles de quantidade posicionados alinhados com o conteúdo principal */}
                         {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
                         {obterWhatsAppEmpresa() && !semEstoque && (
-                          <div className="absolute top-1/2 right-3 transform -translate-y-1/2 flex items-center gap-1">
+                          <div className={`absolute right-3 flex items-center gap-1 ${(() => {
+                            // Verificar se tem alguma tag para ajustar posicionamento
+                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+                            const temDescontoQtd = produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima;
+                            const temEstoque = produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null;
+
+                            const temAlgumTag = temPromocao || temDescontoQtd || temEstoque;
+                            // Se tem tags, posicionar mais abaixo para não conflitar
+                            // Se não tem tags, posicionar mais acima para alinhar com o conteúdo
+                            return temAlgumTag ? 'top-12' : 'top-6';
+                          })()}`}>
                             {/* Botão Decrementar */}
                             <button
                               onClick={() => decrementarQuantidade(produto.id)}
@@ -4722,10 +4593,20 @@ const CardapioPublicoPage: React.FC = () => {
                           })()}
                         </div>
 
-                        {/* Controles de quantidade posicionados centralizados verticalmente à direita */}
+                        {/* Controles de quantidade posicionados alinhados com o conteúdo principal */}
                         {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
                         {obterWhatsAppEmpresa() && !semEstoque && (
-                          <div className="absolute top-1/2 right-3 transform -translate-y-1/2 flex items-center gap-2">
+                          <div className={`absolute right-3 flex items-center gap-2 ${(() => {
+                            // Verificar se tem alguma tag para ajustar posicionamento
+                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+                            const temDescontoQtd = produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima;
+                            const temEstoque = produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null;
+
+                            const temAlgumTag = temPromocao || temDescontoQtd || temEstoque;
+                            // Se tem tags, posicionar mais abaixo para não conflitar
+                            // Se não tem tags, posicionar mais acima para alinhar com o conteúdo
+                            return temAlgumTag ? 'top-12' : 'top-8';
+                          })()}`}>
                             {/* Botão Decrementar */}
                             <button
                               onClick={() => decrementarQuantidade(produto.id)}

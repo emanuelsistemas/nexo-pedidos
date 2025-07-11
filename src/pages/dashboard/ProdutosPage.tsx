@@ -2481,8 +2481,8 @@ const ProdutosPage: React.FC = () => {
     setProdutoOrdenacaoCardapioHabilitada((produto as any).ordenacao_cardapio_habilitada || false);
     setProdutoOrdenacaoCardapioDigital((produto as any).ordenacao_cardapio_digital || '');
 
-    // ✅ CORREÇÃO: Atualizar estado do checkbox cardápio digital na edição
-    setCardapioDigitalHabilitado(produto.cardapio_digital || false);
+    // ✅ CORREÇÃO: Recarregar configuração de cardápio digital da empresa na edição
+    await carregarConfiguracaoCardapioDigital();
 
     // Garantir que os códigos CST/CSOSN estejam preenchidos
     if (produtoState.situacao_tributaria && (!produtoState.cst_icms || !produtoState.csosn_icms)) {
@@ -4038,8 +4038,8 @@ const ProdutosPage: React.FC = () => {
       setProdutoOrdenacaoCardapioHabilitada(false);
       setProdutoOrdenacaoCardapioDigital('');
 
-      // ✅ CORREÇÃO: Atualizar estado do checkbox cardápio digital
-      setCardapioDigitalHabilitado(produtoCriado.cardapio_digital || false);
+      // ✅ CORREÇÃO: Recarregar configuração de cardápio digital da empresa
+      await carregarConfiguracaoCardapioDigital();
 
       // Carregar fotos do produto clonado
       await loadProdutoFotos(produtoCriado.id);
@@ -7345,9 +7345,6 @@ const ProdutosPage: React.FC = () => {
 
                                 {/* Ícone de status */}
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                                  {ncmValidacao.validando && (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                                  )}
                                   {!ncmValidacao.validando && ncmValidacao.valido === true && (
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
                                       <polyline points="20 6 9 17 4 12"></polyline>
@@ -7360,6 +7357,16 @@ const ProdutosPage: React.FC = () => {
                                     </svg>
                                   )}
                                 </div>
+
+                                {/* Mensagem de carregamento NCM */}
+                                {ncmValidacao.validando && (
+                                  <div className="absolute inset-x-0 -bottom-8 bg-blue-900/20 border border-blue-700/50 rounded-lg px-3 py-2 z-10">
+                                    <div className="flex items-center gap-2">
+                                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500/30 border-t-blue-500"></div>
+                                      <span className="text-xs text-blue-300 font-medium">Aguarde Consultando NCM</span>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Mensagem de status */}

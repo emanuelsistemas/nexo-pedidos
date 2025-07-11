@@ -5970,9 +5970,7 @@ const ConfiguracoesPage: React.FC = () => {
 
                               {/* Ícone de status */}
                               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                {vendaSemProdutoNcmValidacao.validando ? (
-                                  <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
-                                ) : vendaSemProdutoNcmValidacao.valido === true ? (
+                                {vendaSemProdutoNcmValidacao.valido === true ? (
                                   <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
                                     <Check size={10} className="text-white" />
                                   </div>
@@ -5982,6 +5980,16 @@ const ConfiguracoesPage: React.FC = () => {
                                   </div>
                                 ) : null}
                               </div>
+
+                              {/* Mensagem de carregamento NCM */}
+                              {vendaSemProdutoNcmValidacao.validando && (
+                                <div className="absolute inset-x-0 -bottom-8 bg-blue-900/20 border border-blue-700/50 rounded-lg px-3 py-2 z-10">
+                                  <div className="flex items-center gap-2">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500/30 border-t-blue-500"></div>
+                                    <span className="text-xs text-blue-300 font-medium">Aguarde Consultando NCM</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                             {/* Feedback de validação */}
