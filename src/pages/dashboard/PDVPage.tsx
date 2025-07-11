@@ -325,6 +325,11 @@ const PDVPage: React.FC = () => {
   const [formaPagamentoPendente, setFormaPagamentoPendente] = useState<any>(null);
   const [parcelasFormaPagamento, setParcelasFormaPagamento] = useState<{[key: string]: number}>({});
 
+  // Estados para modal PIX
+  const [showModalPix, setShowModalPix] = useState(false);
+  const [qrCodePix, setQrCodePix] = useState('');
+  const [chavePix, setChavePix] = useState('');
+
   // ✅ NOVO: Estado para ambiente NFe (homologação/produção)
   const [ambienteNFe, setAmbienteNFe] = useState<'homologacao' | 'producao'>('homologacao');
 
@@ -6637,6 +6642,62 @@ const PDVPage: React.FC = () => {
     setParcelasSelecionadas(1);
   };
 
+  // Função para gerar QR Code PIX
+  const gerarQrCodePix = (valor: number, chave: string, tipoChave: string) => {
+    // Gerar payload PIX baseado no padrão EMV
+    const formatarChave = (chave: string, tipo: string) => {
+      switch (tipo) {
+        case 'telefone':
+          return `+55${chave.replace(/\D/g, '')}`;
+        case 'email':
+          return chave.toLowerCase();
+        case 'cpf':
+        case 'cnpj':
+          return chave.replace(/\D/g, '');
+        case 'chave_aleatoria':
+          return chave;
+        default:
+          return chave;
+      }
+    };
+
+    const chaveFormatada = formatarChave(chave, tipoChave);
+    const valorFormatado = valor.toFixed(2);
+
+    // Payload PIX simplificado (para demonstração)
+    // Em produção, usar biblioteca específica para gerar PIX
+    const payload = `00020126${chaveFormatada.length.toString().padStart(2, '0')}${chaveFormatada}5204000053039865802BR5925NOME_BENEFICIARIO_AQUI6009SAO_PAULO62070503***6304`;
+
+    return payload;
+  };
+
+  // Função para abrir modal PIX
+  const abrirModalPix = () => {
+    const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+    if (forma && forma.utilizar_chave_pix && forma.chave_pix) {
+      const valorTotal = calcularTotalComDesconto();
+      const qrCode = gerarQrCodePix(valorTotal, forma.chave_pix, forma.tipo_chave_pix);
+
+      setQrCodePix(qrCode);
+      setChavePix(forma.chave_pix);
+      setShowModalPix(true);
+    }
+  };
+
+  // Função para confirmar recebimento PIX
+  const confirmarRecebimentoPix = () => {
+    setShowModalPix(false);
+    // Continuar com a finalização normal
+    finalizarVendaCompleta('finalizar_sem_impressao');
+  };
+
+  // Função para cancelar PIX
+  const cancelarPix = () => {
+    setShowModalPix(false);
+    setQrCodePix('');
+    setChavePix('');
+  };
+
   // Função para verificar se há pagamento com cartão
   const temPagamentoCartao = () => {
     if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
@@ -12730,6 +12791,34 @@ const PDVPage: React.FC = () => {
                           </div>
                         )}
 
+                        {/* Forma de Pagamento Selecionada */}
+                        {formaPagamentoSelecionada && (
+                          <div className="flex justify-between items-center text-xs mb-1.5">
+                            <span className="text-gray-400">Forma de Pagamento:</span>
+                            <span className="text-blue-400 font-medium">
+                              {(() => {
+                                const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+                                if (!forma) return 'Não selecionada';
+
+                                let texto = forma.nome;
+
+                                // Adicionar informações específicas para cartão de crédito
+                                if (forma.tipo === 'cartao_credito' && parcelasFormaPagamento[forma.id] > 1) {
+                                  texto += ` (${parcelasFormaPagamento[forma.id]}x)`;
+                                }
+
+                                // Adicionar informações específicas para PIX
+                                if (forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.tipo_chave_pix) {
+                                  const tipoChave = forma.tipo_chave_pix.replace('_', ' ');
+                                  texto += ` (${tipoChave})`;
+                                }
+
+                                return texto;
+                              })()}
+                            </span>
+                          </div>
+                        )}
+
                         {/* Total Final - Compacto */}
                         <div className="flex justify-between items-center mb-0 pt-1.5 border-t border-gray-700">
                           <span className="text-white text-sm">Total da Venda:</span>
@@ -13364,8 +13453,18 @@ const PDVPage: React.FC = () => {
                       console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                       return;
                     }
+
                     setShowPagamentoModal(false);
-                    finalizarVendaCompleta('finalizar_sem_impressao');
+
+                    // Verificar se é PIX com chave configurada
+                    const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+                    if (forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix) {
+                      // Abrir modal PIX
+                      abrirModalPix();
+                    } else {
+                      // Finalizar normalmente
+                      finalizarVendaCompleta('finalizar_sem_impressao');
+                    }
                   }}
                   disabled={showProcessandoVenda}
                   className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
@@ -19084,6 +19183,93 @@ const PDVPage: React.FC = () => {
                   className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
                 >
                   Confirmar {parcelasSelecionadas}x
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal PIX QR Code */}
+      <AnimatePresence>
+        {showModalPix && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card p-6 rounded-lg shadow-xl max-w-md mx-4 w-full border border-gray-800"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-white">
+                  Pagamento PIX
+                </h3>
+                <button
+                  onClick={cancelarPix}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="text-center mb-6">
+                <div className="mb-4">
+                  <h4 className="text-lg font-medium text-white mb-2">
+                    Escaneie o QR Code para pagar
+                  </h4>
+                  <p className="text-gray-400 text-sm">
+                    Valor: <span className="text-primary-400 font-bold">{formatCurrency(calcularTotalComDesconto())}</span>
+                  </p>
+                </div>
+
+                {/* QR Code */}
+                <div className="bg-white p-4 rounded-lg mb-4 mx-auto w-fit">
+                  <div className="w-48 h-48 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                    {qrCodePix ? (
+                      <div className="text-center">
+                        <div className="text-xs text-gray-600 mb-2">QR Code PIX</div>
+                        <div className="text-xs text-gray-500 break-all p-2 bg-gray-50 rounded">
+                          {qrCodePix.substring(0, 50)}...
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-gray-400 text-sm">Gerando QR Code...</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Informações da chave PIX */}
+                <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
+                  <div className="text-sm text-gray-400 mb-1">Chave PIX:</div>
+                  <div className="text-white font-mono text-sm break-all">{chavePix}</div>
+                </div>
+
+                {/* Instruções */}
+                <div className="text-xs text-gray-400 mb-4">
+                  <p>1. Abra o app do seu banco</p>
+                  <p>2. Escaneie o QR Code ou copie a chave PIX</p>
+                  <p>3. Confirme o pagamento no seu banco</p>
+                  <p>4. Clique em "Confirmar Recebimento" após o pagamento</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelarPix}
+                  className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarRecebimentoPix}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                >
+                  Confirmar Recebimento
                 </button>
               </div>
             </motion.div>

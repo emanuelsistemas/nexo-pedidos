@@ -383,7 +383,7 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // ✅ CONFIGURAÇÃO PADRÃO DA BIBLIOTECA KEEN SLIDER
+  // ✅ CONFIGURAÇÃO BASEADA NO EXEMPLO OFICIAL "AUTO WIDTH"
   const [sliderRef, instanceRef] = useKeenSlider({
     slides: {
       perView: "auto",
@@ -4108,16 +4108,17 @@ const CardapioPublicoPage: React.FC = () => {
                         })));
 
                         return todasCategorias.map((categoria) => (
-                          <div key={categoria.id} className="keen-slider__slide" style={{ minWidth: '120px', width: '120px' }}>
+                          <div key={categoria.id} className="keen-slider__slide">
                             <button
                               onClick={() => setGrupoSelecionado(categoria.id)}
-                              className={`flex items-center justify-center transition-all duration-200 h-full px-4 font-medium text-sm whitespace-nowrap w-full ${
+                              className={`flex items-center justify-center transition-all duration-200 h-full px-4 py-2 font-medium text-sm whitespace-nowrap rounded-lg ${
                                 grupoSelecionado === categoria.id
                                   ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
                                   : config.modo_escuro
                                   ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                                   : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
                               }`}
+                              style={{ minWidth: '100px' }}
                             >
                               {categoria.nome}
                             </button>
@@ -4128,26 +4129,37 @@ const CardapioPublicoPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ✅ INDICADORES PADRÃO DA BIBLIOTECA */}
-                {loaded && instanceRef.current && (grupos.length + 1) > 4 && (
-                  <div className="flex justify-center mt-3 space-x-1">
-                    {Array.from({
-                      length: instanceRef.current.track.details.slides.length
-                    }).map((_, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => instanceRef.current?.moveToIdx(idx)}
-                        className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                          currentSlide === idx
-                            ? 'bg-gradient-to-r from-purple-600 to-blue-600'
-                            : config.modo_escuro
-                            ? 'bg-gray-600'
-                            : 'bg-gray-300'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
+                {/* ✅ INDICADORES SIMPLIFICADOS - BASEADOS NO TOTAL DE CATEGORIAS */}
+                {loaded && instanceRef.current && (() => {
+                  const totalCategorias = grupos.length + 1; // +1 para "Todos"
+                  const categoriasVisiveis = Math.floor((window.innerWidth - 100) / 130); // Aproximadamente quantas cabem na tela
+
+                  // Só mostra indicadores se há mais categorias do que cabem na tela
+                  if (totalCategorias <= categoriasVisiveis) return null;
+
+                  const totalDots = Math.ceil(totalCategorias / categoriasVisiveis);
+
+                  return totalDots > 1 && (
+                    <div className="flex justify-center mt-3 space-x-1">
+                      {Array.from({ length: totalDots }).map((_, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            const targetSlide = idx * categoriasVisiveis;
+                            instanceRef.current?.moveToIdx(Math.min(targetSlide, totalCategorias - 1));
+                          }}
+                          className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                            Math.floor(currentSlide / categoriasVisiveis) === idx
+                              ? 'bg-gradient-to-r from-purple-600 to-blue-600'
+                              : config.modo_escuro
+                              ? 'bg-gray-600'
+                              : 'bg-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
