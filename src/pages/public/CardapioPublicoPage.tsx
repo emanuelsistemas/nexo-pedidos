@@ -387,16 +387,8 @@ const CardapioPublicoPage: React.FC = () => {
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
     slides: {
-      perView: 4, // 4 categorias visíveis por vez
+      perView: 4,
       spacing: 8,
-    },
-    breakpoints: {
-      "(max-width: 768px)": {
-        slides: { perView: 3, spacing: 6 }
-      },
-      "(max-width: 480px)": {
-        slides: { perView: 2, spacing: 4 }
-      }
     },
     slideChanged(slider) {
       setCurrentSlide(slider.track.details.rel);
@@ -4080,7 +4072,11 @@ const CardapioPublicoPage: React.FC = () => {
 
                         // ✅ IMPLEMENTAÇÃO NATIVA DO KEEN SLIDER - CADA CATEGORIA É UM SLIDE
                         return todasCategorias.map((categoria) => (
-                          <div key={categoria.id} className="keen-slider__slide">
+                          <div
+                            key={categoria.id}
+                            className="keen-slider__slide"
+                            style={{ minWidth: '120px', width: '120px' }}
+                          >
                             <button
                               onClick={() => setGrupoSelecionado(categoria.id)}
                               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
