@@ -4195,6 +4195,11 @@ const CardapioPublicoPage: React.FC = () => {
                             }
                           }}
                         >
+                          {(grupo as any).exibir_emoji_cardapio && (grupo as any).emoji_selecionado && (
+                            <span style={{ marginRight: '0.5rem' }}>
+                              {(grupo as any).emoji_selecionado}
+                            </span>
+                          )}
                           {grupo.nome}
                         </button>
                       </div>

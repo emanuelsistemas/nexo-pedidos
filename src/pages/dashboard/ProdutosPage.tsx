@@ -180,6 +180,25 @@ const ProdutosPage: React.FC = () => {
   const [percentualComissao, setPercentualComissao] = useState(0);
   const [ordenacaoCardapioHabilitada, setOrdenacaoCardapioHabilitada] = useState(false);
   const [ordenacaoCardapioDigital, setOrdenacaoCardapioDigital] = useState<number | ''>('');
+  const [exibirEmojiCardapio, setExibirEmojiCardapio] = useState(false);
+  const [emojiSelecionado, setEmojiSelecionado] = useState('');
+
+  // Lista de emojis populares para categorias
+  const emojisDisponiveis = [
+    '🍕', '🍔', '🌭', '🥪', '🌮', '🌯', '🥙', '🍖', '🍗', '🥓',
+    '🍟', '🍿', '🥨', '🥯', '🧀', '🥚', '🍳', '🥞', '🧇', '🥐',
+    '🍞', '🥖', '🥨', '🧈', '🍯', '🥜', '🌰', '🥥', '🥝', '🍅',
+    '🥑', '🌶️', '🫒', '🥒', '🥬', '🥦', '🌽', '🥕', '🧄', '🧅',
+    '🍄', '🥔', '🍠', '🫘', '🥗', '🍲', '🍱', '🍘', '🍙', '🍚',
+    '🍛', '🍜', '🍝', '🍠', '🍢', '🍣', '🍤', '🍥', '🥮', '🍡',
+    '🥟', '🥠', '🥡', '🦀', '🦞', '🦐', '🦑', '🐙', '🍦', '🍧',
+    '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭',
+    '🍮', '🍯', '🍼', '🥛', '☕', '🫖', '🍵', '🍶', '🍾', '🍷',
+    '🍸', '🍹', '🍺', '🍻', '🥂', '🥃', '🧃', '🧉', '🧊', '🥤',
+    '🍇', '🍈', '🍉', '🍊', '🍋', '🍌', '🍍', '🥭', '🍎', '🍏',
+    '🍐', '🍑', '🍒', '🍓', '🫐', '🥝', '🍅', '🫒', '🥥', '🥑'
+  ];
+
   const [produtoOrdenacaoCardapioHabilitada, setProdutoOrdenacaoCardapioHabilitada] = useState(false);
   const [produtoOrdenacaoCardapioDigital, setProdutoOrdenacaoCardapioDigital] = useState<number | ''>('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -2161,7 +2180,7 @@ const ProdutosPage: React.FC = () => {
       // Buscar dados atualizados do grupo no banco
       const { data: grupoAtualizado, error: grupoError } = await supabase
         .from('grupos')
-        .select('*, comissao_percentual, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
+        .select('*, comissao_percentual, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital, exibir_emoji_cardapio, emoji_selecionado')
         .eq('id', grupo.id)
         .eq('empresa_id', usuarioData.empresa_id)
         .single();
@@ -2184,6 +2203,8 @@ const ProdutosPage: React.FC = () => {
     setPercentualComissao((grupo as any).comissao_percentual || 0);
     setOrdenacaoCardapioHabilitada((grupo as any).ordenacao_cardapio_habilitada || false);
     setOrdenacaoCardapioDigital((grupo as any).ordenacao_cardapio_digital || '');
+    setExibirEmojiCardapio((grupo as any).exibir_emoji_cardapio || false);
+    setEmojiSelecionado((grupo as any).emoji_selecionado || '');
     setShowSidebar(true);
   };
 
@@ -3135,7 +3156,9 @@ const ProdutosPage: React.FC = () => {
             nome: novoGrupoNome,
             comissao_percentual: novoPercentual,
             ordenacao_cardapio_habilitada: ordenacaoCardapioHabilitada,
-            ordenacao_cardapio_digital: ordenacaoCardapioHabilitada ? Number(ordenacaoCardapioDigital) : null
+            ordenacao_cardapio_digital: ordenacaoCardapioHabilitada ? Number(ordenacaoCardapioDigital) : null,
+            exibir_emoji_cardapio: exibirEmojiCardapio,
+            emoji_selecionado: exibirEmojiCardapio ? emojiSelecionado : null
           })
           .eq('id', selectedGrupo.id)
           .select()
@@ -3160,7 +3183,9 @@ const ProdutosPage: React.FC = () => {
             empresa_id: usuarioData.empresa_id,
             comissao_percentual: comissaoPorGrupo ? percentualComissao : 0,
             ordenacao_cardapio_habilitada: ordenacaoCardapioHabilitada,
-            ordenacao_cardapio_digital: ordenacaoCardapioHabilitada ? Number(ordenacaoCardapioDigital) : null
+            ordenacao_cardapio_digital: ordenacaoCardapioHabilitada ? Number(ordenacaoCardapioDigital) : null,
+            exibir_emoji_cardapio: exibirEmojiCardapio,
+            emoji_selecionado: exibirEmojiCardapio ? emojiSelecionado : null
           }])
           .select()
           .single();
@@ -4419,6 +4444,8 @@ const ProdutosPage: React.FC = () => {
     setPercentualComissao(0);
     setOrdenacaoCardapioHabilitada(false);
     setOrdenacaoCardapioDigital('');
+    setExibirEmojiCardapio(false);
+    setEmojiSelecionado('');
     setSelectedGrupo(null);
 
     // Resetar campos de ordenação do produto
@@ -5592,6 +5619,65 @@ const ProdutosPage: React.FC = () => {
                               className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               placeholder="Ex: 1, 2, 3..."
                             />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Configurações de Emoji nas Categorias - só aparece se cardápio digital estiver habilitado */}
+                    {cardapioDigitalHabilitado && (
+                      <div className="space-y-4 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+                        <h4 className="text-sm font-medium text-gray-300">Incluir emoji nas categorias</h4>
+
+                        <div>
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={exibirEmojiCardapio}
+                              onChange={(e) => {
+                                setExibirEmojiCardapio(e.target.checked);
+                                if (!e.target.checked) {
+                                  setEmojiSelecionado('');
+                                }
+                              }}
+                              className="mr-2 text-primary-500 focus:ring-primary-500"
+                            />
+                            <span className="text-gray-300">Incluir emoji nas categorias</span>
+                          </label>
+                        </div>
+
+                        {exibirEmojiCardapio && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-3">
+                              Selecione um emoji
+                            </label>
+                            <div className="grid grid-cols-8 gap-2 max-h-40 overflow-y-auto p-2 bg-gray-900/50 rounded-lg border border-gray-600">
+                              {emojisDisponiveis.map((emoji, index) => (
+                                <button
+                                  key={index}
+                                  type="button"
+                                  onClick={() => setEmojiSelecionado(emoji)}
+                                  className={`
+                                    w-10 h-10 text-xl rounded-lg border-2 transition-all duration-200 hover:scale-110
+                                    ${emojiSelecionado === emoji
+                                      ? 'border-primary-500 bg-primary-500/20 shadow-lg'
+                                      : 'border-gray-600 hover:border-gray-500 bg-gray-800/50'
+                                    }
+                                  `}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                            {emojiSelecionado && (
+                              <div className="mt-3 p-3 bg-gray-900/50 rounded-lg border border-gray-600">
+                                <p className="text-sm text-gray-400 mb-2">Emoji selecionado:</p>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-2xl">{emojiSelecionado}</span>
+                                  <span className="text-gray-300">{novoGrupoNome || 'Nome da categoria'}</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
