@@ -139,7 +139,9 @@ const TesteKeenSliderPublicoPage: React.FC = () => {
             nome: grupo.nome,
             empresa_id: grupo.empresa_id,
             created_at: grupo.created_at,
-            updated_at: grupo.updated_at
+            updated_at: grupo.updated_at,
+            exibir_emoji_cardapio: grupo.exibir_emoji_cardapio,
+            emoji_selecionado: grupo.emoji_selecionado
           });
         }
         return acc;
@@ -577,6 +579,11 @@ const TesteKeenSliderPublicoPage: React.FC = () => {
                             boxShadow: grupoSelecionadoReal === grupo.id ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none'
                           }}
                         >
+                          {grupo.exibir_emoji_cardapio && grupo.emoji_selecionado && (
+                            <span style={{ marginRight: '0.5rem' }}>
+                              {grupo.emoji_selecionado}
+                            </span>
+                          )}
                           {grupo.nome}
                         </button>
                       </div>

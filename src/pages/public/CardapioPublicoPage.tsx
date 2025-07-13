@@ -1185,7 +1185,7 @@ const CardapioPublicoPage: React.FC = () => {
       if (gruposIds.length > 0) {
         const { data: gruposResult, error: gruposError } = await supabase
           .from('grupos')
-          .select('id, nome, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital')
+          .select('id, nome, ordenacao_cardapio_habilitada, ordenacao_cardapio_digital, exibir_emoji_cardapio, emoji_selecionado')
           .in('id', gruposIds);
 
         if (!gruposError && gruposResult) {
@@ -1263,7 +1263,9 @@ const CardapioPublicoPage: React.FC = () => {
         id: grupo.id,
         nome: grupo.nome,
         ordenacao_cardapio_habilitada: grupo.ordenacao_cardapio_habilitada,
-        ordenacao_cardapio_digital: grupo.ordenacao_cardapio_digital
+        ordenacao_cardapio_digital: grupo.ordenacao_cardapio_digital,
+        exibir_emoji_cardapio: grupo.exibir_emoji_cardapio,
+        emoji_selecionado: grupo.emoji_selecionado
       }));
 
       // Log de grupos únicos removido
