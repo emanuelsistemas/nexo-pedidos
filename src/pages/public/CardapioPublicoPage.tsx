@@ -379,15 +379,25 @@ const CardapioPublicoPage: React.FC = () => {
   const [termoPesquisa, setTermoPesquisa] = useState<string>('');
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
-  // Estados para o Keen Slider
+  // Estados para o Keen Slider das categorias
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  // ✅ CONFIGURAÇÃO ULTRA SIMPLES - SEM COMPLICAÇÕES
+  // ✅ CONFIGURAÇÃO NATIVA DO KEEN SLIDER PARA CATEGORIAS
   const [sliderRef, instanceRef] = useKeenSlider({
-    loop: false,
-    mode: "snap",
-    slides: { perView: 1, spacing: 0 },
+    initial: 0,
+    slides: {
+      perView: 4, // 4 categorias visíveis por vez
+      spacing: 8,
+    },
+    breakpoints: {
+      "(max-width: 768px)": {
+        slides: { perView: 3, spacing: 6 }
+      },
+      "(max-width: 480px)": {
+        slides: { perView: 2, spacing: 4 }
+      }
+    },
     slideChanged(slider) {
       setCurrentSlide(slider.track.details.rel);
     },
@@ -4068,42 +4078,28 @@ const CardapioPublicoPage: React.FC = () => {
                           ...gruposOrdenados
                         ];
 
-                        // ✅ LOG KEEN SLIDER: Verificar categorias para o slider
-                        console.log('🏷️ KEEN SLIDER - Total de categorias:', todasCategorias.length);
-                        console.log('🏷️ KEEN SLIDER - Categorias:', todasCategorias.map(c => c.nome));
-
-                        // Agrupar categorias em "páginas" de 4 (desktop) ou 3 (mobile)
-                        const categoriasPerPage = window.innerWidth <= 768 ? 3 : 4;
-                        const pages = [];
-
-                        for (let i = 0; i < todasCategorias.length; i += categoriasPerPage) {
-                          pages.push(todasCategorias.slice(i, i + categoriasPerPage));
-                        }
-
-                        return pages.map((pageCategories, pageIndex) => (
-                          <div key={pageIndex} className="keen-slider__slide">
-                            <div className="flex gap-2 w-full h-full">
-                              {pageCategories.map((categoria) => (
-                                <button
-                                  key={categoria.id}
-                                  onClick={() => setGrupoSelecionado(categoria.id)}
-                                  className={`flex-1 px-3 py-2 font-medium text-sm whitespace-nowrap rounded-lg transition-all duration-200 min-w-0 ${
-                                    grupoSelecionado === categoria.id
-                                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                                      : config.modo_escuro
-                                      ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-                                      : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
-                                  }`}
-                                  style={{
-                                    maxWidth: `${100 / pageCategories.length}%`,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}
-                                >
-                                  {categoria.nome}
-                                </button>
-                              ))}
-                            </div>
+                        // ✅ IMPLEMENTAÇÃO NATIVA DO KEEN SLIDER - CADA CATEGORIA É UM SLIDE
+                        return todasCategorias.map((categoria) => (
+                          <div
+                            key={categoria.id}
+                            className="keen-slider__slide"
+                            style={{ minWidth: '120px', width: '120px' }}
+                          >
+                            <button
+                              onClick={() => setGrupoSelecionado(categoria.id)}
+                              className={`
+                                flex items-center justify-center transition-all duration-200
+                                h-full px-3 font-medium text-sm whitespace-nowrap w-full rounded-lg
+                                ${grupoSelecionado === categoria.id
+                                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                                  : config.modo_escuro
+                                  ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                                  : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
+                                }
+                              `}
+                            >
+                              {categoria.nome}
+                            </button>
                           </div>
                         ));
                       })()}
@@ -4111,31 +4107,22 @@ const CardapioPublicoPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ✅ INDICADORES SIMPLES - 1 POR PÁGINA */}
-                {loaded && instanceRef.current && (() => {
-                  const totalSlides = instanceRef.current.track.details.slides.length;
-
-                  // Só mostra indicadores se há mais de 1 página
-                  if (totalSlides <= 1) return null;
-
-                  return (
-                    <div className="flex justify-center mt-3 space-x-1">
-                      {Array.from({ length: totalSlides }).map((_, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => instanceRef.current?.moveToIdx(idx)}
-                          className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                            currentSlide === idx
-                              ? 'bg-gradient-to-r from-purple-600 to-blue-600'
-                              : config.modo_escuro
-                              ? 'bg-gray-600'
-                              : 'bg-gray-300'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  );
-                })()}
+                {/* ✅ INDICADORES NATIVOS DO KEEN SLIDER */}
+                {loaded && instanceRef.current && grupos.length > 3 && (
+                  <div className="flex justify-center mt-3 space-x-1">
+                    {Array.from({ length: Math.ceil((grupos.length + 1) / 4) }).map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => instanceRef.current?.moveToIdx(idx)}
+                        className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                          currentSlide === idx
+                            ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                            : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
