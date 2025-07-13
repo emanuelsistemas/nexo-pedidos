@@ -4080,23 +4080,16 @@ const CardapioPublicoPage: React.FC = () => {
 
                         // ✅ IMPLEMENTAÇÃO NATIVA DO KEEN SLIDER - CADA CATEGORIA É UM SLIDE
                         return todasCategorias.map((categoria) => (
-                          <div
-                            key={categoria.id}
-                            className="keen-slider__slide"
-                            style={{ minWidth: '120px', width: '120px' }}
-                          >
+                          <div key={categoria.id} className="keen-slider__slide">
                             <button
                               onClick={() => setGrupoSelecionado(categoria.id)}
-                              className={`
-                                flex items-center justify-center transition-all duration-200
-                                h-full px-3 font-medium text-sm whitespace-nowrap w-full rounded-lg
-                                ${grupoSelecionado === categoria.id
+                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                                grupoSelecionado === categoria.id
                                   ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
                                   : config.modo_escuro
                                   ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
                                   : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
-                                }
-                              `}
+                              }`}
                             >
                               {categoria.nome}
                             </button>
