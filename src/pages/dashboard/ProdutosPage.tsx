@@ -5337,7 +5337,14 @@ const ProdutosPage: React.FC = () => {
                     >
                   <div className="p-3 border-b border-gray-800 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-base font-medium text-white">{grupo.nome}</h3>
+                      <h3 className="text-base font-medium text-white flex items-center gap-2">
+                        {(grupo as any).exibir_emoji_cardapio && (grupo as any).emoji_selecionado && (
+                          <span className="text-lg">
+                            {(grupo as any).emoji_selecionado}
+                          </span>
+                        )}
+                        {grupo.nome}
+                      </h3>
                       {/* Tag de posição do grupo no cardápio digital */}
                       {temPosicionamentoFixo && (
                         <span className="inline-flex items-center gap-1 bg-green-600/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-medium">
