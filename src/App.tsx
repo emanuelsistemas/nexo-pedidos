@@ -25,6 +25,8 @@ import EstoqueMinimoPage from './pages/dashboard/EstoqueMinimoPage';
 import NfePage from './pages/dashboard/NfePage';
 import InutilizacaoPage from './pages/dashboard/InutilizacaoPage';
 import TesteEmailPage from './pages/dashboard/TesteEmailPage';
+import TesteKeenSliderPage from './pages/dashboard/TesteKeenSliderPage';
+import TestePixPage from './pages/dashboard/TestePixPage';
 import RelatoriosPage from './pages/dashboard/RelatoriosPage';
 
 // Páginas de usuário mobile
@@ -41,6 +43,7 @@ import UserPerfilPage from './pages/user/UserPerfilPage';
 import NotaPedidoPage from './pages/public/NotaPedidoPage';
 import ContadorPortalPage from './pages/public/ContadorPortalPage';
 import CardapioPublicoPage from './pages/public/CardapioPublicoPage';
+import TesteKeenSliderPublicoPage from './pages/public/TesteKeenSliderPublicoPage';
 
 function App() {
   return (
@@ -55,6 +58,7 @@ function App() {
         <Route path="/pedido/:codigoPedido" element={<NotaPedidoPage />} />
         <Route path="/contador" element={<ContadorPortalPage />} />
         <Route path="/cardapio/:slug" element={<CardapioPublicoPage />} />
+        <Route path="/teste-keen-slider" element={<TesteKeenSliderPublicoPage />} />
 
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
@@ -77,6 +81,8 @@ function App() {
           <Route path="nfe" element={<NfePage />} />
           <Route path="inutilizacao" element={<InutilizacaoPage />} />
           <Route path="teste-email" element={<TesteEmailPage />} />
+          <Route path="teste-keen-slider" element={<TesteKeenSliderPage />} />
+          <Route path="teste-pix" element={<TestePixPage />} />
           <Route path="relatorios" element={<RelatoriosPage />} />
           <Route path="configuracoes" element={<ConfiguracoesPage />} />
         </Route>

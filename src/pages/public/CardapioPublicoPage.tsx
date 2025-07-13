@@ -4,12 +4,13 @@ import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, 
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
-// Swiper imports
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
+// Keen Slider para outros componentes
+import { useKeenSlider } from "keen-slider/react";
+import "keen-slider/keen-slider.min.css";
+
+// Keen Slider imports para categorias
+import { useKeenSlider } from "keen-slider/react";
+import "keen-slider/keen-slider.min.css";
 
 // Componente para slider de promoções
 interface PromocoesSliderProps {
@@ -383,8 +384,41 @@ const CardapioPublicoPage: React.FC = () => {
   const [termoPesquisa, setTermoPesquisa] = useState<string>('');
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
-  // Estados para o Swiper das categorias
+  // Estados para o Keen Slider das categorias
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  // Configuração do Keen Slider para categorias
+  const [sliderRef, instanceRef] = useKeenSlider({
+    initial: 0,
+    slides: {
+      perView: 4, // 4 categorias por slide
+      spacing: 8,
+    },
+    breakpoints: {
+      "(max-width: 768px)": {
+        slides: { perView: 3, spacing: 6 }
+      },
+      "(max-width: 480px)": {
+        slides: { perView: 2, spacing: 4 }
+      }
+    },
+    slideChanged(slider) {
+      const currentIndex = slider.track.details.rel;
+      setCurrentSlide(currentIndex);
+    },
+    animationEnded(slider) {
+      const currentIndex = slider.track.details.rel;
+      setCurrentSlide(currentIndex);
+    },
+    dragEnded(slider) {
+      const currentIndex = slider.track.details.rel;
+      setCurrentSlide(currentIndex);
+    },
+    created() {
+      setLoaded(true);
+    },
+  });
 
   // Função para calcular valor final com desconto
   const calcularValorFinal = (preco: number, tipoDesconto: string, valorDesconto: number): number => {
@@ -4022,7 +4056,7 @@ const CardapioPublicoPage: React.FC = () => {
                 {/* Slider Container */}
                 <div className="h-12 flex items-center">
                   <div className="flex-1 h-full">
-                    <div ref={sliderRef} className="keen-slider h-full">
+                    <div className="h-full">
                       {(() => {
                         // ✅ APLICAR A MESMA LÓGICA DE ORDENAÇÃO DOS GRUPOS
                         const gruposOrdenados = [...grupos].sort((a, b) => {
@@ -4058,55 +4092,62 @@ const CardapioPublicoPage: React.FC = () => {
                           ...gruposOrdenados
                         ];
 
-                        // ✅ IMPLEMENTAÇÃO NATIVA DO KEEN SLIDER - CADA CATEGORIA É UM SLIDE
-                        return todasCategorias.map((categoria) => (
-                          <div
-                            key={categoria.id}
-                            className="keen-slider__slide"
-                            style={{ minWidth: '120px', width: '120px' }}
-                          >
-                            <button
-                              onClick={() => setGrupoSelecionado(categoria.id)}
-                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                                grupoSelecionado === categoria.id
-                                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                                  : config.modo_escuro
-                                  ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-                                  : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
-                              }`}
-                            >
-                              {categoria.nome}
-                            </button>
+                        // ✅ IMPLEMENTAÇÃO COM KEEN SLIDER - NAVEGAÇÃO FLUIDA
+                        return (
+                          <div className="flex-1 h-12 relative">
+                            {/* Slider Container */}
+                            <div ref={sliderRef} className="keen-slider h-full">
+                              {todasCategorias.map((categoria) => (
+                                <div
+                                  key={categoria.id}
+                                  className="keen-slider__slide"
+                                  style={{ minWidth: '120px', width: '120px' }}
+                                >
+                                  <button
+                                    onClick={() => setGrupoSelecionado(categoria.id)}
+                                    className={`
+                                      flex items-center justify-center transition-all duration-200
+                                      h-full px-4 font-medium text-sm whitespace-nowrap w-full rounded-md
+                                      ${grupoSelecionado === categoria.id
+                                        ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                                        : config.modo_escuro
+                                        ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                                        : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
+                                      }
+                                    `}
+                                  >
+                                    {categoria.nome}
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Indicadores de Dots */}
+                            {loaded && instanceRef.current && todasCategorias.length > 4 && (
+                              <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-1">
+                                {Array.from({ length: Math.ceil(todasCategorias.length / 4) }).map((_, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => instanceRef.current?.moveToIdx(idx)}
+                                    className={`
+                                      w-2 h-2 rounded-full transition-all duration-200
+                                      ${currentSlide === idx
+                                        ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                                        : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
+                                      }
+                                    `}
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        ));
+                        );
                       })()}
                     </div>
                   </div>
                 </div>
 
-                {/* ✅ INDICADORES PARA perView: "auto" */}
-                {loaded && instanceRef.current && (() => {
-                  const totalSlides = instanceRef.current.track.details.slides.length;
 
-                  // Só mostra indicadores se há mais slides do que cabem na tela
-                  if (totalSlides <= 4) return null;
-
-                  return (
-                    <div className="flex justify-center mt-3 space-x-1">
-                      {Array.from({ length: totalSlides }).map((_, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => instanceRef.current?.moveToIdx(idx)}
-                          className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                            currentSlide === idx
-                              ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                              : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  );
-                })()}
               </div>
             </div>
           </div>
