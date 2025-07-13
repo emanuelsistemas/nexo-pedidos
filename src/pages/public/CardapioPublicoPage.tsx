@@ -4,8 +4,12 @@ import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, 
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
-import { useKeenSlider } from "keen-slider/react";
-import "keen-slider/keen-slider.min.css";
+// Swiper imports
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 
 // Componente para slider de promoções
 interface PromocoesSliderProps {
@@ -379,24 +383,8 @@ const CardapioPublicoPage: React.FC = () => {
   const [termoPesquisa, setTermoPesquisa] = useState<string>('');
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
-  // Estados para o Keen Slider das categorias
+  // Estados para o Swiper das categorias
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [loaded, setLoaded] = useState(false);
-
-  // ✅ CONFIGURAÇÃO NATIVA DO KEEN SLIDER PARA CATEGORIAS
-  const [sliderRef, instanceRef] = useKeenSlider({
-    initial: 0,
-    slides: {
-      perView: 4,
-      spacing: 8,
-    },
-    slideChanged(slider) {
-      setCurrentSlide(slider.track.details.rel);
-    },
-    created() {
-      setLoaded(true);
-    },
-  });
 
   // Função para calcular valor final com desconto
   const calcularValorFinal = (preco: number, tipoDesconto: string, valorDesconto: number): number => {
@@ -4096,22 +4084,29 @@ const CardapioPublicoPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ✅ INDICADORES NATIVOS DO KEEN SLIDER */}
-                {loaded && instanceRef.current && grupos.length > 3 && (
-                  <div className="flex justify-center mt-3 space-x-1">
-                    {Array.from({ length: Math.ceil((grupos.length + 1) / 4) }).map((_, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => instanceRef.current?.moveToIdx(idx)}
-                        className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                          currentSlide === idx
-                            ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                            : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
+                {/* ✅ INDICADORES PARA perView: "auto" */}
+                {loaded && instanceRef.current && (() => {
+                  const totalSlides = instanceRef.current.track.details.slides.length;
+
+                  // Só mostra indicadores se há mais slides do que cabem na tela
+                  if (totalSlides <= 4) return null;
+
+                  return (
+                    <div className="flex justify-center mt-3 space-x-1">
+                      {Array.from({ length: totalSlides }).map((_, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => instanceRef.current?.moveToIdx(idx)}
+                          className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                            currentSlide === idx
+                              ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
+                              : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
