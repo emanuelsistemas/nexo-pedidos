@@ -465,6 +465,14 @@ const CardapioPublicoPage: React.FC = () => {
     exibir_desconto_qtd_minimo_no_cardapio_digital: produto.exibir_desconto_qtd_minimo_no_cardapio_digital
   }));
 
+  // Filtrar produtos em promoção com base no termo de pesquisa
+  const produtosEmPromocaoFiltrados = produtosEmPromocao.filter(produto => {
+    if (!termoPesquisa) return true;
+
+    const termo = termoPesquisa.toLowerCase();
+    return produto.nome.toLowerCase().includes(termo);
+  });
+
   // Estados para controle de quantidade dos produtos (carrinho)
   const [quantidadesProdutos, setQuantidadesProdutos] = useState<Record<string, number>>({});
   const [produtoEditandoQuantidade, setProdutoEditandoQuantidade] = useState<string | null>(null);
@@ -4288,7 +4296,7 @@ const CardapioPublicoPage: React.FC = () => {
       </div>
 
       {/* Seção de Promoções */}
-      {produtosEmPromocao.length > 0 && (
+      {produtosEmPromocaoFiltrados.length > 0 && (
         <div className={`${config.modo_escuro ? 'bg-gray-800/20' : 'bg-gradient-to-r from-red-50 to-pink-50'} border-b ${config.modo_escuro ? 'border-gray-700' : 'border-red-100'}`}>
           <div className="max-w-6xl mx-auto px-4 py-6">
             {/* Cabeçalho da seção */}
@@ -4304,13 +4312,13 @@ const CardapioPublicoPage: React.FC = () => {
                   ? 'bg-red-900/50 text-red-300 border border-red-700'
                   : 'bg-red-100 text-red-700 border border-red-200'
               }`}>
-                {produtosEmPromocao.length} {produtosEmPromocao.length === 1 ? 'item' : 'itens'}
+                {produtosEmPromocaoFiltrados.length} {produtosEmPromocaoFiltrados.length === 1 ? 'item' : 'itens'}
               </div>
             </div>
 
             {/* Slider de promoções */}
             <PromocoesSlider
-              promocoes={produtosEmPromocao}
+              promocoes={produtosEmPromocaoFiltrados}
               config={config}
               formatarPreco={formatarPreco}
               calcularValorFinal={calcularValorFinal}
