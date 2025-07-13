@@ -6652,22 +6652,27 @@ const PDVPage: React.FC = () => {
     const formatarChave = (chave: string, tipo: string) => {
       switch (tipo) {
         case 'telefone':
-          // Para telefone, usar apenas os números sem +55
-          // O banco espera apenas os 11 dígitos: 12974060613
+          // Para telefone PIX, usar formato internacional E.164: +5511987654321
+          // Conforme documentação oficial do Banco Central
           let numeroLimpo = chave.replace(/\D/g, '');
 
-          // Se tem +55 no início, remover
-          if (numeroLimpo.startsWith('55') && numeroLimpo.length > 11) {
-            numeroLimpo = numeroLimpo.substring(2);
+          // Se não tem +55, adicionar
+          if (!numeroLimpo.startsWith('55')) {
+            numeroLimpo = '55' + numeroLimpo;
           }
 
-          console.log('📱 FORMATAÇÃO TELEFONE:', {
+          // Formato final: +55 + DDD (2 dígitos) + número (9 dígitos)
+          // Exemplo: +5512974060613
+          const numeroFormatado = '+' + numeroLimpo;
+
+          console.log('📱 FORMATAÇÃO TELEFONE E.164:', {
             original: chave,
             limpo: numeroLimpo,
-            tamanho: numeroLimpo.length
+            formatado: numeroFormatado,
+            tamanho: numeroFormatado.length
           });
 
-          return numeroLimpo;
+          return numeroFormatado;
 
         case 'email':
           return chave.toLowerCase().trim();

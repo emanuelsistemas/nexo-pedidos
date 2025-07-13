@@ -388,6 +388,8 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
+
+
   // Configuração do Keen Slider para categorias
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
@@ -4029,130 +4031,7 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       )}
 
-      {/* Filtros de Categoria com navegação horizontal */}
-      {grupos.length > 0 && (
-        <div className={`${config.modo_escuro ? 'bg-gray-800/50' : 'bg-white/80'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'} sticky top-0 z-10`}>
-          <div className="max-w-6xl mx-auto px-4 py-3">
-            <div className="flex flex-col space-y-3">
-              {/* Cabeçalho das Categorias */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="text-xl">🏷️</div>
-                  <h3 className={`text-lg font-semibold ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                    Categorias
-                  </h3>
-                </div>
-                <div className={`text-sm font-medium px-3 py-1 rounded-full ${
-                  config.modo_escuro
-                    ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
-                    : 'bg-purple-100 text-purple-700 border border-purple-200'
-                }`}>
-                  {grupos.length + 1} {grupos.length + 1 === 1 ? 'categoria' : 'categorias'}
-                </div>
-              </div>
 
-              {/* Container de Categorias com Keen Slider - ESTRUTURA CORRIGIDA */}
-              <div className="relative">
-                {/* Slider Container */}
-                <div className="h-12 flex items-center">
-                  <div className="flex-1 h-full">
-                    <div className="h-full">
-                      {(() => {
-                        // ✅ APLICAR A MESMA LÓGICA DE ORDENAÇÃO DOS GRUPOS
-                        const gruposOrdenados = [...grupos].sort((a, b) => {
-                          // Verificar se tem ordenação configurada
-                          const aTemOrdenacao = a.ordenacao_cardapio_habilitada &&
-                                               a.ordenacao_cardapio_digital !== null &&
-                                               a.ordenacao_cardapio_digital !== undefined;
-                          const bTemOrdenacao = b.ordenacao_cardapio_habilitada &&
-                                               b.ordenacao_cardapio_digital !== null &&
-                                               b.ordenacao_cardapio_digital !== undefined;
-
-                          // Se ambos têm ordenação, ordenar por número (MENOR número = PRIMEIRO)
-                          if (aTemOrdenacao && bTemOrdenacao) {
-                            const posicaoA = Number(a.ordenacao_cardapio_digital);
-                            const posicaoB = Number(b.ordenacao_cardapio_digital);
-                            return posicaoA - posicaoB;
-                          }
-
-                          // Se apenas A tem ordenação, A vem primeiro
-                          if (aTemOrdenacao && !bTemOrdenacao) return -1;
-
-                          // Se apenas B tem ordenação, B vem primeiro
-                          if (!aTemOrdenacao && bTemOrdenacao) return 1;
-
-                          // ✅ ALTERAÇÃO: Ordenar por data de criação (mais novos primeiro) ao invés de alfabético
-                          const dateA = new Date(a.created_at || 0).getTime();
-                          const dateB = new Date(b.created_at || 0).getTime();
-                          return dateB - dateA; // Mais novos primeiro
-                        });
-
-                        const todasCategorias = [
-                          { id: 'todos', nome: '🍽️ Todos' },
-                          ...gruposOrdenados
-                        ];
-
-                        // ✅ IMPLEMENTAÇÃO COM KEEN SLIDER - NAVEGAÇÃO FLUIDA
-                        return (
-                          <div className="flex-1 h-12 relative">
-                            {/* Slider Container */}
-                            <div ref={sliderRef} className="keen-slider h-full">
-                              {todasCategorias.map((categoria) => (
-                                <div
-                                  key={categoria.id}
-                                  className="keen-slider__slide"
-                                  style={{ minWidth: '120px', width: '120px' }}
-                                >
-                                  <button
-                                    onClick={() => setGrupoSelecionado(categoria.id)}
-                                    className={`
-                                      flex items-center justify-center transition-all duration-200
-                                      h-full px-4 font-medium text-sm whitespace-nowrap w-full rounded-md
-                                      ${grupoSelecionado === categoria.id
-                                        ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                                        : config.modo_escuro
-                                        ? 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-                                        : 'text-gray-700 hover:bg-gray-100/50 hover:text-gray-900'
-                                      }
-                                    `}
-                                  >
-                                    {categoria.nome}
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Indicadores de Dots */}
-                            {loaded && instanceRef.current && todasCategorias.length > 4 && (
-                              <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-1">
-                                {Array.from({ length: Math.ceil(todasCategorias.length / 4) }).map((_, idx) => (
-                                  <button
-                                    key={idx}
-                                    onClick={() => instanceRef.current?.moveToIdx(idx)}
-                                    className={`
-                                      w-2 h-2 rounded-full transition-all duration-200
-                                      ${currentSlide === idx
-                                        ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                                        : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
-                                      }
-                                    `}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
-
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Campo de Pesquisa */}
       <div className={`${config.modo_escuro ? 'bg-gray-800/30' : 'bg-white/60'} backdrop-blur-sm border-b ${config.modo_escuro ? 'border-gray-700' : 'border-gray-200'}`}>
@@ -4194,6 +4073,217 @@ const CardapioPublicoPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* SEÇÃO DE TESTE - Categorias Funcionais */}
+      {grupos.length > 0 && (
+        <div style={{
+          backgroundColor: config.modo_escuro ? '#1F2937' : '#F9FAFB',
+          borderBottom: config.modo_escuro ? '1px solid #374151' : '1px solid #E5E7EB',
+          padding: '1rem 0'
+        }}>
+          <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '0 1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {/* Cabeçalho */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ fontSize: '1.25rem' }}>🏷️</div>
+                  <h3 style={{
+                    fontSize: '1.125rem',
+                    fontWeight: '600',
+                    color: config.modo_escuro ? 'white' : '#1F2937',
+                    margin: 0
+                  }}>
+                    Categorias
+                  </h3>
+                </div>
+                <div style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  padding: '0.25rem 0.75rem',
+                  borderRadius: '9999px',
+                  backgroundColor: config.modo_escuro ? '#7C3AED' : '#EDE9FE',
+                  color: config.modo_escuro ? 'white' : '#7C3AED',
+                  border: config.modo_escuro ? '1px solid #A855F7' : '1px solid #C4B5FD'
+                }}>
+                  {grupos.length + 1} {grupos.length + 1 === 1 ? 'categoria' : 'categorias'}
+                </div>
+              </div>
+
+              {/* Container de Categorias com Keen Slider */}
+              <div style={{ height: '48px', position: 'relative' }}>
+                {/* Slider Container */}
+                <div ref={sliderRef} className="keen-slider" style={{ height: '100%' }}>
+                  {/* Categoria "Todos" */}
+                  <div
+                    className="keen-slider__slide"
+                    style={{ minWidth: '120px', width: '120px' }}
+                  >
+                    <button
+                      onClick={() => setGrupoSelecionado('todos')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                        height: '100%',
+                        padding: '0 1rem',
+                        fontWeight: '500',
+                        fontSize: '0.875rem',
+                        whiteSpace: 'nowrap',
+                        width: '100%',
+                        borderRadius: '0.375rem',
+                        border: 'none',
+                        cursor: 'pointer',
+                        background: grupoSelecionado === 'todos'
+                          ? 'linear-gradient(to right, #7C3AED, #2563EB)'
+                          : config.modo_escuro ? '#4B5563' : '#F3F4F6',
+                        color: grupoSelecionado === 'todos'
+                          ? 'white'
+                          : config.modo_escuro ? '#D1D5DB' : '#374151',
+                        boxShadow: grupoSelecionado === 'todos' ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (grupoSelecionado !== 'todos') {
+                          e.currentTarget.style.backgroundColor = config.modo_escuro ? '#6B7280' : '#E5E7EB';
+                          e.currentTarget.style.color = config.modo_escuro ? 'white' : '#1F2937';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (grupoSelecionado !== 'todos') {
+                          e.currentTarget.style.backgroundColor = config.modo_escuro ? '#4B5563' : '#F3F4F6';
+                          e.currentTarget.style.color = config.modo_escuro ? '#D1D5DB' : '#374151';
+                        }
+                      }}
+                    >
+                      🍽️ Todos
+                    </button>
+                  </div>
+
+                  {/* Categorias Reais */}
+                  {grupos
+                    .sort((a, b) => {
+                      // Aplicar a mesma lógica de ordenação dos grupos
+                      const aTemOrdenacao = a.ordenacao_cardapio_habilitada &&
+                                           a.ordenacao_cardapio_digital !== null &&
+                                           a.ordenacao_cardapio_digital !== undefined;
+                      const bTemOrdenacao = b.ordenacao_cardapio_habilitada &&
+                                           b.ordenacao_cardapio_digital !== null &&
+                                           b.ordenacao_cardapio_digital !== undefined;
+
+                      if (aTemOrdenacao && bTemOrdenacao) {
+                        const posicaoA = Number(a.ordenacao_cardapio_digital);
+                        const posicaoB = Number(b.ordenacao_cardapio_digital);
+                        return posicaoA - posicaoB;
+                      }
+
+                      if (aTemOrdenacao && !bTemOrdenacao) return -1;
+                      if (!aTemOrdenacao && bTemOrdenacao) return 1;
+
+                      const dateA = new Date(a.created_at || 0).getTime();
+                      const dateB = new Date(b.created_at || 0).getTime();
+                      return dateB - dateA;
+                    })
+                    .map((grupo) => (
+                      <div
+                        key={grupo.id}
+                        className="keen-slider__slide"
+                        style={{ minWidth: '120px', width: '120px' }}
+                      >
+                        <button
+                          onClick={() => setGrupoSelecionado(grupo.id)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.2s',
+                            height: '100%',
+                            padding: '0 1rem',
+                            fontWeight: '500',
+                            fontSize: '0.875rem',
+                            whiteSpace: 'nowrap',
+                            width: '100%',
+                            borderRadius: '0.375rem',
+                            border: 'none',
+                            cursor: 'pointer',
+                            background: grupoSelecionado === grupo.id
+                              ? 'linear-gradient(to right, #7C3AED, #2563EB)'
+                              : config.modo_escuro ? '#4B5563' : '#F3F4F6',
+                            color: grupoSelecionado === grupo.id
+                              ? 'white'
+                              : config.modo_escuro ? '#D1D5DB' : '#374151',
+                            boxShadow: grupoSelecionado === grupo.id ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (grupoSelecionado !== grupo.id) {
+                              e.currentTarget.style.backgroundColor = config.modo_escuro ? '#6B7280' : '#E5E7EB';
+                              e.currentTarget.style.color = config.modo_escuro ? 'white' : '#1F2937';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (grupoSelecionado !== grupo.id) {
+                              e.currentTarget.style.backgroundColor = config.modo_escuro ? '#4B5563' : '#F3F4F6';
+                              e.currentTarget.style.color = config.modo_escuro ? '#D1D5DB' : '#374151';
+                            }
+                          }}
+                        >
+                          {grupo.nome}
+                        </button>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Indicadores de Dots */}
+                {loaded && instanceRef.current && (grupos.length + 1) > 4 && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '-12px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    gap: '4px'
+                  }}>
+                    {(() => {
+                      const totalSlides = instanceRef.current?.track?.details?.slides?.length || 0;
+                      const slidesPerView = 4;
+                      const totalIndicators = Math.max(1, totalSlides - slidesPerView + 1);
+
+                      return Array.from({ length: totalIndicators }).map((_, idx) => {
+                        const isActive = currentSlide === idx;
+
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              instanceRef.current?.moveToIdx(idx);
+                              setTimeout(() => {
+                                if (instanceRef.current) {
+                                  const newIndex = instanceRef.current.track.details.rel;
+                                  setCurrentSlide(newIndex);
+                                }
+                              }, 100);
+                            }}
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              backgroundColor: isActive
+                                ? (config.modo_escuro ? '#A855F7' : '#7C3AED')
+                                : (config.modo_escuro ? '#6B7280' : '#D1D5DB')
+                            }}
+                          />
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Seção de Promoções */}
       {produtosEmPromocao.length > 0 && (
