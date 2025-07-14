@@ -5903,6 +5903,9 @@ const PDVPage: React.FC = () => {
       setTrocoCalculado(0);
     }
 
+    // Buscar informações da forma de pagamento
+    const forma = formasPagamento.find(f => f.id === formaId);
+
     // Verificar se já existe um pagamento com a mesma forma
     const pagamentoExistente = pagamentosParciais.find(p => p.forma === formaId);
 
@@ -5922,7 +5925,14 @@ const PDVPage: React.FC = () => {
         id: Date.now(),
         forma: formaId,
         valor: valor,
-        tipo: tipo
+        tipo: tipo,
+        // Adicionar informações sobre parcelas para cartão de crédito
+        parcelas: forma?.tipo === 'cartao_credito' && parcelasFormaPagamento[formaId] > 1
+          ? parcelasFormaPagamento[formaId]
+          : null,
+        valorParcela: forma?.tipo === 'cartao_credito' && parcelasFormaPagamento[formaId] > 1
+          ? valor / parcelasFormaPagamento[formaId]
+          : null
       };
 
       setPagamentosParciais(prev => [...prev, novoPagamento]);
@@ -12606,7 +12616,7 @@ const PDVPage: React.FC = () => {
                             {forma.tipo === 'cartao_credito' && forma.max_parcelas > 1 && (
                               <span className="text-xs text-gray-400 block">
                                 {parcelasFormaPagamento[forma.id]
-                                  ? `${parcelasFormaPagamento[forma.id]}x selecionado`
+                                  ? `${parcelasFormaPagamento[forma.id]}x de ${formatCurrency(calcularTotalComDesconto() / parcelasFormaPagamento[forma.id])}`
                                   : `até ${forma.max_parcelas}x`
                                 }
                               </span>
@@ -12675,6 +12685,11 @@ const PDVPage: React.FC = () => {
                                 <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded p-1.5">
                                   <div>
                                     <span className="text-white text-xs">{forma?.nome || pagamento.forma}</span>
+                                    {pagamento.parcelas && pagamento.valorParcela && (
+                                      <span className="text-gray-400 text-xs block">
+                                        {pagamento.parcelas}x de {formatCurrency(pagamento.valorParcela)}
+                                      </span>
+                                    )}
                                     <span className="text-primary-400 text-xs ml-2">{formatCurrency(pagamento.valor)}</span>
                                   </div>
                                   <button
@@ -12793,7 +12808,7 @@ const PDVPage: React.FC = () => {
                             {forma.tipo === 'cartao_credito' && forma.max_parcelas > 1 && (
                               <span className="text-xs text-gray-400 block">
                                 {parcelasFormaPagamento[forma.id]
-                                  ? `${parcelasFormaPagamento[forma.id]}x selecionado`
+                                  ? `${parcelasFormaPagamento[forma.id]}x de ${formatCurrency(calcularTotalComDesconto() / parcelasFormaPagamento[forma.id])}`
                                   : `até ${forma.max_parcelas}x`
                                 }
                               </span>
@@ -12862,6 +12877,11 @@ const PDVPage: React.FC = () => {
                                 <div key={pagamento.id} className="flex justify-between items-center bg-gray-800/30 rounded p-1.5">
                                   <div>
                                     <span className="text-white text-xs">{forma?.nome || pagamento.forma}</span>
+                                    {pagamento.parcelas && pagamento.valorParcela && (
+                                      <span className="text-gray-400 text-xs block">
+                                        {pagamento.parcelas}x de {formatCurrency(pagamento.valorParcela)}
+                                      </span>
+                                    )}
                                     <span className="text-primary-400 text-xs ml-2">{formatCurrency(pagamento.valor)}</span>
                                   </div>
                                   <button
@@ -13031,7 +13051,8 @@ const PDVPage: React.FC = () => {
 
                                 // Adicionar informações específicas para cartão de crédito
                                 if (forma.tipo === 'cartao_credito' && parcelasFormaPagamento[forma.id] > 1) {
-                                  texto += ` (${parcelasFormaPagamento[forma.id]}x)`;
+                                  const valorParcela = calcularTotalComDesconto() / parcelasFormaPagamento[forma.id];
+                                  texto += ` (${parcelasFormaPagamento[forma.id]}x de ${formatCurrency(valorParcela)})`;
                                 }
 
                                 // Adicionar informações específicas para PIX
@@ -13175,9 +13196,16 @@ const PDVPage: React.FC = () => {
 
                       return (
                         <div key={index} className="flex items-center justify-between py-1.5 px-2 bg-gray-700/30 rounded text-sm">
-                          <span className="font-medium text-white">
-                            {forma.nome}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-white">
+                              {forma.nome}
+                            </span>
+                            {pagamento.parcelas && pagamento.valorParcela && (
+                              <span className="text-xs text-gray-400">
+                                {pagamento.parcelas}x de {formatCurrency(pagamento.valorParcela)}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-white font-medium">
                             {formatCurrency(pagamento.valor)}
                           </span>
