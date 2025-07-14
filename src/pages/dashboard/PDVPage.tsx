@@ -330,6 +330,7 @@ const PDVPage: React.FC = () => {
   const [showModalPix, setShowModalPix] = useState(false);
   const [qrCodePix, setQrCodePix] = useState('');
   const [chavePix, setChavePix] = useState('');
+  const [valorPix, setValorPix] = useState<number>(0);
   const [tipoFinalizacaoPendente, setTipoFinalizacaoPendente] = useState<string | null>(null);
 
   // ✅ NOVO: Estado para ambiente NFe (homologação/produção)
@@ -6776,9 +6777,9 @@ const PDVPage: React.FC = () => {
     return payload;
   };
 
-  // Função para abrir modal PIX
+  // Função para abrir modal PIX (pagamento à vista)
   const abrirModalPix = () => {
-    console.log('🚀 ABRINDO MODAL PIX');
+    console.log('🚀 ABRINDO MODAL PIX À VISTA');
     const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
 
     if (forma && forma.utilizar_chave_pix && forma.chave_pix) {
@@ -6787,10 +6788,11 @@ const PDVPage: React.FC = () => {
 
       setQrCodePix(qrCode);
       setChavePix(forma.chave_pix);
+      setValorPix(valorTotal); // Armazenar valor específico
       setShowModalPix(true);
-      console.log('✅ MODAL PIX ABERTO');
+      console.log('✅ MODAL PIX À VISTA ABERTO:', { valor: valorTotal });
     } else {
-      console.log('❌ PIX não configurado:', {
+      console.log('❌ PIX não configurado à vista:', {
         forma: !!forma,
         utilizar_chave_pix: forma?.utilizar_chave_pix,
         chave_pix: !!forma?.chave_pix
@@ -6798,26 +6800,96 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Função para abrir modal PIX (pagamento parcial)
+  const abrirModalPixParcial = () => {
+    console.log('🚀 ABRINDO MODAL PIX PARCIAL');
+    console.log('📊 PAGAMENTOS PARCIAIS:', pagamentosParciais);
+
+    // Encontrar o primeiro pagamento PIX nos pagamentos parciais
+    const pagamentoPix = pagamentosParciais.find(pagamento => {
+      const forma = formasPagamento.find(f => f.id === pagamento.forma);
+      console.log('🔍 VERIFICANDO PAGAMENTO:', {
+        pagamento_id: pagamento.forma,
+        pagamento_valor: pagamento.valor,
+        forma_nome: forma?.nome,
+        forma_tipo: forma?.tipo,
+        e_pix: forma?.tipo === 'pix'
+      });
+      return forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix;
+    });
+
+    console.log('💰 PAGAMENTO PIX ENCONTRADO:', pagamentoPix);
+
+    if (pagamentoPix) {
+      const forma = formasPagamento.find(f => f.id === pagamentoPix.forma);
+
+      if (forma && forma.utilizar_chave_pix && forma.chave_pix) {
+        console.log('🎯 GERANDO QR CODE PIX PARCIAL:', {
+          valor_pix: pagamentoPix.valor,
+          chave: forma.chave_pix,
+          tipo_chave: forma.tipo_chave_pix
+        });
+
+        // Usar o valor específico do pagamento PIX
+        const qrCode = gerarQrCodePix(pagamentoPix.valor, forma.chave_pix, forma.tipo_chave_pix);
+
+        setQrCodePix(qrCode);
+        setChavePix(forma.chave_pix);
+        setValorPix(pagamentoPix.valor); // Armazenar valor específico do PIX
+        setShowModalPix(true);
+        console.log('✅ MODAL PIX PARCIAL ABERTO:', {
+          valor: pagamentoPix.valor,
+          forma: forma.nome,
+          chave: forma.chave_pix
+        });
+      }
+    } else {
+      console.log('❌ PIX não encontrado nos pagamentos parciais');
+    }
+  };
+
   // Função intermediária para verificar PIX antes de finalizar
   const verificarPixEFinalizar = (tipoFinalizacao: string) => {
     console.log('🔍 VERIFICANDO PIX ANTES DE FINALIZAR:', tipoFinalizacao);
 
-    // Verificar se é PIX com chave configurada
-    const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
-    console.log('🔍 PIX CHECK FINALIZAÇÃO:', {
-      forma_nome: forma?.nome,
-      tipo: forma?.tipo,
-      utilizar_chave_pix: forma?.utilizar_chave_pix,
-      tem_chave_pix: !!forma?.chave_pix
-    });
+    if (tipoPagamento === 'vista') {
+      // Pagamento à vista - verificar forma selecionada
+      const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+      console.log('🔍 PIX CHECK FINALIZAÇÃO À VISTA:', {
+        forma_nome: forma?.nome,
+        tipo: forma?.tipo,
+        utilizar_chave_pix: forma?.utilizar_chave_pix,
+        tem_chave_pix: !!forma?.chave_pix
+      });
 
-    if (forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix) {
-      console.log('✅ PIX DETECTADO - Salvando tipo de finalização e abrindo modal PIX');
-      setTipoFinalizacaoPendente(tipoFinalizacao);
-      abrirModalPix();
-    } else {
-      console.log('❌ PIX não detectado - Finalizando diretamente');
-      finalizarVendaCompleta(tipoFinalizacao);
+      if (forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix) {
+        console.log('✅ PIX DETECTADO À VISTA - Salvando tipo de finalização e abrindo modal PIX');
+        setTipoFinalizacaoPendente(tipoFinalizacao);
+        abrirModalPix();
+      } else {
+        console.log('❌ PIX não detectado à vista - Finalizando diretamente');
+        finalizarVendaCompleta(tipoFinalizacao);
+      }
+    } else if (tipoPagamento === 'parcial') {
+      // Pagamento parcial - verificar se há PIX nos pagamentos
+      const temPix = pagamentosParciais.some(pagamento => {
+        const forma = formasPagamento.find(f => f.id === pagamento.forma);
+        return forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix;
+      });
+
+      console.log('🔍 PIX CHECK FINALIZAÇÃO PARCIAL:', {
+        tem_pix: temPix,
+        pagamentos: pagamentosParciais.length
+      });
+
+      if (temPix) {
+        console.log('✅ PIX DETECTADO NO PARCIAL - Salvando tipo de finalização e abrindo modal PIX');
+        setTipoFinalizacaoPendente(tipoFinalizacao);
+        abrirModalPixParcial();
+      } else {
+        console.log('❌ PIX não detectado no parcial - Finalizando diretamente');
+        finalizarVendaCompleta(tipoFinalizacao);
+      }
     }
   };
 
@@ -6839,6 +6911,7 @@ const PDVPage: React.FC = () => {
     setShowModalPix(false);
     setQrCodePix('');
     setChavePix('');
+    setValorPix(0);
     setTipoFinalizacaoPendente(null);
   };
 
@@ -11388,9 +11461,16 @@ const PDVPage: React.FC = () => {
                                       ) : (
                                         <div className="flex items-center gap-1">
                                           <div className="flex-1">
-                                            <h4 className="text-white font-medium text-sm line-clamp-1">
-                                              {item.vendaSemProduto ? item.nome : item.produto.nome}
-                                            </h4>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <h4 className="text-white font-medium text-sm line-clamp-1">
+                                                {item.vendaSemProduto ? item.nome : item.produto.nome}
+                                              </h4>
+                                              {!item.vendaSemProduto && item.produto.unidade_medida?.sigla && (
+                                                <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
+                                                  {item.produto.unidade_medida.sigla}
+                                                </span>
+                                              )}
+                                            </div>
                                             {/* ✅ NOVO: Exibir sabores em linhas separadas */}
                                             {item.descricaoSabores && (
                                               <div className="mt-1 text-xs text-gray-300 leading-tight">
@@ -11403,11 +11483,6 @@ const PDVPage: React.FC = () => {
                                             )}
                                           </div>
                                           <div className="flex items-center gap-1 flex-shrink-0">
-                                            {!item.vendaSemProduto && item.produto.unidade_medida?.sigla && (
-                                              <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded border border-blue-500/30">
-                                                {item.produto.unidade_medida.sigla}
-                                              </span>
-                                            )}
                                             {/* ✅ NOVO: Tag da tabela de preços (fixa no item quando foi adicionado) */}
                                             {item.tabela_preco_nome && (
                                               <span className="ml-2 px-1.5 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded border border-purple-500/30">
@@ -12574,6 +12649,11 @@ const PDVPage: React.FC = () => {
                               className="p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
                             >
                               {forma.nome}
+                              {forma.tipo === 'cartao_credito' && forma.max_parcelas > 1 && (
+                                <span className="text-xs text-gray-400 block">
+                                  até {forma.max_parcelas}x
+                                </span>
+                              )}
                             </button>
                           ))}
                         </div>
@@ -12756,6 +12836,11 @@ const PDVPage: React.FC = () => {
                               className="p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
                             >
                               {forma.nome}
+                              {forma.tipo === 'cartao_credito' && forma.max_parcelas > 1 && (
+                                <span className="text-xs text-gray-400 block">
+                                  até {forma.max_parcelas}x
+                                </span>
+                              )}
                             </button>
                           ))}
                         </div>
@@ -19360,7 +19445,7 @@ const PDVPage: React.FC = () => {
                     Escaneie o QR Code para pagar
                   </h4>
                   <p className="text-gray-400 text-sm">
-                    Valor: <span className="text-primary-400 font-bold">{formatCurrency(calcularTotalComDesconto())}</span>
+                    Valor: <span className="text-primary-400 font-bold">{formatCurrency(valorPix)}</span>
                   </p>
                 </div>
 
