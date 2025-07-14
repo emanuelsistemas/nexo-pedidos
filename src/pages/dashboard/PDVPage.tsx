@@ -10149,26 +10149,25 @@ const PDVPage: React.FC = () => {
           <div class="linha"></div>
 
           ${dadosImpressao.itens.map(item => {
-            // ✅ NOVO: Formatar nome com sabores em linhas separadas
-            const formatarNomeComSabores = (nome) => {
+            // ✅ NOVO: Formatar nome com sabores em linhas separadas e unidade na mesma linha
+            const formatarNomeComSabores = (nome, unidade) => {
               if (nome.includes('\n')) {
                 const linhas = nome.split('\n');
                 const nomePrincipal = linhas[0];
                 const sabores = linhas.slice(1);
 
                 return `
-                  <div class="bold">${nomePrincipal}</div>
+                  <div class="bold">${nomePrincipal} <span style="font-size: 10px;">(${unidade})</span></div>
                   ${sabores.map(sabor => `<div style="font-size: 11px; color: #666; margin-left: 5px;">${sabor}</div>`).join('')}
                 `;
               }
-              return `<div class="bold">${nome}</div>`;
+              return `<div class="bold">${nome} <span style="font-size: 10px;">(${unidade})</span></div>`;
             };
 
             return `
             <div class="item">
               <div>
-                ${formatarNomeComSabores(item.nome)}
-                <span style="font-size: 10px; color: #888;">(${item.unidade})</span>
+                ${formatarNomeComSabores(item.nome, item.unidade)}
               </div>
               <div class="item-linha">
                 <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
@@ -10661,26 +10660,25 @@ const PDVPage: React.FC = () => {
           <div class="linha"></div>
 
           ${dadosImpressao.itens.map(item => {
-            // ✅ NOVO: Formatar nome com sabores em linhas separadas
-            const formatarNomeComSabores = (nome) => {
+            // ✅ NOVO: Formatar nome com sabores em linhas separadas e unidade na mesma linha
+            const formatarNomeComSabores = (nome, unidade) => {
               if (nome.includes('\n')) {
                 const linhas = nome.split('\n');
                 const nomePrincipal = linhas[0];
                 const sabores = linhas.slice(1);
 
                 return `
-                  <div class="bold">${nomePrincipal}</div>
+                  <div class="bold">${nomePrincipal} <span style="font-size: 10px;">(${unidade})</span></div>
                   ${sabores.map(sabor => `<div style="font-size: 11px; color: #666; margin-left: 5px;">${sabor}</div>`).join('')}
                 `;
               }
-              return `<div class="bold">${nome}</div>`;
+              return `<div class="bold">${nome} <span style="font-size: 10px;">(${unidade})</span></div>`;
             };
 
             return `
             <div class="item">
               <div>
-                ${formatarNomeComSabores(item.nome)}
-                <span style="font-size: 10px; color: #888;">(${item.unidade})</span>
+                ${formatarNomeComSabores(item.nome, item.unidade)}
               </div>
               <div class="item-linha">
                 <span>${item.quantidade} x ${formatCurrency(item.valor_unitario)}</span>
