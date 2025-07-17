@@ -105,23 +105,37 @@ async function extractCertificateWithOpenSSL(certificateBytes: Uint8Array, passw
         stdout: "piped",
         stderr: "piped"
       })
-      
+
       const subjectResult = await subjectCmd.output()
       const subjectOutput = subjectResult.success ? new TextDecoder().decode(subjectResult.stdout) : ""
-      
+
       // Parse dos resultados
       let validTo = null
       const dateMatch = endDateOutput.match(/notAfter=(.+)/)
       if (dateMatch) {
         validTo = new Date(dateMatch[1].trim()).toISOString()
       }
-      
+
       let commonName = filename.replace(/\.[^/.]+$/, "")
       const cnMatch = subjectOutput.match(/CN\s*=\s*([^,]+)/)
       if (cnMatch) {
         commonName = cnMatch[1].trim()
       }
-      
+
+      // Extrair CNPJ do subject
+      let cnpjCertificado = null
+      // Padrão comum: CN=RAZAO SOCIAL:CNPJ ou CN=NOME:CNPJ
+      const cnpjMatch1 = subjectOutput.match(/CN\s*=\s*[^:]+:(\d{14})/)
+      if (cnpjMatch1) {
+        cnpjCertificado = cnpjMatch1[1]
+      } else {
+        // Padrão alternativo: buscar 14 dígitos consecutivos no subject
+        const cnpjMatch2 = subjectOutput.match(/(\d{14})/)
+        if (cnpjMatch2) {
+          cnpjCertificado = cnpjMatch2[1]
+        }
+      }
+
       return {
         success: true,
         info: {
@@ -129,6 +143,7 @@ async function extractCertificateWithOpenSSL(certificateBytes: Uint8Array, passw
           issuer: 'Extraído via OpenSSL',
           validTo,
           isValid: validTo ? new Date(validTo) > new Date() : false,
+          cnpj: cnpjCertificado,
           extractedWith: 'openssl_backend'
         }
       }

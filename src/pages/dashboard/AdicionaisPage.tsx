@@ -261,6 +261,30 @@ const AdicionaisPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
+      // ✅ VALIDAÇÃO: Verificar se já existe uma opção com o mesmo nome na empresa
+      const nomeNormalizado = novaOpcao.nome.trim().toLowerCase();
+
+      let queryValidacao = supabase
+        .from('opcoes_adicionais')
+        .select('id, nome')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('deletado', false)
+        .ilike('nome', nomeNormalizado);
+
+      // Se estiver editando, excluir o próprio registro da validação
+      if (editingOpcao) {
+        queryValidacao = queryValidacao.neq('id', editingOpcao.id);
+      }
+
+      const { data: opcoesExistentes, error: validacaoError } = await queryValidacao;
+
+      if (validacaoError) throw validacaoError;
+
+      if (opcoesExistentes && opcoesExistentes.length > 0) {
+        showMessage('error', `Já existe uma opção adicional com o nome "${novaOpcao.nome}" nesta empresa.`);
+        return;
+      }
+
       if (editingOpcao) {
         const { error } = await supabase
           .from('opcoes_adicionais')

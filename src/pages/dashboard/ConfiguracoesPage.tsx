@@ -2563,7 +2563,8 @@ const ConfiguracoesPage: React.FC = () => {
       return {
         nome: info.nome,
         validade: info.validade,
-        status: info.status
+        status: info.status,
+        cnpj: info.cnpj
       };
     } catch (error) {
       console.error('❌ Erro ao extrair informações do certificado:', error);
@@ -2589,6 +2590,30 @@ const ConfiguracoesPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      // Buscar dados da empresa atual para validar CNPJ
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('documento')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      if (!empresaData) throw new Error('Dados da empresa não encontrados');
+
+      // Extrair informações do certificado para validar CNPJ
+      const infoCertificado = await extrairInfoCertificado(certificadoFile, certificadoSenha);
+
+      if (infoCertificado.cnpj) {
+        // Limpar formatação do CNPJ da empresa
+        const cnpjEmpresa = empresaData.documento.replace(/\D/g, '');
+        const cnpjCertificado = infoCertificado.cnpj.replace(/\D/g, '');
+
+        if (cnpjEmpresa !== cnpjCertificado) {
+          showMessage('error', `CNPJ do certificado (${cnpjCertificado}) não confere com o CNPJ da empresa (${cnpjEmpresa}). Verifique se está usando o certificado correto para esta empresa.`);
+          limparCamposCertificado();
+          return;
+        }
+      }
 
       // Upload para storage local usando o novo hook
       const result = await uploadCertificateLocal(

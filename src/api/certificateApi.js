@@ -33,6 +33,7 @@ export const extractCertificateInfo = async (file, password) => {
         status: data.info.isValid ? 'ativo' : 'vencido',
         emissor: data.info.issuer,
         validadeInicio: data.info.validFrom,
+        cnpj: data.info.cnpj,
         metodoExtracao: 'backend_secure'
       };
     } else {
@@ -150,12 +151,29 @@ const extractCertificateInfoFallback = async (file, password) => {
     const now = new Date();
     const isValid = validTo > now && validFrom <= now;
 
+    // Tentar extrair CNPJ do commonName
+    let cnpjCertificado = null;
+    if (commonName) {
+      // Padrão comum: RAZAO SOCIAL:CNPJ ou NOME:CNPJ
+      const cnpjMatch1 = commonName.match(/:(\d{14})/);
+      if (cnpjMatch1) {
+        cnpjCertificado = cnpjMatch1[1];
+      } else {
+        // Padrão alternativo: buscar 14 dígitos consecutivos
+        const cnpjMatch2 = commonName.match(/(\d{14})/);
+        if (cnpjMatch2) {
+          cnpjCertificado = cnpjMatch2[1];
+        }
+      }
+    }
+
     return {
       nome: commonName,
       validade: validTo.toISOString(),
       status: isValid ? 'ativo' : 'vencido',
       emissor: issuer,
       validadeInicio: validFrom.toISOString(),
+      cnpj: cnpjCertificado,
       metodoExtracao: 'node_forge',
       senhaValidada: true
     };
