@@ -510,7 +510,8 @@ const AdicionaisPage: React.FC = () => {
         </Button>
       </div>
 
-      <div className="space-y-6">
+      {/* ✅ LAYOUT DE 2 COLUNAS - Similar à página de produtos */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {!isDataReady ? (
           renderSkeletonCards()
         ) : (
@@ -607,7 +608,7 @@ const AdicionaisPage: React.FC = () => {
             ))}
 
             {opcoes.length === 0 && (
-              <div className="bg-background-card rounded-lg p-8 text-center">
+              <div className="lg:col-span-2 bg-background-card rounded-lg p-8 text-center">
                 <h3 className="text-lg font-medium text-white mb-2">
                   Nenhuma opção cadastrada
                 </h3>
