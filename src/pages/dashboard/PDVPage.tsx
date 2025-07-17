@@ -325,6 +325,7 @@ const PDVPage: React.FC = () => {
   const [parcelasSelecionadas, setParcelasSelecionadas] = useState(1);
   const [formaPagamentoPendente, setFormaPagamentoPendente] = useState<any>(null);
   const [parcelasFormaPagamento, setParcelasFormaPagamento] = useState<{[key: string]: number}>({});
+  const [modalParcelasCallback, setModalParcelasCallback] = useState<((parcelas: number) => void) | null>(null);
 
   // Estados para modal PIX
   const [showModalPix, setShowModalPix] = useState(false);
@@ -485,7 +486,8 @@ const PDVPage: React.FC = () => {
         pedidosImportados,
         showFinalizacaoFinal,
         tipoPagamento,
-        formaPagamentoSelecionada,
+        // ✅ CORREÇÃO: NÃO salvar formaPagamentoSelecionada no localStorage
+        // formaPagamentoSelecionada,
         valorParcial,
         pagamentosParciais,
         trocoCalculado,
@@ -522,7 +524,10 @@ const PDVPage: React.FC = () => {
           }
           if (pdvState.showFinalizacaoFinal !== undefined) setShowFinalizacaoFinal(pdvState.showFinalizacaoFinal);
           if (pdvState.tipoPagamento) setTipoPagamento(pdvState.tipoPagamento);
-          if (pdvState.formaPagamentoSelecionada) setFormaPagamentoSelecionada(pdvState.formaPagamentoSelecionada);
+
+          // ✅ CORREÇÃO: NÃO restaurar formaPagamentoSelecionada do localStorage
+          // Sempre deixar que seja definido pela lógica padrão (Dinheiro)
+          // if (pdvState.formaPagamentoSelecionada) setFormaPagamentoSelecionada(pdvState.formaPagamentoSelecionada);
           if (pdvState.valorParcial) setValorParcial(pdvState.valorParcial);
 
           // Verificar se os pagamentos parciais têm o formato correto (com IDs)
@@ -5869,7 +5874,7 @@ const PDVPage: React.FC = () => {
     return restante < 0 ? 0 : restante;
   };
 
-  const adicionarPagamentoParcial = (formaId: string, formaNome: string, tipo: 'eletronico' | 'dinheiro') => {
+  const adicionarPagamentoParcial = (formaId: string, formaNome: string, tipo: 'eletronico' | 'dinheiro', parcelasEspecificas?: number) => {
     let valor = parseCurrencyToNumber(valorParcial);
     const totalVenda = calcularTotalComDesconto(); // Usar total com desconto
     const totalPago = calcularTotalPago();
@@ -5910,29 +5915,43 @@ const PDVPage: React.FC = () => {
     const pagamentoExistente = pagamentosParciais.find(p => p.forma === formaId);
 
     if (pagamentoExistente) {
-      // Agrupar: somar o valor ao pagamento existente
+      // Agrupar: somar o valor ao pagamento existente e recalcular parcelas
       setPagamentosParciais(prev =>
-        prev.map(p =>
-          p.forma === formaId
-            ? { ...p, valor: p.valor + valor }
-            : p
-        )
+        prev.map(p => {
+          if (p.forma === formaId) {
+            const novoValor = p.valor + valor;
+            const numeroParcelas = forma?.tipo === 'cartao_credito' && parcelasFormaPagamento[formaId] > 1
+              ? parcelasFormaPagamento[formaId]
+              : 1;
+            const novoValorParcela = numeroParcelas > 1 ? novoValor / numeroParcelas : null;
+
+            return {
+              ...p,
+              valor: novoValor,
+              parcelas: numeroParcelas,
+              valorParcela: novoValorParcela
+            };
+          }
+          return p;
+        })
       );
       toast.success(`${formaNome}: ${formatCurrency(valor)} adicionado (Total: ${formatCurrency(pagamentoExistente.valor + valor)})`);
     } else {
       // Criar novo pagamento
+      // ✅ CORREÇÃO: Usar parcelas específicas se fornecidas, senão usar do estado
+      const numeroParcelas = parcelasEspecificas ||
+        (forma?.tipo === 'cartao_credito' && parcelasFormaPagamento[formaId] > 1
+          ? parcelasFormaPagamento[formaId]
+          : 1);
+      const valorParcela = numeroParcelas > 1 ? valor / numeroParcelas : null;
+
       const novoPagamento = {
         id: Date.now(),
         forma: formaId,
         valor: valor,
         tipo: tipo,
-        // Adicionar informações sobre parcelas para cartão de crédito
-        parcelas: forma?.tipo === 'cartao_credito' && parcelasFormaPagamento[formaId] > 1
-          ? parcelasFormaPagamento[formaId]
-          : null,
-        valorParcela: forma?.tipo === 'cartao_credito' && parcelasFormaPagamento[formaId] > 1
-          ? valor / parcelasFormaPagamento[formaId]
-          : null
+        parcelas: numeroParcelas,
+        valorParcela: valorParcela
       };
 
       setPagamentosParciais(prev => [...prev, novoPagamento]);
@@ -6637,14 +6656,49 @@ const PDVPage: React.FC = () => {
   // Função para confirmar seleção de parcelas
   const handleConfirmarParcelas = () => {
     if (formaPagamentoPendente) {
-      setFormaPagamentoSelecionada(formaPagamentoPendente.id);
       // Salvar quantidade de parcelas para esta forma de pagamento
       setParcelasFormaPagamento(prev => ({
         ...prev,
         [formaPagamentoPendente.id]: parcelasSelecionadas
       }));
+
+      // Se há callback (modo parcial), executar; senão, selecionar forma (modo à vista)
+      if (modalParcelasCallback) {
+        // ✅ CORREÇÃO: Executar callback com as parcelas selecionadas
+        modalParcelasCallback(parcelasSelecionadas);
+        setModalParcelasCallback(null);
+      } else {
+        setFormaPagamentoSelecionada(formaPagamentoPendente.id);
+      }
+
       setShowModalParcelas(false);
       setFormaPagamentoPendente(null);
+    }
+  };
+
+  // ✅ NOVA: Função para lidar com seleção de forma de pagamento no modo parcial
+  const handleSelecionarFormaPagamentoParcial = (forma: any) => {
+    // Verificar se é cartão de crédito com mais de 1 parcela
+    if (forma.tipo === 'cartao_credito' && forma.max_parcelas > 1) {
+      setFormaPagamentoPendente(forma);
+      setParcelasSelecionadas(1);
+      setShowModalParcelas(true);
+      // ✅ CORREÇÃO: Callback que recebe as parcelas selecionadas
+      setModalParcelasCallback(() => (parcelasSelecionadas: number) => {
+        adicionarPagamentoParcial(
+          forma.id,
+          forma.nome,
+          forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico',
+          parcelasSelecionadas // ✅ Passar parcelas específicas
+        );
+      });
+    } else {
+      // Para outras formas de pagamento, adicionar diretamente
+      adicionarPagamentoParcial(
+        forma.id,
+        forma.nome,
+        forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
+      );
     }
   };
 
@@ -8118,21 +8172,52 @@ const PDVPage: React.FC = () => {
       setEtapaProcessamento('Preparando dados de pagamento...');
       let pagamentoData = {};
       if (tipoPagamento === 'vista' && formaPagamentoSelecionada) {
+        // Buscar informações da forma de pagamento selecionada
+        const formaSelecionada = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
+        const numeroParcelas = parcelasFormaPagamento[formaPagamentoSelecionada] || 1;
+        const valorParcela = numeroParcelas > 1 ? valorTotal / numeroParcelas : null;
+
         pagamentoData = {
           tipo_pagamento: 'vista',
           forma_pagamento_id: formaPagamentoSelecionada,
           valor_pago: valorTotal,
-          valor_troco: 0
+          valor_troco: 0,
+          parcelas: numeroParcelas,
+          // ✅ NOVO: Estrutura expandida para formas_pagamento
+          formas_pagamento: [{
+            forma_id: formaPagamentoSelecionada,
+            forma_nome: formaSelecionada?.nome || 'Forma de Pagamento',
+            valor: valorTotal,
+            tipo: formaSelecionada?.nome?.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico',
+            parcelas: numeroParcelas,
+            valor_parcela: valorParcela
+          }]
         };
       } else if (tipoPagamento === 'parcial' && pagamentosParciais.length > 0) {
         const totalPago = calcularTotalPago();
+
+        // ✅ NOVO: Expandir dados dos pagamentos parciais com informações de parcelamento
+        const formasExpandidas = pagamentosParciais.map(pagamento => {
+          const forma = formasPagamento.find(f => f.id === pagamento.forma);
+          return {
+            forma_id: pagamento.forma,
+            forma_nome: forma?.nome || 'Forma de Pagamento',
+            valor: pagamento.valor,
+            tipo: pagamento.tipo,
+            parcelas: pagamento.parcelas || 1,
+            valor_parcela: pagamento.valorParcela || null
+          };
+        });
+
         pagamentoData = {
           tipo_pagamento: 'parcial',
-          formas_pagamento: pagamentosParciais,
+          formas_pagamento: formasExpandidas,
           valor_pago: totalPago,
           valor_troco: trocoCalculado
         };
       }
+
+
 
       // Buscar configuração de controle de estoque
       setEtapaProcessamento('Verificando configuração de estoque...');
@@ -9587,10 +9672,11 @@ const PDVPage: React.FC = () => {
       // Os dados de pagamento estão salvos diretamente na tabela pdv
       if (venda.tipo_pagamento) {
         if (venda.tipo_pagamento === 'vista' && venda.forma_pagamento_id) {
-          // Pagamento à vista
+          // Pagamento à vista - incluir formas_pagamento se existir (para parcelamento)
           dadosPagamento = {
             tipo_pagamento: 'vista',
             forma_pagamento_id: venda.forma_pagamento_id,
+            formas_pagamento: venda.formas_pagamento || null, // ✅ CORREÇÃO: Incluir dados expandidos
             valor_pago: venda.valor_pago || venda.valor_total,
             valor_troco: venda.valor_troco || 0
           };
@@ -9783,10 +9869,11 @@ const PDVPage: React.FC = () => {
       // Os dados de pagamento estão salvos diretamente na tabela pdv
       if (venda.tipo_pagamento) {
         if (venda.tipo_pagamento === 'vista' && venda.forma_pagamento_id) {
-          // Pagamento à vista
+          // Pagamento à vista - incluir formas_pagamento se existir (para parcelamento)
           dadosPagamentoCupom = {
             tipo_pagamento: 'vista',
             forma_pagamento_id: venda.forma_pagamento_id,
+            formas_pagamento: venda.formas_pagamento || null, // ✅ CORREÇÃO: Incluir dados expandidos
             valor_pago: venda.valor_pago || venda.valor_total,
             valor_troco: venda.valor_troco || 0
           };
@@ -10238,7 +10325,7 @@ const PDVPage: React.FC = () => {
             ` : ''}
             ${dadosImpressao.pagamento.tipo_pagamento === 'parcial' && dadosImpressao.pagamento.formas_pagamento ? `
               ${dadosImpressao.pagamento.formas_pagamento.map(pag => {
-                const forma = formasPagamento.find(f => f.id === pag.forma);
+                const forma = formasPagamento.find(f => f.id === (pag.forma_id || pag.forma));
                 return forma ? `
                   <div class="item-linha">
                     <span>${forma.nome}:</span>
@@ -10292,6 +10379,29 @@ const PDVPage: React.FC = () => {
                   </div>
                 ` : ''}
               `;
+            }
+            return '';
+          })()}
+
+          ${(() => {
+            // ✅ NOVO: EXIBIR DETALHAMENTO DO PARCELAMENTO PARA CARTÃO DE CRÉDITO
+            if (dadosImpressao.pagamento?.formas_pagamento) {
+              const formasComParcelamento = dadosImpressao.pagamento.formas_pagamento.filter(forma =>
+                forma.parcelas && forma.parcelas > 1 && forma.valor_parcela
+              );
+
+              if (formasComParcelamento.length > 0) {
+                return `
+                  <div class="linha"></div>
+                  <div class="center bold" style="font-size: 12px; margin: 5px 0;">DETALHAMENTO DO PARCELAMENTO</div>
+                  ${formasComParcelamento.map(forma => `
+                    <div class="item-linha" style="font-size: 11px;">
+                      <span>${forma.forma_nome}:</span>
+                      <span class="bold">${forma.parcelas}x de ${formatCurrency(forma.valor_parcela)}</span>
+                    </div>
+                  `).join('')}
+                `;
+              }
             }
             return '';
           })()}
@@ -10749,7 +10859,7 @@ const PDVPage: React.FC = () => {
             ` : ''}
             ${dadosImpressao.pagamento.tipo_pagamento === 'parcial' && dadosImpressao.pagamento.formas_pagamento ? `
               ${dadosImpressao.pagamento.formas_pagamento.map(pag => {
-                const forma = formasPagamento.find(f => f.id === pag.forma);
+                const forma = formasPagamento.find(f => f.id === (pag.forma_id || pag.forma));
                 return forma ? `
                   <div class="item-linha">
                     <span>${forma.nome}:</span>
@@ -10788,6 +10898,29 @@ const PDVPage: React.FC = () => {
                   </div>
                 ` : ''}
               `;
+            }
+            return '';
+          })()}
+
+          ${(() => {
+            // ✅ NOVO: EXIBIR DETALHAMENTO DO PARCELAMENTO PARA CARTÃO DE CRÉDITO
+            if (dadosImpressao.pagamento?.formas_pagamento) {
+              const formasComParcelamento = dadosImpressao.pagamento.formas_pagamento.filter(forma =>
+                forma.parcelas && forma.parcelas > 1 && forma.valor_parcela
+              );
+
+              if (formasComParcelamento.length > 0) {
+                return `
+                  <div class="linha"></div>
+                  <div class="center bold" style="font-size: 12px; margin: 5px 0;">DETALHAMENTO DO PARCELAMENTO</div>
+                  ${formasComParcelamento.map(forma => `
+                    <div class="item-linha" style="font-size: 11px;">
+                      <span>${forma.forma_nome}:</span>
+                      <span class="bold">${forma.parcelas}x de ${formatCurrency(forma.valor_parcela)}</span>
+                    </div>
+                  `).join('')}
+                `;
+              }
             }
             return '';
           })()}
@@ -12568,6 +12701,16 @@ const PDVPage: React.FC = () => {
                         onClick={() => {
                           setTipoPagamento('vista');
                           limparPagamentosParciais();
+
+                          // ✅ CORREÇÃO: Sempre resetar para "Dinheiro" quando selecionar "À Vista"
+                          const dinheiro = formasPagamento.find(forma =>
+                            forma.nome?.toLowerCase() === 'dinheiro'
+                          );
+                          if (dinheiro) {
+                            setFormaPagamentoSelecionada(dinheiro.id);
+                          } else if (formasPagamento.length > 0) {
+                            setFormaPagamentoSelecionada(formasPagamento[0].id);
+                          }
                         }}
                         className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
                           tipoPagamento === 'vista'
@@ -12649,17 +12792,16 @@ const PDVPage: React.FC = () => {
                           {formasPagamento.map((forma) => (
                             <button
                               key={forma.id}
-                              onClick={() => adicionarPagamentoParcial(
-                                forma.id,
-                                forma.nome, // Usar o nome da forma para exibição
-                                forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
-                              )}
+                              onClick={() => handleSelecionarFormaPagamentoParcial(forma)}
                               className="p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
                             >
                               {forma.nome}
                               {forma.tipo === 'cartao_credito' && forma.max_parcelas > 1 && (
                                 <span className="text-xs text-gray-400 block">
-                                  até {forma.max_parcelas}x
+                                  {parcelasFormaPagamento[forma.id]
+                                    ? `${parcelasFormaPagamento[forma.id]}x de ${formatCurrency(calcularTotalComDesconto() / parcelasFormaPagamento[forma.id])}`
+                                    : `até ${forma.max_parcelas}x`
+                                  }
                                 </span>
                               )}
                             </button>
@@ -12760,6 +12902,16 @@ const PDVPage: React.FC = () => {
                         onClick={() => {
                           setTipoPagamento('vista');
                           limparPagamentosParciais();
+
+                          // ✅ CORREÇÃO: Sempre resetar para "Dinheiro" quando selecionar "À Vista"
+                          const dinheiro = formasPagamento.find(forma =>
+                            forma.nome?.toLowerCase() === 'dinheiro'
+                          );
+                          if (dinheiro) {
+                            setFormaPagamentoSelecionada(dinheiro.id);
+                          } else if (formasPagamento.length > 0) {
+                            setFormaPagamentoSelecionada(formasPagamento[0].id);
+                          }
                         }}
                         className={`flex-1 py-1.5 px-2.5 rounded border transition-colors text-sm ${
                           tipoPagamento === 'vista'
@@ -12841,17 +12993,16 @@ const PDVPage: React.FC = () => {
                           {formasPagamento.map((forma) => (
                             <button
                               key={forma.id}
-                              onClick={() => adicionarPagamentoParcial(
-                                forma.id,
-                                forma.nome, // Usar o nome da forma para exibição
-                                forma.nome.toLowerCase() === 'dinheiro' ? 'dinheiro' : 'eletronico'
-                              )}
+                              onClick={() => handleSelecionarFormaPagamentoParcial(forma)}
                               className="p-2 rounded border border-gray-700 bg-gray-800/50 text-gray-300 hover:border-gray-600 hover:bg-gray-750 transition-colors text-sm"
                             >
                               {forma.nome}
                               {forma.tipo === 'cartao_credito' && forma.max_parcelas > 1 && (
                                 <span className="text-xs text-gray-400 block">
-                                  até {forma.max_parcelas}x
+                                  {parcelasFormaPagamento[forma.id]
+                                    ? `${parcelasFormaPagamento[forma.id]}x de ${formatCurrency(calcularTotalComDesconto() / parcelasFormaPagamento[forma.id])}`
+                                    : `até ${forma.max_parcelas}x`
+                                  }
                                 </span>
                               )}
                             </button>
@@ -16665,7 +16816,7 @@ const PDVPage: React.FC = () => {
                               {vendaParaExibirItens.tipo_pagamento === 'parcial' && vendaParaExibirItens.formas_pagamento && (
                                 <>
                                   {vendaParaExibirItens.formas_pagamento.map((pag: any, index: number) => {
-                                    const forma = formasPagamento.find(f => f.id === pag.forma);
+                                    const forma = formasPagamento.find(f => f.id === (pag.forma_id || pag.forma));
                                     return (
                                       <div key={index} className="flex justify-between items-center text-sm">
                                         <span className="text-gray-300">{forma ? forma.nome : 'Forma de Pagamento'}:</span>
@@ -19407,7 +19558,27 @@ const PDVPage: React.FC = () => {
                     <div className="text-center">
                       <p className="text-gray-400 text-sm">Valor por parcela</p>
                       <p className="text-xl font-bold text-primary-400">
-                        {formatCurrency(calcularTotal() / parcelasSelecionadas)}
+                        {(() => {
+                          // ✅ CORREÇÃO: No modo parcial, usar valor restante; no modo à vista, usar total
+                          if (tipoPagamento === 'parcial') {
+                            const valorDigitado = parseCurrencyToNumber(valorParcial);
+                            let valorParaUsar;
+
+                            if (valorDigitado > 0) {
+                              // Se há valor digitado, usar esse valor
+                              valorParaUsar = valorDigitado;
+                            } else {
+                              // Se não há valor digitado, usar o valor restante
+                              const totalVenda = calcularTotalComDesconto();
+                              const totalPago = calcularTotalPago();
+                              valorParaUsar = totalVenda - totalPago;
+                            }
+
+                            return formatCurrency(valorParaUsar / parcelasSelecionadas);
+                          } else {
+                            return formatCurrency(calcularTotalComDesconto() / parcelasSelecionadas);
+                          }
+                        })()}
                       </p>
                       {formaPagamentoPendente.juros_por_parcela > 0 && parcelasSelecionadas > 1 && (
                         <p className="text-xs text-gray-500 mt-1">
