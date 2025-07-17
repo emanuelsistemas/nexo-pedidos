@@ -485,7 +485,8 @@ const PDVPage: React.FC = () => {
         clienteSelecionado,
         pedidosImportados,
         showFinalizacaoFinal,
-        tipoPagamento,
+        // ✅ CORREÇÃO: NÃO salvar tipoPagamento no localStorage
+        // tipoPagamento,
         // ✅ CORREÇÃO: NÃO salvar formaPagamentoSelecionada no localStorage
         // formaPagamentoSelecionada,
         valorParcial,
@@ -523,7 +524,10 @@ const PDVPage: React.FC = () => {
             setPedidosImportados([pdvState.pedidoImportado]);
           }
           if (pdvState.showFinalizacaoFinal !== undefined) setShowFinalizacaoFinal(pdvState.showFinalizacaoFinal);
-          if (pdvState.tipoPagamento) setTipoPagamento(pdvState.tipoPagamento);
+
+          // ✅ CORREÇÃO: NÃO restaurar tipoPagamento do localStorage
+          // Sempre deixar que seja definido pela lógica padrão ("À Vista")
+          // if (pdvState.tipoPagamento) setTipoPagamento(pdvState.tipoPagamento);
 
           // ✅ CORREÇÃO: NÃO restaurar formaPagamentoSelecionada do localStorage
           // Sempre deixar que seja definido pela lógica padrão (Dinheiro)
