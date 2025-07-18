@@ -379,6 +379,10 @@ const ProdutosPage: React.FC = () => {
   const [opcoesAdicionaisHabilitado, setOpcoesAdicionaisHabilitado] = useState(false);
   const [expandedOpcoesForm, setExpandedOpcoesForm] = useState<Record<string, boolean>>({});
 
+  // Estados para exibição dos preços nos cards dos produtos
+  const [produtosPrecos, setProdutosPrecos] = useState<{[key: string]: {[key: string]: number}}>({});
+  const [dropdownAbertoProdutos, setDropdownAbertoProdutos] = useState<{[key: string]: boolean}>({});
+
   // Estados para as abas
   const [activeTab, setActiveTab] = useState<'dados' | 'fotos' | 'estoque' | 'adicionais' | 'impostos'>('dados');
   const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
@@ -4376,6 +4380,29 @@ const ProdutosPage: React.FC = () => {
     setImagensCarregando(prev => ({ ...prev, [produtoId]: false }));
   };
 
+  // Função para alternar dropdown de tabelas de preços dos produtos
+  const toggleDropdownProduto = (produtoId: string) => {
+    setDropdownAbertoProdutos(prev => ({
+      ...prev,
+      [produtoId]: !prev[produtoId]
+    }));
+  };
+
+  // Função para obter tabelas de preços com valores válidos para um produto
+  const obterTabelasComPrecosProduto = (produtoId: string): Array<{id: string; nome: string; preco: number}> => {
+    if (!trabalhaComTabelaPrecos || !produtosPrecos[produtoId]) {
+      return [];
+    }
+
+    return tabelasPrecos
+      .map(tabela => ({
+        id: tabela.id,
+        nome: tabela.nome,
+        preco: produtosPrecos[produtoId][tabela.id] || 0
+      }))
+      .filter(tabela => tabela.preco > 0); // Apenas tabelas com preço > 0
+  };
+
   // Função para carregar preços das tabelas de um produto
   const carregarPrecosTabelas = async (produtoId: string) => {
     try {
@@ -4393,6 +4420,52 @@ const ProdutosPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Erro ao carregar preços das tabelas:', error);
+    }
+  };
+
+  // Função para carregar todos os preços dos produtos para exibição nos cards
+  const carregarTodosPrecosAdicionais = async () => {
+    try {
+      if (!trabalhaComTabelaPrecos || tabelasPrecos.length === 0) {
+        setProdutosPrecos({});
+        return;
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Carregar todos os preços dos produtos
+      const { data: precosData, error } = await supabase
+        .from('produto_precos')
+        .select('produto_id, tabela_preco_id, preco')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .gt('preco', 0); // Apenas preços > 0
+
+      if (error) {
+        console.error('Erro ao carregar preços dos produtos:', error);
+        return;
+      }
+
+      // Organizar preços por produto
+      const precosMap: {[key: string]: {[key: string]: number}} = {};
+      precosData?.forEach(item => {
+        if (!precosMap[item.produto_id]) {
+          precosMap[item.produto_id] = {};
+        }
+        precosMap[item.produto_id][item.tabela_preco_id] = item.preco;
+      });
+
+      setProdutosPrecos(precosMap);
+    } catch (error) {
+      console.error('Erro ao carregar preços dos produtos:', error);
     }
   };
 
@@ -4697,6 +4770,57 @@ const ProdutosPage: React.FC = () => {
     return [...produtosFixos, ...produtosMoveis];
   };
 
+  const renderProdutoTabelasPrecos = (produto: Produto) => {
+    const tabelasComPrecos = obterTabelasComPrecosProduto(produto.id);
+    const temTabelasPrecos = tabelasComPrecos.length > 0;
+    const dropdownEstaAberto = dropdownAbertoProdutos[produto.id] || false;
+
+    if (!temTabelasPrecos) return null;
+
+    return (
+      <div className="mt-2 pt-2 border-t border-gray-700/50">
+        <div className="mb-3">
+          <button
+            onClick={() => toggleDropdownProduto(produto.id)}
+            className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-300 transition-colors"
+          >
+            <span>Tabelas de Preços</span>
+            {dropdownEstaAberto ? (
+              <ChevronUp size={14} />
+            ) : (
+              <ChevronDown size={14} />
+            )}
+          </button>
+
+          {/* Conteúdo do dropdown */}
+          <AnimatePresence>
+            {dropdownEstaAberto && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mt-2 space-y-1 overflow-hidden"
+              >
+                {tabelasComPrecos.map((tabela) => (
+                  <div
+                    key={tabela.id}
+                    className="flex items-center justify-between p-2 bg-gray-700/50 rounded text-xs"
+                  >
+                    <span className="text-gray-300">{tabela.nome}</span>
+                    <span className="text-primary-400 font-medium">
+                      R$ {tabela.preco.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    );
+  };
+
   const renderProdutoOpcoes = (produto: Produto) => {
     if (!produtoOpcoes[produto.id]?.length) return null;
 
@@ -4877,6 +5001,13 @@ const ProdutosPage: React.FC = () => {
       loadProdutosFotosCount(allProdutos);
     }
   }, [grupos]);
+
+  // Recarregar preços dos produtos quando as configurações de tabela mudarem
+  useEffect(() => {
+    if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0 && grupos.length > 0) {
+      carregarTodosPrecosAdicionais();
+    }
+  }, [trabalhaComTabelaPrecos, tabelasPrecos.length, grupos.length]);
 
   const handleOpenProdutoGaleria = async (produto: Produto) => {
     // Carregar todas as fotos do produto
@@ -5143,6 +5274,9 @@ const ProdutosPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Tabelas de preços do produto - Largura completa */}
+        {renderProdutoTabelasPrecos(produto)}
 
         {/* Opções do produto - Largura completa */}
         {renderProdutoOpcoes(produto)}

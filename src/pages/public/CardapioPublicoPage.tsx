@@ -2310,8 +2310,7 @@ const CardapioPublicoPage: React.FC = () => {
     setCarrinhoAberto(false);
     setModalConfirmacaoAberto(false);
 
-    // Limpar localStorage
-    limparCarrinhoLocalStorage();
+    // localStorage removido - não persiste entre reloads
 
     // Mostrar toast de sucesso
     setToastVisivel(true);
@@ -2855,8 +2854,7 @@ const CardapioPublicoPage: React.FC = () => {
 
         // Estado de adicionais pendentes removido - não é mais necessário
 
-        // Salvar seleções atualizadas no localStorage
-        setTimeout(() => salvarSelecaoLocalStorage(), 100);
+        // localStorage removido - não persiste entre reloads
 
         // Ativar efeito de entrada suave no item
         setItemChacoalhando(produtoAlcoolicoPendente);
@@ -4796,75 +4794,85 @@ const CardapioPublicoPage: React.FC = () => {
                                   : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{opcao.nome}</span>
-                                <span className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  ({opcao.itens.length} {opcao.itens.length === 1 ? 'item' : 'itens'})
-                                </span>
-                                {/* Indicadores de quantidade mínima e máxima */}
+                              <div className="flex-1">
+                                {/* Primeira linha: Nome do grupo + contador de itens */}
                                 <div className="flex items-center gap-2">
-                                  {/* Indicador de quantidade mínima */}
-                                  {opcao.quantidade_minima && opcao.quantidade_minima > 0 && (
-                                    <div className="flex items-center gap-1">
-                                      {(() => {
-                                        const quantidadeTotal = obterQuantidadeTotalOpcao(produto.id, opcao.id);
-                                        const atingiuMinimo = opcaoAtingiuMinimo(produto.id, opcao.id);
-                                        return (
-                                          <>
-                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                              atingiuMinimo
-                                                ? config.modo_escuro
-                                                  ? 'bg-green-900/30 text-green-400 border border-green-700'
-                                                  : 'bg-green-100 text-green-600 border border-green-300'
-                                                : config.modo_escuro
-                                                ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700'
-                                                : 'bg-yellow-100 text-yellow-600 border border-yellow-300'
-                                            }`}>
-                                              Mín: {quantidadeTotal}/{opcao.quantidade_minima}
-                                            </span>
-                                            {atingiuMinimo && (
-                                              <CheckCircle size={14} className={config.modo_escuro ? 'text-green-400' : 'text-green-600'} />
-                                            )}
-                                          </>
-                                        );
-                                      })()}
-                                    </div>
-                                  )}
-
-                                  {/* Indicador de quantidade máxima */}
-                                  {opcao.quantidade_maxima && opcao.quantidade_maxima > 0 && (
-                                    <div className="flex items-center gap-1">
-                                      {(() => {
-                                        const quantidadeTotal = obterQuantidadeTotalOpcao(produto.id, opcao.id);
-                                        const excedeuMaximo = opcaoExcedeuMaximo(produto.id, opcao.id);
-                                        return (
-                                          <>
-                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                              excedeuMaximo
-                                                ? config.modo_escuro
-                                                  ? 'bg-red-900/30 text-red-400 border border-red-700'
-                                                  : 'bg-red-100 text-red-600 border border-red-300'
-                                                : config.modo_escuro
-                                                ? 'bg-blue-900/30 text-blue-400 border border-blue-700'
-                                                : 'bg-blue-100 text-blue-600 border border-blue-300'
-                                            }`}>
-                                              Máx: {quantidadeTotal}/{opcao.quantidade_maxima}
-                                            </span>
-                                            {excedeuMaximo && (
-                                              <AlertCircle size={14} className={config.modo_escuro ? 'text-red-400' : 'text-red-600'} />
-                                            )}
-                                          </>
-                                        );
-                                      })()}
-                                    </div>
-                                  )}
+                                  <span className="text-sm font-medium">{opcao.nome}</span>
+                                  <span className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    ({opcao.itens.length} {opcao.itens.length === 1 ? 'item' : 'itens'})
+                                  </span>
                                 </div>
+
+                                {/* Segunda linha: Indicadores de quantidade mínima e máxima */}
+                                {(opcao.quantidade_minima && opcao.quantidade_minima > 0) || (opcao.quantidade_maxima && opcao.quantidade_maxima > 0) ? (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {/* Indicador de quantidade mínima */}
+                                    {opcao.quantidade_minima && opcao.quantidade_minima > 0 && (
+                                      <div className="flex items-center gap-1">
+                                        {(() => {
+                                          const quantidadeTotal = obterQuantidadeTotalOpcao(produto.id, opcao.id);
+                                          const atingiuMinimo = opcaoAtingiuMinimo(produto.id, opcao.id);
+                                          return (
+                                            <>
+                                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                                atingiuMinimo
+                                                  ? config.modo_escuro
+                                                    ? 'bg-green-900/30 text-green-400 border border-green-700'
+                                                    : 'bg-green-100 text-green-600 border border-green-300'
+                                                  : config.modo_escuro
+                                                  ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700'
+                                                  : 'bg-yellow-100 text-yellow-600 border border-yellow-300'
+                                              }`}>
+                                                Mín: {quantidadeTotal}/{opcao.quantidade_minima}
+                                              </span>
+                                              {atingiuMinimo && (
+                                                <CheckCircle size={14} className={config.modo_escuro ? 'text-green-400' : 'text-green-600'} />
+                                              )}
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+
+                                    {/* Indicador de quantidade máxima */}
+                                    {opcao.quantidade_maxima && opcao.quantidade_maxima > 0 && (
+                                      <div className="flex items-center gap-1">
+                                        {(() => {
+                                          const quantidadeTotal = obterQuantidadeTotalOpcao(produto.id, opcao.id);
+                                          const excedeuMaximo = opcaoExcedeuMaximo(produto.id, opcao.id);
+                                          return (
+                                            <>
+                                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                                excedeuMaximo
+                                                  ? config.modo_escuro
+                                                    ? 'bg-red-900/30 text-red-400 border border-red-700'
+                                                    : 'bg-red-100 text-red-600 border border-red-300'
+                                                  : config.modo_escuro
+                                                  ? 'bg-blue-900/30 text-blue-400 border border-blue-700'
+                                                  : 'bg-blue-100 text-blue-600 border border-blue-300'
+                                              }`}>
+                                                Máx: {quantidadeTotal}/{opcao.quantidade_maxima}
+                                              </span>
+                                              {excedeuMaximo && (
+                                                <AlertCircle size={14} className={config.modo_escuro ? 'text-red-400' : 'text-red-600'} />
+                                              )}
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : null}
                               </div>
-                              {adicionaisExpandidos[produto.id]?.[opcao.id] ? (
-                                <ChevronUp size={16} className={config.modo_escuro ? 'text-gray-400' : 'text-gray-500'} />
-                              ) : (
-                                <ChevronDown size={16} className={config.modo_escuro ? 'text-gray-400' : 'text-gray-500'} />
-                              )}
+
+                              {/* Ícone de expansão */}
+                              <div className="ml-2">
+                                {adicionaisExpandidos[produto.id]?.[opcao.id] ? (
+                                  <ChevronUp size={16} className={config.modo_escuro ? 'text-gray-400' : 'text-gray-500'} />
+                                ) : (
+                                  <ChevronDown size={16} className={config.modo_escuro ? 'text-gray-400' : 'text-gray-500'} />
+                                )}
+                              </div>
                             </button>
 
                             {/* Itens do adicional (expansível) */}
