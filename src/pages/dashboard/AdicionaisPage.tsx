@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Plus, Search } from 'lucide-react';
+import { X, Pencil, Trash2, Plus, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import { showMessage } from '../../utils/toast';
@@ -78,7 +78,10 @@ const AdicionaisPage: React.FC = () => {
   const [tabelasPrecos, setTabelasPrecos] = useState<any[]>([]);
   const [abaPrecoAtiva, setAbaPrecoAtiva] = useState<string>('padrao');
   const [precosTabelas, setPrecosTabelas] = useState<{[key: string]: number}>({});
-  const [precoTabelaFormatado, setPrecoTabelaFormatado] = useState<string>('0,00');
+
+  // Estados para exibição dos preços nos cards
+  const [adicionaisPrecos, setAdicionaisPrecos] = useState<{[key: string]: {[key: string]: number}}>({});
+  const [dropdownAberto, setDropdownAberto] = useState<{[key: string]: boolean}>({});
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -338,6 +341,9 @@ const AdicionaisPage: React.FC = () => {
       console.log('Opções filtradas:', opcoesFiltered);
       setOpcoes(opcoesFiltered);
 
+      // Carregar preços dos adicionais para exibição nos cards
+      await carregarTodosPrecosAdicionais();
+
       if (opcoesFiltered.length === 0) {
         console.log('Nenhuma opção adicional encontrada para esta empresa');
       }
@@ -347,6 +353,52 @@ const AdicionaisPage: React.FC = () => {
     } finally {
       setIsDataReady(true);
       setIsLoading(false);
+    }
+  };
+
+  // Função para carregar todos os preços dos adicionais para exibição nos cards
+  const carregarTodosPrecosAdicionais = async () => {
+    try {
+      if (!trabalhaComTabelaPrecos || tabelasPrecos.length === 0) {
+        setAdicionaisPrecos({});
+        return;
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Carregar todos os preços dos adicionais
+      const { data: precosData, error } = await supabase
+        .from('adicionais_precos')
+        .select('adicional_item_id, tabela_preco_id, preco')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .gt('preco', 0); // Apenas preços > 0
+
+      if (error) {
+        console.error('Erro ao carregar preços dos adicionais:', error);
+        return;
+      }
+
+      // Organizar preços por item adicional
+      const precosMap: {[key: string]: {[key: string]: number}} = {};
+      precosData?.forEach(item => {
+        if (!precosMap[item.adicional_item_id]) {
+          precosMap[item.adicional_item_id] = {};
+        }
+        precosMap[item.adicional_item_id][item.tabela_preco_id] = item.preco;
+      });
+
+      setAdicionaisPrecos(precosMap);
+    } catch (error) {
+      console.error('Erro ao carregar preços dos adicionais:', error);
     }
   };
 
@@ -464,7 +516,7 @@ const AdicionaisPage: React.FC = () => {
   // Função para lidar com mudança de preço da tabela
   const handlePrecoTabelaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = e.target.value;
-    setPrecoTabelaFormatado(formatarValorMonetario(valor));
+    const valorFormatado = formatarValorMonetario(valor);
 
     // Converter para número e salvar no estado
     const valorNumerico = parseFloat(valor.replace(/\D/g, '')) / 100;
@@ -482,6 +534,43 @@ const AdicionaisPage: React.FC = () => {
       const preco = precosTabelas[abaPrecoAtiva] || 0;
       await salvarPrecoTabela(editingItem.id, abaPrecoAtiva, preco);
     }
+  };
+
+  // Função para obter tabelas de preços com valores válidos para um item adicional
+  const obterTabelasComPrecos = (itemId: string): Array<{id: string; nome: string; preco: number}> => {
+    if (!trabalhaComTabelaPrecos || !adicionaisPrecos[itemId]) {
+      return [];
+    }
+
+    return tabelasPrecos
+      .map(tabela => ({
+        id: tabela.id,
+        nome: tabela.nome,
+        preco: adicionaisPrecos[itemId][tabela.id] || 0
+      }))
+      .filter(tabela => tabela.preco > 0); // Apenas tabelas com preço > 0
+  };
+
+  // Função para formatar preço
+  const formatarPreco = (preco: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(preco);
+  };
+
+  // Função para alternar dropdown
+  const toggleDropdown = (itemId: string) => {
+    setDropdownAberto(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
+
+  // Função para obter valor formatado de uma tabela específica
+  const obterValorFormatadoTabela = (tabelaId: string): string => {
+    const valor = precosTabelas[tabelaId] || 0;
+    return formatarValorMonetario((valor * 100).toString().padStart(3, '0'));
   };
 
   const handleSubmitOpcao = async (e: React.FormEvent) => {
@@ -606,7 +695,6 @@ const AdicionaisPage: React.FC = () => {
         setNovoItem({ nome: '', preco: '' });
         setPrecoFormatado('');
         setPrecosTabelas({});
-        setPrecoTabelaFormatado('0,00');
         setAbaPrecoAtiva('padrao');
         setEditingItem(null);
         setIsAddingItem(false);
@@ -637,7 +725,6 @@ const AdicionaisPage: React.FC = () => {
         setNovoItem({ nome: '', preco: '' });
         setPrecoFormatado('');
         setPrecosTabelas({});
-        setPrecoTabelaFormatado('0,00');
         setAbaPrecoAtiva('padrao');
         setIsAddingItem(false);
         setEditingOpcao(null);
@@ -827,7 +914,6 @@ const AdicionaisPage: React.FC = () => {
                         setNovoItem({ nome: '', preco: '' });
                         setPrecoFormatado('');
                         setPrecosTabelas({});
-                        setPrecoTabelaFormatado('0,00');
                         setAbaPrecoAtiva('padrao');
                         setIsAddingItem(true);
                         setEditingItem(null);
@@ -867,31 +953,82 @@ const AdicionaisPage: React.FC = () => {
                 <div className="p-4">
                   {opcao.itens?.length > 0 ? (
                     <div className="space-y-3">
-                      {opcao.itens.map((item: any) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg"
-                        >
-                          <span className="text-white">{item.nome}</span>
-                          <div className="flex items-center gap-4">
-                            <span className="text-primary-400">
-                              R$ {item.preco.toFixed(2)}
-                            </span>
-                            <button
-                              onClick={() => handleEditItem(item, opcao)}
-                              className="p-1 text-gray-400 hover:text-white transition-colors"
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(item.id, 'item', item.nome)}
-                              className="text-red-400 hover:text-red-300 transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                      {opcao.itens.map((item: any) => {
+                        const tabelasComPrecos = obterTabelasComPrecos(item.id);
+                        const temTabelasPrecos = tabelasComPrecos.length > 0;
+                        const dropdownEstaAberto = dropdownAberto[item.id] || false;
+
+                        return (
+                          <div key={item.id} className="bg-gray-800/50 rounded-lg">
+                            {/* Linha principal do item */}
+                            <div className="flex items-center justify-between p-3">
+                              <div className="flex-1">
+                                <span className="text-white">{item.nome}</span>
+
+                                {/* Dropdown de tabelas de preços */}
+                                {temTabelasPrecos && (
+                                  <div className="mt-2">
+                                    <button
+                                      onClick={() => toggleDropdown(item.id)}
+                                      className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                                    >
+                                      <span>Tabelas de Preços</span>
+                                      {dropdownEstaAberto ? (
+                                        <ChevronUp size={14} />
+                                      ) : (
+                                        <ChevronDown size={14} />
+                                      )}
+                                    </button>
+
+                                    {/* Conteúdo do dropdown */}
+                                    <AnimatePresence>
+                                      {dropdownEstaAberto && (
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.2 }}
+                                          className="mt-2 space-y-1 overflow-hidden"
+                                        >
+                                          {tabelasComPrecos.map((tabela) => (
+                                            <div
+                                              key={tabela.id}
+                                              className="flex items-center justify-between p-2 bg-gray-700/50 rounded text-xs"
+                                            >
+                                              <span className="text-gray-300">{tabela.nome}</span>
+                                              <span className="text-primary-400 font-medium">
+                                                {formatarPreco(tabela.preco)}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-4">
+                                <span className="text-primary-400">
+                                  R$ {item.preco.toFixed(2)}
+                                </span>
+                                <button
+                                  onClick={() => handleEditItem(item, opcao)}
+                                  className="p-1 text-gray-400 hover:text-white transition-colors"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(item.id, 'item', item.nome)}
+                                  className="text-red-400 hover:text-red-300 transition-colors"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-6">
@@ -1130,7 +1267,7 @@ const AdicionaisPage: React.FC = () => {
                           {/* Campo de Preço Dinâmico */}
                           <input
                             type="text"
-                            value={abaPrecoAtiva === 'padrao' ? precoFormatado : precoTabelaFormatado}
+                            value={abaPrecoAtiva === 'padrao' ? precoFormatado : obterValorFormatadoTabela(abaPrecoAtiva)}
                             onChange={(e) => {
                               if (abaPrecoAtiva === 'padrao') {
                                 handlePrecoChange(e);
@@ -1170,7 +1307,6 @@ const AdicionaisPage: React.FC = () => {
                           setEditingItem(null);
                           setPrecoFormatado('');
                           setPrecosTabelas({});
-                          setPrecoTabelaFormatado('0,00');
                           setAbaPrecoAtiva('padrao');
                           setQuantidadeMinimaInput('');
                           setQuantidadeMaximaInput('');

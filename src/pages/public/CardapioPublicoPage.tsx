@@ -1241,6 +1241,7 @@ const CardapioPublicoPage: React.FC = () => {
           id: a.opcoes_adicionais.id,
           nome: a.opcoes_adicionais.nome,
           quantidade_minima: a.opcoes_adicionais.quantidade_minima || 0,
+          quantidade_maxima: a.opcoes_adicionais.quantidade_maxima || 0, // ✅ CAMPO FALTANTE ADICIONADO
           itens: a.opcoes_adicionais.opcoes_adicionais_itens || []
         }));
 
@@ -1924,16 +1925,13 @@ const CardapioPublicoPage: React.FC = () => {
 
     setQuantidadesSelecionadas(prev => {
       if (novaQuantidade <= 0) {
-        // ✅ SALVAR quantidade 0 explicitamente no estado para o localStorage
-        const novoEstado = {
-          ...prev,
-          [produtoId]: 0
-        };
+        const nova = { ...prev };
+        delete nova[produtoId];
 
         // ✅ LIMPAR TODOS os estados relacionados ao produto quando quantidade for 0
         limparEstadosProduto(produtoId);
 
-        return novoEstado;
+        return nova;
       }
       return {
         ...prev,
@@ -1964,21 +1962,8 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
-  // ✅ FUNÇÃO PARA LIMPAR APENAS DADOS DESNECESSÁRIOS (NÃO MAIS USADA)
-  // Mantida para compatibilidade, mas não limpa mais adicionais e observações quando quantidade = 0
+  // Função para limpar todos os estados de um produto
   const limparEstadosProduto = (produtoId: string) => {
-    // ✅ NÃO LIMPAR MAIS adicionais e observações quando quantidade = 0
-    // Isso permite que o usuário mantenha suas seleções mesmo com quantidade 0
-
-    // Apenas limpar validação mínima se necessário
-    // setValidacaoQuantidadeMinima será atualizada automaticamente pelo useEffect
-
-    // Salvar no localStorage após mudanças
-    setTimeout(() => salvarSelecaoLocalStorage(), 100);
-  };
-
-  // ✅ NOVA FUNÇÃO: Limpar completamente um produto (usado apenas quando necessário)
-  const limparCompletamenteProduto = (produtoId: string) => {
     // Limpar adicionais selecionados
     setAdicionaisSelecionados(prev => {
       const novo = { ...prev };
@@ -2009,13 +1994,6 @@ const CardapioPublicoPage: React.FC = () => {
 
     // Limpar ordem de adição
     setOrdemAdicaoItens(prev => {
-      const novo = { ...prev };
-      delete novo[produtoId];
-      return novo;
-    });
-
-    // Remover quantidade selecionada
-    setQuantidadesSelecionadas(prev => {
       const novo = { ...prev };
       delete novo[produtoId];
       return novo;
