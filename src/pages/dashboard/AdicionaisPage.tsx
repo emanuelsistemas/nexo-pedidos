@@ -528,13 +528,7 @@ const AdicionaisPage: React.FC = () => {
     }
   };
 
-  // Função para lidar com blur do campo de preço da tabela
-  const handlePrecoTabelaBlur = async () => {
-    if (abaPrecoAtiva !== 'padrao' && editingItem) {
-      const preco = precosTabelas[abaPrecoAtiva] || 0;
-      await salvarPrecoTabela(editingItem.id, abaPrecoAtiva, preco);
-    }
-  };
+  // Função removida - salvamento agora é apenas no submit do formulário
 
   // Função para obter tabelas de preços com valores válidos para um item adicional
   const obterTabelasComPrecos = (itemId: string): Array<{id: string; nome: string; preco: number}> => {
@@ -570,7 +564,11 @@ const AdicionaisPage: React.FC = () => {
   // Função para obter valor formatado de uma tabela específica
   const obterValorFormatadoTabela = (tabelaId: string): string => {
     const valor = precosTabelas[tabelaId] || 0;
-    return formatarValorMonetario((valor * 100).toString().padStart(3, '0'));
+    // Formatar diretamente o valor sem multiplicar por 100
+    return valor.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
   };
 
   const handleSubmitOpcao = async (e: React.FormEvent) => {
@@ -1273,11 +1271,6 @@ const AdicionaisPage: React.FC = () => {
                                 handlePrecoChange(e);
                               } else {
                                 handlePrecoTabelaChange(e);
-                              }
-                            }}
-                            onBlur={() => {
-                              if (abaPrecoAtiva !== 'padrao') {
-                                handlePrecoTabelaBlur();
                               }
                             }}
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
