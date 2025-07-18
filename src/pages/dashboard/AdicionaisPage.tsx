@@ -252,6 +252,7 @@ const AdicionaisPage: React.FC = () => {
 
       if (configData?.trabalha_com_tabela_precos) {
         setTrabalhaComTabelaPrecos(true);
+        console.log('Debug - Empresa trabalha com tabelas de preços');
 
         // Carregar tabelas de preços ativas
         const { data: tabelasData, error: tabelasError } = await supabase
@@ -267,8 +268,10 @@ const AdicionaisPage: React.FC = () => {
           return;
         }
 
+        console.log('Debug - Tabelas de preços carregadas:', tabelasData);
         setTabelasPrecos(tabelasData || []);
       } else {
+        console.log('Debug - Empresa NÃO trabalha com tabelas de preços');
         setTrabalhaComTabelaPrecos(false);
         setTabelasPrecos([]);
       }
@@ -369,7 +372,9 @@ const AdicionaisPage: React.FC = () => {
   // Função para carregar todos os preços dos adicionais para exibição nos cards
   const carregarTodosPrecosAdicionais = async () => {
     try {
+      console.log('Debug - carregarTodosPrecosAdicionais:', { trabalhaComTabelaPrecos, tabelasPrecos: tabelasPrecos.length });
       if (!trabalhaComTabelaPrecos || tabelasPrecos.length === 0) {
+        console.log('Debug - Não carregando preços: empresa não trabalha com tabelas ou não há tabelas');
         setAdicionaisPrecos({});
         return;
       }
@@ -397,6 +402,8 @@ const AdicionaisPage: React.FC = () => {
         return;
       }
 
+      console.log('Debug - Preços dos adicionais carregados:', precosData);
+
       // Organizar preços por item adicional
       const precosMap: {[key: string]: {[key: string]: number}} = {};
       precosData?.forEach(item => {
@@ -406,6 +413,7 @@ const AdicionaisPage: React.FC = () => {
         precosMap[item.adicional_item_id][item.tabela_preco_id] = item.preco;
       });
 
+      console.log('Debug - Preços organizados:', precosMap);
       setAdicionaisPrecos(precosMap);
     } catch (error) {
       console.error('Erro ao carregar preços dos adicionais:', error);
@@ -573,17 +581,21 @@ const AdicionaisPage: React.FC = () => {
 
   // Função para obter tabelas de preços com valores válidos para um item adicional
   const obterTabelasComPrecos = (itemId: string): Array<{id: string; nome: string; preco: number}> => {
-    if (!trabalhaComTabelaPrecos || !adicionaisPrecos[itemId]) {
+    if (!trabalhaComTabelaPrecos || tabelasPrecos.length === 0) {
+      console.log('Debug - obterTabelasComPrecos:', { trabalhaComTabelaPrecos, tabelasPrecos: tabelasPrecos.length });
       return [];
     }
 
-    return tabelasPrecos
+    const resultado = tabelasPrecos
       .map(tabela => ({
         id: tabela.id,
         nome: tabela.nome,
-        preco: adicionaisPrecos[itemId][tabela.id] || 0
+        preco: adicionaisPrecos[itemId]?.[tabela.id] || 0
       }))
       .filter(tabela => tabela.preco > 0); // Apenas tabelas com preço > 0
+
+    console.log('Debug - obterTabelasComPrecos resultado:', { itemId, adicionaisPrecos: adicionaisPrecos[itemId], resultado });
+    return resultado;
   };
 
   // Função para formatar preço

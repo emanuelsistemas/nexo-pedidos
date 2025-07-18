@@ -2774,44 +2774,16 @@ const ProdutosPage: React.FC = () => {
 
       // Se for a foto principal ou se é a primeira foto do produto, atualizar a lista de fotos principais
       if ((isPrincipal || produtoFotos.length === 0) && editingProduto) {
-        // Atualizar imediatamente a foto principal na lista
-        setProdutosFotosPrincipais(prev => ({
-          ...prev,
-          [editingProduto.id]: fotoData
-        }));
-
-        // Atualizar também a contagem de fotos
-        setProdutosFotosCount(prev => ({
-          ...prev,
-          [editingProduto.id]: (prev[editingProduto.id] || 0) + 1
-        }));
-
-        // Forçar a atualização da lista de grupos para refletir a nova foto
-        const grupoAtual = grupos.find(g => g.id === editingProduto.grupo_id);
-        if (grupoAtual) {
-          const gruposAtualizados = grupos.map(g => {
-            if (g.id === grupoAtual.id) {
-              // Atualizar o produto com a nova foto
-              const produtosAtualizados = g.produtos.map(p => {
-                if (p.id === editingProduto.id) {
-                  return { ...p }; // Força a atualização do produto
-                }
-                return p;
-              });
-              return { ...g, produtos: produtosAtualizados };
-            }
-            return g;
-          });
-
-          // Atualizar os grupos para forçar a renderização
-          setGrupos([...gruposAtualizados]);
-        }
+        // ✅ OTIMIZAÇÃO: Atualizar foto específica na grid (sem recarregar todas)
+        await atualizarFotoProdutoEspecifico(editingProduto.id);
       } else if (editingProduto) {
-        // Se não for a foto principal, apenas atualizar a contagem
-        setProdutosFotosCount(prev => ({
-          ...prev,
-          [editingProduto.id]: (prev[editingProduto.id] || 0) + 1
-        }));
+        // ✅ Se não for a foto principal, atualizar apenas a contagem específica
+        const novaContagem = await getProdutoFotosCount(editingProduto.id);
+        setProdutosFotosCount(prev => {
+          const novoCount = { ...prev, [editingProduto.id]: novaContagem };
+          salvarFotosCountNoCache(novoCount);
+          return novoCount;
+        });
       }
 
       // Definir um sinalizador no localStorage para notificar a versão mobile
@@ -2866,40 +2838,11 @@ const ProdutosPage: React.FC = () => {
 
       if (error) throw error;
 
-      // Atualiza a lista de fotos
+      // ✅ OTIMIZAÇÃO: Atualizar apenas fotos específicas do produto
       await loadProdutoFotos(editingProduto.id);
 
-      // Buscar a foto principal atualizada diretamente do banco
-      const fotoPrincipalAtualizada = await getProdutoFotoPrincipal(editingProduto.id);
-
-      if (fotoPrincipalAtualizada) {
-        // Atualizar a foto principal na lista de fotos principais
-        setProdutosFotosPrincipais(prev => ({
-          ...prev,
-          [editingProduto.id]: fotoPrincipalAtualizada
-        }));
-
-        // Forçar a atualização da lista de grupos para refletir a nova foto principal
-        const grupoAtual = grupos.find(g => g.id === editingProduto.grupo_id);
-        if (grupoAtual) {
-          const gruposAtualizados = grupos.map(g => {
-            if (g.id === grupoAtual.id) {
-              // Atualizar o produto com a nova foto principal
-              const produtosAtualizados = g.produtos.map(p => {
-                if (p.id === editingProduto.id) {
-                  return { ...p }; // Força a atualização do produto
-                }
-                return p;
-              });
-              return { ...g, produtos: produtosAtualizados };
-            }
-            return g;
-          });
-
-          // Atualizar os grupos para forçar a renderização
-          setGrupos([...gruposAtualizados]);
-        }
-      }
+      // ✅ Atualizar foto específica na grid (sem recarregar todas)
+      await atualizarFotoProdutoEspecifico(editingProduto.id);
 
       // Definir um sinalizador no localStorage para notificar a versão mobile
       localStorage.setItem('produto_atualizado', JSON.stringify({
@@ -3053,14 +2996,11 @@ const ProdutosPage: React.FC = () => {
         const fotoDeletada = produtoFotos.find(f => f.id === deleteConfirmation.id);
         const eraPrincipal = fotoDeletada?.principal || false;
 
-        // Recarregar a lista de fotos
+        // ✅ OTIMIZAÇÃO: Recarregar apenas fotos do produto específico
         await loadProdutoFotos(editingProduto.id);
 
-        // Atualizar a contagem de fotos
-        setProdutosFotosCount(prev => ({
-          ...prev,
-          [editingProduto.id]: Math.max(0, (prev[editingProduto.id] || 1) - 1)
-        }));
+        // ✅ Atualizar foto específica na grid (sem recarregar todas)
+        await atualizarFotoProdutoEspecifico(editingProduto.id);
 
         // Verificar se a foto excluída era a principal
         if (eraPrincipal) {
@@ -3075,11 +3015,17 @@ const ProdutosPage: React.FC = () => {
             const novaFotoPrincipal = fotosRestantes[0];
             await handleSetFotoPrincipal(novaFotoPrincipal.id);
           } else {
-            // Se não houver mais fotos, remover a foto principal
-            setProdutosFotosPrincipais(prev => ({
-              ...prev,
-              [editingProduto.id]: null
-            }));
+            // Se não houver mais fotos, atualizar cache
+            setProdutosFotosPrincipais(prev => {
+              const novoMap = { ...prev, [editingProduto.id]: null };
+              salvarFotosNoCache(novoMap);
+              return novoMap;
+            });
+            setProdutosFotosCount(prev => {
+              const novoCount = { ...prev, [editingProduto.id]: 0 };
+              salvarFotosCountNoCache(novoCount);
+              return novoCount;
+            });
           }
         }
 
@@ -3819,9 +3765,30 @@ const ProdutosPage: React.FC = () => {
       // ✅ NOVO: Salvar preços das tabelas de preços (atualiza estado imediatamente)
       await salvarTodosPrecosTabelas(productId);
 
-      await loadGrupos();
+      // ✅ OTIMIZAÇÃO: Recarregar apenas se for produto novo, senão atualizar específico
+      if (editingProduto) {
+        // Para produto editado: atualizar apenas os dados específicos
+        console.log('📝 Produto editado - atualizando dados específicos');
 
-      // Atualizar o estoque na grid imediatamente após criar o produto
+        // Atualizar foto específica do produto editado
+        await atualizarFotoProdutoEspecifico(editingProduto.id);
+
+        // Recarregar apenas os grupos (sem forçar recarregamento de fotos)
+        await loadGrupos();
+      } else {
+        // Para produto novo: recarregar tudo
+        console.log('🆕 Produto novo - recarregando todos os dados');
+        await loadGrupos();
+
+        // Forçar recarregamento das fotos para incluir o novo produto
+        const allProdutos = grupos.flatMap(grupo => grupo.produtos);
+        if (allProdutos.length > 0) {
+          await loadProdutosFotosPrincipais(allProdutos, true);
+          await loadProdutosFotosCount(allProdutos, true);
+        }
+      }
+
+      // Atualizar o estoque na grid imediatamente após criar/editar o produto
       await loadProdutosEstoque();
 
       // Limpar cache de validação NCM para evitar dados incorretos na interface
@@ -4951,8 +4918,133 @@ const ProdutosPage: React.FC = () => {
   // Estado para controlar quando as fotos estão sendo carregadas do banco
   const [fotosCarregandoDoBanco, setFotosCarregandoDoBanco] = useState<Record<string, boolean>>({});
 
+  // ✅ CACHE DE FOTOS NO LOCALSTORAGE
+  const CACHE_KEY_FOTOS = 'nexo-produtos-fotos-cache';
+  const CACHE_KEY_FOTOS_COUNT = 'nexo-produtos-fotos-count-cache';
+  const CACHE_EXPIRY_TIME = 30 * 60 * 1000; // 30 minutos
+
+  // Função para salvar fotos no cache
+  const salvarFotosNoCache = (fotosMap: Record<string, ProdutoFoto | null>) => {
+    try {
+      const cacheData = {
+        fotos: fotosMap,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(CACHE_KEY_FOTOS, JSON.stringify(cacheData));
+    } catch (error) {
+      console.error('Erro ao salvar fotos no cache:', error);
+    }
+  };
+
+  // Função para salvar contagem de fotos no cache
+  const salvarFotosCountNoCache = (fotosCount: Record<string, number>) => {
+    try {
+      const cacheData = {
+        fotosCount: fotosCount,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(CACHE_KEY_FOTOS_COUNT, JSON.stringify(cacheData));
+    } catch (error) {
+      console.error('Erro ao salvar contagem de fotos no cache:', error);
+    }
+  };
+
+  // Função para carregar fotos do cache
+  const carregarFotosDoCache = (): Record<string, ProdutoFoto | null> | null => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_FOTOS);
+      if (!cached) return null;
+
+      const cacheData = JSON.parse(cached);
+      const isExpired = Date.now() - cacheData.timestamp > CACHE_EXPIRY_TIME;
+
+      if (isExpired) {
+        localStorage.removeItem(CACHE_KEY_FOTOS);
+        return null;
+      }
+
+      return cacheData.fotos;
+    } catch (error) {
+      console.error('Erro ao carregar fotos do cache:', error);
+      return null;
+    }
+  };
+
+  // Função para carregar contagem de fotos do cache
+  const carregarFotosCountDoCache = (): Record<string, number> | null => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_FOTOS_COUNT);
+      if (!cached) return null;
+
+      const cacheData = JSON.parse(cached);
+      const isExpired = Date.now() - cacheData.timestamp > CACHE_EXPIRY_TIME;
+
+      if (isExpired) {
+        localStorage.removeItem(CACHE_KEY_FOTOS_COUNT);
+        return null;
+      }
+
+      return cacheData.fotosCount;
+    } catch (error) {
+      console.error('Erro ao carregar contagem de fotos do cache:', error);
+      return null;
+    }
+  };
+
+  // ✅ FUNÇÃO OTIMIZADA: Atualizar foto específica de um produto
+  const atualizarFotoProdutoEspecifico = async (produtoId: string) => {
+    try {
+      // Marcar produto específico como carregando
+      setFotosCarregandoDoBanco(prev => ({ ...prev, [produtoId]: true }));
+
+      // Buscar foto atualizada do banco
+      const foto = await getProdutoFotoPrincipal(produtoId);
+
+      // Atualizar apenas este produto no estado
+      setProdutosFotosPrincipais(prev => {
+        const novoMap = { ...prev, [produtoId]: foto };
+        // Salvar no cache
+        salvarFotosNoCache(novoMap);
+        return novoMap;
+      });
+
+      // Buscar contagem atualizada
+      const count = await getProdutoFotosCount(produtoId);
+      setProdutosFotosCount(prev => {
+        const novoCount = { ...prev, [produtoId]: count };
+        // Salvar no cache
+        salvarFotosCountNoCache(novoCount);
+        return novoCount;
+      });
+
+      // Marcar como não carregando mais
+      setFotosCarregandoDoBanco(prev => ({ ...prev, [produtoId]: false }));
+    } catch (error) {
+      console.error('Erro ao atualizar foto do produto específico:', error);
+      setFotosCarregandoDoBanco(prev => ({ ...prev, [produtoId]: false }));
+    }
+  };
+
   // Função para carregar as fotos principais de todos os produtos
-  const loadProdutosFotosPrincipais = async (produtos: Produto[]) => {
+  const loadProdutosFotosPrincipais = async (produtos: Produto[], forcarRecarregamento = false) => {
+    // Tentar carregar do cache primeiro (se não forçar recarregamento)
+    if (!forcarRecarregamento) {
+      const fotosCache = carregarFotosDoCache();
+      if (fotosCache) {
+        // Verificar se temos fotos para todos os produtos no cache
+        const produtosIds = produtos.map(p => p.id);
+        const temTodosProdutos = produtosIds.every(id => fotosCache.hasOwnProperty(id));
+
+        if (temTodosProdutos) {
+          console.log('📸 Carregando fotos do cache localStorage');
+          setProdutosFotosPrincipais(fotosCache);
+          return;
+        }
+      }
+    }
+
+    console.log('📸 Carregando fotos do banco de dados');
+
     // Marcar todos os produtos como carregando fotos
     const loadingMap: Record<string, boolean> = {};
     produtos.forEach(produto => {
@@ -4969,6 +5061,9 @@ const ProdutosPage: React.FC = () => {
 
     setProdutosFotosPrincipais(fotosMap);
 
+    // Salvar no cache
+    salvarFotosNoCache(fotosMap);
+
     // Marcar todos os produtos como não carregando mais
     const notLoadingMap: Record<string, boolean> = {};
     produtos.forEach(produto => {
@@ -4977,8 +5072,53 @@ const ProdutosPage: React.FC = () => {
     setFotosCarregandoDoBanco(notLoadingMap);
   };
 
+  // ✅ FUNÇÃO PARA BUSCAR CONTAGEM DE FOTOS DE UM PRODUTO ESPECÍFICO
+  const getProdutoFotosCount = async (produtoId: string): Promise<number> => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return 0;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return 0;
+
+      const { data: fotosCountData } = await supabase
+        .from('produto_fotos')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('produto_id', produtoId);
+
+      return fotosCountData?.length || 0;
+    } catch (error) {
+      console.error('Erro ao buscar contagem de fotos do produto:', error);
+      return 0;
+    }
+  };
+
   // Função para carregar a contagem de fotos de cada produto
-  const loadProdutosFotosCount = async (produtos: Produto[]) => {
+  const loadProdutosFotosCount = async (produtos: Produto[], forcarRecarregamento = false) => {
+    // Tentar carregar do cache primeiro (se não forçar recarregamento)
+    if (!forcarRecarregamento) {
+      const fotosCountCache = carregarFotosCountDoCache();
+      if (fotosCountCache) {
+        // Verificar se temos contagem para todos os produtos no cache
+        const produtosIds = produtos.map(p => p.id);
+        const temTodosProdutos = produtosIds.every(id => fotosCountCache.hasOwnProperty(id));
+
+        if (temTodosProdutos) {
+          console.log('📊 Carregando contagem de fotos do cache localStorage');
+          setProdutosFotosCount(fotosCountCache);
+          return;
+        }
+      }
+    }
+
+    console.log('📊 Carregando contagem de fotos do banco de dados');
+
     try {
       // Obter a empresa_id do usuário atual
       const { data: userData } = await supabase.auth.getUser();
@@ -5008,19 +5148,46 @@ const ProdutosPage: React.FC = () => {
       });
 
       setProdutosFotosCount(fotosCount);
+
+      // Salvar no cache
+      salvarFotosCountNoCache(fotosCount);
     } catch (error) {
       console.error('Erro ao carregar contagem de fotos dos produtos:', error);
     }
   };
 
-  // Carregar fotos principais quando os produtos mudarem
+  // ✅ FUNÇÃO PARA LIMPAR CACHE DE FOTOS
+  const limparCacheFotos = () => {
+    try {
+      localStorage.removeItem(CACHE_KEY_FOTOS);
+      localStorage.removeItem(CACHE_KEY_FOTOS_COUNT);
+      console.log('🗑️ Cache de fotos limpo');
+    } catch (error) {
+      console.error('Erro ao limpar cache de fotos:', error);
+    }
+  };
+
+  // ✅ CARREGAR FOTOS PRINCIPAIS DE FORMA INTELIGENTE
+  // Só recarrega todas as fotos na primeira carga ou quando explicitamente solicitado
+  const [fotosJaCarregadas, setFotosJaCarregadas] = useState(false);
+
   useEffect(() => {
     const allProdutos = grupos.flatMap(grupo => grupo.produtos);
-    if (allProdutos.length > 0) {
+    if (allProdutos.length > 0 && !fotosJaCarregadas) {
+      console.log('📸 Primeira carga de fotos dos produtos');
       loadProdutosFotosPrincipais(allProdutos);
       loadProdutosFotosCount(allProdutos);
+      setFotosJaCarregadas(true);
     }
-  }, [grupos]);
+  }, [grupos, fotosJaCarregadas]);
+
+  // ✅ LIMPAR CACHE QUANDO COMPONENTE FOR DESMONTADO
+  useEffect(() => {
+    return () => {
+      // Opcional: limpar cache ao sair da página (descomente se necessário)
+      // limparCacheFotos();
+    };
+  }, []);
 
   // Recarregar preços dos produtos quando as configurações de tabela mudarem
   useEffect(() => {
