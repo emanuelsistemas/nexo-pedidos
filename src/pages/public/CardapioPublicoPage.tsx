@@ -965,9 +965,9 @@ const CardapioPublicoPage: React.FC = () => {
   // Salvar carrinho no localStorage sempre que quantidades, ordem ou adicionais mudarem
   useEffect(() => {
     if (empresaId) {
-      salvarCarrinhoLocalStorage(quantidadesSelecionadas);
+      salvarCarrinhoLocalStorage(quantidadesProdutos);
     }
-  }, [quantidadesSelecionadas, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, validacaoQuantidadeMaxima, empresaId]);
+  }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, validacaoQuantidadeMaxima, empresaId]);
 
   // Atualizar validação de quantidade mínima sempre que adicionais mudarem
   useEffect(() => {
