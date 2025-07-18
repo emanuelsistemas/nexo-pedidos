@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag } from 'lucide-react';
+import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, AlertCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
@@ -560,6 +560,9 @@ const CardapioPublicoPage: React.FC = () => {
   // Estado para controlar validação de quantidade mínima por opção
   const [validacaoQuantidadeMinima, setValidacaoQuantidadeMinima] = useState<{[produtoId: string]: {[opcaoId: string]: boolean}}>({});
 
+  // Estado para controlar validação de quantidade máxima por opção
+  const [validacaoQuantidadeMaxima, setValidacaoQuantidadeMaxima] = useState<{[produtoId: string]: {[opcaoId: string]: boolean}}>({});
+
   // Estados para observações
   const [observacoesProdutos, setObservacoesProdutos] = useState<Record<string, string>>({});
   const [observacoesSelecionadas, setObservacoesSelecionadas] = useState<Record<string, string>>({});
@@ -964,7 +967,7 @@ const CardapioPublicoPage: React.FC = () => {
     if (empresaId) {
       salvarCarrinhoLocalStorage(quantidadesProdutos);
     }
-  }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, empresaId]);
+  }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, validacaoQuantidadeMaxima, empresaId]);
 
   // Atualizar validação de quantidade mínima sempre que adicionais mudarem
   useEffect(() => {
@@ -1161,6 +1164,7 @@ const CardapioPublicoPage: React.FC = () => {
               id,
               nome,
               quantidade_minima,
+              quantidade_maxima,
               opcoes_adicionais_itens (
                 id,
                 nome,
@@ -1487,6 +1491,21 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const incrementarAdicional = (produtoId: string, itemId: string) => {
+    // ✅ VERIFICAR SE PODE INCREMENTAR (QUANTIDADE MÁXIMA)
+    if (!podeIncrementarAdicional(produtoId, itemId)) {
+      // Encontrar o nome da opção para mostrar mensagem mais clara
+      const produto = produtos.find(p => p.id === produtoId);
+      const opcaoDoItem = produto?.opcoes_adicionais?.find(opcao =>
+        opcao.itens.some(item => item.id === itemId)
+      );
+
+      const nomeOpcao = opcaoDoItem?.nome || 'esta opção';
+      const quantidadeMaxima = opcaoDoItem?.quantidade_maxima || 0;
+
+      showMessage('error', `Quantidade máxima de ${quantidadeMaxima} ${quantidadeMaxima === 1 ? 'item' : 'itens'} atingida para ${nomeOpcao}.`);
+      return;
+    }
+
     const quantidadeProduto = obterQuantidadeSelecionada(produtoId);
     const quantidadeAtualAdicional = obterQuantidadeAdicional(produtoId, itemId);
 
@@ -1568,6 +1587,26 @@ const CardapioPublicoPage: React.FC = () => {
     return quantidadeAdicional > quantidadeProduto;
   };
 
+  // ✅ FUNÇÃO PARA VERIFICAR SE PODE INCREMENTAR ADICIONAL (CONSIDERANDO QUANTIDADE MÁXIMA)
+  const podeIncrementarAdicional = (produtoId: string, itemId: string): boolean => {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto?.opcoes_adicionais) return true;
+
+    // Encontrar a opção que contém este item
+    const opcaoDoItem = produto.opcoes_adicionais.find(opcao =>
+      opcao.itens.some(item => item.id === itemId)
+    );
+
+    if (!opcaoDoItem) return true;
+
+    // Se não tem quantidade máxima definida, pode incrementar
+    if (!opcaoDoItem.quantidade_maxima || opcaoDoItem.quantidade_maxima <= 0) return true;
+
+    // Verificar se incrementar este item faria a opção exceder o máximo
+    const quantidadeAtualOpcao = obterQuantidadeTotalOpcao(produtoId, opcaoDoItem.id);
+    return quantidadeAtualOpcao < opcaoDoItem.quantidade_maxima;
+  };
+
   // ✅ FUNÇÃO PARA OBTER ADICIONAIS VÁLIDOS DE UM PRODUTO
   const obterAdicionaisValidosProduto = (produtoId: string) => {
     const produto = produtos.find(p => p.id === produtoId);
@@ -1623,7 +1662,19 @@ const CardapioPublicoPage: React.FC = () => {
     return quantidadeTotal >= opcao.quantidade_minima;
   };
 
-  // Função para obter adicionais válidos para o carrinho (apenas os que atingiram quantidade mínima)
+  // Função para verificar se uma opção excedeu a quantidade máxima
+  const opcaoExcedeuMaximo = (produtoId: string, opcaoId: string): boolean => {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto?.opcoes_adicionais) return false;
+
+    const opcao = produto.opcoes_adicionais.find(o => o.id === opcaoId);
+    if (!opcao || !opcao.quantidade_maxima || opcao.quantidade_maxima <= 0) return false;
+
+    const quantidadeTotal = obterQuantidadeTotalOpcao(produtoId, opcaoId);
+    return quantidadeTotal > opcao.quantidade_maxima;
+  };
+
+  // Função para obter adicionais válidos para o carrinho (apenas os que atingiram quantidade mínima e não excederam máxima)
   const obterAdicionaisValidosParaCarrinho = (produtoId: string): Array<{id: string; nome: string; preco: number; quantidade: number}> => {
     const produto = produtos.find(p => p.id === produtoId);
     if (!produto?.opcoes_adicionais) return [];
@@ -1631,8 +1682,8 @@ const CardapioPublicoPage: React.FC = () => {
     const adicionaisValidos: Array<{id: string; nome: string; preco: number; quantidade: number}> = [];
 
     produto.opcoes_adicionais.forEach(opcao => {
-      // Só incluir adicionais de opções que atingiram a quantidade mínima
-      if (opcaoAtingiuMinimo(produtoId, opcao.id)) {
+      // Só incluir adicionais de opções que atingiram a quantidade mínima E não excederam a máxima
+      if (opcaoAtingiuMinimo(produtoId, opcao.id) && !opcaoExcedeuMaximo(produtoId, opcao.id)) {
         opcao.itens.forEach(item => {
           const quantidade = obterQuantidadeAdicional(produtoId, item.id);
           if (quantidade > 0) {
@@ -1650,20 +1701,24 @@ const CardapioPublicoPage: React.FC = () => {
     return adicionaisValidos;
   };
 
-  // Função para atualizar validação de quantidade mínima
+  // Função para atualizar validação de quantidade mínima e máxima
   const atualizarValidacaoQuantidadeMinima = () => {
-    const novaValidacao: {[produtoId: string]: {[opcaoId: string]: boolean}} = {};
+    const novaValidacaoMinima: {[produtoId: string]: {[opcaoId: string]: boolean}} = {};
+    const novaValidacaoMaxima: {[produtoId: string]: {[opcaoId: string]: boolean}} = {};
 
     produtos.forEach(produto => {
       if (produto.opcoes_adicionais) {
-        novaValidacao[produto.id] = {};
+        novaValidacaoMinima[produto.id] = {};
+        novaValidacaoMaxima[produto.id] = {};
         produto.opcoes_adicionais.forEach(opcao => {
-          novaValidacao[produto.id][opcao.id] = opcaoAtingiuMinimo(produto.id, opcao.id);
+          novaValidacaoMinima[produto.id][opcao.id] = opcaoAtingiuMinimo(produto.id, opcao.id);
+          novaValidacaoMaxima[produto.id][opcao.id] = opcaoExcedeuMaximo(produto.id, opcao.id);
         });
       }
     });
 
-    setValidacaoQuantidadeMinima(novaValidacao);
+    setValidacaoQuantidadeMinima(novaValidacaoMinima);
+    setValidacaoQuantidadeMaxima(novaValidacaoMaxima);
   };
 
   // Função para obter tabelas de preços com valores válidos para um produto
@@ -3956,8 +4011,13 @@ const CardapioPublicoPage: React.FC = () => {
 
                                 <button
                                   onClick={() => incrementarAdicional(produto.id, adicional.id)}
+                                  disabled={!podeIncrementarAdicional(produto.id, adicional.id)}
                                   className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
-                                    config.modo_escuro
+                                    !podeIncrementarAdicional(produto.id, adicional.id)
+                                      ? config.modo_escuro
+                                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                      : config.modo_escuro
                                       ? 'bg-blue-600 text-white hover:bg-blue-500'
                                       : 'bg-blue-500 text-white hover:bg-blue-600'
                                   }`}
@@ -4903,33 +4963,64 @@ const CardapioPublicoPage: React.FC = () => {
                                 <span className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
                                   ({opcao.itens.length} {opcao.itens.length === 1 ? 'item' : 'itens'})
                                 </span>
-                                {/* Indicador de quantidade mínima */}
-                                {opcao.quantidade_minima && opcao.quantidade_minima > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    {(() => {
-                                      const quantidadeTotal = obterQuantidadeTotalOpcao(produto.id, opcao.id);
-                                      const atingiuMinimo = opcaoAtingiuMinimo(produto.id, opcao.id);
-                                      return (
-                                        <>
-                                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                            atingiuMinimo
-                                              ? config.modo_escuro
-                                                ? 'bg-green-900/30 text-green-400 border border-green-700'
-                                                : 'bg-green-100 text-green-600 border border-green-300'
-                                              : config.modo_escuro
-                                              ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700'
-                                              : 'bg-yellow-100 text-yellow-600 border border-yellow-300'
-                                          }`}>
-                                            {quantidadeTotal}/{opcao.quantidade_minima}
-                                          </span>
-                                          {atingiuMinimo && (
-                                            <CheckCircle size={14} className={config.modo_escuro ? 'text-green-400' : 'text-green-600'} />
-                                          )}
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                )}
+                                {/* Indicadores de quantidade mínima e máxima */}
+                                <div className="flex items-center gap-2">
+                                  {/* Indicador de quantidade mínima */}
+                                  {opcao.quantidade_minima && opcao.quantidade_minima > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      {(() => {
+                                        const quantidadeTotal = obterQuantidadeTotalOpcao(produto.id, opcao.id);
+                                        const atingiuMinimo = opcaoAtingiuMinimo(produto.id, opcao.id);
+                                        return (
+                                          <>
+                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                              atingiuMinimo
+                                                ? config.modo_escuro
+                                                  ? 'bg-green-900/30 text-green-400 border border-green-700'
+                                                  : 'bg-green-100 text-green-600 border border-green-300'
+                                                : config.modo_escuro
+                                                ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700'
+                                                : 'bg-yellow-100 text-yellow-600 border border-yellow-300'
+                                            }`}>
+                                              Mín: {quantidadeTotal}/{opcao.quantidade_minima}
+                                            </span>
+                                            {atingiuMinimo && (
+                                              <CheckCircle size={14} className={config.modo_escuro ? 'text-green-400' : 'text-green-600'} />
+                                            )}
+                                          </>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+
+                                  {/* Indicador de quantidade máxima */}
+                                  {opcao.quantidade_maxima && opcao.quantidade_maxima > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      {(() => {
+                                        const quantidadeTotal = obterQuantidadeTotalOpcao(produto.id, opcao.id);
+                                        const excedeuMaximo = opcaoExcedeuMaximo(produto.id, opcao.id);
+                                        return (
+                                          <>
+                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                              excedeuMaximo
+                                                ? config.modo_escuro
+                                                  ? 'bg-red-900/30 text-red-400 border border-red-700'
+                                                  : 'bg-red-100 text-red-600 border border-red-300'
+                                                : config.modo_escuro
+                                                ? 'bg-blue-900/30 text-blue-400 border border-blue-700'
+                                                : 'bg-blue-100 text-blue-600 border border-blue-300'
+                                            }`}>
+                                              Máx: {quantidadeTotal}/{opcao.quantidade_maxima}
+                                            </span>
+                                            {excedeuMaximo && (
+                                              <AlertCircle size={14} className={config.modo_escuro ? 'text-red-400' : 'text-red-600'} />
+                                            )}
+                                          </>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                               {adicionaisExpandidos[produto.id]?.[opcao.id] ? (
                                 <ChevronUp size={16} className={config.modo_escuro ? 'text-gray-400' : 'text-gray-500'} />
@@ -4998,8 +5089,13 @@ const CardapioPublicoPage: React.FC = () => {
                                           {/* Botão Incrementar */}
                                           <button
                                             onClick={() => incrementarAdicional(produto.id, item.id)}
+                                            disabled={!podeIncrementarAdicional(produto.id, item.id)}
                                             className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                              config.modo_escuro
+                                              !podeIncrementarAdicional(produto.id, item.id)
+                                                ? config.modo_escuro
+                                                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                : config.modo_escuro
                                                 ? 'bg-blue-600 text-white hover:bg-blue-500'
                                                 : 'bg-blue-500 text-white hover:bg-blue-600'
                                             }`}
@@ -5599,8 +5695,13 @@ const CardapioPublicoPage: React.FC = () => {
 
                                     <button
                                       onClick={() => incrementarAdicional(produto.id, adicional.id)}
+                                      disabled={!podeIncrementarAdicional(produto.id, adicional.id)}
                                       className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
-                                        config.modo_escuro
+                                        !podeIncrementarAdicional(produto.id, adicional.id)
+                                          ? config.modo_escuro
+                                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                          : config.modo_escuro
                                           ? 'bg-blue-600 text-white hover:bg-blue-500'
                                           : 'bg-blue-500 text-white hover:bg-blue-600'
                                       }`}

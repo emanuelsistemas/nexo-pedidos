@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, Trash2, Plus } from 'lucide-react';
+import { X, Pencil, Trash2, Plus, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../../components/comum/Button';
 import { showMessage } from '../../utils/toast';
@@ -66,12 +66,14 @@ const AdicionaisPage: React.FC = () => {
   const [isDataReady, setIsDataReady] = useState(false);
   const [opcoes, setOpcoes] = useState<any[]>([]);
   const [editingOpcao, setEditingOpcao] = useState<any>(null);
-  const [novaOpcao, setNovaOpcao] = useState({ nome: '', quantidade_minima: 0 });
+  const [novaOpcao, setNovaOpcao] = useState({ nome: '', quantidade_minima: 0, quantidade_maxima: 0 });
   const [quantidadeMinimaInput, setQuantidadeMinimaInput] = useState('');
+  const [quantidadeMaximaInput, setQuantidadeMaximaInput] = useState('');
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
   const [precoFormatado, setPrecoFormatado] = useState('');
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     itemId: string;
@@ -89,6 +91,27 @@ const AdicionaisPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // ✅ FUNÇÃO DE FILTRO: Filtrar opções baseado no termo de pesquisa
+  const getFilteredOpcoes = () => {
+    if (!searchTerm.trim()) {
+      return opcoes;
+    }
+
+    const termoPesquisa = searchTerm.toLowerCase().trim();
+
+    return opcoes.filter(opcao => {
+      // Buscar no nome da opção
+      const nomeOpcao = opcao.nome?.toLowerCase() || '';
+
+      // Buscar nos nomes dos itens da opção
+      const temItemComTermo = opcao.itens?.some((item: any) =>
+        item.nome?.toLowerCase().includes(termoPesquisa)
+      ) || false;
+
+      return nomeOpcao.includes(termoPesquisa) || temItemComTermo;
+    });
+  };
 
   // Função para formatar valor monetário
   const formatarValorMonetario = (valor: string): string => {
@@ -160,6 +183,26 @@ const AdicionaisPage: React.FC = () => {
     const valorNumerico = parseInt(valor);
     if (!isNaN(valorNumerico) && valorNumerico >= 0) {
       setNovaOpcao({ ...novaOpcao, quantidade_minima: valorNumerico });
+    }
+  };
+
+  // Função para lidar com mudanças no campo de quantidade máxima
+  const handleQuantidadeMaximaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+
+    // Atualiza o input visual
+    setQuantidadeMaximaInput(valor);
+
+    // Se o campo estiver vazio, define quantidade_maxima como 0
+    if (valor === '') {
+      setNovaOpcao({ ...novaOpcao, quantidade_maxima: 0 });
+      return;
+    }
+
+    // Converte para número, garantindo que seja um inteiro não negativo
+    const valorNumerico = parseInt(valor);
+    if (!isNaN(valorNumerico) && valorNumerico >= 0) {
+      setNovaOpcao({ ...novaOpcao, quantidade_maxima: valorNumerico });
     }
   };
 
@@ -290,7 +333,8 @@ const AdicionaisPage: React.FC = () => {
           .from('opcoes_adicionais')
           .update({
             nome: novaOpcao.nome,
-            quantidade_minima: novaOpcao.quantidade_minima
+            quantidade_minima: novaOpcao.quantidade_minima,
+            quantidade_maxima: novaOpcao.quantidade_maxima
           })
           .eq('id', editingOpcao.id);
 
@@ -302,6 +346,7 @@ const AdicionaisPage: React.FC = () => {
           .insert([{
             nome: novaOpcao.nome,
             quantidade_minima: novaOpcao.quantidade_minima,
+            quantidade_maxima: novaOpcao.quantidade_maxima,
             empresa_id: usuarioData.empresa_id
           }]);
 
@@ -309,8 +354,9 @@ const AdicionaisPage: React.FC = () => {
         showMessage('success', 'Opção criada com sucesso!');
       }
 
-      setNovaOpcao({ nome: '', quantidade_minima: 0 });
+      setNovaOpcao({ nome: '', quantidade_minima: 0, quantidade_maxima: 0 });
       setQuantidadeMinimaInput('');
+      setQuantidadeMaximaInput('');
       setEditingOpcao(null);
       setShowSidebar(false);
       loadData();
@@ -500,8 +546,9 @@ const AdicionaisPage: React.FC = () => {
           variant="primary"
           onClick={() => {
             setEditingOpcao(null);
-            setNovaOpcao({ nome: '', quantidade_minima: 0 });
+            setNovaOpcao({ nome: '', quantidade_minima: 0, quantidade_maxima: 0 });
             setQuantidadeMinimaInput('');
+            setQuantidadeMaximaInput('');
             setIsAddingItem(false);
             setShowSidebar(true);
           }}
@@ -510,13 +557,27 @@ const AdicionaisPage: React.FC = () => {
         </Button>
       </div>
 
+      {/* ✅ CAMPO DE PESQUISA */}
+      <div className="mb-6">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Buscar opções adicionais ou itens..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-4 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 transition-colors"
+          />
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        </div>
+      </div>
+
       {/* ✅ LAYOUT DE 2 COLUNAS - Similar à página de produtos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {!isDataReady ? (
           renderSkeletonCards()
         ) : (
           <>
-            {opcoes.map(opcao => (
+            {getFilteredOpcoes().map(opcao => (
               <div
                 key={opcao.id}
                 className="bg-background-card rounded-lg border border-gray-800"
@@ -524,11 +585,18 @@ const AdicionaisPage: React.FC = () => {
                 <div className="p-4 border-b border-gray-800 flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-medium text-white">{opcao.nome}</h3>
-                    {opcao.quantidade_minima > 0 && (
-                      <p className="text-xs text-primary-400 mt-1">
-                        Mínimo: {opcao.quantidade_minima} {opcao.quantidade_minima === 1 ? 'item' : 'itens'}
-                      </p>
-                    )}
+                    <div className="flex gap-4 mt-1">
+                      {opcao.quantidade_minima > 0 && (
+                        <p className="text-xs text-primary-400">
+                          Mín: {opcao.quantidade_minima} {opcao.quantidade_minima === 1 ? 'item' : 'itens'}
+                        </p>
+                      )}
+                      {opcao.quantidade_maxima > 0 && (
+                        <p className="text-xs text-orange-400">
+                          Máx: {opcao.quantidade_maxima} {opcao.quantidade_maxima === 1 ? 'item' : 'itens'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -550,9 +618,11 @@ const AdicionaisPage: React.FC = () => {
                         setEditingOpcao(opcao);
                         setNovaOpcao({
                           nome: opcao.nome,
-                          quantidade_minima: opcao.quantidade_minima || 0
+                          quantidade_minima: opcao.quantidade_minima || 0,
+                          quantidade_maxima: opcao.quantidade_maxima || 0
                         });
                         setQuantidadeMinimaInput(opcao.quantidade_minima > 0 ? opcao.quantidade_minima.toString() : '');
+                        setQuantidadeMaximaInput(opcao.quantidade_maxima > 0 ? opcao.quantidade_maxima.toString() : '');
                         setIsAddingItem(false);
                         setShowSidebar(true);
                       }}
@@ -607,28 +677,49 @@ const AdicionaisPage: React.FC = () => {
               </div>
             ))}
 
-            {opcoes.length === 0 && (
+            {/* Mensagem quando não há opções ou quando a pesquisa não retorna resultados */}
+            {getFilteredOpcoes().length === 0 && (
               <div className="lg:col-span-2 bg-background-card rounded-lg p-8 text-center">
-                <h3 className="text-lg font-medium text-white mb-2">
-                  Nenhuma opção cadastrada
-                </h3>
-                <p className="text-gray-400 mb-6">
-                  Crie sua primeira opção adicional para começar.
-                </p>
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="mx-auto"
-                  onClick={() => {
-                    setEditingOpcao(null);
-                    setNovaOpcao({ nome: '', quantidade_minima: 0 });
-                    setQuantidadeMinimaInput('');
-                    setIsAddingItem(false);
-                    setShowSidebar(true);
-                  }}
-                >
-                  + Adicionar Opção
-                </Button>
+                {opcoes.length === 0 ? (
+                  <>
+                    <h3 className="text-lg font-medium text-white mb-2">
+                      Nenhuma opção cadastrada
+                    </h3>
+                    <p className="text-gray-400 mb-6">
+                      Crie sua primeira opção adicional para começar.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      className="mx-auto"
+                      onClick={() => {
+                        setEditingOpcao(null);
+                        setNovaOpcao({ nome: '', quantidade_minima: 0, quantidade_maxima: 0 });
+                        setQuantidadeMinimaInput('');
+                        setQuantidadeMaximaInput('');
+                        setIsAddingItem(false);
+                        setShowSidebar(true);
+                      }}
+                    >
+                      + Adicionar Opção
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-medium text-white mb-2">
+                      Nenhum resultado encontrado
+                    </h3>
+                    <p className="text-gray-400 mb-6">
+                      Tente ajustar o termo de pesquisa ou{' '}
+                      <button
+                        onClick={() => setSearchTerm('')}
+                        className="text-primary-400 hover:text-primary-300 underline"
+                      >
+                        limpar filtros
+                      </button>
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </>
@@ -695,17 +786,33 @@ const AdicionaisPage: React.FC = () => {
                         placeholder="Digite o nome da opção"
                       />
 
-                      <label className="block text-sm font-medium text-gray-400 mt-4 mb-2">
-                        Quantidade Mínima
-                      </label>
-                      <div className="flex items-center">
-                        <input
-                          type="text"
-                          value={quantidadeMinimaInput}
-                          onChange={handleQuantidadeMinimaChange}
-                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                          placeholder="0"
-                        />
+                      {/* Campos de Quantidade em Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Quantidade Mínima
+                          </label>
+                          <input
+                            type="text"
+                            value={quantidadeMinimaInput}
+                            onChange={handleQuantidadeMinimaChange}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="0"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-2">
+                            Quantidade Máxima
+                          </label>
+                          <input
+                            type="text"
+                            value={quantidadeMaximaInput}
+                            onChange={handleQuantidadeMaximaChange}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="0 (ilimitado)"
+                          />
+                        </div>
                       </div>
                       <p className="text-xs text-gray-400 mt-1">
                         Se maior que 0, o cliente deverá selecionar pelo menos esta quantidade de itens desta opção.
@@ -722,6 +829,7 @@ const AdicionaisPage: React.FC = () => {
                           setIsAddingItem(false);
                           setEditingItem(null);
                           setQuantidadeMinimaInput('');
+                          setQuantidadeMaximaInput('');
                         }}
                       >
                         Cancelar
@@ -776,6 +884,8 @@ const AdicionaisPage: React.FC = () => {
                           setIsAddingItem(false);
                           setEditingItem(null);
                           setPrecoFormatado('');
+                          setQuantidadeMinimaInput('');
+                          setQuantidadeMaximaInput('');
                         }}
                       >
                         Cancelar

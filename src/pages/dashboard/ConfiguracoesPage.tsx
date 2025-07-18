@@ -291,6 +291,25 @@ const ConfiguracoesPage: React.FC = () => {
   // Estado para controlar as abas do PDV
   const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto' | 'cardapio-digital' | 'formas-pagamento'>('geral');
 
+  // Estado para controlar as sub-abas do cardápio digital
+  const [cardapioDigitalActiveTab, setCardapioDigitalActiveTab] = useState<'geral' | 'cupom-desconto'>('geral');
+
+  // Estados para cupons de desconto
+  const [cuponsDesconto, setCuponsDesconto] = useState<any[]>([]);
+  const [showCupomModal, setShowCupomModal] = useState(false);
+  const [editingCupom, setEditingCupom] = useState<any>(null);
+  const [cupomForm, setCupomForm] = useState({
+    codigo: '',
+    descricao: '',
+    tipo_desconto: 'percentual', // 'percentual' ou 'valor_fixo'
+    valor_desconto: 0,
+    valor_minimo_pedido: 0,
+    data_inicio: '',
+    data_fim: '',
+    limite_uso: 0,
+    ativo: true
+  });
+
   // Estado para rodapé personalizado das impressões
   const [rodapePersonalizado, setRodapePersonalizado] = useState('Obrigado pela preferencia volte sempre!');
 
@@ -339,6 +358,146 @@ const ConfiguracoesPage: React.FC = () => {
       setQrCodeDataUrl(qrCodeDataUrl);
     } catch (error) {
       console.error('Erro ao gerar QR Code:', error);
+    }
+  };
+
+  // Função para carregar cupons de desconto
+  const loadCuponsDesconto = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { data: cuponsData, error } = await supabase
+        .from('cupons_desconto')
+        .select('*')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar cupons:', error);
+        showMessage('error', 'Erro ao carregar cupons de desconto');
+        return;
+      }
+
+      setCuponsDesconto(cuponsData || []);
+    } catch (error) {
+      console.error('Erro ao carregar cupons:', error);
+      showMessage('error', 'Erro ao carregar cupons de desconto');
+    }
+  };
+
+  // Função para salvar cupom de desconto
+  const handleSalvarCupom = async () => {
+    if (!cupomForm.codigo || !cupomForm.descricao || cupomForm.valor_desconto <= 0) {
+      showMessage('error', 'Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    // Validação de percentual
+    if (cupomForm.tipo_desconto === 'percentual' && cupomForm.valor_desconto > 100) {
+      showMessage('error', 'Percentual de desconto não pode ser maior que 100%');
+      return;
+    }
+
+    // Validação de datas
+    if (cupomForm.data_inicio && cupomForm.data_fim && cupomForm.data_inicio > cupomForm.data_fim) {
+      showMessage('error', 'Data de início não pode ser posterior à data de fim');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
+
+      const cupomData = {
+        empresa_id: usuarioData.empresa_id,
+        codigo: cupomForm.codigo.trim().toUpperCase(),
+        descricao: cupomForm.descricao.trim(),
+        tipo_desconto: cupomForm.tipo_desconto,
+        valor_desconto: cupomForm.valor_desconto,
+        valor_minimo_pedido: cupomForm.valor_minimo_pedido,
+        data_inicio: cupomForm.data_inicio || null,
+        data_fim: cupomForm.data_fim || null,
+        limite_uso: cupomForm.limite_uso,
+        ativo: cupomForm.ativo
+      };
+
+      if (editingCupom) {
+        // Atualizar cupom existente
+        const { error } = await supabase
+          .from('cupons_desconto')
+          .update(cupomData)
+          .eq('id', editingCupom.id);
+
+        if (error) throw error;
+        showMessage('success', 'Cupom atualizado com sucesso!');
+      } else {
+        // Criar novo cupom
+        const { error } = await supabase
+          .from('cupons_desconto')
+          .insert([cupomData]);
+
+        if (error) {
+          if (error.code === '23505') { // Unique constraint violation
+            showMessage('error', 'Já existe um cupom com este código. Escolha outro código.');
+            return;
+          }
+          throw error;
+        }
+        showMessage('success', 'Cupom criado com sucesso!');
+      }
+
+      // Recarregar lista de cupons
+      await loadCuponsDesconto();
+      setShowCupomModal(false);
+      setEditingCupom(null);
+
+    } catch (error: any) {
+      console.error('Erro ao salvar cupom:', error);
+      showMessage('error', 'Erro ao salvar cupom: ' + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Função para excluir cupom de desconto
+  const handleExcluirCupom = async (cupomId: string) => {
+    try {
+      setIsLoading(true);
+
+      const { error } = await supabase
+        .from('cupons_desconto')
+        .delete()
+        .eq('id', cupomId);
+
+      if (error) throw error;
+
+      showMessage('success', 'Cupom excluído com sucesso!');
+      await loadCuponsDesconto();
+
+    } catch (error: any) {
+      console.error('Erro ao excluir cupom:', error);
+      showMessage('error', 'Erro ao excluir cupom: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1117,6 +1276,7 @@ const ConfiguracoesPage: React.FC = () => {
         carregarConfiguracoesPdv();
         await loadFormasPagamentoOpcoes();
         await loadFormasPagamentoEmpresa();
+        await loadCuponsDesconto();
       }
 
       if (activeSection === 'certificado') {
@@ -6747,42 +6907,74 @@ const ConfiguracoesPage: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Status da funcionalidade */}
-                    <div className="bg-purple-900/20 border border-purple-600/30 rounded-lg p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                        <span className="text-purple-400 font-medium">Funcionalidade Ativa</span>
+                    {/* Sub-navegação do Cardápio Digital */}
+                    <div className="bg-gray-800/30 rounded-lg border border-gray-700">
+                      <div className="border-b border-gray-700">
+                        <nav className="flex space-x-6 px-4 py-3">
+                          <button
+                            onClick={() => setCardapioDigitalActiveTab('geral')}
+                            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                              cardapioDigitalActiveTab === 'geral'
+                                ? 'border-purple-500 text-purple-400'
+                                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                            }`}
+                          >
+                            Geral
+                          </button>
+                          <button
+                            onClick={() => setCardapioDigitalActiveTab('cupom-desconto')}
+                            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                              cardapioDigitalActiveTab === 'cupom-desconto'
+                                ? 'border-purple-500 text-purple-400'
+                                : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                            }`}
+                          >
+                            Cupom Desconto
+                          </button>
+                        </nav>
                       </div>
-                      <p className="text-sm text-gray-400">
-                        O cardápio digital está habilitado e disponível para seus clientes. Configure as opções abaixo para personalizar a experiência.
-                      </p>
-                    </div>
 
-                    {/* Configurações do cardápio */}
-                    <div className="space-y-4">
-                      {/* Configuração de Abertura da Loja - Primeira seção */}
-                      <div className="space-y-4">
-                        <h4 className="text-white font-medium">Abertura da Loja</h4>
-
-                        <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
-                          {/* Tag de Status em Tempo Real */}
-                          <div className="flex items-center justify-between mb-4">
-                            <p className="text-sm text-gray-400">
-                              Configure como a loja será aberta no cardápio digital.
-                            </p>
-                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
-                              pdvConfig.cardapio_loja_aberta
-                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                            }`}>
-                              <div className={`w-2 h-2 rounded-full ${
-                                pdvConfig.cardapio_loja_aberta ? 'bg-green-400' : 'bg-red-400'
-                              }`}></div>
-                              <span>
-                                {pdvConfig.cardapio_loja_aberta ? 'Loja Aberta' : 'Loja Fechada'}
-                              </span>
+                      {/* Conteúdo das Sub-abas */}
+                      <div className="p-6">
+                        {/* Sub-aba Geral */}
+                        {cardapioDigitalActiveTab === 'geral' && (
+                          <div className="space-y-6">
+                            {/* Status da funcionalidade */}
+                            <div className="bg-purple-900/20 border border-purple-600/30 rounded-lg p-4">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                                <span className="text-purple-400 font-medium">Funcionalidade Ativa</span>
+                              </div>
+                              <p className="text-sm text-gray-400">
+                                O cardápio digital está habilitado e disponível para seus clientes. Configure as opções abaixo para personalizar a experiência.
+                              </p>
                             </div>
-                          </div>
+
+                            {/* Configurações do cardápio */}
+                            <div className="space-y-4">
+                              {/* Configuração de Abertura da Loja - Primeira seção */}
+                              <div className="space-y-4">
+                                <h4 className="text-white font-medium">Abertura da Loja</h4>
+
+                                <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                                  {/* Tag de Status em Tempo Real */}
+                                  <div className="flex items-center justify-between mb-4">
+                                    <p className="text-sm text-gray-400">
+                                      Configure como a loja será aberta no cardápio digital.
+                                    </p>
+                                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+                                      pdvConfig.cardapio_loja_aberta
+                                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                        : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                    }`}>
+                                      <div className={`w-2 h-2 rounded-full ${
+                                        pdvConfig.cardapio_loja_aberta ? 'bg-green-400' : 'bg-red-400'
+                                      }`}></div>
+                                      <span>
+                                        {pdvConfig.cardapio_loja_aberta ? 'Loja Aberta' : 'Loja Fechada'}
+                                      </span>
+                                    </div>
+                                  </div>
 
                           <div className="space-y-3">
                             <label className="flex items-center cursor-pointer">
@@ -7216,6 +7408,129 @@ const ConfiguracoesPage: React.FC = () => {
                             Clientes podem visualizar produtos, fazer pedidos e entrar em contato diretamente pelo WhatsApp.
                           </p>
                         </div>
+                      </div>
+                    </div>
+                          </div>
+                        )}
+
+                        {/* Sub-aba Cupom Desconto */}
+                        {cardapioDigitalActiveTab === 'cupom-desconto' && (
+                          <div className="space-y-6">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="text-white font-medium">Cupons de Desconto</h4>
+                                <p className="text-sm text-gray-400 mt-1">
+                                  Crie cupons de desconto para seus clientes utilizarem no cardápio digital.
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setEditingCupom(null);
+                                  setCupomForm({
+                                    codigo: '',
+                                    descricao: '',
+                                    tipo_desconto: 'percentual',
+                                    valor_desconto: 0,
+                                    valor_minimo_pedido: 0,
+                                    data_inicio: '',
+                                    data_fim: '',
+                                    limite_uso: 0,
+                                    ativo: true
+                                  });
+                                  setShowCupomModal(true);
+                                }}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                Novo Cupom
+                              </button>
+                            </div>
+
+                            {/* Lista de cupons */}
+                            <div className="bg-gray-800/50 rounded-lg border border-gray-700">
+                              <div className="p-4 border-b border-gray-700">
+                                <h5 className="text-white font-medium">Cupons Cadastrados</h5>
+                              </div>
+                              <div className="p-4">
+                                {cuponsDesconto.length === 0 ? (
+                                  <div className="text-center py-8">
+                                    <svg className="w-12 h-12 text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                    </svg>
+                                    <p className="text-gray-400 mb-2">Nenhum cupom cadastrado</p>
+                                    <p className="text-sm text-gray-500">
+                                      Clique em "Novo Cupom" para criar seu primeiro cupom de desconto.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-3">
+                                    {cuponsDesconto.map((cupom) => (
+                                      <div key={cupom.id} className="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-3 mb-1">
+                                            <span className="font-mono text-purple-400 font-medium">{cupom.codigo}</span>
+                                            <span className={`px-2 py-1 text-xs rounded-full ${
+                                              cupom.ativo
+                                                ? 'bg-green-500/20 text-green-400'
+                                                : 'bg-red-500/20 text-red-400'
+                                            }`}>
+                                              {cupom.ativo ? 'Ativo' : 'Inativo'}
+                                            </span>
+                                          </div>
+                                          <p className="text-sm text-gray-400">{cupom.descricao}</p>
+                                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                                            <span>
+                                              {cupom.tipo_desconto === 'percentual'
+                                                ? `${cupom.valor_desconto}% de desconto`
+                                                : `R$ ${cupom.valor_desconto.toFixed(2)} de desconto`
+                                              }
+                                            </span>
+                                            {cupom.valor_minimo_pedido > 0 && (
+                                              <span>Mín: R$ {cupom.valor_minimo_pedido.toFixed(2)}</span>
+                                            )}
+                                            {cupom.limite_uso > 0 && (
+                                              <span>Limite: {cupom.limite_uso} usos</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => {
+                                              setEditingCupom(cupom);
+                                              setCupomForm(cupom);
+                                              setShowCupomModal(true);
+                                            }}
+                                            className="p-2 text-gray-400 hover:text-blue-400 transition-colors"
+                                            title="Editar cupom"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              if (window.confirm('Tem certeza que deseja excluir este cupom?')) {
+                                                handleExcluirCupom(cupom.id);
+                                              }
+                                            }}
+                                            className="p-2 text-gray-400 hover:text-red-400 transition-colors"
+                                            title="Excluir cupom"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -9875,6 +10190,199 @@ const ConfiguracoesPage: React.FC = () => {
                 >
                   {isLoading ? 'Salvando...' : (editingFormaPagamento ? 'Salvar' : 'Adicionar')}
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Cupom de Desconto */}
+      <AnimatePresence>
+        {showCupomModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-background-card rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold text-white">
+                    {editingCupom ? 'Editar Cupom de Desconto' : 'Novo Cupom de Desconto'}
+                  </h3>
+                  <button
+                    onClick={() => setShowCupomModal(false)}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <form className="space-y-4">
+                  {/* Código do cupom */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Código do Cupom *
+                    </label>
+                    <input
+                      type="text"
+                      value={cupomForm.codigo}
+                      onChange={(e) => setCupomForm(prev => ({ ...prev, codigo: e.target.value.toUpperCase() }))}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20"
+                      placeholder="Ex: DESCONTO10"
+                      maxLength={20}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Código que o cliente digitará para aplicar o desconto (máx. 20 caracteres)
+                    </p>
+                  </div>
+
+                  {/* Descrição */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Descrição *
+                    </label>
+                    <input
+                      type="text"
+                      value={cupomForm.descricao}
+                      onChange={(e) => setCupomForm(prev => ({ ...prev, descricao: e.target.value }))}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20"
+                      placeholder="Ex: 10% de desconto em todos os produtos"
+                      maxLength={100}
+                    />
+                  </div>
+
+                  {/* Tipo e valor do desconto */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Tipo de Desconto *
+                      </label>
+                      <select
+                        value={cupomForm.tipo_desconto}
+                        onChange={(e) => setCupomForm(prev => ({ ...prev, tipo_desconto: e.target.value }))}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20"
+                      >
+                        <option value="percentual">Percentual (%)</option>
+                        <option value="valor_fixo">Valor Fixo (R$)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Valor do Desconto *
+                      </label>
+                      <input
+                        type="number"
+                        value={cupomForm.valor_desconto}
+                        onChange={(e) => setCupomForm(prev => ({ ...prev, valor_desconto: parseFloat(e.target.value) || 0 }))}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20"
+                        placeholder={cupomForm.tipo_desconto === 'percentual' ? '10' : '5.00'}
+                        min="0"
+                        max={cupomForm.tipo_desconto === 'percentual' ? '100' : undefined}
+                        step={cupomForm.tipo_desconto === 'percentual' ? '1' : '0.01'}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Valor mínimo do pedido */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Valor Mínimo do Pedido (R$)
+                    </label>
+                    <input
+                      type="number"
+                      value={cupomForm.valor_minimo_pedido}
+                      onChange={(e) => setCupomForm(prev => ({ ...prev, valor_minimo_pedido: parseFloat(e.target.value) || 0 }))}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Deixe 0 para não ter valor mínimo
+                    </p>
+                  </div>
+
+                  {/* Datas de validade */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Data de Início
+                      </label>
+                      <input
+                        type="date"
+                        value={cupomForm.data_inicio}
+                        onChange={(e) => setCupomForm(prev => ({ ...prev, data_inicio: e.target.value }))}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        Data de Fim
+                      </label>
+                      <input
+                        type="date"
+                        value={cupomForm.data_fim}
+                        onChange={(e) => setCupomForm(prev => ({ ...prev, data_fim: e.target.value }))}
+                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Limite de uso */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Limite de Uso
+                    </label>
+                    <input
+                      type="number"
+                      value={cupomForm.limite_uso}
+                      onChange={(e) => setCupomForm(prev => ({ ...prev, limite_uso: parseInt(e.target.value) || 0 }))}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/20"
+                      placeholder="0"
+                      min="0"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Deixe 0 para uso ilimitado
+                    </p>
+                  </div>
+
+                  {/* Status ativo */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="cupom-ativo"
+                      checked={cupomForm.ativo}
+                      onChange={(e) => setCupomForm(prev => ({ ...prev, ativo: e.target.checked }))}
+                      className="w-4 h-4 text-purple-500 bg-gray-800 border-gray-600 rounded focus:ring-purple-500 focus:ring-2"
+                    />
+                    <label htmlFor="cupom-ativo" className="ml-2 text-sm text-gray-400">
+                      Cupom ativo (disponível para uso)
+                    </label>
+                  </div>
+                </form>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowCupomModal(false)}
+                    className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSalvarCupom}
+                    disabled={!cupomForm.codigo || !cupomForm.descricao || cupomForm.valor_desconto <= 0 || isLoading}
+                    className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  >
+                    {isLoading ? 'Salvando...' : (editingCupom ? 'Salvar' : 'Criar Cupom')}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
