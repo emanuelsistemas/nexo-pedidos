@@ -60,6 +60,7 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
   );
 };
 
+// ✅ BACKUP CRIADO: AdicionaisPage.tsx.backup-antes-reestruturacao-card
 const AdicionaisPage: React.FC = () => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -101,13 +102,6 @@ const AdicionaisPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
-
-  // Recarregar preços quando as configurações de tabela mudarem
-  useEffect(() => {
-    if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0 && opcoes.length > 0) {
-      carregarTodosPrecosAdicionais();
-    }
-  }, [trabalhaComTabelaPrecos, tabelasPrecos.length, opcoes.length]);
 
   // ✅ FUNÇÃO DE FILTRO: Filtrar opções baseado no termo de pesquisa
   const getFilteredOpcoes = () => {
@@ -318,7 +312,7 @@ const AdicionaisPage: React.FC = () => {
 
       console.log('Empresa ID:', usuarioData.empresa_id);
 
-      // Carregar configurações de tabelas de preços PRIMEIRO
+      // Carregar configurações de tabelas de preços
       await carregarConfiguracoesTabelaPrecos();
 
       const { data: opcoesData, error: opcoesError } = await supabase
@@ -349,8 +343,6 @@ const AdicionaisPage: React.FC = () => {
       setOpcoes(opcoesFiltered);
 
       // Carregar preços dos adicionais para exibição nos cards
-      // Aguardar um pouco para garantir que as configurações foram carregadas
-      await new Promise(resolve => setTimeout(resolve, 200));
       await carregarTodosPrecosAdicionais();
 
       if (opcoesFiltered.length === 0) {
@@ -967,79 +959,71 @@ const AdicionaisPage: React.FC = () => {
 
                         return (
                           <div key={item.id} className="bg-gray-800/50 rounded-lg">
-                            {/* Linha principal do item - Nome e preço na mesma linha */}
-                            <div className="p-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1 min-w-0">
-                                  {/* Nome e preço na mesma linha */}
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-white font-medium truncate">{item.nome}</span>
-                                    <span className="text-primary-400 font-medium ml-2 flex-shrink-0">
-                                      R$ {item.preco.toFixed(2)}
-                                    </span>
-                                  </div>
-                                </div>
+                            {/* Linha principal do item */}
+                            <div className="flex items-center justify-between p-3">
+                              <div className="flex-1">
+                                <span className="text-white">{item.nome}</span>
 
-                                {/* Botões de ação */}
-                                <div className="flex items-center gap-2 ml-3">
-                                  <button
-                                    onClick={() => handleEditItem(item, opcao)}
-                                    className="p-1.5 text-gray-400 hover:text-white transition-colors rounded"
-                                    title="Editar item"
-                                  >
-                                    <Pencil size={14} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(item.id, 'item', item.nome)}
-                                    className="p-1.5 text-red-400 hover:text-red-300 transition-colors rounded"
-                                    title="Excluir item"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
+                                {/* Dropdown de tabelas de preços */}
+                                {temTabelasPrecos && (
+                                  <div className="mt-2">
+                                    <button
+                                      onClick={() => toggleDropdown(item.id)}
+                                      className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                                    >
+                                      <span>Tabelas de Preços</span>
+                                      {dropdownEstaAberto ? (
+                                        <ChevronUp size={14} />
+                                      ) : (
+                                        <ChevronDown size={14} />
+                                      )}
+                                    </button>
+
+                                    {/* Conteúdo do dropdown */}
+                                    <AnimatePresence>
+                                      {dropdownEstaAberto && (
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.2 }}
+                                          className="mt-2 space-y-1 overflow-hidden"
+                                        >
+                                          {tabelasComPrecos.map((tabela) => (
+                                            <div
+                                              key={tabela.id}
+                                              className="flex items-center justify-between p-2 bg-gray-700/50 rounded text-xs"
+                                            >
+                                              <span className="text-gray-300">{tabela.nome}</span>
+                                              <span className="text-primary-400 font-medium">
+                                                {formatarPreco(tabela.preco)}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </div>
+                                )}
                               </div>
 
-                              {/* Dropdown de tabelas de preços - Largura completa */}
-                              {temTabelasPrecos && (
-                                <div className="mt-3">
-                                  <button
-                                    onClick={() => toggleDropdown(item.id)}
-                                    className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-300 transition-colors"
-                                  >
-                                    <span>Tabelas de Preços</span>
-                                    {dropdownEstaAberto ? (
-                                      <ChevronUp size={14} />
-                                    ) : (
-                                      <ChevronDown size={14} />
-                                    )}
-                                  </button>
-
-                                  {/* Conteúdo do dropdown */}
-                                  <AnimatePresence>
-                                    {dropdownEstaAberto && (
-                                      <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                        className="mt-2 space-y-1 overflow-hidden"
-                                      >
-                                        {tabelasComPrecos.map((tabela) => (
-                                          <div
-                                            key={tabela.id}
-                                            className="flex items-center justify-between p-2 bg-gray-700/50 rounded text-xs"
-                                          >
-                                            <span className="text-gray-300">{tabela.nome}</span>
-                                            <span className="text-primary-400 font-medium">
-                                              {formatarPreco(tabela.preco)}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </motion.div>
-                                    )}
-                                  </AnimatePresence>
-                                </div>
-                              )}
+                              <div className="flex items-center gap-4">
+                                <span className="text-primary-400">
+                                  R$ {item.preco.toFixed(2)}
+                                </span>
+                                <button
+                                  onClick={() => handleEditItem(item, opcao)}
+                                  className="p-1 text-gray-400 hover:text-white transition-colors"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(item.id, 'item', item.nome)}
+                                  className="text-red-400 hover:text-red-300 transition-colors"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );

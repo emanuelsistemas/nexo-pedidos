@@ -915,34 +915,7 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [itensCarrinhoSeparados, carrinhoAberto]);
 
-  // Carregar carrinho do localStorage quando empresa está disponível
-  useEffect(() => {
-    if (empresaId) {
-      const { quantidades, ordem, adicionais, observacoes, validacaoMinima } = carregarCarrinhoLocalStorage();
-
-      if (Object.keys(quantidades).length > 0) {
-        setQuantidadesProdutos(quantidades);
-        setOrdemAdicaoItens(ordem);
-        setAdicionaisSelecionados(adicionais);
-        setObservacoesProdutos(observacoes);
-      setValidacaoQuantidadeMinima(validacaoMinima);
-        setCarrinhoAberto(true);
-      }
-
-      // Carregar seleções (estados intermediários)
-      const {
-        quantidades: quantidadesSel,
-        observacoes: observacoesSel
-      } = carregarSelecaoLocalStorage();
-
-      if (Object.keys(quantidadesSel).length > 0 || Object.keys(observacoesSel).length > 0) {
-        setQuantidadesSelecionadas(quantidadesSel);
-        setObservacoesSelecionadas(observacoesSel);
-      }
-
-      // Estados de fluxo de configuração removidos - não são mais necessários
-    }
-  }, [empresaId]);
+  // localStorage removido - carrinho não persiste entre reloads
 
   // Validar e filtrar carrinho quando produtos estão disponíveis
   useEffect(() => {
@@ -962,26 +935,12 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [produtos]);
 
-  // Salvar carrinho no localStorage sempre que quantidades, ordem ou adicionais mudarem
-  useEffect(() => {
-    if (empresaId) {
-      salvarCarrinhoLocalStorage(quantidadesProdutos);
-    }
-  }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, validacaoQuantidadeMaxima, empresaId]);
-
   // Atualizar validação de quantidade mínima sempre que adicionais mudarem
   useEffect(() => {
     if (produtos.length > 0) {
       atualizarValidacaoQuantidadeMinima();
     }
   }, [adicionaisSelecionados, produtos]);
-
-  // Salvar seleções automaticamente quando mudam
-  useEffect(() => {
-    if (empresaId) {
-      salvarSelecaoLocalStorage();
-    }
-  }, [quantidadesSelecionadas, observacoesSelecionadas, empresaId]);
 
 
 
@@ -1740,141 +1699,11 @@ const CardapioPublicoPage: React.FC = () => {
     return resultado;
   };
 
-  // Funções para localStorage do carrinho
-  const salvarCarrinhoLocalStorage = (quantidades: Record<string, number>) => {
-    if (!empresaId) {
-      // Log de carrinho removido
-      return;
-    }
-
-    try {
-      const chaveCarrinho = `carrinho_${empresaId}`;
-      const chaveOrdem = `carrinho_ordem_${empresaId}`;
-      const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
-      const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
-      const chaveValidacaoMinima = `carrinho_validacao_minima_${empresaId}`;
-
-      localStorage.setItem(chaveCarrinho, JSON.stringify(quantidades));
-      localStorage.setItem(chaveOrdem, JSON.stringify(ordemAdicaoItens));
-      localStorage.setItem(chaveAdicionais, JSON.stringify(adicionaisSelecionados));
-      localStorage.setItem(chaveObservacoes, JSON.stringify(observacoesProdutos));
-      localStorage.setItem(chaveValidacaoMinima, JSON.stringify(validacaoQuantidadeMinima));
-
-
-    } catch (error) {
-      // Erro localStorage removido
-    }
-  };
-
-  const carregarCarrinhoLocalStorage = (): {
-    quantidades: Record<string, number>,
-    ordem: Record<string, number>,
-    adicionais: {[produtoId: string]: {[itemId: string]: number}},
-    observacoes: Record<string, string>,
-    validacaoMinima: {[produtoId: string]: {[opcaoId: string]: boolean}}
-  } => {
-    if (!empresaId) {
-      return { quantidades: {}, ordem: {}, adicionais: {}, observacoes: {}, validacaoMinima: {} };
-    }
-
-    try {
-      const chaveCarrinho = `carrinho_${empresaId}`;
-      const chaveOrdem = `carrinho_ordem_${empresaId}`;
-      const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
-      const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
-      const chaveValidacaoMinima = `carrinho_validacao_minima_${empresaId}`;
-
-      const carrinhoSalvo = localStorage.getItem(chaveCarrinho);
-      const ordemSalva = localStorage.getItem(chaveOrdem);
-      const adicionaisSalvos = localStorage.getItem(chaveAdicionais);
-      const observacoesSalvas = localStorage.getItem(chaveObservacoes);
-      const validacaoMinimaSalva = localStorage.getItem(chaveValidacaoMinima);
-
-      const quantidades = carrinhoSalvo ? JSON.parse(carrinhoSalvo) : {};
-      const ordem = ordemSalva ? JSON.parse(ordemSalva) : {};
-      const adicionais = adicionaisSalvos ? JSON.parse(adicionaisSalvos) : {};
-      const observacoes = observacoesSalvas ? JSON.parse(observacoesSalvas) : {};
-      const validacaoMinima = validacaoMinimaSalva ? JSON.parse(validacaoMinimaSalva) : {};
+  // Funções de localStorage removidas - carrinho não persiste entre reloads
 
 
 
-      return { quantidades, ordem, adicionais, observacoes, validacaoMinima };
-    } catch (error) {
-      console.error('Erro ao carregar carrinho do localStorage:', error);
-      return { quantidades: {}, ordem: {}, adicionais: {}, observacoes: {}, validacaoMinima: {} };
-    }
-  };
 
-  const limparCarrinhoLocalStorage = () => {
-    if (!empresaId) return;
-
-    try {
-      const chaveCarrinho = `carrinho_${empresaId}`;
-      const chaveOrdem = `carrinho_ordem_${empresaId}`;
-      const chaveAdicionais = `carrinho_adicionais_${empresaId}`;
-      const chaveObservacoes = `carrinho_observacoes_${empresaId}`;
-      const chaveValidacaoMinima = `carrinho_validacao_minima_${empresaId}`;
-
-      localStorage.removeItem(chaveCarrinho);
-      localStorage.removeItem(chaveOrdem);
-      localStorage.removeItem(chaveAdicionais);
-      localStorage.removeItem(chaveObservacoes);
-      localStorage.removeItem(chaveValidacaoMinima);
-
-
-    } catch (error) {
-      console.error('Erro ao limpar carrinho do localStorage:', error);
-    }
-  };
-
-  // Funções para localStorage dos estados de seleção (antes do carrinho)
-  const salvarSelecaoLocalStorage = () => {
-    if (!empresaId) return;
-
-    try {
-      localStorage.setItem(`selecao_quantidades_${empresaId}`, JSON.stringify(quantidadesSelecionadas));
-      localStorage.setItem(`selecao_observacoes_${empresaId}`, JSON.stringify(observacoesSelecionadas));
-
-    } catch (error) {
-      console.error('Erro ao salvar seleções no localStorage:', error);
-    }
-  };
-
-  const carregarSelecaoLocalStorage = (): {
-    quantidades: Record<string, number>,
-    observacoes: Record<string, string>,
-    adicionaisOcultos: Record<string, boolean>,
-    adicionaisPendentes: Record<string, boolean>
-  } => {
-    if (!empresaId) {
-      return { quantidades: {}, observacoes: {} };
-    }
-
-    try {
-      const quantidadesSalvas = localStorage.getItem(`selecao_quantidades_${empresaId}`);
-      const observacoesSalvas = localStorage.getItem(`selecao_observacoes_${empresaId}`);
-
-      return {
-        quantidades: quantidadesSalvas ? JSON.parse(quantidadesSalvas) : {},
-        observacoes: observacoesSalvas ? JSON.parse(observacoesSalvas) : {}
-      };
-    } catch (error) {
-      console.error('Erro ao carregar seleções do localStorage:', error);
-      return { quantidades: {}, observacoes: {} };
-    }
-  };
-
-  const limparSelecaoLocalStorage = () => {
-    if (!empresaId) return;
-
-    try {
-      localStorage.removeItem(`selecao_quantidades_${empresaId}`);
-      localStorage.removeItem(`selecao_observacoes_${empresaId}`);
-
-    } catch (error) {
-      console.error('Erro ao limpar seleções do localStorage:', error);
-    }
-  };
 
 
 
@@ -1999,8 +1828,7 @@ const CardapioPublicoPage: React.FC = () => {
       return novo;
     });
 
-    // Salvar no localStorage após limpeza
-    setTimeout(() => salvarSelecaoLocalStorage(), 100);
+    // localStorage removido - não persiste entre reloads
   };
 
   const alterarQuantidadeProduto = (produtoId: string, novaQuantidade: number) => {
@@ -2147,8 +1975,7 @@ const CardapioPublicoPage: React.FC = () => {
 
       // Estado de adicionais pendentes removido - não é mais necessário
 
-      // Salvar seleções atualizadas no localStorage
-      setTimeout(() => salvarSelecaoLocalStorage(), 100);
+      // localStorage removido - não persiste entre reloads
 
       // Ativar efeito de entrada suave no item
       setItemChacoalhando(produtoId);
