@@ -78,6 +78,7 @@ const AdicionaisPage: React.FC = () => {
   const [tabelasPrecos, setTabelasPrecos] = useState<any[]>([]);
   const [abaPrecoAtiva, setAbaPrecoAtiva] = useState<string>('padrao');
   const [precosTabelas, setPrecosTabelas] = useState<{[key: string]: number}>({});
+  const [precosTabelasFormatados, setPrecosTabelasFormatados] = useState<{[key: string]: string}>({});
 
   // Estados para exibição dos preços nos cards
   const [adicionaisPrecos, setAdicionaisPrecos] = useState<{[key: string]: {[key: string]: number}}>({});
@@ -425,11 +426,19 @@ const AdicionaisPage: React.FC = () => {
       }
 
       const precosMap: {[key: string]: number} = {};
+      const precosFormatadosMap: {[key: string]: string} = {};
+
       precosData?.forEach(item => {
         precosMap[item.tabela_preco_id] = item.preco;
+        // Formatar o preço para exibição (sem símbolo R$)
+        precosFormatadosMap[item.tabela_preco_id] = item.preco.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
       });
 
       setPrecosTabelas(precosMap);
+      setPrecosTabelasFormatados(precosFormatadosMap);
     } catch (error) {
       console.error('Erro ao carregar preços das tabelas:', error);
     }
@@ -525,11 +534,34 @@ const AdicionaisPage: React.FC = () => {
   // Função para lidar com mudança de preço da tabela
   const handlePrecoTabelaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valor = e.target.value;
+
+    // Se o campo estiver vazio, limpa tudo
+    if (!valor) {
+      if (abaPrecoAtiva !== 'padrao') {
+        setPrecosTabelasFormatados(prev => ({
+          ...prev,
+          [abaPrecoAtiva]: ''
+        }));
+        setPrecosTabelas(prev => ({
+          ...prev,
+          [abaPrecoAtiva]: 0
+        }));
+      }
+      return;
+    }
+
+    // Formata o valor
     const valorFormatado = formatarValorMonetario(valor);
 
-    // Converter para número e salvar no estado
-    const valorNumerico = parseFloat(valor.replace(/\D/g, '')) / 100;
+    // Atualiza o valor formatado no estado
     if (abaPrecoAtiva !== 'padrao') {
+      setPrecosTabelasFormatados(prev => ({
+        ...prev,
+        [abaPrecoAtiva]: valorFormatado
+      }));
+
+      // Atualiza o valor numérico no estado
+      const valorNumerico = desformatarValorMonetario(valorFormatado);
       setPrecosTabelas(prev => ({
         ...prev,
         [abaPrecoAtiva]: valorNumerico
@@ -572,8 +604,13 @@ const AdicionaisPage: React.FC = () => {
 
   // Função para obter valor formatado de uma tabela específica
   const obterValorFormatadoTabela = (tabelaId: string): string => {
+    // Primeiro verifica se há um valor formatado no estado
+    if (precosTabelasFormatados[tabelaId]) {
+      return precosTabelasFormatados[tabelaId];
+    }
+
+    // Se não há valor formatado, formata o valor numérico
     const valor = precosTabelas[tabelaId] || 0;
-    // Formatar diretamente o valor sem multiplicar por 100
     return valor.toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
@@ -702,6 +739,7 @@ const AdicionaisPage: React.FC = () => {
         setNovoItem({ nome: '', preco: '' });
         setPrecoFormatado('');
         setPrecosTabelas({});
+        setPrecosTabelasFormatados({});
         setAbaPrecoAtiva('padrao');
         setEditingItem(null);
         setIsAddingItem(false);
@@ -732,6 +770,7 @@ const AdicionaisPage: React.FC = () => {
         setNovoItem({ nome: '', preco: '' });
         setPrecoFormatado('');
         setPrecosTabelas({});
+        setPrecosTabelasFormatados({});
         setAbaPrecoAtiva('padrao');
         setIsAddingItem(false);
         setEditingOpcao(null);
@@ -1280,29 +1319,39 @@ const AdicionaisPage: React.FC = () => {
                           </div>
 
                           {/* Campo de Preço Dinâmico */}
-                          <input
-                            type="text"
-                            value={abaPrecoAtiva === 'padrao' ? precoFormatado : obterValorFormatadoTabela(abaPrecoAtiva)}
-                            onChange={(e) => {
-                              if (abaPrecoAtiva === 'padrao') {
-                                handlePrecoChange(e);
-                              } else {
-                                handlePrecoTabelaChange(e);
-                              }
-                            }}
-                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                            placeholder="R$ 0,00"
-                          />
+                          <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                              R$
+                            </span>
+                            <input
+                              type="text"
+                              value={abaPrecoAtiva === 'padrao' ? precoFormatado : obterValorFormatadoTabela(abaPrecoAtiva)}
+                              onChange={(e) => {
+                                if (abaPrecoAtiva === 'padrao') {
+                                  handlePrecoChange(e);
+                                } else {
+                                  handlePrecoTabelaChange(e);
+                                }
+                              }}
+                              className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                              placeholder="0,00"
+                            />
+                          </div>
                         </div>
                       ) : (
                         /* Preço Simples quando não trabalha com tabelas */
-                        <input
-                          type="text"
-                          value={precoFormatado}
-                          onChange={handlePrecoChange}
-                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                          placeholder="R$ 0,00"
-                        />
+                        <div className="relative">
+                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                            R$
+                          </span>
+                          <input
+                            type="text"
+                            value={precoFormatado}
+                            onChange={handlePrecoChange}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="0,00"
+                          />
+                        </div>
                       )}
                     </div>
 

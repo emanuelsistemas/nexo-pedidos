@@ -3816,7 +3816,7 @@ const ProdutosPage: React.FC = () => {
         if (opcoesError) throw opcoesError;
       }
 
-      // ✅ NOVO: Salvar preços das tabelas de preços
+      // ✅ NOVO: Salvar preços das tabelas de preços (atualiza estado imediatamente)
       await salvarTodosPrecosTabelas(productId);
 
       await loadGrupos();
@@ -4297,6 +4297,13 @@ const ProdutosPage: React.FC = () => {
 
         console.log(`Produto excluído com sucesso! Sinalizador definido para versão mobile.`);
 
+        // ✅ NOVO: Remover preços do produto excluído do estado
+        setProdutosPrecos(prev => {
+          const newState = { ...prev };
+          delete newState[deleteConfirmation.id];
+          return newState;
+        });
+
         showMessage('success', 'Produto excluído com sucesso!');
       } else if (deleteConfirmation.type === 'foto') {
         await handleDeleteFoto();
@@ -4512,11 +4519,11 @@ const ProdutosPage: React.FC = () => {
   const salvarTodosPrecosTabelas = async (produtoId: string) => {
     try {
       if (!trabalhaComTabelaPrecos || tabelasPrecos.length === 0) {
-        return; // Não há tabelas de preços para salvar
+        return {}; // Não há tabelas de preços para salvar
       }
 
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
+      if (!userData.user) return {};
 
       const { data: usuarioData } = await supabase
         .from('usuarios')
@@ -4524,10 +4531,11 @@ const ProdutosPage: React.FC = () => {
         .eq('id', userData.user.id)
         .single();
 
-      if (!usuarioData?.empresa_id) return;
+      if (!usuarioData?.empresa_id) return {};
 
       // Preparar dados para inserção em lote
       const precosParaInserir = [];
+      const precosMap: {[key: string]: number} = {};
 
       // Verificar cada tabela de preços e seus valores
       for (const tabela of tabelasPrecos) {
@@ -4539,6 +4547,7 @@ const ProdutosPage: React.FC = () => {
             tabela_preco_id: tabela.id,
             preco: preco
           });
+          precosMap[tabela.id] = preco;
         }
       }
 
@@ -4553,11 +4562,22 @@ const ProdutosPage: React.FC = () => {
         if (error) throw error;
 
         console.log(`✅ Salvos ${precosParaInserir.length} preços de tabelas para o produto ${produtoId}`);
+
+        // ✅ NOVO: Atualizar estado imediatamente para exibição no card
+        setProdutosPrecos(prev => ({
+          ...prev,
+          [produtoId]: precosMap
+        }));
+
+        return precosMap;
       }
+
+      return {};
 
     } catch (error) {
       console.error('Erro ao salvar preços das tabelas:', error);
       showMessage('error', 'Erro ao salvar preços das tabelas');
+      return {};
     }
   };
 
