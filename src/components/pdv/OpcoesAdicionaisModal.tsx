@@ -7,6 +7,7 @@ interface OpcaoAdicional {
   id: string;
   nome: string;
   quantidade_minima?: number;
+  quantidade_maxima?: number;
   itens: OpcaoAdicionalItem[];
 }
 
@@ -71,6 +72,7 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
             id,
             nome,
             quantidade_minima,
+            quantidade_maxima,
             itens:opcoes_adicionais_itens (
               id,
               nome,
@@ -117,6 +119,20 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
   };
 
   const adicionarItem = (item: OpcaoAdicionalItem) => {
+    // ✅ VERIFICAR SE PODE INCREMENTAR (QUANTIDADE MÁXIMA)
+    if (!podeIncrementarItem(item.id)) {
+      // Encontrar o nome da opção para mostrar mensagem mais clara
+      const opcaoDoItem = opcoes.find(opcao =>
+        opcao.itens.some(opcaoItem => opcaoItem.id === item.id)
+      );
+
+      const nomeOpcao = opcaoDoItem?.nome || 'esta opção';
+      const quantidadeMaxima = opcaoDoItem?.quantidade_maxima || 0;
+
+      showMessage('error', `Quantidade máxima de ${quantidadeMaxima} ${quantidadeMaxima === 1 ? 'item' : 'itens'} atingida para ${nomeOpcao}.`);
+      return;
+    }
+
     setItensSelecionados(prev => {
       const itemExistente = prev.find(i => i.item.id === item.id);
 
@@ -188,6 +204,33 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
     };
   };
 
+  const verificarQuantidadeMaxima = (): { valido: boolean; opcoesInvalidas: Array<{ nome: string; selecionada: number; maxima: number }> } => {
+    const opcoesInvalidas: Array<{ nome: string; selecionada: number; maxima: number }> = [];
+
+    // Validar opções que têm quantidade máxima definida e itens selecionados
+    for (const opcao of opcoes) {
+      if (!opcao.quantidade_maxima || opcao.quantidade_maxima <= 0) continue;
+
+      const quantidadeSelecionada = itensSelecionados
+        .filter(item => opcao.itens.some(opcaoItem => opcaoItem.id === item.item.id))
+        .reduce((total, item) => total + item.quantidade, 0);
+
+      // Verificar se excedeu a quantidade máxima
+      if (quantidadeSelecionada > opcao.quantidade_maxima) {
+        opcoesInvalidas.push({
+          nome: opcao.nome,
+          selecionada: quantidadeSelecionada,
+          maxima: opcao.quantidade_maxima
+        });
+      }
+    }
+
+    return {
+      valido: opcoesInvalidas.length === 0,
+      opcoesInvalidas
+    };
+  };
+
   const getQuantidadeSelecionadaPorOpcao = (opcaoId: string): number => {
     const opcao = opcoes.find(o => o.id === opcaoId);
     if (!opcao) return 0;
@@ -197,12 +240,37 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
       .reduce((total, item) => total + item.quantidade, 0);
   };
 
-  const handleConfirmar = () => {
-    const validacao = verificarQuantidadeMinima();
+  const podeIncrementarItem = (itemId: string): boolean => {
+    // Encontrar a opção que contém este item
+    const opcaoDoItem = opcoes.find(opcao =>
+      opcao.itens.some(item => item.id === itemId)
+    );
 
-    if (!validacao.valido) {
-      const mensagem = `Quantidade mínima não atingida para: ${validacao.opcoesInvalidas.map(opcao =>
+    if (!opcaoDoItem) return true;
+
+    // Se não tem quantidade máxima definida, pode incrementar
+    if (!opcaoDoItem.quantidade_maxima || opcaoDoItem.quantidade_maxima <= 0) return true;
+
+    // Verificar se incrementar este item faria a opção exceder o máximo
+    const quantidadeAtualOpcao = getQuantidadeSelecionadaPorOpcao(opcaoDoItem.id);
+    return quantidadeAtualOpcao < opcaoDoItem.quantidade_maxima;
+  };
+
+  const handleConfirmar = () => {
+    const validacaoMinima = verificarQuantidadeMinima();
+    const validacaoMaxima = verificarQuantidadeMaxima();
+
+    if (!validacaoMinima.valido) {
+      const mensagem = `Quantidade mínima não atingida para: ${validacaoMinima.opcoesInvalidas.map(opcao =>
         `${opcao.nome} (${opcao.selecionada}/${opcao.minima})`
+      ).join(', ')}`;
+      showMessage('error', mensagem);
+      return;
+    }
+
+    if (!validacaoMaxima.valido) {
+      const mensagem = `Quantidade máxima excedida para: ${validacaoMaxima.opcoesInvalidas.map(opcao =>
+        `${opcao.nome} (${opcao.selecionada}/${opcao.maxima})`
       ).join(', ')}`;
       showMessage('error', mensagem);
       return;
@@ -263,28 +331,56 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="text-white font-medium">{opcao.nome}</h3>
-                        {opcao.quantidade_minima && opcao.quantidade_minima > 0 && (
-                          <div className="flex items-center gap-1">
-                            {(() => {
-                              const quantidadeSelecionada = getQuantidadeSelecionadaPorOpcao(opcao.id);
-                              const atingiuMinimo = quantidadeSelecionada >= opcao.quantidade_minima;
-                              return (
-                                <>
-                                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                    atingiuMinimo
-                                      ? 'bg-green-500/20 text-green-400'
-                                      : 'bg-yellow-500/20 text-yellow-400'
-                                  }`}>
-                                    {quantidadeSelecionada}/{opcao.quantidade_minima}
-                                  </span>
-                                  {atingiuMinimo && (
-                                    <span className="text-green-400 text-sm">✓</span>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        )}
+                        {/* Indicadores de quantidade mínima e máxima */}
+                        <div className="flex items-center gap-2">
+                          {/* Indicador de quantidade mínima */}
+                          {opcao.quantidade_minima && opcao.quantidade_minima > 0 && (
+                            <div className="flex items-center gap-1">
+                              {(() => {
+                                const quantidadeSelecionada = getQuantidadeSelecionadaPorOpcao(opcao.id);
+                                const atingiuMinimo = quantidadeSelecionada >= opcao.quantidade_minima;
+                                return (
+                                  <>
+                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                      atingiuMinimo
+                                        ? 'bg-green-500/20 text-green-400'
+                                        : 'bg-yellow-500/20 text-yellow-400'
+                                    }`}>
+                                      Mín: {quantidadeSelecionada}/{opcao.quantidade_minima}
+                                    </span>
+                                    {atingiuMinimo && (
+                                      <span className="text-green-400 text-sm">✓</span>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          )}
+
+                          {/* Indicador de quantidade máxima */}
+                          {opcao.quantidade_maxima && opcao.quantidade_maxima > 0 && (
+                            <div className="flex items-center gap-1">
+                              {(() => {
+                                const quantidadeSelecionada = getQuantidadeSelecionadaPorOpcao(opcao.id);
+                                const excedeuMaximo = quantidadeSelecionada > opcao.quantidade_maxima;
+                                return (
+                                  <>
+                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                      excedeuMaximo
+                                        ? 'bg-red-500/20 text-red-400'
+                                        : 'bg-blue-500/20 text-blue-400'
+                                    }`}>
+                                      Máx: {quantidadeSelecionada}/{opcao.quantidade_maxima}
+                                    </span>
+                                    {excedeuMaximo && (
+                                      <span className="text-red-400 text-sm">⚠️</span>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <p className="text-sm text-gray-400">
                         {opcao.itens.length} {opcao.itens.length === 1 ? 'opção' : 'opções'}
@@ -333,7 +429,12 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
                               )}
                               <button
                                 onClick={() => adicionarItem(item)}
-                                className="w-8 h-8 rounded-full bg-primary-600 text-white flex items-center justify-center hover:bg-primary-700 transition-colors"
+                                disabled={!podeIncrementarItem(item.id)}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                                  !podeIncrementarItem(item.id)
+                                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                    : 'bg-primary-600 text-white hover:bg-primary-700'
+                                }`}
                               >
                                 <Plus size={16} />
                               </button>
@@ -374,23 +475,43 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
               </div>
             )}
 
-            {/* Aviso de quantidade mínima não atingida */}
+            {/* Avisos de validação */}
             {(() => {
-              const validacao = verificarQuantidadeMinima();
-              if (validacao.valido) return null;
+              const validacaoMinima = verificarQuantidadeMinima();
+              const validacaoMaxima = verificarQuantidadeMaxima();
 
               return (
-                <div className="mb-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                  <div className="flex items-center gap-2 text-yellow-400">
-                    <span className="text-sm">⚠️</span>
-                    <span className="text-sm font-medium">Quantidade mínima não atingida</span>
-                  </div>
-                  <p className="text-xs text-yellow-300 mt-1">
-                    {validacao.opcoesInvalidas.map(opcao =>
-                      `${opcao.nome}: ${opcao.selecionada}/${opcao.minima}`
-                    ).join(' • ')}
-                  </p>
-                </div>
+                <>
+                  {/* Aviso de quantidade mínima não atingida */}
+                  {!validacaoMinima.valido && (
+                    <div className="mb-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                      <div className="flex items-center gap-2 text-yellow-400">
+                        <span className="text-sm">⚠️</span>
+                        <span className="text-sm font-medium">Quantidade mínima não atingida</span>
+                      </div>
+                      <p className="text-xs text-yellow-300 mt-1">
+                        {validacaoMinima.opcoesInvalidas.map(opcao =>
+                          `${opcao.nome}: ${opcao.selecionada}/${opcao.minima}`
+                        ).join(' • ')}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Aviso de quantidade máxima excedida */}
+                  {!validacaoMaxima.valido && (
+                    <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <div className="flex items-center gap-2 text-red-400">
+                        <span className="text-sm">🚫</span>
+                        <span className="text-sm font-medium">Quantidade máxima excedida</span>
+                      </div>
+                      <p className="text-xs text-red-300 mt-1">
+                        {validacaoMaxima.opcoesInvalidas.map(opcao =>
+                          `${opcao.nome}: ${opcao.selecionada}/${opcao.maxima}`
+                        ).join(' • ')}
+                      </p>
+                    </div>
+                  )}
+                </>
               );
             })()}
 
@@ -402,17 +523,29 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
                 Cancelar
               </button>
               {(() => {
-                const validacao = verificarQuantidadeMinima();
+                const validacaoMinima = verificarQuantidadeMinima();
+                const validacaoMaxima = verificarQuantidadeMaxima();
+                const podeConfirmar = validacaoMinima.valido && validacaoMaxima.valido;
+
+                let titleMessage = '';
+                if (!validacaoMinima.valido) {
+                  titleMessage += `Quantidade mínima não atingida para: ${validacaoMinima.opcoesInvalidas.map(opcao => `${opcao.nome} (${opcao.selecionada}/${opcao.minima})`).join(', ')}`;
+                }
+                if (!validacaoMaxima.valido) {
+                  if (titleMessage) titleMessage += ' | ';
+                  titleMessage += `Quantidade máxima excedida para: ${validacaoMaxima.opcoesInvalidas.map(opcao => `${opcao.nome} (${opcao.selecionada}/${opcao.maxima})`).join(', ')}`;
+                }
+
                 return (
                   <button
                     onClick={handleConfirmar}
-                    disabled={!validacao.valido}
+                    disabled={!podeConfirmar}
                     className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
-                      validacao.valido
+                      podeConfirmar
                         ? 'bg-primary-600 text-white hover:bg-primary-700'
                         : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                     }`}
-                    title={!validacao.valido ? `Quantidade mínima não atingida para: ${validacao.opcoesInvalidas.map(opcao => `${opcao.nome} (${opcao.selecionada}/${opcao.minima})`).join(', ')}` : ''}
+                    title={!podeConfirmar ? titleMessage : ''}
                   >
                     Confirmar
                   </button>
