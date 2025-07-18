@@ -2008,10 +2008,18 @@ const CardapioPublicoPage: React.FC = () => {
 
     const quantidadeAnterior = quantidadesProdutos[produtoId] || 0;
 
-    setQuantidadesProdutos(prev => ({
-      ...prev,
-      [produtoId]: novaQuantidade
-    }));
+    setQuantidadesProdutos(prev => {
+      if (novaQuantidade === 0) {
+        // Remover completamente o produto do estado quando quantidade for 0
+        const nova = { ...prev };
+        delete nova[produtoId];
+        return nova;
+      }
+      return {
+        ...prev,
+        [produtoId]: novaQuantidade
+      };
+    });
 
     // Rastrear ordem de adição - SEMPRE que incrementar quantidade (mover para topo)
     if (novaQuantidade > quantidadeAnterior && novaQuantidade > 0) {
