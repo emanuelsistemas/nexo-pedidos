@@ -72,6 +72,13 @@ const AdicionaisPage: React.FC = () => {
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
   const [precoFormatado, setPrecoFormatado] = useState('');
   const [isAddingItem, setIsAddingItem] = useState(false);
+
+  // Estados para sistema de tabelas de preços
+  const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState<boolean>(false);
+  const [tabelasPrecos, setTabelasPrecos] = useState<any[]>([]);
+  const [abaPrecoAtiva, setAbaPrecoAtiva] = useState<string>('padrao');
+  const [precosTabelas, setPrecosTabelas] = useState<{[key: string]: number}>({});
+  const [precoTabelaFormatado, setPrecoTabelaFormatado] = useState<string>('0,00');
   const [editingItem, setEditingItem] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -206,6 +213,59 @@ const AdicionaisPage: React.FC = () => {
     }
   };
 
+  // Função para carregar configurações de tabelas de preços
+  const carregarConfiguracoesTabelaPrecos = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Verificar se a empresa trabalha com tabelas de preços
+      const { data: configData, error: configError } = await supabase
+        .from('tabela_preco_config')
+        .select('trabalha_com_tabela_precos')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (configError && configError.code !== 'PGRST116') {
+        console.error('Erro ao carregar configuração de tabelas:', configError);
+        return;
+      }
+
+      if (configData?.trabalha_com_tabela_precos) {
+        setTrabalhaComTabelaPrecos(true);
+
+        // Carregar tabelas de preços ativas
+        const { data: tabelasData, error: tabelasError } = await supabase
+          .from('tabela_de_preco')
+          .select('id, nome')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('ativo', true)
+          .eq('deletado', false)
+          .order('nome');
+
+        if (tabelasError) {
+          console.error('Erro ao carregar tabelas de preços:', tabelasError);
+          return;
+        }
+
+        setTabelasPrecos(tabelasData || []);
+      } else {
+        setTrabalhaComTabelaPrecos(false);
+        setTabelasPrecos([]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações de tabela de preços:', error);
+    }
+  };
+
   const loadData = async () => {
     try {
       setIsLoading(true);
@@ -248,6 +308,9 @@ const AdicionaisPage: React.FC = () => {
 
       console.log('Empresa ID:', usuarioData.empresa_id);
 
+      // Carregar configurações de tabelas de preços
+      await carregarConfiguracoesTabelaPrecos();
+
       const { data: opcoesData, error: opcoesError } = await supabase
         .from('opcoes_adicionais')
         .select(`
@@ -284,6 +347,140 @@ const AdicionaisPage: React.FC = () => {
     } finally {
       setIsDataReady(true);
       setIsLoading(false);
+    }
+  };
+
+  // Função para carregar preços das tabelas de um item adicional
+  const carregarPrecosTabelas = async (itemId: string) => {
+    try {
+      const { data: precosData, error } = await supabase
+        .from('adicionais_precos')
+        .select('tabela_preco_id, preco')
+        .eq('adicional_item_id', itemId);
+
+      if (error) {
+        console.error('Erro ao carregar preços das tabelas:', error);
+        return;
+      }
+
+      const precosMap: {[key: string]: number} = {};
+      precosData?.forEach(item => {
+        precosMap[item.tabela_preco_id] = item.preco;
+      });
+
+      setPrecosTabelas(precosMap);
+    } catch (error) {
+      console.error('Erro ao carregar preços das tabelas:', error);
+    }
+  };
+
+  // Função para salvar preço de uma tabela específica
+  const salvarPrecoTabela = async (itemId: string, tabelaId: string, preco: number) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const { error } = await supabase
+        .from('adicionais_precos')
+        .upsert({
+          empresa_id: usuarioData.empresa_id,
+          adicional_item_id: itemId,
+          tabela_preco_id: tabelaId,
+          preco: preco
+        }, {
+          onConflict: 'adicional_item_id,tabela_preco_id'
+        });
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setPrecosTabelas(prev => ({
+        ...prev,
+        [tabelaId]: preco
+      }));
+
+    } catch (error) {
+      console.error('Erro ao salvar preço da tabela:', error);
+      showMessage('error', 'Erro ao salvar preço da tabela');
+    }
+  };
+
+  // Função para salvar todos os preços das tabelas
+  const salvarTodosPrecosTabelas = async (itemId: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      const precosParaInserir = [];
+
+      // Para cada tabela de preços
+      for (const tabela of tabelasPrecos) {
+        const preco = precosTabelas[tabela.id];
+        if (preco && preco > 0) {
+          precosParaInserir.push({
+            empresa_id: usuarioData.empresa_id,
+            adicional_item_id: itemId,
+            tabela_preco_id: tabela.id,
+            preco: preco
+          });
+        }
+      }
+
+      // Se há preços para salvar, fazer upsert em lote
+      if (precosParaInserir.length > 0) {
+        const { error } = await supabase
+          .from('adicionais_precos')
+          .upsert(precosParaInserir, {
+            onConflict: 'adicional_item_id,tabela_preco_id'
+          });
+
+        if (error) throw error;
+
+        console.log(`✅ Salvos ${precosParaInserir.length} preços de tabelas para o item ${itemId}`);
+      }
+
+    } catch (error) {
+      console.error('Erro ao salvar preços das tabelas:', error);
+      showMessage('error', 'Erro ao salvar preços das tabelas');
+    }
+  };
+
+  // Função para lidar com mudança de preço da tabela
+  const handlePrecoTabelaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valor = e.target.value;
+    setPrecoTabelaFormatado(formatarValorMonetario(valor));
+
+    // Converter para número e salvar no estado
+    const valorNumerico = parseFloat(valor.replace(/\D/g, '')) / 100;
+    if (abaPrecoAtiva !== 'padrao') {
+      setPrecosTabelas(prev => ({
+        ...prev,
+        [abaPrecoAtiva]: valorNumerico
+      }));
+    }
+  };
+
+  // Função para lidar com blur do campo de preço da tabela
+  const handlePrecoTabelaBlur = async () => {
+    if (abaPrecoAtiva !== 'padrao' && editingItem) {
+      const preco = precosTabelas[abaPrecoAtiva] || 0;
+      await salvarPrecoTabela(editingItem.id, abaPrecoAtiva, preco);
     }
   };
 
@@ -401,8 +598,16 @@ const AdicionaisPage: React.FC = () => {
 
         if (error) throw error;
 
+        // Salvar preços das tabelas se trabalha com tabelas de preços
+        if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+          await salvarTodosPrecosTabelas(editingItem.id);
+        }
+
         setNovoItem({ nome: '', preco: '' });
         setPrecoFormatado('');
+        setPrecosTabelas({});
+        setPrecoTabelaFormatado('0,00');
+        setAbaPrecoAtiva('padrao');
         setEditingItem(null);
         setIsAddingItem(false);
         setEditingOpcao(null);
@@ -411,19 +616,29 @@ const AdicionaisPage: React.FC = () => {
         showMessage('success', 'Item atualizado com sucesso!');
       } else {
         // Adicionar novo item
-        const { error } = await supabase
+        const { data: novoItemData, error } = await supabase
           .from('opcoes_adicionais_itens')
           .insert([{
             nome: novoItem.nome,
             preco: preco,
             opcao_id: editingOpcao.id,
             empresa_id: usuarioData.empresa_id
-          }]);
+          }])
+          .select('id')
+          .single();
 
         if (error) throw error;
 
+        // Salvar preços das tabelas se trabalha com tabelas de preços
+        if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0 && novoItemData?.id) {
+          await salvarTodosPrecosTabelas(novoItemData.id);
+        }
+
         setNovoItem({ nome: '', preco: '' });
         setPrecoFormatado('');
+        setPrecosTabelas({});
+        setPrecoTabelaFormatado('0,00');
+        setAbaPrecoAtiva('padrao');
         setIsAddingItem(false);
         setEditingOpcao(null);
         setShowSidebar(false);
@@ -437,7 +652,7 @@ const AdicionaisPage: React.FC = () => {
     }
   };
 
-  const handleEditItem = (item: any, opcao: any) => {
+  const handleEditItem = async (item: any, opcao: any) => {
     setEditingOpcao(opcao);
     setEditingItem(item);
     setNovoItem({
@@ -447,6 +662,13 @@ const AdicionaisPage: React.FC = () => {
     // Formatar o preço para exibição
     const precoFormatado = (item.preco * 100).toString().padStart(3, '0');
     setPrecoFormatado(formatarValorMonetario(precoFormatado));
+
+    // Carregar preços das tabelas se trabalha com tabelas de preços
+    if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+      await carregarPrecosTabelas(item.id);
+    }
+
+    setAbaPrecoAtiva('padrao');
     setIsAddingItem(true);
     setShowSidebar(true);
   };
@@ -604,6 +826,9 @@ const AdicionaisPage: React.FC = () => {
                         setEditingOpcao(opcao);
                         setNovoItem({ nome: '', preco: '' });
                         setPrecoFormatado('');
+                        setPrecosTabelas({});
+                        setPrecoTabelaFormatado('0,00');
+                        setAbaPrecoAtiva('padrao');
                         setIsAddingItem(true);
                         setEditingItem(null);
                         setShowSidebar(true);
@@ -861,17 +1086,77 @@ const AdicionaisPage: React.FC = () => {
                       />
                     </div>
 
+                    {/* Seção de Preços com Abas */}
                     <div>
                       <label className="block text-sm font-medium text-gray-400 mb-2">
-                        Preço
+                        Preços
                       </label>
-                      <input
-                        type="text"
-                        value={precoFormatado}
-                        onChange={handlePrecoChange}
-                        className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
-                        placeholder="R$ 0,00"
-                      />
+
+                      {/* Abas de Preços */}
+                      {trabalhaComTabelaPrecos && tabelasPrecos.length > 0 ? (
+                        <div className="space-y-4">
+                          {/* Navegação das Abas */}
+                          <div className="flex border-b border-gray-700 overflow-x-auto">
+                            {/* Aba Preço Padrão */}
+                            <button
+                              type="button"
+                              onClick={() => setAbaPrecoAtiva('padrao')}
+                              className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                                abaPrecoAtiva === 'padrao'
+                                  ? 'border-primary-500 text-primary-400'
+                                  : 'border-transparent text-gray-400 hover:text-gray-300'
+                              }`}
+                            >
+                              Preço
+                            </button>
+
+                            {/* Abas das Tabelas de Preços */}
+                            {tabelasPrecos.map((tabela) => (
+                              <button
+                                key={tabela.id}
+                                type="button"
+                                onClick={() => setAbaPrecoAtiva(tabela.id)}
+                                className={`px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                                  abaPrecoAtiva === tabela.id
+                                    ? 'border-primary-500 text-primary-400'
+                                    : 'border-transparent text-gray-400 hover:text-gray-300'
+                                }`}
+                              >
+                                {tabela.nome}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Campo de Preço Dinâmico */}
+                          <input
+                            type="text"
+                            value={abaPrecoAtiva === 'padrao' ? precoFormatado : precoTabelaFormatado}
+                            onChange={(e) => {
+                              if (abaPrecoAtiva === 'padrao') {
+                                handlePrecoChange(e);
+                              } else {
+                                handlePrecoTabelaChange(e);
+                              }
+                            }}
+                            onBlur={() => {
+                              if (abaPrecoAtiva !== 'padrao') {
+                                handlePrecoTabelaBlur();
+                              }
+                            }}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="R$ 0,00"
+                          />
+                        </div>
+                      ) : (
+                        /* Preço Simples quando não trabalha com tabelas */
+                        <input
+                          type="text"
+                          value={precoFormatado}
+                          onChange={handlePrecoChange}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          placeholder="R$ 0,00"
+                        />
+                      )}
                     </div>
 
                     <div className="flex gap-4 pt-4">
@@ -884,6 +1169,9 @@ const AdicionaisPage: React.FC = () => {
                           setIsAddingItem(false);
                           setEditingItem(null);
                           setPrecoFormatado('');
+                          setPrecosTabelas({});
+                          setPrecoTabelaFormatado('0,00');
+                          setAbaPrecoAtiva('padrao');
                           setQuantidadeMinimaInput('');
                           setQuantidadeMaximaInput('');
                         }}

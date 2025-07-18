@@ -965,9 +965,9 @@ const CardapioPublicoPage: React.FC = () => {
   // Salvar carrinho no localStorage sempre que quantidades, ordem ou adicionais mudarem
   useEffect(() => {
     if (empresaId) {
-      salvarCarrinhoLocalStorage(quantidadesProdutos);
+      salvarCarrinhoLocalStorage(quantidadesSelecionadas);
     }
-  }, [quantidadesProdutos, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, validacaoQuantidadeMaxima, empresaId]);
+  }, [quantidadesSelecionadas, ordemAdicaoItens, adicionaisSelecionados, validacaoQuantidadeMinima, validacaoQuantidadeMaxima, empresaId]);
 
   // Atualizar validação de quantidade mínima sempre que adicionais mudarem
   useEffect(() => {
@@ -1924,13 +1924,16 @@ const CardapioPublicoPage: React.FC = () => {
 
     setQuantidadesSelecionadas(prev => {
       if (novaQuantidade <= 0) {
-        const nova = { ...prev };
-        delete nova[produtoId];
+        // ✅ SALVAR quantidade 0 explicitamente no estado para o localStorage
+        const novoEstado = {
+          ...prev,
+          [produtoId]: 0
+        };
 
-        // Limpar TODOS os estados relacionados ao produto quando quantidade for 0
+        // ✅ LIMPAR TODOS os estados relacionados ao produto quando quantidade for 0
         limparEstadosProduto(produtoId);
 
-        return nova;
+        return novoEstado;
       }
       return {
         ...prev,
@@ -1961,9 +1964,21 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
-  // Função para limpar todos os estados de um produto
+  // ✅ FUNÇÃO PARA LIMPAR APENAS DADOS DESNECESSÁRIOS (NÃO MAIS USADA)
+  // Mantida para compatibilidade, mas não limpa mais adicionais e observações quando quantidade = 0
   const limparEstadosProduto = (produtoId: string) => {
+    // ✅ NÃO LIMPAR MAIS adicionais e observações quando quantidade = 0
+    // Isso permite que o usuário mantenha suas seleções mesmo com quantidade 0
 
+    // Apenas limpar validação mínima se necessário
+    // setValidacaoQuantidadeMinima será atualizada automaticamente pelo useEffect
+
+    // Salvar no localStorage após mudanças
+    setTimeout(() => salvarSelecaoLocalStorage(), 100);
+  };
+
+  // ✅ NOVA FUNÇÃO: Limpar completamente um produto (usado apenas quando necessário)
+  const limparCompletamenteProduto = (produtoId: string) => {
     // Limpar adicionais selecionados
     setAdicionaisSelecionados(prev => {
       const novo = { ...prev };
@@ -1978,10 +1993,15 @@ const CardapioPublicoPage: React.FC = () => {
       return novo;
     });
 
-    // Estados de fluxo de configuração removidos - não são mais necessários
-
     // Limpar validação mínima de adicionais
     setValidacaoQuantidadeMinima(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+
+    // Limpar validação máxima de adicionais
+    setValidacaoQuantidadeMaxima(prev => {
       const novo = { ...prev };
       delete novo[produtoId];
       return novo;
@@ -1994,7 +2014,12 @@ const CardapioPublicoPage: React.FC = () => {
       return novo;
     });
 
-
+    // Remover quantidade selecionada
+    setQuantidadesSelecionadas(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
 
     // Salvar no localStorage após limpeza
     setTimeout(() => salvarSelecaoLocalStorage(), 100);
