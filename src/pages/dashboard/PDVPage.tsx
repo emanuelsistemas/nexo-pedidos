@@ -2045,6 +2045,10 @@ const PDVPage: React.FC = () => {
         cest,
         margem_st,
         peso_liquido,
+        promocao_data_habilitada,
+        promocao_data_inicio,
+        promocao_data_fim,
+        promocao_data_cardapio,
         grupo:grupos(nome),
         unidade_medida:unidade_medida_id (
           id,
@@ -11759,6 +11763,13 @@ const PDVPage: React.FC = () => {
                                                     {item.produto.promocao_data_habilitada && item.produto.promocao_data_fim && (
                                                       <div className="mt-1">
                                                         <div>Válida até: {formatarDataPromocao(item.produto.promocao_data_fim)}</div>
+                                                        {/* DEBUG: Verificar dados */}
+                                                        {console.log('🔍 DEBUG Produto:', item.produto.nome, {
+                                                          promocao_data_habilitada: item.produto.promocao_data_habilitada,
+                                                          promocao_data_inicio: item.produto.promocao_data_inicio,
+                                                          promocao_data_fim: item.produto.promocao_data_fim,
+                                                          promocao_data_cardapio: item.produto.promocao_data_cardapio
+                                                        })}
                                                         {(() => {
                                                           const diasRestantes = calcularDiasRestantes(item.produto);
                                                           if (diasRestantes !== null) {

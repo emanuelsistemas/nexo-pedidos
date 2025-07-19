@@ -519,6 +519,63 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
+  // ✅ FUNÇÃO PARA OBTER PREÇO FINAL DO PRODUTO (considerando promoções + tabela de preço)
+  const obterPrecoFinalProduto = (produtoId: string): number => {
+    const produto = produtos.find(p => p.id === produtoId);
+    if (!produto) return 0;
+
+    // 1. Primeiro, obter preço base (tabela de preço ou preço padrão)
+    let precoBase = produto.preco;
+
+    // Se trabalha com tabelas de preço, usar preço da tabela selecionada
+    if (trabalhaComTabelaPrecos) {
+      const tabelasComPrecos = obterTabelasComPrecos(produtoId);
+      const tabelaSelecionadaId = tabelasSelecionadas[produtoId];
+
+      if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+        const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+        if (tabelaEscolhida) {
+          precoBase = tabelaEscolhida.preco;
+        }
+      }
+    }
+
+    // 2. Aplicar promoção sobre o preço base (se houver)
+    let precoFinal = precoBase;
+
+    // Verificar promoção tradicional
+    const temPromocaoTradicional = produto.promocao &&
+      produto.exibir_promocao_cardapio &&
+      produto.tipo_desconto &&
+      produto.valor_desconto !== undefined &&
+      produto.valor_desconto > 0;
+
+    if (temPromocaoTradicional) {
+      precoFinal = calcularValorFinal(precoBase, produto.tipo_desconto!, produto.valor_desconto!);
+    }
+
+    // Verificar desconto por quantidade (só aplica se quantidade mínima for atingida)
+    const temDescontoQuantidade = produto.desconto_quantidade &&
+      produto.exibir_desconto_qtd_minimo_no_cardapio_digital &&
+      produto.quantidade_minima &&
+      produto.quantidade_minima > 0;
+
+    if (temDescontoQuantidade && !temPromocaoTradicional) { // Não aplicar ambos
+      const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
+
+      if (quantidadeSelecionada >= produto.quantidade_minima!) {
+        if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+          const valorDesconto = (precoBase * produto.percentual_desconto_quantidade) / 100;
+          precoFinal = precoBase - valorDesconto;
+        } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+          precoFinal = Math.max(0, precoBase - produto.valor_desconto_quantidade);
+        }
+      }
+    }
+
+    return precoFinal;
+  };
+
   // Filtrar produtos em promoção (incluindo promoções tradicionais e desconto por quantidade)
   const produtosEmPromocao = produtos.filter(produto => {
     // Promoções tradicionais
@@ -1015,6 +1072,31 @@ const CardapioPublicoPage: React.FC = () => {
       setCarrinhoAberto(false);
     }
   }, [itensCarrinhoSeparados, carrinhoAberto]);
+
+  // ✅ LIMPAR LOCALSTORAGE ANTIGO QUE PODE ESTAR INTERFERINDO
+  useEffect(() => {
+    if (empresaId) {
+      try {
+        // Limpar dados antigos do localStorage que podem estar interferindo
+        const chaves = [
+          `carrinho_${empresaId}`,
+          `carrinho_ordem_${empresaId}`,
+          `carrinho_adicionais_${empresaId}`,
+          `tabelas_selecionadas_${empresaId}`,
+          `precos_produtos_${empresaId}`
+        ];
+
+        chaves.forEach(chave => {
+          if (localStorage.getItem(chave)) {
+            console.log('🧹 Removendo localStorage antigo:', chave);
+            localStorage.removeItem(chave);
+          }
+        });
+      } catch (error) {
+        console.error('Erro ao limpar localStorage:', error);
+      }
+    }
+  }, [empresaId]);
 
   // localStorage removido - carrinho não persiste entre reloads
 
@@ -1935,23 +2017,11 @@ const CardapioPublicoPage: React.FC = () => {
     const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
     if (quantidadeSelecionada === 0) return 0;
 
-    // ✅ VERIFICAR SE PRODUTO TEM TABELA DE PREÇO SELECIONADA
-    const tabelasComPrecos = obterTabelasComPrecos(produtoId);
-    let precoBase = produto.preco; // Preço padrão
+    // ✅ USAR PREÇO FINAL DO PRODUTO (considerando tabela de preço + promoções)
+    const precoFinal = obterPrecoFinalProduto(produtoId);
 
-    if (tabelasComPrecos.length > 0) {
-      // Produto tem tabelas de preço, verificar se uma foi selecionada
-      const tabelaSelecionadaId = tabelasSelecionadas[produtoId];
-      if (tabelaSelecionadaId) {
-        const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
-        if (tabelaEscolhida) {
-          precoBase = tabelaEscolhida.preco; // Usar preço da tabela selecionada
-        }
-      }
-    }
-
-    // Valor base do produto (usando preço da tabela se selecionada)
-    let valorTotal = precoBase * quantidadeSelecionada;
+    // Valor base do produto (usando preço final com promoções)
+    let valorTotal = precoFinal * quantidadeSelecionada;
 
     // Adicionar valor dos adicionais selecionados (usando preço da tabela selecionada)
     const adicionaisItem = adicionaisSelecionados[produtoId];
@@ -2168,20 +2238,9 @@ const CardapioPublicoPage: React.FC = () => {
       // Gerar ID único para este item no carrinho
       const itemId = `${produtoId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      // ✅ OBTER PREÇO CORRETO DO PRODUTO (considerando tabela de preço)
-      const tabelasComPrecos = obterTabelasComPrecos(produtoId);
-      let precoProduto = produto.preco; // Preço padrão
-      let tabelaSelecionadaId = null;
-
-      if (tabelasComPrecos.length > 0) {
-        tabelaSelecionadaId = tabelasSelecionadas[produtoId];
-        if (tabelaSelecionadaId) {
-          const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
-          if (tabelaEscolhida) {
-            precoProduto = tabelaEscolhida.preco;
-          }
-        }
-      }
+      // ✅ OBTER PREÇO FINAL DO PRODUTO (considerando tabela de preço + promoções)
+      const precoProduto = obterPrecoFinalProduto(produtoId);
+      const tabelaSelecionadaId = tabelasSelecionadas[produtoId] || null;
 
       // Criar item separado no carrinho
       const novoItem = {
@@ -5446,10 +5505,19 @@ const CardapioPublicoPage: React.FC = () => {
                                           tabelaId: tabela.id,
                                           tabelaNome: tabela.nome
                                         });
-                                        setTabelasSelecionadas(prev => ({
-                                          ...prev,
-                                          [produto.id]: tabela.id
-                                        }));
+                                        setTabelasSelecionadas(prev => {
+                                          const novoEstado = {
+                                            ...prev,
+                                            [produto.id]: tabela.id
+                                          };
+                                          console.log('🔍 TABELA SELECIONADA:', {
+                                            produtoId: produto.id,
+                                            tabelaId: tabela.id,
+                                            tabelaNome: tabela.nome,
+                                            novoEstado
+                                          });
+                                          return novoEstado;
+                                        });
                                       }}
                                       className={`flex-1 p-3 rounded-lg border-2 transition-all duration-200 hover:scale-105 text-left ${
                                         isSelected
