@@ -553,7 +553,7 @@ const ProdutosPage: React.FC = () => {
         setTabelasPrecos([]);
       }
     } catch (error) {
-      console.error('Erro ao carregar configurações de tabela de preços:', error);
+      // Erro silencioso
     }
   };
 
@@ -571,8 +571,6 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      console.log('🍕 Carregando configuração de pizzas para empresa:', usuarioData.empresa_id);
-
       // Buscar configuração de pizzas
       const { data: configData } = await supabase
         .from('pdv_config')
@@ -580,15 +578,12 @@ const ProdutosPage: React.FC = () => {
         .eq('empresa_id', usuarioData.empresa_id)
         .single();
 
-      console.log('🍕 Configuração encontrada:', configData);
-
       if (configData) {
         const trabalhaComPizzasValue = configData.trabalha_com_pizzas || false;
-        console.log('🍕 Definindo trabalhaComPizzas como:', trabalhaComPizzasValue);
         setTrabalhaComPizzas(trabalhaComPizzasValue);
       }
     } catch (error) {
-      console.error('Erro ao carregar configuração de pizzas:', error);
+      // Erro silencioso
     }
   };
 
@@ -606,8 +601,6 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      console.log('📱 Carregando configuração de cardápio digital para empresa:', usuarioData.empresa_id);
-
       // Buscar configuração de cardápio digital
       const { data: configData } = await supabase
         .from('pdv_config')
@@ -615,15 +608,12 @@ const ProdutosPage: React.FC = () => {
         .eq('empresa_id', usuarioData.empresa_id)
         .single();
 
-      console.log('📱 Configuração encontrada:', configData);
-
       if (configData) {
         const cardapioDigitalValue = configData.cardapio_digital || false;
-        console.log('📱 Definindo cardapioDigitalHabilitado como:', cardapioDigitalValue);
         setCardapioDigitalHabilitado(cardapioDigitalValue);
       }
     } catch (error) {
-      console.error('Erro ao carregar configuração de cardápio digital:', error);
+      // Erro silencioso
     }
   };
 
