@@ -939,7 +939,6 @@ const PDVPage: React.FC = () => {
 
         if (tabelasData) {
           setTabelasPrecos(tabelasData);
-          console.log('📋 Tabelas de preços carregadas:', tabelasData);
         }
       } else {
         setTrabalhaComTabelaPrecos(false);
@@ -974,7 +973,7 @@ const PDVPage: React.FC = () => {
       // Sair do fullscreen ao desmontar o componente
       if (isFullscreen) {
         exitFullscreen().catch(error => {
-          console.log('PDV: Erro ao sair do fullscreen:', error);
+          // Erro silencioso ao sair do fullscreen
         });
       }
     };
@@ -1172,10 +1171,9 @@ const PDVPage: React.FC = () => {
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
-            console.log('Fullscreen ativado para modal de pedidos');
           }
         } catch (error) {
-          console.log('Erro ao ativar fullscreen para modal de pedidos:', error);
+          // Erro silencioso ao ativar fullscreen
         }
 
         // Abrir modal IMEDIATAMENTE sem loading
@@ -1351,10 +1349,9 @@ const PDVPage: React.FC = () => {
           // Ativar fullscreen antes de abrir o modal
           if (!isFullscreen) {
             await enterFullscreen();
-            console.log('Fullscreen ativado para modal de movimentos');
           }
         } catch (error) {
-          console.log('Erro ao ativar fullscreen para modal de movimentos:', error);
+          // Erro silencioso ao ativar fullscreen
         }
 
         setShowMovimentosModal(true);
@@ -1491,7 +1488,6 @@ const PDVPage: React.FC = () => {
   // ✅ CORREÇÃO: Resetar menuStartIndex quando o carrinho muda para evitar inconsistências
   useEffect(() => {
     setMenuStartIndex(0); // Sempre voltar ao início quando o carrinho muda
-    console.log('🔄 Menu PDV resetado - Itens no carrinho:', carrinho.length, 'Total itens menu:', menuPDVItems.length);
   }, [carrinho.length]); // Só quando a quantidade de itens no carrinho muda
 
   // useEffect para aplicar filtros quando os estados mudarem
@@ -1507,15 +1503,12 @@ const PDVPage: React.FC = () => {
       // Atualizar configuração local
       setPdvConfig(config);
 
-      // Log para debug (pode remover em produção)
-      console.log(`Configuração PDV atualizada: ${field} = ${value}`);
+
     };
 
     // Listener para mudança de status dos pedidos
     const handlePedidoStatusChange = (event: CustomEvent) => {
       const { pedidosIds, novoStatus, numeroVenda } = event.detail;
-
-      console.log(`Status dos pedidos ${pedidosIds.join(', ')} atualizado para: ${novoStatus} (Venda: ${numeroVenda})`);
 
       // Aguardar um pouco para garantir que a atualização no banco foi processada
       setTimeout(() => {
@@ -1605,19 +1598,10 @@ const PDVPage: React.FC = () => {
     const garantirVendaEmAndamento = async () => {
       // Se há itens no carrinho mas não há venda em andamento e não está criando
       if (carrinho.length > 0 && !vendaEmAndamento && !criandoVenda) {
-        console.log('🔍 USEEFFECT: Detectou carrinho com itens mas sem venda em andamento');
-        console.log('🔍 Estado atual:', {
-          carrinhoLength: carrinho.length,
-          vendaEmAndamento: !!vendaEmAndamento,
-          criandoVenda
-        });
-
         setCriandoVenda(true);
-        console.log('🚀 USEEFFECT: Criando venda em andamento...');
 
         const vendaCriada = await criarVendaEmAndamento();
         if (vendaCriada) {
-          console.log('✅ USEEFFECT: Venda criada com sucesso');
 
           // ✅ CORREÇÃO: Aguardar um pouco para garantir que a transação foi commitada
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -1638,19 +1622,13 @@ const PDVPage: React.FC = () => {
     const salvarItensExistentes = async () => {
       // ✅ CORREÇÃO: Só salvar se é venda nova (não recuperada) e tem itens sem pdv_item_id
       if (vendaEmAndamento && carrinho.length > 0 && !isEditingVenda) {
-        console.log('🔍 USEEFFECT: Venda NOVA criada, salvando itens existentes no carrinho...');
-
         // ✅ CORREÇÃO: Só salvar itens que não têm pdv_item_id (itens novos)
         const itensNovos = carrinho.filter(item => !item.pdv_item_id);
 
         if (itensNovos.length > 0) {
-          console.log(`🔍 USEEFFECT: Encontrados ${itensNovos.length} itens novos para salvar`);
-
           for (const item of itensNovos) {
-            console.log('🔍 Salvando item novo:', item.produto.nome);
             const itemSalvo = await salvarItemNaVendaEmAndamento(item);
             if (itemSalvo) {
-              console.log('✅ Item novo salvo:', item.produto.nome, 'ID:', itemSalvo.id);
 
               // ✅ CORREÇÃO: Atualizar o item no carrinho com o pdv_item_id imediatamente
               setCarrinho(prev => prev.map(carrinhoItem =>
@@ -1663,19 +1641,7 @@ const PDVPage: React.FC = () => {
             }
           }
 
-          console.log('✅ USEEFFECT: Todos os itens novos foram salvos');
-        } else {
-          console.log('🔍 USEEFFECT: Nenhum item novo para salvar (todos têm pdv_item_id)');
         }
-      } else {
-        console.log('🔍 USEEFFECT: Não salvando itens porque:', {
-          vendaEmAndamento: !!vendaEmAndamento,
-          carrinhoLength: carrinho.length,
-          isEditingVenda,
-          motivo: !vendaEmAndamento ? 'Sem venda em andamento' :
-                  carrinho.length === 0 ? 'Carrinho vazio' :
-                  isEditingVenda ? 'É venda recuperada' : 'Outro motivo'
-        });
       }
     };
 
@@ -2090,13 +2056,8 @@ const PDVPage: React.FC = () => {
       ...sabores
     ];
 
-    console.log(`🍕 CORREÇÃO: Produto principal "${produtoParaSabores.nome}" incluído como sabor`);
-    console.log(`🍕 CORREÇÃO: Total de sabores (incluindo principal): ${todosSabores.length}`);
-
     // Criar descrição dos sabores com frações
     const criarDescricaoSabores = () => {
-      console.log(`🍕 DESCRIÇÃO: Criando descrição para ${todosSabores.length} sabores`);
-      console.log('🍕 DESCRIÇÃO: Sabores recebidos:', todosSabores.map(s => s.produto.nome));
 
       if (!tabelaParaSabores.permite_meio_a_meio) {
         return todosSabores.map(sabor => sabor.produto.nome).join(', ');
@@ -2114,11 +2075,8 @@ const PDVPage: React.FC = () => {
         fracao = `${Math.round(100/todosSabores.length)}%`;
       }
 
-      console.log(`🍕 DESCRIÇÃO: Fração calculada: ${fracao} para ${todosSabores.length} sabores`);
-
       // Criar lista com frações
       const resultado = todosSabores.map(sabor => `${fracao} ${sabor.produto.nome}`).join('\n');
-      console.log('🍕 DESCRIÇÃO: Resultado final:', resultado);
       return resultado;
     };
 
@@ -2159,29 +2117,19 @@ const PDVPage: React.FC = () => {
       const isFirstItem = carrinho.length === 0;
       if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
         setCriandoVenda(true);
-        console.log('🚀 CRIACAO: Iniciando criação da venda em andamento...');
-
         try {
           const vendaCriada = await criarVendaEmAndamento();
-          console.log('🔍 CRIACAO: Resultado da criação:', vendaCriada);
 
           if (!vendaCriada) {
             setCriandoVenda(false);
-            console.error('❌ CRIACAO: Falha ao criar venda em andamento - função retornou false');
             toast.error('Erro ao criar venda. Tente novamente.');
             return;
           }
 
-          console.log('⏳ CRIACAO: Aguardando transação ser commitada...');
           await new Promise(resolve => setTimeout(resolve, 200));
           setCriandoVenda(false);
-
-          console.log('✅ CRIACAO: Venda em andamento criada com sucesso');
-          console.log('✅ CRIACAO: Estado vendaEmAndamento após criação:', vendaEmAndamento);
         } catch (error) {
           setCriandoVenda(false);
-          console.error('❌ CRIACAO: Erro durante criação da venda:', error);
-          console.error('❌ CRIACAO: Stack trace:', (error as Error).stack);
           toast.error('Erro ao criar venda: ' + (error as Error).message);
           return;
         }
@@ -2319,7 +2267,6 @@ const PDVPage: React.FC = () => {
         preco: item.preco // Usar preço da tabela em vez do preço padrão
       })) || [];
 
-      console.log(`📋 Produtos carregados para tabela "${tabelaPrecoSelecionada}":`, produtosFormatados.length);
       return produtosFormatados;
 
     } catch (error) {
@@ -2560,7 +2507,6 @@ const PDVPage: React.FC = () => {
         chave_pix: forma.chave_pix
       }));
 
-      console.log('✅ Formas de pagamento carregadas da empresa:', formasTransformadas);
       setFormasPagamento(formasTransformadas);
 
       // Selecionar primeira forma como padrão
@@ -2571,11 +2517,9 @@ const PDVPage: React.FC = () => {
         );
 
         if (dinheiro) {
-          console.log('✅ Dinheiro selecionado como forma de pagamento padrão');
           setFormaPagamentoSelecionada(dinheiro.id);
         } else {
           // Se não encontrar "Dinheiro", usar a primeira forma disponível
-          console.log('⚠️ Dinheiro não encontrado, usando primeira forma de pagamento:', formasTransformadas[0].nome);
           setFormaPagamentoSelecionada(formasTransformadas[0].id);
         }
       } else {
@@ -7878,7 +7822,6 @@ const PDVPage: React.FC = () => {
   const carregarVendasAbertas = async (): Promise<void> => {
     try {
       setCarregandoVendasAbertas(true);
-      console.log('🔍 Carregando vendas abertas...');
 
       // Obter dados do usuário
       const { data: userData } = await supabase.auth.getUser();
@@ -7945,7 +7888,6 @@ const PDVPage: React.FC = () => {
 
       setVendasAbertas(vendasComItens);
       setContadorVendasAbertas(vendasComItens.length);
-      console.log('✅ Vendas abertas carregadas:', vendasComItens.length);
 
     } catch (error) {
       console.error('❌ Erro ao carregar vendas abertas:', error);

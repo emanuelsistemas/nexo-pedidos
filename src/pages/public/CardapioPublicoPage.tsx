@@ -603,19 +603,45 @@ const CardapioPublicoPage: React.FC = () => {
 
     // Verificar desconto por quantidade (só aplica se quantidade mínima for atingida)
     const temDescontoQuantidade = produto.desconto_quantidade &&
-      produto.exibir_desconto_qtd_minimo_no_cardapio_digital &&
       produto.quantidade_minima &&
       produto.quantidade_minima > 0;
 
-    if (temDescontoQuantidade && !temPromocaoTradicional) { // Não aplicar ambos
+    // ✅ APLICAR DESCONTO POR QUANTIDADE SOBRE O PREÇO PROMOCIONAL (SE HOUVER)
+    if (temDescontoQuantidade) { // Aplicar sempre que houver desconto por quantidade
       const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
 
+      console.log('🔍 DEBUG - Desconto por quantidade:', {
+        produtoId,
+        produtoNome: produto.nome,
+        quantidadeSelecionada,
+        quantidadeMinima: produto.quantidade_minima,
+        tipoDesconto: produto.tipo_desconto_quantidade,
+        valorDesconto: produto.percentual_desconto_quantidade || produto.valor_desconto_quantidade,
+        precoBase,
+        temDescontoQuantidade,
+        temPromocaoTradicional
+      });
+
       if (quantidadeSelecionada >= produto.quantidade_minima!) {
+        // ✅ APLICAR DESCONTO SOBRE O PREÇO ATUAL (que já pode ter promoção aplicada)
         if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
-          const valorDesconto = (precoBase * produto.percentual_desconto_quantidade) / 100;
-          precoFinal = precoBase - valorDesconto;
+          const valorDesconto = (precoFinal * produto.percentual_desconto_quantidade) / 100;
+          const precoAnterior = precoFinal;
+          precoFinal = precoFinal - valorDesconto;
+          console.log('✅ Desconto percentual aplicado sobre valor promocional:', {
+            precoAnterior,
+            percentual: produto.percentual_desconto_quantidade,
+            valorDesconto,
+            precoFinal
+          });
         } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
-          precoFinal = Math.max(0, precoBase - produto.valor_desconto_quantidade);
+          const precoAnterior = precoFinal;
+          precoFinal = Math.max(0, precoFinal - produto.valor_desconto_quantidade);
+          console.log('✅ Desconto valor aplicado sobre valor promocional:', {
+            precoAnterior,
+            valorDesconto: produto.valor_desconto_quantidade,
+            precoFinal
+          });
         }
       }
     }
@@ -5098,7 +5124,22 @@ const CardapioPublicoPage: React.FC = () => {
                             if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
                               const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
                               if (tabelaEscolhida) {
-                                // ✅ VERIFICAR DESCONTO POR QUANTIDADE MÍNIMA PRIMEIRO (SOBRE PREÇO DA TABELA)
+                                // ✅ PRIMEIRO APLICAR PROMOÇÃO TRADICIONAL (SE HOUVER)
+                                let precoAtual = tabelaEscolhida.preco;
+
+                                // Verificar se produto está em promoção tradicional
+                                const temPromocao = produto.promocao &&
+                                  produto.exibir_promocao_cardapio &&
+                                  produto.tipo_desconto &&
+                                  produto.valor_desconto !== undefined &&
+                                  produto.valor_desconto > 0;
+
+                                if (temPromocao) {
+                                  // Aplicar promoção sobre preço da tabela
+                                  precoAtual = calcularValorFinal(tabelaEscolhida.preco, produto.tipo_desconto, produto.valor_desconto);
+                                }
+
+                                // ✅ DEPOIS VERIFICAR DESCONTO POR QUANTIDADE (SOBRE VALOR PROMOCIONAL)
                                 const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
                                 const temDescontoQuantidade = produto.desconto_quantidade &&
                                   produto.quantidade_minima &&
@@ -5107,22 +5148,22 @@ const CardapioPublicoPage: React.FC = () => {
                                    (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
 
                                 if (temDescontoQuantidade) {
-                                  // Aplicar desconto por quantidade sobre preço da tabela
-                                  let valorFinal = tabelaEscolhida.preco;
+                                  // Aplicar desconto por quantidade sobre preço atual (com ou sem promoção)
+                                  let valorFinal = precoAtual;
                                   if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
-                                    const valorDesconto = (tabelaEscolhida.preco * produto.percentual_desconto_quantidade) / 100;
-                                    valorFinal = tabelaEscolhida.preco - valorDesconto;
+                                    const valorDesconto = (precoAtual * produto.percentual_desconto_quantidade) / 100;
+                                    valorFinal = precoAtual - valorDesconto;
                                   } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
-                                    valorFinal = tabelaEscolhida.preco - produto.valor_desconto_quantidade;
+                                    valorFinal = precoAtual - produto.valor_desconto_quantidade;
                                   }
 
                                   return (
                                     <div className="flex flex-col">
-                                      {/* Preço da tabela original riscado */}
+                                      {/* Preço antes do desconto por quantidade riscado */}
                                       <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                                        {formatarPreco(tabelaEscolhida.preco)}
+                                        {formatarPreco(precoAtual)}
                                       </div>
-                                      {/* Preço da tabela com desconto por quantidade */}
+                                      {/* Preço com desconto por quantidade */}
                                       <div className="text-2xl font-bold text-green-500">
                                         {formatarPreco(valorFinal)}
                                       </div>
@@ -5130,30 +5171,8 @@ const CardapioPublicoPage: React.FC = () => {
                                   );
                                 }
 
-                                // ✅ VERIFICAR SE PRODUTO TEM PROMOÇÃO TRADICIONAL PARA APLICAR SOBRE PREÇO DA TABELA
-                                const temPromocao = produto.promocao &&
-                                  produto.exibir_promocao_cardapio &&
-                                  produto.tipo_desconto &&
-                                  produto.valor_desconto !== undefined &&
-                                  produto.valor_desconto > 0;
-
-                                if (temPromocao) {
-                                  // Calcular valor final aplicando promoção sobre preço da tabela
-                                  const valorFinal = calcularValorFinal(tabelaEscolhida.preco, produto.tipo_desconto, produto.valor_desconto);
-
-                                  return (
-                                    <div className="flex flex-col">
-                                      {/* Preço da tabela original riscado */}
-                                      <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                                        {formatarPreco(tabelaEscolhida.preco)}
-                                      </div>
-                                      {/* Preço promocional da tabela */}
-                                      <div className="text-2xl font-bold text-green-500">
-                                        {formatarPreco(valorFinal)}
-                                      </div>
-                                    </div>
-                                  );
-                                } else {
+                                // Se não tem desconto por quantidade, mostrar apenas promoção ou preço normal
+                                if (!temPromocao) {
                                   // Preço da tabela sem promoção
                                   return (
                                     <div className={`text-lg font-bold ${
@@ -5162,13 +5181,42 @@ const CardapioPublicoPage: React.FC = () => {
                                       {formatarPreco(tabelaEscolhida.preco)}
                                     </div>
                                   );
+                                } else {
+                                  // Mostrar apenas promoção tradicional (sem desconto por quantidade)
+                                  return (
+                                    <div className="flex flex-col">
+                                      {/* Preço da tabela original riscado */}
+                                      <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        {formatarPreco(tabelaEscolhida.preco)}
+                                      </div>
+                                      {/* Preço promocional da tabela */}
+                                      <div className="text-2xl font-bold text-green-500">
+                                        {formatarPreco(precoAtual)}
+                                      </div>
+                                    </div>
+                                  );
                                 }
                               }
                             }
 
                             // Se não há tabelas de preços, mostrar preço normal
                             if (tabelasComPrecos.length === 0) {
-                            // ✅ VERIFICAR DESCONTO POR QUANTIDADE MÍNIMA PRIMEIRO
+                            // ✅ PRIMEIRO APLICAR PROMOÇÃO TRADICIONAL (SE HOUVER)
+                            let precoAtual = produto.preco;
+
+                            // Verificar se produto está em promoção tradicional
+                            const temPromocaoTradicional = produto.promocao &&
+                              produto.exibir_promocao_cardapio &&
+                              produto.tipo_desconto &&
+                              produto.valor_desconto !== undefined &&
+                              produto.valor_desconto > 0;
+
+                            if (temPromocaoTradicional) {
+                              // Aplicar promoção sobre preço padrão
+                              precoAtual = calcularValorFinal(produto.preco, produto.tipo_desconto, produto.valor_desconto);
+                            }
+
+                            // ✅ DEPOIS VERIFICAR DESCONTO POR QUANTIDADE (SOBRE VALOR PROMOCIONAL)
                             const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
                             const temDescontoQuantidade = produto.desconto_quantidade &&
                               produto.quantidade_minima &&
@@ -5177,20 +5225,20 @@ const CardapioPublicoPage: React.FC = () => {
                                (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
 
                             if (temDescontoQuantidade) {
-                              // Aplicar desconto por quantidade
-                              let valorFinal = produto.preco;
+                              // Aplicar desconto por quantidade sobre preço atual (com ou sem promoção)
+                              let valorFinal = precoAtual;
                               if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
-                                const valorDesconto = (produto.preco * produto.percentual_desconto_quantidade) / 100;
-                                valorFinal = produto.preco - valorDesconto;
+                                const valorDesconto = (precoAtual * produto.percentual_desconto_quantidade) / 100;
+                                valorFinal = precoAtual - valorDesconto;
                               } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
-                                valorFinal = produto.preco - produto.valor_desconto_quantidade;
+                                valorFinal = precoAtual - produto.valor_desconto_quantidade;
                               }
 
                               return (
                                 <div className="flex flex-col">
-                                  {/* Preço original riscado */}
+                                  {/* Preço antes do desconto por quantidade riscado */}
                                   <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                                    {formatarPreco(produto.preco)}
+                                    {formatarPreco(precoAtual)}
                                   </div>
                                   {/* Preço com desconto por quantidade */}
                                   <div className="text-2xl font-bold text-green-500">
@@ -5200,20 +5248,16 @@ const CardapioPublicoPage: React.FC = () => {
                               );
                             }
 
-                            // Verificar se produto está em promoção tradicional
-                            const temPromocao = produto.promocao &&
-                                              produto.exibir_promocao_cardapio &&
-                                              produto.tipo_desconto &&
-                                              produto.valor_desconto !== undefined &&
-                                              produto.valor_desconto > 0;
-
-                            if (temPromocao) {
-                              // Calcular valor final e desconto
-                              const valorFinal = calcularValorFinal(produto.preco, produto.tipo_desconto, produto.valor_desconto);
-                              const descontoExibicao = produto.tipo_desconto === 'percentual'
-                                ? `${produto.valor_desconto}% OFF`
-                                : `- ${formatarPreco(produto.valor_desconto)}`;
-
+                            // Se não tem desconto por quantidade nem promoção, mostrar preço normal
+                            if (!temPromocaoTradicional) {
+                              // Preço normal sem promoção
+                              return (
+                                <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                                  {formatarPreco(produto.preco)}
+                                </span>
+                              );
+                            } else {
+                              // Mostrar apenas promoção tradicional (sem desconto por quantidade)
                               return (
                                 <div className="flex flex-col">
                                   {/* Preço original riscado */}
@@ -5222,16 +5266,9 @@ const CardapioPublicoPage: React.FC = () => {
                                   </div>
                                   {/* Preço promocional */}
                                   <div className="text-2xl font-bold text-green-500">
-                                    {formatarPreco(valorFinal)}
+                                    {formatarPreco(precoAtual)}
                                   </div>
                                 </div>
-                              );
-                            } else {
-                              // Preço normal sem promoção
-                              return (
-                                <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
-                                  {formatarPreco(produto.preco)}
-                                </span>
                               );
                             }
                             }
