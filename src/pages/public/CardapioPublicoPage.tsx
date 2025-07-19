@@ -8172,7 +8172,7 @@ const CardapioPublicoPage: React.FC = () => {
                 <span className={`text-lg font-bold ${
                   config.modo_escuro ? 'text-white' : 'text-gray-900'
                 }`}>
-                  Total Geral:
+                  Total geral dos produtos:
                 </span>
                 <span className={`text-xl font-bold ${
                   config.modo_escuro ? 'text-green-400' : 'text-green-600'
