@@ -329,11 +329,11 @@ const AdicionaisPage: React.FC = () => {
         .from('opcoes_adicionais')
         .select(`
           *,
-          itens:opcoes_adicionais_itens(*)
+          itens:opcoes_adicionais_itens(*).order(created_at.desc)
         `)
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('deletado', false)
-        .order('nome');
+        .order('created_at', { ascending: false }); // ✅ Novos no topo, editados mantêm posição
 
       if (opcoesError) {
         console.error('Erro ao carregar opções adicionais:', opcoesError);
