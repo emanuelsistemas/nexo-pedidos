@@ -5761,8 +5761,11 @@ const PDVPage: React.FC = () => {
       return false; // Sem data definida, promoção não vence
     }
 
+    // ✅ CORREÇÃO: Usar split para evitar problemas de fuso horário
+    const [ano, mes, dia] = produto.promocao_data_fim.split('-');
+    const dataFim = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+
     const hoje = new Date();
-    const dataFim = new Date(produto.promocao_data_fim);
 
     // Zerar as horas para comparar apenas as datas
     hoje.setHours(0, 0, 0, 0);
@@ -5777,8 +5780,11 @@ const PDVPage: React.FC = () => {
       return null;
     }
 
+    // ✅ CORREÇÃO: Usar split para evitar problemas de fuso horário
+    const [ano, mes, dia] = produto.promocao_data_fim.split('-');
+    const dataFim = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+
     const hoje = new Date();
-    const dataFim = new Date(produto.promocao_data_fim);
 
     // Zerar as horas para comparar apenas as datas
     hoje.setHours(0, 0, 0, 0);
@@ -5792,7 +5798,12 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA FUNÇÃO: Formatar data para exibição
   const formatarDataPromocao = (dataString: string) => {
-    const data = new Date(dataString);
+    if (!dataString) return '';
+
+    // ✅ CORREÇÃO: Usar split para evitar problemas de fuso horário
+    const [ano, mes, dia] = dataString.split('-');
+    const data = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+
     return data.toLocaleDateString('pt-BR');
   };
 
@@ -11762,14 +11773,8 @@ const PDVPage: React.FC = () => {
                                                     {/* ✅ EXIBIR DATA E DIAS RESTANTES SE DEFINIDOS */}
                                                     {item.produto.promocao_data_habilitada && item.produto.promocao_data_fim && (
                                                       <div className="mt-1">
+
                                                         <div>Válida até: {formatarDataPromocao(item.produto.promocao_data_fim)}</div>
-                                                        {/* DEBUG: Verificar dados */}
-                                                        {console.log('🔍 DEBUG Produto:', item.produto.nome, {
-                                                          promocao_data_habilitada: item.produto.promocao_data_habilitada,
-                                                          promocao_data_inicio: item.produto.promocao_data_inicio,
-                                                          promocao_data_fim: item.produto.promocao_data_fim,
-                                                          promocao_data_cardapio: item.produto.promocao_data_cardapio
-                                                        })}
                                                         {(() => {
                                                           const diasRestantes = calcularDiasRestantes(item.produto);
                                                           if (diasRestantes !== null) {

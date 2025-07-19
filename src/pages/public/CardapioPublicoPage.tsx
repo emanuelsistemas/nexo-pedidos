@@ -188,9 +188,11 @@ interface TabelasPrecosSliderProps {
   config: {modo_escuro: boolean};
   formatarPreco: (preco: number) => string;
   onSlideChange?: (currentSlide: number, totalSlides: number) => void;
+  produto?: Produto; // ✅ ADICIONAR PRODUTO PARA ACESSAR INFORMAÇÕES DE PROMOÇÃO
+  calcularValorFinal?: (preco: number, tipoDesconto: string, valorDesconto: number) => number; // ✅ FUNÇÃO PARA CALCULAR PROMOÇÃO
 }
 
-const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, config, formatarPreco, onSlideChange, tabelaSelecionada, onTabelaSelect }) => {
+const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, config, formatarPreco, onSlideChange, tabelaSelecionada, onTabelaSelect, produto, calcularValorFinal }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [hasShownPeek, setHasShownPeek] = useState(false);
@@ -250,11 +252,56 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
               }`}>
                 {tabela.nome}
               </div>
-              <div className={`text-lg font-bold ${
-                config.modo_escuro ? 'text-green-400' : 'text-green-600'
-              }`}>
-                {formatarPreco(tabela.preco)}
-              </div>
+              {/* ✅ VERIFICAR SE PRODUTO TEM PROMOÇÃO PARA APLICAR SOBRE PREÇO DA TABELA */}
+              {(() => {
+                if (!produto || !calcularValorFinal) {
+                  // Fallback: mostrar preço normal se não tiver produto ou função
+                  return (
+                    <div className={`text-lg font-bold ${
+                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                    }`}>
+                      {formatarPreco(tabela.preco)}
+                    </div>
+                  );
+                }
+
+                const temPromocao = produto.promocao &&
+                  produto.exibir_promocao_cardapio &&
+                  produto.tipo_desconto &&
+                  produto.valor_desconto !== undefined &&
+                  produto.valor_desconto > 0;
+
+                if (temPromocao) {
+                  // Calcular valor final aplicando promoção sobre preço da tabela
+                  const valorFinal = calcularValorFinal(tabela.preco, produto.tipo_desconto, produto.valor_desconto);
+
+                  return (
+                    <div className="flex flex-col">
+                      {/* Preço da tabela original riscado */}
+                      <div className={`text-xs line-through ${
+                        config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                      }`}>
+                        {formatarPreco(tabela.preco)}
+                      </div>
+                      {/* Preço promocional da tabela */}
+                      <div className={`text-lg font-bold ${
+                        config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                      }`}>
+                        {formatarPreco(valorFinal)}
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // Preço da tabela sem promoção
+                  return (
+                    <div className={`text-lg font-bold ${
+                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                    }`}>
+                      {formatarPreco(tabela.preco)}
+                    </div>
+                  );
+                }
+              })()}
               {/* Tag de quantidade de sabores */}
               {tabela.quantidade_sabores > 1 && (
                 <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
@@ -4878,13 +4925,39 @@ const CardapioPublicoPage: React.FC = () => {
                               if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
                                 const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
                                 if (tabelaEscolhida) {
-                                  return (
-                                    <div className={`text-lg font-bold ${
-                                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                                    }`}>
-                                      {formatarPreco(tabelaEscolhida.preco)}
-                                    </div>
-                                  );
+                                  // ✅ VERIFICAR SE PRODUTO TEM PROMOÇÃO PARA APLICAR SOBRE PREÇO DA TABELA
+                                  const temPromocao = produto.promocao &&
+                                    produto.exibir_promocao_cardapio &&
+                                    produto.tipo_desconto &&
+                                    produto.valor_desconto !== undefined &&
+                                    produto.valor_desconto > 0;
+
+                                  if (temPromocao) {
+                                    // Calcular valor final aplicando promoção sobre preço da tabela
+                                    const valorFinal = calcularValorFinal(tabelaEscolhida.preco, produto.tipo_desconto, produto.valor_desconto);
+
+                                    return (
+                                      <div className="flex flex-col">
+                                        {/* Preço da tabela original riscado */}
+                                        <div className={`text-sm line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                          {formatarPreco(tabelaEscolhida.preco)}
+                                        </div>
+                                        {/* Preço promocional da tabela */}
+                                        <div className="text-lg font-bold text-green-500">
+                                          {formatarPreco(valorFinal)}
+                                        </div>
+                                      </div>
+                                    );
+                                  } else {
+                                    // Preço da tabela sem promoção
+                                    return (
+                                      <div className={`text-lg font-bold ${
+                                        config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                      }`}>
+                                        {formatarPreco(tabelaEscolhida.preco)}
+                                      </div>
+                                    );
+                                  }
                                 }
                               }
 
@@ -5025,19 +5098,109 @@ const CardapioPublicoPage: React.FC = () => {
                             if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
                               const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
                               if (tabelaEscolhida) {
-                                return (
-                                  <div className={`text-lg font-bold ${
-                                    config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                                  }`}>
-                                    {formatarPreco(tabelaEscolhida.preco)}
-                                  </div>
-                                );
+                                // ✅ VERIFICAR DESCONTO POR QUANTIDADE MÍNIMA PRIMEIRO (SOBRE PREÇO DA TABELA)
+                                const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
+                                const temDescontoQuantidade = produto.desconto_quantidade &&
+                                  produto.quantidade_minima &&
+                                  quantidadeSelecionada >= produto.quantidade_minima &&
+                                  ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                                   (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                                if (temDescontoQuantidade) {
+                                  // Aplicar desconto por quantidade sobre preço da tabela
+                                  let valorFinal = tabelaEscolhida.preco;
+                                  if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+                                    const valorDesconto = (tabelaEscolhida.preco * produto.percentual_desconto_quantidade) / 100;
+                                    valorFinal = tabelaEscolhida.preco - valorDesconto;
+                                  } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+                                    valorFinal = tabelaEscolhida.preco - produto.valor_desconto_quantidade;
+                                  }
+
+                                  return (
+                                    <div className="flex flex-col">
+                                      {/* Preço da tabela original riscado */}
+                                      <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        {formatarPreco(tabelaEscolhida.preco)}
+                                      </div>
+                                      {/* Preço da tabela com desconto por quantidade */}
+                                      <div className="text-2xl font-bold text-green-500">
+                                        {formatarPreco(valorFinal)}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                // ✅ VERIFICAR SE PRODUTO TEM PROMOÇÃO TRADICIONAL PARA APLICAR SOBRE PREÇO DA TABELA
+                                const temPromocao = produto.promocao &&
+                                  produto.exibir_promocao_cardapio &&
+                                  produto.tipo_desconto &&
+                                  produto.valor_desconto !== undefined &&
+                                  produto.valor_desconto > 0;
+
+                                if (temPromocao) {
+                                  // Calcular valor final aplicando promoção sobre preço da tabela
+                                  const valorFinal = calcularValorFinal(tabelaEscolhida.preco, produto.tipo_desconto, produto.valor_desconto);
+
+                                  return (
+                                    <div className="flex flex-col">
+                                      {/* Preço da tabela original riscado */}
+                                      <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        {formatarPreco(tabelaEscolhida.preco)}
+                                      </div>
+                                      {/* Preço promocional da tabela */}
+                                      <div className="text-2xl font-bold text-green-500">
+                                        {formatarPreco(valorFinal)}
+                                      </div>
+                                    </div>
+                                  );
+                                } else {
+                                  // Preço da tabela sem promoção
+                                  return (
+                                    <div className={`text-lg font-bold ${
+                                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                    }`}>
+                                      {formatarPreco(tabelaEscolhida.preco)}
+                                    </div>
+                                  );
+                                }
                               }
                             }
 
                             // Se não há tabelas de preços, mostrar preço normal
                             if (tabelasComPrecos.length === 0) {
-                            // Verificar se produto está em promoção
+                            // ✅ VERIFICAR DESCONTO POR QUANTIDADE MÍNIMA PRIMEIRO
+                            const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
+                            const temDescontoQuantidade = produto.desconto_quantidade &&
+                              produto.quantidade_minima &&
+                              quantidadeSelecionada >= produto.quantidade_minima &&
+                              ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                               (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                            if (temDescontoQuantidade) {
+                              // Aplicar desconto por quantidade
+                              let valorFinal = produto.preco;
+                              if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+                                const valorDesconto = (produto.preco * produto.percentual_desconto_quantidade) / 100;
+                                valorFinal = produto.preco - valorDesconto;
+                              } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+                                valorFinal = produto.preco - produto.valor_desconto_quantidade;
+                              }
+
+                              return (
+                                <div className="flex flex-col">
+                                  {/* Preço original riscado */}
+                                  <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    {formatarPreco(produto.preco)}
+                                  </div>
+                                  {/* Preço com desconto por quantidade */}
+                                  <div className="text-2xl font-bold text-green-500">
+                                    {formatarPreco(valorFinal)}
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Verificar se produto está em promoção tradicional
                             const temPromocao = produto.promocao &&
                                               produto.exibir_promocao_cardapio &&
                                               produto.tipo_desconto &&
@@ -5382,14 +5545,37 @@ const CardapioPublicoPage: React.FC = () => {
                       return null;
                     }
 
+                    // ✅ VERIFICAR SE TEM DESCONTO POR QUANTIDADE APLICADO
+                    const temDescontoQuantidade = produto.desconto_quantidade &&
+                      produto.quantidade_minima &&
+                      quantidadeSelecionada >= produto.quantidade_minima &&
+                      ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                       (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                    let textoDesconto = '';
+                    if (temDescontoQuantidade) {
+                      if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+                        textoDesconto = ` (${produto.percentual_desconto_quantidade}% OFF aplicado)`;
+                      } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+                        textoDesconto = ` (${formatarPreco(produto.valor_desconto_quantidade)} OFF aplicado)`;
+                      }
+                    }
+
                     return (
                       <div className="mt-4 w-full">
                         <button
                           onClick={() => adicionarAoCarrinho(produto.id)}
-                          className="w-full py-3 px-4 rounded-xl text-base font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg hover:shadow-xl"
+                          className="w-full py-3 px-4 rounded-xl text-base font-semibold transition-all duration-200 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg hover:shadow-xl"
                         >
-                          <ShoppingBag size={18} />
-                          <span>{formatarPreco(valorTotal)} - Adicionar no carrinho</span>
+                          <div className="flex items-center gap-2">
+                            <ShoppingBag size={18} />
+                            <span>{formatarPreco(valorTotal)} - Adicionar no carrinho</span>
+                          </div>
+                          {textoDesconto && (
+                            <div className="text-xs opacity-90 font-medium">
+                              {textoDesconto}
+                            </div>
+                          )}
                         </button>
                       </div>
                     );
@@ -5536,13 +5722,49 @@ const CardapioPublicoPage: React.FC = () => {
                                       }`}>
                                         {tabela.nome}
                                       </div>
-                                      <div className={`text-lg font-bold ${
-                                        isSelected
-                                          ? config.modo_escuro ? 'text-green-300' : 'text-green-700'
-                                          : config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                                      }`}>
-                                        {formatarPreco(tabela.preco)}
-                                      </div>
+                                      {/* ✅ VERIFICAR SE PRODUTO TEM PROMOÇÃO PARA APLICAR SOBRE PREÇO DA TABELA */}
+                                      {(() => {
+                                        const temPromocao = produto.promocao &&
+                                          produto.exibir_promocao_cardapio &&
+                                          produto.tipo_desconto &&
+                                          produto.valor_desconto !== undefined &&
+                                          produto.valor_desconto > 0;
+
+                                        if (temPromocao) {
+                                          // Calcular valor final aplicando promoção sobre preço da tabela
+                                          const valorFinal = calcularValorFinal(tabela.preco, produto.tipo_desconto, produto.valor_desconto);
+
+                                          return (
+                                            <div className="flex flex-col">
+                                              {/* Preço da tabela original riscado */}
+                                              <div className={`text-xs line-through ${
+                                                config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                                              }`}>
+                                                {formatarPreco(tabela.preco)}
+                                              </div>
+                                              {/* Preço promocional da tabela */}
+                                              <div className={`text-lg font-bold ${
+                                                isSelected
+                                                  ? config.modo_escuro ? 'text-green-300' : 'text-green-700'
+                                                  : config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                              }`}>
+                                                {formatarPreco(valorFinal)}
+                                              </div>
+                                            </div>
+                                          );
+                                        } else {
+                                          // Preço da tabela sem promoção
+                                          return (
+                                            <div className={`text-lg font-bold ${
+                                              isSelected
+                                                ? config.modo_escuro ? 'text-green-300' : 'text-green-700'
+                                                : config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                            }`}>
+                                              {formatarPreco(tabela.preco)}
+                                            </div>
+                                          );
+                                        }
+                                      })()}
                                       {/* Tag de quantidade de sabores */}
                                       {tabela.quantidade_sabores > 1 && (
                                         <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
@@ -5574,6 +5796,8 @@ const CardapioPublicoPage: React.FC = () => {
                                     [produto.id]: tabelaId
                                   }));
                                 }}
+                                produto={produto} // ✅ PASSAR PRODUTO PARA ACESSAR PROMOÇÕES
+                                calcularValorFinal={calcularValorFinal} // ✅ PASSAR FUNÇÃO DE CÁLCULO
                               />
                             )}
                           </div>
