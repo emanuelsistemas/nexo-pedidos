@@ -123,7 +123,7 @@ class TaxaEntregaService {
   }
 
   /**
-   * Calcula taxa por distância usando Routes API
+   * Calcula taxa por distância usando Routes API + faixas configuradas
    */
   private async calcularPorDistancia(
     config: TaxaEntregaConfig,
@@ -135,7 +135,7 @@ class TaxaEntregaService {
         return null;
       }
 
-      // Calcular distância usando o serviço
+      // 1. Calcular distância real usando Routes API
       const distanceResult: DistanceResult = await distanceService.calculateDistance(
         config.endereco_base,
         cepDestino
@@ -147,49 +147,49 @@ class TaxaEntregaService {
       }
 
       const distanciaKm = distanceResult.distance / 1000;
-      const tempoMinutos = Math.round(distanceResult.duration / 60);
 
-      // Verificar se está dentro da distância máxima
-      if (config.distancia_maxima && distanciaKm > config.distancia_maxima) {
-        console.log('❌ Destino fora da área de entrega:', {
-          distancia: distanciaKm,
-          maximo: config.distancia_maxima
-        });
-
-        // Retornar informações mesmo quando fora da área
-        return {
-          valor: 0,
-          tempo_estimado: tempoMinutos,
-          distancia_km: distanciaKm,
-          metodo: 'distancia',
-          fora_area: true,
-          distancia_maxima: config.distancia_maxima,
-          detalhes: {
-            success: true,
-            method: distanceResult.method,
-            endereco_base: config.endereco_base,
-            endereco_destino: cepDestino
-          }
-        };
-      }
-
-      // Calcular valor baseado na distância
-      const valorCalculado = this.calcularValorPorDistancia(
-        distanciaKm,
-        config.valor_km || 2.0,
-        config.valor_minimo || 5.0
-      );
-
-      console.log('✅ Taxa calculada por distância:', {
+      console.log('📏 Distância calculada via Routes API:', {
         distancia: `${distanciaKm.toFixed(2)} km`,
-        tempo: `${tempoMinutos} min`,
-        valor: `R$ ${valorCalculado.toFixed(2)}`,
         metodo: distanceResult.method
       });
 
+      // 2. Buscar faixa de distância correspondente na tabela da empresa
+      const faixaEncontrada = await this.buscarFaixaDistancia(config.empresa_id, distanciaKm);
+
+      if (!faixaEncontrada) {
+        console.log('❌ Nenhuma faixa de distância encontrada para:', distanciaKm, 'km');
+
+        // Verificar se está fora da distância máxima configurada
+        if (config.distancia_maxima && distanciaKm > config.distancia_maxima) {
+          return {
+            valor: 0,
+            tempo_estimado: 0,
+            distancia_km: distanciaKm,
+            metodo: 'distancia',
+            fora_area: true,
+            distancia_maxima: config.distancia_maxima,
+            detalhes: {
+              success: true,
+              method: distanceResult.method,
+              endereco_base: config.endereco_base,
+              endereco_destino: cepDestino
+            }
+          };
+        }
+
+        return null;
+      }
+
+      console.log('✅ Faixa de distância encontrada:', {
+        faixa: `Até ${faixaEncontrada.km} km`,
+        valor: `R$ ${faixaEncontrada.valor}`,
+        tempo: `${faixaEncontrada.tempo_entrega} min`,
+        distancia_real: `${distanciaKm.toFixed(2)} km`
+      });
+
       return {
-        valor: valorCalculado,
-        tempo_estimado: tempoMinutos,
+        valor: faixaEncontrada.valor,
+        tempo_estimado: faixaEncontrada.tempo_entrega,
         distancia_km: distanciaKm,
         metodo: 'distancia',
         detalhes: {
@@ -207,16 +207,47 @@ class TaxaEntregaService {
   }
 
   /**
-   * Calcula valor baseado na distância
+   * Busca a faixa de distância correspondente na tabela da empresa
    */
-  private calcularValorPorDistancia(
-    distanciaKm: number,
-    valorPorKm: number,
-    valorMinimo: number
-  ): number {
-    const valorCalculado = distanciaKm * valorPorKm;
-    return Math.max(valorCalculado, valorMinimo);
+  private async buscarFaixaDistancia(
+    empresaId: string,
+    distanciaKm: number
+  ): Promise<TaxaEntregaItem | null> {
+    try {
+      // Buscar todas as faixas de distância da empresa, ordenadas por km
+      const { data: faixas } = await supabase
+        .from('taxa_entrega')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .not('km', 'is', null)
+        .order('km', { ascending: true });
+
+      if (!faixas || faixas.length === 0) {
+        console.log('❌ Nenhuma faixa de distância configurada para a empresa');
+        return null;
+      }
+
+      console.log('🔍 Faixas disponíveis:', faixas.map(f => `Até ${f.km}km: R$${f.valor} (${f.tempo_entrega}min)`));
+
+      // Encontrar a primeira faixa que comporta a distância
+      for (const faixa of faixas) {
+        if (distanciaKm <= faixa.km) {
+          console.log(`✅ Distância ${distanciaKm.toFixed(2)}km se encaixa na faixa "Até ${faixa.km}km"`);
+          return faixa;
+        }
+      }
+
+      // Se não encontrou nenhuma faixa, está fora da área de entrega
+      console.log(`❌ Distância ${distanciaKm.toFixed(2)}km excede todas as faixas configuradas`);
+      return null;
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar faixa de distância:', error);
+      return null;
+    }
   }
+
+
 
   /**
    * Busca configuração de taxa de entrega da empresa

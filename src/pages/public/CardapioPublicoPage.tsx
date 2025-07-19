@@ -724,6 +724,13 @@ const CardapioPublicoPage: React.FC = () => {
   const [calculoTaxa, setCalculoTaxa] = useState<CalculoTaxaResult | null>(null);
   const [calculandoTaxa, setCalculandoTaxa] = useState(false);
   const [cepForaArea, setCepForaArea] = useState(false);
+  const [modalConfirmacaoEndereco, setModalConfirmacaoEndereco] = useState(false);
+  const [enderecoSalvo, setEnderecoSalvo] = useState<{
+    cep: string;
+    endereco: any;
+    taxa: CalculoTaxaResult;
+  } | null>(null);
+  const [validandoEnderecoSalvo, setValidandoEnderecoSalvo] = useState(false);
 
   // Estados para modal de configuração individual (mantendo apenas os necessários)
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
@@ -941,6 +948,103 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
+  // Validar endereço salvo no localStorage
+  const validarEnderecoSalvo = async (empresaIdParam?: string) => {
+    console.log('🔍 VALIDANDO ENDEREÇO SALVO - Início');
+    const empresaIdParaUsar = empresaIdParam;
+    console.log('📊 EmpresaId do parâmetro:', empresaIdParam);
+    console.log('📊 EmpresaId do estado (empresaId):', empresaId);
+    console.log('📊 EmpresaId que será usado:', empresaIdParaUsar);
+
+    if (!empresaIdParaUsar) {
+      console.log('❌ Não validou - empresaId não existe');
+      return false;
+    }
+
+    try {
+      setValidandoEnderecoSalvo(true);
+
+      // Buscar dados salvos
+      const cepSalvo = localStorage.getItem(`cep_cliente_${empresaIdParaUsar}`);
+      const enderecoSalvoStr = localStorage.getItem(`endereco_encontrado_${empresaIdParaUsar}`);
+      const taxaSalvaStr = localStorage.getItem(`taxa_entrega_${empresaIdParaUsar}`);
+
+      console.log('🔍 Dados encontrados no localStorage:', {
+        cepSalvo,
+        enderecoSalvo: enderecoSalvoStr ? 'Existe' : 'Não existe',
+        taxaSalva: taxaSalvaStr ? 'Existe' : 'Não existe'
+      });
+
+      if (!cepSalvo || !enderecoSalvoStr || !taxaSalvaStr) {
+        console.log('❌ Dados incompletos no localStorage - retornando false');
+        return false;
+      }
+
+      const enderecoSalvoData = JSON.parse(enderecoSalvoStr);
+      const taxaSalvaData = JSON.parse(taxaSalvaStr);
+
+      console.log('🔍 Dados parseados:', {
+        cepSalvo,
+        enderecoSalvoData,
+        taxaSalvaData: {
+          valor: taxaSalvaData.valor,
+          tempo: taxaSalvaData.tempo_estimado
+        }
+      });
+
+      // Recalcular taxa para verificar se ainda é válida
+      console.log('🔄 Recalculando taxa para validar...');
+      const novaCalculoTaxa = await taxaEntregaService.calcularTaxa(empresaIdParaUsar, cepSalvo);
+
+      if (!novaCalculoTaxa || novaCalculoTaxa.fora_area) {
+        // CEP não é mais atendido
+        console.log('❌ CEP salvo não é mais atendido');
+
+        // Limpar dados salvos
+        localStorage.removeItem(`cep_cliente_${empresaIdParaUsar}`);
+        localStorage.removeItem(`endereco_encontrado_${empresaIdParaUsar}`);
+        localStorage.removeItem(`taxa_entrega_${empresaIdParaUsar}`);
+        localStorage.removeItem(`area_validada_${empresaIdParaUsar}`);
+
+        showMessage('warning', 'Seu endereço não é mais atendido. Por favor, informe um novo CEP.');
+        return false;
+      }
+
+      // Verificar se o preço mudou
+      const precoMudou = Math.abs(novaCalculoTaxa.valor - taxaSalvaData.valor) > 0.01;
+
+      if (precoMudou) {
+        console.log('💰 Preço da taxa mudou:', {
+          anterior: taxaSalvaData.valor,
+          atual: novaCalculoTaxa.valor
+        });
+
+        // Atualizar taxa salva com novo preço
+        localStorage.setItem(`taxa_entrega_${empresaIdParaUsar}`, JSON.stringify(novaCalculoTaxa));
+      } else {
+        console.log('✅ Preço da taxa não mudou');
+      }
+
+      // Configurar dados para modal de confirmação
+      console.log('📍 Configurando dados para modal de confirmação');
+      setEnderecoSalvo({
+        cep: cepSalvo,
+        endereco: enderecoSalvoData,
+        taxa: novaCalculoTaxa
+      });
+
+      console.log('✅ VALIDAÇÃO CONCLUÍDA - Endereço válido');
+      return true;
+
+    } catch (error) {
+      console.error('❌ Erro ao validar endereço salvo:', error);
+      return false;
+    } finally {
+      setValidandoEnderecoSalvo(false);
+      console.log('🔍 VALIDANDO ENDEREÇO SALVO - Fim');
+    }
+  };
+
   const selecionarBairro = async (bairro: string) => {
     setBairroSelecionado(bairro);
 
@@ -959,29 +1063,68 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const confirmarAreaEntrega = () => {
+    console.log('🔥 CONFIRMANDO ÁREA DE ENTREGA - Início');
+    console.log('📊 Dados para salvar:', {
+      empresaId,
+      tipo: taxaEntregaConfig?.tipo,
+      cepCliente,
+      bairroSelecionado,
+      enderecoEncontrado: enderecoEncontrado ? 'Existe' : 'Não existe',
+      calculoTaxa: calculoTaxa ? 'Existe' : 'Não existe'
+    });
+
     if (taxaEntregaConfig?.tipo === 'bairro' && !bairroSelecionado) {
+      console.log('❌ Erro: Bairro não selecionado');
       showMessage('error', 'Por favor, selecione um bairro.');
       return;
     }
 
     if (taxaEntregaConfig?.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa)) {
+      console.log('❌ Erro: CEP inválido ou dados incompletos');
       showMessage('error', 'Por favor, informe um CEP válido e aguarde o cálculo da taxa.');
       return;
     }
 
     // Salvar validação no localStorage
     if (empresaId) {
+      console.log('💾 Salvando no localStorage...');
+
+      // Salvar flag de área validada
       localStorage.setItem(`area_validada_${empresaId}`, 'true');
+      console.log('✅ Salvou area_validada_' + empresaId + ' = true');
+
       if (taxaEntregaConfig?.tipo === 'bairro') {
         localStorage.setItem(`bairro_selecionado_${empresaId}`, bairroSelecionado);
+        console.log('✅ Salvou bairro_selecionado_' + empresaId + ' =', bairroSelecionado);
       } else {
         localStorage.setItem(`cep_cliente_${empresaId}`, cepCliente);
+        console.log('✅ Salvou cep_cliente_' + empresaId + ' =', cepCliente);
+
+        // Salvar também o endereço encontrado
+        if (enderecoEncontrado) {
+          localStorage.setItem(`endereco_encontrado_${empresaId}`, JSON.stringify(enderecoEncontrado));
+          console.log('✅ Salvou endereco_encontrado_' + empresaId + ' =', enderecoEncontrado);
+        } else {
+          console.log('❌ Não salvou endereco_encontrado - não existe');
+        }
       }
 
       // Salvar dados da taxa calculada
       if (calculoTaxa) {
         localStorage.setItem(`taxa_entrega_${empresaId}`, JSON.stringify(calculoTaxa));
+        console.log('✅ Salvou taxa_entrega_' + empresaId + ' =', calculoTaxa);
+      } else {
+        console.log('❌ Não salvou taxa_entrega - não existe');
       }
+
+      // Verificar se realmente salvou
+      console.log('🔍 Verificando se salvou corretamente:');
+      console.log('- area_validada:', localStorage.getItem(`area_validada_${empresaId}`));
+      console.log('- cep_cliente:', localStorage.getItem(`cep_cliente_${empresaId}`));
+      console.log('- endereco_encontrado:', localStorage.getItem(`endereco_encontrado_${empresaId}`) ? 'Existe' : 'Não existe');
+      console.log('- taxa_entrega:', localStorage.getItem(`taxa_entrega_${empresaId}`) ? 'Existe' : 'Não existe');
+    } else {
+      console.log('❌ Não salvou - empresaId não existe');
     }
 
     setAreaValidada(true);
@@ -991,7 +1134,49 @@ const CardapioPublicoPage: React.FC = () => {
       ? `Área confirmada! Taxa: R$ ${calculoTaxa.valor.toFixed(2)} - ${calculoTaxa.tempo_estimado} min`
       : 'Área de entrega confirmada!';
 
+    console.log('🔥 CONFIRMANDO ÁREA DE ENTREGA - Fim');
     showMessage('success', mensagem);
+  };
+
+  // Confirmar endereço salvo
+  const confirmarEnderecoSalvo = () => {
+    if (enderecoSalvo) {
+      setAreaValidada(true);
+      setModalConfirmacaoEndereco(false);
+
+      // Atualizar estados com dados salvos
+      setCepCliente(enderecoSalvo.cep);
+      setEnderecoEncontrado(enderecoSalvo.endereco);
+      setCalculoTaxa(enderecoSalvo.taxa);
+
+      showMessage('success', `Endereço confirmado! Taxa: R$ ${enderecoSalvo.taxa.valor.toFixed(2)}`);
+    }
+  };
+
+  // Alterar endereço (limpar dados salvos e abrir modal)
+  const alterarEndereco = () => {
+    if (empresaId) {
+      // Limpar dados salvos
+      localStorage.removeItem(`area_validada_${empresaId}`);
+      localStorage.removeItem(`cep_cliente_${empresaId}`);
+      localStorage.removeItem(`endereco_encontrado_${empresaId}`);
+      localStorage.removeItem(`taxa_entrega_${empresaId}`);
+      localStorage.removeItem(`bairro_selecionado_${empresaId}`);
+    }
+
+    // Limpar estados
+    setEnderecoSalvo(null);
+    setCepCliente('');
+    setEnderecoEncontrado(null);
+    setCalculoTaxa(null);
+    setBairroSelecionado('');
+    setCepForaArea(false);
+
+    // Fechar modal de confirmação e abrir modal de validação
+    setModalConfirmacaoEndereco(false);
+    setModalAreaEntregaAberto(true);
+
+    showMessage('info', 'Informe seu novo endereço de entrega.');
   };
 
   // Filtrar bairros com base na pesquisa
@@ -1441,23 +1626,58 @@ const CardapioPublicoPage: React.FC = () => {
           }
         }
 
-        // Mostrar modal de validação de área apenas se não foi validada ainda
+        // Verificar se há endereço salvo e validá-lo
         const areaJaValidada = localStorage.getItem(`area_validada_${empresaComLogo.id}`);
-        console.log('✅ Área já validada?', areaJaValidada);
-        console.log('🏢 Empresa ID:', empresaComLogo.id);
-        console.log('🚚 Taxa config:', taxaConfigData);
+        const cepSalvoDebug = localStorage.getItem(`cep_cliente_${empresaComLogo.id}`);
+        const enderecoSalvoDebug = localStorage.getItem(`endereco_encontrado_${empresaComLogo.id}`);
+        const taxaSalvaDebug = localStorage.getItem(`taxa_entrega_${empresaComLogo.id}`);
 
-        // TESTE: Sempre mostrar modal para debug
-        setTimeout(() => {
-          console.log('📋 Forçando abertura do modal para teste');
-          setModalAreaEntregaAberto(true);
-        }, 2000);
+        console.log('🔍 DEBUG - Estado do localStorage:', {
+          areaJaValidada,
+          cepSalvo: cepSalvoDebug,
+          enderecoSalvo: enderecoSalvoDebug ? 'Existe' : 'Não existe',
+          taxaSalva: taxaSalvaDebug ? 'Existe' : 'Não existe',
+          empresaId: empresaComLogo.id
+        });
 
-        if (!areaJaValidada) {
-          console.log('📋 Abrindo modal de validação de área');
-          setModalAreaEntregaAberto(true);
+        if (areaJaValidada) {
+          console.log('✅ Área já foi validada anteriormente');
+          console.log('⏳ Aguardando empresaId estar disponível...');
+
+          // Aguardar empresaId estar disponível antes de validar
+          const aguardarEmpresaId = () => {
+            if (empresaComLogo?.id) {
+              console.log('✅ EmpresaId disponível:', empresaComLogo.id);
+              // Validar endereço salvo de forma assíncrona
+              (async () => {
+                console.log('🔄 Iniciando validação do endereço salvo...');
+                const enderecoValido = await validarEnderecoSalvo(empresaComLogo.id);
+
+                console.log('📊 Resultado da validação:', enderecoValido);
+
+                if (enderecoValido) {
+                  // Mostrar modal de confirmação de endereço
+                  console.log('📍 Mostrando modal de confirmação de endereço salvo');
+                  setModalConfirmacaoEndereco(true);
+                } else {
+                  // Endereço não é mais válido, mostrar modal normal
+                  console.log('📋 Endereço salvo inválido, abrindo modal de validação');
+                  setModalAreaEntregaAberto(true);
+                }
+              })();
+            } else {
+              console.log('⏳ EmpresaId ainda não disponível, tentando novamente...');
+              setTimeout(aguardarEmpresaId, 100);
+            }
+          };
+
+          aguardarEmpresaId();
         } else {
-          setAreaValidada(true);
+          // Primeira vez, mostrar modal normal
+          console.log('📋 Primeira visita, abrindo modal de validação de área');
+          setTimeout(() => {
+            setModalAreaEntregaAberto(true);
+          }, 2000);
         }
       } else {
         console.log('❌ Taxa de entrega não habilitada ou não encontrada');
@@ -7960,6 +8180,140 @@ const CardapioPublicoPage: React.FC = () => {
         initialFotoIndex={fotoInicialIndex}
       />
 
+      {/* Modal de Confirmação de Endereço Salvo */}
+      {modalConfirmacaoEndereco && enderecoSalvo && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 text-xl">📍</span>
+                </div>
+                <div>
+                  <h2 className={`text-xl font-bold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Confirmar Endereço
+                  </h2>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Você ainda está neste endereço?
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              <div className="space-y-4">
+                {/* Endereço Salvo */}
+                <div className={`p-4 rounded-lg ${
+                  config.modo_escuro ? 'bg-gray-700' : 'bg-gray-50'
+                }`}>
+                  <h4 className={`font-medium mb-2 ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Seu Endereço:
+                  </h4>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                  }`}>
+                    {enderecoSalvo.endereco.logradouro && `${enderecoSalvo.endereco.logradouro}, `}
+                    {enderecoSalvo.endereco.bairro}<br />
+                    {enderecoSalvo.endereco.localidade} - {enderecoSalvo.endereco.uf}<br />
+                    <strong>CEP:</strong> {enderecoSalvo.cep}
+                  </p>
+                </div>
+
+                {/* Taxa Atual */}
+                <div className={`p-4 rounded-lg border ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 border-gray-600'
+                    : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <h4 className={`font-medium mb-2 ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Taxa de Entrega:
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className={`text-sm ${
+                        config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
+                        Valor:
+                      </span>
+                      <span className={`font-bold text-lg ${
+                        config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                      }`}>
+                        {formatarPreco(enderecoSalvo.taxa.valor)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className={`text-sm ${
+                        config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
+                        Tempo estimado:
+                      </span>
+                      <span className={`text-sm font-medium ${
+                        config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                      }`}>
+                        {enderecoSalvo.taxa.tempo_estimado} minutos
+                      </span>
+                    </div>
+
+                    {enderecoSalvo.taxa.distancia_km > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className={`text-sm ${
+                          config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                        }`}>
+                          Distância:
+                        </span>
+                        <span className={`text-sm ${
+                          config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                        }`}>
+                          {enderecoSalvo.taxa.distancia_km.toFixed(1)} km
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t space-y-3 ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={confirmarEnderecoSalvo}
+                className="w-full py-3 px-4 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transform hover:scale-[1.02] transition-all"
+              >
+                ✅ Sim, estou neste endereço
+              </button>
+
+              <button
+                onClick={alterarEndereco}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-white hover:bg-gray-600'
+                    : 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                }`}
+              >
+                📍 Alterar endereço
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Validação de Área de Entrega */}
       {modalAreaEntregaAberto && taxaEntregaConfig && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -7998,7 +8352,8 @@ const CardapioPublicoPage: React.FC = () => {
                     </label>
                     <div className="flex gap-2">
                       <input
-                        type="text"
+                        type="tel"
+                        inputMode="numeric"
                         value={cepCliente}
                         onChange={(e) => setCepCliente(formatarCEP(e.target.value))}
                         placeholder="00000-000"
