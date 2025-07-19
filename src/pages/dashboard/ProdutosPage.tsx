@@ -1654,11 +1654,11 @@ const ProdutosPage: React.FC = () => {
     }
   }, [abaPrecoAtiva, precosTabelas]);
 
-  // Função para salvar valor da aba atual antes de trocar de aba
-  const salvarValorAbaAtual = () => {
+  // Função para salvar valor da aba atual no estado local (sem salvar no banco)
+  const salvarValorAbaAtualNoEstado = () => {
     if (abaPrecoAtiva !== 'padrao' && precoTabelaFormatado) {
       const valorNumerico = desformatarPreco(precoTabelaFormatado);
-      console.log('💾 Salvando valor da aba:', abaPrecoAtiva, 'Valor:', valorNumerico);
+      console.log('💾 Salvando valor da aba no estado:', abaPrecoAtiva, 'Valor:', valorNumerico);
 
       // Atualizar estado local dos preços das tabelas
       setPrecosTabelas(prev => ({
@@ -3762,6 +3762,9 @@ const ProdutosPage: React.FC = () => {
         if (opcoesError) throw opcoesError;
       }
 
+      // ✅ IMPORTANTE: Salvar valor da aba atual no estado antes de salvar no banco
+      salvarValorAbaAtualNoEstado();
+
       // ✅ NOVO: Salvar preços das tabelas de preços (atualiza estado imediatamente)
       await salvarTodosPrecosTabelas(productId);
 
@@ -4507,7 +4510,10 @@ const ProdutosPage: React.FC = () => {
       // Verificar cada tabela de preços e seus valores
       for (const tabela of tabelasPrecos) {
         const preco = precosTabelas[tabela.id];
-        if (preco && preco > 0) {
+        console.log(`🔍 Verificando tabela ${tabela.nome} (${tabela.id}): preço = ${preco}`);
+
+        // Incluir preços >= 0 (permite salvar valor 0 para remover preço)
+        if (preco !== undefined && preco >= 0) {
           precosParaInserir.push({
             empresa_id: usuarioData.empresa_id,
             produto_id: produtoId,
@@ -6473,7 +6479,7 @@ const ProdutosPage: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    salvarValorAbaAtual(); // Salvar valor da aba atual antes de trocar
+                                    salvarValorAbaAtualNoEstado(); // Salvar valor da aba atual antes de trocar
                                     setAbaPrecoAtiva('padrao');
                                   }}
                                   className={`flex-shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -6491,7 +6497,7 @@ const ProdutosPage: React.FC = () => {
                                     key={tabela.id}
                                     type="button"
                                     onClick={() => {
-                                      salvarValorAbaAtual(); // Salvar valor da aba atual antes de trocar
+                                      salvarValorAbaAtualNoEstado(); // Salvar valor da aba atual antes de trocar
                                       setAbaPrecoAtiva(tabela.id);
                                     }}
                                     className={`flex-shrink-0 px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -6542,20 +6548,19 @@ const ProdutosPage: React.FC = () => {
                                       handlePrecoTabelaChange(e);
                                     }
                                   }}
-                                  onBlur={async () => {
+                                  onBlur={() => {
                                     if (abaPrecoAtiva === 'padrao') {
                                       // Se tem preço de custo definido, recalcular margem automaticamente
                                       if (novoProduto.preco_custo > 0 && novoProduto.preco > 0) {
                                         atualizarMargemComCustoPreco(novoProduto.preco_custo, novoProduto.preco);
                                       }
                                     } else {
+                                      // Apenas formatar o valor, sem salvar automaticamente
                                       const valorNumerico = desformatarPreco(precoTabelaFormatado);
                                       setPrecoTabelaFormatado(formatarPreco(valorNumerico));
 
-                                      // Salvar preço da tabela se estiver editando um produto
-                                      if (editingProduto && valorNumerico > 0) {
-                                        await salvarPrecoTabela(editingProduto.id, abaPrecoAtiva, valorNumerico);
-                                      }
+                                      // Salvar no estado local para ser usado no salvamento manual
+                                      salvarValorAbaAtualNoEstado();
                                     }
                                   }}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
