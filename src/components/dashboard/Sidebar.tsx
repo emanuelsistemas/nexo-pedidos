@@ -208,7 +208,7 @@ const Sidebar: React.FC = () => {
     // Adicionar "Taxa de Entrega" se estiver habilitado
     if (taxaEntregaHabilitada) {
       menuItems.push({
-        icon: Truck,
+        icon: Bike,
         label: 'Taxa de Entrega',
         path: '/dashboard/entregador/taxa',
         tooltip: 'Taxa de Entrega'

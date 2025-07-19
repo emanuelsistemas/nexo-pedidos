@@ -723,6 +723,7 @@ const CardapioPublicoPage: React.FC = () => {
   const [areaValidada, setAreaValidada] = useState(false);
   const [calculoTaxa, setCalculoTaxa] = useState<CalculoTaxaResult | null>(null);
   const [calculandoTaxa, setCalculandoTaxa] = useState(false);
+  const [cepForaArea, setCepForaArea] = useState(false);
 
   // Estados para modal de configuração individual (mantendo apenas os necessários)
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
@@ -892,6 +893,7 @@ const CardapioPublicoPage: React.FC = () => {
         showMessage('error', 'CEP não encontrado.');
         setEnderecoEncontrado(null);
         setCalculoTaxa(null);
+        setCepForaArea(false);
         return;
       }
 
@@ -911,11 +913,19 @@ const CardapioPublicoPage: React.FC = () => {
 
         if (resultadoTaxa) {
           setCalculoTaxa(resultadoTaxa);
-          showMessage('success', `CEP válido! Taxa: R$ ${resultadoTaxa.valor.toFixed(2)} - ${resultadoTaxa.tempo_estimado} min`);
+
+          if (resultadoTaxa.fora_area) {
+            setCepForaArea(true);
+            showMessage('error', `CEP fora da área de entrega. Distância: ${resultadoTaxa.distancia_km.toFixed(1)} km`);
+          } else {
+            setCepForaArea(false);
+            showMessage('success', `CEP válido! Taxa: R$ ${resultadoTaxa.valor.toFixed(2)} - ${resultadoTaxa.tempo_estimado} min`);
+          }
         } else {
           setCalculoTaxa(null);
+          setCepForaArea(true);
+          // Manter o endereço encontrado mesmo quando fora da área
           showMessage('error', 'CEP fora da área de entrega.');
-          setEnderecoEncontrado(null);
         }
       }
 
@@ -924,6 +934,7 @@ const CardapioPublicoPage: React.FC = () => {
       showMessage('error', 'Erro ao validar CEP. Tente novamente.');
       setEnderecoEncontrado(null);
       setCalculoTaxa(null);
+      setCepForaArea(false);
     } finally {
       setValidandoCep(false);
       setCalculandoTaxa(false);
@@ -8014,7 +8025,9 @@ const CardapioPublicoPage: React.FC = () => {
 
                   {enderecoEncontrado && (
                     <div className={`p-4 rounded-lg ${
-                      config.modo_escuro ? 'bg-gray-700' : 'bg-gray-50'
+                      cepForaArea
+                        ? config.modo_escuro ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
+                        : config.modo_escuro ? 'bg-gray-700' : 'bg-gray-50'
                     }`}>
                       <h4 className={`font-medium mb-2 ${
                         config.modo_escuro ? 'text-white' : 'text-gray-900'
@@ -8028,6 +8041,44 @@ const CardapioPublicoPage: React.FC = () => {
                         {enderecoEncontrado.bairro}<br />
                         {enderecoEncontrado.localidade} - {enderecoEncontrado.uf}
                       </p>
+
+                      {(cepForaArea || calculoTaxa?.fora_area) && (
+                        <div className={`mt-3 p-3 rounded-lg ${
+                          config.modo_escuro ? 'bg-red-900/30' : 'bg-red-100'
+                        }`}>
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              config.modo_escuro ? 'bg-red-400' : 'bg-red-500'
+                            }`}></div>
+                            <p className={`text-sm font-medium ${
+                              config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                            }`}>
+                              CEP fora da área de entrega
+                            </p>
+                          </div>
+
+                          {calculoTaxa?.fora_area && calculoTaxa.distancia_km > 0 && (
+                            <div className={`text-sm mt-2 space-y-2 ${
+                              config.modo_escuro ? 'text-red-300' : 'text-red-600'
+                            }`}>
+                              <p>
+                                <strong>Distância calculada:</strong> {calculoTaxa.distancia_km.toFixed(1)} km
+                              </p>
+                              {calculoTaxa.distancia_maxima && (
+                                <p>
+                                  <strong>Distância máxima de entrega deste estabelecimento:</strong> {calculoTaxa.distancia_maxima.toFixed(0)} km
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          <p className={`text-sm mt-3 ${
+                            config.modo_escuro ? 'text-red-300' : 'text-red-600'
+                          }`}>
+                            Infelizmente não atendemos este endereço. Tente outro CEP.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -8103,8 +8154,8 @@ const CardapioPublicoPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Resultado do Cálculo de Taxa */}
-              {(calculandoTaxa || calculoTaxa) && (
+              {/* Resultado do Cálculo de Taxa - Só mostra se não estiver fora da área */}
+              {(calculandoTaxa || (calculoTaxa && !calculoTaxa.fora_area)) && (
                 <div className={`mt-4 p-4 rounded-lg border ${
                   config.modo_escuro
                     ? 'bg-gray-700 border-gray-600'
@@ -8125,7 +8176,7 @@ const CardapioPublicoPage: React.FC = () => {
                         Calculando taxa de entrega...
                       </span>
                     </div>
-                  ) : calculoTaxa ? (
+                  ) : calculoTaxa && !calculoTaxa.fora_area ? (
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
                         <span className={`text-sm ${
@@ -8196,13 +8247,17 @@ const CardapioPublicoPage: React.FC = () => {
                 onClick={confirmarAreaEntrega}
                 disabled={
                   calculandoTaxa ||
+                  cepForaArea ||
+                  calculoTaxa?.fora_area ||
                   (taxaEntregaConfig.tipo === 'bairro' && (!bairroSelecionado || !calculoTaxa)) ||
-                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa))
+                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa || calculoTaxa.fora_area))
                 }
                 className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${
                   calculandoTaxa ||
+                  cepForaArea ||
+                  calculoTaxa?.fora_area ||
                   (taxaEntregaConfig.tipo === 'bairro' && (!bairroSelecionado || !calculoTaxa)) ||
-                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa))
+                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa || calculoTaxa.fora_area))
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-green-600 text-white hover:bg-green-700 transform hover:scale-[1.02]'
                 }`}

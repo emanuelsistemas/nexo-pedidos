@@ -32,6 +32,8 @@ interface CalculoTaxaResult {
   tempo_estimado: number; // em minutos
   distancia_km: number;
   metodo: 'bairro' | 'distancia';
+  fora_area?: boolean;
+  distancia_maxima?: number;
   detalhes: {
     success: boolean;
     method: 'routes_api' | 'haversine' | 'cached' | 'bairro_fixo';
@@ -153,7 +155,22 @@ class TaxaEntregaService {
           distancia: distanciaKm,
           maximo: config.distancia_maxima
         });
-        return null;
+
+        // Retornar informações mesmo quando fora da área
+        return {
+          valor: 0,
+          tempo_estimado: tempoMinutos,
+          distancia_km: distanciaKm,
+          metodo: 'distancia',
+          fora_area: true,
+          distancia_maxima: config.distancia_maxima,
+          detalhes: {
+            success: true,
+            method: distanceResult.method,
+            endereco_base: config.endereco_base,
+            endereco_destino: cepDestino
+          }
+        };
       }
 
       // Calcular valor baseado na distância

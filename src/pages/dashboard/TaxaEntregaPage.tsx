@@ -369,7 +369,7 @@ const TaxaEntregaPage: React.FC = () => {
                           <p className="text-sm text-gray-400">CEP: {taxa.cep}</p>
                         </>
                       ) : (
-                        <h3 className="text-white font-medium">Até {taxa.km}km</h3>
+                        <h3 className="text-white font-medium">Até {taxa.km ? parseFloat(taxa.km).toFixed(0) : '0'}km</h3>
                       )}
                       <div>
                         <p className="text-sm text-primary-400">
@@ -402,7 +402,7 @@ const TaxaEntregaPage: React.FC = () => {
                       )}
                     </button>
                     <button
-                      onClick={() => handleDelete(taxa.id, taxaMode === 'bairro' ? taxa.bairro : `${taxa.km}km`)}
+                      onClick={() => handleDelete(taxa.id, taxaMode === 'bairro' ? taxa.bairro : `${taxa.km ? parseFloat(taxa.km).toFixed(0) : '0'}km`)}
                       className="p-2 text-red-400 hover:text-red-300 transition-colors"
                     >
                       <Trash2 size={16} />
