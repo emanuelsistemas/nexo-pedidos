@@ -5139,29 +5139,31 @@ const PDVPage: React.FC = () => {
     setQuantidadeEditando('');
   };
 
-  // ✅ NOVO: Função para calcular preço considerando desconto por quantidade no modal
-  const calcularPrecoModalQuantidade = (produto: Produto, quantidade: number) => {
-    let precoUnitario = calcularPrecoFinal(produto); // Já considera promoção
+  // ✅ NOVA FUNÇÃO: Calcular preço com desconto por quantidade aplicado sobre o preço promocional
+  const calcularPrecoComDescontoQuantidade = (produto: Produto, quantidade: number) => {
+    // 1. Primeiro aplicar promoção (se houver e não estiver vencida)
+    let precoBase = calcularPrecoFinal(produto);
 
-    // Verificar se a quantidade atinge o mínimo para desconto por quantidade
+    // 2. Depois aplicar desconto por quantidade sobre o preço promocional
     if (produto.desconto_quantidade &&
         produto.quantidade_minima &&
         quantidade >= produto.quantidade_minima) {
 
-      // Calcular preço com desconto por quantidade
-      let precoComDescontoQuantidade = produto.preco;
-
       if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
-        precoComDescontoQuantidade = produto.preco * (1 - produto.percentual_desconto_quantidade / 100);
+        // Aplicar desconto percentual sobre o preço promocional
+        precoBase = precoBase * (1 - produto.percentual_desconto_quantidade / 100);
       } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
-        precoComDescontoQuantidade = produto.preco - produto.valor_desconto_quantidade;
+        // Aplicar desconto em valor sobre o preço promocional
+        precoBase = precoBase - produto.valor_desconto_quantidade;
       }
-
-      // Usar o menor preço entre promoção e desconto por quantidade
-      precoUnitario = Math.min(precoUnitario, precoComDescontoQuantidade);
     }
 
-    return Math.max(precoUnitario, 0);
+    return Math.max(precoBase, 0);
+  };
+
+  // ✅ FUNÇÃO ATUALIZADA: Usar a nova lógica cumulativa
+  const calcularPrecoModalQuantidade = (produto: Produto, quantidade: number) => {
+    return calcularPrecoComDescontoQuantidade(produto, quantidade);
   };
 
   // Função para adicionar produto com vendedor específico
@@ -5382,8 +5384,8 @@ const PDVPage: React.FC = () => {
     setCarrinho(prev =>
       prev.map(item => {
         if (item.id === itemId && item.desconto) {
-          // Voltar ao preço final do produto (considerando promoções)
-          const precoFinal = calcularPrecoFinal(item.produto);
+          // ✅ CORRIGIDO: Voltar ao preço considerando promoções E desconto por quantidade
+          const precoFinal = calcularPrecoComDescontoQuantidade(item.produto, item.quantidade);
           return {
             ...item,
             desconto: undefined,
@@ -5569,8 +5571,8 @@ const PDVPage: React.FC = () => {
             total + (adicional.preco * adicional.quantidade), 0
           );
 
-          // Calcular novo subtotal (produto + todos os adicionais) * quantidade
-          const precoUnitario = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
+          // ✅ CORRIGIDO: Calcular novo subtotal considerando promoções E desconto por quantidade
+          const precoUnitario = item.desconto ? item.desconto.precoComDesconto : calcularPrecoComDescontoQuantidade(item.produto, item.quantidade);
           const novoSubtotal = (precoUnitario * item.quantidade) + valorAdicionais;
 
           console.log(`✅ Adicionais atualizados para ${item.produto.nome}:`, todosAdicionais.map(a => `${a.nome}(${a.quantidade})`));
@@ -5607,8 +5609,8 @@ const PDVPage: React.FC = () => {
             total + (adicional.preco * adicional.quantidade), 0
           );
 
-          // Usar o preço com desconto se houver, senão usar preço final do produto
-          const precoBase = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
+          // ✅ CORRIGIDO: Usar preço com desconto ou calcular considerando promoções E desconto por quantidade
+          const precoBase = item.desconto ? item.desconto.precoComDesconto : calcularPrecoComDescontoQuantidade(item.produto, item.quantidade);
           const novoSubtotal = (precoBase * item.quantidade) + valorAdicionais;
 
           return {
@@ -5644,8 +5646,8 @@ const PDVPage: React.FC = () => {
             total + (adicional.preco * adicional.quantidade), 0
           );
 
-          // Usar o preço com desconto se houver, senão usar preço final do produto
-          const precoBase = item.desconto ? item.desconto.precoComDesconto : calcularPrecoFinal(item.produto);
+          // ✅ CORRIGIDO: Usar preço com desconto ou calcular considerando promoções E desconto por quantidade
+          const precoBase = item.desconto ? item.desconto.precoComDesconto : calcularPrecoComDescontoQuantidade(item.produto, item.quantidade);
           const novoSubtotal = (precoBase * item.quantidade) + valorAdicionais;
 
           return {
@@ -11751,47 +11753,48 @@ const PDVPage: React.FC = () => {
                                           )}
                                         </p>
 
-                                        {/* Texto explicativo apenas para produtos com desconto/promoção */}
+                                        {/* ✅ NOVA LÓGICA: Mostrar ambos os descontos quando aplicáveis */}
                                         {(item.produto.promocao || (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0))) && (
-                                          <div className="text-xs text-green-400">
-                                            {item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0) ? (
-                                              <>
+                                          <div className="text-xs text-green-400 space-y-1">
+                                            {/* Mostrar promoção se houver */}
+                                            {item.produto.promocao && !verificarPromocaoVencida(item.produto) && (
+                                              <div>
+                                                <span>Produto em promoção</span>
+                                                {/* ✅ EXIBIR DATA E DIAS RESTANTES SE DEFINIDOS */}
+                                                {item.produto.promocao_data_habilitada && item.produto.promocao_data_fim && (
+                                                  <div className="mt-1">
+                                                    <div>Válida até: {formatarDataPromocao(item.produto.promocao_data_fim)}</div>
+                                                    {(() => {
+                                                      const diasRestantes = calcularDiasRestantes(item.produto);
+                                                      if (diasRestantes !== null) {
+                                                        if (diasRestantes === 0) {
+                                                          return <div className="text-yellow-400">⏰ Último dia!</div>;
+                                                        } else if (diasRestantes === 1) {
+                                                          return <div className="text-yellow-400">⏰ 1 dia restante</div>;
+                                                        } else if (diasRestantes > 1) {
+                                                          return <div>⏰ {diasRestantes} dias restantes</div>;
+                                                        }
+                                                      }
+                                                      return null;
+                                                    })()}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+
+                                            {/* Mostrar promoção vencida */}
+                                            {item.produto.promocao && verificarPromocaoVencida(item.produto) && (
+                                              <div className="text-red-400">Promoção vencida</div>
+                                            )}
+
+                                            {/* Mostrar desconto por quantidade se aplicável */}
+                                            {item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0) && (
+                                              <div>
                                                 Desconto por quantidade:
                                                 {item.produto.tipo_desconto_quantidade === 'percentual'
                                                   ? ` ${item.produto.percentual_desconto_quantidade}%`
                                                   : ` ${formatCurrency(item.produto.valor_desconto_quantidade || 0)}`
                                                 }
-                                              </>
-                                            ) : (
-                                              <div>
-                                                {/* ✅ VERIFICAR SE PROMOÇÃO ESTÁ VENCIDA */}
-                                                {verificarPromocaoVencida(item.produto) ? (
-                                                  <span className="text-red-400">Promoção vencida</span>
-                                                ) : (
-                                                  <>
-                                                    <span>Produto em promoção</span>
-                                                    {/* ✅ EXIBIR DATA E DIAS RESTANTES SE DEFINIDOS */}
-                                                    {item.produto.promocao_data_habilitada && item.produto.promocao_data_fim && (
-                                                      <div className="mt-1">
-
-                                                        <div>Válida até: {formatarDataPromocao(item.produto.promocao_data_fim)}</div>
-                                                        {(() => {
-                                                          const diasRestantes = calcularDiasRestantes(item.produto);
-                                                          if (diasRestantes !== null) {
-                                                            if (diasRestantes === 0) {
-                                                              return <div className="text-yellow-400">⏰ Último dia!</div>;
-                                                            } else if (diasRestantes === 1) {
-                                                              return <div className="text-yellow-400">⏰ 1 dia restante</div>;
-                                                            } else if (diasRestantes > 1) {
-                                                              return <div>⏰ {diasRestantes} dias restantes</div>;
-                                                            }
-                                                          }
-                                                          return null;
-                                                        })()}
-                                                      </div>
-                                                    )}
-                                                  </>
-                                                )}
                                               </div>
                                             )}
                                           </div>
@@ -17996,8 +17999,8 @@ const PDVPage: React.FC = () => {
               total + (adicional.preco * adicional.quantidade), 0
             );
 
-            // Calcular novo subtotal (produto + adicionais) * quantidade
-            const precoUnitario = calcularPrecoFinal(itemParaAdicionais.produto);
+            // ✅ CORRIGIDO: Calcular novo subtotal considerando promoções E desconto por quantidade
+            const precoUnitario = calcularPrecoComDescontoQuantidade(itemParaAdicionais.produto, itemParaAdicionais.quantidade);
             const novoSubtotal = (precoUnitario * itemParaAdicionais.quantidade) + valorAdicionais;
 
             // Adicionar produto ao carrinho com adicionais e subtotal correto

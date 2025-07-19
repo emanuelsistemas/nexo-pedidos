@@ -5552,12 +5552,60 @@ const CardapioPublicoPage: React.FC = () => {
                       ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
                        (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
 
+                    // ✅ CALCULAR PREÇO ORIGINAL SEM DESCONTO PARA COMPARAÇÃO
+                    let precoOriginalTotal = 0;
                     let textoDesconto = '';
+
                     if (temDescontoQuantidade) {
+                      // Calcular preço original (sem desconto por quantidade)
+                      const produto_encontrado = produtos.find(p => p.id === produto.id);
+                      if (produto_encontrado) {
+                        let precoBase = produto_encontrado.preco;
+
+                        // Se trabalha com tabelas de preço, usar preço da tabela selecionada
+                        if (trabalhaComTabelaPrecos) {
+                          const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                          const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
+
+                          if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+                            const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+                            if (tabelaEscolhida) {
+                              precoBase = tabelaEscolhida.preco;
+                            }
+                          }
+                        }
+
+                        // Aplicar promoção tradicional se houver (mas não desconto por quantidade)
+                        const temPromocaoTradicional = produto_encontrado.promocao &&
+                          produto_encontrado.exibir_promocao_cardapio &&
+                          produto_encontrado.tipo_desconto &&
+                          produto_encontrado.valor_desconto !== undefined &&
+                          produto_encontrado.valor_desconto > 0;
+
+                        if (temPromocaoTradicional) {
+                          precoBase = calcularValorFinal(precoBase, produto_encontrado.tipo_desconto!, produto_encontrado.valor_desconto!);
+                        }
+
+                        precoOriginalTotal = precoBase * quantidadeSelecionada;
+
+                        // Adicionar valor dos adicionais
+                        const adicionaisItem = adicionaisSelecionados[produto.id];
+                        if (adicionaisItem) {
+                          Object.entries(adicionaisItem).forEach(([itemId, quantidade]) => {
+                            if (quantidade > 0) {
+                              const precoAdicional = obterPrecoAdicional(produto.id, itemId);
+                              if (precoAdicional > 0) {
+                                precoOriginalTotal += precoAdicional * quantidade * quantidadeSelecionada;
+                              }
+                            }
+                          });
+                        }
+                      }
+
                       if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
-                        textoDesconto = ` (${produto.percentual_desconto_quantidade}% OFF aplicado)`;
+                        textoDesconto = `(${produto.percentual_desconto_quantidade}% OFF aplicado)`;
                       } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
-                        textoDesconto = ` (${formatarPreco(produto.valor_desconto_quantidade)} OFF aplicado)`;
+                        textoDesconto = `(${formatarPreco(produto.valor_desconto_quantidade)} OFF aplicado)`;
                       }
                     }
 
@@ -5569,7 +5617,20 @@ const CardapioPublicoPage: React.FC = () => {
                         >
                           <div className="flex items-center gap-2">
                             <ShoppingBag size={18} />
-                            <span>{formatarPreco(valorTotal)} - Adicionar no carrinho</span>
+                            {temDescontoQuantidade && precoOriginalTotal > 0 ? (
+                              <div className="flex flex-col items-center">
+                                {/* Preço original riscado */}
+                                <div className="text-xs line-through opacity-75">
+                                  {formatarPreco(precoOriginalTotal)}
+                                </div>
+                                {/* Preço com desconto */}
+                                <div className="text-base font-semibold">
+                                  {formatarPreco(valorTotal)} - Adicionar no carrinho
+                                </div>
+                              </div>
+                            ) : (
+                              <span>{formatarPreco(valorTotal)} - Adicionar no carrinho</span>
+                            )}
                           </div>
                           {textoDesconto && (
                             <div className="text-xs opacity-90 font-medium">
