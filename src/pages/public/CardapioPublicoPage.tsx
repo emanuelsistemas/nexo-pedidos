@@ -187,6 +187,7 @@ interface TabelasPrecosSliderProps {
   tabelas: Array<{id: string; nome: string; preco: number; quantidade_sabores: number}>;
   config: {modo_escuro: boolean};
   formatarPreco: (preco: number) => string;
+  onSlideChange?: (currentSlide: number, totalSlides: number) => void;
 }
 
 const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, config, formatarPreco }) => {
@@ -221,25 +222,6 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
 
   return (
     <div className="relative">
-      {/* ✅ INDICADOR VISUAL PARA USUÁRIOS LEIGOS - TABELAS DE PREÇOS */}
-      {(() => {
-        const slidesPerView = 2.5;
-        const totalPaginas = Math.ceil(tabelas.length / slidesPerView);
-        const isUltimaPagina = currentSlide >= totalPaginas - 1;
-
-        return tabelas.length > 3 && !isUltimaPagina && (
-          <div className={`absolute -top-2 right-0 z-20 flex items-center gap-1 text-xs font-medium animate-pulse ${
-            config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
-          }`}>
-            <span>Deslize para ver mais</span>
-            <div className="flex">
-              <div className="w-1 h-1 rounded-full bg-current animate-bounce"></div>
-              <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-              <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-            </div>
-          </div>
-        );
-      })()}
 
       <div ref={sliderRef} className="keen-slider">
         {tabelas.map((tabela) => (
@@ -627,6 +609,13 @@ const CardapioPublicoPage: React.FC = () => {
     nomeProduto: string;
     quantidadeSolicitada: number;
     estoqueDisponivel: number;
+  } | null>(null);
+
+  // Estados para modal de tabela de preço obrigatória
+  const [modalTabelaPrecoObrigatoria, setModalTabelaPrecoObrigatoria] = useState(false);
+  const [produtoTabelaPrecoObrigatoria, setProdutoTabelaPrecoObrigatoria] = useState<{
+    id: string;
+    nome: string;
   } | null>(null);
 
   // Estados para modal de configuração individual
@@ -4872,13 +4861,29 @@ const CardapioPublicoPage: React.FC = () => {
                               : 'bg-blue-50/50 border-blue-200/60 shadow-sm'
                           }`}>
                             {/* Título das tabelas com ícone */}
-                            <div className={`flex items-center gap-2 text-sm font-semibold mb-3 ${
+                            <div className={`flex items-center gap-2 text-sm font-semibold mb-2 ${
                               config.modo_escuro ? 'text-blue-300' : 'text-blue-700'
                             }`}>
                               <div className={`w-2 h-2 rounded-full ${
                                 config.modo_escuro ? 'bg-blue-400' : 'bg-blue-500'
                               }`}></div>
                               Opções de Tamanho e Preço
+                            </div>
+
+                            {/* Linha dedicada para o indicador "Deslize para ver mais" */}
+                            <div className="h-5 mb-2 relative">
+                              {tabelasComPrecos.length > 3 && (
+                                <div className={`absolute top-0 right-0 flex items-center gap-1 text-xs font-medium animate-pulse ${
+                                  config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
+                                }`}>
+                                  <span>Deslize para ver mais</span>
+                                  <div className="flex">
+                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce"></div>
+                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
 
                           {/* Slider horizontal das tabelas */}
