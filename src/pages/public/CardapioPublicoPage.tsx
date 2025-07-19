@@ -192,35 +192,65 @@ interface TabelasPrecosSliderProps {
 const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, config, formatarPreco }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [hasShownPeek, setHasShownPeek] = useState(false);
 
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
     slides: {
-      perView: 3,
-      spacing: 8,
+      perView: 2.5, // ✅ Mostra 2.5 itens para criar efeito "peek" natural
+      spacing: 12,
     },
     slideChanged(slider) {
       setCurrentSlide(slider.track.details.rel);
     },
-    created() {
+    created(slider) {
       setLoaded(true);
+
+      // ✅ EFEITO PEEK: Leve arrastada automática após 1 segundo
+      if (tabelas.length > 3) {
+        setTimeout(() => {
+          slider.moveToIdx(0.3); // Move levemente para mostrar que há mais itens
+          setTimeout(() => {
+            slider.moveToIdx(0); // Volta para o início
+            setHasShownPeek(true);
+          }, 800);
+        }, 1000);
+      }
     },
   });
 
   return (
     <div className="relative">
+      {/* ✅ INDICADOR VISUAL PARA USUÁRIOS LEIGOS */}
+      {tabelas.length > 3 && !hasShownPeek && (
+        <div className={`absolute -top-6 right-0 z-10 flex items-center gap-1 text-xs font-medium animate-pulse ${
+          config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
+        }`}>
+          <span>Deslize para ver mais</span>
+          <div className="flex">
+            <div className="w-1 h-1 rounded-full bg-current animate-bounce"></div>
+            <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+            <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          </div>
+        </div>
+      )}
+
       <div ref={sliderRef} className="keen-slider">
         {tabelas.map((tabela) => (
-          <div key={tabela.id} className="keen-slider__slide" style={{ minWidth: '100px' }}>
+          <div key={tabela.id} className="keen-slider__slide" style={{ minWidth: '120px' }}>
             <div
-              className={`p-2 rounded-lg border transition-all duration-200 h-full ${
+              className={`p-3 rounded-lg border-2 transition-all duration-200 h-full hover:scale-105 ${
                 config.modo_escuro
-                  ? 'bg-gray-700/50 border-gray-600 text-white'
-                  : 'bg-gray-50 border-gray-200 text-gray-800'
+                  ? 'bg-gray-700 border-gray-500 text-white shadow-md hover:border-purple-400'
+                  : 'bg-white border-gray-300 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md'
               }`}
             >
-              <div className="text-xs font-medium truncate">{tabela.nome}</div>
-              <div className={`text-sm font-bold ${
+              <div className={`text-xs font-bold truncate mb-1 ${
+                config.modo_escuro ? 'text-gray-200' : 'text-gray-700'
+              }`}>
+                {tabela.nome}
+              </div>
+              <div className={`text-lg font-bold ${
                 config.modo_escuro ? 'text-green-400' : 'text-green-600'
               }`}>
                 {formatarPreco(tabela.preco)}
@@ -240,20 +270,64 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
         ))}
       </div>
 
-      {/* Indicadores */}
+      {/* ✅ INDICADORES MELHORADOS PARA USUÁRIOS LEIGOS */}
       {loaded && instanceRef.current && tabelas.length > 3 && (
-        <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-1">
-          {Array.from({ length: Math.ceil(tabelas.length / 3) }).map((_, idx) => (
+        <div className="mt-3 flex items-center justify-center gap-3">
+          {/* Indicadores de navegação */}
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-medium ${
+              config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+            }`}>
+              {currentSlide + 1} de {Math.ceil(tabelas.length / 2.5)}
+            </span>
+            <div className="flex space-x-1">
+              {Array.from({ length: Math.ceil(tabelas.length / 2.5) }).map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => instanceRef.current?.moveToIdx(idx)}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 hover:scale-125 ${
+                    currentSlide === idx
+                      ? config.modo_escuro
+                        ? 'bg-blue-400 shadow-lg shadow-blue-400/50'
+                        : 'bg-blue-600 shadow-lg shadow-blue-600/50'
+                      : config.modo_escuro
+                        ? 'bg-gray-600 hover:bg-gray-500'
+                        : 'bg-gray-300 hover:bg-gray-400'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Setas de navegação */}
+          <div className="flex gap-1">
             <button
-              key={idx}
-              onClick={() => instanceRef.current?.moveToIdx(idx)}
-              className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${
-                currentSlide === idx
-                  ? config.modo_escuro ? 'bg-purple-400' : 'bg-purple-600'
-                  : config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
+              onClick={() => instanceRef.current?.prev()}
+              disabled={currentSlide === 0}
+              className={`p-1 rounded-full transition-all duration-200 ${
+                currentSlide === 0
+                  ? config.modo_escuro ? 'text-gray-600' : 'text-gray-300'
+                  : config.modo_escuro
+                    ? 'text-blue-400 hover:bg-gray-700 active:scale-95'
+                    : 'text-blue-600 hover:bg-blue-50 active:scale-95'
               }`}
-            />
-          ))}
+            >
+              <ChevronDown className="w-4 h-4 rotate-90" />
+            </button>
+            <button
+              onClick={() => instanceRef.current?.next()}
+              disabled={currentSlide >= Math.ceil(tabelas.length / 2.5) - 1}
+              className={`p-1 rounded-full transition-all duration-200 ${
+                currentSlide >= Math.ceil(tabelas.length / 2.5) - 1
+                  ? config.modo_escuro ? 'text-gray-600' : 'text-gray-300'
+                  : config.modo_escuro
+                    ? 'text-blue-400 hover:bg-gray-700 active:scale-95'
+                    : 'text-blue-600 hover:bg-blue-50 active:scale-95'
+              }`}
+            >
+              <ChevronDown className="w-4 h-4 -rotate-90" />
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -4713,13 +4787,21 @@ const CardapioPublicoPage: React.FC = () => {
                     if (tabelasComPrecos.length > 0) {
                       return (
                         <div className="mb-3 w-full">
-                          {/* Divisória acima das tabelas */}
-                          <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
-
-                          {/* Título das tabelas */}
-                          <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Tabelas de Preços:
-                          </div>
+                          {/* ✅ NOVA ÁREA SEPARADA VISUALMENTE */}
+                          <div className={`mt-4 p-3 rounded-lg border-2 border-dashed transition-all duration-300 ${
+                            config.modo_escuro
+                              ? 'bg-gray-800/30 border-gray-600/50 shadow-lg'
+                              : 'bg-blue-50/50 border-blue-200/60 shadow-sm'
+                          }`}>
+                            {/* Título das tabelas com ícone */}
+                            <div className={`flex items-center gap-2 text-sm font-semibold mb-3 ${
+                              config.modo_escuro ? 'text-blue-300' : 'text-blue-700'
+                            }`}>
+                              <div className={`w-2 h-2 rounded-full ${
+                                config.modo_escuro ? 'bg-blue-400' : 'bg-blue-500'
+                              }`}></div>
+                              Opções de Tamanho e Preço
+                            </div>
 
                           {/* Slider horizontal das tabelas */}
                           <div className="relative">
@@ -4729,14 +4811,18 @@ const CardapioPublicoPage: React.FC = () => {
                                 {tabelasComPrecos.map(tabela => (
                                   <div
                                     key={tabela.id}
-                                    className={`flex-1 p-2 rounded-lg border transition-all duration-200 ${
+                                    className={`flex-1 p-3 rounded-lg border-2 transition-all duration-200 hover:scale-105 ${
                                       config.modo_escuro
-                                        ? 'bg-gray-700/50 border-gray-600 text-white'
-                                        : 'bg-gray-50 border-gray-200 text-gray-800'
+                                        ? 'bg-gray-700 border-gray-500 text-white shadow-md hover:border-purple-400'
+                                        : 'bg-white border-gray-300 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md'
                                     }`}
                                   >
-                                    <div className="text-xs font-medium truncate">{tabela.nome}</div>
-                                    <div className={`text-sm font-bold ${
+                                    <div className={`text-xs font-bold truncate mb-1 ${
+                                      config.modo_escuro ? 'text-gray-200' : 'text-gray-700'
+                                    }`}>
+                                      {tabela.nome}
+                                    </div>
+                                    <div className={`text-lg font-bold ${
                                       config.modo_escuro ? 'text-green-400' : 'text-green-600'
                                     }`}>
                                       {formatarPreco(tabela.preco)}
@@ -4762,6 +4848,7 @@ const CardapioPublicoPage: React.FC = () => {
                                 formatarPreco={formatarPreco}
                               />
                             )}
+                          </div>
                           </div>
                         </div>
                       );
