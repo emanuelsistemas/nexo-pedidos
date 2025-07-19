@@ -695,6 +695,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [modalRemoverItemAberto, setModalRemoverItemAberto] = useState(false);
   const [produtoParaRemover, setProdutoParaRemover] = useState<string | null>(null);
 
+  // Estado para o modal de finalização do pedido
+  const [modalFinalizacaoAberto, setModalFinalizacaoAberto] = useState(false);
+
   // Estados para modal de configuração individual (mantendo apenas os necessários)
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
   const [produtoConfiguracaoIndividual, setProdutoConfiguracaoIndividual] = useState<any>(null);
@@ -3602,7 +3605,35 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const handlePedirCarrinhoCompleto = () => {
+    // Abrir modal de finalização em vez de ir direto para o WhatsApp
+    setModalFinalizacaoAberto(true);
+  };
+
+  const confirmarFinalizacaoPedido = () => {
+    // Fechar modal e ir para o WhatsApp
+    setModalFinalizacaoAberto(false);
     handlePedirWhatsApp();
+
+    // Limpar carrinho após finalizar pedido
+    setQuantidadesProdutos({});
+    setOrdemAdicaoItens({});
+    setAdicionaisSelecionados({});
+    setObservacoesProdutos({});
+    setItensCarrinhoSeparados({});
+    setCarrinhoAberto(false);
+
+    // Limpar localStorage
+    if (empresaId) {
+      localStorage.removeItem(`carrinho_${empresaId}`);
+      localStorage.removeItem(`carrinho_ordem_${empresaId}`);
+      localStorage.removeItem(`carrinho_adicionais_${empresaId}`);
+      localStorage.removeItem(`carrinho_observacoes_${empresaId}`);
+      localStorage.removeItem(`carrinho_validacao_minima_${empresaId}`);
+    }
+  };
+
+  const cancelarFinalizacaoPedido = () => {
+    setModalFinalizacaoAberto(false);
   };
 
   const handleContatoWhatsApp = () => {
@@ -7295,6 +7326,209 @@ const CardapioPublicoPage: React.FC = () => {
               >
                 Entendi
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Finalização do Pedido */}
+      {modalFinalizacaoAberto && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50">
+          <div className={`w-full h-full flex flex-col ${
+            config.modo_escuro ? 'bg-gray-900' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`flex-shrink-0 p-4 sm:p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={`text-xl font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Finalizar Pedido
+                  </h3>
+                  <p className={`text-sm mt-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Revise seu pedido antes de enviar
+                  </p>
+                </div>
+                <button
+                  onClick={cancelarFinalizacaoPedido}
+                  className={`p-2 rounded-lg transition-colors ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:bg-gray-800'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* Lista de Itens - Scrollável */}
+            <div className="flex-1 p-4 overflow-y-auto">
+              <div className="space-y-3">
+                {obterItensCarrinho().map((item, index) => {
+                  const { produto, quantidade, adicionais, observacao, itemId, precoProduto } = item as any;
+                  const precoFinal = precoProduto || produto.preco;
+
+                  return (
+                    <div
+                      key={itemId}
+                      className={`p-4 rounded-lg border transition-all duration-200 ${
+                        config.modo_escuro
+                          ? 'bg-gray-800/50 border-gray-700'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        {/* Número do item */}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                          config.modo_escuro
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-blue-500 text-white'
+                        }`}>
+                          {index + 1}
+                        </div>
+
+                        {/* Conteúdo do item */}
+                        <div className="flex-1 min-w-0">
+                          {/* Nome e quantidade */}
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className={`font-medium truncate ${
+                              config.modo_escuro ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              {produto.nome}
+                            </h4>
+                            <span className={`text-sm font-medium ml-2 ${
+                              config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                            }`}>
+                              {quantidade}x
+                            </span>
+                          </div>
+
+                          {/* Preço */}
+                          {config.mostrar_precos && (
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`text-sm ${
+                                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                Preço unitário: {formatarPreco(precoFinal)}
+                              </span>
+                              <span className={`text-sm font-medium ${
+                                config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                              }`}>
+                                Subtotal: {formatarPreco(precoFinal * quantidade)}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Adicionais */}
+                          {adicionais && adicionais.length > 0 && (
+                            <div className="mb-2">
+                              <p className={`text-xs font-medium mb-1 ${
+                                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                Adicionais:
+                              </p>
+                              <div className="space-y-1">
+                                {adicionais.map((adicional: any, idx: number) => (
+                                  <div key={idx} className="flex items-center justify-between">
+                                    <span className={`text-xs ${
+                                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                                    }`}>
+                                      • {adicional.nome} ({adicional.quantidade}x)
+                                    </span>
+                                    {config.mostrar_precos && (
+                                      <span className={`text-xs ${
+                                        config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                                      }`}>
+                                        {formatarPreco(adicional.preco * adicional.quantidade)}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Observação */}
+                          {observacao && (
+                            <div className={`text-xs p-2 rounded ${
+                              config.modo_escuro
+                                ? 'bg-gray-700/50 text-gray-300'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              <span className="font-medium">Obs:</span> {observacao}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Total Geral */}
+              {config.mostrar_precos && (
+                <div className={`mt-6 p-4 rounded-lg border-2 ${
+                  config.modo_escuro
+                    ? 'bg-gray-800/50 border-green-600'
+                    : 'bg-green-50 border-green-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-lg font-semibold ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Total Geral:
+                    </span>
+                    <span className={`text-xl font-bold ${
+                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                    }`}>
+                      {formatarPreco(obterTotalCarrinho())}
+                    </span>
+                  </div>
+                  <p className={`text-sm mt-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    {obterQuantidadeTotalItens()} {obterQuantidadeTotalItens() === 1 ? 'item' : 'itens'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer com Botões */}
+            <div className={`flex-shrink-0 p-4 border-t space-y-3 ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              {/* Botão Cancelar */}
+              <button
+                onClick={cancelarFinalizacaoPedido}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                }`}
+              >
+                Cancelar
+              </button>
+
+              {/* Botão Concluir */}
+              {obterWhatsAppEmpresa() && (
+                <button
+                  onClick={confirmarFinalizacaoPedido}
+                  disabled={lojaAberta === false}
+                  className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                    lojaAberta === false
+                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed opacity-60'
+                      : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white transform hover:scale-[1.02] shadow-lg'
+                  }`}
+                >
+                  {lojaAberta === false ? 'Loja Fechada' : 'Concluir Pedido'}
+                </button>
+              )}
             </div>
           </div>
         </div>
