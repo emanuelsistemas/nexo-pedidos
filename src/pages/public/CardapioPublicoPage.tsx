@@ -711,6 +711,7 @@ const CardapioPublicoPage: React.FC = () => {
     tempo_entrega?: number;
   }>>([]);
   const [cepCliente, setCepCliente] = useState('');
+  const [cepClienteTemp, setCepClienteTemp] = useState(''); // CEP temporário para o modal
   const [bairroSelecionado, setBairroSelecionado] = useState('');
   const [termoPesquisaBairro, setTermoPesquisaBairro] = useState('');
   const [validandoCep, setValidandoCep] = useState(false);
@@ -1034,7 +1035,7 @@ const CardapioPublicoPage: React.FC = () => {
       return;
     }
 
-    if (taxaEntregaConfig?.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa)) {
+    if (taxaEntregaConfig?.tipo === 'distancia' && (!cepClienteTemp || !enderecoEncontrado || !calculoTaxa)) {
       showMessage('error', 'Por favor, informe um CEP válido e aguarde o cálculo da taxa.');
       return;
     }
@@ -1046,7 +1047,9 @@ const CardapioPublicoPage: React.FC = () => {
       if (taxaEntregaConfig?.tipo === 'bairro') {
         localStorage.setItem(`bairro_selecionado_${empresaId}`, bairroSelecionado);
       } else {
-        localStorage.setItem(`cep_cliente_${empresaId}`, cepCliente);
+        // Atualizar CEP real com o CEP temporário validado
+        setCepCliente(cepClienteTemp);
+        localStorage.setItem(`cep_cliente_${empresaId}`, cepClienteTemp);
 
         // Salvar também o endereço encontrado
         if (enderecoEncontrado) {
@@ -1062,6 +1065,32 @@ const CardapioPublicoPage: React.FC = () => {
 
     setAreaValidada(true);
     setModalAreaEntregaAberto(false);
+
+    // Limpar backup dos dados originais (confirmação bem-sucedida)
+    setDadosOriginaisBackup(null);
+
+    // Carregar dados salvos nos estados para exibir na tela
+    if (empresaId) {
+      const cepSalvo = localStorage.getItem(`cep_cliente_${empresaId}`);
+      const enderecoSalvoStr = localStorage.getItem(`endereco_encontrado_${empresaId}`);
+      const taxaSalvaStr = localStorage.getItem(`taxa_entrega_${empresaId}`);
+
+      if (cepSalvo) setCepCliente(cepSalvo);
+      if (enderecoSalvoStr) {
+        try {
+          setEnderecoEncontrado(JSON.parse(enderecoSalvoStr));
+        } catch (e) {
+          console.error('Erro ao carregar endereço salvo:', e);
+        }
+      }
+      if (taxaSalvaStr) {
+        try {
+          setCalculoTaxa(JSON.parse(taxaSalvaStr));
+        } catch (e) {
+          console.error('Erro ao carregar taxa salva:', e);
+        }
+      }
+    }
 
     const mensagem = calculoTaxa
       ? `Área confirmada! Taxa: R$ ${calculoTaxa.valor.toFixed(2)} - ${calculoTaxa.tempo_estimado} min`
@@ -1083,6 +1112,49 @@ const CardapioPublicoPage: React.FC = () => {
 
       showMessage('success', `Endereço confirmado! Taxa: R$ ${enderecoSalvo.taxa.valor.toFixed(2)}`);
     }
+  };
+
+  // Estados para backup dos dados originais antes da alteração
+  const [dadosOriginaisBackup, setDadosOriginaisBackup] = useState<{
+    cepCliente: string;
+    enderecoEncontrado: any;
+    calculoTaxa: CalculoTaxaResult | null;
+    bairroSelecionado: string;
+  } | null>(null);
+
+  // Apenas abrir modal de alteração (sem limpar dados)
+  const abrirModalAlteracao = () => {
+    // Fazer backup dos dados atuais antes de abrir o modal
+    setDadosOriginaisBackup({
+      cepCliente,
+      enderecoEncontrado,
+      calculoTaxa,
+      bairroSelecionado
+    });
+
+    // Inicializar CEP temporário com o CEP atual
+    setCepClienteTemp(cepCliente);
+    setModalAreaEntregaAberto(true);
+  };
+
+  // Fechar modal de alteração sem salvar mudanças
+  const fecharModalAlteracao = () => {
+    // Restaurar dados originais do backup
+    if (dadosOriginaisBackup) {
+      setCepCliente(dadosOriginaisBackup.cepCliente);
+      setEnderecoEncontrado(dadosOriginaisBackup.enderecoEncontrado);
+      setCalculoTaxa(dadosOriginaisBackup.calculoTaxa);
+      setBairroSelecionado(dadosOriginaisBackup.bairroSelecionado);
+    }
+
+    // Limpar estados temporários
+    setCepClienteTemp('');
+    setCepForaArea(false);
+    setValidandoCep(false);
+    setModalAreaEntregaAberto(false);
+
+    // Limpar backup
+    setDadosOriginaisBackup(null);
   };
 
   // Alterar endereço (limpar dados salvos e abrir modal)
@@ -8049,7 +8121,7 @@ const CardapioPublicoPage: React.FC = () => {
                     <span className={`text-lg font-semibold ${
                       config.modo_escuro ? 'text-white' : 'text-gray-900'
                     }`}>
-                      Total Geral:
+                      Total geral dos produtos:
                     </span>
                     <span className={`text-xl font-bold ${
                       config.modo_escuro ? 'text-green-400' : 'text-green-600'
@@ -8081,7 +8153,7 @@ const CardapioPublicoPage: React.FC = () => {
                       🚚 Taxa de Entrega
                     </h4>
                     <button
-                      onClick={() => setModalAreaEntregaAberto(true)}
+                      onClick={abrirModalAlteracao}
                       className={`text-sm px-3 py-1 rounded-lg transition-colors ${
                         config.modo_escuro
                           ? 'text-blue-400 hover:bg-gray-700'
@@ -8172,7 +8244,7 @@ const CardapioPublicoPage: React.FC = () => {
                 <span className={`text-lg font-bold ${
                   config.modo_escuro ? 'text-white' : 'text-gray-900'
                 }`}>
-                  Total geral dos produtos:
+                  Total Geral:
                 </span>
                 <span className={`text-xl font-bold ${
                   config.modo_escuro ? 'text-green-400' : 'text-green-600'
@@ -8376,19 +8448,34 @@ const CardapioPublicoPage: React.FC = () => {
             <div className={`p-6 border-b ${
               config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
             }`}>
-              <h2 className={`text-xl font-bold ${
-                config.modo_escuro ? 'text-white' : 'text-gray-900'
-              }`}>
-                Validar Área de Entrega
-              </h2>
-              <p className={`text-sm mt-2 ${
-                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-              }`}>
-                {taxaEntregaConfig.tipo === 'bairro'
-                  ? 'Selecione seu bairro para verificar se atendemos sua região'
-                  : 'Informe seu CEP para verificar se atendemos sua região'
-                }
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className={`text-xl font-bold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Validar Área de Entrega
+                  </h2>
+                  <p className={`text-sm mt-2 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    {taxaEntregaConfig.tipo === 'bairro'
+                      ? 'Selecione seu bairro para verificar se atendemos sua região'
+                      : 'Informe seu CEP para verificar se atendemos sua região'
+                    }
+                  </p>
+                </div>
+                <button
+                  onClick={fecharModalAlteracao}
+                  className={`p-2 rounded-lg transition-colors ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                  title="Fechar"
+                >
+                  <X size={24} />
+                </button>
+              </div>
             </div>
 
             {/* Content */}
@@ -8406,8 +8493,8 @@ const CardapioPublicoPage: React.FC = () => {
                       <input
                         type="tel"
                         inputMode="numeric"
-                        value={cepCliente}
-                        onChange={(e) => setCepCliente(formatarCEP(e.target.value))}
+                        value={cepClienteTemp}
+                        onChange={(e) => setCepClienteTemp(formatarCEP(e.target.value))}
                         placeholder="00000-000"
                         maxLength={9}
                         className={`w-32 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
@@ -8417,10 +8504,10 @@ const CardapioPublicoPage: React.FC = () => {
                         }`}
                       />
                       <button
-                        onClick={() => validarCEP(cepCliente)}
-                        disabled={validandoCep || cepCliente.replace(/\D/g, '').length !== 8}
+                        onClick={() => validarCEP(cepClienteTemp)}
+                        disabled={validandoCep || cepClienteTemp.replace(/\D/g, '').length !== 8}
                         className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                          validandoCep || cepCliente.replace(/\D/g, '').length !== 8
+                          validandoCep || cepClienteTemp.replace(/\D/g, '').length !== 8
                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
