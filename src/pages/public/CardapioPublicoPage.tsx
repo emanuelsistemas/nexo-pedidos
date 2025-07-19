@@ -464,11 +464,6 @@ const CardapioPublicoPage: React.FC = () => {
   const [loaded, setLoaded] = useState(false);
   const [hasShownPeekCategoria, setHasShownPeekCategoria] = useState(false);
 
-  // Estado para controlar qual tabela de preço está selecionada para cada produto
-  const [tabelaSelecionada, setTabelaSelecionada] = useState<{[key: string]: string}>({});
-
-
-
   // Configuração do Keen Slider para categorias com efeito peek
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
@@ -2210,6 +2205,16 @@ const CardapioPublicoPage: React.FC = () => {
     if (tabelasComPrecos.length > 0) {
       // Produto tem tabela de preço, verificar se uma foi selecionada
       const tabelaSelecionada = tabelasSelecionadas[produtoId];
+
+      // 🐛 DEBUG: Log para verificar estado
+      console.log('🔍 DEBUG - Verificação tabela de preço:', {
+        produtoId,
+        produtoNome: produto.nome,
+        tabelasComPrecos: tabelasComPrecos.length,
+        tabelaSelecionada,
+        tabelasSelecionadasCompleto: tabelasSelecionadas
+      });
+
       if (!tabelaSelecionada) {
         // Nenhuma tabela selecionada, mostrar modal de aviso
         setProdutoTabelaPrecoObrigatoria({
@@ -4652,7 +4657,7 @@ const CardapioPublicoPage: React.FC = () => {
                           <div className="flex items-center mt-1">
                             {config.mostrar_precos && (() => {
                               const tabelasComPrecos = obterTabelasComPrecos(produto.id);
-                              const tabelaSelecionadaId = tabelaSelecionada[produto.id];
+                              const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
 
                               // Se há tabelas de preços e uma está selecionada, mostrar preço da tabela
                               if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
@@ -4799,7 +4804,7 @@ const CardapioPublicoPage: React.FC = () => {
                         <div className="flex items-center mb-3">
                           {config.mostrar_precos && (() => {
                             const tabelasComPrecos = obterTabelasComPrecos(produto.id);
-                            const tabelaSelecionadaId = tabelaSelecionada[produto.id];
+                            const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
 
                             // Se há tabelas de preços e uma está selecionada, mostrar preço da tabela
                             if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
@@ -4995,37 +5000,64 @@ const CardapioPublicoPage: React.FC = () => {
                             {tabelasComPrecos.length <= 3 ? (
                               // Se tem 3 ou menos tabelas, mostrar sem slider
                               <div className="flex gap-2 w-full">
-                                {tabelasComPrecos.map(tabela => (
-                                  <div
-                                    key={tabela.id}
-                                    className={`flex-1 p-3 rounded-lg border-2 transition-all duration-200 hover:scale-105 ${
-                                      config.modo_escuro
-                                        ? 'bg-gray-700 border-gray-500 text-white shadow-md hover:border-purple-400'
-                                        : 'bg-white border-gray-300 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md'
-                                    }`}
-                                  >
-                                    <div className={`text-xs font-bold truncate mb-1 ${
-                                      config.modo_escuro ? 'text-gray-200' : 'text-gray-700'
-                                    }`}>
-                                      {tabela.nome}
-                                    </div>
-                                    <div className={`text-lg font-bold ${
-                                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                                    }`}>
-                                      {formatarPreco(tabela.preco)}
-                                    </div>
-                                    {/* Tag de quantidade de sabores */}
-                                    {tabela.quantidade_sabores > 1 && (
-                                      <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
-                                        config.modo_escuro
-                                          ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
-                                          : 'bg-purple-100 text-purple-700 border border-purple-300'
+                                {tabelasComPrecos.map(tabela => {
+                                  const isSelected = tabelasSelecionadas[produto.id] === tabela.id;
+                                  return (
+                                    <button
+                                      key={tabela.id}
+                                      onClick={() => {
+                                        console.log('🔍 DEBUG - Selecionando tabela:', {
+                                          produtoId: produto.id,
+                                          produtoNome: produto.nome,
+                                          tabelaId: tabela.id,
+                                          tabelaNome: tabela.nome
+                                        });
+                                        setTabelasSelecionadas(prev => ({
+                                          ...prev,
+                                          [produto.id]: tabela.id
+                                        }));
+                                      }}
+                                      className={`flex-1 p-3 rounded-lg border-2 transition-all duration-200 hover:scale-105 text-left ${
+                                        isSelected
+                                          ? config.modo_escuro
+                                            ? 'bg-purple-900/50 border-purple-400 text-white shadow-lg ring-2 ring-purple-400/50'
+                                            : 'bg-blue-50 border-blue-500 text-gray-800 shadow-md ring-2 ring-blue-500/50'
+                                          : config.modo_escuro
+                                            ? 'bg-gray-700 border-gray-500 text-white shadow-md hover:border-purple-400'
+                                            : 'bg-white border-gray-300 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md'
+                                      }`}
+                                    >
+                                      <div className={`text-xs font-bold truncate mb-1 ${
+                                        isSelected
+                                          ? config.modo_escuro ? 'text-purple-200' : 'text-blue-700'
+                                          : config.modo_escuro ? 'text-gray-200' : 'text-gray-700'
                                       }`}>
-                                        {tabela.quantidade_sabores} sabores
+                                        {tabela.nome}
                                       </div>
-                                    )}
-                                  </div>
-                                ))}
+                                      <div className={`text-lg font-bold ${
+                                        isSelected
+                                          ? config.modo_escuro ? 'text-green-300' : 'text-green-700'
+                                          : config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                      }`}>
+                                        {formatarPreco(tabela.preco)}
+                                      </div>
+                                      {/* Tag de quantidade de sabores */}
+                                      {tabela.quantidade_sabores > 1 && (
+                                        <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
+                                          isSelected
+                                            ? config.modo_escuro
+                                              ? 'bg-purple-800/70 text-purple-200 border border-purple-600'
+                                              : 'bg-blue-100 text-blue-800 border border-blue-400'
+                                            : config.modo_escuro
+                                              ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
+                                              : 'bg-purple-100 text-purple-700 border border-purple-300'
+                                        }`}>
+                                          {tabela.quantidade_sabores} sabores
+                                        </div>
+                                      )}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             ) : (
                               // Se tem mais de 3 tabelas, usar Keen Slider
@@ -5033,9 +5065,9 @@ const CardapioPublicoPage: React.FC = () => {
                                 tabelas={tabelasComPrecos}
                                 config={config}
                                 formatarPreco={formatarPreco}
-                                tabelaSelecionada={tabelaSelecionada[produto.id]}
+                                tabelaSelecionada={tabelasSelecionadas[produto.id]}
                                 onTabelaSelect={(tabelaId) => {
-                                  setTabelaSelecionada(prev => ({
+                                  setTabelasSelecionadas(prev => ({
                                     ...prev,
                                     [produto.id]: tabelaId
                                   }));
