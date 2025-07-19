@@ -7,6 +7,8 @@ import FotoGaleria from '../../components/comum/FotoGaleria';
 // Keen Slider
 import { useKeenSlider } from "keen-slider/react";
 import "keen-slider/keen-slider.min.css";
+// Serviços de taxa de entrega
+import { taxaEntregaService, type CalculoTaxaResult } from '../../services/taxaEntregaService';
 
 // Componente para slider de promoções
 interface PromocoesSliderProps {
@@ -719,6 +721,8 @@ const CardapioPublicoPage: React.FC = () => {
     uf: string;
   } | null>(null);
   const [areaValidada, setAreaValidada] = useState(false);
+  const [calculoTaxa, setCalculoTaxa] = useState<CalculoTaxaResult | null>(null);
+  const [calculandoTaxa, setCalculandoTaxa] = useState(false);
 
   // Estados para modal de configuração individual (mantendo apenas os necessários)
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
@@ -872,6 +876,7 @@ const CardapioPublicoPage: React.FC = () => {
   const validarCEP = async (cep: string) => {
     try {
       setValidandoCep(true);
+      setCalculandoTaxa(true);
       const cepLimpo = cep.replace(/\D/g, '');
 
       if (cepLimpo.length !== 8) {
@@ -879,30 +884,66 @@ const CardapioPublicoPage: React.FC = () => {
         return;
       }
 
+      // 1. Validar CEP via ViaCEP
       const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
       const data = await response.json();
 
       if (data.erro) {
         showMessage('error', 'CEP não encontrado.');
         setEnderecoEncontrado(null);
+        setCalculoTaxa(null);
         return;
       }
 
-      setEnderecoEncontrado({
+      const endereco = {
         logradouro: data.logradouro || '',
         bairro: data.bairro || '',
         localidade: data.localidade || '',
         uf: data.uf || ''
-      });
+      };
 
-      showMessage('success', 'CEP válido! Verificando área de entrega...');
+      setEnderecoEncontrado(endereco);
+
+      // 2. Calcular taxa de entrega
+      if (empresaId) {
+        console.log('🚚 Calculando taxa de entrega para CEP:', cep);
+        const resultadoTaxa = await taxaEntregaService.calcularTaxa(empresaId, cep);
+
+        if (resultadoTaxa) {
+          setCalculoTaxa(resultadoTaxa);
+          showMessage('success', `CEP válido! Taxa: R$ ${resultadoTaxa.valor.toFixed(2)} - ${resultadoTaxa.tempo_estimado} min`);
+        } else {
+          setCalculoTaxa(null);
+          showMessage('error', 'CEP fora da área de entrega.');
+          setEnderecoEncontrado(null);
+        }
+      }
 
     } catch (error) {
       console.error('Erro ao validar CEP:', error);
       showMessage('error', 'Erro ao validar CEP. Tente novamente.');
       setEnderecoEncontrado(null);
+      setCalculoTaxa(null);
     } finally {
       setValidandoCep(false);
+      setCalculandoTaxa(false);
+    }
+  };
+
+  const selecionarBairro = async (bairro: string) => {
+    setBairroSelecionado(bairro);
+
+    // Calcular taxa para o bairro selecionado
+    if (empresaId && taxaEntregaConfig?.tipo === 'bairro') {
+      setCalculandoTaxa(true);
+      try {
+        const resultadoTaxa = await taxaEntregaService.calcularTaxa(empresaId, '', bairro);
+        setCalculoTaxa(resultadoTaxa);
+      } catch (error) {
+        console.error('Erro ao calcular taxa do bairro:', error);
+      } finally {
+        setCalculandoTaxa(false);
+      }
     }
   };
 
@@ -912,8 +953,8 @@ const CardapioPublicoPage: React.FC = () => {
       return;
     }
 
-    if (taxaEntregaConfig?.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado)) {
-      showMessage('error', 'Por favor, informe um CEP válido.');
+    if (taxaEntregaConfig?.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa)) {
+      showMessage('error', 'Por favor, informe um CEP válido e aguarde o cálculo da taxa.');
       return;
     }
 
@@ -925,11 +966,21 @@ const CardapioPublicoPage: React.FC = () => {
       } else {
         localStorage.setItem(`cep_cliente_${empresaId}`, cepCliente);
       }
+
+      // Salvar dados da taxa calculada
+      if (calculoTaxa) {
+        localStorage.setItem(`taxa_entrega_${empresaId}`, JSON.stringify(calculoTaxa));
+      }
     }
 
     setAreaValidada(true);
     setModalAreaEntregaAberto(false);
-    showMessage('success', 'Área de entrega confirmada!');
+
+    const mensagem = calculoTaxa
+      ? `Área confirmada! Taxa: R$ ${calculoTaxa.valor.toFixed(2)} - ${calculoTaxa.tempo_estimado} min`
+      : 'Área de entrega confirmada!';
+
+    showMessage('success', mensagem);
   };
 
   // Filtrar bairros com base na pesquisa
@@ -8007,7 +8058,8 @@ const CardapioPublicoPage: React.FC = () => {
                       bairrosFiltrados.map((item) => (
                         <button
                           key={item.id}
-                          onClick={() => setBairroSelecionado(item.bairro)}
+                          onClick={() => selecionarBairro(item.bairro)}
+                          disabled={calculandoTaxa}
                           className={`w-full p-3 text-left rounded-lg border-2 transition-all ${
                             bairroSelecionado === item.bairro
                               ? config.modo_escuro
@@ -8016,7 +8068,7 @@ const CardapioPublicoPage: React.FC = () => {
                               : config.modo_escuro
                                 ? 'bg-gray-700 border-gray-600 text-white hover:border-blue-400'
                                 : 'bg-white border-gray-300 text-gray-900 hover:border-blue-400'
-                          }`}
+                          } ${calculandoTaxa ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <div className="flex justify-between items-center">
                             <span className="font-medium">{item.bairro}</span>
@@ -8050,6 +8102,90 @@ const CardapioPublicoPage: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Resultado do Cálculo de Taxa */}
+              {(calculandoTaxa || calculoTaxa) && (
+                <div className={`mt-4 p-4 rounded-lg border ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 border-gray-600'
+                    : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <h4 className={`font-medium mb-2 ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Taxa de Entrega:
+                  </h4>
+
+                  {calculandoTaxa ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                      <span className={`text-sm ${
+                        config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
+                        Calculando taxa de entrega...
+                      </span>
+                    </div>
+                  ) : calculoTaxa ? (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className={`text-sm ${
+                          config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                        }`}>
+                          Valor:
+                        </span>
+                        <span className={`font-bold text-lg ${
+                          config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                        }`}>
+                          {formatarPreco(calculoTaxa.valor)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className={`text-sm ${
+                          config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                        }`}>
+                          Tempo estimado:
+                        </span>
+                        <span className={`text-sm font-medium ${
+                          config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
+                          {calculoTaxa.tempo_estimado} minutos
+                        </span>
+                      </div>
+
+                      {calculoTaxa.distancia_km > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className={`text-sm ${
+                            config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                          }`}>
+                            Distância:
+                          </span>
+                          <span className={`text-sm ${
+                            config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                          }`}>
+                            {calculoTaxa.distancia_km.toFixed(1)} km
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center">
+                        <span className={`text-xs ${
+                          config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                        }`}>
+                          Método:
+                        </span>
+                        <span className={`text-xs ${
+                          config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                        }`}>
+                          {calculoTaxa.detalhes.method === 'routes_api' ? 'Google Maps' :
+                           calculoTaxa.detalhes.method === 'haversine' ? 'Estimativa' :
+                           calculoTaxa.detalhes.method === 'cached' ? 'Cache' : 'Bairro'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -8059,17 +8195,19 @@ const CardapioPublicoPage: React.FC = () => {
               <button
                 onClick={confirmarAreaEntrega}
                 disabled={
-                  (taxaEntregaConfig.tipo === 'bairro' && !bairroSelecionado) ||
-                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado))
+                  calculandoTaxa ||
+                  (taxaEntregaConfig.tipo === 'bairro' && (!bairroSelecionado || !calculoTaxa)) ||
+                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa))
                 }
                 className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${
-                  (taxaEntregaConfig.tipo === 'bairro' && !bairroSelecionado) ||
-                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado))
+                  calculandoTaxa ||
+                  (taxaEntregaConfig.tipo === 'bairro' && (!bairroSelecionado || !calculoTaxa)) ||
+                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa))
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-green-600 text-white hover:bg-green-700 transform hover:scale-[1.02]'
                 }`}
               >
-                Confirmar Área de Entrega
+                {calculandoTaxa ? 'Calculando...' : 'Confirmar Área de Entrega'}
               </button>
             </div>
           </div>

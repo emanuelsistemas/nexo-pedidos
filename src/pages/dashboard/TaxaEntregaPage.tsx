@@ -74,6 +74,10 @@ const TaxaEntregaPage: React.FC = () => {
     km: '',
     tempo_entrega: '',
   });
+
+  // ✅ NOVO: Estado para controlar loading do botão de edição
+  const [loadingEditTaxa, setLoadingEditTaxa] = useState<string | null>(null);
+
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     id: string;
@@ -240,6 +244,30 @@ const TaxaEntregaPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA FUNÇÃO: Editar taxa com loading
+  const handleEditTaxa = async (taxa: any) => {
+    try {
+      // ✅ NOVO: Ativar loading para esta taxa específica
+      setLoadingEditTaxa(taxa.id);
+
+      setEditingTaxa(taxa);
+      setFormData({
+        cep: taxa.cep || '',
+        bairro: taxa.bairro || '',
+        valor: taxa.valor.toString(),
+        km: taxa.km?.toString() || '',
+        tempo_entrega: taxa.tempo_entrega?.toString() || '',
+      });
+      setShowSidebar(true);
+    } catch (error) {
+      console.error('Erro ao abrir taxa para edição:', error);
+      showMessage('error', 'Erro ao carregar dados da taxa');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditTaxa(null);
+    }
+  };
+
   const handleDelete = async (id: string, identifier: string) => {
     setDeleteConfirmation({
       isOpen: true,
@@ -356,19 +384,22 @@ const TaxaEntregaPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => {
-                        setEditingTaxa(taxa);
-                        setFormData({
-                          cep: taxa.cep || '',
-                          bairro: taxa.bairro || '',
-                          valor: taxa.valor.toString(),
-                          km: taxa.km?.toString() || '',
-                          tempo_entrega: taxa.tempo_entrega?.toString() || '',
-                        });
-                        setShowSidebar(true);
+                        if (loadingEditTaxa === taxa.id) return; // Evitar cliques múltiplos
+                        handleEditTaxa(taxa);
                       }}
-                      className="p-2 text-gray-400 hover:text-white transition-colors"
+                      className={`p-2 transition-colors ${
+                        loadingEditTaxa === taxa.id
+                          ? 'text-primary-400 cursor-wait'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                      title={loadingEditTaxa === taxa.id ? "Carregando..." : "Editar taxa"}
+                      disabled={loadingEditTaxa === taxa.id}
                     >
-                      <Pencil size={16} />
+                      {loadingEditTaxa === taxa.id ? (
+                        <div className="w-4 h-4 border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+                      ) : (
+                        <Pencil size={16} />
+                      )}
                     </button>
                     <button
                       onClick={() => handleDelete(taxa.id, taxaMode === 'bairro' ? taxa.bairro : `${taxa.km}km`)}
