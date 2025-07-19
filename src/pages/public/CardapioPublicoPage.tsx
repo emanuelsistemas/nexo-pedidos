@@ -190,7 +190,7 @@ interface TabelasPrecosSliderProps {
   onSlideChange?: (currentSlide: number, totalSlides: number) => void;
 }
 
-const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, config, formatarPreco }) => {
+const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, config, formatarPreco, onSlideChange, tabelaSelecionada, onTabelaSelect }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [hasShownPeek, setHasShownPeek] = useState(false);
@@ -202,7 +202,11 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
       spacing: 12,
     },
     slideChanged(slider) {
-      setCurrentSlide(slider.track.details.rel);
+      const newSlide = slider.track.details.rel;
+      setCurrentSlide(newSlide);
+      const slidesPerView = 2.5;
+      const totalSlides = Math.ceil(tabelas.length / slidesPerView);
+      onSlideChange?.(newSlide, totalSlides);
     },
     created(slider) {
       setLoaded(true);
@@ -224,15 +228,23 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
     <div className="relative">
 
       <div ref={sliderRef} className="keen-slider">
-        {tabelas.map((tabela) => (
-          <div key={tabela.id} className="keen-slider__slide" style={{ minWidth: '120px' }}>
-            <div
-              className={`p-3 rounded-lg border-2 transition-all duration-200 h-full hover:scale-105 ${
-                config.modo_escuro
-                  ? 'bg-gray-700 border-gray-500 text-white shadow-md hover:border-purple-400'
-                  : 'bg-white border-gray-300 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md'
-              }`}
-            >
+        {tabelas.map((tabela) => {
+          const isSelected = tabelaSelecionada === tabela.id;
+
+          return (
+            <div key={tabela.id} className="keen-slider__slide" style={{ minWidth: '120px' }}>
+              <button
+                onClick={() => onTabelaSelect?.(tabela.id)}
+                className={`w-full p-3 rounded-lg border-2 transition-all duration-200 h-full hover:scale-105 text-left ${
+                  isSelected
+                    ? config.modo_escuro
+                      ? 'bg-purple-900/50 border-purple-400 text-white shadow-lg ring-2 ring-purple-400/50'
+                      : 'bg-blue-50 border-blue-500 text-gray-800 shadow-md ring-2 ring-blue-500/50'
+                    : config.modo_escuro
+                      ? 'bg-gray-700 border-gray-500 text-white shadow-md hover:border-purple-400'
+                      : 'bg-white border-gray-300 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md'
+                }`}
+              >
               <div className={`text-xs font-bold truncate mb-1 ${
                 config.modo_escuro ? 'text-gray-200' : 'text-gray-700'
               }`}>
@@ -253,9 +265,10 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
                   {tabela.quantidade_sabores} sabores
                 </div>
               )}
+              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* ✅ INDICADORES MELHORADOS PARA USUÁRIOS LEIGOS */}
@@ -450,6 +463,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [hasShownPeekCategoria, setHasShownPeekCategoria] = useState(false);
+
+  // Estado para controlar qual tabela de preço está selecionada para cada produto
+  const [tabelaSelecionada, setTabelaSelecionada] = useState<{[key: string]: string}>({});
 
 
 
@@ -656,6 +672,7 @@ const CardapioPublicoPage: React.FC = () => {
   const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState(false);
   const [tabelasPrecos, setTabelasPrecos] = useState<Array<{id: string; nome: string; quantidade_sabores: number}>>([]);
   const [produtoPrecos, setProdutoPrecos] = useState<{[produtoId: string]: {[tabelaId: string]: number}}>({});
+  const [tabelasSelecionadas, setTabelasSelecionadas] = useState<{[produtoId: string]: string}>({});
 
   // Funções para observações
   const abrirModalObservacao = (produtoId: string, itemId?: string) => {
@@ -2184,10 +2201,27 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const incrementarQuantidade = (produtoId: string) => {
-    const quantidadeAtual = obterQuantidadeSelecionada(produtoId);
-
-    // Buscar o produto para verificar se é fracionário
+    // Buscar o produto
     const produto = produtos.find(p => p.id === produtoId);
+    if (!produto) return;
+
+    // ✅ VERIFICAR SE PRODUTO TEM TABELA DE PREÇO E SE UMA FOI SELECIONADA
+    const tabelasComPrecos = obterTabelasComPrecos(produtoId);
+    if (tabelasComPrecos.length > 0) {
+      // Produto tem tabela de preço, verificar se uma foi selecionada
+      const tabelaSelecionada = tabelasSelecionadas[produtoId];
+      if (!tabelaSelecionada) {
+        // Nenhuma tabela selecionada, mostrar modal de aviso
+        setProdutoTabelaPrecoObrigatoria({
+          id: produtoId,
+          nome: produto.nome
+        });
+        setModalTabelaPrecoObrigatoria(true);
+        return;
+      }
+    }
+
+    const quantidadeAtual = obterQuantidadeSelecionada(produtoId);
     const isFracionado = produto?.unidade_medida?.fracionado || false;
 
     let novaQuantidade;
@@ -2220,6 +2254,25 @@ const CardapioPublicoPage: React.FC = () => {
       }
 
       alterarQuantidadeSelecionada(produtoId, novaQuantidade);
+    } else {
+      // ✅ VERIFICAR SE PRODUTO TEM TABELA DE PREÇO E SE UMA FOI SELECIONADA (mesmo quando quantidade é 0)
+      const produto = produtos.find(p => p.id === produtoId);
+      if (!produto) return;
+
+      const tabelasComPrecos = obterTabelasComPrecos(produtoId);
+      if (tabelasComPrecos.length > 0) {
+        // Produto tem tabela de preço, verificar se uma foi selecionada
+        const tabelaSelecionada = tabelasSelecionadas[produtoId];
+        if (!tabelaSelecionada) {
+          // Nenhuma tabela selecionada, mostrar modal de aviso
+          setProdutoTabelaPrecoObrigatoria({
+            id: produtoId,
+            nome: produto.nome
+          });
+          setModalTabelaPrecoObrigatoria(true);
+          return;
+        }
+      }
     }
   };
 
@@ -2967,6 +3020,11 @@ const CardapioPublicoPage: React.FC = () => {
     // Fechar modal sem adicionar
     setModalProdutoAlcoolico(false);
     setProdutoAlcoolicoPendente(null);
+  };
+
+  const fecharModalTabelaPrecoObrigatoria = () => {
+    setModalTabelaPrecoObrigatoria(false);
+    setProdutoTabelaPrecoObrigatoria(null);
   };
 
   // Funções auxiliares para o modal de configuração
@@ -4592,7 +4650,26 @@ const CardapioPublicoPage: React.FC = () => {
 
                           {/* Linha do preço */}
                           <div className="flex items-center mt-1">
-                            {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (() => {
+                            {config.mostrar_precos && (() => {
+                              const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                              const tabelaSelecionadaId = tabelaSelecionada[produto.id];
+
+                              // Se há tabelas de preços e uma está selecionada, mostrar preço da tabela
+                              if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+                                const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+                                if (tabelaEscolhida) {
+                                  return (
+                                    <div className={`text-lg font-bold ${
+                                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                    }`}>
+                                      {formatarPreco(tabelaEscolhida.preco)}
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              // Se não há tabelas de preços, mostrar preço normal
+                              if (tabelasComPrecos.length === 0) {
                               // Verificar se produto está em promoção
                               const temPromocao = produto.promocao &&
                                                 produto.exibir_promocao_cardapio &&
@@ -4627,6 +4704,10 @@ const CardapioPublicoPage: React.FC = () => {
                                   </div>
                                 );
                               }
+                              }
+
+                              // Se há tabelas mas nenhuma selecionada, não mostrar preço
+                              return null;
                             })()}
                           </div>
                         </div>
@@ -4716,7 +4797,26 @@ const CardapioPublicoPage: React.FC = () => {
                         </div>
                         {/* Preço logo abaixo do nome quando não tem foto */}
                         <div className="flex items-center mb-3">
-                          {config.mostrar_precos && obterTabelasComPrecos(produto.id).length === 0 && (() => {
+                          {config.mostrar_precos && (() => {
+                            const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                            const tabelaSelecionadaId = tabelaSelecionada[produto.id];
+
+                            // Se há tabelas de preços e uma está selecionada, mostrar preço da tabela
+                            if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+                              const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+                              if (tabelaEscolhida) {
+                                return (
+                                  <div className={`text-lg font-bold ${
+                                    config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                  }`}>
+                                    {formatarPreco(tabelaEscolhida.preco)}
+                                  </div>
+                                );
+                              }
+                            }
+
+                            // Se não há tabelas de preços, mostrar preço normal
+                            if (tabelasComPrecos.length === 0) {
                             // Verificar se produto está em promoção
                             const temPromocao = produto.promocao &&
                                               produto.exibir_promocao_cardapio &&
@@ -4751,6 +4851,10 @@ const CardapioPublicoPage: React.FC = () => {
                                 </span>
                               );
                             }
+                            }
+
+                            // Se há tabelas mas nenhuma selecionada, não mostrar preço
+                            return null;
                           })()}
                         </div>
 
@@ -4929,6 +5033,13 @@ const CardapioPublicoPage: React.FC = () => {
                                 tabelas={tabelasComPrecos}
                                 config={config}
                                 formatarPreco={formatarPreco}
+                                tabelaSelecionada={tabelaSelecionada[produto.id]}
+                                onTabelaSelect={(tabelaId) => {
+                                  setTabelaSelecionada(prev => ({
+                                    ...prev,
+                                    [produto.id]: tabelaId
+                                  }));
+                                }}
                               />
                             )}
                           </div>
@@ -6566,6 +6677,64 @@ const CardapioPublicoPage: React.FC = () => {
                 className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 transition-colors"
               >
                 Sou maior de 18 anos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Tabela de Preço Obrigatória */}
+      {modalTabelaPrecoObrigatoria && produtoTabelaPrecoObrigatoria && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`max-w-md w-full rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+          }`}>
+            {/* Header do Modal */}
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <span className="text-2xl">📋</span>
+                </div>
+                <div>
+                  <h3 className={`text-lg font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Selecione uma Opção de Preço
+                  </h3>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    {produtoTabelaPrecoObrigatoria.nome}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <div className={`bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 ${
+                config.modo_escuro ? 'text-blue-200' : 'text-blue-800'
+              }`}>
+                <p className="text-sm font-medium">
+                  ℹ️ Este produto possui diferentes opções de tamanho e preço.
+                </p>
+                <p className="text-sm mt-1">
+                  Por favor, selecione primeiro uma das opções disponíveis antes de escolher a quantidade.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer do Modal */}
+            <div className="p-6 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={fecharModalTabelaPrecoObrigatoria}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  config.modo_escuro
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                }`}
+              >
+                Entendi
               </button>
             </div>
           </div>
