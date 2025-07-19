@@ -75,6 +75,10 @@ const UnidadeMedidaPage: React.FC = () => {
     nome: '',
     fracionado: false,
   });
+
+  // ✅ NOVO: Estado para controlar loading do botão de edição
+  const [loadingEditUnidade, setLoadingEditUnidade] = useState<string | null>(null);
+
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     id: string;
@@ -123,14 +127,25 @@ const UnidadeMedidaPage: React.FC = () => {
     }
   };
 
-  const handleEditUnidade = (unidade: UnidadeMedida) => {
-    setEditingUnidade(unidade);
-    setFormData({
-      sigla: unidade.sigla,
-      nome: unidade.nome,
-      fracionado: unidade.fracionado,
-    });
-    setShowSidebar(true);
+  const handleEditUnidade = async (unidade: UnidadeMedida) => {
+    try {
+      // ✅ NOVO: Ativar loading para esta unidade específica
+      setLoadingEditUnidade(unidade.id);
+
+      setEditingUnidade(unidade);
+      setFormData({
+        sigla: unidade.sigla,
+        nome: unidade.nome,
+        fracionado: unidade.fracionado,
+      });
+      setShowSidebar(true);
+    } catch (error) {
+      console.error('Erro ao abrir unidade para edição:', error);
+      showMessage('error', 'Erro ao carregar dados da unidade');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditUnidade(null);
+    }
   };
 
   const handleDeleteClick = (unidade: UnidadeMedida) => {
@@ -325,10 +340,23 @@ const UnidadeMedidaPage: React.FC = () => {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleEditUnidade(unidade)}
-                      className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                      onClick={() => {
+                        if (loadingEditUnidade === unidade.id) return; // Evitar cliques múltiplos
+                        handleEditUnidade(unidade);
+                      }}
+                      className={`p-2 rounded-lg transition-colors ${
+                        loadingEditUnidade === unidade.id
+                          ? 'text-primary-400 cursor-wait'
+                          : 'hover:bg-gray-800 text-gray-400 hover:text-white'
+                      }`}
+                      title={loadingEditUnidade === unidade.id ? "Carregando..." : "Editar unidade"}
+                      disabled={loadingEditUnidade === unidade.id}
                     >
-                      <Pencil size={18} />
+                      {loadingEditUnidade === unidade.id ? (
+                        <div className="w-[18px] h-[18px] border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+                      ) : (
+                        <Pencil size={18} />
+                      )}
                     </button>
                     <button
                       onClick={() => handleDeleteClick(unidade)}

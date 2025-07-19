@@ -62,6 +62,9 @@ const ClientesPage: React.FC = () => {
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
 
+  // ✅ NOVO: Estado para controlar loading do botão de edição
+  const [loadingEditCliente, setLoadingEditCliente] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     tipo_documento: 'CNPJ',
     documento: '',
@@ -1120,14 +1123,18 @@ const ClientesPage: React.FC = () => {
   };
 
   const handleEdit = async (cliente: Cliente) => {
-    // Usar diretamente os campos individuais de endereço
-    console.log('Editando cliente:', cliente);
+    try {
+      // ✅ NOVO: Ativar loading para este cliente específico
+      setLoadingEditCliente(cliente.id);
 
-    // Formatar CEP se existir
-    let cep = cliente.cep || '';
-    if (cep && /^\d+$/.test(cep)) {
-      cep = formatarCep(cep);
-    }
+      // Usar diretamente os campos individuais de endereço
+      console.log('Editando cliente:', cliente);
+
+      // Formatar CEP se existir
+      let cep = cliente.cep || '';
+      if (cep && /^\d+$/.test(cep)) {
+        cep = formatarCep(cep);
+      }
 
     // Usar os campos individuais diretamente
     let endereco = cliente.endereco || '';
@@ -1206,6 +1213,13 @@ const ClientesPage: React.FC = () => {
     await loadDescontos(cliente.id);
 
     setShowSidebar(true);
+    } catch (error) {
+      console.error('Erro ao abrir cliente para edição:', error);
+      toast.error('Erro ao carregar dados do cliente');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditCliente(null);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -1733,11 +1747,23 @@ const ClientesPage: React.FC = () => {
                 {/* Coluna Direita - Ações */}
                 <div className="flex gap-1 flex-shrink-0">
                   <button
-                    onClick={() => handleEdit(cliente)}
-                    className="p-1.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
-                    title="Editar"
+                    onClick={() => {
+                      if (loadingEditCliente === cliente.id) return; // Evitar cliques múltiplos
+                      handleEdit(cliente);
+                    }}
+                    className={`p-1.5 rounded transition-colors ${
+                      loadingEditCliente === cliente.id
+                        ? 'bg-primary-500/10 text-primary-400 cursor-wait'
+                        : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                    }`}
+                    title={loadingEditCliente === cliente.id ? "Carregando..." : "Editar"}
+                    disabled={loadingEditCliente === cliente.id}
                   >
-                    <Edit size={14} />
+                    {loadingEditCliente === cliente.id ? (
+                      <div className="w-3.5 h-3.5 border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+                    ) : (
+                      <Edit size={14} />
+                    )}
                   </button>
                   <button
                     onClick={() => handleDelete(cliente.id)}

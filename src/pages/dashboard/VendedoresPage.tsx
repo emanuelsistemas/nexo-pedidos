@@ -90,6 +90,9 @@ const VendedoresPage: React.FC = () => {
   const [novoEmail, setNovoEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // ✅ NOVO: Estado para controlar loading do botão de edição
+  const [loadingEditVendedor, setLoadingEditVendedor] = useState<string | null>(null);
+
   useEffect(() => {
     loadVendedores();
     loadEmpresas();
@@ -377,36 +380,47 @@ const VendedoresPage: React.FC = () => {
     }
   };
 
-  const handleEdit = (vendedor: Vendedor) => {
-    setEditingVendedor(vendedor);
-    setFormData({
-      tipo_documento: vendedor.tipo_documento || 'CPF',
-      documento: vendedor.documento || '',
-      razao_social: vendedor.razao_social || '',
-      nome_fantasia: vendedor.nome_fantasia || '',
-      nome: vendedor.nome,
-      telefones: vendedor.telefones || [],
-      emails: vendedor.emails || [],
-      cep: vendedor.cep || '',
-      endereco: vendedor.endereco || '',
-      numero: vendedor.numero || '',
-      complemento: vendedor.complemento || '',
-      bairro: vendedor.bairro || '',
-      cidade: vendedor.cidade || '',
-      estado: vendedor.estado || '',
-      empresa_id: vendedor.empresa_id,
-      comissao_percentual: vendedor.comissao_percentual || 0,
-      meta_mensal: vendedor.meta_mensal || 0,
-      ativo: vendedor.ativo !== false,
-      is_cliente: false,
-      is_funcionario: false,
-      is_vendedor: true,
-      is_fornecedor: false,
-      is_transportadora: false,
-      observacao_nfe: '',
-      observacao_interna: ''
-    });
-    setShowSidebar(true);
+  const handleEdit = async (vendedor: Vendedor) => {
+    try {
+      // ✅ NOVO: Ativar loading para este vendedor específico
+      setLoadingEditVendedor(vendedor.id);
+
+      setEditingVendedor(vendedor);
+      setFormData({
+        tipo_documento: vendedor.tipo_documento || 'CPF',
+        documento: vendedor.documento || '',
+        razao_social: vendedor.razao_social || '',
+        nome_fantasia: vendedor.nome_fantasia || '',
+        nome: vendedor.nome,
+        telefones: vendedor.telefones || [],
+        emails: vendedor.emails || [],
+        cep: vendedor.cep || '',
+        endereco: vendedor.endereco || '',
+        numero: vendedor.numero || '',
+        complemento: vendedor.complemento || '',
+        bairro: vendedor.bairro || '',
+        cidade: vendedor.cidade || '',
+        estado: vendedor.estado || '',
+        empresa_id: vendedor.empresa_id,
+        comissao_percentual: vendedor.comissao_percentual || 0,
+        meta_mensal: vendedor.meta_mensal || 0,
+        ativo: vendedor.ativo !== false,
+        is_cliente: false,
+        is_funcionario: false,
+        is_vendedor: true,
+        is_fornecedor: false,
+        is_transportadora: false,
+        observacao_nfe: '',
+        observacao_interna: ''
+      });
+      setShowSidebar(true);
+    } catch (error) {
+      console.error('Erro ao abrir vendedor para edição:', error);
+      toast.error('Erro ao carregar dados do vendedor');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditVendedor(null);
+    }
   };
 
   const handleDelete = async (vendedor: Vendedor) => {
@@ -556,10 +570,23 @@ const VendedoresPage: React.FC = () => {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => handleEdit(vendedor)}
-                  className="p-2 text-gray-400 hover:text-primary-400 transition-colors"
+                  onClick={() => {
+                    if (loadingEditVendedor === vendedor.id) return; // Evitar cliques múltiplos
+                    handleEdit(vendedor);
+                  }}
+                  className={`p-2 transition-colors ${
+                    loadingEditVendedor === vendedor.id
+                      ? 'text-primary-400 cursor-wait'
+                      : 'text-gray-400 hover:text-primary-400'
+                  }`}
+                  title={loadingEditVendedor === vendedor.id ? "Carregando..." : "Editar vendedor"}
+                  disabled={loadingEditVendedor === vendedor.id}
                 >
-                  <Edit size={16} />
+                  {loadingEditVendedor === vendedor.id ? (
+                    <div className="w-4 h-4 border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+                  ) : (
+                    <Edit size={16} />
+                  )}
                 </button>
                 <button
                   onClick={() => handleDelete(vendedor)}

@@ -72,6 +72,11 @@ const AdicionaisPage: React.FC = () => {
   const [novoItem, setNovoItem] = useState({ nome: '', preco: '' });
   const [precoFormatado, setPrecoFormatado] = useState('');
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+
+  // ✅ NOVO: Estados para controlar loading dos botões de edição
+  const [loadingEditOpcao, setLoadingEditOpcao] = useState<string | null>(null);
+  const [loadingEditItem, setLoadingEditItem] = useState<string | null>(null);
 
   // Estados para sistema de tabelas de preços
   const [trabalhaComTabelaPrecos, setTrabalhaComTabelaPrecos] = useState<boolean>(false);
@@ -83,7 +88,6 @@ const AdicionaisPage: React.FC = () => {
   // Estados para exibição dos preços nos cards
   const [adicionaisPrecos, setAdicionaisPrecos] = useState<{[key: string]: {[key: string]: number}}>({});
   const [dropdownAberto, setDropdownAberto] = useState<{[key: string]: boolean}>({});
-  const [editingItem, setEditingItem] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
@@ -797,25 +801,61 @@ const AdicionaisPage: React.FC = () => {
     }
   };
 
-  const handleEditItem = async (item: any, opcao: any) => {
-    setEditingOpcao(opcao);
-    setEditingItem(item);
-    setNovoItem({
-      nome: item.nome,
-      preco: item.preco.toString()
-    });
-    // Formatar o preço para exibição
-    const precoFormatado = (item.preco * 100).toString().padStart(3, '0');
-    setPrecoFormatado(formatarValorMonetario(precoFormatado));
+  // ✅ NOVA FUNÇÃO: Editar opção com loading
+  const handleEditOpcao = async (opcao: any) => {
+    try {
+      // ✅ NOVO: Ativar loading para esta opção específica
+      setLoadingEditOpcao(opcao.id);
 
-    // Carregar preços das tabelas se trabalha com tabelas de preços
-    if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
-      await carregarPrecosTabelas(item.id);
+      setEditingOpcao(opcao);
+      setNovaOpcao({
+        nome: opcao.nome,
+        quantidade_minima: opcao.quantidade_minima || 0,
+        quantidade_maxima: opcao.quantidade_maxima || 0
+      });
+      setQuantidadeMinimaInput(opcao.quantidade_minima > 0 ? opcao.quantidade_minima.toString() : '');
+      setQuantidadeMaximaInput(opcao.quantidade_maxima > 0 ? opcao.quantidade_maxima.toString() : '');
+      setIsAddingItem(false);
+      setShowSidebar(true);
+    } catch (error) {
+      console.error('Erro ao abrir opção para edição:', error);
+      showMessage('error', 'Erro ao carregar dados da opção');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditOpcao(null);
     }
+  };
 
-    setAbaPrecoAtiva('padrao');
-    setIsAddingItem(true);
-    setShowSidebar(true);
+  const handleEditItem = async (item: any, opcao: any) => {
+    try {
+      // ✅ NOVO: Ativar loading para este item específico
+      setLoadingEditItem(item.id);
+
+      setEditingOpcao(opcao);
+      setEditingItem(item);
+      setNovoItem({
+        nome: item.nome,
+        preco: item.preco.toString()
+      });
+      // Formatar o preço para exibição
+      const precoFormatado = (item.preco * 100).toString().padStart(3, '0');
+      setPrecoFormatado(formatarValorMonetario(precoFormatado));
+
+      // Carregar preços das tabelas se trabalha com tabelas de preços
+      if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+        await carregarPrecosTabelas(item.id);
+      }
+
+      setAbaPrecoAtiva('padrao');
+      setIsAddingItem(true);
+      setShowSidebar(true);
+    } catch (error) {
+      console.error('Erro ao abrir item para edição:', error);
+      showMessage('error', 'Erro ao carregar dados do item');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditItem(null);
+    }
   };
 
   const handleDelete = async (id: string, type: 'opcao' | 'item', nome: string) => {
@@ -984,20 +1024,22 @@ const AdicionaisPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => {
-                        setEditingOpcao(opcao);
-                        setNovaOpcao({
-                          nome: opcao.nome,
-                          quantidade_minima: opcao.quantidade_minima || 0,
-                          quantidade_maxima: opcao.quantidade_maxima || 0
-                        });
-                        setQuantidadeMinimaInput(opcao.quantidade_minima > 0 ? opcao.quantidade_minima.toString() : '');
-                        setQuantidadeMaximaInput(opcao.quantidade_maxima > 0 ? opcao.quantidade_maxima.toString() : '');
-                        setIsAddingItem(false);
-                        setShowSidebar(true);
+                        if (loadingEditOpcao === opcao.id) return; // Evitar cliques múltiplos
+                        handleEditOpcao(opcao);
                       }}
-                      className="p-1 text-gray-400 hover:text-white transition-colors"
+                      className={`p-1 transition-colors ${
+                        loadingEditOpcao === opcao.id
+                          ? 'text-primary-400 cursor-wait'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                      title={loadingEditOpcao === opcao.id ? "Carregando..." : "Editar opção"}
+                      disabled={loadingEditOpcao === opcao.id}
                     >
-                      <Pencil size={16} />
+                      {loadingEditOpcao === opcao.id ? (
+                        <div className="w-4 h-4 border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+                      ) : (
+                        <Pencil size={16} />
+                      )}
                     </button>
                     <button
                       onClick={() => handleDelete(opcao.id, 'opcao', opcao.nome)}
@@ -1034,11 +1076,23 @@ const AdicionaisPage: React.FC = () => {
                                 {/* Botões de ação */}
                                 <div className="flex items-center gap-2 ml-3">
                                   <button
-                                    onClick={() => handleEditItem(item, opcao)}
-                                    className="p-1.5 text-gray-400 hover:text-white transition-colors rounded"
-                                    title="Editar item"
+                                    onClick={() => {
+                                      if (loadingEditItem === item.id) return; // Evitar cliques múltiplos
+                                      handleEditItem(item, opcao);
+                                    }}
+                                    className={`p-1.5 transition-colors rounded ${
+                                      loadingEditItem === item.id
+                                        ? 'text-primary-400 cursor-wait'
+                                        : 'text-gray-400 hover:text-white'
+                                    }`}
+                                    title={loadingEditItem === item.id ? "Carregando..." : "Editar item"}
+                                    disabled={loadingEditItem === item.id}
                                   >
-                                    <Pencil size={14} />
+                                    {loadingEditItem === item.id ? (
+                                      <div className="w-3.5 h-3.5 border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+                                    ) : (
+                                      <Pencil size={14} />
+                                    )}
                                   </button>
                                   <button
                                     onClick={() => handleDelete(item.id, 'item', item.nome)}

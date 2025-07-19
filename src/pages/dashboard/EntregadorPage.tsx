@@ -66,6 +66,10 @@ const EntregadorPage: React.FC = () => {
   const [entregadores, setEntregadores] = useState<any[]>([]);
   const [editingEntregador, setEditingEntregador] = useState<any>(null);
   const [novoEntregador, setNovoEntregador] = useState({ nome: '', comissao: '' });
+
+  // ✅ NOVO: Estado para controlar loading do botão de edição
+  const [loadingEditEntregador, setLoadingEditEntregador] = useState<string | null>(null);
+
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
     id: string;
@@ -160,6 +164,27 @@ const EntregadorPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA FUNÇÃO: Editar entregador com loading
+  const handleEditEntregador = async (entregador: any) => {
+    try {
+      // ✅ NOVO: Ativar loading para este entregador específico
+      setLoadingEditEntregador(entregador.id);
+
+      setEditingEntregador(entregador);
+      setNovoEntregador({
+        nome: entregador.nome,
+        comissao: entregador.comissao.toString()
+      });
+      setShowSidebar(true);
+    } catch (error) {
+      console.error('Erro ao abrir entregador para edição:', error);
+      showMessage('error', 'Erro ao carregar dados do entregador');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditEntregador(null);
+    }
+  };
+
   const handleDelete = async (id: string, nome: string) => {
     setDeleteConfirmation({
       isOpen: true,
@@ -228,16 +253,22 @@ const EntregadorPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
-                    setEditingEntregador(entregador);
-                    setNovoEntregador({
-                      nome: entregador.nome,
-                      comissao: entregador.comissao.toString()
-                    });
-                    setShowSidebar(true);
+                    if (loadingEditEntregador === entregador.id) return; // Evitar cliques múltiplos
+                    handleEditEntregador(entregador);
                   }}
-                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                  className={`p-2 transition-colors ${
+                    loadingEditEntregador === entregador.id
+                      ? 'text-primary-400 cursor-wait'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                  title={loadingEditEntregador === entregador.id ? "Carregando..." : "Editar entregador"}
+                  disabled={loadingEditEntregador === entregador.id}
                 >
-                  <Pencil size={16} />
+                  {loadingEditEntregador === entregador.id ? (
+                    <div className="w-4 h-4 border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+                  ) : (
+                    <Pencil size={16} />
+                  )}
                 </button>
                 <button
                   onClick={() => handleDelete(entregador.id, entregador.nome)}
