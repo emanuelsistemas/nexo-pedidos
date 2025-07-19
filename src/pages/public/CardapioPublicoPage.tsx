@@ -1821,8 +1821,23 @@ const CardapioPublicoPage: React.FC = () => {
     const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
     if (quantidadeSelecionada === 0) return 0;
 
-    // Valor base do produto
-    let valorTotal = produto.preco * quantidadeSelecionada;
+    // ✅ VERIFICAR SE PRODUTO TEM TABELA DE PREÇO SELECIONADA
+    const tabelasComPrecos = obterTabelasComPrecos(produtoId);
+    let precoBase = produto.preco; // Preço padrão
+
+    if (tabelasComPrecos.length > 0) {
+      // Produto tem tabelas de preço, verificar se uma foi selecionada
+      const tabelaSelecionadaId = tabelasSelecionadas[produtoId];
+      if (tabelaSelecionadaId) {
+        const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+        if (tabelaEscolhida) {
+          precoBase = tabelaEscolhida.preco; // Usar preço da tabela selecionada
+        }
+      }
+    }
+
+    // Valor base do produto (usando preço da tabela se selecionada)
+    let valorTotal = precoBase * quantidadeSelecionada;
 
     // Adicionar valor dos adicionais selecionados
     const adicionaisItem = adicionaisSelecionados[produtoId];
@@ -4957,130 +4972,7 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Tabelas de Preços - largura total do card */}
-                  {(() => {
-                    const tabelasComPrecos = obterTabelasComPrecos(produto.id);
-                    if (tabelasComPrecos.length > 0) {
-                      return (
-                        <div className="mb-3 w-full">
-                          {/* ✅ NOVA ÁREA SEPARADA VISUALMENTE */}
-                          <div className={`mt-4 p-3 rounded-lg border-2 border-dashed transition-all duration-300 ${
-                            config.modo_escuro
-                              ? 'bg-gray-800/30 border-gray-600/50 shadow-lg'
-                              : 'bg-blue-50/50 border-blue-200/60 shadow-sm'
-                          }`}>
-                            {/* Título das tabelas com ícone */}
-                            <div className={`flex items-center gap-2 text-sm font-semibold mb-2 ${
-                              config.modo_escuro ? 'text-blue-300' : 'text-blue-700'
-                            }`}>
-                              <div className={`w-2 h-2 rounded-full ${
-                                config.modo_escuro ? 'bg-blue-400' : 'bg-blue-500'
-                              }`}></div>
-                              Opções de Tamanho e Preço
-                            </div>
 
-                            {/* Linha dedicada para o indicador "Deslize para ver mais" */}
-                            <div className="h-5 mb-2 relative">
-                              {tabelasComPrecos.length > 3 && (
-                                <div className={`absolute top-0 right-0 flex items-center gap-1 text-xs font-medium animate-pulse ${
-                                  config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
-                                }`}>
-                                  <span>Deslize para ver mais</span>
-                                  <div className="flex">
-                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce"></div>
-                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                          {/* Slider horizontal das tabelas */}
-                          <div className="relative">
-                            {tabelasComPrecos.length <= 3 ? (
-                              // Se tem 3 ou menos tabelas, mostrar sem slider
-                              <div className="flex gap-2 w-full">
-                                {tabelasComPrecos.map(tabela => {
-                                  const isSelected = tabelasSelecionadas[produto.id] === tabela.id;
-                                  return (
-                                    <button
-                                      key={tabela.id}
-                                      onClick={() => {
-                                        console.log('🔍 DEBUG - Selecionando tabela:', {
-                                          produtoId: produto.id,
-                                          produtoNome: produto.nome,
-                                          tabelaId: tabela.id,
-                                          tabelaNome: tabela.nome
-                                        });
-                                        setTabelasSelecionadas(prev => ({
-                                          ...prev,
-                                          [produto.id]: tabela.id
-                                        }));
-                                      }}
-                                      className={`flex-1 p-3 rounded-lg border-2 transition-all duration-200 hover:scale-105 text-left ${
-                                        isSelected
-                                          ? config.modo_escuro
-                                            ? 'bg-purple-900/50 border-purple-400 text-white shadow-lg ring-2 ring-purple-400/50'
-                                            : 'bg-blue-50 border-blue-500 text-gray-800 shadow-md ring-2 ring-blue-500/50'
-                                          : config.modo_escuro
-                                            ? 'bg-gray-700 border-gray-500 text-white shadow-md hover:border-purple-400'
-                                            : 'bg-white border-gray-300 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md'
-                                      }`}
-                                    >
-                                      <div className={`text-xs font-bold truncate mb-1 ${
-                                        isSelected
-                                          ? config.modo_escuro ? 'text-purple-200' : 'text-blue-700'
-                                          : config.modo_escuro ? 'text-gray-200' : 'text-gray-700'
-                                      }`}>
-                                        {tabela.nome}
-                                      </div>
-                                      <div className={`text-lg font-bold ${
-                                        isSelected
-                                          ? config.modo_escuro ? 'text-green-300' : 'text-green-700'
-                                          : config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                                      }`}>
-                                        {formatarPreco(tabela.preco)}
-                                      </div>
-                                      {/* Tag de quantidade de sabores */}
-                                      {tabela.quantidade_sabores > 1 && (
-                                        <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
-                                          isSelected
-                                            ? config.modo_escuro
-                                              ? 'bg-purple-800/70 text-purple-200 border border-purple-600'
-                                              : 'bg-blue-100 text-blue-800 border border-blue-400'
-                                            : config.modo_escuro
-                                              ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
-                                              : 'bg-purple-100 text-purple-700 border border-purple-300'
-                                        }`}>
-                                          {tabela.quantidade_sabores} sabores
-                                        </div>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              // Se tem mais de 3 tabelas, usar Keen Slider
-                              <TabelasPrecosSlider
-                                tabelas={tabelasComPrecos}
-                                config={config}
-                                formatarPreco={formatarPreco}
-                                tabelaSelecionada={tabelasSelecionadas[produto.id]}
-                                onTabelaSelect={(tabelaId) => {
-                                  setTabelasSelecionadas(prev => ({
-                                    ...prev,
-                                    [produto.id]: tabelaId
-                                  }));
-                                }}
-                              />
-                            )}
-                          </div>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
 
                   {/* Adicionais do produto - aparece quando há quantidade selecionada */}
                   {produto.opcoes_adicionais && produto.opcoes_adicionais.length > 0 && obterQuantidadeSelecionada(produto.id) > 0 && (
@@ -5354,6 +5246,131 @@ const CardapioPublicoPage: React.FC = () => {
                     )}
                   </div>
                   )}
+
+                  {/* Tabelas de Preços - largura total do card - MOVIDO PARA ÚLTIMA POSIÇÃO */}
+                  {(() => {
+                    const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                    if (tabelasComPrecos.length > 0) {
+                      return (
+                        <div className="mb-3 w-full">
+                          {/* ✅ NOVA ÁREA SEPARADA VISUALMENTE */}
+                          <div className={`mt-4 p-3 rounded-lg border-2 border-dashed transition-all duration-300 ${
+                            config.modo_escuro
+                              ? 'bg-gray-800/30 border-gray-600/50 shadow-lg'
+                              : 'bg-blue-50/50 border-blue-200/60 shadow-sm'
+                          }`}>
+                            {/* Título das tabelas com ícone */}
+                            <div className={`flex items-center gap-2 text-sm font-semibold mb-2 ${
+                              config.modo_escuro ? 'text-blue-300' : 'text-blue-700'
+                            }`}>
+                              <div className={`w-2 h-2 rounded-full ${
+                                config.modo_escuro ? 'bg-blue-400' : 'bg-blue-500'
+                              }`}></div>
+                              Opções de Tamanho e Preço
+                            </div>
+
+                            {/* Linha dedicada para o indicador "Deslize para ver mais" */}
+                            <div className="h-5 mb-2 relative">
+                              {tabelasComPrecos.length > 3 && (
+                                <div className={`absolute top-0 right-0 flex items-center gap-1 text-xs font-medium animate-pulse ${
+                                  config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
+                                }`}>
+                                  <span>Deslize para ver mais</span>
+                                  <div className="flex">
+                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce"></div>
+                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                                    <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                          {/* Slider horizontal das tabelas */}
+                          <div className="relative">
+                            {tabelasComPrecos.length <= 3 ? (
+                              // Se tem 3 ou menos tabelas, mostrar sem slider
+                              <div className="flex gap-2 w-full">
+                                {tabelasComPrecos.map(tabela => {
+                                  const isSelected = tabelasSelecionadas[produto.id] === tabela.id;
+                                  return (
+                                    <button
+                                      key={tabela.id}
+                                      onClick={() => {
+                                        console.log('🔍 DEBUG - Selecionando tabela:', {
+                                          produtoId: produto.id,
+                                          produtoNome: produto.nome,
+                                          tabelaId: tabela.id,
+                                          tabelaNome: tabela.nome
+                                        });
+                                        setTabelasSelecionadas(prev => ({
+                                          ...prev,
+                                          [produto.id]: tabela.id
+                                        }));
+                                      }}
+                                      className={`flex-1 p-3 rounded-lg border-2 transition-all duration-200 hover:scale-105 text-left ${
+                                        isSelected
+                                          ? config.modo_escuro
+                                            ? 'bg-purple-900/50 border-purple-400 text-white shadow-lg ring-2 ring-purple-400/50'
+                                            : 'bg-blue-50 border-blue-500 text-gray-800 shadow-md ring-2 ring-blue-500/50'
+                                          : config.modo_escuro
+                                            ? 'bg-gray-700 border-gray-500 text-white shadow-md hover:border-purple-400'
+                                            : 'bg-white border-gray-300 text-gray-800 shadow-sm hover:border-blue-400 hover:shadow-md'
+                                      }`}
+                                    >
+                                      <div className={`text-xs font-bold truncate mb-1 ${
+                                        isSelected
+                                          ? config.modo_escuro ? 'text-purple-200' : 'text-blue-700'
+                                          : config.modo_escuro ? 'text-gray-200' : 'text-gray-700'
+                                      }`}>
+                                        {tabela.nome}
+                                      </div>
+                                      <div className={`text-lg font-bold ${
+                                        isSelected
+                                          ? config.modo_escuro ? 'text-green-300' : 'text-green-700'
+                                          : config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                      }`}>
+                                        {formatarPreco(tabela.preco)}
+                                      </div>
+                                      {/* Tag de quantidade de sabores */}
+                                      {tabela.quantidade_sabores > 1 && (
+                                        <div className={`inline-block px-1.5 py-0.5 rounded-full text-xs font-medium mt-1 ${
+                                          isSelected
+                                            ? config.modo_escuro
+                                              ? 'bg-purple-800/70 text-purple-200 border border-purple-600'
+                                              : 'bg-blue-100 text-blue-800 border border-blue-400'
+                                            : config.modo_escuro
+                                              ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
+                                              : 'bg-purple-100 text-purple-700 border border-purple-300'
+                                        }`}>
+                                          {tabela.quantidade_sabores} sabores
+                                        </div>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              // Se tem mais de 3 tabelas, usar Keen Slider
+                              <TabelasPrecosSlider
+                                tabelas={tabelasComPrecos}
+                                config={config}
+                                formatarPreco={formatarPreco}
+                                tabelaSelecionada={tabelasSelecionadas[produto.id]}
+                                onTabelaSelect={(tabelaId) => {
+                                  setTabelasSelecionadas(prev => ({
+                                    ...prev,
+                                    [produto.id]: tabelaId
+                                  }));
+                                }}
+                              />
+                            )}
+                          </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                 </div>
               </div>
