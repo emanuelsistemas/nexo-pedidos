@@ -2261,7 +2261,11 @@ const PDVPage: React.FC = () => {
       // Transformar dados para o formato esperado, substituindo o preço padrão pelo preço da tabela
       const produtosFormatados = produtosComPreco?.map(item => ({
         ...item.produto,
-        preco: item.preco // Usar preço da tabela em vez do preço padrão
+        preco: item.preco, // Usar preço da tabela em vez do preço padrão
+        // ✅ CORREÇÃO: Garantir que campos essenciais não sejam undefined
+        nome: item.produto?.nome || '',
+        codigo: item.produto?.codigo || '',
+        codigo_barras: item.produto?.codigo_barras || null
       })) || [];
 
       return produtosFormatados;
@@ -2738,9 +2742,9 @@ const PDVPage: React.FC = () => {
     if (searchPedidos.trim()) {
       const termoLower = searchPedidos.toLowerCase();
       filtered = filtered.filter(pedido =>
-        pedido.numero.toString().includes(termoLower) ||
-        pedido.cliente?.nome?.toLowerCase().includes(termoLower) ||
-        pedido.cliente?.telefone?.includes(searchPedidos)
+        (pedido.numero && pedido.numero.toString().includes(termoLower)) ||
+        (pedido.cliente?.nome && pedido.cliente.nome.toLowerCase().includes(termoLower)) ||
+        (pedido.cliente?.telefone && pedido.cliente.telefone.includes(searchPedidos))
       );
     }
 
@@ -3014,7 +3018,7 @@ const PDVPage: React.FC = () => {
         vendasFiltradas = vendasProcessadas.filter(venda => {
           if (venda.pedidos_origem && Array.isArray(venda.pedidos_origem)) {
             return venda.pedidos_origem.some((numeroPedido: string) =>
-              numeroPedido.toString().toLowerCase().includes(filtroNumeroPedido.toLowerCase())
+              numeroPedido && numeroPedido.toString().toLowerCase().includes(filtroNumeroPedido.toLowerCase())
             );
           }
           return false;
@@ -4490,8 +4494,8 @@ const PDVPage: React.FC = () => {
       }
     }
 
-    const matchesSearch = produto.nome.toLowerCase().includes(termoBusca.toLowerCase()) ||
-                         produto.codigo.toLowerCase().includes(termoBusca.toLowerCase()) ||
+    const matchesSearch = (produto.nome && produto.nome.toLowerCase().includes(termoBusca.toLowerCase())) ||
+                         (produto.codigo && produto.codigo.toLowerCase().includes(termoBusca.toLowerCase())) ||
                          (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(termoBusca.toLowerCase()));
     const matchesGrupo = grupoSelecionado === 'todos' || produto.grupo_id === grupoSelecionado;
     return matchesSearch && matchesGrupo;
@@ -17792,6 +17796,9 @@ const PDVPage: React.FC = () => {
           }}
           produto={produtoParaAdicionais}
           onConfirm={confirmarOpcoesAdicionais}
+          // ✅ NOVO: Passar informações da tabela de preços
+          trabalhaComTabelaPrecos={trabalhaComTabelaPrecos}
+          tabelaPrecoSelecionada={tabelaPrecoSelecionada}
         />
       )}
 
@@ -17846,6 +17853,9 @@ const PDVPage: React.FC = () => {
             //   toast.success('Produto adicionado ao carrinho!');
             // }
           }}
+          // ✅ NOVO: Passar informações da tabela de preços
+          trabalhaComTabelaPrecos={trabalhaComTabelaPrecos}
+          tabelaPrecoSelecionada={tabelaPrecoSelecionada}
         />
       )}
 

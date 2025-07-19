@@ -394,6 +394,10 @@ const ProdutosPage: React.FC = () => {
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ✅ NOVO: Estados para controlar loading dos botões de edição
+  const [loadingEditProduto, setLoadingEditProduto] = useState<string | null>(null);
+  const [loadingEditGrupo, setLoadingEditGrupo] = useState<string | null>(null);
+
   // Estados para a galeria de fotos
   const [isGaleriaOpen, setIsGaleriaOpen] = useState(false);
   const [currentFotoIndex, setCurrentFotoIndex] = useState(0);
@@ -2227,8 +2231,12 @@ const ProdutosPage: React.FC = () => {
   };
 
   const handleEditGrupo = async (grupo: Grupo) => {
-    setIsGrupoForm(true);
-    setSelectedGrupo(grupo);
+    try {
+      // ✅ NOVO: Ativar loading para este grupo específico
+      setLoadingEditGrupo(grupo.id);
+
+      setIsGrupoForm(true);
+      setSelectedGrupo(grupo);
 
     // ✅ CORREÇÃO: Buscar dados atualizados do grupo no banco de dados
     try {
@@ -2272,6 +2280,13 @@ const ProdutosPage: React.FC = () => {
     setExibirEmojiCardapio((grupo as any).exibir_emoji_cardapio || false);
     setEmojiSelecionado((grupo as any).emoji_selecionado || '');
     setShowSidebar(true);
+    } catch (error) {
+      console.error('Erro ao abrir grupo para edição:', error);
+      showMessage('error', 'Erro ao carregar dados do grupo');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditGrupo(null);
+    }
   };
 
   const handleAddProduto = async (grupo: Grupo) => {
@@ -2479,19 +2494,23 @@ const ProdutosPage: React.FC = () => {
   };
 
   const handleEditProduto = async (grupo: Grupo, produto: Produto) => {
-    // Primeiro, definir o estado para o formulário de produto (não de grupo)
-    setIsGrupoForm(false);
+    try {
+      // ✅ NOVO: Ativar loading para este produto específico
+      setLoadingEditProduto(produto.id);
 
-    // Definir o grupo selecionado
-    setSelectedGrupo(grupo);
+      // Primeiro, definir o estado para o formulário de produto (não de grupo)
+      setIsGrupoForm(false);
 
-    // Definir o produto que está sendo editado
-    setEditingProduto(produto);
+      // Definir o grupo selecionado
+      setSelectedGrupo(grupo);
 
-    // Carregar preços das tabelas se a empresa trabalha com tabelas de preços
-    if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
-      await carregarPrecosTabelas(produto.id);
-    }
+      // Definir o produto que está sendo editado
+      setEditingProduto(produto);
+
+      // Carregar preços das tabelas se a empresa trabalha com tabelas de preços
+      if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+        await carregarPrecosTabelas(produto.id);
+      }
 
     // ✅ CORREÇÃO: Buscar dados atualizados do produto no banco de dados
     try {
@@ -2658,6 +2677,13 @@ const ProdutosPage: React.FC = () => {
       await loadEstoqueMovimentos(produto.id);
     } catch (error) {
       console.error('Error loading product options:', error);
+    }
+    } catch (error) {
+      console.error('Erro ao abrir produto para edição:', error);
+      showMessage('error', 'Erro ao carregar dados do produto');
+    } finally {
+      // ✅ NOVO: Remover loading independente do resultado
+      setLoadingEditProduto(null);
     }
   };
 
@@ -5432,14 +5458,24 @@ const ProdutosPage: React.FC = () => {
           {/* Coluna Direita - Ações */}
           <div className="flex items-center gap-1">
             <button
-              className="p-1.5 text-gray-400 hover:text-white transition-colors rounded"
+              className={`p-1.5 transition-colors rounded ${
+                loadingEditProduto === produto.id
+                  ? 'text-primary-400 cursor-wait'
+                  : 'text-gray-400 hover:text-white'
+              }`}
               onClick={() => {
+                if (loadingEditProduto === produto.id) return; // Evitar cliques múltiplos
                 console.log('Botão de edição clicado para produto:', produto);
                 handleEditProduto(grupo, produto);
               }}
-              title="Editar produto"
+              title={loadingEditProduto === produto.id ? "Carregando..." : "Editar produto"}
+              disabled={loadingEditProduto === produto.id}
             >
-              <Pencil size={14} />
+              {loadingEditProduto === produto.id ? (
+                <div className="w-3.5 h-3.5 border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+              ) : (
+                <Pencil size={14} />
+              )}
             </button>
             <button
               className="p-1.5 text-blue-400 hover:text-blue-300 transition-colors rounded"
@@ -5804,10 +5840,23 @@ const ProdutosPage: React.FC = () => {
                         Adicionar Produto
                       </button>
                       <button
-                        className="p-1 text-gray-400 hover:text-white transition-colors"
-                        onClick={async () => await handleEditGrupo(grupo)}
+                        className={`p-1 transition-colors ${
+                          loadingEditGrupo === grupo.id
+                            ? 'text-primary-400 cursor-wait'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                        onClick={async () => {
+                          if (loadingEditGrupo === grupo.id) return; // Evitar cliques múltiplos
+                          await handleEditGrupo(grupo);
+                        }}
+                        title={loadingEditGrupo === grupo.id ? "Carregando..." : "Editar grupo"}
+                        disabled={loadingEditGrupo === grupo.id}
                       >
-                        <Pencil size={14} />
+                        {loadingEditGrupo === grupo.id ? (
+                          <div className="w-3.5 h-3.5 border-2 border-primary-400/30 border-t-primary-400 rounded-full animate-spin"></div>
+                        ) : (
+                          <Pencil size={14} />
+                        )}
                       </button>
                       <button
                         className="p-1 text-red-400 hover:text-red-300 transition-colors"

@@ -4,11 +4,7 @@ import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, 
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
-// Keen Slider para outros componentes
-import { useKeenSlider } from "keen-slider/react";
-import "keen-slider/keen-slider.min.css";
-
-// Keen Slider imports para categorias
+// Keen Slider
 import { useKeenSlider } from "keen-slider/react";
 import "keen-slider/keen-slider.min.css";
 
@@ -566,6 +562,8 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
+
+
   // ✅ FUNÇÃO PARA OBTER PREÇO FINAL DO PRODUTO (considerando promoções + tabela de preço)
   const obterPrecoFinalProduto = (produtoId: string): number => {
     const produto = produtos.find(p => p.id === produtoId);
@@ -697,6 +695,30 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Estado para o modal de finalização do pedido
   const [modalFinalizacaoAberto, setModalFinalizacaoAberto] = useState(false);
+
+  // Estados para o modal de validação de área de entrega
+  const [modalAreaEntregaAberto, setModalAreaEntregaAberto] = useState(false);
+  const [taxaEntregaConfig, setTaxaEntregaConfig] = useState<{
+    habilitado: boolean;
+    tipo: 'bairro' | 'distancia';
+  } | null>(null);
+  const [bairrosDisponiveis, setBairrosDisponiveis] = useState<Array<{
+    id: string;
+    bairro: string;
+    valor: number;
+    tempo_entrega?: number;
+  }>>([]);
+  const [cepCliente, setCepCliente] = useState('');
+  const [bairroSelecionado, setBairroSelecionado] = useState('');
+  const [termoPesquisaBairro, setTermoPesquisaBairro] = useState('');
+  const [validandoCep, setValidandoCep] = useState(false);
+  const [enderecoEncontrado, setEnderecoEncontrado] = useState<{
+    logradouro: string;
+    bairro: string;
+    localidade: string;
+    uf: string;
+  } | null>(null);
+  const [areaValidada, setAreaValidada] = useState(false);
 
   // Estados para modal de configuração individual (mantendo apenas os necessários)
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
@@ -839,6 +861,81 @@ const CardapioPublicoPage: React.FC = () => {
     setProdutoObservacaoAtual(null);
     setObservacaoTemp('');
   };
+  // Funções para validação de área de entrega
+  const formatarCEP = (value: string) => {
+    return value
+      .replace(/\D/g, '')
+      .replace(/^(\d{5})(\d{3})$/, '$1-$2')
+      .substring(0, 9);
+  };
+
+  const validarCEP = async (cep: string) => {
+    try {
+      setValidandoCep(true);
+      const cepLimpo = cep.replace(/\D/g, '');
+
+      if (cepLimpo.length !== 8) {
+        showMessage('error', 'CEP inválido. O CEP deve conter 8 dígitos.');
+        return;
+      }
+
+      const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        showMessage('error', 'CEP não encontrado.');
+        setEnderecoEncontrado(null);
+        return;
+      }
+
+      setEnderecoEncontrado({
+        logradouro: data.logradouro || '',
+        bairro: data.bairro || '',
+        localidade: data.localidade || '',
+        uf: data.uf || ''
+      });
+
+      showMessage('success', 'CEP válido! Verificando área de entrega...');
+
+    } catch (error) {
+      console.error('Erro ao validar CEP:', error);
+      showMessage('error', 'Erro ao validar CEP. Tente novamente.');
+      setEnderecoEncontrado(null);
+    } finally {
+      setValidandoCep(false);
+    }
+  };
+
+  const confirmarAreaEntrega = () => {
+    if (taxaEntregaConfig?.tipo === 'bairro' && !bairroSelecionado) {
+      showMessage('error', 'Por favor, selecione um bairro.');
+      return;
+    }
+
+    if (taxaEntregaConfig?.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado)) {
+      showMessage('error', 'Por favor, informe um CEP válido.');
+      return;
+    }
+
+    // Salvar validação no localStorage
+    if (empresaId) {
+      localStorage.setItem(`area_validada_${empresaId}`, 'true');
+      if (taxaEntregaConfig?.tipo === 'bairro') {
+        localStorage.setItem(`bairro_selecionado_${empresaId}`, bairroSelecionado);
+      } else {
+        localStorage.setItem(`cep_cliente_${empresaId}`, cepCliente);
+      }
+    }
+
+    setAreaValidada(true);
+    setModalAreaEntregaAberto(false);
+    showMessage('success', 'Área de entrega confirmada!');
+  };
+
+  // Filtrar bairros com base na pesquisa
+  const bairrosFiltrados = bairrosDisponiveis.filter(item =>
+    item.bairro.toLowerCase().includes(termoPesquisaBairro.toLowerCase())
+  );
 
 
 
@@ -1256,6 +1353,53 @@ const CardapioPublicoPage: React.FC = () => {
 
       // Definir o ID da empresa para o realtime
       setEmpresaId(empresaComLogo.id);
+
+      // 2.0. Carregar configuração de taxa de entrega
+      const { data: taxaConfigData } = await supabase
+        .from('taxa_entrega_config')
+        .select('habilitado, tipo')
+        .eq('empresa_id', empresaComLogo.id)
+        .single();
+
+      if (taxaConfigData?.habilitado) {
+        console.log('🚚 Taxa de entrega habilitada:', taxaConfigData);
+        setTaxaEntregaConfig(taxaConfigData);
+
+        // Se for por bairro, carregar lista de bairros
+        if (taxaConfigData.tipo === 'bairro') {
+          const { data: bairrosData } = await supabase
+            .from('taxa_entrega')
+            .select('id, bairro, valor, tempo_entrega')
+            .eq('empresa_id', empresaComLogo.id)
+            .order('bairro');
+
+          console.log('🏘️ Bairros carregados:', bairrosData);
+          if (bairrosData) {
+            setBairrosDisponiveis(bairrosData);
+          }
+        }
+
+        // Mostrar modal de validação de área apenas se não foi validada ainda
+        const areaJaValidada = localStorage.getItem(`area_validada_${empresaComLogo.id}`);
+        console.log('✅ Área já validada?', areaJaValidada);
+        console.log('🏢 Empresa ID:', empresaComLogo.id);
+        console.log('🚚 Taxa config:', taxaConfigData);
+
+        // TESTE: Sempre mostrar modal para debug
+        setTimeout(() => {
+          console.log('📋 Forçando abertura do modal para teste');
+          setModalAreaEntregaAberto(true);
+        }, 2000);
+
+        if (!areaJaValidada) {
+          console.log('📋 Abrindo modal de validação de área');
+          setModalAreaEntregaAberto(true);
+        } else {
+          setAreaValidada(true);
+        }
+      } else {
+        console.log('❌ Taxa de entrega não habilitada ou não encontrada');
+      }
 
       // 2.1. Carregar configuração de tabela de preços
       const { data: tabelaPrecoConfig } = await supabase
@@ -7753,6 +7897,184 @@ const CardapioPublicoPage: React.FC = () => {
         onClose={() => setGaleriaAberta(false)}
         initialFotoIndex={fotoInicialIndex}
       />
+
+      {/* Modal de Validação de Área de Entrega */}
+      {modalAreaEntregaAberto && taxaEntregaConfig && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <h2 className={`text-xl font-bold ${
+                config.modo_escuro ? 'text-white' : 'text-gray-900'
+              }`}>
+                Validar Área de Entrega
+              </h2>
+              <p className={`text-sm mt-2 ${
+                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                {taxaEntregaConfig.tipo === 'bairro'
+                  ? 'Selecione seu bairro para verificar se atendemos sua região'
+                  : 'Informe seu CEP para verificar se atendemos sua região'
+                }
+              </p>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {taxaEntregaConfig.tipo === 'distancia' ? (
+                // Validação por CEP/Distância
+                <div className="space-y-4">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      CEP de Entrega
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={cepCliente}
+                        onChange={(e) => setCepCliente(formatarCEP(e.target.value))}
+                        placeholder="00000-000"
+                        maxLength={9}
+                        className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                          config.modo_escuro
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                        }`}
+                      />
+                      <button
+                        onClick={() => validarCEP(cepCliente)}
+                        disabled={validandoCep || cepCliente.replace(/\D/g, '').length !== 8}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                          validandoCep || cepCliente.replace(/\D/g, '').length !== 8
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {validandoCep ? 'Validando...' : 'Validar'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {enderecoEncontrado && (
+                    <div className={`p-4 rounded-lg ${
+                      config.modo_escuro ? 'bg-gray-700' : 'bg-gray-50'
+                    }`}>
+                      <h4 className={`font-medium mb-2 ${
+                        config.modo_escuro ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        Endereço Encontrado:
+                      </h4>
+                      <p className={`text-sm ${
+                        config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
+                        {enderecoEncontrado.logradouro && `${enderecoEncontrado.logradouro}, `}
+                        {enderecoEncontrado.bairro}<br />
+                        {enderecoEncontrado.localidade} - {enderecoEncontrado.uf}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Validação por Bairro
+                <div className="space-y-4">
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Pesquisar Bairro
+                    </label>
+                    <input
+                      type="text"
+                      value={termoPesquisaBairro}
+                      onChange={(e) => setTermoPesquisaBairro(e.target.value)}
+                      placeholder="Digite o nome do bairro..."
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto space-y-2">
+                    {bairrosFiltrados.length > 0 ? (
+                      bairrosFiltrados.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => setBairroSelecionado(item.bairro)}
+                          className={`w-full p-3 text-left rounded-lg border-2 transition-all ${
+                            bairroSelecionado === item.bairro
+                              ? config.modo_escuro
+                                ? 'bg-blue-900/50 border-blue-400 text-white'
+                                : 'bg-blue-50 border-blue-500 text-gray-900'
+                              : config.modo_escuro
+                                ? 'bg-gray-700 border-gray-600 text-white hover:border-blue-400'
+                                : 'bg-white border-gray-300 text-gray-900 hover:border-blue-400'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="font-medium">{item.bairro}</span>
+                            <div className="text-right">
+                              <div className={`text-sm font-bold ${
+                                config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                              }`}>
+                                Taxa: {formatarPreco(item.valor)}
+                              </div>
+                              {item.tempo_entrega && (
+                                <div className={`text-xs ${
+                                  config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                                }`}>
+                                  {item.tempo_entrega} min
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className={`text-center py-8 ${
+                        config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                      }`}>
+                        {termoPesquisaBairro
+                          ? 'Nenhum bairro encontrado com esse nome'
+                          : 'Nenhum bairro disponível para entrega'
+                        }
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={confirmarAreaEntrega}
+                disabled={
+                  (taxaEntregaConfig.tipo === 'bairro' && !bairroSelecionado) ||
+                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado))
+                }
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${
+                  (taxaEntregaConfig.tipo === 'bairro' && !bairroSelecionado) ||
+                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado))
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-green-600 text-white hover:bg-green-700 transform hover:scale-[1.02]'
+                }`}
+              >
+                Confirmar Área de Entrega
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );

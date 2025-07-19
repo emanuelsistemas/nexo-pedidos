@@ -32,18 +32,25 @@ interface OpcoesAdicionaisModalProps {
     preco: number;
   };
   onConfirm: (itensSelecionados: ItemSelecionado[]) => void;
+  // ✅ NOVO: Props para tabela de preços
+  trabalhaComTabelaPrecos?: boolean;
+  tabelaPrecoSelecionada?: string;
 }
 
 const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
   isOpen,
   onClose,
   produto,
-  onConfirm
+  onConfirm,
+  trabalhaComTabelaPrecos = false,
+  tabelaPrecoSelecionada = 'padrao'
 }) => {
   const [opcoes, setOpcoes] = useState<OpcaoAdicional[]>([]);
   const [itensSelecionados, setItensSelecionados] = useState<ItemSelecionado[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [opcaoExpandida, setOpcaoExpandida] = useState<string | null>(null);
+  // ✅ NOVO: Estado para preços dos adicionais por tabela
+  const [adicionaisPrecos, setAdicionaisPrecos] = useState<{[itemId: string]: {[tabelaId: string]: number}}>({});
 
   // Carregar opções adicionais do produto quando o modal abrir
   useEffect(() => {
@@ -59,6 +66,56 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
       setOpcaoExpandida(null);
     }
   }, [isOpen]);
+
+  // ✅ NOVA FUNÇÃO: Carregar preços dos adicionais por tabela
+  const carregarPrecosAdicionais = async (itensAdicionais: OpcaoAdicionalItem[]): Promise<{[itemId: string]: {[tabelaId: string]: number}}> => {
+    if (!trabalhaComTabelaPrecos || tabelaPrecoSelecionada === 'padrao') {
+      return {};
+    }
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return {};
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return {};
+
+      // Buscar preços dos adicionais para a tabela selecionada
+      const idsItens = itensAdicionais.map(item => item.id);
+
+      const { data: precosData, error } = await supabase
+        .from('adicionais_precos')
+        .select('adicional_item_id, tabela_preco_id, preco')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .in('adicional_item_id', idsItens);
+
+      if (error) {
+        console.error('Erro ao carregar preços dos adicionais:', error);
+        return {};
+      }
+
+      // Organizar preços por item e tabela
+      const precosMap: {[itemId: string]: {[tabelaId: string]: number}} = {};
+
+      precosData?.forEach(preco => {
+        if (!precosMap[preco.adicional_item_id]) {
+          precosMap[preco.adicional_item_id] = {};
+        }
+        precosMap[preco.adicional_item_id][preco.tabela_preco_id] = preco.preco;
+      });
+
+      setAdicionaisPrecos(precosMap);
+      return precosMap;
+    } catch (error) {
+      console.error('Erro ao carregar preços dos adicionais:', error);
+      return {};
+    }
+  };
 
   const loadOpcoesAdicionais = async () => {
     try {
@@ -91,13 +148,34 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
       }
 
       // Filtrar e organizar as opções
-      const opcoesFormatadas = (produtoOpcoesData || [])
+      let opcoesFormatadas = (produtoOpcoesData || [])
         .map(item => item.opcao)
         .filter(opcao => opcao && opcao.itens && opcao.itens.length > 0)
         .map(opcao => ({
           ...opcao,
           itens: opcao.itens.filter(item => item && item.nome && item.preco !== undefined)
         }));
+
+      // ✅ NOVO: Se trabalha com tabelas de preços, carregar preços e filtrar itens
+      if (trabalhaComTabelaPrecos && tabelaPrecoSelecionada !== 'padrao') {
+        // Coletar todos os itens adicionais
+        const todosItens = opcoesFormatadas.flatMap(opcao => opcao.itens);
+
+        // Carregar preços dos adicionais e obter o mapa de preços
+        const precosCarregados = await carregarPrecosAdicionais(todosItens);
+
+        // Filtrar opções para mostrar apenas itens que têm preço na tabela selecionada
+        opcoesFormatadas = opcoesFormatadas
+          .map(opcao => ({
+            ...opcao,
+            itens: opcao.itens.filter(item => {
+              const temPrecoNaTabela = precosCarregados[item.id]?.[tabelaPrecoSelecionada] > 0;
+              console.log(`Item ${item.nome} (${item.id}): preço na tabela ${tabelaPrecoSelecionada} = ${precosCarregados[item.id]?.[tabelaPrecoSelecionada] || 0}`);
+              return temPrecoNaTabela;
+            })
+          }))
+          .filter(opcao => opcao.itens.length > 0); // Remover opções sem itens válidos
+      }
 
       setOpcoes(opcoesFormatadas);
 
@@ -116,6 +194,17 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
 
   const toggleOpcao = (opcaoId: string) => {
     setOpcaoExpandida(opcaoExpandida === opcaoId ? null : opcaoId);
+  };
+
+  // ✅ NOVA FUNÇÃO: Obter preço correto do adicional conforme tabela selecionada
+  const obterPrecoAdicional = (item: OpcaoAdicionalItem): number => {
+    if (!trabalhaComTabelaPrecos || tabelaPrecoSelecionada === 'padrao') {
+      return item.preco; // Usar preço padrão
+    }
+
+    // Usar preço da tabela selecionada se disponível
+    const precoTabela = adicionaisPrecos[item.id]?.[tabelaPrecoSelecionada];
+    return precoTabela > 0 ? precoTabela : item.preco;
   };
 
   const adicionarItem = (item: OpcaoAdicionalItem) => {
@@ -143,7 +232,12 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
             : i
         );
       } else {
-        return [...prev, { item, quantidade: 1 }];
+        // ✅ NOVO: Usar preço correto conforme tabela selecionada
+        const itemComPrecoCorreto = {
+          ...item,
+          preco: obterPrecoAdicional(item)
+        };
+        return [...prev, { item: itemComPrecoCorreto, quantidade: 1 }];
       }
     });
   };
@@ -171,6 +265,7 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
 
   const calcularTotal = (): number => {
     return itensSelecionados.reduce((total, item) => {
+      // ✅ NOVO: Usar preço correto (já está correto no item.item.preco após seleção)
       return total + (item.item.preco * item.quantidade);
     }, 0);
   };
@@ -409,7 +504,8 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
                             <div className="flex-1">
                               <p className="text-white font-medium">{item.nome}</p>
                               <p className="text-sm text-gray-400">
-                                {item.preco > 0 ? `+ ${formatCurrency(item.preco)}` : 'Grátis'}
+                                {/* ✅ NOVO: Usar preço correto conforme tabela selecionada */}
+                                {obterPrecoAdicional(item) > 0 ? `+ ${formatCurrency(obterPrecoAdicional(item))}` : 'Grátis'}
                               </p>
                             </div>
 

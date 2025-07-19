@@ -101,6 +101,16 @@ export interface TaxaEntregaConfig {
   updated_at?: string;
 }
 
+export interface TaxaEntregaItem {
+  id: string;
+  empresa_id: string;
+  cep?: string;
+  bairro: string;
+  valor: number;
+  tempo_entrega?: number;
+  created_at?: string;
+}
+
 export interface TipoUserConfig {
   id: string;
   tipo: 'admin' | 'user' | 'vendedor' | 'caixa' | 'socio';
