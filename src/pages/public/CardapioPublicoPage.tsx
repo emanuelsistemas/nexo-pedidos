@@ -7962,7 +7962,7 @@ const CardapioPublicoPage: React.FC = () => {
 
       {/* Modal de Validação de Área de Entrega */}
       {modalAreaEntregaAberto && taxaEntregaConfig && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className={`w-full max-w-md rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto ${
             config.modo_escuro ? 'bg-gray-800' : 'bg-white'
           }`}>
@@ -8003,7 +8003,7 @@ const CardapioPublicoPage: React.FC = () => {
                         onChange={(e) => setCepCliente(formatarCEP(e.target.value))}
                         placeholder="00000-000"
                         maxLength={9}
-                        className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        className={`w-32 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                           config.modo_escuro
                             ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
                             : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
