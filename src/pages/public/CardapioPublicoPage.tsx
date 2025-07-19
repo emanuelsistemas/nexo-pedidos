@@ -222,18 +222,24 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
   return (
     <div className="relative">
       {/* ✅ INDICADOR VISUAL PARA USUÁRIOS LEIGOS */}
-      {tabelas.length > 3 && !hasShownPeek && (
-        <div className={`absolute -top-6 right-0 z-10 flex items-center gap-1 text-xs font-medium animate-pulse ${
-          config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
-        }`}>
-          <span>Deslize para ver mais</span>
-          <div className="flex">
-            <div className="w-1 h-1 rounded-full bg-current animate-bounce"></div>
-            <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-            <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+      {(() => {
+        const slidesPerView = 2.5;
+        const totalPaginas = Math.ceil(tabelas.length / slidesPerView);
+        const isUltimaPagina = currentSlide >= totalPaginas - 1;
+
+        return tabelas.length > 3 && !hasShownPeek && !isUltimaPagina && (
+          <div className={`absolute -top-6 right-0 z-10 flex items-center gap-1 text-xs font-medium animate-pulse ${
+            config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
+          }`}>
+            <span>Deslize para ver mais</span>
+            <div className="flex">
+              <div className="w-1 h-1 rounded-full bg-current animate-bounce"></div>
+              <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+              <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div ref={sliderRef} className="keen-slider">
         {tabelas.map((tabela) => (
@@ -461,22 +467,23 @@ const CardapioPublicoPage: React.FC = () => {
   // Estados para o Keen Slider das categorias
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [hasShownPeekCategoria, setHasShownPeekCategoria] = useState(false);
 
 
 
-  // Configuração do Keen Slider para categorias
+  // Configuração do Keen Slider para categorias com efeito peek
   const [sliderRef, instanceRef] = useKeenSlider({
     initial: 0,
     slides: {
-      perView: 4, // 4 categorias por slide
-      spacing: 8,
+      perView: 3.5, // ✅ Mostra 3.5 categorias para criar efeito "peek" natural
+      spacing: 12,
     },
     breakpoints: {
       "(max-width: 768px)": {
-        slides: { perView: 3, spacing: 6 }
+        slides: { perView: 2.5, spacing: 8 }
       },
       "(max-width: 480px)": {
-        slides: { perView: 2, spacing: 4 }
+        slides: { perView: 1.8, spacing: 6 }
       }
     },
     slideChanged(slider) {
@@ -491,8 +498,20 @@ const CardapioPublicoPage: React.FC = () => {
       const currentIndex = slider.track.details.rel;
       setCurrentSlide(currentIndex);
     },
-    created() {
+    created(slider) {
       setLoaded(true);
+
+      // ✅ EFEITO PEEK: Leve arrastada automática após 1.5 segundos
+      const totalCategorias = grupos.length + 1; // +1 para "Todos"
+      if (totalCategorias > 4) {
+        setTimeout(() => {
+          slider.moveToIdx(0.4); // Move levemente para mostrar que há mais categorias
+          setTimeout(() => {
+            slider.moveToIdx(0); // Volta para o início
+            setHasShownPeekCategoria(true);
+          }, 1000);
+        }, 1500);
+      }
     },
   });
 
@@ -4025,33 +4044,41 @@ const CardapioPublicoPage: React.FC = () => {
           <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '0 1rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {/* Cabeçalho */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <div style={{ fontSize: '1.25rem' }}>🏷️</div>
-                  <h3 style={{
-                    fontSize: '1.125rem',
-                    fontWeight: '600',
-                    color: config.modo_escuro ? 'white' : '#1F2937',
-                    margin: 0
-                  }}>
-                    Categorias
-                  </h3>
-                </div>
-                <div style={{
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  padding: '0.25rem 0.75rem',
-                  borderRadius: '9999px',
-                  backgroundColor: config.modo_escuro ? '#7C3AED' : '#EDE9FE',
-                  color: config.modo_escuro ? 'white' : '#7C3AED',
-                  border: config.modo_escuro ? '1px solid #A855F7' : '1px solid #C4B5FD'
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <div style={{ fontSize: '1.25rem' }}>🏷️</div>
+                <h3 style={{
+                  fontSize: '1.125rem',
+                  fontWeight: '600',
+                  color: config.modo_escuro ? 'white' : '#1F2937',
+                  margin: 0
                 }}>
-                  {grupos.length + 1} {grupos.length + 1 === 1 ? 'categoria' : 'categorias'}
-                </div>
+                  Categorias ({grupos.length + 1})
+                </h3>
               </div>
 
               {/* Container de Categorias com Keen Slider */}
               <div style={{ height: '48px', position: 'relative' }}>
+                {/* ✅ INDICADOR VISUAL PARA USUÁRIOS LEIGOS */}
+                {(() => {
+                  const totalCategorias = grupos.length + 1;
+                  const slidesPerView = 3.5;
+                  const totalPaginas = Math.ceil(totalCategorias / slidesPerView);
+                  const isUltimaPagina = currentSlide >= totalPaginas - 1;
+
+                  return totalCategorias > 4 && !hasShownPeekCategoria && !isUltimaPagina && (
+                    <div className={`absolute -top-6 right-0 z-10 flex items-center gap-1 text-xs font-medium animate-pulse ${
+                      config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
+                    }`}>
+                      <span>Deslize para ver mais</span>
+                      <div className="flex">
+                        <div className="w-1 h-1 rounded-full bg-current animate-bounce"></div>
+                        <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-1 h-1 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Slider Container */}
                 <div ref={sliderRef} className="keen-slider" style={{ height: '100%' }}>
                   {/* Categoria "Todos" */}
@@ -4178,51 +4205,102 @@ const CardapioPublicoPage: React.FC = () => {
                     ))}
                 </div>
 
-                {/* Indicadores de Dots */}
+                {/* ✅ INDICADORES MELHORADOS PARA USUÁRIOS LEIGOS */}
                 {loaded && instanceRef.current && (grupos.length + 1) > 4 && (
                   <div style={{
                     position: 'absolute',
-                    bottom: '-12px',
+                    bottom: '-20px',
                     left: '50%',
                     transform: 'translateX(-50%)',
                     display: 'flex',
-                    gap: '4px'
+                    alignItems: 'center',
+                    gap: '12px'
                   }}>
-                    {(() => {
-                      const totalSlides = instanceRef.current?.track?.details?.slides?.length || 0;
-                      const slidesPerView = 4;
-                      const totalIndicators = Math.max(1, totalSlides - slidesPerView + 1);
+                    {/* Contador de páginas */}
+                    <span className={`text-xs font-medium ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                    }`}>
+                      {currentSlide + 1} de {(() => {
+                        const totalSlides = instanceRef.current?.track?.details?.slides?.length || 0;
+                        const slidesPerView = 3.5;
+                        return Math.max(1, Math.ceil(totalSlides / slidesPerView));
+                      })()}
+                    </span>
 
-                      return Array.from({ length: totalIndicators }).map((_, idx) => {
-                        const isActive = currentSlide === idx;
+                    {/* Indicadores de navegação */}
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {(() => {
+                        const totalSlides = instanceRef.current?.track?.details?.slides?.length || 0;
+                        const slidesPerView = 3.5;
+                        const totalIndicators = Math.max(1, Math.ceil(totalSlides / slidesPerView));
 
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              instanceRef.current?.moveToIdx(idx);
-                              setTimeout(() => {
-                                if (instanceRef.current) {
-                                  const newIndex = instanceRef.current.track.details.rel;
-                                  setCurrentSlide(newIndex);
-                                }
-                              }, 100);
-                            }}
-                            style={{
-                              width: '8px',
-                              height: '8px',
-                              borderRadius: '50%',
-                              border: 'none',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              backgroundColor: isActive
-                                ? (config.modo_escuro ? '#A855F7' : '#7C3AED')
-                                : (config.modo_escuro ? '#6B7280' : '#D1D5DB')
-                            }}
-                          />
-                        );
+                        return Array.from({ length: totalIndicators }).map((_, idx) => {
+                          const isActive = currentSlide === idx;
+
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                instanceRef.current?.moveToIdx(idx);
+                                setTimeout(() => {
+                                  if (instanceRef.current) {
+                                    const newIndex = instanceRef.current.track.details.rel;
+                                    setCurrentSlide(newIndex);
+                                  }
+                                }, 100);
+                              }}
+                              className={`w-2 h-2 rounded-full transition-all duration-300 hover:scale-125 ${
+                                isActive
+                                  ? config.modo_escuro
+                                    ? 'bg-blue-400 shadow-lg shadow-blue-400/50'
+                                    : 'bg-blue-600 shadow-lg shadow-blue-600/50'
+                                  : config.modo_escuro
+                                    ? 'bg-gray-600 hover:bg-gray-500'
+                                    : 'bg-gray-300 hover:bg-gray-400'
+                              }`}
+                            />
+                          );
                       });
                     })()}
+                    </div>
+
+                    {/* Setas de navegação */}
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <button
+                        onClick={() => instanceRef.current?.prev()}
+                        disabled={currentSlide === 0}
+                        className={`p-1 rounded-full transition-all duration-200 ${
+                          currentSlide === 0
+                            ? config.modo_escuro ? 'text-gray-600' : 'text-gray-300'
+                            : config.modo_escuro
+                              ? 'text-blue-400 hover:bg-gray-700 active:scale-95'
+                              : 'text-blue-600 hover:bg-blue-50 active:scale-95'
+                        }`}
+                      >
+                        <ChevronDown className="w-4 h-4 rotate-90" />
+                      </button>
+                      <button
+                        onClick={() => instanceRef.current?.next()}
+                        disabled={(() => {
+                          const totalSlides = instanceRef.current?.track?.details?.slides?.length || 0;
+                          const slidesPerView = 3.5;
+                          return currentSlide >= Math.ceil(totalSlides / slidesPerView) - 1;
+                        })()}
+                        className={`p-1 rounded-full transition-all duration-200 ${
+                          (() => {
+                            const totalSlides = instanceRef.current?.track?.details?.slides?.length || 0;
+                            const slidesPerView = 3.5;
+                            return currentSlide >= Math.ceil(totalSlides / slidesPerView) - 1;
+                          })()
+                            ? config.modo_escuro ? 'text-gray-600' : 'text-gray-300'
+                            : config.modo_escuro
+                              ? 'text-blue-400 hover:bg-gray-700 active:scale-95'
+                              : 'text-blue-600 hover:bg-blue-50 active:scale-95'
+                        }`}
+                      >
+                        <ChevronDown className="w-4 h-4 -rotate-90" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
