@@ -571,12 +571,6 @@ const CardapioPublicoPage: React.FC = () => {
     const produto = produtos.find(p => p.id === produtoId);
     if (!produto) return 0;
 
-    console.log('🔍 DEBUG - obterPrecoFinalProduto INÍCIO:', {
-      produtoId,
-      produtoNome: produto.nome,
-      precoOriginal: produto.preco
-    });
-
     // 1. Primeiro, obter preço base (tabela de preço ou preço padrão)
     let precoBase = produto.preco;
 
@@ -585,20 +579,10 @@ const CardapioPublicoPage: React.FC = () => {
       const tabelasComPrecos = obterTabelasComPrecos(produtoId);
       const tabelaSelecionadaId = tabelasSelecionadas[produtoId];
 
-      console.log('🔍 DEBUG - Tabelas de preço:', {
-        trabalhaComTabelaPrecos,
-        tabelasComPrecos: tabelasComPrecos.length,
-        tabelaSelecionadaId
-      });
-
       if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
         const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
         if (tabelaEscolhida) {
           precoBase = tabelaEscolhida.preco;
-          console.log('✅ Usando preço da tabela:', {
-            tabelaNome: tabelaEscolhida.nome,
-            precoTabela: tabelaEscolhida.preco
-          });
         }
       }
     }
@@ -626,49 +610,18 @@ const CardapioPublicoPage: React.FC = () => {
     if (temDescontoQuantidade) { // Aplicar sempre que houver desconto por quantidade
       const quantidadeSelecionada = obterQuantidadeSelecionada(produtoId);
 
-      console.log('🔍 DEBUG - Desconto por quantidade:', {
-        produtoId,
-        produtoNome: produto.nome,
-        quantidadeSelecionada,
-        quantidadeMinima: produto.quantidade_minima,
-        tipoDesconto: produto.tipo_desconto_quantidade,
-        valorDesconto: produto.percentual_desconto_quantidade || produto.valor_desconto_quantidade,
-        precoBase,
-        temDescontoQuantidade,
-        temPromocaoTradicional
-      });
+
 
       if (quantidadeSelecionada >= produto.quantidade_minima!) {
         // ✅ APLICAR DESCONTO SOBRE O PREÇO ATUAL (que já pode ter promoção aplicada)
         if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
           const valorDesconto = (precoFinal * produto.percentual_desconto_quantidade) / 100;
-          const precoAnterior = precoFinal;
           precoFinal = precoFinal - valorDesconto;
-          console.log('✅ Desconto percentual aplicado sobre valor promocional:', {
-            precoAnterior,
-            percentual: produto.percentual_desconto_quantidade,
-            valorDesconto,
-            precoFinal
-          });
         } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
-          const precoAnterior = precoFinal;
           precoFinal = Math.max(0, precoFinal - produto.valor_desconto_quantidade);
-          console.log('✅ Desconto valor aplicado sobre valor promocional:', {
-            precoAnterior,
-            valorDesconto: produto.valor_desconto_quantidade,
-            precoFinal
-          });
         }
       }
     }
-
-    console.log('✅ DEBUG - obterPrecoFinalProduto RESULTADO:', {
-      produtoId,
-      produtoNome: produto.nome,
-      precoBase,
-      precoFinal,
-      diferenca: precoFinal - precoBase
-    });
 
     return precoFinal;
   };
@@ -2339,14 +2292,6 @@ const CardapioPublicoPage: React.FC = () => {
       const precoProduto = obterPrecoFinalProduto(produtoId);
       const tabelaSelecionadaId = tabelasSelecionadas[produtoId] || null;
 
-      console.log('🛒 DEBUG - Adicionando ao carrinho:', {
-        produtoId,
-        produtoNome: produto?.nome,
-        quantidadeSelecionada,
-        precoProduto,
-        tabelaSelecionadaId
-      });
-
       // Criar item separado no carrinho
       const novoItem = {
         produtoId,
@@ -2357,8 +2302,6 @@ const CardapioPublicoPage: React.FC = () => {
         observacao: observacoesSelecionadas[produtoId],
         ordemAdicao: Date.now()
       };
-
-      console.log('🛒 DEBUG - Item criado:', novoItem);
 
       // Adicionar ao estado de itens separados
       setItensCarrinhoSeparados(prev => ({
@@ -2516,14 +2459,7 @@ const CardapioPublicoPage: React.FC = () => {
       // Produto tem tabela de preço, verificar se uma foi selecionada
       const tabelaSelecionada = tabelasSelecionadas[produtoId];
 
-      // 🐛 DEBUG: Log para verificar estado
-      console.log('🔍 DEBUG - Verificação tabela de preço:', {
-        produtoId,
-        produtoNome: produto.nome,
-        tabelasComPrecos: tabelasComPrecos.length,
-        tabelaSelecionada,
-        tabelasSelecionadasCompleto: tabelasSelecionadas
-      });
+
 
       if (!tabelaSelecionada) {
         // Nenhuma tabela selecionada, mostrar modal de aviso
@@ -4091,13 +4027,6 @@ const CardapioPublicoPage: React.FC = () => {
                             <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
                               {(() => {
                                 const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
-                                console.log('💰 DEBUG - Exibindo preço no carrinho:', {
-                                  produtoNome: produto.nome,
-                                  itemPrecoProduto: (item as any).precoProduto,
-                                  produtoPreco: produto.preco,
-                                  precoFinal: precoProduto,
-                                  item: item
-                                });
                                 return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
                               })()}
                             </div>
