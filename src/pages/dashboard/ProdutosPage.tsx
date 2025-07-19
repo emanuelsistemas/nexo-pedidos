@@ -642,7 +642,7 @@ const ProdutosPage: React.FC = () => {
         const parsedOrder = JSON.parse(savedOrder);
         setGruposOrder(parsedOrder);
       } catch (error) {
-        console.error('Erro ao carregar ordem dos grupos:', error);
+        // Erro silencioso
       }
     }
   };
@@ -655,7 +655,7 @@ const ProdutosPage: React.FC = () => {
         const parsedOrder = JSON.parse(savedOrder);
         setProdutosOrder(parsedOrder);
       } catch (error) {
-        console.error('Erro ao carregar ordem dos produtos:', error);
+        // Erro silencioso
       }
     }
   };
@@ -764,11 +764,8 @@ const ProdutosPage: React.FC = () => {
 
   // Função para mover grupo
   const moveGrupo = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
-    console.log(`🚀 Movendo grupo ${grupoId} para ${direction}`);
-
     // Primeiro verificar se o movimento é possível usando a função canMove
     if (!canMove(grupoId, direction)) {
-      console.log(`❌ Movimento ${direction} não é possível para o grupo ${grupoId}`);
       showMessage('error', 'Movimento não permitido');
       return;
     }
@@ -793,13 +790,9 @@ const ProdutosPage: React.FC = () => {
       ? gruposOrder
       : filteredAndSortedGrupos.map(g => g.id);
 
-    console.log('📋 Ordem atual sendo usada:', currentOrder);
-
     const currentIndex = currentOrder.indexOf(grupoId);
-    console.log(`📍 Índice atual do grupo: ${currentIndex}`);
 
     if (currentIndex === -1) {
-      console.log('❌ Grupo não encontrado na ordem atual');
       return;
     }
 
@@ -822,7 +815,7 @@ const ProdutosPage: React.FC = () => {
         break;
     }
 
-    console.log(`🎯 Novo índice calculado: ${newIndex}`);
+
 
     if (newIndex !== currentIndex) {
       // Verificar se o destino tem um grupo com posicionamento fixo
@@ -841,12 +834,10 @@ const ProdutosPage: React.FC = () => {
         return;
       }
 
-      console.log('✅ Movimento válido, aplicando mudança...');
       const newOrder = [...currentOrder];
       const [movedItem] = newOrder.splice(currentIndex, 1);
       newOrder.splice(newIndex, 0, movedItem);
 
-      console.log('📦 Nova ordem:', newOrder);
       saveGruposOrder(newOrder);
 
       // Encontrar o nome do grupo movido para mostrar no toast
@@ -869,7 +860,6 @@ const ProdutosPage: React.FC = () => {
 
   // Função para verificar se um movimento é possível
   const canMove = (grupoId: string, direction: 'up' | 'down' | 'left' | 'right') => {
-    console.log(`🔍 [v2.0] Verificando movimento ${direction} para grupo ${grupoId}`);
 
     // Verificar se o grupo tem posicionamento fixo
     const grupo = grupos.find(g => g.id === grupoId);
@@ -881,7 +871,6 @@ const ProdutosPage: React.FC = () => {
 
     // Grupos com posicionamento fixo não podem ser movidos
     if (temPosicionamentoFixo) {
-      console.log(`❌ Grupo ${grupoId} é fixo, não pode ser movido`);
       return false;
     }
 
@@ -891,10 +880,8 @@ const ProdutosPage: React.FC = () => {
       : filteredAndSortedGrupos.map(g => g.id);
 
     const currentIndex = currentOrder.indexOf(grupoId);
-    console.log(`📍 Posição atual: ${currentIndex} de ${currentOrder.length} total`);
 
     if (currentIndex === -1) {
-      console.log(`❌ Grupo ${grupoId} não encontrado na ordem atual`);
       return false;
     }
 
@@ -916,19 +903,15 @@ const ProdutosPage: React.FC = () => {
     const isRightColumn = currentIndex % 2 === 1; // Ímpar = coluna direita
     const currentRow = Math.floor(currentIndex / 2);
 
-    console.log(`🏗️ Layout: linha ${currentRow}, coluna ${isLeftColumn ? 'esquerda' : 'direita'}`);
-
     // Verificações específicas por direção
     switch (direction) {
       case 'up':
         // Só pode subir se não está na primeira linha (linha 0)
         if (currentRow === 0) {
-          console.log(`❌ UP: Já está na primeira linha`);
           return false;
         }
         const upTargetIndex = currentIndex - 2; // Sobe uma linha (2 posições)
         if (upTargetIndex < 0) {
-          console.log(`❌ UP: Índice de destino inválido (${upTargetIndex})`);
           return false;
         }
         const upTargetGrupoId = currentOrder[upTargetIndex];
@@ -1637,7 +1620,7 @@ const ProdutosPage: React.FC = () => {
 
   // Efeito para carregar preço da tabela quando a aba ativa mudar
   useEffect(() => {
-    console.log('🔄 Mudança de aba:', abaPrecoAtiva, 'Preços disponíveis:', precosTabelas);
+
 
     if (abaPrecoAtiva !== 'padrao' && precosTabelas[abaPrecoAtiva] !== undefined) {
       const valorFormatado = formatarPreco(precosTabelas[abaPrecoAtiva]);
@@ -4654,18 +4637,7 @@ const ProdutosPage: React.FC = () => {
     const gruposIds = grupos.map(g => g.id).join(',');
     const gruposOrderStr = gruposOrder.join(',');
 
-    console.log('🔍 Debug ordenação:');
-    console.log('- Grupos originais:', gruposIds);
-    console.log('- Ordem personalizada:', gruposOrderStr);
-    console.log('- São diferentes?', gruposOrder.length > 0 && gruposOrderStr !== gruposIds);
 
-    // Log detalhado dos grupos com posicionamento
-    console.log('📋 Grupos com posicionamento:', filtered.map(g => ({
-      nome: g.nome,
-      id: g.id,
-      ordenacao_cardapio_habilitada: (g as any).ordenacao_cardapio_habilitada,
-      ordenacao_cardapio_digital: (g as any).ordenacao_cardapio_digital
-    })));
 
     // PRIORIDADE ABSOLUTA: Grupos com posicionamento fixo sempre vêm primeiro, independente de qualquer outra ordenação
     return filtered.sort((a, b) => {
@@ -4678,16 +4650,7 @@ const ProdutosPage: React.FC = () => {
                          (b as any).ordenacao_cardapio_digital !== undefined &&
                          (b as any).ordenacao_cardapio_digital !== '';
 
-      console.log('🔍 Comparando grupos:', {
-        grupoA: a.nome,
-        aHabilitada: (a as any).ordenacao_cardapio_habilitada,
-        aPosicao: (a as any).ordenacao_cardapio_digital,
-        aTemPosicao,
-        grupoB: b.nome,
-        bHabilitada: (b as any).ordenacao_cardapio_habilitada,
-        bPosicao: (b as any).ordenacao_cardapio_digital,
-        bTemPosicao
-      });
+
 
       // Se ambos têm posicionamento fixo, ordenar por posição numérica (menor número = primeiro)
       if (aTemPosicao && bTemPosicao) {
@@ -4699,13 +4662,11 @@ const ProdutosPage: React.FC = () => {
 
       // Se apenas A tem posicionamento fixo, A vem SEMPRE primeiro
       if (aTemPosicao && !bTemPosicao) {
-        console.log(`📌 ${a.nome} vem primeiro (tem posição fixa)`);
         return -1;
       }
 
       // Se apenas B tem posicionamento fixo, B vem SEMPRE primeiro
       if (!aTemPosicao && bTemPosicao) {
-        console.log(`📌 ${b.nome} vem primeiro (tem posição fixa)`);
         return 1;
       }
 
@@ -5071,7 +5032,7 @@ const ProdutosPage: React.FC = () => {
         const temTodosProdutos = produtosIds.every(id => fotosCache.hasOwnProperty(id));
 
         if (temTodosProdutos) {
-          console.log('📸 Carregando fotos do cache localStorage');
+
           setProdutosFotosPrincipais(fotosCache);
           return;
         }
@@ -5145,14 +5106,14 @@ const ProdutosPage: React.FC = () => {
         const temTodosProdutos = produtosIds.every(id => fotosCountCache.hasOwnProperty(id));
 
         if (temTodosProdutos) {
-          console.log('📊 Carregando contagem de fotos do cache localStorage');
+
           setProdutosFotosCount(fotosCountCache);
           return;
         }
       }
     }
 
-    console.log('📊 Carregando contagem de fotos do banco de dados');
+
 
     try {
       // Obter a empresa_id do usuário atual
@@ -5209,7 +5170,7 @@ const ProdutosPage: React.FC = () => {
   useEffect(() => {
     const allProdutos = grupos.flatMap(grupo => grupo.produtos);
     if (allProdutos.length > 0 && !fotosJaCarregadas) {
-      console.log('📸 Primeira carga de fotos dos produtos');
+
       loadProdutosFotosPrincipais(allProdutos);
       loadProdutosFotosCount(allProdutos);
       setFotosJaCarregadas(true);
@@ -5691,18 +5652,12 @@ const ProdutosPage: React.FC = () => {
                     })
                     .map(g => g.id);
 
-                  console.log('📊 Comparando ordens para salvar:');
-                  console.log('- Ordem personalizada:', gruposOrder.join(','));
-                  console.log('- Ordem alfabética ORIGINAL:', originalAlphabeticalOrder.join(','));
-
                   if (gruposOrder.length === 0 || gruposOrder.join(',') === originalAlphabeticalOrder.join(',')) {
                     // Se não há ordem personalizada ou ela é igual à alfabética, limpar
-                    console.log('🗑️ Limpando ordem personalizada (igual à alfabética ou vazia)');
                     localStorage.removeItem('nexo-grupos-order');
                     setGruposOrder([]);
                     showMessage('info', 'Nenhuma alteração foi detectada para salvar');
                   } else {
-                    console.log('✅ Mantendo ordem personalizada');
                     showMessage('success', 'Alterações na organização dos grupos salvas com sucesso!');
                   }
                 } else {

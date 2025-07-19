@@ -2291,8 +2291,9 @@ const CardapioPublicoPage: React.FC = () => {
       // Gerar ID único para este item no carrinho
       const itemId = `${produtoId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      // ✅ OBTER PREÇO FINAL DO PRODUTO (considerando tabela de preço + promoções)
-      const precoProduto = obterPrecoFinalProduto(produtoId);
+      // ✅ CALCULAR PREÇO COM DESCONTO POR QUANTIDADE (considerando tabela de preço + promoções + desconto por quantidade)
+      const produto = produtos.find(p => p.id === produtoId);
+      const precoProduto = produto ? calcularPrecoComDescontoQuantidade(produto, quantidadeSelecionada) : 0;
       const tabelaSelecionadaId = tabelasSelecionadas[produtoId] || null;
 
       // Criar item separado no carrinho
@@ -2386,11 +2387,8 @@ const CardapioPublicoPage: React.FC = () => {
         novaQuantidade = item.quantidade - 1;
       }
 
-      // Atualizar item no carrinho
-      setItensCarrinhoSeparados(prev => ({
-        ...prev,
-        [itemId]: { ...item, quantidade: novaQuantidade }
-      }));
+      // Atualizar item no carrinho com novo preço baseado na quantidade
+      atualizarPrecoItemCarrinho(itemId, novaQuantidade);
 
       // Atualizar também o sistema antigo para compatibilidade
       alterarQuantidadeProduto(item.produtoId, obterQuantidadeProduto(item.produtoId) - (item.quantidade - novaQuantidade));
@@ -2414,11 +2412,8 @@ const CardapioPublicoPage: React.FC = () => {
       novaQuantidade = item.quantidade + 1;
     }
 
-    // Atualizar item no carrinho
-    setItensCarrinhoSeparados(prev => ({
-      ...prev,
-      [itemId]: { ...item, quantidade: novaQuantidade }
-    }));
+    // Atualizar item no carrinho com novo preço baseado na quantidade
+    atualizarPrecoItemCarrinho(itemId, novaQuantidade);
 
     // Atualizar também o sistema antigo para compatibilidade
     alterarQuantidadeProduto(item.produtoId, obterQuantidadeProduto(item.produtoId) + (novaQuantidade - item.quantidade));
@@ -3316,10 +3311,14 @@ const CardapioPublicoPage: React.FC = () => {
     // Gerar ID único para este item no carrinho
     const itemId = `${produtoConfiguracaoIndividual.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+    // ✅ CALCULAR PREÇO COM DESCONTO POR QUANTIDADE PARA CONFIGURAÇÃO INDIVIDUAL
+    const precoProduto = calcularPrecoComDescontoQuantidade(produtoConfiguracaoIndividual, 1);
+
     // Criar item separado no carrinho
     const novoItem = {
       produtoId: produtoConfiguracaoIndividual.id,
       quantidade: 1, // Sempre 1 para configuração individual
+      precoProduto: precoProduto, // ✅ SALVAR PREÇO CALCULADO
       adicionais: adicionaisSelecionados[produtoConfiguracaoIndividual.id] ? { ...adicionaisSelecionados[produtoConfiguracaoIndividual.id] } : {},
       observacao: undefined,
       ordemAdicao: Date.now()
@@ -3634,6 +3633,121 @@ const CardapioPublicoPage: React.FC = () => {
 
   const cancelarFinalizacaoPedido = () => {
     setModalFinalizacaoAberto(false);
+  };
+
+  // Funções para controlar adicionais nos itens do carrinho separado
+  const incrementarAdicionalItem = (itemId: string, adicionalId: string) => {
+    setItensCarrinhoSeparados(prev => {
+      const item = prev[itemId];
+      if (!item) return prev;
+
+      return {
+        ...prev,
+        [itemId]: {
+          ...item,
+          adicionais: {
+            ...item.adicionais,
+            [adicionalId]: (item.adicionais[adicionalId] || 0) + 1
+          }
+        }
+      };
+    });
+  };
+
+  const decrementarAdicionalItem = (itemId: string, adicionalId: string) => {
+    setItensCarrinhoSeparados(prev => {
+      const item = prev[itemId];
+      if (!item) return prev;
+
+      const quantidadeAtual = item.adicionais[adicionalId] || 0;
+
+      if (quantidadeAtual <= 1) {
+        // Remover o adicional se quantidade for 1 ou menor
+        const novosAdicionais = { ...item.adicionais };
+        delete novosAdicionais[adicionalId];
+
+        return {
+          ...prev,
+          [itemId]: {
+            ...item,
+            adicionais: novosAdicionais
+          }
+        };
+      }
+
+      return {
+        ...prev,
+        [itemId]: {
+          ...item,
+          adicionais: {
+            ...item.adicionais,
+            [adicionalId]: quantidadeAtual - 1
+          }
+        }
+      };
+    });
+  };
+
+  const obterQuantidadeAdicionalItem = (itemId: string, adicionalId: string): number => {
+    const item = itensCarrinhoSeparados[itemId];
+    return item?.adicionais[adicionalId] || 0;
+  };
+
+  // Função para calcular preço com desconto por quantidade
+  const calcularPrecoComDescontoQuantidade = (produto: any, quantidade: number): number => {
+    let precoFinal = produto.preco;
+
+    // Primeiro aplicar promoção tradicional se houver
+    const temPromocaoTradicional = produto.promocao &&
+      produto.exibir_promocao_cardapio &&
+      produto.tipo_desconto &&
+      produto.valor_desconto !== undefined &&
+      produto.valor_desconto > 0;
+
+    if (temPromocaoTradicional) {
+      precoFinal = calcularValorFinal(produto.preco, produto.tipo_desconto!, produto.valor_desconto!);
+    }
+
+    // Depois aplicar desconto por quantidade se a quantidade mínima for atingida
+    const temDescontoQuantidade = produto.desconto_quantidade &&
+      produto.quantidade_minima &&
+      produto.quantidade_minima > 0 &&
+      quantidade >= produto.quantidade_minima &&
+      ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+       (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+    if (temDescontoQuantidade) {
+      if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+        const valorDesconto = (precoFinal * produto.percentual_desconto_quantidade) / 100;
+        precoFinal = precoFinal - valorDesconto;
+      } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+        precoFinal = Math.max(0, precoFinal - produto.valor_desconto_quantidade);
+      }
+    }
+
+    return precoFinal;
+  };
+
+  // Função para atualizar preço do item no carrinho quando quantidade muda
+  const atualizarPrecoItemCarrinho = (itemId: string, novaQuantidade: number) => {
+    const item = itensCarrinhoSeparados[itemId];
+    if (!item) return;
+
+    const produto = produtos.find(p => p.id === item.produtoId);
+    if (!produto) return;
+
+    // Calcular novo preço baseado na quantidade
+    const novoPreco = calcularPrecoComDescontoQuantidade(produto, novaQuantidade);
+
+    // Atualizar item no carrinho com novo preço
+    setItensCarrinhoSeparados(prev => ({
+      ...prev,
+      [itemId]: {
+        ...item,
+        quantidade: novaQuantidade,
+        precoProduto: novoPreco
+      }
+    }));
   };
 
   const handleContatoWhatsApp = () => {
@@ -7351,7 +7465,7 @@ const CardapioPublicoPage: React.FC = () => {
                   <p className={`text-sm mt-1 ${
                     config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                   }`}>
-                    Revise seu pedido antes de enviar
+                    {obterQuantidadeTotalItens()} {obterQuantidadeTotalItens() === 1 ? 'item' : 'itens'} • {config.mostrar_precos ? formatarPreco(obterTotalCarrinho()) : 'Preços ocultos'}
                   </p>
                 </div>
                 <button
@@ -7395,18 +7509,50 @@ const CardapioPublicoPage: React.FC = () => {
 
                         {/* Conteúdo do item */}
                         <div className="flex-1 min-w-0">
-                          {/* Nome e quantidade */}
+                          {/* Nome e controles de quantidade */}
                           <div className="flex items-center justify-between mb-2">
                             <h4 className={`font-medium truncate ${
                               config.modo_escuro ? 'text-white' : 'text-gray-900'
                             }`}>
                               {produto.nome}
                             </h4>
-                            <span className={`text-sm font-medium ml-2 ${
-                              config.modo_escuro ? 'text-gray-300' : 'text-gray-600'
-                            }`}>
-                              {quantidade}x
-                            </span>
+
+                            {/* Controles de quantidade do produto */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => decrementarQuantidadeItemCarrinho(itemId)}
+                                disabled={lojaAberta === false}
+                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                                  lojaAberta === false
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : config.modo_escuro
+                                    ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                              >
+                                <Minus size={14} />
+                              </button>
+
+                              <span className={`min-w-[2rem] text-center text-sm font-semibold ${
+                                config.modo_escuro ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                {quantidade}
+                              </span>
+
+                              <button
+                                onClick={() => incrementarQuantidadeItemCarrinho(itemId)}
+                                disabled={lojaAberta === false}
+                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                                  lojaAberta === false
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : config.modo_escuro
+                                    ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                                }`}
+                              >
+                                <Plus size={14} />
+                              </button>
+                            </div>
                           </div>
 
                           {/* Preço */}
@@ -7425,28 +7571,77 @@ const CardapioPublicoPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Adicionais */}
+                          {/* Adicionais com controladores */}
                           {adicionais && adicionais.length > 0 && (
                             <div className="mb-2">
-                              <p className={`text-xs font-medium mb-1 ${
+                              <p className={`text-xs font-medium mb-2 ${
                                 config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                               }`}>
                                 Adicionais:
                               </p>
-                              <div className="space-y-1">
+                              <div className="space-y-2">
                                 {adicionais.map((adicional: any, idx: number) => (
-                                  <div key={idx} className="flex items-center justify-between">
-                                    <span className={`text-xs ${
-                                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
-                                    }`}>
-                                      • {adicional.nome} ({adicional.quantidade}x)
-                                    </span>
+                                  <div key={idx} className={`flex items-center justify-between p-2 rounded ${
+                                    config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-100'
+                                  }`}>
+                                    <div className="flex-1">
+                                      <span className={`text-xs font-medium ${
+                                        config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                                      }`}>
+                                        {adicional.nome}
+                                      </span>
+                                      {config.mostrar_precos && (
+                                        <div className={`text-xs ${
+                                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                                        }`}>
+                                          {formatarPreco(adicional.preco)} cada
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Controles de quantidade do adicional */}
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => decrementarAdicionalItem(itemId, adicional.id)}
+                                        disabled={lojaAberta === false}
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                          lojaAberta === false
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : config.modo_escuro
+                                            ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                      >
+                                        <Minus size={10} />
+                                      </button>
+
+                                      <span className={`min-w-[1.5rem] text-center text-xs font-semibold ${
+                                        config.modo_escuro ? 'text-white' : 'text-gray-900'
+                                      }`}>
+                                        {adicional.quantidade}
+                                      </span>
+
+                                      <button
+                                        onClick={() => incrementarAdicionalItem(itemId, adicional.id)}
+                                        disabled={lojaAberta === false}
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                                          lojaAberta === false
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : config.modo_escuro
+                                            ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                                        }`}
+                                      >
+                                        <Plus size={10} />
+                                      </button>
+                                    </div>
+
                                     {config.mostrar_precos && (
-                                      <span className={`text-xs ${
-                                        config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                                      <div className={`text-xs font-medium ml-2 ${
+                                        config.modo_escuro ? 'text-green-400' : 'text-green-600'
                                       }`}>
                                         {formatarPreco(adicional.preco * adicional.quantidade)}
-                                      </span>
+                                      </div>
                                     )}
                                   </div>
                                 ))}
@@ -7464,6 +7659,23 @@ const CardapioPublicoPage: React.FC = () => {
                               <span className="font-medium">Obs:</span> {observacao}
                             </div>
                           )}
+
+                          {/* Botão para remover item */}
+                          <div className="flex justify-end mt-3">
+                            <button
+                              onClick={() => {
+                                setProdutoParaRemover(itemId);
+                                setModalRemoverItemAberto(true);
+                              }}
+                              className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                                config.modo_escuro
+                                  ? 'text-red-400 hover:bg-red-900/20 border border-red-800'
+                                  : 'text-red-600 hover:bg-red-50 border border-red-200'
+                              }`}
+                            >
+                              Remover item
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
