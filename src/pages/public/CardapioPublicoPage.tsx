@@ -206,29 +206,29 @@ const TabelasPrecosSlider: React.FC<TabelasPrecosSliderProps> = ({ tabelas, conf
     created(slider) {
       setLoaded(true);
 
-      // ✅ EFEITO PEEK: Leve arrastada automática após 1 segundo
+      // ✅ EFEITO PEEK: Leve arrastada automática após 2.5 segundos
       if (tabelas.length > 3) {
         setTimeout(() => {
           slider.moveToIdx(0.3); // Move levemente para mostrar que há mais itens
           setTimeout(() => {
             slider.moveToIdx(0); // Volta para o início
             setHasShownPeek(true);
-          }, 800);
-        }, 1000);
+          }, 1000);
+        }, 2500);
       }
     },
   });
 
   return (
     <div className="relative">
-      {/* ✅ INDICADOR VISUAL PARA USUÁRIOS LEIGOS */}
+      {/* ✅ INDICADOR VISUAL PARA USUÁRIOS LEIGOS - TABELAS DE PREÇOS */}
       {(() => {
         const slidesPerView = 2.5;
         const totalPaginas = Math.ceil(tabelas.length / slidesPerView);
         const isUltimaPagina = currentSlide >= totalPaginas - 1;
 
-        return tabelas.length > 3 && !hasShownPeek && !isUltimaPagina && (
-          <div className={`absolute -top-6 right-0 z-10 flex items-center gap-1 text-xs font-medium animate-pulse ${
+        return tabelas.length > 3 && !isUltimaPagina && (
+          <div className={`absolute -top-2 right-0 z-20 flex items-center gap-1 text-xs font-medium animate-pulse ${
             config.modo_escuro ? 'text-blue-300' : 'text-blue-600'
           }`}>
             <span>Deslize para ver mais</span>
