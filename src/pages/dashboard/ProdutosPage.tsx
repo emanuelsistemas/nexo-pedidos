@@ -3505,6 +3505,8 @@ const ProdutosPage: React.FC = () => {
     }
 
     setIsLoading(true);
+    const startTime = performance.now(); // ✅ Medir performance
+
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Usuário não autenticado');
@@ -3517,49 +3519,60 @@ const ProdutosPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) throw new Error('Empresa não encontrada');
 
-      // Validações de duplicatas (apenas para produtos não deletados)
-      // Construir query base para verificar duplicatas
-      let query = supabase
-        .from('produtos')
-        .select('id, nome, codigo, codigo_barras')
-        .eq('empresa_id', usuarioData.empresa_id)
-        .eq('deletado', false); // Apenas produtos não deletados
+      // ✅ OTIMIZAÇÃO: Verificação de duplicatas mais eficiente
+      // Verificar duplicatas apenas se necessário (campos alterados)
+      const precisaVerificarDuplicatas = !editingProduto ||
+        (editingProduto.nome !== novoProduto.nome ||
+         editingProduto.codigo !== novoProduto.codigo ||
+         editingProduto.codigo_barras !== novoProduto.codigo_barras);
 
-      // Se estiver editando, excluir o produto atual da verificação
-      if (editingProduto) {
-        query = query.neq('id', editingProduto.id);
+      let produtosExistentes = [];
+      if (precisaVerificarDuplicatas) {
+        // Construir query otimizada para verificar duplicatas
+        let query = supabase
+          .from('produtos')
+          .select('id, nome, codigo, codigo_barras')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('deletado', false);
+
+        // Se estiver editando, excluir o produto atual da verificação
+        if (editingProduto) {
+          query = query.neq('id', editingProduto.id);
+        }
+
+        const { data, error: queryError } = await query;
+        if (queryError) throw queryError;
+        produtosExistentes = data || [];
       }
 
-      const { data: produtosExistentes, error: queryError } = await query;
-
-      if (queryError) throw queryError;
-
-      // Verificar duplicatas
+      // Verificar duplicatas apenas se a consulta foi executada
       const duplicatas = [];
 
-      // Verificar nome duplicado
-      const nomeDuplicado = produtosExistentes?.find(p =>
-        p.nome.toLowerCase().trim() === novoProduto.nome?.toLowerCase().trim()
-      );
-      if (nomeDuplicado) {
-        duplicatas.push('Nome do produto');
-      }
-
-      // Verificar código duplicado
-      const codigoDuplicado = produtosExistentes?.find(p =>
-        p.codigo === novoProduto.codigo
-      );
-      if (codigoDuplicado) {
-        duplicatas.push('Código do produto');
-      }
-
-      // Verificar código de barras duplicado (apenas se foi informado)
-      if (novoProduto.codigo_barras && novoProduto.codigo_barras.trim() !== '') {
-        const codigoBarrasDuplicado = produtosExistentes?.find(p =>
-          p.codigo_barras && p.codigo_barras === novoProduto.codigo_barras
+      if (precisaVerificarDuplicatas && produtosExistentes.length > 0) {
+        // Verificar nome duplicado
+        const nomeDuplicado = produtosExistentes.find(p =>
+          p.nome.toLowerCase().trim() === novoProduto.nome?.toLowerCase().trim()
         );
-        if (codigoBarrasDuplicado) {
-          duplicatas.push('Código de barras');
+        if (nomeDuplicado) {
+          duplicatas.push('Nome do produto');
+        }
+
+        // Verificar código duplicado
+        const codigoDuplicado = produtosExistentes.find(p =>
+          p.codigo === novoProduto.codigo
+        );
+        if (codigoDuplicado) {
+          duplicatas.push('Código do produto');
+        }
+
+        // Verificar código de barras duplicado (apenas se foi informado)
+        if (novoProduto.codigo_barras && novoProduto.codigo_barras.trim() !== '') {
+          const codigoBarrasDuplicado = produtosExistentes.find(p =>
+            p.codigo_barras && p.codigo_barras === novoProduto.codigo_barras
+          );
+          if (codigoBarrasDuplicado) {
+            duplicatas.push('Código de barras');
+          }
         }
       }
 
@@ -3694,18 +3707,8 @@ const ProdutosPage: React.FC = () => {
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
         };
 
-        // Log para confirmar que os dados fiscais estão sendo salvos
-        console.log('=== SALVANDO DADOS FISCAIS (CRIAÇÃO) ===');
-        console.log('NCM:', produtoData.ncm);
-        console.log('CFOP:', produtoData.cfop);
-        console.log('Origem:', produtoData.origem_produto);
-        console.log('CST ICMS:', produtoData.cst_icms);
-        console.log('CSOSN ICMS:', produtoData.csosn_icms);
-        console.log('Alíquota ICMS:', produtoData.aliquota_icms);
-        console.log('CEST:', produtoData.cest);
-        console.log('Margem ST:', produtoData.margem_st);
-        console.log('Preço de Custo:', produtoData.preco_custo);
-        console.log('Margem Percentual:', produtoData.margem_percentual);
+        // ✅ OTIMIZAÇÃO: Logs reduzidos para melhor performance
+        console.log('💾 Salvando produto:', produtoData.nome);
 
         const { data, error } = await supabase
           .from('produtos')
@@ -3768,41 +3771,45 @@ const ProdutosPage: React.FC = () => {
       // ✅ NOVO: Salvar preços das tabelas de preços (atualiza estado imediatamente)
       await salvarTodosPrecosTabelas(productId);
 
-      // ✅ OTIMIZAÇÃO: Recarregar apenas se for produto novo, senão atualizar específico
-      if (editingProduto) {
-        // Para produto editado: atualizar apenas os dados específicos
-        console.log('📝 Produto editado - atualizando dados específicos');
+      // ✅ OTIMIZAÇÃO CRÍTICA: Operações mínimas e assíncronas
+      console.log('⚡ Salvamento concluído - executando atualizações otimizadas');
 
-        // Atualizar foto específica do produto editado
-        await atualizarFotoProdutoEspecifico(editingProduto.id);
+      // Operações críticas (síncronas) - apenas o essencial
+      await loadGrupos(); // Necessário para atualizar a lista
 
-        // Recarregar apenas os grupos (sem forçar recarregamento de fotos)
-        await loadGrupos();
-      } else {
-        // Para produto novo: recarregar tudo
-        console.log('🆕 Produto novo - recarregando todos os dados');
-        await loadGrupos();
+      // ✅ OPERAÇÕES NÃO-CRÍTICAS (assíncronas) - executam em background
+      setTimeout(async () => {
+        try {
+          if (editingProduto) {
+            // Para produto editado: atualizar apenas dados específicos
+            await atualizarFotoProdutoEspecifico(editingProduto.id);
+          } else {
+            // Para produto novo: recarregar fotos apenas se necessário
+            const allProdutos = grupos.flatMap(grupo => grupo.produtos);
+            if (allProdutos.length > 0) {
+              loadProdutosFotosPrincipais(allProdutos, true); // Sem await
+              loadProdutosFotosCount(allProdutos, true); // Sem await
+            }
+          }
 
-        // Forçar recarregamento das fotos para incluir o novo produto
-        const allProdutos = grupos.flatMap(grupo => grupo.produtos);
-        if (allProdutos.length > 0) {
-          await loadProdutosFotosPrincipais(allProdutos, true);
-          await loadProdutosFotosCount(allProdutos, true);
+          // Atualizar estoque em background
+          loadProdutosEstoque(); // Sem await
+        } catch (error) {
+          console.error('Erro nas operações em background:', error);
         }
-      }
+      }, 100);
 
-      // Atualizar o estoque na grid imediatamente após criar/editar o produto
-      await loadProdutosEstoque();
-
-      // Limpar cache de validação NCM para evitar dados incorretos na interface
-      setNcmValidacao({
-        validando: false,
-        valido: null,
-        descricao: '',
-        erro: '',
-        temSubstituicaoTributaria: false,
-        fonte: null
-      });
+      // ✅ OTIMIZAÇÃO: Limpar validação NCM em background
+      setTimeout(() => {
+        setNcmValidacao({
+          validando: false,
+          valido: null,
+          descricao: '',
+          erro: '',
+          temSubstituicaoTributaria: false,
+          fonte: null
+        });
+      }, 50);
       setCestOpcoes([]);
 
       // Se for um novo produto com estoque inicial, atualizar o estado local imediatamente
@@ -3866,7 +3873,9 @@ const ProdutosPage: React.FC = () => {
       console.error('Stack trace:', error.stack);
       showMessage('error', `Erro ao ${editingProduto ? 'atualizar' : 'criar'} produto: ` + error.message);
     } finally {
-      console.log('=== FINALIZANDO SUBMIT ===');
+      // ✅ OTIMIZAÇÃO: Finalizar loading rapidamente
+      const endTime = performance.now();
+      console.log(`⚡ Produto salvo em ${Math.round(endTime - startTime)}ms`);
       setIsLoading(false);
     }
   };
