@@ -571,6 +571,12 @@ const CardapioPublicoPage: React.FC = () => {
     const produto = produtos.find(p => p.id === produtoId);
     if (!produto) return 0;
 
+    console.log('🔍 DEBUG - obterPrecoFinalProduto INÍCIO:', {
+      produtoId,
+      produtoNome: produto.nome,
+      precoOriginal: produto.preco
+    });
+
     // 1. Primeiro, obter preço base (tabela de preço ou preço padrão)
     let precoBase = produto.preco;
 
@@ -579,10 +585,20 @@ const CardapioPublicoPage: React.FC = () => {
       const tabelasComPrecos = obterTabelasComPrecos(produtoId);
       const tabelaSelecionadaId = tabelasSelecionadas[produtoId];
 
+      console.log('🔍 DEBUG - Tabelas de preço:', {
+        trabalhaComTabelaPrecos,
+        tabelasComPrecos: tabelasComPrecos.length,
+        tabelaSelecionadaId
+      });
+
       if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
         const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
         if (tabelaEscolhida) {
           precoBase = tabelaEscolhida.preco;
+          console.log('✅ Usando preço da tabela:', {
+            tabelaNome: tabelaEscolhida.nome,
+            precoTabela: tabelaEscolhida.preco
+          });
         }
       }
     }
@@ -645,6 +661,14 @@ const CardapioPublicoPage: React.FC = () => {
         }
       }
     }
+
+    console.log('✅ DEBUG - obterPrecoFinalProduto RESULTADO:', {
+      produtoId,
+      produtoNome: produto.nome,
+      precoBase,
+      precoFinal,
+      diferenca: precoFinal - precoBase
+    });
 
     return precoFinal;
   };
@@ -2315,6 +2339,14 @@ const CardapioPublicoPage: React.FC = () => {
       const precoProduto = obterPrecoFinalProduto(produtoId);
       const tabelaSelecionadaId = tabelasSelecionadas[produtoId] || null;
 
+      console.log('🛒 DEBUG - Adicionando ao carrinho:', {
+        produtoId,
+        produtoNome: produto?.nome,
+        quantidadeSelecionada,
+        precoProduto,
+        tabelaSelecionadaId
+      });
+
       // Criar item separado no carrinho
       const novoItem = {
         produtoId,
@@ -2325,6 +2357,8 @@ const CardapioPublicoPage: React.FC = () => {
         observacao: observacoesSelecionadas[produtoId],
         ordemAdicao: Date.now()
       };
+
+      console.log('🛒 DEBUG - Item criado:', novoItem);
 
       // Adicionar ao estado de itens separados
       setItensCarrinhoSeparados(prev => ({
@@ -2668,7 +2702,7 @@ const CardapioPublicoPage: React.FC = () => {
       })
       .filter(Boolean)
       .sort((a, b) => b!.ordemAdicao - a!.ordemAdicao) // Mais recentes primeiro
-      .map(({ produto, quantidade, adicionais, observacao, itemId }) => ({ produto, quantidade, adicionais, observacao, itemId })) as (ItemCarrinho & { itemId: string })[];
+      .map(({ produto, quantidade, precoProduto, tabelaPrecoId, adicionais, observacao, itemId }) => ({ produto, quantidade, precoProduto, tabelaPrecoId, adicionais, observacao, itemId })) as (ItemCarrinho & { itemId: string })[];
   };
 
   const obterTotalCarrinho = () => {
@@ -4057,6 +4091,13 @@ const CardapioPublicoPage: React.FC = () => {
                             <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
                               {(() => {
                                 const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
+                                console.log('💰 DEBUG - Exibindo preço no carrinho:', {
+                                  produtoNome: produto.nome,
+                                  itemPrecoProduto: (item as any).precoProduto,
+                                  produtoPreco: produto.preco,
+                                  precoFinal: precoProduto,
+                                  item: item
+                                });
                                 return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
                               })()}
                             </div>

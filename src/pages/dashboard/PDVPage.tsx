@@ -2165,12 +2165,9 @@ const PDVPage: React.FC = () => {
         console.log('🔍 AGUARDAR: Venda atual para salvamento:', vendaAtual);
 
         if (vendaAtual) {
-          console.log('🔍 DEBUG: Iniciando salvamento do item na venda em andamento...');
           const sucesso = await salvarItemNaVendaEmAndamento(novoItem);
-          if (sucesso) {
-            console.log('✅ SUCESSO: Item salvo com sucesso na venda em andamento');
-          } else {
-            console.error('❌ ERRO: Falha ao salvar item na venda em andamento');
+          if (!sucesso) {
+            toast.error('Erro ao salvar item na venda');
           }
         }
       };
@@ -7189,27 +7186,16 @@ const PDVPage: React.FC = () => {
   // ✅ NOVA: Função para criar venda em andamento no primeiro item (adaptada do sistema de rascunhos NFe)
   const criarVendaEmAndamento = async (): Promise<boolean> => {
     try {
-      console.log('🚀 INICIANDO CRIAÇÃO DE VENDA EM ANDAMENTO');
-      console.log('🔍 Estado atual:', {
-        carrinho: carrinho.length,
-        vendaEmAndamento,
-        isEditingVenda
-      });
-
       // Obter dados do usuário
-      console.log('🔍 Obtendo dados do usuário...');
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError) {
-        console.error('❌ Erro ao obter usuário:', userError);
         return false;
       }
       if (!userData.user) {
-        console.error('❌ Usuário não autenticado');
         return false;
       }
-      console.log('✅ Usuário autenticado:', userData.user.id);
 
-      console.log('🔍 Obtendo dados da empresa...');
+      // Obter dados da empresa
       const { data: usuarioData, error: usuarioError } = await supabase
         .from('usuarios')
         .select('empresa_id, serie_nfce')
@@ -7217,40 +7203,19 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (usuarioError) {
-        console.error('❌ Erro ao obter dados do usuário:', usuarioError);
         return false;
       }
 
       if (!usuarioData?.empresa_id) {
-        console.error('❌ Empresa não encontrada nos dados do usuário');
         return false;
       }
 
-      console.log('✅ Dados do usuário obtidos:', {
-        empresa_id: usuarioData.empresa_id,
-        serie_nfce: usuarioData.serie_nfce
-      });
-
       // Gerar número da venda
       const numeroVenda = `PDV-${Date.now()}`;
-      console.log('🔢 Número da venda gerado:', numeroVenda);
 
       // Reservar número da NFC-e
-      console.log('🔍 VENDA: Reservando número da NFC-e...');
-      console.log('🔍 VENDA: Empresa ID para numeração:', usuarioData.empresa_id);
-      console.log('🔍 VENDA: Série do usuário:', usuarioData.serie_nfce);
-
       const numeroNfceReservado = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
-      console.log('✅ VENDA: Número NFC-e reservado com sucesso:', numeroNfceReservado);
-
       const serieUsuario = usuarioData.serie_nfce;
-      console.log('✅ VENDA: Série confirmada:', serieUsuario);
-
-      console.log('🔢 Números reservados:', {
-        numeroVenda,
-        numeroNfceReservado,
-        serieUsuario
-      });
 
       // Preparar dados da venda em andamento (similar ao rascunho NFe)
       const vendaData = {
@@ -7279,8 +7244,6 @@ const PDVPage: React.FC = () => {
       };
 
       // Inserir venda na tabela pdv
-      console.log('🔍 VENDA: Inserindo venda na tabela pdv...');
-      console.log('🔍 VENDA: Dados da venda a serem inseridos:', JSON.stringify(vendaData, null, 2));
 
       const { data: vendaInserida, error: vendaError } = await supabase
         .from('pdv')
@@ -7289,18 +7252,8 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (vendaError) {
-        console.error('❌ VENDA: Erro ao inserir venda na tabela pdv:', vendaError);
-        console.error('❌ VENDA: Detalhes completos do erro:', {
-          message: vendaError.message,
-          details: vendaError.details,
-          hint: vendaError.hint,
-          code: vendaError.code,
-          vendaData: vendaData
-        });
         throw new Error(`Falha ao inserir venda: ${vendaError.message}`);
       }
-
-      console.log('✅ VENDA: Venda inserida com sucesso:', vendaInserida);
 
       // Atualizar estado da venda em andamento
       const novaVendaEmAndamento = {
@@ -7311,15 +7264,11 @@ const PDVPage: React.FC = () => {
         status_venda: 'aberta'
       };
 
-      console.log('🔄 VENDA: Atualizando estado vendaEmAndamento:', novaVendaEmAndamento);
       setVendaEmAndamento(novaVendaEmAndamento);
 
       // ✅ CORREÇÃO: Venda NOVA deve ter isEditingVenda = false
-      console.log('🔄 VENDA: Definindo isEditingVenda = false');
       setIsEditingVenda(false);
 
-      console.log('✅ VENDA: Processo de criação concluído com sucesso');
-      console.log('✅ VENDA: Retornando true da função criarVendaEmAndamento');
       return true;
 
     } catch (error) {
@@ -7331,27 +7280,13 @@ const PDVPage: React.FC = () => {
   // ✅ NOVA: Função para salvar item na venda em andamento (adaptada do sistema de rascunhos NFe)
   const salvarItemNaVendaEmAndamento = async (item: ItemCarrinho): Promise<any> => {
     try {
-      console.log('🔍 INICIANDO salvamento do item na venda em andamento');
-      console.log('🔍 Item recebido:', {
-        id: item.id,
-        produto: item.produto?.nome,
-        quantidade: item.quantidade,
-        subtotal: item.subtotal,
-        vendaSemProduto: item.vendaSemProduto,
-        adicionais: item.adicionais?.length || 0 // ✅ NOVO: Log dos adicionais
-      });
-
       if (!vendaEmAndamento) {
-        console.error('❌ Nenhuma venda em andamento para salvar item');
         return false;
       }
-
-      console.log('🔍 Venda em andamento encontrada:', vendaEmAndamento);
 
       // Obter dados do usuário
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
-        console.error('❌ Usuário não autenticado');
         return false;
       }
 
@@ -7362,12 +7297,10 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) {
-        console.error('❌ Empresa não encontrada');
         return false;
       }
 
       // ✅ NOVO: Preparar dados completos do item incluindo imagem e dados de promoção
-      console.log('🔍 Preparando dados completos do item...');
       const itemData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
@@ -7405,10 +7338,7 @@ const PDVPage: React.FC = () => {
         descricao_sabores: item.descricaoSabores || null
       };
 
-      console.log('🔍 Dados do item preparados:', itemData);
-
       // Inserir item na tabela pdv_itens
-      console.log('🔍 Inserindo item na tabela pdv_itens...');
       const { data: itemInserido, error: itemError } = await supabase
         .from('pdv_itens')
         .insert(itemData)
@@ -7416,33 +7346,18 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (itemError) {
-        console.error('❌ ERRO CRÍTICO: Falha ao salvar item na venda em andamento:', itemError);
-        console.error('❌ Detalhes completos do erro:', {
-          message: itemError.message,
-          details: itemError.details,
-          hint: itemError.hint,
-          code: itemError.code,
-          itemData: itemData
-        });
-
         // ✅ NOVO: Mostrar toast com erro específico
         toast.error(`Erro ao salvar item: ${itemError.message}`);
         return false;
       }
 
       if (!itemInserido) {
-        console.error('❌ ERRO: Item não foi inserido (resposta vazia)');
         toast.error('Erro: Item não foi salvo no banco de dados');
         return false;
       }
 
-      console.log('✅ SUCESSO: Item inserido com sucesso:', itemInserido);
-      console.log('✅ SUCESSO: Item salvo na venda em andamento:', itemData.nome_produto);
-
       // ✅ NOVO: Salvar adicionais do item se existirem
       if (item.adicionais && item.adicionais.length > 0) {
-        console.log('🔍 SALVANDO adicionais do item:', item.adicionais.length, 'adicionais encontrados');
-
         // Converter adicionais do carrinho para o formato esperado pela função utilitária
         const adicionaisFormatados = item.adicionais.map(adicional => ({
           item: {
@@ -7461,15 +7376,10 @@ const PDVPage: React.FC = () => {
           userData.user.id
         );
 
-        if (sucessoAdicionais) {
-          console.log('✅ SUCESSO: Adicionais salvos com sucesso para o item:', itemData.nome_produto);
-        } else {
-          console.error('❌ ERRO: Falha ao salvar adicionais do item:', itemData.nome_produto);
+        if (!sucessoAdicionais) {
           // Não falhar a operação inteira por causa dos adicionais, mas registrar o erro
           toast.error(`Aviso: Adicionais do item ${itemData.nome_produto} não foram salvos`);
         }
-      } else {
-        console.log('🔍 Item sem adicionais, prosseguindo...');
       }
 
       // ✅ NOVO: Toast de confirmação para debug (removido para não poluir a interface)
@@ -7477,7 +7387,6 @@ const PDVPage: React.FC = () => {
       return itemInserido; // Retornar o item inserido com o ID
 
     } catch (error) {
-      console.error('❌ Erro ao salvar item na venda em andamento:', error);
       return false;
     }
   };
