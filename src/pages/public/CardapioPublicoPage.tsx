@@ -389,6 +389,8 @@ interface Produto {
 interface ItemCarrinho {
   produto: Produto;
   quantidade: number;
+  precoProduto?: number; // ✅ PREÇO DO PRODUTO DA TABELA SELECIONADA
+  tabelaPrecoId?: string; // ✅ ID DA TABELA DE PREÇO SELECIONADA
   adicionais?: Array<{
     id: string;
     nome: string;
@@ -567,6 +569,8 @@ const CardapioPublicoPage: React.FC = () => {
   const [itensCarrinhoSeparados, setItensCarrinhoSeparados] = useState<Record<string, {
     produtoId: string;
     quantidade: number;
+    precoProduto?: number; // ✅ PREÇO DO PRODUTO DA TABELA SELECIONADA
+    tabelaPrecoId?: string; // ✅ ID DA TABELA DE PREÇO SELECIONADA
     adicionais: {[itemId: string]: number};
     observacao?: string;
     ordemAdicao: number;
@@ -668,6 +672,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [tabelasPrecos, setTabelasPrecos] = useState<Array<{id: string; nome: string; quantidade_sabores: number}>>([]);
   const [produtoPrecos, setProdutoPrecos] = useState<{[produtoId: string]: {[tabelaId: string]: number}}>({});
   const [tabelasSelecionadas, setTabelasSelecionadas] = useState<{[produtoId: string]: string}>({});
+
+  // Estados para preços dos adicionais por tabela
+  const [adicionaisPrecos, setAdicionaisPrecos] = useState<{[adicionalId: string]: {[tabelaId: string]: number}}>({});
 
   // Funções para observações
   const abrirModalObservacao = (produtoId: string, itemId?: string) => {
@@ -1036,6 +1043,43 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [adicionaisSelecionados, produtos]);
 
+  // ✅ LIMPAR ADICIONAIS INVÁLIDOS QUANDO TABELA DE PREÇO MUDA
+  useEffect(() => {
+    if (!trabalhaComTabelaPrecos || produtos.length === 0) return;
+
+    // Para cada produto que tem tabela selecionada
+    Object.keys(tabelasSelecionadas).forEach(produtoId => {
+      const adicionaisItem = adicionaisSelecionados[produtoId];
+      if (!adicionaisItem) return;
+
+      // Verificar quais adicionais devem ser removidos
+      const adicionaisParaRemover: string[] = [];
+      Object.keys(adicionaisItem).forEach(adicionalId => {
+        if (!adicionalDeveSerExibido(produtoId, adicionalId)) {
+          adicionaisParaRemover.push(adicionalId);
+        }
+      });
+
+      // Remover adicionais inválidos
+      if (adicionaisParaRemover.length > 0) {
+        setAdicionaisSelecionados(prev => {
+          const novosAdicionais = { ...prev };
+          if (novosAdicionais[produtoId]) {
+            adicionaisParaRemover.forEach(adicionalId => {
+              delete novosAdicionais[produtoId][adicionalId];
+            });
+
+            // Se não sobrou nenhum adicional, remover o produto do objeto
+            if (Object.keys(novosAdicionais[produtoId]).length === 0) {
+              delete novosAdicionais[produtoId];
+            }
+          }
+          return novosAdicionais;
+        });
+      }
+    });
+  }, [tabelasSelecionadas, trabalhaComTabelaPrecos, produtos, adicionaisSelecionados]);
+
 
 
   const carregarDadosCardapio = async () => {
@@ -1118,6 +1162,26 @@ const CardapioPublicoPage: React.FC = () => {
             });
 
             setProdutoPrecos(precosMap);
+          }
+
+          // Carregar preços dos adicionais para as tabelas
+          const { data: adicionaisPrecosData, error: adicionaisPrecosError } = await supabase
+            .from('adicionais_precos')
+            .select('adicional_item_id, tabela_preco_id, preco')
+            .eq('empresa_id', empresaComLogo.id)
+            .gt('preco', 0); // Apenas preços maiores que 0
+
+          if (adicionaisPrecosData && adicionaisPrecosData.length > 0) {
+            const adicionaisPrecosMap: {[adicionalId: string]: {[tabelaId: string]: number}} = {};
+
+            adicionaisPrecosData.forEach(item => {
+              if (!adicionaisPrecosMap[item.adicional_item_id]) {
+                adicionaisPrecosMap[item.adicional_item_id] = {};
+              }
+              adicionaisPrecosMap[item.adicional_item_id][item.tabela_preco_id] = item.preco;
+            });
+
+            setAdicionaisPrecos(adicionaisPrecosMap);
           }
         }
       }
@@ -1680,7 +1744,7 @@ const CardapioPublicoPage: React.FC = () => {
             adicionaisValidos.push({
               id: adicional.id,
               nome: adicional.nome,
-              preco: adicional.preco,
+              preco: obterPrecoAdicional(produtoId, itemId), // ✅ USAR PREÇO DA TABELA
               quantidade: quantidade
             });
           }
@@ -1740,11 +1804,11 @@ const CardapioPublicoPage: React.FC = () => {
       if (opcaoAtingiuMinimo(produtoId, opcao.id) && !opcaoExcedeuMaximo(produtoId, opcao.id)) {
         opcao.itens.forEach(item => {
           const quantidade = obterQuantidadeAdicional(produtoId, item.id);
-          if (quantidade > 0) {
+          if (quantidade > 0 && adicionalDeveSerExibido(produtoId, item.id)) { // ✅ VERIFICAR SE DEVE SER EXIBIDO
             adicionaisValidos.push({
               id: item.id,
               nome: item.nome,
-              preco: item.preco,
+              preco: obterPrecoAdicional(produtoId, item.id), // ✅ USAR PREÇO DA TABELA
               quantidade: quantidade
             });
           }
@@ -1793,6 +1857,56 @@ const CardapioPublicoPage: React.FC = () => {
     return resultado;
   };
 
+  // Função para obter preço do adicional conforme a tabela selecionada
+  const obterPrecoAdicional = (produtoId: string, adicionalId: string): number => {
+    // Se não trabalha com tabelas de preço, usar preço padrão do adicional
+    if (!trabalhaComTabelaPrecos) {
+      const produto = produtos.find(p => p.id === produtoId);
+      if (produto?.opcoes_adicionais) {
+        for (const opcao of produto.opcoes_adicionais) {
+          const item = opcao.itens?.find(item => item.id === adicionalId);
+          if (item) return item.preco || 0;
+        }
+      }
+      return 0;
+    }
+
+    // Se trabalha com tabelas de preço, verificar se há tabela selecionada
+    const tabelaSelecionadaId = tabelasSelecionadas[produtoId];
+    if (tabelaSelecionadaId && adicionaisPrecos[adicionalId]?.[tabelaSelecionadaId]) {
+      return adicionaisPrecos[adicionalId][tabelaSelecionadaId];
+    }
+
+    // Fallback: usar preço padrão do adicional
+    const produto = produtos.find(p => p.id === produtoId);
+    if (produto?.opcoes_adicionais) {
+      for (const opcao of produto.opcoes_adicionais) {
+        const item = opcao.itens?.find(item => item.id === adicionalId);
+        if (item) return item.preco || 0;
+      }
+    }
+
+    return 0;
+  };
+
+  // Função para verificar se adicional deve ser exibido (tem preço na tabela selecionada)
+  const adicionalDeveSerExibido = (produtoId: string, adicionalId: string): boolean => {
+    // Se não trabalha com tabelas de preço, sempre exibir
+    if (!trabalhaComTabelaPrecos) {
+      return true;
+    }
+
+    // Se trabalha com tabelas de preço, verificar se há tabela selecionada
+    const tabelaSelecionadaId = tabelasSelecionadas[produtoId];
+    if (!tabelaSelecionadaId) {
+      // Se não há tabela selecionada, exibir todos
+      return true;
+    }
+
+    // Verificar se o adicional tem preço na tabela selecionada
+    return adicionaisPrecos[adicionalId]?.[tabelaSelecionadaId] > 0;
+  };
+
   // Funções de localStorage removidas - carrinho não persiste entre reloads
 
 
@@ -1839,18 +1953,16 @@ const CardapioPublicoPage: React.FC = () => {
     // Valor base do produto (usando preço da tabela se selecionada)
     let valorTotal = precoBase * quantidadeSelecionada;
 
-    // Adicionar valor dos adicionais selecionados
+    // Adicionar valor dos adicionais selecionados (usando preço da tabela selecionada)
     const adicionaisItem = adicionaisSelecionados[produtoId];
     if (adicionaisItem) {
       Object.entries(adicionaisItem).forEach(([itemId, quantidade]) => {
         if (quantidade > 0) {
-          // Encontrar o adicional e seu preço
-          produto.opcoes_adicionais?.forEach(opcao => {
-            const item = opcao.itens?.find(item => item.id === itemId);
-            if (item && item.preco) {
-              valorTotal += item.preco * quantidade * quantidadeSelecionada;
-            }
-          });
+          // Usar preço do adicional conforme a tabela selecionada
+          const precoAdicional = obterPrecoAdicional(produtoId, itemId);
+          if (precoAdicional > 0) {
+            valorTotal += precoAdicional * quantidade * quantidadeSelecionada;
+          }
         }
       });
     }
@@ -2056,10 +2168,27 @@ const CardapioPublicoPage: React.FC = () => {
       // Gerar ID único para este item no carrinho
       const itemId = `${produtoId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+      // ✅ OBTER PREÇO CORRETO DO PRODUTO (considerando tabela de preço)
+      const tabelasComPrecos = obterTabelasComPrecos(produtoId);
+      let precoProduto = produto.preco; // Preço padrão
+      let tabelaSelecionadaId = null;
+
+      if (tabelasComPrecos.length > 0) {
+        tabelaSelecionadaId = tabelasSelecionadas[produtoId];
+        if (tabelaSelecionadaId) {
+          const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+          if (tabelaEscolhida) {
+            precoProduto = tabelaEscolhida.preco;
+          }
+        }
+      }
+
       // Criar item separado no carrinho
       const novoItem = {
         produtoId,
         quantidade: quantidadeSelecionada,
+        precoProduto: precoProduto, // ✅ SALVAR PREÇO DA TABELA SELECIONADA
+        tabelaPrecoId: tabelaSelecionadaId, // ✅ SALVAR ID DA TABELA PARA REFERÊNCIA
         adicionais: adicionaisSelecionados[produtoId] ? { ...adicionaisSelecionados[produtoId] } : {},
         observacao: observacoesSelecionadas[produtoId],
         ordemAdicao: Date.now()
@@ -2385,7 +2514,7 @@ const CardapioPublicoPage: React.FC = () => {
                   adicionaisArray.push({
                     id: adicionalId,
                     nome: adicionalItem.nome,
-                    preco: adicionalItem.preco || 0,
+                    preco: obterPrecoAdicional(item.produtoId, adicionalId), // ✅ USAR PREÇO DA TABELA
                     quantidade
                   });
                 }
@@ -2397,6 +2526,8 @@ const CardapioPublicoPage: React.FC = () => {
         return {
           produto,
           quantidade: item.quantidade,
+          precoProduto: item.precoProduto, // ✅ INCLUIR PREÇO SALVO DO PRODUTO
+          tabelaPrecoId: item.tabelaPrecoId, // ✅ INCLUIR ID DA TABELA
           adicionais: adicionaisArray.length > 0 ? adicionaisArray : undefined,
           observacao: item.observacao,
           ordemAdicao: item.ordemAdicao,
@@ -2410,10 +2541,13 @@ const CardapioPublicoPage: React.FC = () => {
 
   const obterTotalCarrinho = () => {
     return obterItensCarrinho().reduce((total, item) => {
-      // Total do produto principal
-      let totalItem = item.produto.preco * item.quantidade;
+      // ✅ USAR PREÇO SALVO NO ITEM (já considera tabela de preço)
+      const precoProduto = item.precoProduto || item.produto.preco;
 
-      // Adicionar total dos adicionais
+      // Total do produto principal (usando preço salvo)
+      let totalItem = precoProduto * item.quantidade;
+
+      // Adicionar total dos adicionais (já usando preços corretos da tabela)
       if (item.adicionais) {
         const totalAdicionais = item.adicionais.reduce((totalAd, adicional) => {
           return totalAd + (adicional.preco * adicional.quantidade * item.quantidade);
@@ -3346,11 +3480,12 @@ const CardapioPublicoPage: React.FC = () => {
       }
 
       itensCarrinho.forEach((item, index) => {
+        const precoProduto = (item as any).precoProduto || item.produto.preco; // ✅ USAR PREÇO SALVO
         mensagem += `${index + 1}. *${item.produto.nome}*\n`;
         mensagem += `   Quantidade: ${item.quantidade}\n`;
         if (config.mostrar_precos) {
-          mensagem += `   Preço unitário: ${formatarPreco(item.produto.preco)}\n`;
-          mensagem += `   Subtotal: ${formatarPreco(item.produto.preco * item.quantidade)}\n`;
+          mensagem += `   Preço unitário: ${formatarPreco(precoProduto)}\n`;
+          mensagem += `   Subtotal: ${formatarPreco(precoProduto * item.quantidade)}\n`;
         }
         mensagem += '\n';
       });
@@ -3788,7 +3923,10 @@ const CardapioPublicoPage: React.FC = () => {
                           {/* Linha 2: Preço */}
                           {config.mostrar_precos && (
                             <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                              {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                              {(() => {
+                                const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
+                                return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+                              })()}
                             </div>
                           )}
                         </div>
@@ -3871,7 +4009,10 @@ const CardapioPublicoPage: React.FC = () => {
                             </h4>
                             {config.mostrar_precos && (
                               <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                                {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                                {(() => {
+                                  const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
+                                  return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+                                })()}
                               </div>
                             )}
                           </div>
@@ -4067,7 +4208,7 @@ const CardapioPublicoPage: React.FC = () => {
                       config.modo_escuro ? 'border-gray-600 text-green-400' : 'border-gray-300 text-green-600'
                     }`}>
                       Total do Item: {formatarPreco(
-                        (produto.preco * quantidade) +
+                        (((item as any).precoProduto || produto.preco) * quantidade) + // ✅ USAR PREÇO SALVO
                         adicionais.reduce((total, adicional) => total + (adicional.preco * adicional.quantidade * quantidade), 0)
                       )}
                     </div>
@@ -5080,11 +5221,14 @@ const CardapioPublicoPage: React.FC = () => {
                               </div>
                             </button>
 
-                            {/* Itens do adicional (expansível) */}
+                            {/* Itens do adicional (expansível) - FILTRADOS POR TABELA DE PREÇO */}
                             {adicionaisExpandidos[produto.id]?.[opcao.id] && (
                               <div className="mt-2 space-y-2">
-                                {opcao.itens.map(item => {
+                                {opcao.itens
+                                  .filter(item => adicionalDeveSerExibido(produto.id, item.id)) // ✅ FILTRAR POR TABELA
+                                  .map(item => {
                                   const quantidade = obterQuantidadeAdicional(produto.id, item.id);
+                                  const precoAdicional = obterPrecoAdicional(produto.id, item.id); // ✅ PREÇO DA TABELA
                                   return (
                                     <div
                                       key={item.id}
@@ -5099,14 +5243,14 @@ const CardapioPublicoPage: React.FC = () => {
                                           {item.nome}
                                         </p>
                                         <p className={`text-xs ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
-                                          {item.preco > 0 ? (
+                                          {precoAdicional > 0 ? (
                                             quantidade > 1 ? (
                                               <>
-                                                {formatarPreco(item.preco * quantidade)}
-                                                <span className="opacity-70"> ({quantidade}x {formatarPreco(item.preco)})</span>
+                                                {formatarPreco(precoAdicional * quantidade)}
+                                                <span className="opacity-70"> ({quantidade}x {formatarPreco(precoAdicional)})</span>
                                               </>
                                             ) : (
-                                              `+ ${formatarPreco(item.preco)}`
+                                              `+ ${formatarPreco(precoAdicional)}`
                                             )
                                           ) : 'Grátis'}
                                         </p>
@@ -5671,7 +5815,10 @@ const CardapioPublicoPage: React.FC = () => {
                               {/* Linha 2: Preço */}
                               {config.mostrar_precos && (
                                 <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                                  {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                                  {(() => {
+                                    const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
+                                    return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+                                  })()}
                                 </div>
                               )}
                             </div>
@@ -5739,7 +5886,10 @@ const CardapioPublicoPage: React.FC = () => {
                                 </h4>
                                 {config.mostrar_precos && (
                                   <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                                    {formatarPreco(produto.preco)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(produto.preco * quantidade)}
+                                    {(() => {
+                                      const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
+                                      return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+                                    })()}
                                   </div>
                                 )}
                               </div>

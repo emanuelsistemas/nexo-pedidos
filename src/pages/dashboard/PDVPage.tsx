@@ -5751,7 +5751,53 @@ const PDVPage: React.FC = () => {
     return quantidade.toString();
   };
 
+  // ✅ NOVA FUNÇÃO: Verificar se promoção está vencida
+  const verificarPromocaoVencida = (produto: any) => {
+    if (!produto.promocao_data_habilitada || !produto.promocao_data_fim) {
+      return false; // Sem data definida, promoção não vence
+    }
+
+    const hoje = new Date();
+    const dataFim = new Date(produto.promocao_data_fim);
+
+    // Zerar as horas para comparar apenas as datas
+    hoje.setHours(0, 0, 0, 0);
+    dataFim.setHours(23, 59, 59, 999);
+
+    return hoje > dataFim;
+  };
+
+  // ✅ NOVA FUNÇÃO: Calcular dias restantes da promoção
+  const calcularDiasRestantes = (produto: any) => {
+    if (!produto.promocao_data_habilitada || !produto.promocao_data_fim) {
+      return null;
+    }
+
+    const hoje = new Date();
+    const dataFim = new Date(produto.promocao_data_fim);
+
+    // Zerar as horas para comparar apenas as datas
+    hoje.setHours(0, 0, 0, 0);
+    dataFim.setHours(0, 0, 0, 0);
+
+    const diffTime = dataFim.getTime() - hoje.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays;
+  };
+
+  // ✅ NOVA FUNÇÃO: Formatar data para exibição
+  const formatarDataPromocao = (dataString: string) => {
+    const data = new Date(dataString);
+    return data.toLocaleDateString('pt-BR');
+  };
+
   const calcularPrecoFinal = (produto: Produto) => {
+    // ✅ VERIFICAR SE PROMOÇÃO ESTÁ VENCIDA
+    if (produto.promocao && verificarPromocaoVencida(produto)) {
+      return produto.preco; // Retorna preço normal se promoção vencida
+    }
+
     if (!produto.promocao || !produto.valor_desconto) return produto.preco;
 
     if (produto.tipo_desconto === 'percentual') {
@@ -11692,7 +11738,7 @@ const PDVPage: React.FC = () => {
 
                                         {/* Texto explicativo apenas para produtos com desconto/promoção */}
                                         {(item.produto.promocao || (item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0))) && (
-                                          <p className="text-xs text-green-400">
+                                          <div className="text-xs text-green-400">
                                             {item.produto.desconto_quantidade && item.quantidade >= (item.produto.quantidade_minima || 0) ? (
                                               <>
                                                 Desconto por quantidade:
@@ -11702,9 +11748,37 @@ const PDVPage: React.FC = () => {
                                                 }
                                               </>
                                             ) : (
-                                              'Produto em promoção'
+                                              <div>
+                                                {/* ✅ VERIFICAR SE PROMOÇÃO ESTÁ VENCIDA */}
+                                                {verificarPromocaoVencida(item.produto) ? (
+                                                  <span className="text-red-400">Promoção vencida</span>
+                                                ) : (
+                                                  <>
+                                                    <span>Produto em promoção</span>
+                                                    {/* ✅ EXIBIR DATA E DIAS RESTANTES SE DEFINIDOS */}
+                                                    {item.produto.promocao_data_habilitada && item.produto.promocao_data_fim && (
+                                                      <div className="mt-1">
+                                                        <div>Válida até: {formatarDataPromocao(item.produto.promocao_data_fim)}</div>
+                                                        {(() => {
+                                                          const diasRestantes = calcularDiasRestantes(item.produto);
+                                                          if (diasRestantes !== null) {
+                                                            if (diasRestantes === 0) {
+                                                              return <div className="text-yellow-400">⏰ Último dia!</div>;
+                                                            } else if (diasRestantes === 1) {
+                                                              return <div className="text-yellow-400">⏰ 1 dia restante</div>;
+                                                            } else if (diasRestantes > 1) {
+                                                              return <div>⏰ {diasRestantes} dias restantes</div>;
+                                                            }
+                                                          }
+                                                          return null;
+                                                        })()}
+                                                      </div>
+                                                    )}
+                                                  </>
+                                                )}
+                                              </div>
                                             )}
-                                          </p>
+                                          </div>
                                         )}
                                       </div>
                                     )}
@@ -18841,7 +18915,35 @@ const PDVPage: React.FC = () => {
                         <span className="line-through">{formatCurrency(produtoParaQuantidade.preco)}</span>
                         <span className="text-primary-400 ml-2 font-medium">{formatCurrency(calcularPrecoFinal(produtoParaQuantidade))}</span>
                       </p>
-                      <p className="text-xs text-green-400">Produto em promoção</p>
+                      <div className="text-xs text-green-400">
+                        {/* ✅ VERIFICAR SE PROMOÇÃO ESTÁ VENCIDA */}
+                        {verificarPromocaoVencida(produtoParaQuantidade) ? (
+                          <span className="text-red-400">Promoção vencida</span>
+                        ) : (
+                          <>
+                            <span>Produto em promoção</span>
+                            {/* ✅ EXIBIR DATA E DIAS RESTANTES SE DEFINIDOS */}
+                            {produtoParaQuantidade.promocao_data_habilitada && produtoParaQuantidade.promocao_data_fim && (
+                              <div className="mt-1">
+                                <div>Válida até: {formatarDataPromocao(produtoParaQuantidade.promocao_data_fim)}</div>
+                                {(() => {
+                                  const diasRestantes = calcularDiasRestantes(produtoParaQuantidade);
+                                  if (diasRestantes !== null) {
+                                    if (diasRestantes === 0) {
+                                      return <div className="text-yellow-400">⏰ Último dia!</div>;
+                                    } else if (diasRestantes === 1) {
+                                      return <div className="text-yellow-400">⏰ 1 dia restante</div>;
+                                    } else if (diasRestantes > 1) {
+                                      return <div>⏰ {diasRestantes} dias restantes</div>;
+                                    }
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <p>Preço: {formatCurrency(calcularPrecoFinal(produtoParaQuantidade!))}</p>

@@ -328,6 +328,11 @@ const ProdutosPage: React.FC = () => {
     pizza: false,
     cardapio_digital: false,
     exibir_promocao_cardapio: false,
+    // Novos campos para data de promoção
+    promocao_data_habilitada: false,
+    promocao_data_inicio: '',
+    promocao_data_fim: '',
+    promocao_data_cardapio: false,
   });
 
   // Estado para controlar o valor formatado do preço
@@ -2352,6 +2357,11 @@ const ProdutosPage: React.FC = () => {
       pizza: false,
       cardapio_digital: false,
       exibir_promocao_cardapio: false,
+      // Novos campos para data de promoção
+      promocao_data_habilitada: false,
+      promocao_data_inicio: '',
+      promocao_data_fim: '',
+      promocao_data_cardapio: false,
     });
 
     // Inicializa o preço formatado
@@ -2586,6 +2596,11 @@ const ProdutosPage: React.FC = () => {
       cardapio_digital: produto.cardapio_digital || false,
       exibir_promocao_cardapio: produto.exibir_promocao_cardapio || false,
       controla_estoque_cardapio: produto.controla_estoque_cardapio || false,
+      // Novos campos para data de promoção
+      promocao_data_habilitada: (produto as any).promocao_data_habilitada || false,
+      promocao_data_inicio: (produto as any).promocao_data_inicio || '',
+      promocao_data_fim: (produto as any).promocao_data_fim || '',
+      promocao_data_cardapio: (produto as any).promocao_data_cardapio || false,
     };
 
     // Definir o estado do novo produto
@@ -3636,6 +3651,11 @@ const ProdutosPage: React.FC = () => {
           controla_estoque_cardapio: novoProduto.controla_estoque_cardapio || false,
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
+          // ✅ NOVOS CAMPOS: Data de promoção
+          promocao_data_habilitada: novoProduto.promocao_data_habilitada || false,
+          promocao_data_inicio: novoProduto.promocao_data_habilitada ? novoProduto.promocao_data_inicio : null,
+          promocao_data_fim: novoProduto.promocao_data_habilitada ? novoProduto.promocao_data_fim : null,
+          promocao_data_cardapio: novoProduto.promocao_data_cardapio || false,
           empresa_id: usuarioData.empresa_id
         };
 
@@ -3703,6 +3723,11 @@ const ProdutosPage: React.FC = () => {
           exibir_promocao_cardapio: novoProduto.exibir_promocao_cardapio || false,
           exibir_desconto_qtd_minimo_no_cardapio_digital: novoProduto.exibir_desconto_qtd_minimo_no_cardapio_digital || false, // ✅ NOVO CAMPO: Exibir no cardápio digital
           controla_estoque_cardapio: novoProduto.controla_estoque_cardapio || false,
+          // ✅ NOVOS CAMPOS: Data de promoção
+          promocao_data_habilitada: novoProduto.promocao_data_habilitada || false,
+          promocao_data_inicio: novoProduto.promocao_data_habilitada ? novoProduto.promocao_data_inicio : null,
+          promocao_data_fim: novoProduto.promocao_data_habilitada ? novoProduto.promocao_data_fim : null,
+          promocao_data_cardapio: novoProduto.promocao_data_cardapio || false,
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
         };
@@ -4134,6 +4159,11 @@ const ProdutosPage: React.FC = () => {
         exibir_promocao_cardapio: produtoCriado.exibir_promocao_cardapio,
         controla_estoque_cardapio: produtoCriado.controla_estoque_cardapio,
         produto_alcoolico: produtoCriado.produto_alcoolico, // ✅ NOVO CAMPO: Produto Alcoólico
+        // ✅ NOVOS CAMPOS: Data de promoção
+        promocao_data_habilitada: (produtoCriado as any).promocao_data_habilitada || false,
+        promocao_data_inicio: (produtoCriado as any).promocao_data_inicio || '',
+        promocao_data_fim: (produtoCriado as any).promocao_data_fim || '',
+        promocao_data_cardapio: (produtoCriado as any).promocao_data_cardapio || false,
       });
 
       // Atualizar os campos formatados com os valores clonados
@@ -6888,6 +6918,79 @@ const ProdutosPage: React.FC = () => {
                                       Exibir promoção no cardápio digital
                                     </label>
                                   </div>
+                                </div>
+                              )}
+
+                              {/* Checkbox para habilitar data de início e fim */}
+                              <div className="mb-2">
+                                <div className="flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    id="promocao_data_habilitada"
+                                    checked={novoProduto.promocao_data_habilitada || false}
+                                    onChange={(e) => setNovoProduto({
+                                      ...novoProduto,
+                                      promocao_data_habilitada: e.target.checked,
+                                      // Limpar datas se desabilitar
+                                      promocao_data_inicio: e.target.checked ? novoProduto.promocao_data_inicio : '',
+                                      promocao_data_fim: e.target.checked ? novoProduto.promocao_data_fim : '',
+                                      promocao_data_cardapio: e.target.checked ? novoProduto.promocao_data_cardapio : false
+                                    })}
+                                    className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                  />
+                                  <label htmlFor="promocao_data_habilitada" className="text-sm font-medium text-white cursor-pointer">
+                                    Data de Início e Fim
+                                  </label>
+                                </div>
+                              </div>
+
+                              {/* Campos de data - só aparecem se data estiver habilitada */}
+                              {novoProduto.promocao_data_habilitada && (
+                                <div className="pl-7 border-l-2 border-primary-500/30 ml-1.5 mb-4">
+                                  <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                                        Data de Início <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={novoProduto.promocao_data_inicio || ''}
+                                        onChange={(e) => setNovoProduto({ ...novoProduto, promocao_data_inicio: e.target.value })}
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                        required={novoProduto.promocao_data_habilitada}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                                        Data de Fim <span className="text-red-500">*</span>
+                                      </label>
+                                      <input
+                                        type="date"
+                                        value={novoProduto.promocao_data_fim || ''}
+                                        onChange={(e) => setNovoProduto({ ...novoProduto, promocao_data_fim: e.target.value })}
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                        required={novoProduto.promocao_data_habilitada}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Checkbox para aplicar data no cardápio - só aparece se cardápio digital e exibir promoção estiverem habilitados */}
+                                  {cardapioDigitalHabilitado && novoProduto.exibir_promocao_cardapio && (
+                                    <div className="mb-2">
+                                      <div className="flex items-center">
+                                        <input
+                                          type="checkbox"
+                                          id="promocao_data_cardapio"
+                                          checked={novoProduto.promocao_data_cardapio || false}
+                                          onChange={(e) => setNovoProduto({ ...novoProduto, promocao_data_cardapio: e.target.checked })}
+                                          className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                                        />
+                                        <label htmlFor="promocao_data_cardapio" className="text-sm font-medium text-white cursor-pointer">
+                                          Data da promoção no cardápio
+                                        </label>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
