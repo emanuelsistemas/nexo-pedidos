@@ -1135,6 +1135,25 @@ const CardapioPublicoPage: React.FC = () => {
   const [validandoDadosCliente, setValidandoDadosCliente] = useState(false);
   const [erroDadosCliente, setErroDadosCliente] = useState<string | null>(null);
 
+  // Estados para forma de pagamento
+  const [modalFormaPagamentoAberto, setModalFormaPagamentoAberto] = useState(false);
+  const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState<{
+    id: string;
+    nome: string;
+    tipo: string;
+    max_parcelas: number;
+    chave_pix?: string;
+    tipo_chave_pix?: string;
+  } | null>(null);
+  const [formasPagamentoDisponiveis, setFormasPagamentoDisponiveis] = useState<any[]>([]);
+  const [carregandoFormasPagamento, setCarregandoFormasPagamento] = useState(false);
+
+  // Estados para controle de troco (dinheiro)
+  const [modalTrocoAberto, setModalTrocoAberto] = useState(false);
+  const [precisaTroco, setPrecisaTroco] = useState<boolean | null>(null);
+  const [valorDinheiro, setValorDinheiro] = useState('');
+  const [formaDinheiroTemp, setFormaDinheiroTemp] = useState<any>(null);
+
   // Estados para o modal de validação de área de entrega
   const [modalAreaEntregaAberto, setModalAreaEntregaAberto] = useState(false);
   const [taxaEntregaConfig, setTaxaEntregaConfig] = useState<{
@@ -1698,6 +1717,9 @@ const CardapioPublicoPage: React.FC = () => {
       if (dadosSalvos) {
         setDadosCliente(dadosSalvos);
       }
+
+      // Carregar formas de pagamento disponíveis
+      carregarFormasPagamento();
     }
   }, [empresaId]);
 
@@ -4388,6 +4410,136 @@ const CardapioPublicoPage: React.FC = () => {
       cpfCnpj: ''
     });
     setErroDadosCliente(null);
+  };
+
+  // ✅ FUNÇÕES PARA FORMAS DE PAGAMENTO
+  const carregarFormasPagamento = async () => {
+    if (!empresaId) return;
+
+    setCarregandoFormasPagamento(true);
+    try {
+      const { data: formasData, error } = await supabase
+        .from('formas_pagamento_empresa')
+        .select(`
+          id,
+          max_parcelas,
+          chave_pix,
+          tipo_chave_pix,
+          forma_pagamento_opcao_id,
+          forma_pagamento_opcoes (
+            id,
+            nome,
+            tipo,
+            max_parcelas
+          )
+        `)
+        .eq('empresa_id', empresaId)
+        .eq('ativo', true)
+        .eq('cardapio_digital', true);
+
+      if (error) {
+        console.error('Erro ao carregar formas de pagamento:', error);
+        return;
+      }
+
+      setFormasPagamentoDisponiveis(formasData || []);
+    } catch (error) {
+      console.error('Erro ao carregar formas de pagamento:', error);
+    } finally {
+      setCarregandoFormasPagamento(false);
+    }
+  };
+
+  const selecionarFormaPagamento = (forma: any) => {
+    const formaSelecionada = {
+      id: forma.id,
+      nome: forma.forma_pagamento_opcoes.nome,
+      tipo: forma.forma_pagamento_opcoes.tipo,
+      max_parcelas: forma.max_parcelas || forma.forma_pagamento_opcoes.max_parcelas,
+      chave_pix: forma.chave_pix,
+      tipo_chave_pix: forma.tipo_chave_pix
+    };
+
+    // Se for dinheiro, abrir modal de troco
+    if (forma.forma_pagamento_opcoes.tipo === 'dinheiro') {
+      setFormaDinheiroTemp(formaSelecionada);
+      setModalFormaPagamentoAberto(false);
+      setModalTrocoAberto(true);
+      setPrecisaTroco(null);
+      setValorDinheiro('');
+    } else {
+      setFormaPagamentoSelecionada(formaSelecionada);
+      setModalFormaPagamentoAberto(false);
+    }
+  };
+
+  const removerFormaPagamento = () => {
+    setFormaPagamentoSelecionada(null);
+  };
+
+  // ✅ FUNÇÕES PARA CONTROLE DE TROCO
+  const confirmarTroco = () => {
+    if (!formaDinheiroTemp) return;
+
+    let formaFinal = { ...formaDinheiroTemp };
+
+    if (precisaTroco === true) {
+      // Validar valor do dinheiro
+      const valorNumerico = parseFloat(valorDinheiro.replace(',', '.'));
+      const totalPedido = obterTotalFinal();
+
+      if (!valorDinheiro || valorNumerico <= 0) {
+        alert('Por favor, informe o valor do dinheiro');
+        return;
+      }
+
+      if (valorNumerico < totalPedido) {
+        alert(`O valor informado (R$ ${valorNumerico.toFixed(2)}) é menor que o total do pedido (R$ ${totalPedido.toFixed(2)})`);
+        return;
+      }
+
+      // Adicionar informações de troco
+      formaFinal.valor_dinheiro = valorNumerico;
+      formaFinal.troco = valorNumerico - totalPedido;
+      formaFinal.precisa_troco = true;
+    } else {
+      // Pagamento exato
+      formaFinal.precisa_troco = false;
+      formaFinal.valor_dinheiro = obterTotalFinal();
+      formaFinal.troco = 0;
+    }
+
+    setFormaPagamentoSelecionada(formaFinal);
+    setModalTrocoAberto(false);
+    setFormaDinheiroTemp(null);
+    setPrecisaTroco(null);
+    setValorDinheiro('');
+  };
+
+  const cancelarTroco = () => {
+    setModalTrocoAberto(false);
+    setFormaDinheiroTemp(null);
+    setPrecisaTroco(null);
+    setValorDinheiro('');
+  };
+
+  const formatarValorDinheiro = (valor: string): string => {
+    // Remove tudo que não é número ou vírgula/ponto
+    const numeros = valor.replace(/[^\d,\.]/g, '');
+
+    // Substitui vírgula por ponto para cálculos
+    const valorLimpo = numeros.replace(',', '.');
+
+    // Limita a 2 casas decimais
+    const partes = valorLimpo.split('.');
+    if (partes.length > 2) {
+      return partes[0] + '.' + partes[1].substring(0, 2);
+    }
+    if (partes[1] && partes[1].length > 2) {
+      return partes[0] + '.' + partes[1].substring(0, 2);
+    }
+
+    return valorLimpo;
   };
 
   const fecharModalTabelaPrecoObrigatoria = () => {
@@ -9195,6 +9347,95 @@ const CardapioPublicoPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Seção Forma de Pagamento */}
+              <div className={`mt-4 p-4 rounded-lg border ${
+                config.modo_escuro
+                  ? 'bg-gray-800 border-gray-600'
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className={`font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    💳 Forma de Pagamento
+                  </h4>
+                  {!formaPagamentoSelecionada && (
+                    <button
+                      onClick={() => setModalFormaPagamentoAberto(true)}
+                      className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                        config.modo_escuro
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      }`}
+                    >
+                      Adicionar
+                    </button>
+                  )}
+                </div>
+
+                {formaPagamentoSelecionada ? (
+                  <div className={`p-3 rounded-lg ${
+                    config.modo_escuro
+                      ? 'bg-blue-900/30 border border-blue-600'
+                      : 'bg-blue-50 border border-blue-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <span className={`font-medium ${
+                          config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
+                          {formaPagamentoSelecionada.nome}
+                        </span>
+                        {formaPagamentoSelecionada.tipo === 'pix' && formaPagamentoSelecionada.chave_pix && (
+                          <p className={`text-xs ${
+                            config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                          }`}>
+                            {formaPagamentoSelecionada.tipo_chave_pix}: {formaPagamentoSelecionada.chave_pix}
+                          </p>
+                        )}
+                        {formaPagamentoSelecionada.tipo === 'dinheiro' && formaPagamentoSelecionada.precisa_troco !== undefined && (
+                          <div className={`text-xs ${
+                            config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                          }`}>
+                            {formaPagamentoSelecionada.precisa_troco ? (
+                              <>
+                                <p>Valor: R$ {formaPagamentoSelecionada.valor_dinheiro?.toFixed(2)}</p>
+                                <p>Troco: R$ {formaPagamentoSelecionada.troco?.toFixed(2)}</p>
+                              </>
+                            ) : (
+                              <p>Pagamento exato (sem troco)</p>
+                            )}
+                          </div>
+                        )}
+                        {formaPagamentoSelecionada.max_parcelas > 1 && (
+                          <p className={`text-xs ${
+                            config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                          }`}>
+                            Até {formaPagamentoSelecionada.max_parcelas}x
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={removerFormaPagamento}
+                        className={`text-xs px-2 py-1 rounded ${
+                          config.modo_escuro
+                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                            : 'bg-red-500 hover:bg-red-600 text-white'
+                        }`}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Nenhuma forma de pagamento selecionada
+                  </p>
+                )}
+              </div>
+
               {/* Seção Cupom de Desconto */}
               <div className={`mt-4 p-4 rounded-lg border ${
                 config.modo_escuro
@@ -9649,6 +9890,363 @@ const CardapioPublicoPage: React.FC = () => {
               >
                 Cancelar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Forma de Pagamento */}
+      {modalFormaPagamentoAberto && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-blue-600 text-xl">💳</span>
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-bold ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Forma de Pagamento
+                    </h2>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Selecione como deseja pagar
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setModalFormaPagamentoAberto(false)}
+                  className={`p-2 rounded-full transition-colors ${
+                    config.modo_escuro
+                      ? 'hover:bg-gray-700 text-gray-400'
+                      : 'hover:bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6">
+              {carregandoFormasPagamento ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : formasPagamentoDisponiveis.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Nenhuma forma de pagamento disponível
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {formasPagamentoDisponiveis.map((forma) => (
+                    <button
+                      key={forma.id}
+                      onClick={() => selecionarFormaPagamento(forma)}
+                      className={`w-full p-4 rounded-lg border text-left transition-all ${
+                        config.modo_escuro
+                          ? 'border-gray-600 bg-gray-700 hover:bg-gray-600 hover:border-blue-500'
+                          : 'border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className={`font-medium ${
+                            config.modo_escuro ? 'text-white' : 'text-gray-900'
+                          }`}>
+                            {forma.forma_pagamento_opcoes.nome}
+                          </h4>
+
+                          {/* Informações específicas do PIX */}
+                          {forma.forma_pagamento_opcoes.tipo === 'pix' && forma.chave_pix && (
+                            <p className={`text-sm mt-1 ${
+                              config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                              {forma.tipo_chave_pix}: {forma.chave_pix}
+                            </p>
+                          )}
+
+                          {/* Informações de parcelamento */}
+                          {(forma.max_parcelas || forma.forma_pagamento_opcoes.max_parcelas) > 1 && (
+                            <p className={`text-sm mt-1 ${
+                              config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                              Até {forma.max_parcelas || forma.forma_pagamento_opcoes.max_parcelas}x
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Ícone baseado no tipo */}
+                        <div className="text-2xl">
+                          {forma.forma_pagamento_opcoes.tipo === 'pix' && '🔗'}
+                          {forma.forma_pagamento_opcoes.tipo === 'dinheiro' && '💵'}
+                          {forma.forma_pagamento_opcoes.tipo === 'cartao_credito' && '💳'}
+                          {forma.forma_pagamento_opcoes.tipo === 'cartao_debito' && '💳'}
+                          {forma.forma_pagamento_opcoes.tipo === 'boleto' && '📄'}
+                          {forma.forma_pagamento_opcoes.tipo === 'voucher' && '🎫'}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={() => setModalFormaPagamentoAberto(false)}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Controle de Troco */}
+      {modalTrocoAberto && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-600 text-xl">💵</span>
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-bold ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Pagamento em Dinheiro
+                    </h2>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Você vai precisar de troco?
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={cancelarTroco}
+                  className={`p-2 rounded-full transition-colors ${
+                    config.modo_escuro
+                      ? 'hover:bg-gray-700 text-gray-400'
+                      : 'hover:bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6">
+              <div className="space-y-6">
+                {/* Total do Pedido */}
+                <div className={`p-4 rounded-lg ${
+                  config.modo_escuro ? 'bg-gray-700' : 'bg-gray-50'
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <span className={`font-medium ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Total do Pedido:
+                    </span>
+                    <span className={`font-bold text-lg ${
+                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                    }`}>
+                      R$ {obterTotalFinal().toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Opções de Troco */}
+                <div className="space-y-3">
+                  <h4 className={`font-medium ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Você vai precisar de troco?
+                  </h4>
+
+                  {/* Não precisa de troco */}
+                  <button
+                    onClick={() => setPrecisaTroco(false)}
+                    className={`w-full p-4 rounded-lg border text-left transition-all ${
+                      precisaTroco === false
+                        ? config.modo_escuro
+                          ? 'border-green-500 bg-green-900/30'
+                          : 'border-green-500 bg-green-50'
+                        : config.modo_escuro
+                          ? 'border-gray-600 bg-gray-700 hover:bg-gray-600'
+                          : 'border-gray-200 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h5 className={`font-medium ${
+                          config.modo_escuro ? 'text-white' : 'text-gray-900'
+                        }`}>
+                          Não, tenho o valor exato
+                        </h5>
+                        <p className={`text-sm ${
+                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          R$ {obterTotalFinal().toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="text-2xl">✅</div>
+                    </div>
+                  </button>
+
+                  {/* Precisa de troco */}
+                  <button
+                    onClick={() => setPrecisaTroco(true)}
+                    className={`w-full p-4 rounded-lg border text-left transition-all ${
+                      precisaTroco === true
+                        ? config.modo_escuro
+                          ? 'border-blue-500 bg-blue-900/30'
+                          : 'border-blue-500 bg-blue-50'
+                        : config.modo_escuro
+                          ? 'border-gray-600 bg-gray-700 hover:bg-gray-600'
+                          : 'border-gray-200 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h5 className={`font-medium ${
+                          config.modo_escuro ? 'text-white' : 'text-gray-900'
+                        }`}>
+                          Sim, vou precisar de troco
+                        </h5>
+                        <p className={`text-sm ${
+                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          Informe o valor do dinheiro
+                        </p>
+                      </div>
+                      <div className="text-2xl">💰</div>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Campo de valor do dinheiro */}
+                {precisaTroco === true && (
+                  <div className="space-y-3">
+                    <label className={`block text-sm font-medium ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Valor do dinheiro que você vai dar:
+                    </label>
+                    <div className="relative">
+                      <span className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${
+                        config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                      }`}>
+                        R$
+                      </span>
+                      <input
+                        type="text"
+                        value={valorDinheiro}
+                        onChange={(e) => setValorDinheiro(formatarValorDinheiro(e.target.value))}
+                        placeholder="0,00"
+                        className={`w-full pl-10 pr-4 py-3 rounded-lg border ${
+                          config.modo_escuro
+                            ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                        } focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                        inputMode="decimal"
+                      />
+                    </div>
+
+                    {/* Cálculo do troco */}
+                    {valorDinheiro && (
+                      <div className={`p-3 rounded-lg ${
+                        config.modo_escuro ? 'bg-gray-700' : 'bg-gray-50'
+                      }`}>
+                        <div className="flex justify-between items-center">
+                          <span className={`text-sm ${
+                            config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                          }`}>
+                            Troco:
+                          </span>
+                          <span className={`font-medium ${
+                            parseFloat(valorDinheiro.replace(',', '.')) >= obterTotalFinal()
+                              ? config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                              : config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                          }`}>
+                            R$ {Math.max(0, parseFloat(valorDinheiro.replace(',', '.') || '0') - obterTotalFinal()).toFixed(2)}
+                          </span>
+                        </div>
+                        {parseFloat(valorDinheiro.replace(',', '.')) < obterTotalFinal() && (
+                          <p className={`text-xs mt-1 ${
+                            config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                          }`}>
+                            Valor insuficiente
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex space-x-3">
+                <button
+                  onClick={cancelarTroco}
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium transition-colors ${
+                    config.modo_escuro
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarTroco}
+                  disabled={precisaTroco === null}
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium transition-colors ${
+                    precisaTroco !== null
+                      ? config.modo_escuro
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                        : 'bg-green-500 hover:bg-green-600 text-white'
+                      : config.modo_escuro
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  Confirmar
+                </button>
+              </div>
             </div>
           </div>
         </div>

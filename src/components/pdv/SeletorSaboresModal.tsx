@@ -71,76 +71,57 @@ export default function SeletorSaboresModal({
 
       if (!usuarioData?.empresa_id) return;
 
-      // Buscar produtos que têm preço na tabela selecionada
-      const { data: produtosComPreco, error } = await supabase
-        .from('produto_precos')
+      // ✅ BUSCAR TODOS OS PRODUTOS PIZZA DA EMPRESA (não apenas os com preço na tabela)
+      const { data: produtosPizza, error } = await supabase
+        .from('produtos')
         .select(`
-          preco,
-          produto:produtos(
-            id,
-            nome,
-            codigo,
-            grupo_id,
-            deletado,
-            ativo,
-            pizza
-          )
+          id,
+          nome,
+          codigo,
+          grupo_id,
+          deletado,
+          ativo,
+          pizza,
+          preco
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('tabela_preco_id', tabelaPreco.id)
-        .gt('preco', 0);
+        .eq('ativo', true)
+        .or('deletado.is.null,deletado.eq.false')  // ✅ ACEITAR null OU false
+        .eq('pizza', true);
 
       if (error) {
         console.error('Erro ao carregar sabores:', error);
         return;
       }
 
-      // ✅ PROCESSAR PRODUTOS COM FILTROS CORRETOS (SAAS + SOFT DELETE)
-      let sabores = produtosComPreco
-        ?.map(item => ({
-          ...item.produto,
-          preco: item.preco
-        }))
-        .filter(produto => {
-          // Filtrar produtos nulos
-          if (!produto) return false;
-
-          // ✅ FILTRAR PRODUTOS DELETADOS (soft delete)
-          if (produto.deletado === true) return false;
-
-          // ✅ FILTRAR PRODUTOS INATIVOS
-          if (produto.ativo === false) return false;
-
-          // ✅ FILTRAR APENAS PRODUTOS MARCADOS COMO PIZZA
-          if (produto.pizza !== true) return false;
-
-          return true;
-        }) || [];
+      // ✅ PROCESSAR PRODUTOS (já vêm filtrados da query)
+      let sabores = produtosPizza || [];
 
       // ✅ FILTRAR O PRODUTO ATUAL DA LISTA DE SABORES
       if (produtoAtual) {
+        const saboresAntes = sabores.length;
         sabores = sabores.filter(sabor => sabor.id !== produtoAtual.id);
-        console.log(`🍕 SABORES: Produto atual "${produtoAtual.nome}" removido da lista de sabores`);
+        console.log(`🍕 SABORES: Produto atual "${produtoAtual.nome}" (ID: ${produtoAtual.id}) removido da lista`);
+        console.log(`🍕 SABORES: ${saboresAntes} → ${sabores.length} sabores após filtrar produto atual`);
       }
 
-      console.log('🍕 SABORES PDV - DEBUG DETALHADO:', {
+      console.log('🍕 SABORES PDV - TODOS OS PRODUTOS PIZZA:', {
         empresaId: usuarioData.empresa_id,
         tabelaId: tabelaPreco.id,
-        totalEncontrados: produtosComPreco?.length || 0,
-        produtosBrutos: produtosComPreco?.map(item => ({
-          id: item.produto?.id,
-          nome: item.produto?.nome,
-          preco: item.preco,
-          pizza: item.produto?.pizza,
-          ativo: item.produto?.ativo,
-          deletado: item.produto?.deletado
+        totalProdutosPizza: produtosPizza?.length || 0,
+        produtosPizza: produtosPizza?.map(produto => ({
+          id: produto.id,
+          nome: produto.nome,
+          preco: produto.preco,
+          pizza: produto.pizza,
+          ativo: produto.ativo,
+          deletado: produto.deletado
         })),
-        saboresValidos: sabores.length,
+        saboresFinais: sabores.length,
         saboresFiltrados: sabores.map(s => ({
           id: s.id,
           nome: s.nome,
-          preco: s.preco,
-          pizza: s.pizza
+          preco: s.preco
         }))
       });
 
