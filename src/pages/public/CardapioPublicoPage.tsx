@@ -751,6 +751,19 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
     onClose();
   };
 
+  // Função para obter a foto principal do produto (similar ao PDV)
+  const getFotoPrincipal = (produto: any) => {
+    if (!produto?.produto_fotos || produto.produto_fotos.length === 0) {
+      return null;
+    }
+
+    // Buscar foto marcada como principal
+    const fotoPrincipal = produto.produto_fotos.find((foto: any) => foto.principal);
+
+    // Se não encontrar foto principal, retornar a primeira
+    return fotoPrincipal || produto.produto_fotos[0];
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -831,7 +844,29 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
                       }`}
                       onClick={() => !jaSelecionado && podeAdicionar && adicionarSabor(produto)}
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        {/* Foto do sabor */}
+                        <div className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-gray-700 flex-shrink-0">
+                          {(() => {
+                            const fotoItem = getFotoPrincipal(produto);
+                            return fotoItem ? (
+                              <img
+                                src={fotoItem.url}
+                                alt={produto.nome}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={20} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Informações do sabor */}
                         <div className="flex-1 min-w-0">
                           <h4 className={`font-medium text-base sm:text-lg lg:text-xl truncate ${
                             config.modo_escuro ? 'text-white' : 'text-gray-900'
@@ -844,8 +879,10 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
                             {formatarPreco(produto.preco)}
                           </p>
                         </div>
+
+                        {/* Indicador de selecionado */}
                         {jaSelecionado && (
-                          <Check size={24} className="text-green-500 ml-2" />
+                          <Check size={24} className="text-green-500" />
                         )}
                       </div>
                     </div>
