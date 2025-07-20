@@ -8150,7 +8150,7 @@ const CardapioPublicoPage: React.FC = () => {
                     <h4 className={`font-semibold ${
                       config.modo_escuro ? 'text-white' : 'text-gray-900'
                     }`}>
-                      🚚 Taxa de Entrega
+                      🚴 Taxa de Entrega
                     </h4>
                     <button
                       onClick={abrirModalAlteracao}
