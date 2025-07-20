@@ -6443,7 +6443,6 @@ const CardapioPublicoPage: React.FC = () => {
 
                         {/* Nome e preço */}
                         <div className="flex-1 min-w-0">
-                          {/* Nome do produto - agora com espaço completo */}
                           <h3 className={`text-lg font-bold leading-tight truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'} ${(() => {
                             // Verificar se tem alguma tag para adicionar margin-top no nome
                             const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
@@ -6456,8 +6455,8 @@ const CardapioPublicoPage: React.FC = () => {
                             {produto.nome}
                           </h3>
 
-                          {/* Linha do preço com controlador */}
-                          <div className="flex items-center justify-between mt-1 gap-2">
+                          {/* Linha do preço */}
+                          <div className="flex items-center mt-1">
                             {config.mostrar_precos && (() => {
                               const tabelasComPrecos = obterTabelasComPrecos(produto.id);
                               const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
@@ -6543,68 +6542,339 @@ const CardapioPublicoPage: React.FC = () => {
                               // Se há tabelas mas nenhuma selecionada, não mostrar preço
                               return null;
                             })()}
-
-                            {/* Controles de quantidade na linha do preço */}
-                            {obterWhatsAppEmpresa() && !semEstoque && (
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                {/* Botão Decrementar */}
-                                <button
-                                  onClick={() => decrementarQuantidade(produto.id)}
-                                  disabled={obterQuantidadeSelecionada(produto.id) === 0 || lojaAberta === false}
-                                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                    obterQuantidadeSelecionada(produto.id) === 0 || lojaAberta === false
-                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                      : config.modo_escuro
-                                      ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                  }`}
-                                >
-                                  <Minus size={10} />
-                                </button>
-
-                                {/* Campo de Quantidade */}
-                                <input
-                                  type="text"
-                                  value={formatarQuantidade(obterQuantidadeSelecionada(produto.id), produto.unidade_medida)}
-                                  onChange={(e) => handleQuantidadeChange(produto.id, e.target.value)}
-                                  onBlur={() => setItemEditandoQuantidade(null)}
-                                  onFocus={() => setItemEditandoQuantidade(produto.id)}
-                                  disabled={lojaAberta === false}
-                                  className={`w-8 h-6 text-center text-xs font-semibold rounded border transition-all duration-200 ${
-                                    lojaAberta === false
-                                      ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
-                                      : itemEditandoQuantidade === produto.id
-                                      ? config.modo_escuro
-                                        ? 'bg-gray-700 border-blue-500 text-white'
-                                        : 'bg-white border-blue-500 text-gray-800'
-                                      : config.modo_escuro
-                                      ? 'bg-gray-700 border-gray-600 text-white hover:border-gray-500'
-                                      : 'bg-white border-gray-300 text-gray-800 hover:border-gray-400'
-                                  }`}
-                                />
-
-                                {/* Botão Incrementar */}
-                                <button
-                                  onClick={() => incrementarQuantidade(produto.id)}
-                                  disabled={lojaAberta === false}
-                                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                    lojaAberta === false
-                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                      : config.modo_escuro
-                                      ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                      : 'bg-blue-500 text-white hover:bg-blue-600'
-                                  }`}
-                                >
-                                  <Plus size={10} />
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </div>
 
+                        {/* Controles de quantidade posicionados alinhados com o conteúdo principal */}
+                        {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
+                        {obterWhatsAppEmpresa() && !semEstoque && (
+                          <div className={`absolute right-3 flex items-center gap-1 ${(() => {
+                            // Verificar se tem alguma tag para ajustar posicionamento
+                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+                            const temDescontoQtd = produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima;
+                            const temEstoque = produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null;
 
+                            const temAlgumTag = temPromocao || temDescontoQtd || temEstoque;
+                            // Se tem tags, posicionar mais abaixo para não conflitar
+                            // Se não tem tags, posicionar mais acima para alinhar com o conteúdo
+                            return temAlgumTag ? 'top-12' : 'top-6';
+                          })()}`}>
+                            {/* Botão Decrementar */}
+                            <button
+                              onClick={() => decrementarQuantidade(produto.id)}
+                              disabled={obterQuantidadeSelecionada(produto.id) === 0 || lojaAberta === false}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                obterQuantidadeSelecionada(produto.id) === 0 || lojaAberta === false
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : config.modo_escuro
+                                  ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              }`}
+                            >
+                              <Minus size={12} />
+                            </button>
+
+                            {/* Campo de Quantidade */}
+                            <input
+                              type="text"
+                              value={formatarQuantidade(obterQuantidadeSelecionada(produto.id), produto.unidade_medida)}
+                              onChange={(e) => handleQuantidadeChange(produto.id, e.target.value)}
+                              onBlur={() => setItemEditandoQuantidade(null)}
+                              onFocus={() => setItemEditandoQuantidade(produto.id)}
+                              disabled={lojaAberta === false}
+                              className={`w-10 h-7 text-center text-xs font-semibold rounded-lg border-2 transition-all duration-200 ${
+                                lojaAberta === false
+                                  ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
+                                  : itemEditandoQuantidade === produto.id
+                                  ? config.modo_escuro
+                                    ? 'bg-gray-700 border-blue-500 text-white'
+                                    : 'bg-white border-blue-500 text-gray-800'
+                                  : config.modo_escuro
+                                  ? 'bg-gray-700 border-gray-600 text-white hover:border-gray-500'
+                                  : 'bg-white border-gray-300 text-gray-800 hover:border-gray-400'
+                              }`}
+                            />
+
+                            {/* Botão Incrementar */}
+                            <button
+                              onClick={() => incrementarQuantidade(produto.id)}
+                              disabled={lojaAberta === false}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                lojaAberta === false
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : config.modo_escuro
+                                  ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                  : 'bg-blue-500 text-white hover:bg-blue-600'
+                              }`}
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    ) : null}
+                    ) : (
+                      /* Layout normal sem foto pequena */
+                      <>
+                        <div>
+                          <h3 className={`text-xl font-bold mb-2 truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'} ${(() => {
+                            // Verificar se tem alguma tag para adicionar margin-top no nome
+                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+                            const temDescontoQtd = produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima;
+                            const temEstoque = produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null;
+
+                            const temAlgumTag = temPromocao || temDescontoQtd || temEstoque;
+                            return temAlgumTag ? 'mt-8' : '';
+                          })()}`}>
+                            {produto.nome}
+                          </h3>
+                        </div>
+                        {/* Preço logo abaixo do nome quando não tem foto */}
+                        <div className="flex items-center mb-3">
+                          {config.mostrar_precos && (() => {
+                            const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                            const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
+
+                            // Se há tabelas de preços e uma está selecionada, mostrar preço da tabela
+                            if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+                              const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+                              if (tabelaEscolhida) {
+                                // ✅ PRIMEIRO APLICAR PROMOÇÃO TRADICIONAL (SE HOUVER)
+                                let precoAtual = tabelaEscolhida.preco;
+
+                                // Verificar se produto está em promoção tradicional
+                                const temPromocao = produto.promocao &&
+                                  produto.exibir_promocao_cardapio &&
+                                  produto.tipo_desconto &&
+                                  produto.valor_desconto !== undefined &&
+                                  produto.valor_desconto > 0;
+
+                                if (temPromocao) {
+                                  // Aplicar promoção sobre preço da tabela
+                                  precoAtual = calcularValorFinal(tabelaEscolhida.preco, produto.tipo_desconto, produto.valor_desconto);
+                                }
+
+                                // ✅ DEPOIS VERIFICAR DESCONTO POR QUANTIDADE (SOBRE VALOR PROMOCIONAL)
+                                const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
+                                const temDescontoQuantidade = produto.desconto_quantidade &&
+                                  produto.quantidade_minima &&
+                                  quantidadeSelecionada >= produto.quantidade_minima &&
+                                  ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                                   (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                                if (temDescontoQuantidade) {
+                                  // Aplicar desconto por quantidade sobre preço atual (com ou sem promoção)
+                                  let valorFinal = precoAtual;
+                                  if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+                                    const valorDesconto = (precoAtual * produto.percentual_desconto_quantidade) / 100;
+                                    valorFinal = precoAtual - valorDesconto;
+                                  } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+                                    valorFinal = precoAtual - produto.valor_desconto_quantidade;
+                                  }
+
+                                  return (
+                                    <div className="flex flex-col">
+                                      {/* Preço antes do desconto por quantidade riscado */}
+                                      <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        {formatarPreco(precoAtual)}
+                                      </div>
+                                      {/* Preço com desconto por quantidade */}
+                                      <div className="text-2xl font-bold text-green-500">
+                                        {formatarPreco(valorFinal)}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                // Se não tem desconto por quantidade, mostrar apenas promoção ou preço normal
+                                if (!temPromocao) {
+                                  // Preço da tabela sem promoção
+                                  return (
+                                    <div className={`text-lg font-bold ${
+                                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                    }`}>
+                                      {formatarPreco(tabelaEscolhida.preco)}
+                                    </div>
+                                  );
+                                } else {
+                                  // Mostrar apenas promoção tradicional (sem desconto por quantidade)
+                                  return (
+                                    <div className="flex flex-col">
+                                      {/* Preço da tabela original riscado */}
+                                      <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                        {formatarPreco(tabelaEscolhida.preco)}
+                                      </div>
+                                      {/* Preço promocional da tabela */}
+                                      <div className="text-2xl font-bold text-green-500">
+                                        {formatarPreco(precoAtual)}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              }
+                            }
+
+                            // Se não há tabelas de preços, mostrar preço normal
+                            if (tabelasComPrecos.length === 0) {
+                            // ✅ PRIMEIRO APLICAR PROMOÇÃO TRADICIONAL (SE HOUVER)
+                            let precoAtual = produto.preco;
+
+                            // Verificar se produto está em promoção tradicional
+                            const temPromocaoTradicional = produto.promocao &&
+                              produto.exibir_promocao_cardapio &&
+                              produto.tipo_desconto &&
+                              produto.valor_desconto !== undefined &&
+                              produto.valor_desconto > 0;
+
+                            if (temPromocaoTradicional) {
+                              // Aplicar promoção sobre preço padrão
+                              precoAtual = calcularValorFinal(produto.preco, produto.tipo_desconto, produto.valor_desconto);
+                            }
+
+                            // ✅ DEPOIS VERIFICAR DESCONTO POR QUANTIDADE (SOBRE VALOR PROMOCIONAL)
+                            const quantidadeSelecionada = obterQuantidadeSelecionada(produto.id);
+                            const temDescontoQuantidade = produto.desconto_quantidade &&
+                              produto.quantidade_minima &&
+                              quantidadeSelecionada >= produto.quantidade_minima &&
+                              ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                               (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                            if (temDescontoQuantidade) {
+                              // Aplicar desconto por quantidade sobre preço atual (com ou sem promoção)
+                              let valorFinal = precoAtual;
+                              if (produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) {
+                                const valorDesconto = (precoAtual * produto.percentual_desconto_quantidade) / 100;
+                                valorFinal = precoAtual - valorDesconto;
+                              } else if (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade) {
+                                valorFinal = precoAtual - produto.valor_desconto_quantidade;
+                              }
+
+                              return (
+                                <div className="flex flex-col">
+                                  {/* Preço antes do desconto por quantidade riscado */}
+                                  <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    {formatarPreco(precoAtual)}
+                                  </div>
+                                  {/* Preço com desconto por quantidade */}
+                                  <div className="text-2xl font-bold text-green-500">
+                                    {formatarPreco(valorFinal)}
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // Se não tem desconto por quantidade nem promoção, mostrar preço normal
+                            if (!temPromocaoTradicional) {
+                              // Preço normal sem promoção
+                              return (
+                                <span className="text-2xl font-bold bg-gradient-to-r from-green-500 to-emerald-600 bg-clip-text text-transparent">
+                                  {formatarPreco(produto.preco)}
+                                </span>
+                              );
+                            } else {
+                              // Mostrar apenas promoção tradicional (sem desconto por quantidade)
+                              return (
+                                <div className="flex flex-col">
+                                  {/* Preço original riscado */}
+                                  <div className={`text-lg line-through ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    {formatarPreco(produto.preco)}
+                                  </div>
+                                  {/* Preço promocional */}
+                                  <div className="text-2xl font-bold text-green-500">
+                                    {formatarPreco(precoAtual)}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            }
+
+                            // Se há tabelas mas nenhuma selecionada, não mostrar preço
+                            return null;
+                          })()}
+                        </div>
+
+                        {/* Controles de quantidade posicionados alinhados com o conteúdo principal */}
+                        {/* ✅ OCULTAR CONTROLADOR QUANDO SEM ESTOQUE */}
+                        {obterWhatsAppEmpresa() && !semEstoque && (
+                          <div className={`absolute right-3 flex items-center gap-2 ${(() => {
+                            // Verificar se tem alguma tag para ajustar posicionamento
+                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+                            const temDescontoQtd = produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima;
+                            const temEstoque = produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null;
+
+                            const temAlgumTag = temPromocao || temDescontoQtd || temEstoque;
+                            // Se tem tags, posicionar mais abaixo para não conflitar
+                            // Se não tem tags, posicionar mais acima para alinhar com o conteúdo
+                            return temAlgumTag ? 'top-12' : 'top-8';
+                          })()}`}>
+                            {/* Botão Decrementar */}
+                            <button
+                              onClick={() => decrementarQuantidade(produto.id)}
+                              disabled={obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                obterQuantidadeProduto(produto.id) === 0 || lojaAberta === false
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : config.modo_escuro
+                                  ? 'bg-gray-600 text-white hover:bg-gray-500'
+                                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                              }`}
+                            >
+                              <Minus size={14} />
+                            </button>
+
+                            {/* Campo de Quantidade */}
+                            {produtoEditandoQuantidade === produto.id && lojaAberta !== false ? (
+                              <input
+                                type="text"
+                                value={formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
+                                onChange={(e) => handleQuantidadeChange(produto.id, e.target.value)}
+                                onBlur={() => setProdutoEditandoQuantidade(null)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    setProdutoEditandoQuantidade(null);
+                                  }
+                                }}
+                                className={`w-12 h-8 text-center text-sm font-semibold rounded-lg border-2 transition-all duration-200 ${
+                                  config.modo_escuro
+                                    ? 'bg-gray-700 border-blue-500 text-white'
+                                    : 'bg-white border-blue-500 text-gray-800'
+                                }`}
+                                placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
+                                autoFocus
+                              />
+                            ) : (
+                              <button
+                                onClick={() => lojaAberta !== false && setProdutoEditandoQuantidade(produto.id)}
+                                disabled={lojaAberta === false}
+                                className={`w-12 h-8 text-center text-sm font-semibold rounded-lg border-2 transition-all duration-200 ${
+                                  lojaAberta === false
+                                    ? 'bg-gray-100 border-gray-300 text-gray-500 cursor-not-allowed'
+                                    : config.modo_escuro
+                                    ? 'bg-gray-700 border-gray-600 text-white hover:border-gray-500'
+                                    : 'bg-white border-gray-300 text-gray-800 hover:border-gray-400'
+                                }`}
+                              >
+                                {formatarQuantidade(obterQuantidadeProduto(produto.id), produto.unidade_medida)}
+                              </button>
+                            )}
+
+                            {/* Botão Incrementar */}
+                            <button
+                              onClick={() => incrementarQuantidade(produto.id)}
+                              disabled={lojaAberta === false}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                lojaAberta === false
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : config.modo_escuro
+                                  ? 'bg-blue-600 text-white hover:bg-blue-500'
+                                  : 'bg-blue-500 text-white hover:bg-blue-600'
+                              }`}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {/* Descrição do produto - largura total do card */}
