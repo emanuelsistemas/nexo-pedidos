@@ -579,12 +579,24 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
         console.log(`🍕 CARDÁPIO: ${saboresAntes} → ${sabores.length} sabores após filtrar produto atual`);
       }
 
-      console.log('🍕 Sabores carregados:', {
+      console.log('🍕 CARDÁPIO - TODOS OS PRODUTOS PIZZA:', {
         empresaId: empresa.id,
         tabelaId: tabelaPreco.id,
-        totalEncontrados: produtosComPreco?.length || 0,
-        saboresValidos: sabores.length,
-        sabores: sabores.map(s => ({ id: s.id, nome: s.nome, preco: s.preco }))
+        totalProdutosPizza: produtosPizza?.length || 0,
+        produtosPizza: produtosPizza?.map(produto => ({
+          id: produto.id,
+          nome: produto.nome,
+          preco: produto.preco,
+          pizza: produto.pizza,
+          ativo: produto.ativo,
+          deletado: produto.deletado
+        })),
+        saboresFinais: sabores.length,
+        saboresFiltrados: sabores.map(s => ({
+          id: s.id,
+          nome: s.nome,
+          preco: s.preco
+        }))
       });
 
       setSaboresDisponiveis(sabores);
@@ -10715,6 +10727,7 @@ const CardapioPublicoPage: React.FC = () => {
           produtoAtual={dadosModalSabores.produto}
           config={config}
           formatarPreco={formatarPreco}
+          empresa={empresa} // ✅ PASSAR EMPRESA PARA O MODAL
         />
       )}
     </div>
