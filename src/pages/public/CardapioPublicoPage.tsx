@@ -8136,14 +8136,10 @@ const CardapioPublicoPage: React.FC = () => {
                   </p>
                 </div>
               )}
-            </div>
 
-            {/* Seção Taxa de Entrega */}
-            {taxaEntregaConfig && areaValidada && calculoTaxa && (
-              <div className={`flex-shrink-0 p-4 border-t ${
-                config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
-              }`}>
-                <div className={`rounded-lg p-4 ${
+              {/* Seção Taxa de Entrega */}
+              {taxaEntregaConfig && areaValidada && calculoTaxa && (
+                <div className={`mt-4 p-4 rounded-lg ${
                   config.modo_escuro ? 'bg-gray-800' : 'bg-gray-50'
                 }`}>
                   <div className="flex items-center justify-between mb-3">
@@ -8233,32 +8229,34 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Total Geral com Taxa */}
-            <div className={`flex-shrink-0 p-4 border-t ${
-              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
-            }`}>
-              <div className="flex justify-between items-center">
-                <span className={`text-lg font-bold ${
-                  config.modo_escuro ? 'text-white' : 'text-gray-900'
-                }`}>
-                  Total Geral:
-                </span>
-                <span className={`text-xl font-bold ${
-                  config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                }`}>
-                  {config.mostrar_precos ? formatarPreco(obterTotalCarrinho() + (calculoTaxa?.valor || 0)) : 'Preços ocultos'}
-                </span>
-              </div>
-              {calculoTaxa && config.mostrar_precos && (
-                <div className={`text-sm mt-1 ${
-                  config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                }`}>
-                  Produtos: {formatarPreco(obterTotalCarrinho())} + Taxa: {formatarPreco(calculoTaxa.valor)}
-                </div>
               )}
+
+              {/* Total Geral com Taxa */}
+              <div className={`mt-4 p-4 rounded-lg border-2 ${
+                config.modo_escuro
+                  ? 'bg-gray-800/50 border-blue-600'
+                  : 'bg-blue-50 border-blue-200'
+              }`}>
+                <div className="flex justify-between items-center">
+                  <span className={`text-lg font-bold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Total Geral:
+                  </span>
+                  <span className={`text-xl font-bold ${
+                    config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                  }`}>
+                    {config.mostrar_precos ? formatarPreco(obterTotalCarrinho() + (calculoTaxa?.valor || 0)) : 'Preços ocultos'}
+                  </span>
+                </div>
+                {calculoTaxa && config.mostrar_precos && (
+                  <div className={`text-sm mt-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Produtos: {formatarPreco(obterTotalCarrinho())} + Taxa: {formatarPreco(calculoTaxa.valor)}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Footer com Botões */}
