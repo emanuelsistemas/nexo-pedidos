@@ -545,54 +545,39 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
         return;
       }
 
-      // Buscar produtos que têm preço na tabela selecionada
-      const { data: produtosComPreco, error } = await supabase
-        .from('produto_precos')
+      // ✅ BUSCAR TODOS OS PRODUTOS PIZZA DA EMPRESA (não apenas os com preço na tabela)
+      const { data: produtosPizza, error } = await supabase
+        .from('produtos')
         .select(`
-          preco,
-          produto:produtos(
-            id,
-            nome,
-            codigo,
-            grupo_id,
-            deletado,
-            ativo,
-            pizza
-          )
+          id,
+          nome,
+          codigo,
+          grupo_id,
+          deletado,
+          ativo,
+          pizza,
+          preco
         `)
         .eq('empresa_id', empresa.id)
-        .eq('tabela_preco_id', tabelaPreco.id)
-        .gt('preco', 0);
+        .eq('ativo', true)
+        .or('deletado.is.null,deletado.eq.false')  // ✅ ACEITAR null OU false
+        .eq('pizza', true);                        // ✅ APENAS PRODUTOS MARCADOS COMO PIZZA
 
       if (error) {
         console.error('Erro ao carregar sabores:', error);
         return;
       }
 
-      // ✅ PROCESSAR PRODUTOS COM FILTROS CORRETOS (SAAS + SOFT DELETE)
-      const sabores = produtosComPreco
-        ?.map(item => ({
-          ...item.produto,
-          preco: item.preco
-        }))
-        .filter(produto => {
-          // Filtrar produtos nulos
-          if (!produto) return false;
+      // ✅ PROCESSAR PRODUTOS (já vêm filtrados da query)
+      let sabores = produtosPizza || [];
 
-          // ✅ FILTRAR PRODUTOS DELETADOS (soft delete)
-          if (produto.deletado === true) return false;
-
-          // ✅ FILTRAR PRODUTOS INATIVOS
-          if (produto.ativo === false) return false;
-
-          // ✅ FILTRAR APENAS PRODUTOS MARCADOS COMO PIZZA
-          if (produto.pizza !== true) return false;
-
-          // Excluir o produto atual se fornecido
-          if (produtoAtual && produto.id === produtoAtual.id) return false;
-
-          return true;
-        }) || [];
+      // ✅ FILTRAR O PRODUTO ATUAL DA LISTA DE SABORES
+      if (produtoAtual) {
+        const saboresAntes = sabores.length;
+        sabores = sabores.filter(sabor => sabor.id !== produtoAtual.id);
+        console.log(`🍕 CARDÁPIO: Produto atual "${produtoAtual.nome}" (ID: ${produtoAtual.id}) removido da lista`);
+        console.log(`🍕 CARDÁPIO: ${saboresAntes} → ${sabores.length} sabores após filtrar produto atual`);
+      }
 
       console.log('🍕 Sabores carregados:', {
         empresaId: empresa.id,
