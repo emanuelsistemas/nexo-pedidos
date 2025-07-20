@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, AlertCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag } from 'lucide-react';
+import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, AlertCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag, Check } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
@@ -436,6 +436,7 @@ interface ItemCarrinho {
   quantidade: number;
   precoProduto?: number; // ✅ PREÇO DO PRODUTO DA TABELA SELECIONADA
   tabelaPrecoId?: string; // ✅ ID DA TABELA DE PREÇO SELECIONADA
+  sabores?: SaborSelecionado[]; // ✅ SABORES SELECIONADOS (PARA PIZZAS)
   adicionais?: Array<{
     id: string;
     nome: string;
@@ -479,6 +480,416 @@ interface CardapioConfig {
   trabalha_com_pizzas?: boolean;
   ocultar_grupos_cardapio?: boolean;
 }
+
+// Interfaces para o modal de sabores
+interface TabelaPreco {
+  id: string;
+  nome: string;
+  quantidade_sabores: number;
+  permite_meio_a_meio: boolean;
+}
+
+interface SaborSelecionado {
+  produto: Produto;
+  porcentagem: number;
+}
+
+interface SeletorSaboresModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  tabelaPreco: TabelaPreco;
+  onConfirmar: (sabores: SaborSelecionado[], precoCalculado: number) => void;
+  tipoPreco: 'sabor_mais_caro' | 'preco_medio';
+  produtoAtual?: Produto;
+  config: CardapioConfig;
+  formatarPreco: (preco: number) => string;
+  empresa: Empresa; // ✅ ADICIONAR EMPRESA PARA FILTROS CORRETOS
+}
+
+// Componente Modal de Seleção de Sabores para Cardápio Digital
+const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
+  isOpen,
+  onClose,
+  tabelaPreco,
+  onConfirmar,
+  tipoPreco,
+  produtoAtual,
+  config,
+  formatarPreco,
+  empresa
+}) => {
+  const [saboresDisponiveis, setSaboresDisponiveis] = useState<Produto[]>([]);
+  const [saboresSelecionados, setSaboresSelecionados] = useState<SaborSelecionado[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [precoCalculado, setPrecoCalculado] = useState(0);
+
+  // Carregar sabores disponíveis
+  useEffect(() => {
+    if (isOpen) {
+      carregarSaboresDisponiveis();
+    }
+  }, [isOpen]);
+
+  // Calcular preço quando sabores mudam
+  useEffect(() => {
+    calcularPreco();
+  }, [saboresSelecionados, tipoPreco]);
+
+  const carregarSaboresDisponiveis = async () => {
+    try {
+      setLoading(true);
+
+      // ✅ USAR EMPRESA DO CARDÁPIO PÚBLICO (não há usuário autenticado)
+      if (!empresa?.id) {
+        console.error('Empresa não encontrada para carregar sabores');
+        return;
+      }
+
+      // Buscar produtos que têm preço na tabela selecionada
+      const { data: produtosComPreco, error } = await supabase
+        .from('produto_precos')
+        .select(`
+          preco,
+          produto:produtos(
+            id,
+            nome,
+            codigo,
+            grupo_id,
+            deletado,
+            ativo,
+            pizza
+          )
+        `)
+        .eq('empresa_id', empresa.id)
+        .eq('tabela_preco_id', tabelaPreco.id)
+        .gt('preco', 0);
+
+      if (error) {
+        console.error('Erro ao carregar sabores:', error);
+        return;
+      }
+
+      // ✅ PROCESSAR PRODUTOS COM FILTROS CORRETOS (SAAS + SOFT DELETE)
+      const sabores = produtosComPreco
+        ?.map(item => ({
+          ...item.produto,
+          preco: item.preco
+        }))
+        .filter(produto => {
+          // Filtrar produtos nulos
+          if (!produto) return false;
+
+          // ✅ FILTRAR PRODUTOS DELETADOS (soft delete)
+          if (produto.deletado === true) return false;
+
+          // ✅ FILTRAR PRODUTOS INATIVOS
+          if (produto.ativo === false) return false;
+
+          // ✅ FILTRAR APENAS PRODUTOS MARCADOS COMO PIZZA
+          if (produto.pizza !== true) return false;
+
+          // Excluir o produto atual se fornecido
+          if (produtoAtual && produto.id === produtoAtual.id) return false;
+
+          return true;
+        }) || [];
+
+      console.log('🍕 Sabores carregados:', {
+        empresaId: empresa.id,
+        tabelaId: tabelaPreco.id,
+        totalEncontrados: produtosComPreco?.length || 0,
+        saboresValidos: sabores.length,
+        sabores: sabores.map(s => ({ id: s.id, nome: s.nome, preco: s.preco }))
+      });
+
+      setSaboresDisponiveis(sabores);
+    } catch (error) {
+      console.error('Erro ao carregar sabores:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calcularPreco = () => {
+    if (saboresSelecionados.length === 0) {
+      setPrecoCalculado(0);
+      return;
+    }
+
+    let preco = 0;
+
+    if (tipoPreco === 'sabor_mais_caro') {
+      // Usar preço do sabor mais caro
+      preco = Math.max(...saboresSelecionados.map(s => s.produto.preco));
+    } else {
+      // Calcular preço médio ponderado pela porcentagem
+      const precoTotal = saboresSelecionados.reduce((total, sabor) => {
+        return total + (sabor.produto.preco * sabor.porcentagem / 100);
+      }, 0);
+      preco = precoTotal;
+    }
+
+    setPrecoCalculado(preco);
+  };
+
+  const adicionarSabor = (produto: Produto) => {
+    const saboresAtual = saboresSelecionados.length;
+
+    if (saboresAtual >= tabelaPreco.quantidade_sabores) {
+      return; // Máximo de sabores atingido
+    }
+
+    // Calcular porcentagem automática
+    let porcentagem = 100;
+    if (tabelaPreco.permite_meio_a_meio) {
+      if (saboresAtual === 0) {
+        porcentagem = tabelaPreco.quantidade_sabores === 2 ? 50 : Math.floor(100 / tabelaPreco.quantidade_sabores);
+      } else {
+        // Redistribuir porcentagens igualmente
+        porcentagem = Math.floor(100 / (saboresAtual + 1));
+      }
+    }
+
+    const novoSabor: SaborSelecionado = {
+      produto,
+      porcentagem
+    };
+
+    let novosSabores = [...saboresSelecionados, novoSabor];
+
+    // Redistribuir porcentagens se meio a meio
+    if (tabelaPreco.permite_meio_a_meio && novosSabores.length > 1) {
+      const porcentagemIgual = Math.floor(100 / novosSabores.length);
+      const resto = 100 - (porcentagemIgual * novosSabores.length);
+
+      novosSabores = novosSabores.map((sabor, index) => ({
+        ...sabor,
+        porcentagem: porcentagemIgual + (index === 0 ? resto : 0)
+      }));
+    }
+
+    setSaboresSelecionados(novosSabores);
+  };
+
+  const removerSabor = (index: number) => {
+    const novosSabores = saboresSelecionados.filter((_, i) => i !== index);
+
+    // Redistribuir porcentagens
+    if (tabelaPreco.permite_meio_a_meio && novosSabores.length > 1) {
+      const porcentagemIgual = Math.floor(100 / novosSabores.length);
+      const resto = 100 - (porcentagemIgual * novosSabores.length);
+
+      novosSabores.forEach((sabor, i) => {
+        sabor.porcentagem = porcentagemIgual + (i === 0 ? resto : 0);
+      });
+    } else if (novosSabores.length === 1) {
+      novosSabores[0].porcentagem = 100;
+    }
+
+    setSaboresSelecionados(novosSabores);
+  };
+
+  const confirmarSelecao = () => {
+    if (saboresSelecionados.length === 0) return;
+    onConfirmar(saboresSelecionados, precoCalculado);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className={`rounded-2xl w-full max-w-sm sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden shadow-2xl ${
+        config.modo_escuro ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+      }`}>
+        {/* Header */}
+        <div className={`flex items-center justify-between p-4 sm:p-6 border-b ${
+          config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+        }`}>
+          <div className="flex-1 min-w-0">
+            <h2 className={`text-lg sm:text-xl font-bold truncate ${
+              config.modo_escuro ? 'text-white' : 'text-gray-900'
+            }`}>
+              🍕 Selecionar Sabores - {tabelaPreco.nome}
+            </h2>
+            <p className={`text-xs sm:text-sm mt-1 ${
+              config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+            }`}>
+              {tabelaPreco.permite_meio_a_meio ? 'Meio a meio permitido' : 'Sabor único'} •
+              Máximo {tabelaPreco.quantidade_sabores} sabor{tabelaPreco.quantidade_sabores > 1 ? 'es' : ''}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className={`p-2 rounded-full transition-colors ml-2 ${
+              config.modo_escuro
+                ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Layout responsivo: vertical no mobile, horizontal no desktop */}
+        <div className="flex flex-col sm:flex-row h-[calc(95vh-140px)] sm:h-[calc(90vh-200px)]">
+          {/* Lista de Sabores Disponíveis */}
+          <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
+            <h3 className={`text-base sm:text-lg font-semibold mb-3 sm:mb-4 ${
+              config.modo_escuro ? 'text-white' : 'text-gray-900'
+            }`}>
+              Sabores Disponíveis
+            </h3>
+
+            {loading ? (
+              <div className="text-center py-8">
+                <div className={`animate-spin rounded-full h-8 w-8 border-b-2 mx-auto ${
+                  config.modo_escuro ? 'border-blue-400' : 'border-blue-600'
+                }`}></div>
+                <p className={`mt-2 ${
+                  config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  Carregando sabores...
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {saboresDisponiveis.map((produto) => {
+                  const jaSelecionado = saboresSelecionados.some(s => s.produto.id === produto.id);
+                  const podeAdicionar = saboresSelecionados.length < tabelaPreco.quantidade_sabores;
+
+                  return (
+                    <div
+                      key={produto.id}
+                      className={`p-3 sm:p-4 rounded-lg border transition-all cursor-pointer ${
+                        jaSelecionado
+                          ? config.modo_escuro
+                            ? 'border-green-500 bg-green-500/10'
+                            : 'border-green-500 bg-green-50'
+                          : podeAdicionar
+                          ? config.modo_escuro
+                            ? 'border-gray-600 bg-gray-700/50 hover:border-blue-500'
+                            : 'border-gray-300 bg-gray-50 hover:border-blue-500'
+                          : config.modo_escuro
+                            ? 'border-gray-700 bg-gray-800/50 opacity-50 cursor-not-allowed'
+                            : 'border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed'
+                      }`}
+                      onClick={() => !jaSelecionado && podeAdicionar && adicionarSabor(produto)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h4 className={`font-medium text-sm sm:text-base truncate ${
+                            config.modo_escuro ? 'text-white' : 'text-gray-900'
+                          }`}>
+                            {produto.nome}
+                          </h4>
+                          <p className={`text-xs sm:text-sm ${
+                            config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                          }`}>
+                            {formatarPreco(produto.preco)}
+                          </p>
+                        </div>
+                        {jaSelecionado && (
+                          <Check size={18} className="text-green-500 ml-2" />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Painel de Sabores Selecionados */}
+          <div className={`w-full sm:w-80 p-4 sm:p-6 border-t sm:border-t-0 sm:border-l overflow-y-auto ${
+            config.modo_escuro ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+          }`}>
+            <h3 className={`text-base sm:text-lg font-semibold mb-3 sm:mb-4 ${
+              config.modo_escuro ? 'text-white' : 'text-gray-900'
+            }`}>
+              Sabores Selecionados ({saboresSelecionados.length}/{tabelaPreco.quantidade_sabores})
+            </h3>
+
+            <div className="space-y-3 mb-6">
+              {saboresSelecionados.map((sabor, index) => (
+                <div key={index} className={`p-3 rounded-lg ${
+                  config.modo_escuro ? 'bg-gray-700' : 'bg-white border border-gray-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`font-medium text-sm ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      {sabor.produto.nome}
+                    </span>
+                    <button
+                      onClick={() => removerSabor(index)}
+                      className={`p-1 rounded transition-colors ${
+                        config.modo_escuro
+                          ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20'
+                          : 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                      }`}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className={config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}>
+                      {formatarPreco(sabor.produto.preco)}
+                    </span>
+                    {tabelaPreco.permite_meio_a_meio && (
+                      <span className={`font-medium ${
+                        config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                      }`}>
+                        {sabor.porcentagem}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Resumo do Preço */}
+            {saboresSelecionados.length > 0 && (
+              <div className={`p-4 rounded-lg mb-6 ${
+                config.modo_escuro ? 'bg-gray-700' : 'bg-white border border-gray-200'
+              }`}>
+                <div className="text-center">
+                  <p className={`text-sm mb-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Preço {tipoPreco === 'sabor_mais_caro' ? 'do sabor mais caro' : 'médio'}
+                  </p>
+                  <p className={`text-2xl font-bold ${
+                    config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                  }`}>
+                    {formatarPreco(precoCalculado)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Botão Confirmar */}
+            <button
+              onClick={confirmarSelecao}
+              disabled={saboresSelecionados.length === 0}
+              className={`w-full font-medium py-3 px-4 rounded-lg transition-colors ${
+                saboresSelecionados.length === 0
+                  ? config.modo_escuro
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : config.modo_escuro
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+              }`}
+            >
+              Confirmar Seleção
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const CardapioPublicoPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -678,6 +1089,7 @@ const CardapioPublicoPage: React.FC = () => {
     quantidade: number;
     precoProduto?: number; // ✅ PREÇO DO PRODUTO DA TABELA SELECIONADA
     tabelaPrecoId?: string; // ✅ ID DA TABELA DE PREÇO SELECIONADA
+    sabores?: SaborSelecionado[]; // ✅ SABORES SELECIONADOS (PARA PIZZAS)
     adicionais: {[itemId: string]: number};
     observacao?: string;
     ordemAdicao: number;
@@ -697,6 +1109,31 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Estado para o modal de finalização do pedido
   const [modalFinalizacaoAberto, setModalFinalizacaoAberto] = useState(false);
+
+  // Estados para cupons de desconto
+  const [modalCupomAberto, setModalCupomAberto] = useState(false);
+  const [codigoCupom, setCodigoCupom] = useState('');
+  const [cupomAplicado, setCupomAplicado] = useState<{
+    id: string;
+    codigo: string;
+    descricao: string;
+    tipo_desconto: string;
+    valor_desconto: number;
+    valor_minimo_pedido: number;
+  } | null>(null);
+  const [validandoCupom, setValidandoCupom] = useState(false);
+  const [erroCupom, setErroCupom] = useState<string | null>(null);
+
+  // Estados para modal de dados do cliente
+  const [modalDadosClienteAberto, setModalDadosClienteAberto] = useState(false);
+  const [dadosCliente, setDadosCliente] = useState({
+    nome: '',
+    telefone: '',
+    querNotaFiscal: false,
+    cpfCnpj: ''
+  });
+  const [validandoDadosCliente, setValidandoDadosCliente] = useState(false);
+  const [erroDadosCliente, setErroDadosCliente] = useState<string | null>(null);
 
   // Estados para o modal de validação de área de entrega
   const [modalAreaEntregaAberto, setModalAreaEntregaAberto] = useState(false);
@@ -776,6 +1213,15 @@ const CardapioPublicoPage: React.FC = () => {
   const [produtoTabelaPrecoObrigatoria, setProdutoTabelaPrecoObrigatoria] = useState<{
     id: string;
     nome: string;
+  } | null>(null);
+
+  // Estados para modal de seleção de sabores
+  const [modalSabores, setModalSabores] = useState(false);
+  const [dadosModalSabores, setDadosModalSabores] = useState<{
+    produto: Produto;
+    tabelaPreco: TabelaPreco;
+    tipoPreco: 'sabor_mais_caro' | 'preco_medio';
+    quantidadeSelecionada: number;
   } | null>(null);
 
   // Estados para modal de configuração individual
@@ -1245,6 +1691,16 @@ const CardapioPublicoPage: React.FC = () => {
     }
   }, [slug]);
 
+  // Carregar dados do cliente salvos quando empresa for identificada
+  useEffect(() => {
+    if (empresaId) {
+      const dadosSalvos = carregarDadosClienteLocalStorage();
+      if (dadosSalvos) {
+        setDadosCliente(dadosSalvos);
+      }
+    }
+  }, [empresaId]);
+
   // Configurar realtime para monitorar mudanças no status da loja
   useEffect(() => {
     if (!empresaId) return;
@@ -1613,7 +2069,6 @@ const CardapioPublicoPage: React.FC = () => {
         .single();
 
       if (taxaConfigData?.habilitado) {
-        console.log('🚚 Taxa de entrega habilitada:', taxaConfigData);
         setTaxaEntregaConfig(taxaConfigData);
 
         // Se for por bairro, carregar lista de bairros
@@ -1661,8 +2116,6 @@ const CardapioPublicoPage: React.FC = () => {
             setModalAreaEntregaAberto(true);
           }, 2000);
         }
-      } else {
-        console.log('❌ Taxa de entrega não habilitada ou não encontrada');
       }
 
       // 2.1. Carregar configuração de tabela de preços
@@ -2696,13 +3149,32 @@ const CardapioPublicoPage: React.FC = () => {
     }
 
     if (quantidadeSelecionada > 0) {
+      // ✅ VERIFICAR SE PRODUTO PRECISA DE SELEÇÃO DE SABORES
+      const tabelasComPrecos = obterTabelasComPrecos(produtoId);
+      const tabelaSelecionadaId = tabelasSelecionadas[produtoId];
+
+      if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+        const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+        if (tabelaEscolhida && tabelaEscolhida.quantidade_sabores > 1) {
+          // Produto precisa de seleção de sabores - abrir modal
+          const tabelaPreco: TabelaPreco = {
+            id: tabelaEscolhida.id,
+            nome: tabelaEscolhida.nome,
+            quantidade_sabores: tabelaEscolhida.quantidade_sabores,
+            permite_meio_a_meio: true // Assumir que permite meio a meio por padrão
+          };
+
+          abrirModalSabores(produto!, tabelaPreco, quantidadeSelecionada);
+          return;
+        }
+      }
+
       // Gerar ID único para este item no carrinho
       const itemId = `${produtoId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
       // ✅ CALCULAR PREÇO COM DESCONTO POR QUANTIDADE (considerando tabela de preço + promoções + desconto por quantidade)
       const produto = produtos.find(p => p.id === produtoId);
       const precoProduto = produto ? calcularPrecoComDescontoQuantidade(produto, quantidadeSelecionada) : 0;
-      const tabelaSelecionadaId = tabelasSelecionadas[produtoId] || null;
 
       // Criar item separado no carrinho
       const novoItem = {
@@ -3036,6 +3508,7 @@ const CardapioPublicoPage: React.FC = () => {
           quantidade: item.quantidade,
           precoProduto: item.precoProduto, // ✅ INCLUIR PREÇO SALVO DO PRODUTO
           tabelaPrecoId: item.tabelaPrecoId, // ✅ INCLUIR ID DA TABELA
+          sabores: item.sabores, // ✅ INCLUIR SABORES SELECIONADOS
           adicionais: adicionaisArray.length > 0 ? adicionaisArray : undefined,
           observacao: item.observacao,
           ordemAdicao: item.ordemAdicao,
@@ -3044,7 +3517,7 @@ const CardapioPublicoPage: React.FC = () => {
       })
       .filter(Boolean)
       .sort((a, b) => b!.ordemAdicao - a!.ordemAdicao) // Mais recentes primeiro
-      .map(({ produto, quantidade, precoProduto, tabelaPrecoId, adicionais, observacao, itemId }) => ({ produto, quantidade, precoProduto, tabelaPrecoId, adicionais, observacao, itemId })) as (ItemCarrinho & { itemId: string })[];
+      .map(({ produto, quantidade, precoProduto, tabelaPrecoId, sabores, adicionais, observacao, itemId }) => ({ produto, quantidade, precoProduto, tabelaPrecoId, sabores, adicionais, observacao, itemId })) as (ItemCarrinho & { itemId: string })[];
   };
 
   const obterTotalCarrinho = () => {
@@ -3684,9 +4157,303 @@ const CardapioPublicoPage: React.FC = () => {
     setProdutoAlcoolicoPendente(null);
   };
 
+  // ✅ FUNÇÕES PARA CUPONS DE DESCONTO
+  const validarCupom = async () => {
+    if (!codigoCupom.trim()) {
+      setErroCupom('Digite um código de cupom');
+      return;
+    }
+
+    if (!empresaId) {
+      setErroCupom('Erro interno: empresa não identificada');
+      return;
+    }
+
+    setValidandoCupom(true);
+    setErroCupom(null);
+
+    try {
+      // Buscar cupom no banco de dados
+      const { data: cupomData, error } = await supabase
+        .from('cupons_desconto')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('codigo', codigoCupom.trim().toUpperCase())
+        .eq('ativo', true)
+        .single();
+
+      if (error || !cupomData) {
+        setErroCupom('Cupom não encontrado ou inválido');
+        return;
+      }
+
+      // Verificar data de validade
+      const hoje = new Date();
+
+      // Corrigir problema de timezone - forçar interpretação como data local
+      const dataInicio = cupomData.data_inicio ? new Date(cupomData.data_inicio + 'T00:00:00') : null;
+      const dataFim = cupomData.data_fim ? new Date(cupomData.data_fim + 'T23:59:59') : null;
+
+      if (dataInicio && hoje < dataInicio) {
+        const dataInicioFormatada = dataInicio.toLocaleDateString('pt-BR');
+        setErroCupom(`Este cupom ainda não está válido (válido a partir de ${dataInicioFormatada})`);
+        return;
+      }
+
+      if (dataFim) {
+        if (hoje > dataFim) {
+          const dataVencimento = dataFim.toLocaleDateString('pt-BR');
+          setErroCupom(`Este cupom está vencido (venceu em ${dataVencimento})`);
+          return;
+        }
+      }
+
+      // Verificar limite de uso
+      if (cupomData.limite_uso > 0 && cupomData.usos_realizados >= cupomData.limite_uso) {
+        setErroCupom('Este cupom atingiu o limite de uso');
+        return;
+      }
+
+      // Verificar valor mínimo do pedido
+      const totalProdutos = obterTotalCarrinho();
+      if (cupomData.valor_minimo_pedido > 0 && totalProdutos < cupomData.valor_minimo_pedido) {
+        setErroCupom(`Valor mínimo do pedido: R$ ${cupomData.valor_minimo_pedido.toFixed(2)}`);
+        return;
+      }
+
+      // Aplicar cupom
+      setCupomAplicado({
+        id: cupomData.id,
+        codigo: cupomData.codigo,
+        descricao: cupomData.descricao,
+        tipo_desconto: cupomData.tipo_desconto,
+        valor_desconto: cupomData.valor_desconto,
+        valor_minimo_pedido: cupomData.valor_minimo_pedido
+      });
+
+      setModalCupomAberto(false);
+      setCodigoCupom('');
+
+    } catch (error) {
+      console.error('Erro ao validar cupom:', error);
+      setErroCupom('Erro ao validar cupom. Tente novamente.');
+    } finally {
+      setValidandoCupom(false);
+    }
+  };
+
+  const removerCupom = () => {
+    setCupomAplicado(null);
+  };
+
+  // ✅ FUNÇÕES PARA FORMATAÇÃO DE DADOS DO CLIENTE
+  const formatarTelefone = (valor: string): string => {
+    // Remove tudo que não é número
+    const numeros = valor.replace(/\D/g, '');
+
+    // Limita a 11 dígitos
+    const numerosLimitados = numeros.slice(0, 11);
+
+    // Aplica máscara de telefone
+    if (numerosLimitados.length <= 10) {
+      // Telefone fixo: (11) 1234-5678
+      if (numerosLimitados.length <= 2) {
+        return numerosLimitados;
+      } else if (numerosLimitados.length <= 6) {
+        return numerosLimitados.replace(/(\d{2})(\d{0,4})/, '($1) $2');
+      } else {
+        return numerosLimitados.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+      }
+    } else {
+      // Celular: (11) 91234-5678
+      if (numerosLimitados.length <= 2) {
+        return numerosLimitados;
+      } else if (numerosLimitados.length <= 7) {
+        return numerosLimitados.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+      } else {
+        return numerosLimitados.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+      }
+    }
+  };
+
+  const formatarCpfCnpj = (valor: string): string => {
+    // Remove tudo que não é número
+    const numeros = valor.replace(/\D/g, '');
+
+    if (numeros.length <= 11) {
+      // CPF: 123.456.789-01
+      return numeros.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    } else {
+      // CNPJ: 12.345.678/0001-90
+      return numeros.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    }
+  };
+
+  const validarCpfCnpj = (valor: string): boolean => {
+    const numeros = valor.replace(/\D/g, '');
+    return numeros.length === 11 || numeros.length === 14;
+  };
+
+  const validarTelefone = (valor: string): boolean => {
+    const numeros = valor.replace(/\D/g, '');
+    return numeros.length >= 10 && numeros.length <= 11;
+  };
+
+  const calcularDescontoCupom = (): number => {
+    if (!cupomAplicado) return 0;
+
+    const totalProdutos = obterTotalCarrinho();
+
+    if (cupomAplicado.tipo_desconto === 'percentual') {
+      return totalProdutos * (cupomAplicado.valor_desconto / 100);
+    } else {
+      return Math.min(cupomAplicado.valor_desconto, totalProdutos);
+    }
+  };
+
+  // ✅ FUNÇÕES PARA LOCALSTORAGE DOS DADOS DO CLIENTE
+  const salvarDadosClienteLocalStorage = (dados: typeof dadosCliente) => {
+    if (empresaId) {
+      localStorage.setItem(`dados_cliente_${empresaId}`, JSON.stringify(dados));
+    }
+  };
+
+  const carregarDadosClienteLocalStorage = (): typeof dadosCliente | null => {
+    if (empresaId) {
+      const dadosSalvos = localStorage.getItem(`dados_cliente_${empresaId}`);
+      if (dadosSalvos) {
+        try {
+          return JSON.parse(dadosSalvos);
+        } catch (error) {
+          console.error('Erro ao carregar dados do cliente do localStorage:', error);
+        }
+      }
+    }
+    return null;
+  };
+
+  // ✅ FUNÇÕES PARA MODAL DE DADOS DO CLIENTE
+  const validarDadosCliente = (): boolean => {
+    setErroDadosCliente(null);
+
+    if (!dadosCliente.nome.trim()) {
+      setErroDadosCliente('Nome é obrigatório');
+      return false;
+    }
+
+    if (!dadosCliente.telefone.trim()) {
+      setErroDadosCliente('Telefone é obrigatório');
+      return false;
+    }
+
+    if (!validarTelefone(dadosCliente.telefone)) {
+      setErroDadosCliente('Telefone inválido');
+      return false;
+    }
+
+    if (dadosCliente.querNotaFiscal && !dadosCliente.cpfCnpj.trim()) {
+      setErroDadosCliente('CPF/CNPJ é obrigatório para nota fiscal');
+      return false;
+    }
+
+    if (dadosCliente.querNotaFiscal && !validarCpfCnpj(dadosCliente.cpfCnpj)) {
+      setErroDadosCliente('CPF/CNPJ inválido');
+      return false;
+    }
+
+    return true;
+  };
+
+  const confirmarDadosCliente = () => {
+    if (!validarDadosCliente()) {
+      return;
+    }
+
+    // Salvar dados no localStorage para próximos pedidos
+    salvarDadosClienteLocalStorage(dadosCliente);
+
+    // Fechar modal de dados do cliente
+    setModalDadosClienteAberto(false);
+
+    // Prosseguir com a finalização do pedido
+    confirmarFinalizacaoPedido();
+  };
+
+  const cancelarDadosCliente = () => {
+    setModalDadosClienteAberto(false);
+    setDadosCliente({
+      nome: '',
+      telefone: '',
+      querNotaFiscal: false,
+      cpfCnpj: ''
+    });
+    setErroDadosCliente(null);
+  };
+
   const fecharModalTabelaPrecoObrigatoria = () => {
     setModalTabelaPrecoObrigatoria(false);
     setProdutoTabelaPrecoObrigatoria(null);
+  };
+
+  // Funções para o modal de sabores
+  const abrirModalSabores = (produto: Produto, tabelaPreco: TabelaPreco, quantidadeSelecionada: number) => {
+    setDadosModalSabores({
+      produto,
+      tabelaPreco,
+      tipoPreco: 'sabor_mais_caro', // Pode ser configurável no futuro
+      quantidadeSelecionada
+    });
+    setModalSabores(true);
+  };
+
+  const fecharModalSabores = () => {
+    setModalSabores(false);
+    setDadosModalSabores(null);
+  };
+
+  const confirmarSabores = (sabores: SaborSelecionado[], precoCalculado: number) => {
+    if (!dadosModalSabores) return;
+
+    const { produto, quantidadeSelecionada } = dadosModalSabores;
+
+    // Criar item no carrinho com sabores
+    const itemId = `${produto.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const novoItem = {
+      produtoId: produto.id,
+      quantidade: quantidadeSelecionada,
+      precoProduto: precoCalculado,
+      tabelaPrecoId: dadosModalSabores.tabelaPreco.id,
+      sabores: sabores,
+      adicionais: adicionaisSelecionados[produto.id] ? { ...adicionaisSelecionados[produto.id] } : {},
+      observacao: observacoesSelecionadas[produto.id],
+      ordemAdicao: Date.now()
+    };
+
+    // Adicionar ao carrinho
+    setItensCarrinhoSeparados(prev => ({
+      ...prev,
+      [itemId]: novoItem
+    }));
+
+    // Limpar seleções do produto
+    setQuantidadesProdutos(prev => ({ ...prev, [produto.id]: 0 }));
+    setAdicionaisSelecionados(prev => ({ ...prev, [produto.id]: {} }));
+    setObservacoesSelecionadas(prev => ({ ...prev, [produto.id]: undefined }));
+
+    // Feedback visual
+    setItemChacoalhando(itemId);
+    setTimeout(() => setItemChacoalhando(null), 800);
+
+    // Abrir carrinho se estava fechado
+    if (!carrinhoAberto) {
+      setCarrinhoAberto(true);
+    }
+
+    // Fechar modal
+    fecharModalSabores();
+
+    showMessage('success', `${produto.nome} adicionado ao carrinho com sabores!`);
   };
 
   // Funções auxiliares para o modal de configuração
@@ -3993,8 +4760,45 @@ const CardapioPublicoPage: React.FC = () => {
 
       itensCarrinho.forEach((item, index) => {
         const precoProduto = (item as any).precoProduto || item.produto.preco; // ✅ USAR PREÇO SALVO
+        const sabores = (item as any).sabores; // ✅ OBTER SABORES SELECIONADOS
+        const adicionais = item.adicionais;
+        const observacao = item.observacao;
+
         mensagem += `${index + 1}. *${item.produto.nome}*\n`;
         mensagem += `   Quantidade: ${item.quantidade}\n`;
+
+        // ✅ ADICIONAR SABORES SE EXISTIREM
+        if (sabores && sabores.length > 0) {
+          mensagem += `   🍕 Sabores:\n`;
+          sabores.forEach((sabor: SaborSelecionado) => {
+            if (sabores.length > 1) {
+              mensagem += `      • ${sabor.produto.nome} (${sabor.porcentagem}%)\n`;
+            } else {
+              mensagem += `      • ${sabor.produto.nome}\n`;
+            }
+          });
+        }
+
+        // ✅ ADICIONAR ADICIONAIS SE EXISTIREM
+        if (adicionais && adicionais.length > 0) {
+          mensagem += `   Adicionais:\n`;
+          adicionais.forEach((adicional: any) => {
+            mensagem += `      • ${adicional.nome}`;
+            if (adicional.quantidade > 1) {
+              mensagem += ` (${adicional.quantidade}x)`;
+            }
+            if (config.mostrar_precos) {
+              mensagem += ` - ${formatarPreco(adicional.preco * adicional.quantidade)}`;
+            }
+            mensagem += `\n`;
+          });
+        }
+
+        // ✅ ADICIONAR OBSERVAÇÃO SE EXISTIR
+        if (observacao && observacao.trim()) {
+          mensagem += `   Observação: ${observacao}\n`;
+        }
+
         if (config.mostrar_precos) {
           mensagem += `   Preço unitário: ${formatarPreco(precoProduto)}\n`;
           mensagem += `   Subtotal: ${formatarPreco(precoProduto * item.quantidade)}\n`;
@@ -4035,9 +4839,20 @@ const CardapioPublicoPage: React.FC = () => {
     setModalFinalizacaoAberto(true);
   };
 
-  const confirmarFinalizacaoPedido = () => {
-    // Fechar modal e ir para o WhatsApp
+  const iniciarFinalizacaoPedido = () => {
+    // Carregar dados salvos do localStorage
+    const dadosSalvos = carregarDadosClienteLocalStorage();
+    if (dadosSalvos) {
+      setDadosCliente(dadosSalvos);
+    }
+
+    // Fechar modal de finalização e abrir modal de dados do cliente
     setModalFinalizacaoAberto(false);
+    setModalDadosClienteAberto(true);
+  };
+
+  const confirmarFinalizacaoPedido = () => {
+    // Ir para o WhatsApp com os dados do cliente
     handlePedirWhatsApp();
 
     // Limpar carrinho após finalizar pedido
@@ -4056,6 +4871,14 @@ const CardapioPublicoPage: React.FC = () => {
       localStorage.removeItem(`carrinho_observacoes_${empresaId}`);
       localStorage.removeItem(`carrinho_validacao_minima_${empresaId}`);
     }
+
+    // Limpar dados do cliente
+    setDadosCliente({
+      nome: '',
+      telefone: '',
+      querNotaFiscal: false,
+      cpfCnpj: ''
+    });
   };
 
   const cancelarFinalizacaoPedido = () => {
@@ -6329,8 +7152,10 @@ const CardapioPublicoPage: React.FC = () => {
                                           produtoId: produto.id,
                                           produtoNome: produto.nome,
                                           tabelaId: tabela.id,
-                                          tabelaNome: tabela.nome
+                                          tabelaNome: tabela.nome,
+                                          quantidadeSabores: tabela.quantidade_sabores
                                         });
+
                                         setTabelasSelecionadas(prev => {
                                           const novoEstado = {
                                             ...prev,
@@ -6340,10 +7165,32 @@ const CardapioPublicoPage: React.FC = () => {
                                             produtoId: produto.id,
                                             tabelaId: tabela.id,
                                             tabelaNome: tabela.nome,
+                                            quantidadeSabores: tabela.quantidade_sabores,
                                             novoEstado
                                           });
                                           return novoEstado;
                                         });
+
+                                        // ✅ ABRIR MODAL DE SABORES SE TABELA TEM MÚLTIPLOS SABORES
+                                        if (tabela.quantidade_sabores > 1) {
+                                          const tabelaPreco: TabelaPreco = {
+                                            id: tabela.id,
+                                            nome: tabela.nome,
+                                            quantidade_sabores: tabela.quantidade_sabores,
+                                            permite_meio_a_meio: true
+                                          };
+
+                                          // Definir quantidade padrão como 1 se não houver quantidade selecionada
+                                          const quantidadeAtual = obterQuantidadeSelecionada(produto.id);
+                                          const quantidadeFinal = quantidadeAtual > 0 ? quantidadeAtual : 1;
+
+                                          // Definir quantidade selecionada como 1 se for 0
+                                          if (quantidadeAtual === 0) {
+                                            alterarQuantidadeSelecionada(produto.id, 1);
+                                          }
+
+                                          abrirModalSabores(produto, tabelaPreco, quantidadeFinal);
+                                        }
                                       }}
                                       className={`flex-1 p-3 rounded-lg border-2 transition-all duration-200 hover:scale-105 text-left ${
                                         isSelected
@@ -6435,6 +7282,28 @@ const CardapioPublicoPage: React.FC = () => {
                                     ...prev,
                                     [produto.id]: tabelaId
                                   }));
+
+                                  // ✅ ABRIR MODAL DE SABORES SE TABELA TEM MÚLTIPLOS SABORES
+                                  const tabelaSelecionada = tabelasComPrecos.find(t => t.id === tabelaId);
+                                  if (tabelaSelecionada && tabelaSelecionada.quantidade_sabores > 1) {
+                                    const tabelaPreco: TabelaPreco = {
+                                      id: tabelaSelecionada.id,
+                                      nome: tabelaSelecionada.nome,
+                                      quantidade_sabores: tabelaSelecionada.quantidade_sabores,
+                                      permite_meio_a_meio: true
+                                    };
+
+                                    // Definir quantidade padrão como 1 se não houver quantidade selecionada
+                                    const quantidadeAtual = obterQuantidadeSelecionada(produto.id);
+                                    const quantidadeFinal = quantidadeAtual > 0 ? quantidadeAtual : 1;
+
+                                    // Definir quantidade selecionada como 1 se for 0
+                                    if (quantidadeAtual === 0) {
+                                      alterarQuantidadeSelecionada(produto.id, 1);
+                                    }
+
+                                    abrirModalSabores(produto, tabelaPreco, quantidadeFinal);
+                                  }
                                 }}
                                 produto={produto} // ✅ PASSAR PRODUTO PARA ACESSAR PROMOÇÕES
                                 calcularValorFinal={calcularValorFinal} // ✅ PASSAR FUNÇÃO DE CÁLCULO
@@ -6697,7 +7566,7 @@ const CardapioPublicoPage: React.FC = () => {
             <div className="flex-1 p-4 overflow-y-auto">
               <div className="space-y-3">
                 {obterItensCarrinho().map((item) => {
-                  const { produto, quantidade, adicionais, observacao, itemId } = item as any;
+                  const { produto, quantidade, sabores, adicionais, observacao, itemId } = item as any;
                   return (
                     <div
                       key={itemId}
@@ -6879,6 +7748,57 @@ const CardapioPublicoPage: React.FC = () => {
                             </div>
                           </div>
                         </>
+                      )}
+
+                      {/* Seção de Sabores - Largura Total */}
+                      {sabores && sabores.length > 0 && (
+                        <div className="mb-2">
+                          {/* Divisória */}
+                          <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
+
+                          {/* Título */}
+                          <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
+                            🍕 Sabores:
+                          </div>
+
+                          {/* Lista de Sabores */}
+                          <div className="space-y-1">
+                            {sabores.map((sabor: SaborSelecionado, idx: number) => (
+                              <div
+                                key={idx}
+                                className={`flex items-center justify-between p-2 rounded text-xs ${
+                                  config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-100'
+                                }`}
+                              >
+                                <div className="flex-1">
+                                  <span className={`font-medium ${
+                                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                                  }`}>
+                                    {sabor.produto.nome}
+                                  </span>
+                                  {config.mostrar_precos && (
+                                    <div className={`${
+                                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                                    }`}>
+                                      {formatarPreco(sabor.produto.preco)}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Porcentagem do sabor */}
+                                {sabores.length > 1 && (
+                                  <div className={`font-medium px-2 py-1 rounded ${
+                                    config.modo_escuro
+                                      ? 'bg-blue-600/20 text-blue-400'
+                                      : 'bg-blue-100 text-blue-600'
+                                  }`}>
+                                    {sabor.porcentagem}%
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
 
                       {/* Seção de Adicionais - Largura Total */}
@@ -7912,7 +8832,7 @@ const CardapioPublicoPage: React.FC = () => {
             <div className="flex-1 p-4 overflow-y-auto">
               <div className="space-y-3">
                 {obterItensCarrinho().map((item, index) => {
-                  const { produto, quantidade, adicionais, observacao, itemId, precoProduto } = item as any;
+                  const { produto, quantidade, sabores, adicionais, observacao, itemId, precoProduto } = item as any;
                   const precoFinal = precoProduto || produto.preco;
 
                   return (
@@ -7995,6 +8915,50 @@ const CardapioPublicoPage: React.FC = () => {
                               }`}>
                                 Subtotal: {formatarPreco(precoFinal * quantidade)}
                               </span>
+                            </div>
+                          )}
+
+                          {/* Sabores selecionados */}
+                          {sabores && sabores.length > 0 && (
+                            <div className="mb-2">
+                              <p className={`text-xs font-medium mb-2 ${
+                                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                              }`}>
+                                🍕 Sabores:
+                              </p>
+                              <div className="space-y-1">
+                                {sabores.map((sabor: SaborSelecionado, idx: number) => (
+                                  <div key={idx} className={`flex items-center justify-between p-2 rounded ${
+                                    config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-100'
+                                  }`}>
+                                    <div className="flex-1">
+                                      <span className={`text-xs font-medium ${
+                                        config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                                      }`}>
+                                        {sabor.produto.nome}
+                                      </span>
+                                      {config.mostrar_precos && (
+                                        <div className={`text-xs ${
+                                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                                        }`}>
+                                          {formatarPreco(sabor.produto.preco)}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Porcentagem do sabor */}
+                                    {sabores.length > 1 && (
+                                      <div className={`text-xs font-medium px-2 py-1 rounded ${
+                                        config.modo_escuro
+                                          ? 'bg-blue-600/20 text-blue-400'
+                                          : 'bg-blue-100 text-blue-600'
+                                      }`}>
+                                        {sabor.porcentagem}%
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
 
@@ -8231,6 +9195,84 @@ const CardapioPublicoPage: React.FC = () => {
                 </div>
               )}
 
+              {/* Seção Cupom de Desconto */}
+              <div className={`mt-4 p-4 rounded-lg border ${
+                config.modo_escuro
+                  ? 'bg-gray-800 border-gray-600'
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className={`font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    🎫 Cupom de Desconto
+                  </h4>
+                  {!cupomAplicado && (
+                    <button
+                      onClick={() => setModalCupomAberto(true)}
+                      className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                        config.modo_escuro
+                          ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                          : 'bg-purple-500 hover:bg-purple-600 text-white'
+                      }`}
+                    >
+                      Adicionar
+                    </button>
+                  )}
+                </div>
+
+                {cupomAplicado ? (
+                  <div className={`p-3 rounded-lg ${
+                    config.modo_escuro
+                      ? 'bg-green-900/30 border border-green-600'
+                      : 'bg-green-50 border border-green-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <span className={`font-mono text-sm font-bold ${
+                          config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                        }`}>
+                          {cupomAplicado.codigo}
+                        </span>
+                        <p className={`text-xs ${
+                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          {cupomAplicado.descricao}
+                        </p>
+                      </div>
+                      <button
+                        onClick={removerCupom}
+                        className={`text-xs px-2 py-1 rounded ${
+                          config.modo_escuro
+                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                            : 'bg-red-500 hover:bg-red-600 text-white'
+                        }`}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className={`text-sm ${
+                        config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Desconto aplicado:
+                      </span>
+                      <span className={`font-bold ${
+                        config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                      }`}>
+                        -{formatarPreco(calcularDescontoCupom())}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Nenhum cupom aplicado
+                  </p>
+                )}
+              </div>
+
               {/* Total Geral com Taxa */}
               <div className={`mt-4 p-4 rounded-lg border-2 ${
                 config.modo_escuro
@@ -8246,14 +9288,22 @@ const CardapioPublicoPage: React.FC = () => {
                   <span className={`text-xl font-bold ${
                     config.modo_escuro ? 'text-green-400' : 'text-green-600'
                   }`}>
-                    {config.mostrar_precos ? formatarPreco(obterTotalCarrinho() + (calculoTaxa?.valor || 0)) : 'Preços ocultos'}
+                    {config.mostrar_precos ? formatarPreco(obterTotalCarrinho() + (calculoTaxa?.valor || 0) - calcularDescontoCupom()) : 'Preços ocultos'}
                   </span>
                 </div>
-                {calculoTaxa && config.mostrar_precos && (
-                  <div className={`text-sm mt-1 ${
+                {config.mostrar_precos && (
+                  <div className={`text-sm mt-1 space-y-1 ${
                     config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                   }`}>
-                    Produtos: {formatarPreco(obterTotalCarrinho())} + Taxa: {formatarPreco(calculoTaxa.valor)}
+                    <div>Produtos: {formatarPreco(obterTotalCarrinho())}</div>
+                    {calculoTaxa && (
+                      <div>Taxa de entrega: {formatarPreco(calculoTaxa.valor)}</div>
+                    )}
+                    {cupomAplicado && (
+                      <div className={config.modo_escuro ? 'text-green-400' : 'text-green-600'}>
+                        Desconto ({cupomAplicado.codigo}): -{formatarPreco(calcularDescontoCupom())}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -8278,7 +9328,7 @@ const CardapioPublicoPage: React.FC = () => {
               {/* Botão Concluir */}
               {obterWhatsAppEmpresa() && (
                 <button
-                  onClick={confirmarFinalizacaoPedido}
+                  onClick={iniciarFinalizacaoPedido}
                   disabled={lojaAberta === false}
                   className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
                     lojaAberta === false
@@ -8289,6 +9339,316 @@ const CardapioPublicoPage: React.FC = () => {
                   {lojaAberta === false ? 'Loja Fechada' : 'Concluir Pedido'}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cupom de Desconto */}
+      {modalCupomAberto && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                    <span className="text-purple-600 text-xl">🎫</span>
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-bold ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Cupom de Desconto
+                    </h2>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Digite o código do seu cupom
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setModalCupomAberto(false);
+                    setCodigoCupom('');
+                    setErroCupom(null);
+                  }}
+                  className={`p-2 rounded-full transition-colors ${
+                    config.modo_escuro
+                      ? 'hover:bg-gray-700 text-gray-400'
+                      : 'hover:bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${
+                  config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  Código do Cupom
+                </label>
+                <input
+                  type="text"
+                  value={codigoCupom}
+                  onChange={(e) => {
+                    setCodigoCupom(e.target.value.toUpperCase());
+                    setErroCupom(null);
+                  }}
+                  placeholder="Digite o código"
+                  className={`w-full px-4 py-3 rounded-lg border font-mono text-center text-lg tracking-wider ${
+                    config.modo_escuro
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                  } focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
+                />
+              </div>
+
+              {erroCupom && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-red-600 text-sm">{erroCupom}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t space-y-3 ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={validarCupom}
+                disabled={validandoCupom || !codigoCupom.trim()}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  validandoCupom || !codigoCupom.trim()
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white transform hover:scale-[1.02]'
+                }`}
+              >
+                {validandoCupom ? 'Validando...' : 'Aplicar Cupom'}
+              </button>
+
+              <button
+                onClick={() => {
+                  setModalCupomAberto(false);
+                  setCodigoCupom('');
+                  setErroCupom(null);
+                }}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Dados do Cliente */}
+      {modalDadosClienteAberto && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-green-600 text-xl">👤</span>
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-bold ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Dados do Cliente
+                    </h2>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Informe seus dados para finalizar o pedido
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={cancelarDadosCliente}
+                  className={`p-2 rounded-full transition-colors ${
+                    config.modo_escuro
+                      ? 'hover:bg-gray-700 text-gray-400'
+                      : 'hover:bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              {/* Nome */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${
+                  config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  Nome Completo *
+                </label>
+                <input
+                  type="text"
+                  value={dadosCliente.nome}
+                  onChange={(e) => {
+                    setDadosCliente(prev => ({ ...prev, nome: e.target.value }));
+                    setErroDadosCliente(null);
+                  }}
+                  placeholder="Digite seu nome completo"
+                  className={`w-full px-4 py-3 rounded-lg border ${
+                    config.modo_escuro
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                  } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                />
+              </div>
+
+              {/* Telefone */}
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${
+                  config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  Telefone/Celular *
+                </label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={dadosCliente.telefone}
+                  onChange={(e) => {
+                    const valorFormatado = formatarTelefone(e.target.value);
+                    setDadosCliente(prev => ({ ...prev, telefone: valorFormatado }));
+                    setErroDadosCliente(null);
+                  }}
+                  placeholder="(12) 91234-5678"
+                  className={`w-full px-4 py-3 rounded-lg border ${
+                    config.modo_escuro
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                  } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                />
+              </div>
+
+              {/* Toggle Nota Fiscal */}
+              <div className={`flex items-center justify-between p-4 rounded-lg border ${
+                config.modo_escuro
+                  ? 'bg-gray-700 border-gray-600'
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div>
+                  <label className={`font-medium ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Deseja Nota Fiscal Paulista?
+                  </label>
+                  <p className={`text-sm ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Informe seu CPF/CNPJ para emissão
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setDadosCliente(prev => ({
+                      ...prev,
+                      querNotaFiscal: !prev.querNotaFiscal,
+                      cpfCnpj: !prev.querNotaFiscal ? prev.cpfCnpj : ''
+                    }));
+                    setErroDadosCliente(null);
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    dadosCliente.querNotaFiscal
+                      ? 'bg-green-600'
+                      : config.modo_escuro
+                      ? 'bg-gray-600'
+                      : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      dadosCliente.querNotaFiscal ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* CPF/CNPJ */}
+              {dadosCliente.querNotaFiscal && (
+                <div>
+                  <label className={`block text-sm font-medium mb-2 ${
+                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    CPF/CNPJ *
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={dadosCliente.cpfCnpj}
+                    onChange={(e) => {
+                      const valorFormatado = formatarCpfCnpj(e.target.value);
+                      setDadosCliente(prev => ({ ...prev, cpfCnpj: valorFormatado }));
+                      setErroDadosCliente(null);
+                    }}
+                    placeholder="123.456.789-01 ou 12.345.678/0001-90"
+                    className={`w-full px-4 py-3 rounded-lg border ${
+                      config.modo_escuro
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                    } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                  />
+                </div>
+              )}
+
+              {erroDadosCliente && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-red-600 text-sm">{erroDadosCliente}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t space-y-3 ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={confirmarDadosCliente}
+                disabled={validandoDadosCliente}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                  validandoDadosCliente
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700 text-white transform hover:scale-[1.02]'
+                }`}
+              >
+                {validandoDadosCliente ? 'Finalizando...' : 'Finalizar Pedido'}
+              </button>
+
+              <button
+                onClick={cancelarDadosCliente}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>
@@ -8759,6 +10119,20 @@ const CardapioPublicoPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Seleção de Sabores */}
+      {dadosModalSabores && (
+        <SeletorSaboresModalCardapio
+          isOpen={modalSabores}
+          onClose={fecharModalSabores}
+          tabelaPreco={dadosModalSabores.tabelaPreco}
+          onConfirmar={confirmarSabores}
+          tipoPreco={dadosModalSabores.tipoPreco}
+          produtoAtual={dadosModalSabores.produto}
+          config={config}
+          formatarPreco={formatarPreco}
+        />
       )}
     </div>
     </>

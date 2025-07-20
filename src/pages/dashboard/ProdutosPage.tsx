@@ -37,6 +37,7 @@ interface DeleteConfirmationProps {
   onConfirm: () => void;
   title: string;
   message: string;
+  loading?: boolean; // ✅ NOVO: Estado de loading
 }
 
 const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
@@ -45,6 +46,7 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
   onConfirm,
   title,
   message,
+  loading = false, // ✅ NOVO: Estado de loading
 }) => {
   if (!isOpen) return null;
 
@@ -65,21 +67,32 @@ const DeleteConfirmation: React.FC<DeleteConfirmationProps> = ({
           <h3 className="text-xl font-semibold text-white mb-2">{title}</h3>
           <p className="text-gray-400 mb-6">{message}</p>
           <div className="flex gap-4">
-            <Button
-              type="button"
-              variant="text"
-              className="flex-1"
-              onClick={onClose}
-            >
-              Cancelar
-            </Button>
+            {/* ✅ MOSTRAR CANCELAR APENAS QUANDO NÃO ESTÁ CARREGANDO */}
+            {!loading && (
+              <Button
+                type="button"
+                variant="text"
+                className="flex-1"
+                onClick={onClose}
+              >
+                Cancelar
+              </Button>
+            )}
             <Button
               type="button"
               variant="primary"
-              className="flex-1 !bg-red-500 hover:!bg-red-600"
+              className={`${loading ? 'w-full' : 'flex-1'} !bg-red-500 hover:!bg-red-600 disabled:!bg-red-400 disabled:cursor-not-allowed`}
               onClick={onConfirm}
+              disabled={loading}
             >
-              Excluir
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Aguarde um momento...
+                </div>
+              ) : (
+                'Excluir'
+              )}
             </Button>
           </div>
         </motion.div>
@@ -364,6 +377,9 @@ const ProdutosPage: React.FC = () => {
     title: '',
     message: '',
   });
+
+  // ✅ NOVO: Estado de loading para exclusão
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [cloneConfirmation, setCloneConfirmation] = useState<{
     isOpen: boolean;
@@ -4257,6 +4273,9 @@ const ProdutosPage: React.FC = () => {
   };
 
   const handleConfirmDelete = async () => {
+    // ✅ ATIVAR LOADING
+    setDeleteLoading(true);
+
     try {
       // Obter dados do usuário atual
       const { data: userData } = await supabase.auth.getUser();
@@ -4319,6 +4338,8 @@ const ProdutosPage: React.FC = () => {
     } catch (error: any) {
       showMessage('error', `Erro ao excluir ${deleteConfirmation.type}: ` + error.message);
     } finally {
+      // ✅ RESETAR LOADING E FECHAR MODAL
+      setDeleteLoading(false);
       setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
     }
   };
@@ -5381,10 +5402,27 @@ const ProdutosPage: React.FC = () => {
           <div className="flex-1 min-w-0">
             {/* Preços */}
             <div className="flex items-center gap-2 mb-0.5">
-              {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined ? (
-                <div className="flex items-center gap-2">
+              {/* ✅ OCULTAR PREÇO QUANDO FOR R$ 0,00 (produtos que usam apenas tabelas de preços) */}
+              {produto.preco > 0 ? (
+                produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <p className="text-xs text-gray-400 line-through">
+                        R$ {produto.preco.toFixed(2)}
+                      </p>
+                      {unidadeMedida && (
+                        <span className="px-1.5 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                          {unidadeMedida.sigla}
+                        </span>
+                      )}
+                    </div>
+                    <span className="px-1.5 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
+                      {descontoExibicao}
+                    </span>
+                  </div>
+                ) : (
                   <div className="flex items-center gap-1">
-                    <p className="text-xs text-gray-400 line-through">
+                    <p className="text-sm text-primary-400 font-medium">
                       R$ {produto.preco.toFixed(2)}
                     </p>
                     {unidadeMedida && (
@@ -5393,21 +5431,14 @@ const ProdutosPage: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <span className="px-1.5 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
-                    {descontoExibicao}
-                  </span>
-                </div>
+                )
               ) : (
-                <div className="flex items-center gap-1">
-                  <p className="text-sm text-primary-400 font-medium">
-                    R$ {produto.preco.toFixed(2)}
-                  </p>
-                  {unidadeMedida && (
-                    <span className="px-1.5 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
-                      {unidadeMedida.sigla}
-                    </span>
-                  )}
-                </div>
+                /* ✅ QUANDO PREÇO É R$ 0,00, MOSTRAR APENAS UNIDADE DE MEDIDA */
+                unidadeMedida && (
+                  <span className="px-1.5 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                    {unidadeMedida.sigla}
+                  </span>
+                )
               )}
             </div>
 
@@ -8703,10 +8734,15 @@ const ProdutosPage: React.FC = () => {
 
       <DeleteConfirmation
         isOpen={deleteConfirmation.isOpen}
-        onClose={() => setDeleteConfirmation(prev => ({ ...prev, isOpen: false }))}
+        onClose={() => {
+          // ✅ RESETAR LOADING AO CANCELAR
+          setDeleteLoading(false);
+          setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
+        }}
         onConfirm={handleConfirmDelete}
         title={deleteConfirmation.title}
         message={deleteConfirmation.message}
+        loading={deleteLoading} // ✅ PASSAR ESTADO DE LOADING
       />
 
       <WarningModal

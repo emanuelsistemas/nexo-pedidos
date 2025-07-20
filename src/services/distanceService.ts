@@ -50,7 +50,6 @@ class DistanceService {
       }
 
       // Fallback para Haversine se Routes API falhar
-      console.warn('Routes API falhou, usando fallback Haversine:', routesResult.error);
       const haversineResult = await this.calculateWithHaversine(origin, destination);
       
       // Cache o resultado do fallback por menos tempo
@@ -89,10 +88,7 @@ class DistanceService {
         units: 'METRIC'
       };
 
-      console.log('🚗 Calculando distância via Routes API:', {
-        origin: typeof origin === 'string' ? origin : `${origin.lat},${origin.lng}`,
-        destination: typeof destination === 'string' ? destination : `${destination.lat},${destination.lng}`
-      });
+
 
       const response = await fetch('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
         method: 'POST',
@@ -110,7 +106,6 @@ class DistanceService {
       }
 
       const data = await response.json();
-      console.log('📊 Resposta Routes API:', data);
 
       if (data.length > 0 && data[0].distanceMeters && data[0].duration) {
         const result = {
@@ -119,11 +114,6 @@ class DistanceService {
           success: true,
           method: 'routes_api' as const
         };
-
-        console.log('✅ Distância calculada via Routes API:', {
-          distance: `${(result.distance / 1000).toFixed(2)} km`,
-          duration: `${Math.round(result.duration / 60)} min`
-        });
 
         return result;
       } else {
@@ -165,11 +155,7 @@ class DistanceService {
       // Estimar duração baseada na velocidade média urbana (25 km/h)
       const duration = Math.round((realDistance / 1000) * 60 * 60 / 25);
 
-      console.log('📐 Distância calculada via Haversine:', {
-        distance: `${(realDistance / 1000).toFixed(2)} km`,
-        duration: `${Math.round(duration / 60)} min`,
-        note: 'Distância em linha reta + 35% de correção'
-      });
+
 
       return {
         distance: realDistance,
@@ -293,7 +279,6 @@ class DistanceService {
   private getFromCache(key: string): DistanceResult | null {
     const entry = this.cache.get(key);
     if (entry && Date.now() < entry.timestamp + entry.expiresIn) {
-      console.log('📦 Usando resultado do cache');
       return entry.result;
     }
     

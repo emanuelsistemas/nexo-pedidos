@@ -80,7 +80,10 @@ export default function SeletorSaboresModal({
             id,
             nome,
             codigo,
-            grupo_id
+            grupo_id,
+            deletado,
+            ativo,
+            pizza
           )
         `)
         .eq('empresa_id', usuarioData.empresa_id)
@@ -92,17 +95,54 @@ export default function SeletorSaboresModal({
         return;
       }
 
-      let sabores = produtosComPreco?.map(item => ({
-        ...item.produto,
-        preco: item.preco
-      })) || [];
+      // ✅ PROCESSAR PRODUTOS COM FILTROS CORRETOS (SAAS + SOFT DELETE)
+      let sabores = produtosComPreco
+        ?.map(item => ({
+          ...item.produto,
+          preco: item.preco
+        }))
+        .filter(produto => {
+          // Filtrar produtos nulos
+          if (!produto) return false;
 
-      // ✅ NOVO: Filtrar o produto atual da lista de sabores
+          // ✅ FILTRAR PRODUTOS DELETADOS (soft delete)
+          if (produto.deletado === true) return false;
+
+          // ✅ FILTRAR PRODUTOS INATIVOS
+          if (produto.ativo === false) return false;
+
+          // ✅ FILTRAR APENAS PRODUTOS MARCADOS COMO PIZZA
+          if (produto.pizza !== true) return false;
+
+          return true;
+        }) || [];
+
+      // ✅ FILTRAR O PRODUTO ATUAL DA LISTA DE SABORES
       if (produtoAtual) {
         sabores = sabores.filter(sabor => sabor.id !== produtoAtual.id);
         console.log(`🍕 SABORES: Produto atual "${produtoAtual.nome}" removido da lista de sabores`);
-        console.log(`🍕 SABORES: ${sabores.length} sabores disponíveis após filtro`);
       }
+
+      console.log('🍕 SABORES PDV - DEBUG DETALHADO:', {
+        empresaId: usuarioData.empresa_id,
+        tabelaId: tabelaPreco.id,
+        totalEncontrados: produtosComPreco?.length || 0,
+        produtosBrutos: produtosComPreco?.map(item => ({
+          id: item.produto?.id,
+          nome: item.produto?.nome,
+          preco: item.preco,
+          pizza: item.produto?.pizza,
+          ativo: item.produto?.ativo,
+          deletado: item.produto?.deletado
+        })),
+        saboresValidos: sabores.length,
+        saboresFiltrados: sabores.map(s => ({
+          id: s.id,
+          nome: s.nome,
+          preco: s.preco,
+          pizza: s.pizza
+        }))
+      });
 
       setSaboresDisponiveis(sabores);
     } catch (error) {

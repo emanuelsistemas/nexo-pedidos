@@ -53,16 +53,9 @@ class TaxaEntregaService {
     bairroSelecionado?: string
   ): Promise<CalculoTaxaResult | null> {
     try {
-      console.log('🚚 Iniciando cálculo de taxa de entrega:', {
-        empresaId,
-        cepDestino,
-        bairroSelecionado
-      });
-
       // 1. Buscar configuração da empresa
       const config = await this.getConfiguracao(empresaId);
       if (!config || !config.habilitado) {
-        console.log('❌ Taxa de entrega não habilitada para esta empresa');
         return null;
       }
 
@@ -95,15 +88,8 @@ class TaxaEntregaService {
         .single();
 
       if (!taxaData) {
-        console.log('❌ Bairro não encontrado na lista de entrega');
         return null;
       }
-
-      console.log('✅ Taxa calculada por bairro:', {
-        bairro,
-        valor: taxaData.valor,
-        tempo: taxaData.tempo_entrega
-      });
 
       return {
         valor: taxaData.valor,
@@ -157,8 +143,6 @@ class TaxaEntregaService {
       const faixaEncontrada = await this.buscarFaixaDistancia(config.empresa_id, distanciaKm);
 
       if (!faixaEncontrada) {
-        console.log('❌ Nenhuma faixa de distância encontrada para:', distanciaKm, 'km');
-
         // Verificar se está fora da distância máxima configurada
         if (config.distancia_maxima && distanciaKm > config.distancia_maxima) {
           return {
@@ -180,12 +164,7 @@ class TaxaEntregaService {
         return null;
       }
 
-      console.log('✅ Faixa de distância encontrada:', {
-        faixa: `Até ${faixaEncontrada.km} km`,
-        valor: `R$ ${faixaEncontrada.valor}`,
-        tempo: `${faixaEncontrada.tempo_entrega} min`,
-        distancia_real: `${distanciaKm.toFixed(2)} km`
-      });
+
 
       return {
         valor: faixaEncontrada.valor,
@@ -227,18 +206,14 @@ class TaxaEntregaService {
         return null;
       }
 
-      console.log('🔍 Faixas disponíveis:', faixas.map(f => `Até ${f.km}km: R$${f.valor} (${f.tempo_entrega}min)`));
-
       // Encontrar a primeira faixa que comporta a distância
       for (const faixa of faixas) {
         if (distanciaKm <= faixa.km) {
-          console.log(`✅ Distância ${distanciaKm.toFixed(2)}km se encaixa na faixa "Até ${faixa.km}km"`);
           return faixa;
         }
       }
 
       // Se não encontrou nenhuma faixa, está fora da área de entrega
-      console.log(`❌ Distância ${distanciaKm.toFixed(2)}km excede todas as faixas configuradas`);
       return null;
 
     } catch (error) {
@@ -352,7 +327,6 @@ class TaxaEntregaService {
 
       if (error) throw error;
 
-      console.log('✅ Endereço base atualizado:', endereco);
       return true;
     } catch (error) {
       console.error('❌ Erro ao atualizar endereço base:', error);
