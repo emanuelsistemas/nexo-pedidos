@@ -526,17 +526,17 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
 
   // Carregar sabores disponíveis
   useEffect(() => {
-    if (isOpen) {
-      carregarSaboresDisponiveis();
+    if (isOpen && tabelaPreco) {
+      carregarSaboresDisponiveis(tabelaPreco);
     }
-  }, [isOpen]);
+  }, [isOpen, tabelaPreco]);
 
   // Calcular preço quando sabores mudam
   useEffect(() => {
     calcularPreco();
   }, [saboresSelecionados, tipoPreco]);
 
-  const carregarSaboresDisponiveis = async () => {
+  const carregarSaboresDisponiveis = async (tabelaPrecoParam: TabelaPreco) => {
     try {
       setLoading(true);
 
@@ -569,8 +569,59 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
         return;
       }
 
-      // ✅ PROCESSAR PRODUTOS (já vêm filtrados da query)
-      let sabores = produtosPizza || [];
+      // ✅ BUSCAR PREÇOS DA TABELA DE PREÇOS ESPECÍFICA
+      const produtosIds = produtosPizza?.map(p => p.id) || [];
+      let precosTabela: {[produtoId: string]: number} = {};
+
+      if (produtosIds.length > 0 && tabelaPrecoParam?.id) {
+        const { data: precosData, error: precosError } = await supabase
+          .from('produto_precos')
+          .select('produto_id, preco')
+          .eq('empresa_id', empresa.id)
+          .eq('tabela_preco_id', tabelaPrecoParam.id)
+          .in('produto_id', produtosIds)
+          .gt('preco', 0); // Apenas preços maiores que 0
+
+        if (!precosError && precosData) {
+          precosData.forEach(item => {
+            precosTabela[item.produto_id] = item.preco;
+          });
+        }
+      }
+
+      // ✅ BUSCAR FOTOS DOS PRODUTOS PIZZA
+      let fotosData: any[] = [];
+
+      if (produtosIds.length > 0) {
+        const { data: fotosResult, error: fotosError } = await supabase
+          .from('produto_fotos')
+          .select('produto_id, url, principal')
+          .in('produto_id', produtosIds)
+          .eq('principal', true); // Buscar apenas a foto principal
+
+        if (!fotosError && fotosResult) {
+          fotosData = fotosResult;
+        }
+      }
+
+      // ✅ PROCESSAR PRODUTOS COM FOTOS E PREÇOS DA TABELA
+      const produtosComFotos = (produtosPizza || []).map(produto => {
+        const foto = fotosData.find(f => f.produto_id === produto.id);
+        const precoTabela = precosTabela[produto.id];
+
+        return {
+          ...produto,
+          preco: precoTabela || produto.preco, // Usar preço da tabela se disponível, senão preço padrão
+          produto_fotos: foto ? [{
+            id: foto.produto_id,
+            url: foto.url,
+            principal: true
+          }] : []
+        };
+      });
+
+      // ✅ PROCESSAR PRODUTOS (manter todos os produtos pizza, mesmo sem preço na tabela)
+      let sabores = produtosComFotos;
 
       // ✅ FILTRAR O PRODUTO ATUAL DA LISTA DE SABORES
       if (produtoAtual) {
@@ -582,15 +633,22 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
 
       console.log('🍕 CARDÁPIO - TODOS OS PRODUTOS PIZZA:', {
         empresaId: empresa.id,
-        tabelaId: tabelaPreco.id,
+        tabelaId: tabelaPrecoParam?.id,
         totalProdutosPizza: produtosPizza?.length || 0,
+        precosEncontrados: Object.keys(precosTabela).length,
+        precosTabela: precosTabela,
         produtosPizza: produtosPizza?.map(produto => ({
           id: produto.id,
           nome: produto.nome,
-          preco: produto.preco,
+          precoOriginal: produto.preco,
           pizza: produto.pizza,
           ativo: produto.ativo,
           deletado: produto.deletado
+        })),
+        produtosComFotos: produtosComFotos?.map(produto => ({
+          id: produto.id,
+          nome: produto.nome,
+          precoFinal: produto.preco
         })),
         saboresFinais: sabores.length,
         saboresFiltrados: sabores.map(s => ({
@@ -697,7 +755,7 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999]">
         <div className={`w-full h-full overflow-hidden ${
           config.modo_escuro ? 'bg-gray-800' : 'bg-white'
         }`}>
@@ -854,7 +912,7 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
 
         {/* Modal de Sabores Selecionados */}
         {modalSaboresSelecionados && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998] flex items-center justify-center p-4">
             <div className={`w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-2xl ${
               config.modo_escuro ? 'bg-gray-800' : 'bg-white'
             }`}>
@@ -10542,7 +10600,7 @@ const CardapioPublicoPage: React.FC = () => {
       )}
 
       {/* Modal de Seleção de Sabores */}
-      {dadosModalSabores && (
+      {modalSabores && dadosModalSabores && (
         <SeletorSaboresModalCardapio
           isOpen={modalSabores}
           onClose={fecharModalSabores}

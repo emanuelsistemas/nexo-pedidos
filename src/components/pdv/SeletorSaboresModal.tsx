@@ -99,8 +99,27 @@ export default function SeletorSaboresModal({
         return;
       }
 
-      // ✅ BUSCAR FOTOS DOS PRODUTOS PIZZA
+      // ✅ BUSCAR PREÇOS DA TABELA DE PREÇOS ESPECÍFICA
       const produtosIds = produtosPizza?.map(p => p.id) || [];
+      let precosTabela: {[produtoId: string]: number} = {};
+
+      if (produtosIds.length > 0 && tabelaPreco?.id) {
+        const { data: precosData, error: precosError } = await supabase
+          .from('produto_precos')
+          .select('produto_id, preco')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('tabela_preco_id', tabelaPreco.id)
+          .in('produto_id', produtosIds)
+          .gt('preco', 0); // Apenas preços maiores que 0
+
+        if (!precosError && precosData) {
+          precosData.forEach(item => {
+            precosTabela[item.produto_id] = item.preco;
+          });
+        }
+      }
+
+      // ✅ BUSCAR FOTOS DOS PRODUTOS PIZZA
       let fotosData: any[] = [];
 
       if (produtosIds.length > 0) {
@@ -115,11 +134,14 @@ export default function SeletorSaboresModal({
         }
       }
 
-      // ✅ PROCESSAR PRODUTOS COM FOTOS
+      // ✅ PROCESSAR PRODUTOS COM FOTOS E PREÇOS DA TABELA
       const produtosComFotos = (produtosPizza || []).map(produto => {
         const foto = fotosData.find(f => f.produto_id === produto.id);
+        const precoTabela = precosTabela[produto.id];
+
         return {
           ...produto,
+          preco: precoTabela || produto.preco, // Usar preço da tabela se disponível, senão preço padrão
           produto_fotos: foto ? [{
             id: foto.produto_id,
             url: foto.url,
@@ -128,8 +150,8 @@ export default function SeletorSaboresModal({
         };
       });
 
-      // ✅ PROCESSAR PRODUTOS (já vêm filtrados da query)
-      let sabores = produtosComFotos;
+      // ✅ PROCESSAR PRODUTOS (filtrar apenas os que têm preço > 0)
+      let sabores = produtosComFotos.filter(produto => produto.preco > 0);
 
       // ✅ FILTRAR O PRODUTO ATUAL DA LISTA DE SABORES
       if (produtoAtual) {
