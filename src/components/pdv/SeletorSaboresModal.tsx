@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Minus, Check } from 'lucide-react';
+import { X, Plus, Minus, Check, Package } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Produto {
@@ -8,6 +8,11 @@ interface Produto {
   preco: number;
   codigo: string;
   grupo_id: string;
+  produto_fotos?: Array<{
+    id: string;
+    url: string;
+    principal: boolean;
+  }>;
 }
 
 interface TabelaPreco {
@@ -94,8 +99,37 @@ export default function SeletorSaboresModal({
         return;
       }
 
+      // ✅ BUSCAR FOTOS DOS PRODUTOS PIZZA
+      const produtosIds = produtosPizza?.map(p => p.id) || [];
+      let fotosData: any[] = [];
+
+      if (produtosIds.length > 0) {
+        const { data: fotosResult, error: fotosError } = await supabase
+          .from('produto_fotos')
+          .select('produto_id, url, principal')
+          .in('produto_id', produtosIds)
+          .eq('principal', true); // Buscar apenas a foto principal
+
+        if (!fotosError && fotosResult) {
+          fotosData = fotosResult;
+        }
+      }
+
+      // ✅ PROCESSAR PRODUTOS COM FOTOS
+      const produtosComFotos = (produtosPizza || []).map(produto => {
+        const foto = fotosData.find(f => f.produto_id === produto.id);
+        return {
+          ...produto,
+          produto_fotos: foto ? [{
+            id: foto.produto_id,
+            url: foto.url,
+            principal: true
+          }] : []
+        };
+      });
+
       // ✅ PROCESSAR PRODUTOS (já vêm filtrados da query)
-      let sabores = produtosPizza || [];
+      let sabores = produtosComFotos;
 
       // ✅ FILTRAR O PRODUTO ATUAL DA LISTA DE SABORES
       if (produtoAtual) {
@@ -233,6 +267,19 @@ export default function SeletorSaboresModal({
     }).format(value);
   };
 
+  // Função para obter a foto principal do produto (similar ao carrinho)
+  const getFotoPrincipal = (produto: Produto) => {
+    if (!produto?.produto_fotos || produto.produto_fotos.length === 0) {
+      return null;
+    }
+
+    // Buscar foto marcada como principal
+    const fotoPrincipal = produto.produto_fotos.find((foto: any) => foto.principal);
+
+    // Se não encontrar foto principal, retornar a primeira
+    return fotoPrincipal || produto.produto_fotos[0];
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -285,11 +332,35 @@ export default function SeletorSaboresModal({
                       }`}
                       onClick={() => !jaSelecionado && podeAdicionar && adicionarSabor(produto)}
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
+                      <div className="flex items-center gap-3">
+                        {/* Foto do sabor */}
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                          {(() => {
+                            const fotoItem = getFotoPrincipal(produto);
+                            return fotoItem ? (
+                              <img
+                                src={fotoItem.url}
+                                alt={produto.nome}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package size={16} className="text-gray-500" />
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Informações do sabor */}
+                        <div className="flex-1">
                           <h4 className="text-white font-medium">{produto.nome}</h4>
                           <p className="text-gray-400 text-sm">{formatCurrency(produto.preco)}</p>
                         </div>
+
+                        {/* Indicador de selecionado */}
                         {jaSelecionado && (
                           <Check size={20} className="text-green-500" />
                         )}
@@ -310,8 +381,32 @@ export default function SeletorSaboresModal({
             <div className="space-y-3 mb-6">
               {saboresSelecionados.map((sabor, index) => (
                 <div key={index} className="p-3 bg-gray-800 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium text-sm">{sabor.produto.nome}</span>
+                  <div className="flex items-center gap-3 mb-2">
+                    {/* Foto do sabor selecionado */}
+                    <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                      {(() => {
+                        const fotoItem = getFotoPrincipal(sabor.produto);
+                        return fotoItem ? (
+                          <img
+                            src={fotoItem.url}
+                            alt={sabor.produto.nome}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package size={12} className="text-gray-500" />
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Nome do sabor */}
+                    <span className="text-white font-medium text-sm flex-1">{sabor.produto.nome}</span>
+
+                    {/* Botão remover */}
                     <button
                       onClick={() => removerSabor(index)}
                       className="text-red-400 hover:text-red-300 transition-colors"
@@ -319,7 +414,7 @@ export default function SeletorSaboresModal({
                       <X size={16} />
                     </button>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center justify-between text-sm ml-13">
                     <span className="text-gray-400">{formatCurrency(sabor.produto.preco)}</span>
                     {tabelaPreco.permite_meio_a_meio && (
                       <span className="text-primary-400 font-medium">{sabor.porcentagem}%</span>
