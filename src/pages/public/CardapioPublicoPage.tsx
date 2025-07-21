@@ -527,17 +527,42 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
   useEffect(() => {
     if (isOpen && tabelaPreco) {
       carregarSaboresDisponiveis(tabelaPreco);
+    }
+  }, [isOpen, tabelaPreco, produtoAtual]);
 
-      // ✅ PRÉ-SELECIONAR O PRODUTO ATUAL COMO PRIMEIRO SABOR
-      if (produtoAtual) {
+  // ✅ PRÉ-SELECIONAR O PRODUTO ATUAL APÓS CARREGAR SABORES (com preço correto da tabela)
+  useEffect(() => {
+    if (produtoAtual && saboresDisponiveis.length > 0 && saboresSelecionados.length === 0) {
+      // Buscar o produto atual na lista de sabores processados (com preço da tabela)
+      const produtoComPrecoCorreto = saboresDisponiveis.find(sabor => sabor.id === produtoAtual.id);
+
+      if (produtoComPrecoCorreto) {
+        const saborPrincipal: SaborSelecionado = {
+          produto: produtoComPrecoCorreto, // Usar produto com preço da tabela
+          porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
+        };
+        setSaboresSelecionados([saborPrincipal]);
+        console.log('🍕 CARDÁPIO: Produto principal pré-selecionado com preço correto:', {
+          id: produtoComPrecoCorreto.id,
+          nome: produtoComPrecoCorreto.nome,
+          precoOriginal: produtoAtual.preco,
+          precoTabela: produtoComPrecoCorreto.preco
+        });
+      } else {
+        // Se o produto atual não está na lista de sabores (sem preço válido), usar o original
         const saborPrincipal: SaborSelecionado = {
           produto: produtoAtual,
           porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
         };
         setSaboresSelecionados([saborPrincipal]);
+        console.log('🍕 CARDÁPIO: Produto principal pré-selecionado (preço original):', {
+          id: produtoAtual.id,
+          nome: produtoAtual.nome,
+          preco: produtoAtual.preco
+        });
       }
     }
-  }, [isOpen, tabelaPreco, produtoAtual]);
+  }, [saboresDisponiveis, produtoAtual, tabelaPreco]);
 
   // Calcular preço quando sabores mudam
   useEffect(() => {
@@ -628,16 +653,11 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
         };
       });
 
-      // ✅ PROCESSAR PRODUTOS (manter todos os produtos pizza, mesmo sem preço na tabela)
-      let sabores = produtosComFotos;
+      // ✅ FILTRAR APENAS PRODUTOS COM PREÇO VÁLIDO (mesma lógica do PDV)
+      let sabores = produtosComFotos.filter(produto => produto.preco > 0);
 
-      // ✅ FILTRAR O PRODUTO ATUAL DA LISTA DE SABORES
-      if (produtoAtual) {
-        const saboresAntes = sabores.length;
-        sabores = sabores.filter(sabor => sabor.id !== produtoAtual.id);
-        console.log(`🍕 CARDÁPIO: Produto atual "${produtoAtual.nome}" (ID: ${produtoAtual.id}) removido da lista`);
-        console.log(`🍕 CARDÁPIO: ${saboresAntes} → ${sabores.length} sabores após filtrar produto atual`);
-      }
+      // ✅ NÃO REMOVER O PRODUTO ATUAL - ELE DEVE ESTAR DISPONÍVEL PARA SELEÇÃO
+      // (O produto principal pode ser combinado com outros sabores)
 
       console.log('🍕 CARDÁPIO - TODOS OS PRODUTOS PIZZA:', {
         empresaId: empresa.id,
@@ -4738,10 +4758,38 @@ const CardapioPublicoPage: React.FC = () => {
       [itemId]: novoItem
     }));
 
-    // Limpar seleções do produto
-    setQuantidadesProdutos(prev => ({ ...prev, [produto.id]: 0 }));
+    // ✅ LIMPAR TODAS AS SELEÇÕES DO PRODUTO - RESET COMPLETO DO CARD
+    // Resetar quantidade selecionada (controles do card)
+    setQuantidadesSelecionadas(prev => {
+      const nova = { ...prev };
+      delete nova[produto.id];
+      return nova;
+    });
+
+    // Resetar adicionais selecionados
     setAdicionaisSelecionados(prev => ({ ...prev, [produto.id]: {} }));
-    setObservacoesSelecionadas(prev => ({ ...prev, [produto.id]: undefined }));
+
+    // Limpar observações selecionadas (consistente com outros lugares do código)
+    setObservacoesSelecionadas(prev => {
+      const nova = { ...prev };
+      delete nova[produto.id];
+      return nova;
+    });
+
+    // Limpar observações do produto
+    setObservacoesProdutos(prev => {
+      const nova = { ...prev };
+      delete nova[produto.id];
+      return nova;
+    });
+
+    // Resetar seleção da tabela de preços - volta ao estado inicial
+    setTabelasSelecionadas(prev => {
+      const nova = { ...prev };
+      delete nova[produto.id];
+      console.log('🔄 RESETANDO CARD COMPLETO para produto:', produto.nome);
+      return nova;
+    });
 
     // Feedback visual
     setItemChacoalhando(itemId);

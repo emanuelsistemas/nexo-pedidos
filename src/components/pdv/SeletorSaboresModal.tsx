@@ -54,7 +54,41 @@ export default function SeletorSaboresModal({
     if (isOpen) {
       carregarSaboresDisponiveis();
     }
-  }, [isOpen]);
+  }, [isOpen, produtoAtual, tabelaPreco]);
+
+  // ✅ PRÉ-SELECIONAR O PRODUTO ATUAL APÓS CARREGAR SABORES (com preço correto da tabela)
+  useEffect(() => {
+    if (produtoAtual && saboresDisponiveis.length > 0 && saboresSelecionados.length === 0) {
+      // Buscar o produto atual na lista de sabores processados (com preço da tabela)
+      const produtoComPrecoCorreto = saboresDisponiveis.find(sabor => sabor.id === produtoAtual.id);
+
+      if (produtoComPrecoCorreto) {
+        const saborPrincipal: SaborSelecionado = {
+          produto: produtoComPrecoCorreto, // Usar produto com preço da tabela
+          porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
+        };
+        setSaboresSelecionados([saborPrincipal]);
+        console.log('🍕 PDV: Produto principal pré-selecionado com preço correto:', {
+          id: produtoComPrecoCorreto.id,
+          nome: produtoComPrecoCorreto.nome,
+          precoOriginal: produtoAtual.preco,
+          precoTabela: produtoComPrecoCorreto.preco
+        });
+      } else {
+        // Se o produto atual não está na lista de sabores (sem preço válido), usar o original
+        const saborPrincipal: SaborSelecionado = {
+          produto: produtoAtual,
+          porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
+        };
+        setSaboresSelecionados([saborPrincipal]);
+        console.log('🍕 PDV: Produto principal pré-selecionado (preço original):', {
+          id: produtoAtual.id,
+          nome: produtoAtual.nome,
+          preco: produtoAtual.preco
+        });
+      }
+    }
+  }, [saboresDisponiveis, produtoAtual, tabelaPreco]);
 
   // Calcular preço quando sabores mudam
   useEffect(() => {
@@ -139,9 +173,15 @@ export default function SeletorSaboresModal({
         const foto = fotosData.find(f => f.produto_id === produto.id);
         const precoTabela = precosTabela[produto.id];
 
+        // ✅ GARANTIR QUE SEMPRE TENHA UM PREÇO VÁLIDO
+        let precoFinal = precoTabela || produto.preco;
+        if (precoFinal <= 0) {
+          precoFinal = produto.preco > 0 ? produto.preco : 1; // Usar preço padrão ou 1 como fallback
+        }
+
         return {
           ...produto,
-          preco: precoTabela || produto.preco, // Usar preço da tabela se disponível, senão preço padrão
+          preco: precoFinal,
           produto_fotos: foto ? [{
             id: foto.produto_id,
             url: foto.url,
@@ -150,16 +190,11 @@ export default function SeletorSaboresModal({
         };
       });
 
-      // ✅ PROCESSAR PRODUTOS (filtrar apenas os que têm preço > 0)
-      let sabores = produtosComFotos.filter(produto => produto.preco > 0);
+      // ✅ MOSTRAR TODOS OS PRODUTOS PIZZA ATIVOS (agora todos têm preço > 0)
+      let sabores = produtosComFotos;
 
-      // ✅ FILTRAR O PRODUTO ATUAL DA LISTA DE SABORES
-      if (produtoAtual) {
-        const saboresAntes = sabores.length;
-        sabores = sabores.filter(sabor => sabor.id !== produtoAtual.id);
-        console.log(`🍕 SABORES: Produto atual "${produtoAtual.nome}" (ID: ${produtoAtual.id}) removido da lista`);
-        console.log(`🍕 SABORES: ${saboresAntes} → ${sabores.length} sabores após filtrar produto atual`);
-      }
+      // ✅ NÃO REMOVER O PRODUTO ATUAL - ELE DEVE ESTAR DISPONÍVEL PARA SELEÇÃO
+      // (O produto principal pode ser combinado com outros sabores)
 
       console.log('🍕 SABORES PDV - TODOS OS PRODUTOS PIZZA:', {
         empresaId: usuarioData.empresa_id,
@@ -254,13 +289,19 @@ export default function SeletorSaboresModal({
   };
 
   const removerSabor = (index: number) => {
+    // ✅ NÃO PERMITIR REMOVER O PRIMEIRO SABOR (PRODUTO PRINCIPAL)
+    if (index === 0) {
+      console.log('🍕 PDV: Não é possível remover o produto principal');
+      return;
+    }
+
     const novosSabores = saboresSelecionados.filter((_, i) => i !== index);
-    
+
     // Redistribuir porcentagens
     if (tabelaPreco.permite_meio_a_meio && novosSabores.length > 1) {
       const porcentagemIgual = Math.floor(100 / novosSabores.length);
       const resto = 100 - (porcentagemIgual * novosSabores.length);
-      
+
       novosSabores.forEach((sabor, i) => {
         sabor.porcentagem = porcentagemIgual + (i === 0 ? resto : 0);
       });
@@ -314,8 +355,7 @@ export default function SeletorSaboresModal({
               🍕 Selecionar Sabores - {tabelaPreco.nome}
             </h2>
             <p className="text-gray-400 text-sm mt-1">
-              {tabelaPreco.permite_meio_a_meio ? 'Meio a meio permitido' : 'Sabor único'} • 
-              Máximo {tabelaPreco.quantidade_sabores} sabor{tabelaPreco.quantidade_sabores > 1 ? 'es' : ''}
+              {produtoAtual?.nome} já incluído • Selecione mais {tabelaPreco.quantidade_sabores - 1} sabor{tabelaPreco.quantidade_sabores - 1 > 1 ? 'es' : ''}
             </p>
           </div>
           <button
@@ -401,49 +441,69 @@ export default function SeletorSaboresModal({
             </h3>
 
             <div className="space-y-3 mb-6">
-              {saboresSelecionados.map((sabor, index) => (
-                <div key={index} className="p-3 bg-gray-800 rounded-lg">
-                  <div className="flex items-center gap-3 mb-2">
-                    {/* Foto do sabor selecionado */}
-                    <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
-                      {(() => {
-                        const fotoItem = getFotoPrincipal(sabor.produto);
-                        return fotoItem ? (
-                          <img
-                            src={fotoItem.url}
-                            alt={sabor.produto.nome}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Package size={12} className="text-gray-500" />
-                          </div>
-                        );
-                      })()}
+              {saboresSelecionados.map((sabor, index) => {
+                const isPrincipal = index === 0; // Primeiro sabor é o principal
+
+                return (
+                  <div key={index} className={`p-3 rounded-lg ${
+                    isPrincipal ? 'bg-blue-900/20 border border-blue-600' : 'bg-gray-800'
+                  }`}>
+                    <div className="flex items-center gap-3 mb-2">
+                      {/* Indicador de sabor principal */}
+                      {isPrincipal && (
+                        <span className="text-xs">⭐</span>
+                      )}
+
+                      {/* Foto do sabor selecionado */}
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                        {(() => {
+                          const fotoItem = getFotoPrincipal(sabor.produto);
+                          return fotoItem ? (
+                            <img
+                              src={fotoItem.url}
+                              alt={sabor.produto.nome}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package size={12} className="text-gray-500" />
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Nome do sabor */}
+                      <span className="text-white font-medium text-sm flex-1">
+                        {sabor.produto.nome}
+                        {isPrincipal && (
+                          <span className="text-xs ml-1 text-blue-400">
+                            (Principal)
+                          </span>
+                        )}
+                      </span>
+
+                      {/* Botão remover - apenas para sabores adicionais */}
+                      {!isPrincipal && (
+                        <button
+                          onClick={() => removerSabor(index)}
+                          className="text-red-400 hover:text-red-300 transition-colors"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
                     </div>
-
-                    {/* Nome do sabor */}
-                    <span className="text-white font-medium text-sm flex-1">{sabor.produto.nome}</span>
-
-                    {/* Botão remover */}
-                    <button
-                      onClick={() => removerSabor(index)}
-                      className="text-red-400 hover:text-red-300 transition-colors"
-                    >
-                      <X size={16} />
-                    </button>
+                    <div className="flex items-center justify-between text-sm ml-13">
+                      <span className="text-gray-400">{formatCurrency(sabor.produto.preco)}</span>
+                      {tabelaPreco.permite_meio_a_meio && saboresSelecionados.length > 1 && (
+                        <span className="text-primary-400 font-medium">1/{saboresSelecionados.length}</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-sm ml-13">
-                    <span className="text-gray-400">{formatCurrency(sabor.produto.preco)}</span>
-                    {tabelaPreco.permite_meio_a_meio && (
-                      <span className="text-primary-400 font-medium">{sabor.porcentagem}%</span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Resumo do Preço */}
