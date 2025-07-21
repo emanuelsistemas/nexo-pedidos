@@ -522,7 +522,6 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
   const [saboresSelecionados, setSaboresSelecionados] = useState<SaborSelecionado[]>([]);
   const [loading, setLoading] = useState(false);
   const [precoCalculado, setPrecoCalculado] = useState(0);
-  const [modalSaboresSelecionados, setModalSaboresSelecionados] = useState(false);
 
   // Carregar sabores disponíveis
   useEffect(() => {
@@ -772,37 +771,98 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
         <div className={`w-full h-full overflow-hidden ${
           config.modo_escuro ? 'bg-gray-800' : 'bg-white'
         }`}>
-        {/* Header */}
-        <div className={`flex items-center justify-between p-4 sm:p-6 border-b ${
-          config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
-        }`}>
-          <div className="flex-1 min-w-0">
-            <h2 className={`text-xl sm:text-2xl font-bold truncate ${
-              config.modo_escuro ? 'text-white' : 'text-gray-900'
-            }`}>
-              🍕 Selecionar Sabores - {tabelaPreco.nome}
-            </h2>
-            <p className={`text-sm sm:text-base mt-1 ${
-              config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-            }`}>
-              {tabelaPreco.permite_meio_a_meio ? 'Meio a meio permitido' : 'Sabor único'} •
-              Máximo {tabelaPreco.quantidade_sabores} sabor{tabelaPreco.quantidade_sabores > 1 ? 'es' : ''}
-            </p>
+          {/* Header */}
+          <div className={`flex items-center justify-between p-4 sm:p-6 border-b ${
+            config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+          }`}>
+            <div className="flex-1 min-w-0">
+              <h2 className={`text-xl sm:text-2xl font-bold truncate ${
+                config.modo_escuro ? 'text-white' : 'text-gray-900'
+              }`}>
+                🍕 Selecionar Sabores - {tabelaPreco.nome}
+              </h2>
+              <p className={`text-sm sm:text-base mt-1 ${
+                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                {tabelaPreco.permite_meio_a_meio ? 'Meio a meio permitido' : 'Sabor único'} •
+                Máximo {tabelaPreco.quantidade_sabores} sabor{tabelaPreco.quantidade_sabores > 1 ? 'es' : ''}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className={`p-3 rounded-full transition-colors ml-2 ${
+                config.modo_escuro
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <X size={24} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className={`p-3 rounded-full transition-colors ml-2 ${
-              config.modo_escuro
-                ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-            }`}
-          >
-            <X size={24} />
-          </button>
-        </div>
 
-        {/* Lista de Sabores Disponíveis - Largura Total */}
-        <div className="h-[calc(100vh-120px)] p-6 sm:p-8 overflow-y-auto">
+          {/* Sabores Selecionados - Área no topo similar ao carrinho */}
+          {saboresSelecionados.length > 0 && (
+            <div className={`p-4 border-b ${config.modo_escuro ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className={`text-lg font-semibold ${
+                  config.modo_escuro ? 'text-white' : 'text-gray-900'
+                }`}>
+                  Sabores Selecionados ({saboresSelecionados.length}/{tabelaPreco.quantidade_sabores})
+                </h3>
+                <div className={`text-lg font-bold ${
+                  config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                }`}>
+                  {formatarPreco(precoCalculado)}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {saboresSelecionados.map((sabor, index) => (
+                  <div key={index} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                    config.modo_escuro ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'
+                  }`}>
+                    <span className={`text-sm font-medium ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      {sabor.produto.nome}
+                    </span>
+                    {tabelaPreco.permite_meio_a_meio && (
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        config.modo_escuro ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                      }`}>
+                        {sabor.porcentagem}%
+                      </span>
+                    )}
+                    <button
+                      onClick={() => removerSabor(index)}
+                      className={`p-1 rounded-full transition-colors ${
+                        config.modo_escuro
+                          ? 'text-red-400 hover:bg-red-900/20'
+                          : 'text-red-600 hover:bg-red-100'
+                      }`}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Botão Confirmar */}
+              {saboresSelecionados.length > 0 && (
+                <div className="mt-4">
+                  <button
+                    onClick={confirmarSelecao}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
+                  >
+                    Confirmar Sabores ({formatarPreco(precoCalculado)})
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Lista de Sabores Disponíveis - Largura Total */}
+          <div className="h-[calc(100vh-120px)] p-6 sm:p-8 overflow-y-auto">
             <h3 className={`text-lg sm:text-xl lg:text-2xl font-semibold mb-4 sm:mb-6 ${
               config.modo_escuro ? 'text-white' : 'text-gray-900'
             }`}>
@@ -891,188 +951,7 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* Barra Inferior com Resumo e Botão */}
-          <div className={`p-6 border-t ${
-            config.modo_escuro ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-          }`}>
-            <div className="flex items-center justify-between">
-              {/* Resumo dos Sabores Selecionados */}
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className={`text-lg font-semibold ${
-                    config.modo_escuro ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Sabores: {saboresSelecionados.length}/{tabelaPreco.quantidade_sabores}
-                  </span>
-                  {saboresSelecionados.length > 0 && (
-                    <button
-                      onClick={() => setModalSaboresSelecionados(true)}
-                      className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                        config.modo_escuro
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                          : 'bg-blue-500 hover:bg-blue-600 text-white'
-                      }`}
-                    >
-                      Ver Selecionados
-                    </button>
-                  )}
-                </div>
-                {saboresSelecionados.length > 0 && (
-                  <div className={`text-sm ${
-                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                  }`}>
-                    Preço {tipoPreco === 'sabor_mais_caro' ? 'do sabor mais caro' : 'médio'}: {formatarPreco(precoCalculado)}
-                  </div>
-                )}
-              </div>
-
-              {/* Botão Confirmar */}
-              <button
-                onClick={confirmarSelecao}
-                disabled={saboresSelecionados.length === 0}
-                className={`px-8 py-3 rounded-xl font-medium text-lg transition-colors ${
-                  saboresSelecionados.length === 0
-                    ? config.modo_escuro
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : config.modo_escuro
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                Confirmar Seleção
-              </button>
-            </div>
-          </div>
         </div>
-
-        {/* Modal de Sabores Selecionados */}
-        {modalSaboresSelecionados && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998] flex items-center justify-center p-4">
-            <div className={`w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-2xl ${
-              config.modo_escuro ? 'bg-gray-800' : 'bg-white'
-            }`}>
-              {/* Header */}
-              <div className={`flex items-center justify-between p-6 border-b ${
-                config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
-              }`}>
-                <h3 className={`text-xl font-semibold ${
-                  config.modo_escuro ? 'text-white' : 'text-gray-900'
-                }`}>
-                  Sabores Selecionados ({saboresSelecionados.length}/{tabelaPreco.quantidade_sabores})
-                </h3>
-                <button
-                  onClick={() => setModalSaboresSelecionados(false)}
-                  className={`p-2 rounded-full transition-colors ${
-                    config.modo_escuro
-                      ? 'text-gray-400 hover:text-white hover:bg-gray-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              {/* Lista de Sabores */}
-              <div className="p-6 max-h-[60vh] overflow-y-auto">
-                {saboresSelecionados.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className={`text-lg ${
-                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
-                      Nenhum sabor selecionado ainda
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {saboresSelecionados.map((sabor, index) => (
-                      <div key={index} className={`p-4 rounded-xl border ${
-                        config.modo_escuro ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
-                      }`}>
-                        <div className="flex items-center gap-3 mb-2">
-                          {/* Foto do sabor selecionado */}
-                          <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-gray-700 flex-shrink-0">
-                            {(() => {
-                              const fotoItem = getFotoPrincipal(sabor.produto);
-                              return fotoItem ? (
-                                <img
-                                  src={fotoItem.url}
-                                  alt={sabor.produto.nome}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <Package size={16} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
-                                </div>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Nome do sabor */}
-                          <h4 className={`font-medium text-lg flex-1 ${
-                            config.modo_escuro ? 'text-white' : 'text-gray-900'
-                          }`}>
-                            {sabor.produto.nome}
-                          </h4>
-
-                          {/* Botão remover */}
-                          <button
-                            onClick={() => removerSabor(index)}
-                            className={`p-2 rounded-full transition-colors ${
-                              config.modo_escuro
-                                ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20'
-                                : 'text-red-500 hover:text-red-700 hover:bg-red-50'
-                            }`}
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className={`text-base ${
-                            config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                            {formatarPreco(sabor.produto.preco)}
-                          </span>
-                          {tabelaPreco.permite_meio_a_meio && (
-                            <span className={`font-medium text-lg ${
-                              config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
-                            }`}>
-                              {sabor.porcentagem}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Footer com Resumo */}
-              {saboresSelecionados.length > 0 && (
-                <div className={`p-6 border-t ${
-                  config.modo_escuro ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-                }`}>
-                  <div className="text-center">
-                    <p className={`text-base mb-2 ${
-                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
-                      Preço {tipoPreco === 'sabor_mais_caro' ? 'do sabor mais caro' : 'médio'}
-                    </p>
-                    <p className={`text-2xl font-bold ${
-                      config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
-                    }`}>
-                      {formatarPreco(precoCalculado)}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </>
   );
@@ -9131,7 +9010,38 @@ const CardapioPublicoPage: React.FC = () => {
                                 ? 'bg-gray-700/50 text-gray-300'
                                 : 'bg-gray-100 text-gray-600'
                             }`}>
-                              <span className="font-medium">Obs:</span> {observacao}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <span className="font-medium">Obs:</span> {observacao}
+                                </div>
+                                <button
+                                  onClick={() => abrirModalObservacao(produto.id, itemId)}
+                                  className={`p-1 rounded-full transition-colors flex-shrink-0 ${
+                                    config.modo_escuro
+                                      ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-600'
+                                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                                  }`}
+                                  title="Editar observação"
+                                >
+                                  <Edit size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Botão para adicionar observação quando não existe */}
+                          {!observacao && (
+                            <div className="mt-2">
+                              <button
+                                onClick={() => abrirModalObservacao(produto.id, itemId)}
+                                className={`w-full p-2 rounded-lg border-2 border-dashed transition-colors text-xs ${
+                                  config.modo_escuro
+                                    ? 'border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
+                                    : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                + Adicionar observação
+                              </button>
                             </div>
                           )}
 
