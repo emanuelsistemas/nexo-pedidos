@@ -17251,7 +17251,7 @@ const PDVPage: React.FC = () => {
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Produto"
+                      placeholder="Pesquisar produtos por nome ou código..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       onKeyDown={(e) => {
@@ -17296,7 +17296,7 @@ const PDVPage: React.FC = () => {
                       autoFocus
                       className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-12 text-white placeholder-gray-300 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                     />
-                    <QrCode size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+                    <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
 
                     {/* ✅ CORRIGIDO: Posicionamento inteligente dos indicadores */}
                     {/* Indicador de quantidade - posição dinâmica */}

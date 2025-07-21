@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Minus, Check, Package } from 'lucide-react';
+import { X, Plus, Minus, Check, Package, Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface Produto {
@@ -48,6 +48,7 @@ export default function SeletorSaboresModal({
   const [saboresSelecionados, setSaboresSelecionados] = useState<SaborSelecionado[]>([]);
   const [loading, setLoading] = useState(false);
   const [precoCalculado, setPrecoCalculado] = useState(0);
+  const [termoPesquisa, setTermoPesquisa] = useState('');
 
   // Carregar sabores disponíveis
   useEffect(() => {
@@ -330,6 +331,12 @@ export default function SeletorSaboresModal({
     }).format(value);
   };
 
+  // Filtrar sabores por termo de pesquisa
+  const saboresFiltrados = saboresDisponiveis.filter(produto =>
+    produto.nome.toLowerCase().includes(termoPesquisa.toLowerCase()) ||
+    produto.codigo.toLowerCase().includes(termoPesquisa.toLowerCase())
+  );
+
   // Função para obter a foto principal do produto (similar ao carrinho)
   const getFotoPrincipal = (produto: Produto) => {
     if (!produto?.produto_fotos || produto.produto_fotos.length === 0) {
@@ -347,7 +354,7 @@ export default function SeletorSaboresModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
+      <div className="bg-gray-800 rounded-lg w-full max-w-6xl h-[95vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div>
@@ -366,19 +373,43 @@ export default function SeletorSaboresModal({
           </button>
         </div>
 
-        <div className="flex h-[calc(90vh-200px)]">
+        <div className="flex flex-1 min-h-0">
           {/* Lista de Sabores Disponíveis */}
-          <div className="flex-1 p-6 overflow-y-auto">
+          <div className="flex-1 p-6 overflow-y-auto flex flex-col">
             <h3 className="text-lg font-semibold text-white mb-4">Sabores Disponíveis</h3>
+
+            {/* Campo de Pesquisa */}
+            <div className="relative mb-4">
+              <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Pesquisar sabores..."
+                value={termoPesquisa}
+                onChange={(e) => setTermoPesquisa(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+              />
+            </div>
             
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto"></div>
                 <p className="text-gray-400 mt-2">Carregando sabores...</p>
               </div>
+            ) : saboresFiltrados.length === 0 ? (
+              <div className="text-center py-8">
+                <Package size={48} className="text-gray-500 mx-auto mb-4" />
+                <p className="text-gray-400">
+                  {termoPesquisa ? 'Nenhum sabor encontrado para a pesquisa' : 'Nenhum sabor disponível'}
+                </p>
+                {termoPesquisa && (
+                  <p className="text-gray-500 text-sm mt-2">
+                    Tente pesquisar por outro termo
+                  </p>
+                )}
+              </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3">
-                {saboresDisponiveis.map((produto) => {
+              <div className="grid grid-cols-1 gap-3 flex-1 overflow-y-auto">
+                {saboresFiltrados.map((produto) => {
                   const jaSelecionado = saboresSelecionados.some(s => s.produto.id === produto.id);
                   const podeAdicionar = saboresSelecionados.length < tabelaPreco.quantidade_sabores;
                   
@@ -435,7 +466,7 @@ export default function SeletorSaboresModal({
           </div>
 
           {/* Sabores Selecionados */}
-          <div className="w-80 bg-gray-900 p-6 border-l border-gray-700">
+          <div className="w-80 bg-gray-900 p-6 border-l border-gray-700 flex flex-col">
             <h3 className="text-lg font-semibold text-white mb-4">
               Sabores Selecionados ({saboresSelecionados.length}/{tabelaPreco.quantidade_sabores})
             </h3>
