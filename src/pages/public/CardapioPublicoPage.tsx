@@ -1386,6 +1386,10 @@ const CardapioPublicoPage: React.FC = () => {
   // Estados para preços dos adicionais por tabela
   const [adicionaisPrecos, setAdicionaisPrecos] = useState<{[adicionalId: string]: {[tabelaId: string]: number}}>({});
 
+  // Estados para sabores selecionados e seus preços
+  const [saboresSelecionados, setSaboresSelecionados] = useState<{[produtoId: string]: SaborSelecionado[]}>({});
+  const [precosSabores, setPrecosSabores] = useState<{[produtoId: string]: number}>({});
+
   // Funções para observações
   const abrirModalObservacao = (produtoId: string, itemId?: string) => {
     setProdutoObservacaoAtual(itemId || produtoId);
@@ -3370,16 +3374,22 @@ const CardapioPublicoPage: React.FC = () => {
       if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
         const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
         if (tabelaEscolhida && tabelaEscolhida.quantidade_sabores > 1) {
-          // Produto precisa de seleção de sabores - abrir modal
-          const tabelaPreco: TabelaPreco = {
-            id: tabelaEscolhida.id,
-            nome: tabelaEscolhida.nome,
-            quantidade_sabores: tabelaEscolhida.quantidade_sabores,
-            permite_meio_a_meio: true // Assumir que permite meio a meio por padrão
-          };
+          // ✅ VERIFICAR SE SABORES JÁ FORAM SELECIONADOS
+          const saboresDoProduto = saboresSelecionados[produtoId];
 
-          abrirModalSabores(produto!, tabelaPreco, quantidadeSelecionada);
-          return;
+          if (!saboresDoProduto || saboresDoProduto.length === 0) {
+            // Produto precisa de seleção de sabores - abrir modal
+            const tabelaPreco: TabelaPreco = {
+              id: tabelaEscolhida.id,
+              nome: tabelaEscolhida.nome,
+              quantidade_sabores: tabelaEscolhida.quantidade_sabores,
+              permite_meio_a_meio: true // Assumir que permite meio a meio por padrão
+            };
+
+            abrirModalSabores(produto!, tabelaPreco, quantidadeSelecionada);
+            return;
+          }
+          // Se sabores já foram selecionados, continua para adicionar ao carrinho
         }
       }
 
@@ -3388,14 +3398,27 @@ const CardapioPublicoPage: React.FC = () => {
 
       // ✅ CALCULAR PREÇO COM DESCONTO POR QUANTIDADE (considerando tabela de preço + promoções + desconto por quantidade)
       const produto = produtos.find(p => p.id === produtoId);
-      const precoProduto = produto ? calcularPrecoComDescontoQuantidade(produto, quantidadeSelecionada) : 0;
+
+      // ✅ VERIFICAR SE TEM SABORES SELECIONADOS E USAR SEU PREÇO
+      const saboresDoProduto = saboresSelecionados[produtoId];
+      const precoSabores = precosSabores[produtoId];
+
+      let precoProduto;
+      if (saboresDoProduto && saboresDoProduto.length > 0 && precoSabores) {
+        // Usar preço calculado dos sabores
+        precoProduto = precoSabores;
+      } else {
+        // Usar preço normal com desconto por quantidade
+        precoProduto = produto ? calcularPrecoComDescontoQuantidade(produto, quantidadeSelecionada) : 0;
+      }
 
       // Criar item separado no carrinho
       const novoItem = {
         produtoId,
         quantidade: quantidadeSelecionada,
-        precoProduto: precoProduto, // ✅ SALVAR PREÇO DA TABELA SELECIONADA
+        precoProduto: precoProduto, // ✅ SALVAR PREÇO DA TABELA SELECIONADA OU DOS SABORES
         tabelaPrecoId: tabelaSelecionadaId, // ✅ SALVAR ID DA TABELA PARA REFERÊNCIA
+        sabores: saboresDoProduto ? [...saboresDoProduto] : undefined, // ✅ INCLUIR SABORES SE EXISTIREM
         adicionais: adicionaisSelecionados[produtoId] ? { ...adicionaisSelecionados[produtoId] } : {},
         observacao: observacoesSelecionadas[produtoId],
         ordemAdicao: Date.now()
@@ -3413,6 +3436,19 @@ const CardapioPublicoPage: React.FC = () => {
       // Limpar quantidade e observação selecionadas
       alterarQuantidadeSelecionada(produtoId, 0);
       setObservacoesSelecionadas(prev => {
+        const nova = { ...prev };
+        delete nova[produtoId];
+        return nova;
+      });
+
+      // ✅ LIMPAR SABORES SELECIONADOS
+      setSaboresSelecionados(prev => {
+        const nova = { ...prev };
+        delete nova[produtoId];
+        return nova;
+      });
+
+      setPrecosSabores(prev => {
         const nova = { ...prev };
         delete nova[produtoId];
         return nova;
@@ -4765,7 +4801,7 @@ const CardapioPublicoPage: React.FC = () => {
   const confirmarSabores = (sabores: SaborSelecionado[], precoCalculado: number) => {
     if (!dadosModalSabores) return;
 
-    const { produto, quantidadeSelecionada } = dadosModalSabores;
+    const { produto } = dadosModalSabores;
 
     console.log('🍕 CONFIRMANDO SABORES:', {
       produto: produto.nome,
@@ -4775,74 +4811,32 @@ const CardapioPublicoPage: React.FC = () => {
       saboresDetalhados: sabores.map(s => ({ nome: s.produto.nome, porcentagem: s.porcentagem }))
     });
 
-    // Criar item no carrinho com sabores
-    const itemId = `${produto.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    const novoItem = {
-      produtoId: produto.id,
-      quantidade: quantidadeSelecionada,
-      precoProduto: precoCalculado,
-      tabelaPrecoId: dadosModalSabores.tabelaPreco.id,
-      sabores: sabores,
-      adicionais: adicionaisSelecionados[produto.id] ? { ...adicionaisSelecionados[produto.id] } : {},
-      observacao: observacoesSelecionadas[produto.id],
-      ordemAdicao: Date.now()
-    };
-
-    console.log('🛒 NOVO ITEM CRIADO:', novoItem);
-
-    // Adicionar ao carrinho
-    setItensCarrinhoSeparados(prev => ({
+    // ✅ NOVO FLUXO: Voltar para o card com quantidade 1 e sabores selecionados
+    // Definir quantidade como 1 no card
+    setQuantidadesSelecionadas(prev => ({
       ...prev,
-      [itemId]: novoItem
+      [produto.id]: 1
     }));
 
-    // ✅ LIMPAR TODAS AS SELEÇÕES DO PRODUTO - RESET COMPLETO DO CARD
-    // Resetar quantidade selecionada (controles do card)
-    setQuantidadesSelecionadas(prev => {
-      const nova = { ...prev };
-      delete nova[produto.id];
-      return nova;
-    });
+    // Salvar sabores selecionados para este produto
+    setSaboresSelecionados(prev => ({
+      ...prev,
+      [produto.id]: sabores
+    }));
 
-    // Resetar adicionais selecionados
-    setAdicionaisSelecionados(prev => ({ ...prev, [produto.id]: {} }));
+    // Salvar preço calculado dos sabores
+    setPrecosSabores(prev => ({
+      ...prev,
+      [produto.id]: precoCalculado
+    }));
 
-    // Limpar observações selecionadas (consistente com outros lugares do código)
-    setObservacoesSelecionadas(prev => {
-      const nova = { ...prev };
-      delete nova[produto.id];
-      return nova;
-    });
-
-    // Limpar observações do produto
-    setObservacoesProdutos(prev => {
-      const nova = { ...prev };
-      delete nova[produto.id];
-      return nova;
-    });
-
-    // Resetar seleção da tabela de preços - volta ao estado inicial
-    setTabelasSelecionadas(prev => {
-      const nova = { ...prev };
-      delete nova[produto.id];
-      console.log('🔄 RESETANDO CARD COMPLETO para produto:', produto.nome);
-      return nova;
-    });
-
-    // Feedback visual
-    setItemChacoalhando(itemId);
-    setTimeout(() => setItemChacoalhando(null), 800);
-
-    // Abrir carrinho se estava fechado
-    if (!carrinhoAberto) {
-      setCarrinhoAberto(true);
-    }
+    // Manter a tabela de preços selecionada
+    // (não resetar tabelasSelecionadas para manter a seleção)
 
     // Fechar modal
     fecharModalSabores();
 
-    showMessage('success', `${produto.nome} adicionado ao carrinho com sabores!`);
+    showMessage('success', `Sabores selecionados! Agora configure adicionais e observações.`);
   };
 
   // Funções auxiliares para o modal de configuração

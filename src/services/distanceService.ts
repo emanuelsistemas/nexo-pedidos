@@ -81,14 +81,11 @@ class DistanceService {
       }
 
       const requestBody = {
-        origins: [this.formatLocation(origin)],
-        destinations: [this.formatLocation(destination)],
+        origins: [this.formatLocationForRoutesAPI(origin)],
+        destinations: [this.formatLocationForRoutesAPI(destination)],
         travelMode: 'DRIVE',
-        routingPreference: 'TRAFFIC_AWARE',
-        units: 'METRIC'
+        routingPreference: 'TRAFFIC_AWARE'
       };
-
-
 
       const response = await fetch('https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix', {
         method: 'POST',
@@ -254,7 +251,31 @@ class DistanceService {
   }
 
   /**
-   * Formata localização para a API
+   * Formata localização para a API Routes v2 (formato correto)
+   */
+  private formatLocationForRoutesAPI(location: string | Coordinates) {
+    if (typeof location === 'string') {
+      return {
+        waypoint: {
+          address: location
+        }
+      };
+    } else {
+      return {
+        waypoint: {
+          location: {
+            latLng: {
+              latitude: location.lat,
+              longitude: location.lng
+            }
+          }
+        }
+      };
+    }
+  }
+
+  /**
+   * Formata localização para a API (método legado - manter para compatibilidade)
    */
   private formatLocation(location: string | Coordinates) {
     if (typeof location === 'string') {

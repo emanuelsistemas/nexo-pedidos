@@ -135,7 +135,7 @@ const AdicionaisPage: React.FC = () => {
     });
   };
 
-  // Função para formatar valor monetário
+  // Função para formatar valor monetário (sem símbolo R$)
   const formatarValorMonetario = (valor: string): string => {
     // Remove todos os caracteres não numéricos
     let valorLimpo = valor.replace(/\D/g, '');
@@ -146,10 +146,10 @@ const AdicionaisPage: React.FC = () => {
     // Converte para número (centavos)
     const valorNumerico = parseInt(valorLimpo) / 100;
 
-    // Formata como moeda brasileira
+    // Formata apenas o número sem símbolo da moeda
     return valorNumerico.toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     });
   };
 
@@ -256,7 +256,7 @@ const AdicionaisPage: React.FC = () => {
 
       if (configData?.trabalha_com_tabela_precos) {
         setTrabalhaComTabelaPrecos(true);
-        console.log('Debug - Empresa trabalha com tabelas de preços');
+
 
         // Carregar tabelas de preços ativas
         const { data: tabelasData, error: tabelasError } = await supabase
@@ -272,10 +272,10 @@ const AdicionaisPage: React.FC = () => {
           return;
         }
 
-        console.log('Debug - Tabelas de preços carregadas:', tabelasData);
+
         setTabelasPrecos(tabelasData || []);
       } else {
-        console.log('Debug - Empresa NÃO trabalha com tabelas de preços');
+
         setTrabalhaComTabelaPrecos(false);
         setTabelasPrecos([]);
       }
@@ -304,7 +304,7 @@ const AdicionaisPage: React.FC = () => {
         return;
       }
 
-      console.log('Usuário logado:', userData.user.id);
+
 
       const { data: usuarioData, error: usuarioError } = await supabase
         .from('usuarios')
@@ -324,7 +324,7 @@ const AdicionaisPage: React.FC = () => {
         return;
       }
 
-      console.log('Empresa ID:', usuarioData.empresa_id);
+
 
       // Carregar configurações de tabelas de preços PRIMEIRO
       await carregarConfiguracoesTabelaPrecos();
@@ -345,7 +345,7 @@ const AdicionaisPage: React.FC = () => {
         return;
       }
 
-      console.log('Dados brutos das opções:', opcoesData);
+
 
       // Filtrar itens não deletados no lado do cliente
       const opcoesFiltered = opcoesData?.map(opcao => ({
@@ -353,7 +353,7 @@ const AdicionaisPage: React.FC = () => {
         itens: opcao.itens?.filter((item: any) => !item.deletado) || []
       })) || [];
 
-      console.log('Opções filtradas:', opcoesFiltered);
+
       setOpcoes(opcoesFiltered);
 
       // Carregar preços dos adicionais para exibição nos cards
@@ -376,9 +376,9 @@ const AdicionaisPage: React.FC = () => {
   // Função para carregar todos os preços dos adicionais para exibição nos cards
   const carregarTodosPrecosAdicionais = async () => {
     try {
-      console.log('Debug - carregarTodosPrecosAdicionais:', { trabalhaComTabelaPrecos, tabelasPrecos: tabelasPrecos.length });
+
       if (!trabalhaComTabelaPrecos || tabelasPrecos.length === 0) {
-        console.log('Debug - Não carregando preços: empresa não trabalha com tabelas ou não há tabelas');
+
         setAdicionaisPrecos({});
         return;
       }
@@ -406,7 +406,7 @@ const AdicionaisPage: React.FC = () => {
         return;
       }
 
-      console.log('Debug - Preços dos adicionais carregados:', precosData);
+
 
       // Organizar preços por item adicional
       const precosMap: {[key: string]: {[key: string]: number}} = {};
@@ -417,7 +417,7 @@ const AdicionaisPage: React.FC = () => {
         precosMap[item.adicional_item_id][item.tabela_preco_id] = item.preco;
       });
 
-      console.log('Debug - Preços organizados:', precosMap);
+
       setAdicionaisPrecos(precosMap);
     } catch (error) {
       console.error('Erro ao carregar preços dos adicionais:', error);
@@ -534,7 +534,7 @@ const AdicionaisPage: React.FC = () => {
 
         if (error) throw error;
 
-        console.log(`✅ Salvos ${precosParaInserir.length} preços de tabelas para o item ${itemId}`);
+
       }
 
     } catch (error) {
@@ -586,7 +586,7 @@ const AdicionaisPage: React.FC = () => {
   // Função para obter tabelas de preços com valores válidos para um item adicional
   const obterTabelasComPrecos = (itemId: string): Array<{id: string; nome: string; preco: number}> => {
     if (!trabalhaComTabelaPrecos || tabelasPrecos.length === 0) {
-      console.log('Debug - obterTabelasComPrecos:', { trabalhaComTabelaPrecos, tabelasPrecos: tabelasPrecos.length });
+
       return [];
     }
 
@@ -598,7 +598,7 @@ const AdicionaisPage: React.FC = () => {
       }))
       .filter(tabela => tabela.preco > 0); // Apenas tabelas com preço > 0
 
-    console.log('Debug - obterTabelasComPrecos resultado:', { itemId, adicionaisPrecos: adicionaisPrecos[itemId], resultado });
+
     return resultado;
   };
 
@@ -1067,9 +1067,11 @@ const AdicionaisPage: React.FC = () => {
                                   {/* Nome e preço na mesma linha */}
                                   <div className="flex items-center justify-between">
                                     <span className="text-white font-medium truncate">{item.nome}</span>
-                                    <span className="text-primary-400 font-medium ml-2 flex-shrink-0">
-                                      R$ {item.preco.toFixed(2)}
-                                    </span>
+                                    {item.preco > 0 && (
+                                      <span className="text-primary-400 font-medium ml-2 flex-shrink-0">
+                                        R$ {item.preco.toFixed(2)}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
 
