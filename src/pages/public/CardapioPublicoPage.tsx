@@ -5382,6 +5382,21 @@ const CardapioPublicoPage: React.FC = () => {
 
   return (
     <>
+      {/* Modal de Seleção de Sabores - Renderizado no nível mais alto */}
+      {modalSabores && dadosModalSabores && (
+        <SeletorSaboresModalCardapio
+          isOpen={modalSabores}
+          onClose={fecharModalSabores}
+          tabelaPreco={dadosModalSabores.tabelaPreco}
+          onConfirmar={confirmarSabores}
+          tipoPreco={dadosModalSabores.tipoPreco}
+          produtoAtual={dadosModalSabores.produto}
+          config={config}
+          formatarPreco={formatarPreco}
+          empresa={empresa}
+        />
+      )}
+
       {/* Estilos CSS customizados para animação de entrada suave */}
       <style>{`
         @keyframes itemCaindo {
@@ -10636,20 +10651,6 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Seleção de Sabores */}
-      {modalSabores && dadosModalSabores && (
-        <SeletorSaboresModalCardapio
-          isOpen={modalSabores}
-          onClose={fecharModalSabores}
-          tabelaPreco={dadosModalSabores.tabelaPreco}
-          onConfirmar={confirmarSabores}
-          tipoPreco={dadosModalSabores.tipoPreco}
-          produtoAtual={dadosModalSabores.produto}
-          config={config}
-          formatarPreco={formatarPreco}
-          empresa={empresa} // ✅ PASSAR EMPRESA PARA O MODAL
-        />
-      )}
     </div>
     </>
   );
