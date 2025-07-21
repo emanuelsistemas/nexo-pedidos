@@ -47,6 +47,7 @@ import { toast } from 'react-toastify';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import { formatarPreco } from '../../utils/formatters';
 import { EVENT_TYPES, contarPedidosPendentes, PedidoEventData, RecarregarEventData } from '../../utils/eventSystem';
+import { useCardapioDigitalNotifications } from '../../hooks/useCardapioDigitalNotifications';
 import Sidebar from '../../components/dashboard/Sidebar';
 import { useSidebarStore } from '../../store/sidebarStore';
 import OpcoesAdicionaisModal from '../../components/pdv/OpcoesAdicionaisModal';
@@ -184,6 +185,19 @@ const PDVPage: React.FC = () => {
   const [pdvConfig, setPdvConfig] = useState<any>(null);
   const [empresaData, setEmpresaData] = useState<any>(null);
 
+  // ✅ HOOK PARA NOTIFICAÇÕES DO CARDÁPIO DIGITAL
+  const {
+    pedidosPendentes: pedidosCardapio,
+    contadorPendentes: contadorCardapio,
+    isLoading: loadingCardapio,
+    aceitarPedido,
+    rejeitarPedido,
+    recarregarPedidos: recarregarPedidosCardapio
+  } = useCardapioDigitalNotifications({
+    empresaId: empresaData?.id || '',
+    enabled: pdvConfig?.cardapio_digital === true
+  });
+
   // Estados para os modais do menu PDV
   const [showPedidosModal, setShowPedidosModal] = useState(false);
   const [showMesasModal, setShowMesasModal] = useState(false);
@@ -198,6 +212,7 @@ const PDVPage: React.FC = () => {
   const valorVendaSemProdutoRef = useRef<HTMLInputElement>(null);
   const [showMovimentosModal, setShowMovimentosModal] = useState(false);
   const [showDescontoTotalModal, setShowDescontoTotalModal] = useState(false);
+  const [showCardapioDigitalModal, setShowCardapioDigitalModal] = useState(false);
   const [descontoTotal, setDescontoTotal] = useState(0);
   const [tipoDescontoTotal, setTipoDescontoTotal] = useState<'percentual' | 'valor'>('percentual');
   const [descontoGlobal, setDescontoGlobal] = useState(0);
@@ -1198,8 +1213,7 @@ const PDVPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
         }
-        // TODO: Implementar funcionalidade do cardápio digital
-        toast.info('Funcionalidade do Cardápio Digital em desenvolvimento');
+        setShowCardapioDigitalModal(true);
       }
     },
     {
@@ -12118,6 +12132,14 @@ const PDVPage: React.FC = () => {
                                 {contadorPedidosPendentes > 99 ? '99+' : contadorPedidosPendentes}
                               </div>
                             )}
+                            {/* Contador de pedidos do cardápio digital - só aparece no botão Cardápio Digital */}
+                            {item.id === 'cardapio-digital' && contadorCardapio > 0 && (
+                              <div className={`absolute -top-3 -right-10 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60] ${
+                                contadorCardapio > 0 ? 'bg-orange-500 animate-pulse' : 'bg-gray-500'
+                              }`}>
+                                {contadorCardapio > 99 ? '99+' : contadorCardapio}
+                              </div>
+                            )}
                             {/* Contador de NFC-e pendentes - só aparece no botão Movimentos */}
                             {item.id === 'movimentos' && contadorNfcePendentes > 0 && (
                               <div className="absolute -top-3 -right-10 bg-yellow-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
@@ -19644,6 +19666,137 @@ const PDVPage: React.FC = () => {
                 >
                   Confirmar Recebimento
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal do Cardápio Digital */}
+      <AnimatePresence>
+        {showCardapioDigitalModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full h-full bg-background-card flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-700">
+                <div className="flex items-center gap-3">
+                  <BookOpen size={24} className="text-orange-500" />
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Cardápio Digital</h2>
+                    <p className="text-gray-400 text-sm">
+                      {contadorCardapio > 0 ? `${contadorCardapio} pedido${contadorCardapio > 1 ? 's' : ''} pendente${contadorCardapio > 1 ? 's' : ''}` : 'Nenhum pedido pendente'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCardapioDigitalModal(false)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* Conteúdo */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* Lista de Pedidos */}
+                <div className="w-1/3 border-r border-gray-700 flex flex-col">
+                  <div className="p-4 border-b border-gray-700">
+                    <h3 className="font-semibold text-white mb-2">Pedidos Pendentes</h3>
+                    <button
+                      onClick={recarregarPedidosCardapio}
+                      disabled={loadingCardapio}
+                      className="text-sm text-orange-400 hover:text-orange-300 disabled:opacity-50"
+                    >
+                      {loadingCardapio ? 'Carregando...' : '🔄 Atualizar'}
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto">
+                    {pedidosCardapio.length === 0 ? (
+                      <div className="p-6 text-center text-gray-400">
+                        <BookOpen size={48} className="mx-auto mb-3 opacity-50" />
+                        <p>Nenhum pedido pendente</p>
+                        <p className="text-sm mt-1">Os novos pedidos aparecerão aqui</p>
+                      </div>
+                    ) : (
+                      <div className="p-4 space-y-3">
+                        {pedidosCardapio.map((pedido) => (
+                          <div
+                            key={pedido.id}
+                            className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-orange-500/50 transition-colors"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <h4 className="font-semibold text-white">#{pedido.numero_pedido}</h4>
+                                <p className="text-sm text-gray-400">{pedido.nome_cliente}</p>
+                                <p className="text-xs text-gray-500">{pedido.telefone_cliente}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-bold text-green-400">{formatarPreco(pedido.valor_total)}</p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(pedido.data_pedido).toLocaleTimeString('pt-BR', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mb-3">
+                              <p className="text-xs text-gray-400 mb-1">Itens:</p>
+                              <div className="text-sm text-gray-300">
+                                {pedido.itens_pedido?.slice(0, 2).map((item: any, index: number) => (
+                                  <div key={index} className="truncate">
+                                    {item.quantidade}x {item.produto_nome}
+                                  </div>
+                                ))}
+                                {pedido.itens_pedido?.length > 2 && (
+                                  <div className="text-xs text-gray-500">
+                                    +{pedido.itens_pedido.length - 2} item(s)
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => aceitarPedido(pedido.id)}
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm py-2 px-3 rounded transition-colors"
+                              >
+                                ✅ Aceitar
+                              </button>
+                              <button
+                                onClick={() => rejeitarPedido(pedido.id)}
+                                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm py-2 px-3 rounded transition-colors"
+                              >
+                                ❌ Rejeitar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Área de Detalhes */}
+                <div className="flex-1 flex items-center justify-center bg-gray-800/30">
+                  <div className="text-center text-gray-400">
+                    <BookOpen size={64} className="mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-semibold mb-2">Selecione um pedido</h3>
+                    <p className="text-sm">Clique em um pedido para ver os detalhes</p>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </motion.div>
