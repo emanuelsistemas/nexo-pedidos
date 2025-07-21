@@ -2649,6 +2649,30 @@ const CardapioPublicoPage: React.FC = () => {
     }).format(preco);
   };
 
+  // Função para formatar sabores de forma compacta (similar ao PDV)
+  const formatarSaboresCompacto = (sabores: SaborSelecionado[]) => {
+    console.log('🍕 FORMATANDO SABORES:', sabores);
+
+    if (!sabores || sabores.length === 0) {
+      console.log('🍕 SABORES VAZIOS OU NULOS');
+      return '';
+    }
+
+    if (sabores.length === 1) {
+      console.log('🍕 SABOR ÚNICO:', sabores[0].produto.nome);
+      return sabores[0].produto.nome;
+    }
+
+    // Para múltiplos sabores, mostrar com porcentagem
+    const resultado = sabores.map(sabor => {
+      const fracao = sabor.porcentagem === 50 ? '1/2' : `${sabor.porcentagem}%`;
+      return `${fracao} ${sabor.produto.nome}`;
+    }).join(', ');
+
+    console.log('🍕 MÚLTIPLOS SABORES FORMATADOS:', resultado);
+    return resultado;
+  };
+
   // Função para formatar quantidade baseada na unidade de medida (similar ao PDV)
   const formatarQuantidade = (quantidade: number, unidadeMedida?: any) => {
     // Se a unidade de medida permite fracionamento, mostrar 3 casas decimais
@@ -3289,6 +3313,17 @@ const CardapioPublicoPage: React.FC = () => {
       setObservacoesSelecionadas(prev => {
         const nova = { ...prev };
         delete nova[produtoId];
+        return nova;
+      });
+
+      // ✅ LIMPAR TABELA DE PREÇOS SELECIONADA PARA RESETAR O CARD
+      console.log('🧹 ANTES DA LIMPEZA - Tabelas selecionadas:', tabelasSelecionadas);
+      console.log('🧹 LIMPANDO TABELA PARA PRODUTO:', produtoId);
+
+      setTabelasSelecionadas(prev => {
+        const nova = { ...prev };
+        delete nova[produtoId];
+        console.log('🧹 APÓS LIMPEZA - Nova estrutura:', nova);
         return nova;
       });
 
@@ -4634,6 +4669,14 @@ const CardapioPublicoPage: React.FC = () => {
 
     const { produto, quantidadeSelecionada } = dadosModalSabores;
 
+    console.log('🍕 CONFIRMANDO SABORES:', {
+      produto: produto.nome,
+      sabores: sabores,
+      quantidadeSabores: sabores.length,
+      precoCalculado,
+      saboresDetalhados: sabores.map(s => ({ nome: s.produto.nome, porcentagem: s.porcentagem }))
+    });
+
     // Criar item no carrinho com sabores
     const itemId = `${produto.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -4647,6 +4690,8 @@ const CardapioPublicoPage: React.FC = () => {
       observacao: observacoesSelecionadas[produto.id],
       ordemAdicao: Date.now()
     };
+
+    console.log('🛒 NOVO ITEM CRIADO:', novoItem);
 
     // Adicionar ao carrinho
     setItensCarrinhoSeparados(prev => ({
@@ -5163,7 +5208,19 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Função para calcular preço com desconto por quantidade
   const calcularPrecoComDescontoQuantidade = (produto: any, quantidade: number): number => {
+    // ✅ USAR PREÇO DA TABELA SELECIONADA SE HOUVER
     let precoFinal = produto.preco;
+
+    // Verificar se há tabela de preços selecionada para este produto
+    const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+    const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
+
+    if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+      const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+      if (tabelaEscolhida) {
+        precoFinal = tabelaEscolhida.preco; // ✅ USAR PREÇO DA TABELA SELECIONADA
+      }
+    }
 
     // Primeiro aplicar promoção tradicional se houver
     const temPromocaoTradicional = produto.promocao &&
@@ -5594,7 +5651,7 @@ const CardapioPublicoPage: React.FC = () => {
             {/* Lista de Itens do Carrinho */}
             <div className="max-h-28 overflow-y-auto space-y-2 mb-3">
               {obterItensCarrinho().map((item) => {
-                const { produto, quantidade, adicionais, observacao, itemId } = item as any;
+                const { produto, quantidade, sabores, adicionais, observacao, itemId } = item as any;
                 return (
                 <div
                   key={itemId}
@@ -5650,6 +5707,12 @@ const CardapioPublicoPage: React.FC = () => {
                           <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                             {produto.nome}
                           </h4>
+                          {/* Linha 1.5: Sabores (se existirem) */}
+                          {sabores && sabores.length > 0 && (
+                            <div className={`text-xs mt-0.5 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                              🍕 {formatarSaboresCompacto(sabores)}
+                            </div>
+                          )}
                           {/* Linha 2: Preço */}
                           {config.mostrar_precos && (
                             <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
@@ -5737,6 +5800,12 @@ const CardapioPublicoPage: React.FC = () => {
                             <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
                               {produto.nome}
                             </h4>
+                            {/* Sabores (se existirem) */}
+                            {sabores && sabores.length > 0 && (
+                              <div className={`text-xs mt-0.5 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                                🍕 {formatarSaboresCompacto(sabores)}
+                              </div>
+                            )}
                             {config.mostrar_precos && (
                               <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
                                 {(() => {
@@ -7530,6 +7599,7 @@ const CardapioPublicoPage: React.FC = () => {
               <div className="space-y-3">
                 {obterItensCarrinho().map((item) => {
                   const { produto, quantidade, sabores, adicionais, observacao, itemId } = item as any;
+                  console.log('🛒 ITEM DO CARRINHO:', { produto: produto.nome, sabores, itemId });
                   return (
                     <div
                       key={itemId}
@@ -7713,54 +7783,12 @@ const CardapioPublicoPage: React.FC = () => {
                         </>
                       )}
 
-                      {/* Seção de Sabores - Largura Total */}
+                      {/* Sabores - Formato Compacto (similar ao PDV) */}
                       {sabores && sabores.length > 0 && (
-                        <div className="mb-2">
-                          {/* Divisória */}
-                          <div className={`border-t ${config.modo_escuro ? 'border-gray-600' : 'border-gray-300'} mb-2`}></div>
-
-                          {/* Título */}
-                          <div className={`text-xs font-medium mb-2 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-500'}`}>
-                            🍕 Sabores:
-                          </div>
-
-                          {/* Lista de Sabores */}
-                          <div className="space-y-1">
-                            {sabores.map((sabor: SaborSelecionado, idx: number) => (
-                              <div
-                                key={idx}
-                                className={`flex items-center justify-between p-2 rounded text-xs ${
-                                  config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-100'
-                                }`}
-                              >
-                                <div className="flex-1">
-                                  <span className={`font-medium ${
-                                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
-                                  }`}>
-                                    {sabor.produto.nome}
-                                  </span>
-                                  {config.mostrar_precos && (
-                                    <div className={`${
-                                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                                    }`}>
-                                      {formatarPreco(sabor.produto.preco)}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Porcentagem do sabor */}
-                                {sabores.length > 1 && (
-                                  <div className={`font-medium px-2 py-1 rounded ${
-                                    config.modo_escuro
-                                      ? 'bg-blue-600/20 text-blue-400'
-                                      : 'bg-blue-100 text-blue-600'
-                                  }`}>
-                                    {sabor.porcentagem}%
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
+                        <div className={`text-xs mt-1 ${
+                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                        }`}>
+                          {formatarSaboresCompacto(sabores)}
                         </div>
                       )}
 
@@ -8881,47 +8909,12 @@ const CardapioPublicoPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Sabores selecionados */}
+                          {/* Sabores - Formato Compacto (similar ao PDV) */}
                           {sabores && sabores.length > 0 && (
-                            <div className="mb-2">
-                              <p className={`text-xs font-medium mb-2 ${
-                                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                              }`}>
-                                🍕 Sabores:
-                              </p>
-                              <div className="space-y-1">
-                                {sabores.map((sabor: SaborSelecionado, idx: number) => (
-                                  <div key={idx} className={`flex items-center justify-between p-2 rounded ${
-                                    config.modo_escuro ? 'bg-gray-700/50' : 'bg-gray-100'
-                                  }`}>
-                                    <div className="flex-1">
-                                      <span className={`text-xs font-medium ${
-                                        config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
-                                      }`}>
-                                        {sabor.produto.nome}
-                                      </span>
-                                      {config.mostrar_precos && (
-                                        <div className={`text-xs ${
-                                          config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                                        }`}>
-                                          {formatarPreco(sabor.produto.preco)}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Porcentagem do sabor */}
-                                    {sabores.length > 1 && (
-                                      <div className={`text-xs font-medium px-2 py-1 rounded ${
-                                        config.modo_escuro
-                                          ? 'bg-blue-600/20 text-blue-400'
-                                          : 'bg-blue-100 text-blue-600'
-                                      }`}>
-                                        {sabor.porcentagem}%
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
+                            <div className={`text-xs mt-1 mb-2 ${
+                              config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                              {formatarSaboresCompacto(sabores)}
                             </div>
                           )}
 
@@ -10542,14 +10535,14 @@ const CardapioPublicoPage: React.FC = () => {
                   cepForaArea ||
                   calculoTaxa?.fora_area ||
                   (taxaEntregaConfig.tipo === 'bairro' && (!bairroSelecionado || !calculoTaxa)) ||
-                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa || calculoTaxa.fora_area))
+                  (taxaEntregaConfig.tipo === 'distancia' && (!cepClienteTemp || !enderecoEncontrado || !calculoTaxa || calculoTaxa.fora_area))
                 }
                 className={`w-full py-3 px-4 rounded-xl font-medium transition-all ${
                   calculandoTaxa ||
                   cepForaArea ||
                   calculoTaxa?.fora_area ||
                   (taxaEntregaConfig.tipo === 'bairro' && (!bairroSelecionado || !calculoTaxa)) ||
-                  (taxaEntregaConfig.tipo === 'distancia' && (!cepCliente || !enderecoEncontrado || !calculoTaxa || calculoTaxa.fora_area))
+                  (taxaEntregaConfig.tipo === 'distancia' && (!cepClienteTemp || !enderecoEncontrado || !calculoTaxa || calculoTaxa.fora_area))
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-green-600 text-white hover:bg-green-700 transform hover:scale-[1.02]'
                 }`}
