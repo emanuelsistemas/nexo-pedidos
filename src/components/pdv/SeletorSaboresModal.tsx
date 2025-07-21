@@ -69,12 +69,7 @@ export default function SeletorSaboresModal({
           porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
         };
         setSaboresSelecionados([saborPrincipal]);
-        console.log('🍕 PDV: Produto principal pré-selecionado com preço correto:', {
-          id: produtoComPrecoCorreto.id,
-          nome: produtoComPrecoCorreto.nome,
-          precoOriginal: produtoAtual.preco,
-          precoTabela: produtoComPrecoCorreto.preco
-        });
+
       } else {
         // Se o produto atual não está na lista de sabores (sem preço válido), usar o original
         const saborPrincipal: SaborSelecionado = {
@@ -82,11 +77,7 @@ export default function SeletorSaboresModal({
           porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
         };
         setSaboresSelecionados([saborPrincipal]);
-        console.log('🍕 PDV: Produto principal pré-selecionado (preço original):', {
-          id: produtoAtual.id,
-          nome: produtoAtual.nome,
-          preco: produtoAtual.preco
-        });
+
       }
     }
   }, [saboresDisponiveis, produtoAtual, tabelaPreco]);
@@ -197,25 +188,7 @@ export default function SeletorSaboresModal({
       // ✅ NÃO REMOVER O PRODUTO ATUAL - ELE DEVE ESTAR DISPONÍVEL PARA SELEÇÃO
       // (O produto principal pode ser combinado com outros sabores)
 
-      console.log('🍕 SABORES PDV - TODOS OS PRODUTOS PIZZA:', {
-        empresaId: usuarioData.empresa_id,
-        tabelaId: tabelaPreco.id,
-        totalProdutosPizza: produtosPizza?.length || 0,
-        produtosPizza: produtosPizza?.map(produto => ({
-          id: produto.id,
-          nome: produto.nome,
-          preco: produto.preco,
-          pizza: produto.pizza,
-          ativo: produto.ativo,
-          deletado: produto.deletado
-        })),
-        saboresFinais: sabores.length,
-        saboresFiltrados: sabores.map(s => ({
-          id: s.id,
-          nome: s.nome,
-          preco: s.preco
-        }))
-      });
+
 
       setSaboresDisponiveis(sabores);
     } catch (error) {

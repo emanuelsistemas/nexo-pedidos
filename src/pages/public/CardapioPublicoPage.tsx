@@ -542,12 +542,7 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
           porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
         };
         setSaboresSelecionados([saborPrincipal]);
-        console.log('🍕 CARDÁPIO: Produto principal pré-selecionado com preço correto:', {
-          id: produtoComPrecoCorreto.id,
-          nome: produtoComPrecoCorreto.nome,
-          precoOriginal: produtoAtual.preco,
-          precoTabela: produtoComPrecoCorreto.preco
-        });
+
       } else {
         // Se o produto atual não está na lista de sabores (sem preço válido), usar o original
         const saborPrincipal: SaborSelecionado = {
@@ -555,11 +550,7 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
           porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
         };
         setSaboresSelecionados([saborPrincipal]);
-        console.log('🍕 CARDÁPIO: Produto principal pré-selecionado (preço original):', {
-          id: produtoAtual.id,
-          nome: produtoAtual.nome,
-          preco: produtoAtual.preco
-        });
+
       }
     }
   }, [saboresDisponiveis, produtoAtual, tabelaPreco]);
@@ -659,32 +650,7 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
       // ✅ NÃO REMOVER O PRODUTO ATUAL - ELE DEVE ESTAR DISPONÍVEL PARA SELEÇÃO
       // (O produto principal pode ser combinado com outros sabores)
 
-      console.log('🍕 CARDÁPIO - TODOS OS PRODUTOS PIZZA:', {
-        empresaId: empresa.id,
-        tabelaId: tabelaPrecoParam?.id,
-        totalProdutosPizza: produtosPizza?.length || 0,
-        precosEncontrados: Object.keys(precosTabela).length,
-        precosTabela: precosTabela,
-        produtosPizza: produtosPizza?.map(produto => ({
-          id: produto.id,
-          nome: produto.nome,
-          precoOriginal: produto.preco,
-          pizza: produto.pizza,
-          ativo: produto.ativo,
-          deletado: produto.deletado
-        })),
-        produtosComFotos: produtosComFotos?.map(produto => ({
-          id: produto.id,
-          nome: produto.nome,
-          precoFinal: produto.preco
-        })),
-        saboresFinais: sabores.length,
-        saboresFiltrados: sabores.map(s => ({
-          id: s.id,
-          nome: s.nome,
-          preco: s.preco
-        }))
-      });
+
 
       setSaboresDisponiveis(sabores);
     } catch (error) {
@@ -3453,13 +3419,9 @@ const CardapioPublicoPage: React.FC = () => {
       });
 
       // ✅ LIMPAR TABELA DE PREÇOS SELECIONADA PARA RESETAR O CARD
-      console.log('🧹 ANTES DA LIMPEZA - Tabelas selecionadas:', tabelasSelecionadas);
-      console.log('🧹 LIMPANDO TABELA PARA PRODUTO:', produtoId);
-
       setTabelasSelecionadas(prev => {
         const nova = { ...prev };
         delete nova[produtoId];
-        console.log('🧹 APÓS LIMPEZA - Nova estrutura:', nova);
         return nova;
       });
 
@@ -5832,381 +5794,212 @@ const CardapioPublicoPage: React.FC = () => {
                       : undefined
                   }}
                 >
-                  {/* Layout com foto (quando configuração ativa) */}
-                  {config.cardapio_fotos_minimizadas ? (
-                    <>
-                      {/* Header do Item - Foto + Nome/Preço + Controles */}
-                      <div className="flex items-center gap-3 mb-2">
-                        {/* Foto do produto */}
-                        <div
-                          className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
-                          onClick={() => abrirGaleriaFotos(produto, 0)}
-                        >
+                  {/* Header do Item - Foto + Nome/Preço + Controles */}
+                  <div className="flex items-center gap-3 mb-2">
+                    {/* Foto do produto */}
+                    <div
+                      className="relative w-12 h-12 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 cursor-pointer"
+                      onClick={() => abrirGaleriaFotos(produto, 0)}
+                    >
+                      {(() => {
+                        const fotoItem = getFotoPrincipal(produto);
+                        return fotoItem ? (
+                          <img
+                            src={fotoItem.url}
+                            alt={produto.nome}
+                            className="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package size={16} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
+                          </div>
+                        );
+                      })()}
+
+                      {/* Contador de fotos */}
+                      {produto.fotos_count && produto.fotos_count > 1 && (
+                        <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium">
+                          {produto.fotos_count}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Área central com Nome e Preço em 2 linhas */}
+                    <div className="flex-1 min-w-0">
+                      {/* Linha 1: Nome do produto */}
+                      <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
+                        {produto.nome}
+                      </h4>
+                      {/* Linha 1.5: Sabores (se existirem) */}
+                      {sabores && sabores.length > 0 && (
+                        <div className={`text-xs mt-0.5 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
+                          {formatarSaboresCompacto(sabores).map((saborFormatado, index) => (
+                            <div key={index}>🍕 {saborFormatado}</div>
+                          ))}
+                        </div>
+                      )}
+                      {/* Linha 2: Preço */}
+                      {config.mostrar_precos && (
+                        <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
                           {(() => {
-                            const fotoItem = getFotoPrincipal(produto);
-                            return fotoItem ? (
-                              <img
-                                src={fotoItem.url}
-                                alt={produto.nome}
-                                className="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Package size={16} className={config.modo_escuro ? 'text-gray-500' : 'text-gray-400'} />
-                              </div>
-                            );
+                            const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
+
+                            // ✅ CALCULAR PREÇO ORIGINAL E VERIFICAR DESCONTOS
+                            let precoOriginal = produto.preco;
+
+                            // Verificar se há tabela de preços selecionada
+                            const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                            const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
+
+                            if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+                              const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+                              if (tabelaEscolhida) {
+                                precoOriginal = tabelaEscolhida.preco;
+                              }
+                            }
+
+                            // Verificar promoção tradicional
+                            const temPromocaoTradicional = produto.promocao &&
+                              produto.exibir_promocao_cardapio &&
+                              produto.tipo_desconto &&
+                              produto.valor_desconto !== undefined &&
+                              produto.valor_desconto > 0;
+
+                            // Verificar desconto por quantidade
+                            const temDescontoQuantidade = produto.desconto_quantidade &&
+                              produto.quantidade_minima &&
+                              produto.quantidade_minima > 0 &&
+                              quantidade >= produto.quantidade_minima &&
+                              ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                               (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                            // ✅ VERIFICAR SE TEM DESCONTO POR QUANTIDADE CONFIGURADO (mesmo que não atingiu mínimo)
+                            const temDescontoQuantidadeConfigurado = produto.desconto_quantidade &&
+                              produto.quantidade_minima &&
+                              produto.quantidade_minima > 0 &&
+                              ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                               (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                            // ✅ VERIFICAR SE REALMENTE HÁ DESCONTO APLICADO (preço mudou)
+                            const temDescontoReal = precoProduto < precoOriginal;
+
+                            if (temDescontoReal) {
+                              // Mostrar preço original riscado e preço com desconto
+                              return (
+                                <div>
+                                  <div className="flex items-center gap-1 mb-0.5">
+                                    <span className={`line-through ${
+                                      config.modo_escuro ? 'text-gray-500' : 'text-gray-400'
+                                    }`}>
+                                      {formatarPreco(precoOriginal)}
+                                    </span>
+                                    <span className={`font-medium ${
+                                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                    }`}>
+                                      {formatarPreco(precoProduto)}
+                                    </span>
+                                    {temDescontoQuantidade && (
+                                      <span className={`${
+                                        config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                                      }`}>
+                                        {produto.tipo_desconto_quantidade === 'percentual'
+                                          ? `${produto.percentual_desconto_quantidade}% OFF`
+                                          : `${formatarPreco(produto.valor_desconto_quantidade!)} OFF`
+                                        }
+                                      </span>
+                                    )}
+                                    {temPromocaoTradicional && !temDescontoQuantidade && !temDescontoQuantidadeConfigurado && (
+                                      <span className={`${
+                                        config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                                      }`}>
+                                        {produto.tipo_desconto === 'percentual'
+                                          ? `${produto.valor_desconto}% OFF`
+                                          : `${formatarPreco(produto.valor_desconto!)} OFF`
+                                        }
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div>
+                                    {formatarPreco(precoProduto)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(precoProduto * quantidade)}
+                                  </div>
+                                </div>
+                              );
+                            } else {
+                              // Mostrar preço normal
+                              return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+                            }
                           })()}
-
-                          {/* Contador de fotos */}
-                          {produto.fotos_count && produto.fotos_count > 1 && (
-                            <div className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-medium">
-                              {produto.fotos_count}
-                            </div>
-                          )}
                         </div>
+                      )}
+                    </div>
 
-                        {/* Área central com Nome e Preço em 2 linhas */}
-                        <div className="flex-1 min-w-0">
-                          {/* Linha 1: Nome do produto */}
-                          <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                            {produto.nome}
-                          </h4>
-                          {/* Linha 1.5: Sabores (se existirem) */}
-                          {sabores && sabores.length > 0 && (
-                            <div className={`text-xs mt-0.5 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
-                              {formatarSaboresCompacto(sabores).map((saborFormatado, index) => (
-                                <div key={index}>🍕 {saborFormatado}</div>
-                              ))}
-                            </div>
-                          )}
-                          {/* Linha 2: Preço */}
-                          {config.mostrar_precos && (
-                            <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                              {(() => {
-                                const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
+                    {/* Controles de Quantidade do Produto Principal */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => decrementarQuantidadeItemCarrinho(itemId)}
+                        disabled={lojaAberta === false}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                          lojaAberta === false
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : config.modo_escuro
+                            ? 'bg-gray-600 text-white hover:bg-gray-500'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        <Minus size={12} />
+                      </button>
 
-                                // ✅ CALCULAR PREÇO ORIGINAL E VERIFICAR DESCONTOS
-                                let precoOriginal = produto.preco;
+                      {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
+                        <input
+                          type="text"
+                          value={formatarQuantidade(quantidade, produto.unidade_medida)}
+                          onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
+                          onBlur={() => setItemEditandoCarrinho(null)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              setItemEditandoCarrinho(null);
+                            }
+                          }}
+                          className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
+                            config.modo_escuro
+                              ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
+                              : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
+                          }`}
+                          placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
+                          disabled={lojaAberta === false}
+                          className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
+                            lojaAberta === false
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : config.modo_escuro
+                              ? 'bg-gray-600 text-white hover:bg-gray-500'
+                              : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                          }`}
+                        >
+                          {formatarQuantidade(quantidade, produto.unidade_medida)}
+                        </button>
+                      )}
 
-                                // Verificar se há tabela de preços selecionada
-                                const tabelasComPrecos = obterTabelasComPrecos(produto.id);
-                                const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
+                      <button
+                        onClick={() => incrementarQuantidadeItemCarrinho(itemId)}
+                        disabled={lojaAberta === false}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                          lojaAberta === false
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : config.modo_escuro
+                            ? 'bg-blue-600 text-white hover:bg-blue-500'
+                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                        }`}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                  </div>
 
-                                if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
-                                  const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
-                                  if (tabelaEscolhida) {
-                                    precoOriginal = tabelaEscolhida.preco;
-                                  }
-                                }
-
-                                // Verificar promoção tradicional
-                                const temPromocaoTradicional = produto.promocao &&
-                                  produto.exibir_promocao_cardapio &&
-                                  produto.tipo_desconto &&
-                                  produto.valor_desconto !== undefined &&
-                                  produto.valor_desconto > 0;
-
-                                // Verificar desconto por quantidade
-                                const temDescontoQuantidade = produto.desconto_quantidade &&
-                                  produto.quantidade_minima &&
-                                  produto.quantidade_minima > 0 &&
-                                  quantidade >= produto.quantidade_minima &&
-                                  ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
-                                   (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
-
-                                const temDesconto = temPromocaoTradicional || temDescontoQuantidade;
-
-                                if (temDesconto) {
-                                  // Mostrar preço original riscado e preço com desconto
-                                  return (
-                                    <div>
-                                      <div className="flex items-center gap-1 mb-0.5">
-                                        <span className={`line-through ${
-                                          config.modo_escuro ? 'text-gray-500' : 'text-gray-400'
-                                        }`}>
-                                          {formatarPreco(precoOriginal)}
-                                        </span>
-                                        <span className={`font-medium ${
-                                          config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                                        }`}>
-                                          {formatarPreco(precoProduto)}
-                                        </span>
-                                        {temDescontoQuantidade && (
-                                          <span className={`${
-                                            config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
-                                          }`}>
-                                            {produto.tipo_desconto_quantidade === 'percentual'
-                                              ? `${produto.percentual_desconto_quantidade}% OFF`
-                                              : `${formatarPreco(produto.valor_desconto_quantidade!)} OFF`
-                                            }
-                                          </span>
-                                        )}
-                                        {temPromocaoTradicional && !temDescontoQuantidade && (
-                                          <span className={`${
-                                            config.modo_escuro ? 'text-red-400' : 'text-red-600'
-                                          }`}>
-                                            {produto.tipo_desconto === 'percentual'
-                                              ? `${produto.valor_desconto}% OFF`
-                                              : `${formatarPreco(produto.valor_desconto!)} OFF`
-                                            }
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div>
-                                        {formatarPreco(precoProduto)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(precoProduto * quantidade)}
-                                      </div>
-                                    </div>
-                                  );
-                                } else {
-                                  // Mostrar preço normal
-                                  return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
-                                }
-                              })()}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Controles de Quantidade do Produto Principal */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => decrementarQuantidadeItemCarrinho(itemId)}
-                            disabled={lojaAberta === false}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            }`}
-                          >
-                            <Minus size={12} />
-                          </button>
-
-                          {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
-                            <input
-                              type="text"
-                              value={formatarQuantidade(quantidade, produto.unidade_medida)}
-                              onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
-                              onBlur={() => setItemEditandoCarrinho(null)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  setItemEditandoCarrinho(null);
-                                }
-                              }}
-                              className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
-                                config.modo_escuro
-                                  ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
-                                  : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
-                              }`}
-                              placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
-                              disabled={lojaAberta === false}
-                              className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
-                                lojaAberta === false
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : config.modo_escuro
-                                  ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                  : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                              }`}
-                            >
-                              {formatarQuantidade(quantidade, produto.unidade_medida)}
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => incrementarQuantidadeItemCarrinho(itemId)}
-                            disabled={lojaAberta === false}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                              lojaAberta === false
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : config.modo_escuro
-                                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                : 'bg-blue-500 text-white hover:bg-blue-600'
-                            }`}
-                          >
-                            <Plus size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* Header do Item - Nome + Preço + Controles (sem foto) */}
-                      <div className="mb-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <h4 className={`font-medium text-sm truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'}`}>
-                              {produto.nome}
-                            </h4>
-                            {/* Sabores (se existirem) */}
-                            {sabores && sabores.length > 0 && (
-                              <div className={`text-xs mt-0.5 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
-                                🍕 {formatarSaboresCompacto(sabores)}
-                              </div>
-                            )}
-                            {config.mostrar_precos && (
-                              <>
-                                {(() => {
-                                  const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
-
-                                  // ✅ CALCULAR PREÇO ORIGINAL E VERIFICAR DESCONTOS
-                                  let precoOriginal = produto.preco;
-
-                                  // Verificar se há tabela de preços selecionada
-                                  const tabelasComPrecos = obterTabelasComPrecos(produto.id);
-                                  const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
-
-                                  if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
-                                    const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
-                                    if (tabelaEscolhida) {
-                                      precoOriginal = tabelaEscolhida.preco;
-                                    }
-                                  }
-
-                                  // Verificar promoção tradicional
-                                  const temPromocaoTradicional = produto.promocao &&
-                                    produto.exibir_promocao_cardapio &&
-                                    produto.tipo_desconto &&
-                                    produto.valor_desconto !== undefined &&
-                                    produto.valor_desconto > 0;
-
-                                  // Verificar desconto por quantidade
-                                  const temDescontoQuantidade = produto.desconto_quantidade &&
-                                    produto.quantidade_minima &&
-                                    produto.quantidade_minima > 0 &&
-                                    quantidade >= produto.quantidade_minima &&
-                                    ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
-                                     (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
-
-                                  const temDesconto = temPromocaoTradicional || temDescontoQuantidade;
-
-                                  if (temDesconto) {
-                                    // Mostrar preço original riscado e preço com desconto
-                                    return (
-                                      <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                                        <div className="flex items-center gap-1 mb-0.5">
-                                          <span className={`line-through ${
-                                            config.modo_escuro ? 'text-gray-500' : 'text-gray-400'
-                                          }`}>
-                                            {formatarPreco(precoOriginal)}
-                                          </span>
-                                          <span className={`font-medium ${
-                                            config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                                          }`}>
-                                            {formatarPreco(precoProduto)}
-                                          </span>
-                                          {temDescontoQuantidade && (
-                                            <span className={`${
-                                              config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
-                                            }`}>
-                                              {produto.tipo_desconto_quantidade === 'percentual'
-                                                ? `${produto.percentual_desconto_quantidade}% OFF`
-                                                : `${formatarPreco(produto.valor_desconto_quantidade!)} OFF`
-                                              }
-                                            </span>
-                                          )}
-                                          {temPromocaoTradicional && !temDescontoQuantidade && (
-                                            <span className={`${
-                                              config.modo_escuro ? 'text-red-400' : 'text-red-600'
-                                            }`}>
-                                              {produto.tipo_desconto === 'percentual'
-                                                ? `${produto.valor_desconto}% OFF`
-                                                : `${formatarPreco(produto.valor_desconto!)} OFF`
-                                              }
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div>
-                                          {formatarPreco(precoProduto)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(precoProduto * quantidade)}
-                                        </div>
-                                      </div>
-                                    );
-                                  } else {
-                                    // Mostrar preço normal
-                                    return (
-                                      <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
-                                        {formatarPreco(precoProduto)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(precoProduto * quantidade)}
-                                      </div>
-                                    );
-                                  }
-                                })()}
-                              </>
-                            )}
-                          </div>
-
-                          {/* Controles de Quantidade do Produto Principal */}
-                          <div className="flex items-center gap-2 ml-3">
-                            <button
-                              onClick={() => decrementarQuantidadeItemCarrinho(itemId)}
-                              disabled={lojaAberta === false}
-                              className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                                lojaAberta === false
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : config.modo_escuro
-                                  ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                              }`}
-                            >
-                              <Minus size={12} />
-                            </button>
-
-                            {itemEditandoCarrinho === produto.id && lojaAberta !== false ? (
-                              <input
-                                type="text"
-                                value={formatarQuantidade(quantidade, produto.unidade_medida)}
-                                onChange={(e) => handleQuantidadeInputChange(produto.id, e.target.value)}
-                                onBlur={() => setItemEditandoCarrinho(null)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    setItemEditandoCarrinho(null);
-                                  }
-                                }}
-                                className={`w-8 h-6 text-center text-xs font-semibold rounded border focus:outline-none ${
-                                  config.modo_escuro
-                                    ? 'bg-gray-600 border-gray-500 text-white focus:border-purple-400'
-                                    : 'bg-white border-gray-300 text-gray-900 focus:border-purple-500'
-                                }`}
-                                placeholder={produto.unidade_medida?.fracionado ? "0,000" : "0"}
-                                autoFocus
-                              />
-                            ) : (
-                              <button
-                                onClick={() => lojaAberta !== false && setItemEditandoCarrinho(produto.id)}
-                                disabled={lojaAberta === false}
-                                className={`w-8 h-6 text-center text-xs font-semibold rounded transition-colors ${
-                                  lojaAberta === false
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : config.modo_escuro
-                                    ? 'bg-gray-600 text-white hover:bg-gray-500'
-                                    : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                                }`}
-                              >
-                                {formatarQuantidade(quantidade, produto.unidade_medida)}
-                              </button>
-                            )}
-
-                            <button
-                              onClick={() => incrementarQuantidadeItemCarrinho(itemId)}
-                              disabled={lojaAberta === false}
-                              className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
-                                lojaAberta === false
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : config.modo_escuro
-                                  ? 'bg-blue-600 text-white hover:bg-blue-500'
-                                  : 'bg-blue-500 text-white hover:bg-blue-600'
-                              }`}
-                            >
-                              <Plus size={12} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
 
                   {/* Seção de Adicionais - Largura Total */}
                   {adicionais && adicionais.length > 0 && (
@@ -9251,9 +9044,17 @@ const CardapioPublicoPage: React.FC = () => {
                                     ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
                                      (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
 
-                                  const temDesconto = temPromocaoTradicional || temDescontoQuantidade;
+                                  // ✅ VERIFICAR SE TEM DESCONTO POR QUANTIDADE CONFIGURADO (mesmo que não atingiu mínimo)
+                                  const temDescontoQuantidadeConfigurado = produto.desconto_quantidade &&
+                                    produto.quantidade_minima &&
+                                    produto.quantidade_minima > 0 &&
+                                    ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                                     (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
 
-                                  if (temDesconto) {
+                                  // ✅ VERIFICAR SE REALMENTE HÁ DESCONTO APLICADO (preço mudou)
+                                  const temDescontoReal = precoFinal < precoOriginal;
+
+                                  if (temDescontoReal) {
                                     // Mostrar preço original riscado e preço com desconto
                                     return (
                                       <div className="flex flex-col">
@@ -9279,7 +9080,7 @@ const CardapioPublicoPage: React.FC = () => {
                                             }
                                           </span>
                                         )}
-                                        {temPromocaoTradicional && !temDescontoQuantidade && (
+                                        {temPromocaoTradicional && !temDescontoQuantidade && !temDescontoQuantidadeConfigurado && (
                                           <span className={`text-xs ${
                                             config.modo_escuro ? 'text-red-400' : 'text-red-600'
                                           }`}>

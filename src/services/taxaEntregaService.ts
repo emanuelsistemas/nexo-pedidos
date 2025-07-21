@@ -134,10 +134,7 @@ class TaxaEntregaService {
 
       const distanciaKm = distanceResult.distance / 1000;
 
-      console.log('📏 Distância calculada via Routes API:', {
-        distancia: `${distanciaKm.toFixed(2)} km`,
-        metodo: distanceResult.method
-      });
+
 
       // 2. Buscar faixa de distância correspondente na tabela da empresa
       const faixaEncontrada = await this.buscarFaixaDistancia(config.empresa_id, distanciaKm);

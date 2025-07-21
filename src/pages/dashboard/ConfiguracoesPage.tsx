@@ -1110,7 +1110,7 @@ const ConfiguracoesPage: React.FC = () => {
             console.error('Erro ao carregar tabelas de preços:', tabelasError);
             showMessage('error', 'Erro ao carregar tabelas de preços');
           } else {
-            console.log('Tabelas de preços carregadas:', tabelasData);
+
             setTabelasPrecos(tabelasData || []);
           }
 

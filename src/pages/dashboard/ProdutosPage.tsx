@@ -1101,7 +1101,7 @@ const ProdutosPage: React.FC = () => {
   // useEffect separado para configurar event listener de pizzas
   useEffect(() => {
     const handlePizzasChange = (event: CustomEvent) => {
-      console.log('🍕 Evento pizzasChanged recebido:', event.detail);
+
       setTrabalhaComPizzas(event.detail.trabalhaComPizzas);
     };
 
@@ -1115,7 +1115,7 @@ const ProdutosPage: React.FC = () => {
   // useEffect separado para configurar event listener de cardápio digital
   useEffect(() => {
     const handleCardapioDigitalChange = (event: CustomEvent) => {
-      console.log('📱 Evento cardapioDigitalChanged recebido:', event.detail);
+
       setCardapioDigitalHabilitado(event.detail.cardapioDigital);
     };
 
@@ -1644,10 +1644,10 @@ const ProdutosPage: React.FC = () => {
 
     if (abaPrecoAtiva !== 'padrao' && precosTabelas[abaPrecoAtiva] !== undefined) {
       const valorFormatado = formatarPreco(precosTabelas[abaPrecoAtiva]);
-      console.log('📥 Carregando valor da aba:', abaPrecoAtiva, 'Valor:', valorFormatado);
+
       setPrecoTabelaFormatado(valorFormatado);
     } else if (abaPrecoAtiva !== 'padrao') {
-      console.log('🆕 Nova aba sem valor:', abaPrecoAtiva);
+
       setPrecoTabelaFormatado('0,00');
     }
   }, [abaPrecoAtiva, precosTabelas]);
@@ -2629,7 +2629,7 @@ const ProdutosPage: React.FC = () => {
         cst_icms: codigosFiscais.cst,
         csosn_icms: codigosFiscais.csosn
       }));
-      console.log('Códigos fiscais aplicados automaticamente na edição:', codigosFiscais);
+
     }
 
     // Definir o preço formatado usando formatação monetária
@@ -3451,12 +3451,7 @@ const ProdutosPage: React.FC = () => {
     }
 
     // ✅ VALIDAÇÃO CORRIGIDA: Posição única por GRUPO (não global)
-    console.log('🔍 DEBUG VALIDAÇÃO POSIÇÃO:', {
-      produtoOrdenacaoCardapioHabilitada,
-      produtoOrdenacaoCardapioDigital,
-      editingProduto: editingProduto?.id,
-      selectedGrupo: selectedGrupo?.id
-    });
+
 
     if (produtoOrdenacaoCardapioHabilitada && produtoOrdenacaoCardapioDigital) {
       // Obter dados do usuário para a validação
@@ -3678,22 +3673,7 @@ const ProdutosPage: React.FC = () => {
         const codigosFiscais = obterCodigosFiscais(updateData.situacao_tributaria || 'tributado_integral');
         updateData.cst_icms = codigosFiscais.cst;     // SEMPRE salvar CST (Regime Normal)
         updateData.csosn_icms = codigosFiscais.csosn; // SEMPRE salvar CSOSN (Simples Nacional)
-        console.log('🔧 Códigos fiscais aplicados (AMBOS):', codigosFiscais);
 
-        // Log para confirmar que os dados fiscais estão sendo salvos
-        console.log('=== SALVANDO DADOS FISCAIS (EDIÇÃO) ===');
-        console.log('NCM:', updateData.ncm);
-        console.log('CFOP:', updateData.cfop);
-        console.log('Origem:', updateData.origem_produto);
-        console.log('Situação Tributária:', updateData.situacao_tributaria);
-        console.log('CST ICMS:', updateData.cst_icms);
-        console.log('CSOSN ICMS:', updateData.csosn_icms);
-        console.log('Alíquota ICMS:', updateData.aliquota_icms);
-        console.log('CEST:', updateData.cest);
-        console.log('Margem ST:', updateData.margem_st);
-        console.log('Peso Líquido:', updateData.peso_liquido);
-        console.log('Preço de Custo:', updateData.preco_custo);
-        console.log('Margem Percentual:', updateData.margem_percentual);
 
         const { data, error } = await supabase
           .from('produtos')
@@ -3747,8 +3727,7 @@ const ProdutosPage: React.FC = () => {
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
         };
 
-        // ✅ OTIMIZAÇÃO: Logs reduzidos para melhor performance
-        console.log('💾 Salvando produto:', produtoData.nome);
+
 
         const { data, error } = await supabase
           .from('produtos')
@@ -3811,8 +3790,7 @@ const ProdutosPage: React.FC = () => {
       // ✅ NOVO: Salvar preços das tabelas de preços (atualiza estado imediatamente)
       await salvarTodosPrecosTabelas(productId);
 
-      // ✅ OTIMIZAÇÃO CRÍTICA: Operações mínimas e assíncronas
-      console.log('⚡ Salvamento concluído - executando atualizações otimizadas');
+
 
       // Operações críticas (síncronas) - apenas o essencial
       await loadGrupos(); // Necessário para atualizar a lista
@@ -3870,7 +3848,7 @@ const ProdutosPage: React.FC = () => {
         acao: editingProduto ? 'atualizado' : 'criado'
       }));
 
-      console.log(`Produto ${editingProduto ? 'atualizado' : 'criado'} com sucesso! Sinalizador definido para versão mobile.`);
+
 
       if (editingProduto) {
         showMessage('success', 'Produto atualizado com sucesso!');
@@ -3913,9 +3891,7 @@ const ProdutosPage: React.FC = () => {
       console.error('Stack trace:', error.stack);
       showMessage('error', `Erro ao ${editingProduto ? 'atualizar' : 'criar'} produto: ` + error.message);
     } finally {
-      // ✅ OTIMIZAÇÃO: Finalizar loading rapidamente
-      const endTime = performance.now();
-      console.log(`⚡ Produto salvo em ${Math.round(endTime - startTime)}ms`);
+
       setIsLoading(false);
     }
   };
@@ -4322,7 +4298,7 @@ const ProdutosPage: React.FC = () => {
           acao: 'excluido'
         }));
 
-        console.log(`Produto excluído com sucesso! Sinalizador definido para versão mobile.`);
+
 
         // ✅ NOVO: Remover preços do produto excluído do estado
         setProdutosPrecos(prev => {
@@ -4569,7 +4545,7 @@ const ProdutosPage: React.FC = () => {
       // Verificar cada tabela de preços e seus valores
       for (const tabela of tabelasPrecos) {
         const preco = precosTabelas[tabela.id];
-        console.log(`🔍 Verificando tabela ${tabela.nome} (${tabela.id}): preço = ${preco}`);
+
 
         // Incluir preços >= 0 (permite salvar valor 0 para remover preço)
         if (preco !== undefined && preco >= 0) {
@@ -4593,7 +4569,7 @@ const ProdutosPage: React.FC = () => {
 
         if (error) throw error;
 
-        console.log(`✅ Salvos ${precosParaInserir.length} preços de tabelas para o produto ${produtoId}`);
+
 
         // ✅ NOVO: Atualizar estado imediatamente para exibição no card
         setProdutosPrecos(prev => ({
@@ -4703,7 +4679,7 @@ const ProdutosPage: React.FC = () => {
       if (aTemPosicao && bTemPosicao) {
         const posicaoA = Number((a as any).ordenacao_cardapio_digital);
         const posicaoB = Number((b as any).ordenacao_cardapio_digital);
-        console.log(`📌 Ambos fixos: ${a.nome}(${posicaoA}) vs ${b.nome}(${posicaoB}) = ${posicaoA - posicaoB}`);
+
         return posicaoA - posicaoB;
       }
 
@@ -5086,7 +5062,7 @@ const ProdutosPage: React.FC = () => {
       }
     }
 
-    console.log('📸 Carregando fotos do banco de dados');
+
 
     // Marcar todos os produtos como carregando fotos
     const loadingMap: Record<string, boolean> = {};
@@ -5204,7 +5180,7 @@ const ProdutosPage: React.FC = () => {
     try {
       localStorage.removeItem(CACHE_KEY_FOTOS);
       localStorage.removeItem(CACHE_KEY_FOTOS_COUNT);
-      console.log('🗑️ Cache de fotos limpo');
+
     } catch (error) {
       console.error('Erro ao limpar cache de fotos:', error);
     }
@@ -5496,7 +5472,7 @@ const ProdutosPage: React.FC = () => {
               }`}
               onClick={() => {
                 if (loadingEditProduto === produto.id) return; // Evitar cliques múltiplos
-                console.log('Botão de edição clicado para produto:', produto);
+
                 handleEditProduto(grupo, produto);
               }}
               title={loadingEditProduto === produto.id ? "Carregando..." : "Editar produto"}
@@ -7277,7 +7253,7 @@ const ProdutosPage: React.FC = () => {
                         </div>
 
                         {/* Seção de Pizza - Só aparece se a empresa trabalha com pizzas */}
-                        {console.log('🍕 DEBUG: trabalhaComPizzas =', trabalhaComPizzas)}
+
                         {trabalhaComPizzas && (
                           <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-gray-800/30">
                             <div className="flex items-center mb-4">

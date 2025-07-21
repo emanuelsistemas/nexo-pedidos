@@ -2137,32 +2137,32 @@ const PDVPage: React.FC = () => {
 
       // Salvar item na venda em andamento
       const aguardarVendaEsalvarItem = async () => {
-        console.log('🔍 AGUARDAR: Iniciando processo de aguardar venda e salvar item...');
+
 
         if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
-          console.log('🔍 AGUARDAR: É primeiro item, aguardando criação da venda...');
+
 
           let tentativas = 0;
           const maxTentativas = 100;
 
           while (!vendaEmAndamento && tentativas < maxTentativas) {
             if (tentativas % 10 === 0) {
-              console.log(`🔍 AGUARDAR: Tentativa ${tentativas + 1}/${maxTentativas} - Aguardando venda...`);
+              // Log reduzido para evitar spam no console
             }
             await new Promise(resolve => setTimeout(resolve, 100));
             tentativas++;
           }
 
           if (!vendaEmAndamento) {
-            console.error('❌ AGUARDAR: Timeout - Venda não foi criada após aguardar');
+
             return;
           }
 
-          console.log('✅ AGUARDAR: Venda encontrada após aguardar:', vendaEmAndamento);
+
         }
 
         const vendaAtual = vendaEmAndamento;
-        console.log('🔍 AGUARDAR: Venda atual para salvamento:', vendaAtual);
+
 
         if (vendaAtual) {
           const sucesso = await salvarItemNaVendaEmAndamento(novoItem);
@@ -4720,51 +4720,38 @@ const PDVPage: React.FC = () => {
 
     // ✅ CORREÇÃO: Aguardar venda ser criada antes de salvar item
     const aguardarVendaEsalvarItem = async () => {
-      console.log('🔍 AGUARDAR: Iniciando processo de aguardar venda e salvar item...');
+
 
       // Se é primeiro item e não há venda, aguardar criação
       if (isFirstItem && !vendaEmAndamento && !isEditingVenda) {
-        console.log('🔍 AGUARDAR: É primeiro item, aguardando criação da venda...');
+
 
         let tentativas = 0;
         const maxTentativas = 100; // 10 segundos
 
         while (!vendaEmAndamento && tentativas < maxTentativas) {
-          // Log apenas a cada 10 tentativas para não poluir o console
+          // Log reduzido para evitar spam no console
           if (tentativas % 10 === 0) {
-            console.log(`🔍 AGUARDAR: Tentativa ${tentativas + 1}/${maxTentativas} - Aguardando venda...`);
+            // Aguardando venda...
           }
           await new Promise(resolve => setTimeout(resolve, 100));
           tentativas++;
         }
 
         if (!vendaEmAndamento) {
-          console.error('❌ AGUARDAR: Timeout - Venda não foi criada após aguardar');
+
           return;
         }
 
-        console.log('✅ AGUARDAR: Venda encontrada após aguardar:', vendaEmAndamento);
+
       }
 
       // Usar o estado mais atual da venda em andamento
       const vendaAtual = vendaEmAndamento;
-      console.log('🔍 AGUARDAR: Venda atual para salvamento:', vendaAtual);
+
 
       if (vendaAtual) {
-        console.log('🔍 DEBUG: Iniciando salvamento do item na venda em andamento:', {
-          vendaAtual: {
-            id: vendaAtual.id,
-            numero_venda: vendaAtual.numero_venda
-          },
-          isEditingVenda,
-          novoItem: {
-            id: novoItem.id,
-            produto: novoItem.produto.nome,
-            quantidade: novoItem.quantidade,
-            subtotal: novoItem.subtotal,
-            vendaSemProduto: novoItem.vendaSemProduto
-          }
-        });
+
 
         // ✅ CORREÇÃO: Só salvar se não é venda recuperada (para evitar duplicação)
         if (!isEditingVenda) {

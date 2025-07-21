@@ -37,7 +37,7 @@ export const useAuthSession = () => {
       }
 
       if (timeUntilExpiry <= 300) { // 5 minutos
-        console.log('Sessão próxima do vencimento, tentando renovar...');
+
         return await refreshSession();
       }
 
@@ -61,7 +61,7 @@ export const useAuthSession = () => {
       }
 
       if (data.session) {
-        console.log('Sessão renovada com sucesso');
+
         return true;
       }
 
