@@ -5884,7 +5884,83 @@ const CardapioPublicoPage: React.FC = () => {
                             <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
                               {(() => {
                                 const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
-                                return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+
+                                // ✅ CALCULAR PREÇO ORIGINAL E VERIFICAR DESCONTOS
+                                let precoOriginal = produto.preco;
+
+                                // Verificar se há tabela de preços selecionada
+                                const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                                const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
+
+                                if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+                                  const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+                                  if (tabelaEscolhida) {
+                                    precoOriginal = tabelaEscolhida.preco;
+                                  }
+                                }
+
+                                // Verificar promoção tradicional
+                                const temPromocaoTradicional = produto.promocao &&
+                                  produto.exibir_promocao_cardapio &&
+                                  produto.tipo_desconto &&
+                                  produto.valor_desconto !== undefined &&
+                                  produto.valor_desconto > 0;
+
+                                // Verificar desconto por quantidade
+                                const temDescontoQuantidade = produto.desconto_quantidade &&
+                                  produto.quantidade_minima &&
+                                  produto.quantidade_minima > 0 &&
+                                  quantidade >= produto.quantidade_minima &&
+                                  ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                                   (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                                const temDesconto = temPromocaoTradicional || temDescontoQuantidade;
+
+                                if (temDesconto) {
+                                  // Mostrar preço original riscado e preço com desconto
+                                  return (
+                                    <div>
+                                      <div className="flex items-center gap-1 mb-0.5">
+                                        <span className={`line-through ${
+                                          config.modo_escuro ? 'text-gray-500' : 'text-gray-400'
+                                        }`}>
+                                          {formatarPreco(precoOriginal)}
+                                        </span>
+                                        <span className={`font-medium ${
+                                          config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                        }`}>
+                                          {formatarPreco(precoProduto)}
+                                        </span>
+                                        {temDescontoQuantidade && (
+                                          <span className={`${
+                                            config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                                          }`}>
+                                            {produto.tipo_desconto_quantidade === 'percentual'
+                                              ? `${produto.percentual_desconto_quantidade}% OFF`
+                                              : `${formatarPreco(produto.valor_desconto_quantidade!)} OFF`
+                                            }
+                                          </span>
+                                        )}
+                                        {temPromocaoTradicional && !temDescontoQuantidade && (
+                                          <span className={`${
+                                            config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                                          }`}>
+                                            {produto.tipo_desconto === 'percentual'
+                                              ? `${produto.valor_desconto}% OFF`
+                                              : `${formatarPreco(produto.valor_desconto!)} OFF`
+                                            }
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div>
+                                        {formatarPreco(precoProduto)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(precoProduto * quantidade)}
+                                      </div>
+                                    </div>
+                                  );
+                                } else {
+                                  // Mostrar preço normal
+                                  return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+                                }
                               })()}
                             </div>
                           )}
@@ -5973,7 +6049,7 @@ const CardapioPublicoPage: React.FC = () => {
                               </div>
                             )}
                             {config.mostrar_precos && (
-                              <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                              <>
                                 {(() => {
                                   const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
 
@@ -6011,20 +6087,20 @@ const CardapioPublicoPage: React.FC = () => {
                                   if (temDesconto) {
                                     // Mostrar preço original riscado e preço com desconto
                                     return (
-                                      <div className="flex flex-col gap-0.5">
-                                        <div className="flex items-center gap-1">
-                                          <span className={`text-xs line-through ${
+                                      <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                                        <div className="flex items-center gap-1 mb-0.5">
+                                          <span className={`line-through ${
                                             config.modo_escuro ? 'text-gray-500' : 'text-gray-400'
                                           }`}>
                                             {formatarPreco(precoOriginal)}
                                           </span>
-                                          <span className={`text-xs font-medium ${
+                                          <span className={`font-medium ${
                                             config.modo_escuro ? 'text-green-400' : 'text-green-600'
                                           }`}>
                                             {formatarPreco(precoProduto)}
                                           </span>
                                           {temDescontoQuantidade && (
-                                            <span className={`text-xs ${
+                                            <span className={`${
                                               config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
                                             }`}>
                                               {produto.tipo_desconto_quantidade === 'percentual'
@@ -6034,7 +6110,7 @@ const CardapioPublicoPage: React.FC = () => {
                                             </span>
                                           )}
                                           {temPromocaoTradicional && !temDescontoQuantidade && (
-                                            <span className={`text-xs ${
+                                            <span className={`${
                                               config.modo_escuro ? 'text-red-400' : 'text-red-600'
                                             }`}>
                                               {produto.tipo_desconto === 'percentual'
@@ -6051,10 +6127,14 @@ const CardapioPublicoPage: React.FC = () => {
                                     );
                                   } else {
                                     // Mostrar preço normal
-                                    return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+                                    return (
+                                      <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
+                                        {formatarPreco(precoProduto)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(precoProduto * quantidade)}
+                                      </div>
+                                    );
                                   }
                                 })()}
-                              </div>
+                              </>
                             )}
                           </div>
 
