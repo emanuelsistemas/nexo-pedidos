@@ -523,12 +523,21 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [precoCalculado, setPrecoCalculado] = useState(0);
 
-  // Carregar sabores disponíveis
+  // Carregar sabores disponíveis e pré-selecionar produto atual
   useEffect(() => {
     if (isOpen && tabelaPreco) {
       carregarSaboresDisponiveis(tabelaPreco);
+
+      // ✅ PRÉ-SELECIONAR O PRODUTO ATUAL COMO PRIMEIRO SABOR
+      if (produtoAtual) {
+        const saborPrincipal: SaborSelecionado = {
+          produto: produtoAtual,
+          porcentagem: Math.round(100 / tabelaPreco.quantidade_sabores)
+        };
+        setSaboresSelecionados([saborPrincipal]);
+      }
     }
-  }, [isOpen, tabelaPreco]);
+  }, [isOpen, tabelaPreco, produtoAtual]);
 
   // Calcular preço quando sabores mudam
   useEffect(() => {
@@ -727,6 +736,12 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
   };
 
   const removerSabor = (index: number) => {
+    // ✅ NÃO PERMITIR REMOVER O PRIMEIRO SABOR (PRODUTO PRINCIPAL)
+    if (index === 0) {
+      console.log('🍕 MODAL: Não é possível remover o produto principal');
+      return;
+    }
+
     const novosSabores = saboresSelecionados.filter((_, i) => i !== index);
 
     // Redistribuir porcentagens
@@ -784,8 +799,7 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
               <p className={`text-sm sm:text-base mt-1 ${
                 config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
               }`}>
-                {tabelaPreco.permite_meio_a_meio ? 'Meio a meio permitido' : 'Sabor único'} •
-                Máximo {tabelaPreco.quantidade_sabores} sabor{tabelaPreco.quantidade_sabores > 1 ? 'es' : ''}
+                {produtoAtual?.nome} já incluído • Selecione mais {tabelaPreco.quantidade_sabores - 1} sabor{tabelaPreco.quantidade_sabores - 1 > 1 ? 'es' : ''}
               </p>
             </div>
             <button
@@ -817,34 +831,57 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {saboresSelecionados.map((sabor, index) => (
-                  <div key={index} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
-                    config.modo_escuro ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'
-                  }`}>
-                    <span className={`text-sm font-medium ${
-                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                {saboresSelecionados.map((sabor, index) => {
+                  const isPrincipal = index === 0; // Primeiro sabor é o principal
+
+                  return (
+                    <div key={index} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                      isPrincipal
+                        ? config.modo_escuro ? 'bg-blue-900/20 border-blue-600' : 'bg-blue-50 border-blue-300'
+                        : config.modo_escuro ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'
                     }`}>
-                      {sabor.produto.nome}
-                    </span>
-                    {tabelaPreco.permite_meio_a_meio && (
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        config.modo_escuro ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                      {/* Indicador de sabor principal */}
+                      {isPrincipal && (
+                        <span className="text-xs">⭐</span>
+                      )}
+
+                      <span className={`text-sm font-medium ${
+                        config.modo_escuro ? 'text-white' : 'text-gray-900'
                       }`}>
-                        {sabor.porcentagem}%
+                        {sabor.produto.nome}
+                        {isPrincipal && (
+                          <span className={`text-xs ml-1 ${
+                            config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                          }`}>
+                            (Principal)
+                          </span>
+                        )}
                       </span>
-                    )}
-                    <button
-                      onClick={() => removerSabor(index)}
-                      className={`p-1 rounded-full transition-colors ${
-                        config.modo_escuro
-                          ? 'text-red-400 hover:bg-red-900/20'
-                          : 'text-red-600 hover:bg-red-100'
-                      }`}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
+
+                      {tabelaPreco.permite_meio_a_meio && (
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          config.modo_escuro ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                        }`}>
+                          {sabor.porcentagem}%
+                        </span>
+                      )}
+
+                      {/* Botão de remover - apenas para sabores adicionais */}
+                      {!isPrincipal && (
+                        <button
+                          onClick={() => removerSabor(index)}
+                          className={`p-1 rounded-full transition-colors ${
+                            config.modo_escuro
+                              ? 'text-red-400 hover:bg-red-900/20'
+                              : 'text-red-600 hover:bg-red-100'
+                          }`}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Botão Confirmar */}
@@ -2655,19 +2692,21 @@ const CardapioPublicoPage: React.FC = () => {
 
     if (!sabores || sabores.length === 0) {
       console.log('🍕 SABORES VAZIOS OU NULOS');
-      return '';
+      return [];
     }
 
     if (sabores.length === 1) {
       console.log('🍕 SABOR ÚNICO:', sabores[0].produto.nome);
-      return sabores[0].produto.nome;
+      return [sabores[0].produto.nome];
     }
 
-    // Para múltiplos sabores, mostrar com porcentagem
+    // Para múltiplos sabores, calcular fração baseada na quantidade
+    const totalSabores = sabores.length;
     const resultado = sabores.map(sabor => {
-      const fracao = sabor.porcentagem === 50 ? '1/2' : `${sabor.porcentagem}%`;
+      // Calcular fração baseada na quantidade de sabores
+      const fracao = `1/${totalSabores}`;
       return `${fracao} ${sabor.produto.nome}`;
-    }).join(', ');
+    });
 
     console.log('🍕 MÚLTIPLOS SABORES FORMATADOS:', resultado);
     return resultado;
@@ -5710,7 +5749,9 @@ const CardapioPublicoPage: React.FC = () => {
                           {/* Linha 1.5: Sabores (se existirem) */}
                           {sabores && sabores.length > 0 && (
                             <div className={`text-xs mt-0.5 ${config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}`}>
-                              🍕 {formatarSaboresCompacto(sabores)}
+                              {formatarSaboresCompacto(sabores).map((saborFormatado, index) => (
+                                <div key={index}>🍕 {saborFormatado}</div>
+                              ))}
                             </div>
                           )}
                           {/* Linha 2: Preço */}
@@ -7788,7 +7829,9 @@ const CardapioPublicoPage: React.FC = () => {
                         <div className={`text-xs mt-1 ${
                           config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                         }`}>
-                          {formatarSaboresCompacto(sabores)}
+                          {formatarSaboresCompacto(sabores).map((saborFormatado, index) => (
+                            <div key={index}>🍕 {saborFormatado}</div>
+                          ))}
                         </div>
                       )}
 
@@ -8914,7 +8957,9 @@ const CardapioPublicoPage: React.FC = () => {
                             <div className={`text-xs mt-1 mb-2 ${
                               config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                             }`}>
-                              {formatarSaboresCompacto(sabores)}
+                              {formatarSaboresCompacto(sabores).map((saborFormatado, index) => (
+                                <div key={index}>🍕 {saborFormatado}</div>
+                              ))}
                             </div>
                           )}
 
