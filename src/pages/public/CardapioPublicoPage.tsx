@@ -858,11 +858,11 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
                         )}
                       </span>
 
-                      {tabelaPreco.permite_meio_a_meio && (
+                      {tabelaPreco.permite_meio_a_meio && saboresSelecionados.length > 1 && (
                         <span className={`text-xs px-2 py-1 rounded-full ${
                           config.modo_escuro ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
                         }`}>
-                          {sabor.porcentagem}%
+                          1/{saboresSelecionados.length}
                         </span>
                       )}
 
