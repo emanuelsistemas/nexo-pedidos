@@ -1312,6 +1312,17 @@ const CardapioPublicoPage: React.FC = () => {
   } | null>(null);
   const [validandoEnderecoSalvo, setValidandoEnderecoSalvo] = useState(false);
 
+  // Estados para complemento de endereço (Casa/Condomínio)
+  const [tipoEndereco, setTipoEndereco] = useState<'casa' | 'condominio' | null>(null);
+  const [modalComplementoEnderecoAberto, setModalComplementoEnderecoAberto] = useState(false);
+  const [dadosComplementoEndereco, setDadosComplementoEndereco] = useState<{
+    numero?: string;
+    complemento?: string;
+    proximoA?: string;
+    nomeCondominio?: string;
+    bloco?: string;
+  }>({});
+
   // Estados para modal de configuração individual (mantendo apenas os necessários)
   const [modalAdicionarCarrinho, setModalAdicionarCarrinho] = useState(false);
   const [produtoConfiguracaoIndividual, setProdutoConfiguracaoIndividual] = useState<any>(null);
@@ -1678,6 +1689,9 @@ const CardapioPublicoPage: React.FC = () => {
           console.error('Erro ao carregar taxa salva:', e);
         }
       }
+
+      // Carregar dados de complemento de endereço
+      carregarComplementoEndereco();
     }
 
     const mensagem = calculoTaxa
@@ -1745,6 +1759,61 @@ const CardapioPublicoPage: React.FC = () => {
     setDadosOriginaisBackup(null);
   };
 
+  // Funções para complemento de endereço
+  const abrirModalComplementoEndereco = (tipo: 'casa' | 'condominio') => {
+    setTipoEndereco(tipo);
+    setModalComplementoEnderecoAberto(true);
+  };
+
+  const fecharModalComplementoEndereco = () => {
+    setModalComplementoEnderecoAberto(false);
+    setTipoEndereco(null);
+  };
+
+  const salvarComplementoEndereco = () => {
+    // Salvar dados no localStorage
+    if (empresaId && tipoEndereco) {
+      const dadosParaSalvar = {
+        tipo: tipoEndereco,
+        dados: dadosComplementoEndereco
+      };
+      localStorage.setItem(`complemento_endereco_${empresaId}`, JSON.stringify(dadosParaSalvar));
+    }
+
+    setModalComplementoEnderecoAberto(false);
+    showMessage('success', 'Dados de endereço salvos com sucesso!');
+  };
+
+  const limparComplementoEndereco = () => {
+    // Limpar dados do localStorage
+    if (empresaId) {
+      localStorage.removeItem(`complemento_endereco_${empresaId}`);
+    }
+
+    setTipoEndereco(null);
+    setDadosComplementoEndereco({});
+  };
+
+  // Função para carregar dados de complemento do localStorage
+  const carregarComplementoEndereco = () => {
+    if (empresaId) {
+      const dadosSalvosStr = localStorage.getItem(`complemento_endereco_${empresaId}`);
+      if (dadosSalvosStr) {
+        try {
+          const dadosSalvos = JSON.parse(dadosSalvosStr);
+          if (dadosSalvos.tipo && dadosSalvos.dados) {
+            setTipoEndereco(dadosSalvos.tipo);
+            setDadosComplementoEndereco(dadosSalvos.dados);
+          }
+        } catch (error) {
+          console.error('Erro ao carregar dados de complemento de endereço:', error);
+          // Limpar dados corrompidos
+          localStorage.removeItem(`complemento_endereco_${empresaId}`);
+        }
+      }
+    }
+  };
+
   // Alterar endereço (limpar dados salvos e abrir modal)
   const alterarEndereco = () => {
     if (empresaId) {
@@ -1754,6 +1823,7 @@ const CardapioPublicoPage: React.FC = () => {
       localStorage.removeItem(`endereco_encontrado_${empresaId}`);
       localStorage.removeItem(`taxa_entrega_${empresaId}`);
       localStorage.removeItem(`bairro_selecionado_${empresaId}`);
+      localStorage.removeItem(`complemento_endereco_${empresaId}`);
     }
 
     // Limpar estados
@@ -1763,6 +1833,10 @@ const CardapioPublicoPage: React.FC = () => {
     setCalculoTaxa(null);
     setBairroSelecionado('');
     setCepForaArea(false);
+
+    // Limpar dados de complemento de endereço
+    setTipoEndereco(null);
+    setDadosComplementoEndereco({});
 
     // Fechar modal de confirmação e abrir modal de validação
     setModalConfirmacaoEndereco(false);
@@ -1843,6 +1917,9 @@ const CardapioPublicoPage: React.FC = () => {
 
       // Carregar formas de pagamento disponíveis
       carregarFormasPagamento();
+
+      // Carregar dados de complemento de endereço salvos
+      carregarComplementoEndereco();
     }
   }, [empresaId]);
 
@@ -5899,7 +5976,83 @@ const CardapioPublicoPage: React.FC = () => {
                               <div className={`text-xs ${config.modo_escuro ? 'text-gray-300' : 'text-gray-600'}`}>
                                 {(() => {
                                   const precoProduto = (item as any).precoProduto || produto.preco; // ✅ USAR PREÇO SALVO
-                                  return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+
+                                  // ✅ CALCULAR PREÇO ORIGINAL E VERIFICAR DESCONTOS
+                                  let precoOriginal = produto.preco;
+
+                                  // Verificar se há tabela de preços selecionada
+                                  const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                                  const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
+
+                                  if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+                                    const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+                                    if (tabelaEscolhida) {
+                                      precoOriginal = tabelaEscolhida.preco;
+                                    }
+                                  }
+
+                                  // Verificar promoção tradicional
+                                  const temPromocaoTradicional = produto.promocao &&
+                                    produto.exibir_promocao_cardapio &&
+                                    produto.tipo_desconto &&
+                                    produto.valor_desconto !== undefined &&
+                                    produto.valor_desconto > 0;
+
+                                  // Verificar desconto por quantidade
+                                  const temDescontoQuantidade = produto.desconto_quantidade &&
+                                    produto.quantidade_minima &&
+                                    produto.quantidade_minima > 0 &&
+                                    quantidade >= produto.quantidade_minima &&
+                                    ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                                     (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                                  const temDesconto = temPromocaoTradicional || temDescontoQuantidade;
+
+                                  if (temDesconto) {
+                                    // Mostrar preço original riscado e preço com desconto
+                                    return (
+                                      <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-1">
+                                          <span className={`text-xs line-through ${
+                                            config.modo_escuro ? 'text-gray-500' : 'text-gray-400'
+                                          }`}>
+                                            {formatarPreco(precoOriginal)}
+                                          </span>
+                                          <span className={`text-xs font-medium ${
+                                            config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                          }`}>
+                                            {formatarPreco(precoProduto)}
+                                          </span>
+                                          {temDescontoQuantidade && (
+                                            <span className={`text-xs ${
+                                              config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                                            }`}>
+                                              {produto.tipo_desconto_quantidade === 'percentual'
+                                                ? `${produto.percentual_desconto_quantidade}% OFF`
+                                                : `${formatarPreco(produto.valor_desconto_quantidade!)} OFF`
+                                              }
+                                            </span>
+                                          )}
+                                          {temPromocaoTradicional && !temDescontoQuantidade && (
+                                            <span className={`text-xs ${
+                                              config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                                            }`}>
+                                              {produto.tipo_desconto === 'percentual'
+                                                ? `${produto.valor_desconto}% OFF`
+                                                : `${formatarPreco(produto.valor_desconto!)} OFF`
+                                              }
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div>
+                                          {formatarPreco(precoProduto)} × {formatarQuantidade(quantidade, produto.unidade_medida)} = {formatarPreco(precoProduto * quantidade)}
+                                        </div>
+                                      </div>
+                                    );
+                                  } else {
+                                    // Mostrar preço normal
+                                    return `${formatarPreco(precoProduto)} × ${formatarQuantidade(quantidade, produto.unidade_medida)} = ${formatarPreco(precoProduto * quantidade)}`;
+                                  }
                                 })()}
                               </div>
                             )}
@@ -8987,11 +9140,89 @@ const CardapioPublicoPage: React.FC = () => {
                           {/* Preço */}
                           {config.mostrar_precos && (
                             <div className="flex items-center justify-between mb-2">
-                              <span className={`text-sm ${
-                                config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                              }`}>
-                                Preço unitário: {formatarPreco(precoFinal)}
-                              </span>
+                              <div className="flex flex-col">
+                                {(() => {
+                                  // ✅ CALCULAR PREÇO ORIGINAL E VERIFICAR DESCONTOS
+                                  let precoOriginal = produto.preco;
+
+                                  // Verificar se há tabela de preços selecionada
+                                  const tabelasComPrecos = obterTabelasComPrecos(produto.id);
+                                  const tabelaSelecionadaId = tabelasSelecionadas[produto.id];
+
+                                  if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
+                                    const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
+                                    if (tabelaEscolhida) {
+                                      precoOriginal = tabelaEscolhida.preco;
+                                    }
+                                  }
+
+                                  // Verificar promoção tradicional
+                                  const temPromocaoTradicional = produto.promocao &&
+                                    produto.exibir_promocao_cardapio &&
+                                    produto.tipo_desconto &&
+                                    produto.valor_desconto !== undefined &&
+                                    produto.valor_desconto > 0;
+
+                                  // Verificar desconto por quantidade
+                                  const temDescontoQuantidade = produto.desconto_quantidade &&
+                                    produto.quantidade_minima &&
+                                    produto.quantidade_minima > 0 &&
+                                    quantidade >= produto.quantidade_minima &&
+                                    ((produto.tipo_desconto_quantidade === 'percentual' && produto.percentual_desconto_quantidade) ||
+                                     (produto.tipo_desconto_quantidade === 'valor' && produto.valor_desconto_quantidade));
+
+                                  const temDesconto = temPromocaoTradicional || temDescontoQuantidade;
+
+                                  if (temDesconto) {
+                                    // Mostrar preço original riscado e preço com desconto
+                                    return (
+                                      <div className="flex flex-col">
+                                        <div className="flex items-center gap-2">
+                                          <span className={`text-xs line-through ${
+                                            config.modo_escuro ? 'text-gray-500' : 'text-gray-400'
+                                          }`}>
+                                            {formatarPreco(precoOriginal)}
+                                          </span>
+                                          <span className={`text-sm font-medium ${
+                                            config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                                          }`}>
+                                            {formatarPreco(precoFinal)}
+                                          </span>
+                                        </div>
+                                        {temDescontoQuantidade && (
+                                          <span className={`text-xs ${
+                                            config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                                          }`}>
+                                            {produto.tipo_desconto_quantidade === 'percentual'
+                                              ? `${produto.percentual_desconto_quantidade}% OFF (mín. ${produto.quantidade_minima})`
+                                              : `${formatarPreco(produto.valor_desconto_quantidade!)} OFF (mín. ${produto.quantidade_minima})`
+                                            }
+                                          </span>
+                                        )}
+                                        {temPromocaoTradicional && !temDescontoQuantidade && (
+                                          <span className={`text-xs ${
+                                            config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                                          }`}>
+                                            {produto.tipo_desconto === 'percentual'
+                                              ? `${produto.valor_desconto}% OFF`
+                                              : `${formatarPreco(produto.valor_desconto!)} OFF`
+                                            }
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  } else {
+                                    // Mostrar preço normal
+                                    return (
+                                      <span className={`text-sm ${
+                                        config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                                      }`}>
+                                        Preço unitário: {formatarPreco(precoFinal)}
+                                      </span>
+                                    );
+                                  }
+                                })()}
+                              </div>
                               <span className={`text-sm font-medium ${
                                 config.modo_escuro ? 'text-green-400' : 'text-green-600'
                               }`}>
@@ -9217,10 +9448,43 @@ const CardapioPublicoPage: React.FC = () => {
                       }`}>
                         {enderecoEncontrado ? (
                           <>
-                            {enderecoEncontrado.logradouro && `${enderecoEncontrado.logradouro}, `}
+                            {enderecoEncontrado.logradouro && (
+                              <>
+                                {enderecoEncontrado.logradouro}
+                                {dadosComplementoEndereco.numero && (
+                                  <span className={`font-medium ${
+                                    config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                                  }`}>
+                                    , {dadosComplementoEndereco.numero}
+                                  </span>
+                                )}
+                                <br />
+                              </>
+                            )}
                             {enderecoEncontrado.bairro}<br />
                             {enderecoEncontrado.localidade} - {enderecoEncontrado.uf}<br />
                             <strong>CEP:</strong> {cepCliente}
+
+                            {/* Dados complementares */}
+                            {tipoEndereco && (
+                              <div className={`mt-2 text-xs ${
+                                config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                              }`}>
+                                {tipoEndereco === 'casa' ? (
+                                  <>
+                                    {dadosComplementoEndereco.complemento && <div>Complemento: {dadosComplementoEndereco.complemento}</div>}
+                                    {dadosComplementoEndereco.proximoA && <div>Próximo a: {dadosComplementoEndereco.proximoA}</div>}
+                                  </>
+                                ) : (
+                                  <>
+                                    {dadosComplementoEndereco.nomeCondominio && <div>Condomínio: {dadosComplementoEndereco.nomeCondominio}</div>}
+                                    {dadosComplementoEndereco.bloco && <div>Bloco: {dadosComplementoEndereco.bloco}</div>}
+                                    {dadosComplementoEndereco.complemento && <div>Complemento: {dadosComplementoEndereco.complemento}</div>}
+                                    {dadosComplementoEndereco.proximoA && <div>Próximo a: {dadosComplementoEndereco.proximoA}</div>}
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </>
                         ) : (
                           bairroSelecionado || 'Não informado'
@@ -9272,6 +9536,95 @@ const CardapioPublicoPage: React.FC = () => {
                       </span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Seção Tipo de Endereço */}
+              {taxaEntregaConfig && areaValidada && calculoTaxa && (
+                <div className={`mt-4 p-4 rounded-lg border ${
+                  config.modo_escuro
+                    ? 'bg-gray-800 border-gray-600'
+                    : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className={`font-semibold ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      🏠 Tipo de Endereço
+                    </h4>
+                  </div>
+
+                  {tipoEndereco ? (
+                    <div className={`p-3 rounded-lg ${
+                      config.modo_escuro
+                        ? 'bg-blue-900/30 border border-blue-600'
+                        : 'bg-blue-50 border border-blue-200'
+                    }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <span className={`font-medium ${
+                            config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                          }`}>
+                            {tipoEndereco === 'casa' ? '🏠 Casa' : '🏢 Condomínio'}
+                          </span>
+                          <div className={`text-xs mt-1 ${
+                            config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                          }`}>
+                            {tipoEndereco === 'casa' ? (
+                              <>
+                                {dadosComplementoEndereco.numero && <p>Número: {dadosComplementoEndereco.numero}</p>}
+                                {dadosComplementoEndereco.complemento && <p>Complemento: {dadosComplementoEndereco.complemento}</p>}
+                                {dadosComplementoEndereco.proximoA && <p>Próximo a: {dadosComplementoEndereco.proximoA}</p>}
+                              </>
+                            ) : (
+                              <>
+                                {dadosComplementoEndereco.nomeCondominio && <p>Condomínio: {dadosComplementoEndereco.nomeCondominio}</p>}
+                                {dadosComplementoEndereco.numero && <p>Número: {dadosComplementoEndereco.numero}</p>}
+                                {dadosComplementoEndereco.bloco && <p>Bloco: {dadosComplementoEndereco.bloco}</p>}
+                                {dadosComplementoEndereco.complemento && <p>Complemento: {dadosComplementoEndereco.complemento}</p>}
+                                {dadosComplementoEndereco.proximoA && <p>Próximo a: {dadosComplementoEndereco.proximoA}</p>}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={limparComplementoEndereco}
+                          className={`text-xs px-2 py-1 rounded ${
+                            config.modo_escuro
+                              ? 'bg-red-600 hover:bg-red-700 text-white'
+                              : 'bg-red-500 hover:bg-red-600 text-white'
+                          }`}
+                        >
+                          Alterar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => abrirModalComplementoEndereco('casa')}
+                        className={`p-3 rounded-lg border-2 border-dashed transition-colors text-center ${
+                          config.modo_escuro
+                            ? 'border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
+                            : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">🏠</div>
+                        <div className="text-sm font-medium">Casa</div>
+                      </button>
+                      <button
+                        onClick={() => abrirModalComplementoEndereco('condominio')}
+                        className={`p-3 rounded-lg border-2 border-dashed transition-colors text-center ${
+                          config.modo_escuro
+                            ? 'border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-300 hover:bg-gray-800/30'
+                            : 'border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">🏢</div>
+                        <div className="text-sm font-medium">Condomínio</div>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -10642,6 +10995,236 @@ const CardapioPublicoPage: React.FC = () => {
               >
                 {calculandoTaxa ? 'Calculando...' : 'Confirmar Área de Entrega'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Complemento de Endereço */}
+      {modalComplementoEnderecoAberto && tipoEndereco && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`text-lg font-semibold ${
+                  config.modo_escuro ? 'text-white' : 'text-gray-900'
+                }`}>
+                  {tipoEndereco === 'casa' ? '🏠 Dados da Casa' : '🏢 Dados do Condomínio'}
+                </h3>
+                <button
+                  onClick={fecharModalComplementoEndereco}
+                  className={`p-2 rounded-full transition-colors ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6 space-y-4">
+              {tipoEndereco === 'casa' ? (
+                <>
+                  {/* Campos para Casa */}
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Número *
+                    </label>
+                    <input
+                      type="text"
+                      value={dadosComplementoEndereco.numero || ''}
+                      onChange={(e) => setDadosComplementoEndereco(prev => ({ ...prev, numero: e.target.value }))}
+                      placeholder="Ex: 123"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Complemento
+                    </label>
+                    <input
+                      type="text"
+                      value={dadosComplementoEndereco.complemento || ''}
+                      onChange={(e) => setDadosComplementoEndereco(prev => ({ ...prev, complemento: e.target.value }))}
+                      placeholder="Ex: Apto 101, Casa dos fundos"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Próximo a
+                    </label>
+                    <input
+                      type="text"
+                      value={dadosComplementoEndereco.proximoA || ''}
+                      onChange={(e) => setDadosComplementoEndereco(prev => ({ ...prev, proximoA: e.target.value }))}
+                      placeholder="Ex: Padaria do João, Escola Municipal"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Campos para Condomínio */}
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Nome do Condomínio *
+                    </label>
+                    <input
+                      type="text"
+                      value={dadosComplementoEndereco.nomeCondominio || ''}
+                      onChange={(e) => setDadosComplementoEndereco(prev => ({ ...prev, nomeCondominio: e.target.value }))}
+                      placeholder="Ex: Residencial Jardim das Flores"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Número *
+                    </label>
+                    <input
+                      type="text"
+                      value={dadosComplementoEndereco.numero || ''}
+                      onChange={(e) => setDadosComplementoEndereco(prev => ({ ...prev, numero: e.target.value }))}
+                      placeholder="Ex: 123"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Bloco
+                    </label>
+                    <input
+                      type="text"
+                      value={dadosComplementoEndereco.bloco || ''}
+                      onChange={(e) => setDadosComplementoEndereco(prev => ({ ...prev, bloco: e.target.value }))}
+                      placeholder="Ex: A, B, Torre 1"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Complemento
+                    </label>
+                    <input
+                      type="text"
+                      value={dadosComplementoEndereco.complemento || ''}
+                      onChange={(e) => setDadosComplementoEndereco(prev => ({ ...prev, complemento: e.target.value }))}
+                      placeholder="Ex: Apto 101, Casa 5"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-sm font-medium mb-2 ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Próximo a
+                    </label>
+                    <input
+                      type="text"
+                      value={dadosComplementoEndereco.proximoA || ''}
+                      onChange={(e) => setDadosComplementoEndereco(prev => ({ ...prev, proximoA: e.target.value }))}
+                      placeholder="Ex: Padaria do João, Escola Municipal"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        config.modo_escuro
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                          : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                      }`}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex gap-3">
+                <button
+                  onClick={fecharModalComplementoEndereco}
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium transition-colors ${
+                    config.modo_escuro
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                  }`}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={salvarComplementoEndereco}
+                  disabled={
+                    tipoEndereco === 'casa'
+                      ? !dadosComplementoEndereco.numero
+                      : !dadosComplementoEndereco.nomeCondominio || !dadosComplementoEndereco.numero
+                  }
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                    (tipoEndereco === 'casa'
+                      ? !dadosComplementoEndereco.numero
+                      : !dadosComplementoEndereco.nomeCondominio || !dadosComplementoEndereco.numero)
+                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transform hover:scale-[1.02] shadow-lg'
+                  }`}
+                >
+                  Salvar
+                </button>
+              </div>
             </div>
           </div>
         </div>
