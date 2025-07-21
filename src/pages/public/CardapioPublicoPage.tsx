@@ -1390,6 +1390,17 @@ const CardapioPublicoPage: React.FC = () => {
   const [saboresSelecionados, setSaboresSelecionados] = useState<{[produtoId: string]: SaborSelecionado[]}>({});
   const [precosSabores, setPrecosSabores] = useState<{[produtoId: string]: number}>({});
 
+  // Estados para controle de status do pedido
+  const [modalStatusPedidoAberto, setModalStatusPedidoAberto] = useState(false);
+  const [pedidoAtual, setPedidoAtual] = useState<{
+    id: string;
+    numero_pedido: string;
+    status_pedido: string;
+    data_pedido: string;
+    valor_total: number;
+  } | null>(null);
+  const [mostrarTarjaPedido, setMostrarTarjaPedido] = useState(false);
+
   // Funções para observações
   const abrirModalObservacao = (produtoId: string, itemId?: string) => {
     setProdutoObservacaoAtual(itemId || produtoId);
@@ -5234,38 +5245,370 @@ const CardapioPublicoPage: React.FC = () => {
     setModalDadosClienteAberto(true);
   };
 
-  const confirmarFinalizacaoPedido = () => {
-    // Ir para o WhatsApp com os dados do cliente
-    handlePedirWhatsApp();
+  const confirmarFinalizacaoPedido = async () => {
+    try {
+      // ✅ SALVAR PEDIDO NA TABELA CARDAPIO_DIGITAL
+      const pedidoSalvo = await salvarPedidoCardapioDigital();
 
-    // Limpar carrinho após finalizar pedido
-    setQuantidadesProdutos({});
-    setOrdemAdicaoItens({});
-    setAdicionaisSelecionados({});
-    setObservacoesProdutos({});
-    setItensCarrinhoSeparados({});
-    setCarrinhoAberto(false);
+      // Ir para o WhatsApp com os dados do cliente
+      // handlePedirWhatsApp(); // ✅ COMENTADO TEMPORARIAMENTE
 
-    // Limpar localStorage
-    if (empresaId) {
-      localStorage.removeItem(`carrinho_${empresaId}`);
-      localStorage.removeItem(`carrinho_ordem_${empresaId}`);
-      localStorage.removeItem(`carrinho_adicionais_${empresaId}`);
-      localStorage.removeItem(`carrinho_observacoes_${empresaId}`);
-      localStorage.removeItem(`carrinho_validacao_minima_${empresaId}`);
+      // ✅ ABRIR MODAL DE STATUS DO PEDIDO
+      abrirModalStatusPedido(pedidoSalvo);
+
+      // Limpar carrinho após finalizar pedido
+      setQuantidadesProdutos({});
+      setOrdemAdicaoItens({});
+      setAdicionaisSelecionados({});
+      setObservacoesProdutos({});
+      setItensCarrinhoSeparados({});
+      setCarrinhoAberto(false);
+
+      // Limpar localStorage
+      if (empresaId) {
+        localStorage.removeItem(`carrinho_${empresaId}`);
+        localStorage.removeItem(`carrinho_ordem_${empresaId}`);
+        localStorage.removeItem(`carrinho_adicionais_${empresaId}`);
+        localStorage.removeItem(`carrinho_observacoes_${empresaId}`);
+        localStorage.removeItem(`carrinho_validacao_minima_${empresaId}`);
+      }
+
+      // Limpar dados do cliente
+      setDadosCliente({
+        nome: '',
+        telefone: '',
+        querNotaFiscal: false,
+        cpfCnpj: ''
+      });
+
+      // Limpar dados de entrega e pagamento
+      setCepCliente('');
+      setEnderecoEncontrado(null);
+      setCalculoTaxa(null);
+      setBairroSelecionado('');
+      setAreaValidada(false);
+      setFormaPagamentoSelecionada(null);
+      setCupomAplicado(null);
+      setTipoEndereco(null);
+      setDadosComplementoEndereco({
+        numero: '',
+        complemento: '',
+        proximoA: '',
+        nomeCondominio: '',
+        bloco: ''
+      });
+
+    } catch (error) {
+      console.error('Erro ao finalizar pedido:', error);
+      showMessage('error', 'Erro ao finalizar pedido. Tente novamente.');
     }
-
-    // Limpar dados do cliente
-    setDadosCliente({
-      nome: '',
-      telefone: '',
-      querNotaFiscal: false,
-      cpfCnpj: ''
-    });
   };
 
   const cancelarFinalizacaoPedido = () => {
     setModalFinalizacaoAberto(false);
+  };
+
+  // ✅ FUNÇÕES PARA CONTROLE DE STATUS DO PEDIDO
+  const salvarPedidoLocalStorage = (pedido: any) => {
+    if (empresaId) {
+      localStorage.setItem(`pedido_status_${empresaId}`, JSON.stringify(pedido));
+    }
+  };
+
+  const carregarPedidoLocalStorage = () => {
+    if (empresaId) {
+      const pedidoSalvo = localStorage.getItem(`pedido_status_${empresaId}`);
+      if (pedidoSalvo) {
+        try {
+          return JSON.parse(pedidoSalvo);
+        } catch (error) {
+          console.error('Erro ao carregar pedido do localStorage:', error);
+        }
+      }
+    }
+    return null;
+  };
+
+  const limparPedidoLocalStorage = () => {
+    if (empresaId) {
+      localStorage.removeItem(`pedido_status_${empresaId}`);
+    }
+  };
+
+  const abrirModalStatusPedido = (pedido: any) => {
+    setPedidoAtual(pedido);
+    setModalStatusPedidoAberto(true);
+    setMostrarTarjaPedido(false);
+    salvarPedidoLocalStorage(pedido);
+  };
+
+  const fecharModalStatusPedido = () => {
+    setModalStatusPedidoAberto(false);
+    setMostrarTarjaPedido(true);
+  };
+
+  const voltarParaCardapio = () => {
+    setModalStatusPedidoAberto(false);
+    setMostrarTarjaPedido(true);
+  };
+
+  const finalizarAcompanhamentoPedido = () => {
+    setModalStatusPedidoAberto(false);
+    setMostrarTarjaPedido(false);
+    setPedidoAtual(null);
+    limparPedidoLocalStorage();
+  };
+
+  // Carregar pedido do localStorage ao inicializar
+  useEffect(() => {
+    const pedidoSalvo = carregarPedidoLocalStorage();
+    if (pedidoSalvo) {
+      setPedidoAtual(pedidoSalvo);
+      setMostrarTarjaPedido(true);
+    }
+  }, [empresaId]);
+
+  // ✅ FUNÇÃO PARA OBTER STATUS DO PEDIDO
+  const obterStatusPedido = (status: string) => {
+    const statusMap = {
+      'pendente': {
+        titulo: 'Aguardando Estabelecimento Aceitar o Pedido',
+        icone: 'loading',
+        cor: 'text-yellow-500',
+        bgCor: 'bg-yellow-50',
+        borderCor: 'border-yellow-200'
+      },
+      'confirmado': {
+        titulo: 'Pedido Aceito - Sendo Preparado',
+        icone: 'check',
+        cor: 'text-blue-500',
+        bgCor: 'bg-blue-50',
+        borderCor: 'border-blue-200'
+      },
+      'preparando': {
+        titulo: 'Pedido Sendo Preparado',
+        icone: 'loading',
+        cor: 'text-blue-500',
+        bgCor: 'bg-blue-50',
+        borderCor: 'border-blue-200'
+      },
+      'pronto': {
+        titulo: 'Pedido Pronto - Saiu para Entrega',
+        icone: 'loading',
+        cor: 'text-purple-500',
+        bgCor: 'bg-purple-50',
+        borderCor: 'border-purple-200'
+      },
+      'entregue': {
+        titulo: 'Pedido Entregue',
+        icone: 'check',
+        cor: 'text-green-500',
+        bgCor: 'bg-green-50',
+        borderCor: 'border-green-200'
+      }
+    };
+
+    return statusMap[status as keyof typeof statusMap] || statusMap.pendente;
+  };
+
+  // ✅ FUNÇÃO PARA SALVAR PEDIDO NA TABELA CARDAPIO_DIGITAL
+  const salvarPedidoCardapioDigital = async () => {
+    if (!empresaId || !dadosCliente.nome || !dadosCliente.telefone) {
+      throw new Error('Dados obrigatórios não preenchidos');
+    }
+
+    try {
+      // 1. Gerar número do pedido
+      const { data: numeroData, error: numeroError } = await supabase
+        .rpc('gerar_numero_pedido_cardapio', { empresa_uuid: empresaId });
+
+      if (numeroError) {
+        console.error('Erro ao gerar número do pedido:', numeroError);
+        throw new Error('Erro ao gerar número do pedido');
+      }
+
+      const numeroPedido = numeroData;
+
+      // 2. Buscar ou criar cliente
+      let clienteId = null;
+      try {
+        // Tentar buscar cliente existente pelo telefone
+        const { data: clienteExistente } = await supabase
+          .from('clientes')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('telefone', dadosCliente.telefone)
+          .eq('deletado', false)
+          .single();
+
+        if (clienteExistente) {
+          clienteId = clienteExistente.id;
+        } else {
+          // Criar novo cliente
+          const novoCliente = {
+            empresa_id: empresaId,
+            nome: dadosCliente.nome,
+            telefone: dadosCliente.telefone,
+            documento: dadosCliente.cpfCnpj || null,
+            tipo_documento: dadosCliente.cpfCnpj ? (dadosCliente.cpfCnpj.length <= 14 ? 'CPF' : 'CNPJ') : null,
+            cep: cepCliente || null,
+            endereco: enderecoEncontrado?.logradouro || null,
+            numero: dadosComplementoEndereco.numero || null,
+            complemento: dadosComplementoEndereco.complemento || null,
+            bairro: enderecoEncontrado?.bairro || bairroSelecionado || null,
+            cidade: enderecoEncontrado?.localidade || null,
+            estado: enderecoEncontrado?.uf || null,
+            tipo_residencia: tipoEndereco || null,
+            ponto_referencia: dadosComplementoEndereco.proximoA || null
+          };
+
+          const { data: clienteCriado, error: clienteError } = await supabase
+            .from('clientes')
+            .insert([novoCliente])
+            .select('id')
+            .single();
+
+          if (clienteError) {
+            console.error('Erro ao criar cliente:', clienteError);
+            // Continuar sem cliente_id se der erro
+          } else {
+            clienteId = clienteCriado.id;
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao processar cliente:', error);
+        // Continuar sem cliente_id se der erro
+      }
+
+      // 3. Preparar itens do pedido
+      const itensCarrinho = obterItensCarrinho();
+      const itensFormatados = itensCarrinho.map((item: any) => ({
+        produto_id: item.produto.id,
+        produto_nome: item.produto.nome,
+        quantidade: item.quantidade,
+        preco_unitario: item.precoProduto || item.produto.preco,
+        preco_total: (item.precoProduto || item.produto.preco) * item.quantidade,
+        tabela_preco_id: item.tabelaPrecoId || null,
+        sabores: item.sabores || [],
+        adicionais: item.adicionais || [],
+        observacao: item.observacao || null
+      }));
+
+      // 4. Calcular valores
+      const valorProdutos = obterTotalCarrinho();
+      const valorTaxaEntrega = calculoTaxa?.valor || 0;
+      const valorDescontoCupom = calcularDescontoCupom();
+      const valorTotal = valorProdutos + valorTaxaEntrega - valorDescontoCupom;
+
+      // 5. Preparar dados do pedido
+      const dadosPedido = {
+        numero_pedido: numeroPedido,
+        empresa_id: empresaId,
+        cliente_id: clienteId,
+        status_pedido: 'pendente',
+
+        // Dados do cliente
+        nome_cliente: dadosCliente.nome,
+        telefone_cliente: dadosCliente.telefone,
+        quer_nota_fiscal: dadosCliente.querNotaFiscal || false,
+        cpf_cnpj_cliente: dadosCliente.cpfCnpj || null,
+
+        // Dados de entrega
+        tem_entrega: !!calculoTaxa,
+        cep_entrega: cepCliente || null,
+        endereco_entrega: enderecoEncontrado?.logradouro || null,
+        numero_entrega: dadosComplementoEndereco.numero || null,
+        complemento_entrega: dadosComplementoEndereco.complemento || null,
+        bairro_entrega: enderecoEncontrado?.bairro || bairroSelecionado || null,
+        cidade_entrega: enderecoEncontrado?.localidade || null,
+        estado_entrega: enderecoEncontrado?.uf || null,
+        tipo_endereco: tipoEndereco || null,
+        nome_condominio: dadosComplementoEndereco.nomeCondominio || null,
+        bloco_endereco: dadosComplementoEndereco.bloco || null,
+        proximo_a: dadosComplementoEndereco.proximoA || null,
+
+        // Taxa de entrega
+        valor_taxa_entrega: valorTaxaEntrega,
+        distancia_km: calculoTaxa?.distancia_km || null,
+        tempo_estimado_minutos: calculoTaxa?.tempo_estimado || null,
+
+        // Forma de pagamento
+        forma_pagamento_nome: formaPagamentoSelecionada?.nome || null,
+        forma_pagamento_tipo: formaPagamentoSelecionada?.tipo || null,
+        forma_pagamento_detalhes: formaPagamentoSelecionada ? {
+          chave_pix: formaPagamentoSelecionada.chave_pix || null,
+          tipo_chave_pix: formaPagamentoSelecionada.tipo_chave_pix || null,
+          precisa_troco: formaPagamentoSelecionada.precisa_troco || null,
+          valor_dinheiro: formaPagamentoSelecionada.valor_dinheiro || null,
+          troco: formaPagamentoSelecionada.troco || null,
+          max_parcelas: formaPagamentoSelecionada.max_parcelas || null
+        } : null,
+
+        // Cupom de desconto
+        cupom_desconto_id: cupomAplicado?.id || null,
+        cupom_codigo: cupomAplicado?.codigo || null,
+        cupom_descricao: cupomAplicado?.descricao || null,
+        cupom_tipo_desconto: cupomAplicado?.tipo_desconto || null,
+        cupom_valor_desconto: cupomAplicado?.valor_desconto || null,
+
+        // Valores
+        valor_produtos: valorProdutos,
+        valor_desconto_cupom: valorDescontoCupom,
+        valor_total: valorTotal,
+
+        // Itens do pedido
+        itens_pedido: itensFormatados,
+
+        // Dados de origem
+        url_cardapio: window.location.href,
+        ip_cliente: null, // Será preenchido pelo backend se necessário
+        user_agent: navigator.userAgent
+      };
+
+      // 6. Salvar pedido no banco
+      const { data: pedidoSalvo, error: pedidoError } = await supabase
+        .from('cardapio_digital')
+        .insert([dadosPedido])
+        .select('id, numero_pedido')
+        .single();
+
+      if (pedidoError) {
+        console.error('Erro ao salvar pedido:', pedidoError);
+        throw new Error('Erro ao salvar pedido no banco de dados');
+      }
+
+      // 7. Atualizar uso do cupom se aplicado
+      if (cupomAplicado?.id) {
+        try {
+          const { error: cupomError } = await supabase
+            .rpc('incrementar_uso_cupom', { cupom_id: cupomAplicado.id });
+
+          if (cupomError) {
+            console.error('Erro ao atualizar uso do cupom:', cupomError);
+            // Não falhar o pedido por causa do cupom
+          }
+        } catch (error) {
+          console.error('Erro ao processar cupom:', error);
+        }
+      }
+
+      console.log('✅ Pedido salvo com sucesso:', pedidoSalvo);
+
+      // ✅ ABRIR MODAL DE STATUS DO PEDIDO
+      const pedidoParaStatus = {
+        id: pedidoSalvo.id,
+        numero_pedido: pedidoSalvo.numero_pedido,
+        status_pedido: 'pendente',
+        data_pedido: new Date().toISOString(),
+        valor_total: valorTotal
+      };
+
+      return pedidoParaStatus;
+
+    } catch (error) {
+      console.error('Erro ao salvar pedido:', error);
+      throw error;
+    }
   };
 
   // Funções para controlar adicionais nos itens do carrinho separado
@@ -5544,6 +5887,31 @@ const CardapioPublicoPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Tarja do Pedido Ativo */}
+      {mostrarTarjaPedido && pedidoAtual && (
+        <div className="bg-green-600 text-white py-3 px-4 text-center relative overflow-hidden shadow-lg">
+          <div className="absolute inset-0 bg-gradient-to-r from-green-600 via-green-500 to-green-600"></div>
+          <div className="relative z-10 flex items-center justify-center gap-3">
+            <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+            <div className="font-bold text-lg">
+              📋 PEDIDO #{pedidoAtual.numero_pedido}
+            </div>
+            <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
+          </div>
+          <div className="relative z-10 mt-1">
+            <p className="text-sm font-medium mb-2">
+              {obterStatusPedido(pedidoAtual.status_pedido).titulo}
+            </p>
+            <button
+              onClick={() => setModalStatusPedidoAberto(true)}
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 border border-white/30"
+            >
+              👁️ Acompanhar Pedido
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header com gradiente - Oculto quando carrinho está aberto */}
       <div className={`relative ${config.modo_escuro ? 'bg-gradient-to-r from-gray-800 via-gray-900 to-gray-800' : 'bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800'} shadow-xl transition-all duration-300 ${
@@ -11100,6 +11468,246 @@ const CardapioPublicoPage: React.FC = () => {
                   Salvar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Status do Pedido */}
+      {modalStatusPedidoAberto && pedidoAtual && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={`text-xl font-bold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Status do Pedido
+                  </h3>
+                  <p className={`text-sm mt-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Pedido #{pedidoAtual.numero_pedido}
+                  </p>
+                </div>
+                <button
+                  onClick={fecharModalStatusPedido}
+                  className={`p-2 rounded-lg transition-colors ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:bg-gray-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6">
+              {/* Status Atual */}
+              <div className={`p-4 rounded-xl border-2 mb-6 ${
+                obterStatusPedido(pedidoAtual.status_pedido).bgCor
+              } ${
+                obterStatusPedido(pedidoAtual.status_pedido).borderCor
+              }`}>
+                <div className="flex items-center gap-3">
+                  {obterStatusPedido(pedidoAtual.status_pedido).icone === 'check' ? (
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      obterStatusPedido(pedidoAtual.status_pedido).cor.replace('text-', 'bg-')
+                    }`}>
+                      <Check size={20} className="text-white" />
+                    </div>
+                  ) : (
+                    <div className={`w-8 h-8 rounded-full border-2 border-current animate-spin ${
+                      obterStatusPedido(pedidoAtual.status_pedido).cor
+                    }`}>
+                      <div className="w-2 h-2 bg-current rounded-full ml-1 mt-1"></div>
+                    </div>
+                  )}
+                  <div>
+                    <h4 className={`font-semibold ${
+                      obterStatusPedido(pedidoAtual.status_pedido).cor
+                    }`}>
+                      {obterStatusPedido(pedidoAtual.status_pedido).titulo}
+                    </h4>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      {new Date(pedidoAtual.data_pedido).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeline de Status */}
+              <div className="space-y-4 mb-6">
+                {/* Pedido Concluído */}
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                    <Check size={14} className="text-white" />
+                  </div>
+                  <span className={`text-sm font-medium ${
+                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Pedido Concluído com Sucesso
+                  </span>
+                </div>
+
+                {/* Aguardando Estabelecimento */}
+                <div className="flex items-center gap-3">
+                  {['confirmado', 'preparando', 'pronto', 'entregue'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <Check size={14} className="text-white" />
+                    </div>
+                  ) : (
+                    <div className="w-6 h-6 rounded-full border-2 border-yellow-500 animate-spin">
+                      <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full ml-0.5 mt-0.5"></div>
+                    </div>
+                  )}
+                  <span className={`text-sm font-medium ${
+                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Estabelecimento Aceitar o Pedido
+                  </span>
+                </div>
+
+                {/* Pedido Sendo Feito */}
+                <div className="flex items-center gap-3">
+                  {['preparando', 'pronto', 'entregue'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <Check size={14} className="text-white" />
+                    </div>
+                  ) : ['confirmado'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full border-2 border-blue-500 animate-spin">
+                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full ml-0.5 mt-0.5"></div>
+                    </div>
+                  ) : (
+                    <div className={`w-6 h-6 rounded-full border-2 ${
+                      config.modo_escuro ? 'border-gray-600' : 'border-gray-300'
+                    }`}></div>
+                  )}
+                  <span className={`text-sm font-medium ${
+                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Pedido Sendo Preparado
+                  </span>
+                </div>
+
+                {/* Saiu para Entrega */}
+                <div className="flex items-center gap-3">
+                  {['entregue'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <Check size={14} className="text-white" />
+                    </div>
+                  ) : ['pronto'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full border-2 border-purple-500 animate-spin">
+                      <div className="w-1.5 h-1.5 bg-purple-500 rounded-full ml-0.5 mt-0.5"></div>
+                    </div>
+                  ) : (
+                    <div className={`w-6 h-6 rounded-full border-2 ${
+                      config.modo_escuro ? 'border-gray-600' : 'border-gray-300'
+                    }`}></div>
+                  )}
+                  <span className={`text-sm font-medium ${
+                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Saiu para Entrega
+                  </span>
+                </div>
+
+                {/* Entregue */}
+                <div className="flex items-center gap-3">
+                  {['entregue'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <Check size={14} className="text-white" />
+                    </div>
+                  ) : (
+                    <div className={`w-6 h-6 rounded-full border-2 ${
+                      config.modo_escuro ? 'border-gray-600' : 'border-gray-300'
+                    }`}></div>
+                  )}
+                  <span className={`text-sm font-medium ${
+                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Pedido Entregue
+                  </span>
+                </div>
+              </div>
+
+              {/* Informações do Pedido */}
+              <div className={`p-4 rounded-lg ${
+                config.modo_escuro ? 'bg-gray-700' : 'bg-gray-50'
+              }`}>
+                <h5 className={`font-semibold mb-2 ${
+                  config.modo_escuro ? 'text-white' : 'text-gray-900'
+                }`}>
+                  Informações do Pedido
+                </h5>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className={config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}>
+                      Número:
+                    </span>
+                    <span className={`font-medium ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      #{pedidoAtual.numero_pedido}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className={config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}>
+                      Data:
+                    </span>
+                    <span className={`font-medium ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      {new Date(pedidoAtual.data_pedido).toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className={config.modo_escuro ? 'text-gray-400' : 'text-gray-600'}>
+                      Valor Total:
+                    </span>
+                    <span className={`font-bold text-green-600 ${
+                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                    }`}>
+                      {formatarPreco(pedidoAtual.valor_total)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`p-6 border-t space-y-3 ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={voltarParaCardapio}
+                className={`w-full py-3 px-4 rounded-xl font-medium transition-colors ${
+                  config.modo_escuro
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                }`}
+              >
+                🍽️ Voltar ao Cardápio
+              </button>
+
+              {pedidoAtual.status_pedido === 'entregue' && (
+                <button
+                  onClick={finalizarAcompanhamentoPedido}
+                  className="w-full py-3 px-4 rounded-xl font-medium transition-colors bg-green-600 hover:bg-green-700 text-white"
+                >
+                  ✅ Finalizar Acompanhamento
+                </button>
+              )}
             </div>
           </div>
         </div>
