@@ -158,18 +158,36 @@ export const useCardapioDigitalNotifications = ({
       intervalSomRef.current = null;
     }
 
-    // Tocar som imediatamente
-    console.log('🔊 Tocando som inicial...');
-    tocarSomNotificacao(true);
+    // ✅ NOVA LÓGICA: Função para tocar 2 vezes consecutivas (aguardando cada som terminar)
+    const tocarDuasVezes = async () => {
+      try {
+        console.log('🔔 Tocando som 1/2...');
+        await tocarSomNotificacao(true);
 
-    // Configurar intervalo para tocar a cada 10 segundos
+        // Aguardar o som terminar completamente (duração do som + margem de segurança)
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 segundos para garantir que terminou
+
+        console.log('🔔 Tocando som 2/2...');
+        await tocarSomNotificacao(true);
+
+        console.log('✅ Sequência de 2 sons concluída');
+      } catch (error) {
+        console.error('❌ Erro ao tocar sequência de sons:', error);
+      }
+    };
+
+    // Tocar 2 vezes imediatamente
+    console.log('🔊 Tocando som inicial (2x)...');
+    tocarDuasVezes();
+
+    // Configurar intervalo para tocar 2 vezes a cada ciclo
     intervalSomRef.current = setInterval(() => {
       console.log('🔔 VERIFICAÇÃO PERIÓDICA - Pedidos pendentes:', contadorPendentes);
 
       // Verificar se ainda há pedidos pendentes
       if (contadorPendentes > 0) {
-        console.log('🔔 SOM CONTÍNUO - Tocando novamente...');
-        tocarSomNotificacao(true);
+        console.log('🔔 SOM CONTÍNUO - Tocando 2x novamente...');
+        tocarDuasVezes();
       } else {
         console.log('🔕 PARANDO SOM CONTÍNUO - Sem pedidos pendentes');
         if (intervalSomRef.current) {
@@ -178,7 +196,7 @@ export const useCardapioDigitalNotifications = ({
         }
         setSomContinuoAtivo(false);
       }
-    }, 10000); // 10 segundos (mais frequente)
+    }, 5000); // ✅ AJUSTADO: 5 segundos de pausa entre ciclos
 
     console.log('✅ Som contínuo configurado com sucesso!');
 
