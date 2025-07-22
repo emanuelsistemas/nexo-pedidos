@@ -258,6 +258,13 @@ const PDVPage: React.FC = () => {
       const habilitado = await habilitarAudio();
       if (habilitado) {
         reabilitarSomPeloUsuario(); // Reabilitar som no hook
+
+        // ✅ NOVO: Se há pedidos pendentes, tocar som imediatamente
+        if (contadorCardapio > 0) {
+          console.log('🔔 REATIVAÇÃO IMEDIATA: Tocando som - há pedidos pendentes!');
+          await tocarSomNotificacao(true);
+        }
+
         toast.success('Som do cardápio ativado!');
       } else {
         toast.error('Não foi possível habilitar o áudio');
@@ -269,6 +276,12 @@ const PDVPage: React.FC = () => {
       // Caso não esteja ativo, ativar
       console.log('🔊 Ativando som do cardápio...');
       reabilitarSomPeloUsuario(); // Reabilitar som no hook
+
+      // ✅ NOVO: Se há pedidos pendentes, tocar som imediatamente
+      if (contadorCardapio > 0) {
+        console.log('🔔 ATIVAÇÃO IMEDIATA: Tocando som - há pedidos pendentes!');
+      }
+
       const sucesso = await tocarSomNotificacao(true);
       if (sucesso) {
         toast.success('Som do cardápio ativado!');

@@ -142,6 +142,12 @@ export const useCardapioDigitalNotifications = ({
       return;
     }
 
+    // ✅ NOVA VERIFICAÇÃO: Se foi desabilitado pelo usuário, não iniciar
+    if (somDesabilitadoPeloUsuario) {
+      console.log('🔇 Som foi desabilitado pelo usuário, não iniciando...');
+      return;
+    }
+
     console.log('🔔 INICIANDO SOM CONTÍNUO - Pedidos pendentes:', contadorPendentes);
     setSomContinuoAtivo(true);
 
@@ -176,7 +182,7 @@ export const useCardapioDigitalNotifications = ({
 
     console.log('✅ Som contínuo configurado com sucesso!');
 
-  }, [contadorPendentes, somContinuoAtivo, tocarSomNotificacao]);
+  }, [contadorPendentes, somContinuoAtivo, somDesabilitadoPeloUsuario, tocarSomNotificacao]);
 
   // ✅ FUNÇÃO PARA PARAR SOM CONTÍNUO
   const pararSomContinuo = useCallback(() => {
@@ -199,7 +205,13 @@ export const useCardapioDigitalNotifications = ({
   const reabilitarSomPeloUsuario = useCallback(() => {
     console.log('🔊 Som reabilitado pelo usuário');
     setSomDesabilitadoPeloUsuario(false);
-  }, []);
+
+    // ✅ NOVO: Se há pedidos pendentes, iniciar som imediatamente
+    if (contadorPendentes > 0 && !somContinuoAtivo && audioHabilitado) {
+      console.log('🔔 REABILITAÇÃO: Iniciando som imediatamente - há pedidos pendentes!');
+      setTimeout(() => iniciarSomContinuo(), 100); // Delay mínimo apenas para garantir que o estado foi atualizado
+    }
+  }, [contadorPendentes, somContinuoAtivo, audioHabilitado, iniciarSomContinuo]);
 
   // ✅ CARREGAR PEDIDOS PENDENTES
   const carregarPedidosPendentes = useCallback(async () => {
@@ -246,10 +258,10 @@ export const useCardapioDigitalNotifications = ({
       setPedidosPendentes(pedidos);
       setContadorPendentes(novoContador);
 
-      // ✅ INICIAR SOM CONTÍNUO SE HÁ PEDIDOS PENDENTES
-      if (novoContador > 0 && !somContinuoAtivo) {
+      // ✅ INICIAR SOM CONTÍNUO SE HÁ PEDIDOS PENDENTES E NÃO FOI DESABILITADO PELO USUÁRIO
+      if (novoContador > 0 && !somContinuoAtivo && !somDesabilitadoPeloUsuario) {
         console.log('🔔 DETECTADOS PEDIDOS PENDENTES - INICIANDO SOM CONTÍNUO IMEDIATAMENTE!');
-        setTimeout(() => iniciarSomContinuo(), 500); // Pequeno delay para garantir que o estado foi atualizado
+        setTimeout(() => iniciarSomContinuo(), 200); // Delay reduzido para melhor responsividade
       }
 
     } catch (error) {
@@ -257,7 +269,7 @@ export const useCardapioDigitalNotifications = ({
     } finally {
       setIsLoading(false);
     }
-  }, [empresaId, enabled, contadorPendentes, somContinuoAtivo, iniciarSomContinuo]);
+  }, [empresaId, enabled, contadorPendentes, somContinuoAtivo, somDesabilitadoPeloUsuario, iniciarSomContinuo]);
 
   // ✅ ACEITAR PEDIDO
   const aceitarPedido = useCallback(async (pedidoId: string) => {
@@ -413,17 +425,23 @@ export const useCardapioDigitalNotifications = ({
       empresaId,
       enabled,
       audioHabilitado,
+      somDesabilitadoPeloUsuario,
       timestamp: new Date().toISOString()
     });
 
     // Se há pedidos pendentes, áudio habilitado, som não está ativo E não foi desabilitado pelo usuário, iniciar
     if (contadorPendentes > 0 && !somContinuoAtivo && empresaId && enabled && audioHabilitado && !somDesabilitadoPeloUsuario) {
       console.log('🔔 DETECTADOS PEDIDOS PENDENTES - INICIANDO SOM CONTÍNUO AUTOMATICAMENTE!');
-      setTimeout(() => iniciarSomContinuo(), 1000); // Delay de 1 segundo para garantir estabilidade
+      setTimeout(() => iniciarSomContinuo(), 300); // Delay reduzido para melhor responsividade
     }
     // Se não há pedidos pendentes e som está ativo, parar
     else if (contadorPendentes === 0 && somContinuoAtivo) {
       console.log('🔕 SEM PEDIDOS PENDENTES - PARANDO SOM CONTÍNUO AUTOMATICAMENTE!');
+      pararSomContinuo();
+    }
+    // ✅ NOVO: Se foi desabilitado pelo usuário e som está ativo, parar imediatamente
+    else if (somDesabilitadoPeloUsuario && somContinuoAtivo) {
+      console.log('🔇 SOM DESABILITADO PELO USUÁRIO - PARANDO SOM CONTÍNUO IMEDIATAMENTE!');
       pararSomContinuo();
     }
   }, [contadorPendentes, somContinuoAtivo, empresaId, enabled, audioHabilitado, somDesabilitadoPeloUsuario, iniciarSomContinuo, pararSomContinuo]);
