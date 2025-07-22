@@ -12426,7 +12426,11 @@ const PDVPage: React.FC = () => {
                         <button
                           key={item.id}
                           onClick={(e) => item.onClick(e)}
-                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative`}
+                          className={`flex flex-col items-center justify-center text-gray-400 ${getColorClasses(item.color)} transition-all duration-200 h-full relative ${
+                            item.id === 'cardapio-digital' && contadorCardapio > 0
+                              ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
+                              : ''
+                          }`}
                           style={{ flex: '1 1 100px', minWidth: '100px' }}
                         >
                           {/* Wrapper do ícone com contador - Compacto */}
