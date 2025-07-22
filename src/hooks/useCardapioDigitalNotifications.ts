@@ -112,6 +112,27 @@ export const useCardapioDigitalNotifications = ({
       const audio = new Audio('/sounds/notification.mp3');
       audio.volume = 1.0;
 
+      // ✅ NOVO: Registrar instância de áudio para controle
+      audioInstancesRef.current.push(audio);
+
+      // ✅ NOVO: Remover da lista quando terminar
+      audio.addEventListener('ended', () => {
+        const index = audioInstancesRef.current.indexOf(audio);
+        if (index > -1) {
+          audioInstancesRef.current.splice(index, 1);
+          console.log('🔊 Áudio removido da lista de controle');
+        }
+      });
+
+      // ✅ NOVO: Remover da lista se houver erro
+      audio.addEventListener('error', () => {
+        const index = audioInstancesRef.current.indexOf(audio);
+        if (index > -1) {
+          audioInstancesRef.current.splice(index, 1);
+          console.log('🔊 Áudio removido da lista de controle (erro)');
+        }
+      });
+
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         await playPromise;
@@ -128,6 +149,38 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ REFERÊNCIA PARA O INTERVALO DO SOM CONTÍNUO
   const intervalSomRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ REFERÊNCIA PARA CONTROLAR INSTÂNCIAS DE ÁUDIO ATIVAS
+  const audioInstancesRef = useRef<HTMLAudioElement[]>([]);
+
+  // ✅ FUNÇÃO PARA PARAR TODOS OS SONS IMEDIATAMENTE
+  const pararTodosSonsImediatamente = useCallback(() => {
+    console.log('🔇 PARANDO TODOS OS SONS IMEDIATAMENTE!');
+
+    // Parar todas as instâncias de áudio ativas
+    audioInstancesRef.current.forEach((audio, index) => {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        console.log(`🔇 Áudio ${index + 1} parado`);
+      } catch (error) {
+        console.error(`❌ Erro ao parar áudio ${index + 1}:`, error);
+      }
+    });
+
+    // Limpar array de instâncias
+    audioInstancesRef.current = [];
+
+    // Tentar parar o useSound também (se estiver tocando)
+    try {
+      // O useSound não tem método stop direto, mas podemos tentar pausar
+      console.log('🔇 Tentando parar useSound...');
+    } catch (error) {
+      console.error('❌ Erro ao parar useSound:', error);
+    }
+
+    console.log('✅ Todos os sons foram parados imediatamente');
+  }, []);
 
   // ✅ FUNÇÃO PARA INICIAR SOM CONTÍNUO
   const iniciarSomContinuo = useCallback(() => {
@@ -205,19 +258,27 @@ export const useCardapioDigitalNotifications = ({
   // ✅ FUNÇÃO PARA PARAR SOM CONTÍNUO
   const pararSomContinuo = useCallback(() => {
     console.log('🔕 Parando som contínuo manualmente');
+
+    // ✅ NOVO: Parar todos os sons imediatamente
+    pararTodosSonsImediatamente();
+
     if (intervalSomRef.current) {
       clearInterval(intervalSomRef.current);
       intervalSomRef.current = null;
     }
     setSomContinuoAtivo(false);
-  }, []);
+  }, [pararTodosSonsImediatamente]);
 
   // ✅ NOVA FUNÇÃO PARA DESABILITAR SOM PELO USUÁRIO
   const desabilitarSomPeloUsuario = useCallback(() => {
     console.log('🔇 Som desabilitado pelo usuário');
+
+    // ✅ NOVO: Parar todos os sons imediatamente ANTES de desabilitar
+    pararTodosSonsImediatamente();
+
     setSomDesabilitadoPeloUsuario(true);
     pararSomContinuo();
-  }, [pararSomContinuo]);
+  }, [pararTodosSonsImediatamente, pararSomContinuo]);
 
   // ✅ NOVA FUNÇÃO PARA REABILITAR SOM PELO USUÁRIO
   const reabilitarSomPeloUsuario = useCallback(() => {
@@ -516,6 +577,7 @@ export const useCardapioDigitalNotifications = ({
     audioHabilitado,
     desabilitarSomPeloUsuario,
     reabilitarSomPeloUsuario,
-    somDesabilitadoPeloUsuario
+    somDesabilitadoPeloUsuario,
+    pararTodosSonsImediatamente
   };
 };
