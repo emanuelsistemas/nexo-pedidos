@@ -217,6 +217,7 @@ const PDVPage: React.FC = () => {
   const [somMutadoPeloUsuario, setSomMutadoPeloUsuario] = useState(false);
   const [showModalHabilitarSom, setShowModalHabilitarSom] = useState(false);
   const [modalSomJaExibido, setModalSomJaExibido] = useState(false);
+  const [showModalDesabilitarSom, setShowModalDesabilitarSom] = useState(false);
 
   // ✅ FUNÇÃO PARA ALTERNAR SOM DO CARDÁPIO DIGITAL
   const alternarSomCardapio = useCallback(() => {
@@ -259,18 +260,8 @@ const PDVPage: React.FC = () => {
         toast.error('Não foi possível habilitar o áudio');
       }
     } else if (audioHabilitado && somContinuoAtivo) {
-      // Se áudio está habilitado e som está ativo, pedir confirmação para mutar
-      const confirmar = window.confirm(
-        '🔇 Deseja realmente desabilitar o som do cardápio digital?\n\n' +
-        'Você não receberá alertas sonoros de novos pedidos até reativar manualmente.'
-      );
-
-      if (confirmar) {
-        console.log('🔇 Mutando som do cardápio por solicitação do usuário...');
-        setSomMutadoPeloUsuario(true); // Marcar como mutado pelo usuário
-        pararSomContinuo();
-        toast.info('Som do cardápio desabilitado');
-      }
+      // Se áudio está habilitado e som está ativo, mostrar modal de confirmação
+      setShowModalDesabilitarSom(true);
     } else {
       // Caso não esteja ativo, ativar
       console.log('🔊 Ativando som do cardápio...');
@@ -282,6 +273,20 @@ const PDVPage: React.FC = () => {
         toast.error('Erro ao ativar som');
       }
     }
+  };
+
+  // ✅ FUNÇÃO PARA CONFIRMAR DESABILITAÇÃO DO SOM
+  const confirmarDesabilitarSom = () => {
+    console.log('🔇 Mutando som do cardápio por solicitação do usuário...');
+    setSomMutadoPeloUsuario(true); // Marcar como mutado pelo usuário
+    pararSomContinuo();
+    setShowModalDesabilitarSom(false);
+    toast.info('Som do cardápio desabilitado');
+  };
+
+  // ✅ FUNÇÃO PARA CANCELAR DESABILITAÇÃO DO SOM
+  const cancelarDesabilitarSom = () => {
+    setShowModalDesabilitarSom(false);
   };
 
   // ✅ LOG PARA DEBUG
@@ -20169,6 +20174,61 @@ const PDVPage: React.FC = () => {
                     <p className="text-sm">Clique em um pedido para ver os detalhes</p>
                   </div>
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmação - Desabilitar Som do Cardápio Digital */}
+      <AnimatePresence>
+        {showModalDesabilitarSom && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+            onClick={cancelarDesabilitarSom}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card border border-gray-800 rounded-lg p-6 max-w-md w-full mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-orange-400">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <line x1="23" y1="9" x2="17" y2="15"/>
+                    <line x1="17" y1="9" x2="23" y2="15"/>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-white">Desabilitar Som do Cardápio</h3>
+              </div>
+
+              <p className="text-gray-300 mb-6">
+                Deseja realmente desabilitar o som do cardápio digital?
+                <br /><br />
+                <span className="text-orange-400">
+                  Você não receberá alertas sonoros de novos pedidos até reativar manualmente.
+                </span>
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelarDesabilitarSom}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarDesabilitarSom}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  OK
+                </button>
               </div>
             </motion.div>
           </motion.div>
