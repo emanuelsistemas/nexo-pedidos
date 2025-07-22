@@ -30,8 +30,43 @@ export const useCardapioDigitalNotifications = ({
   // ✅ HOOK DE SOM PARA NOTIFICAÇÕES
   const [playNotificationSound] = useSound('/sounds/notification.mp3', {
     volume: 0.8,
-    interrupt: true
+    interrupt: true,
+    onload: () => {
+      console.log('🔊 Som carregado com sucesso');
+    },
+    onloaderror: (error) => {
+      console.error('❌ Erro ao carregar som:', error);
+    },
+    onplay: () => {
+      console.log('▶️ Som sendo reproduzido');
+    },
+    onend: () => {
+      console.log('⏹️ Som finalizado');
+    }
   });
+
+  // ✅ FUNÇÃO PARA TOCAR SOM COM FALLBACK
+  const tocarSomNotificacao = useCallback(() => {
+    try {
+      console.log('🔊 Tentando tocar som de notificação...');
+      playNotificationSound();
+    } catch (error) {
+      console.error('❌ Erro ao tocar som:', error);
+
+      // Fallback: tentar tocar som nativo do navegador
+      try {
+        const audio = new Audio('/sounds/notification.mp3');
+        audio.volume = 0.8;
+        audio.play().then(() => {
+          console.log('🔊 Som tocado via Audio API');
+        }).catch((fallbackError) => {
+          console.error('❌ Erro no fallback de áudio:', fallbackError);
+        });
+      } catch (fallbackError) {
+        console.error('❌ Erro no fallback de áudio:', fallbackError);
+      }
+    }
+  }, [playNotificationSound]);
 
   // ✅ CARREGAR PEDIDOS PENDENTES
   const carregarPedidosPendentes = useCallback(async () => {
@@ -158,7 +193,7 @@ export const useCardapioDigitalNotifications = ({
           console.log('🆕 Novo pedido do cardápio digital:', payload);
           
           // Tocar som de notificação
-          playNotificationSound();
+          tocarSomNotificacao();
           
           // Mostrar notificação visual
           const novoPedido = payload.new as PedidoCardapio;
@@ -198,7 +233,7 @@ export const useCardapioDigitalNotifications = ({
       console.log('🔌 Desconectando canal cardápio digital');
       supabase.removeChannel(channel);
     };
-  }, [empresaId, enabled, playNotificationSound, carregarPedidosPendentes]);
+  }, [empresaId, enabled, tocarSomNotificacao, carregarPedidosPendentes]);
 
   // ✅ POLLING BACKUP (a cada 10 segundos)
   useEffect(() => {

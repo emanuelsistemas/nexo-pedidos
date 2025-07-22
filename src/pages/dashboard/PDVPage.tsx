@@ -198,6 +198,31 @@ const PDVPage: React.FC = () => {
     enabled: !!empresaData?.id // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA (independente da config PDV)
   });
 
+  // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
+  const [statusFilterCardapio, setStatusFilterCardapio] = useState<string>('pendente');
+  const [searchCardapio, setSearchCardapio] = useState('');
+  const [showFiltersCardapio, setShowFiltersCardapio] = useState(false);
+  const [dataInicioCardapio, setDataInicioCardapio] = useState('');
+  const [dataFimCardapio, setDataFimCardapio] = useState('');
+  const [pedidosCardapioFiltrados, setPedidosCardapioFiltrados] = useState<any[]>([]);
+  const [todosOsPedidosCardapio, setTodosOsPedidosCardapio] = useState<any[]>([]);
+
+  // ✅ FUNÇÃO DE TESTE DE SOM
+  const testarSom = () => {
+    console.log('🧪 Testando som manualmente...');
+    try {
+      const audio = new Audio('/sounds/notification.mp3');
+      audio.volume = 0.8;
+      audio.play().then(() => {
+        console.log('✅ Som de teste tocado com sucesso');
+      }).catch((error) => {
+        console.error('❌ Erro ao tocar som de teste:', error);
+      });
+    } catch (error) {
+      console.error('❌ Erro ao criar áudio de teste:', error);
+    }
+  };
+
   // ✅ LOG PARA DEBUG
   useEffect(() => {
     console.log('🏢 PDV - Dados da empresa:', {
@@ -2787,6 +2812,113 @@ const PDVPage: React.FC = () => {
     setStatusFilterPedidos(status);
     aplicarFiltrosPedidos();
   };
+
+  // ✅ FUNÇÃO PARA CARREGAR TODOS OS PEDIDOS DO CARDÁPIO DIGITAL
+  const carregarTodosPedidosCardapio = async () => {
+    if (!empresaData?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('cardapio_digital')
+        .select(`
+          id,
+          numero_pedido,
+          nome_cliente,
+          telefone_cliente,
+          valor_total,
+          status_pedido,
+          data_pedido,
+          itens_pedido
+        `)
+        .eq('empresa_id', empresaData.id)
+        .order('data_pedido', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar pedidos do cardápio:', error);
+        return;
+      }
+
+      const pedidos = data || [];
+      setTodosOsPedidosCardapio(pedidos);
+      aplicarFiltrosCardapio(pedidos);
+    } catch (error) {
+      console.error('Erro ao carregar pedidos do cardápio:', error);
+    }
+  };
+
+  // ✅ FUNÇÃO PARA APLICAR FILTROS NO CARDÁPIO DIGITAL
+  const aplicarFiltrosCardapio = (pedidosParaFiltrar = todosOsPedidosCardapio) => {
+    let filtered = [...pedidosParaFiltrar];
+
+    // Aplicar filtro de status
+    if (statusFilterCardapio !== 'todos') {
+      const statusMap = {
+        'aguardando': 'pendente',
+        'aceitos': 'confirmado',
+        'finalizados': 'entregue'
+      };
+      const statusFiltro = statusMap[statusFilterCardapio as keyof typeof statusMap] || statusFilterCardapio;
+      filtered = filtered.filter(pedido => pedido.status_pedido === statusFiltro);
+    }
+
+    // Aplicar filtro de busca
+    if (searchCardapio.trim()) {
+      const termoLower = searchCardapio.toLowerCase();
+      filtered = filtered.filter(pedido =>
+        pedido.numero_pedido?.toLowerCase().includes(termoLower) ||
+        pedido.nome_cliente?.toLowerCase().includes(termoLower) ||
+        pedido.telefone_cliente?.includes(searchCardapio)
+      );
+    }
+
+    // Aplicar filtro de data
+    if (dataInicioCardapio || dataFimCardapio) {
+      filtered = filtered.filter(pedido => {
+        const dataPedido = new Date(pedido.data_pedido);
+        const inicio = dataInicioCardapio ? new Date(dataInicioCardapio + 'T00:00:00') : null;
+        const fim = dataFimCardapio ? new Date(dataFimCardapio + 'T23:59:59') : null;
+
+        if (inicio && dataPedido < inicio) return false;
+        if (fim && dataPedido > fim) return false;
+        return true;
+      });
+    }
+
+    setPedidosCardapioFiltrados(filtered);
+  };
+
+  // ✅ FUNÇÕES DE FILTRO DO CARDÁPIO DIGITAL
+  const filtrarCardapioPorStatus = (status: string) => {
+    setStatusFilterCardapio(status);
+    aplicarFiltrosCardapio();
+  };
+
+  const filtrarCardapioPorBusca = (termo: string) => {
+    setSearchCardapio(termo);
+    aplicarFiltrosCardapio();
+  };
+
+  const limparFiltrosCardapio = () => {
+    setStatusFilterCardapio('aguardando');
+    setSearchCardapio('');
+    setDataInicioCardapio('');
+    setDataFimCardapio('');
+    aplicarFiltrosCardapio();
+  };
+
+  // ✅ USEEFFECT PARA CARREGAR PEDIDOS DO CARDÁPIO QUANDO MODAL ABRIR
+  useEffect(() => {
+    if (showCardapioDigitalModal && empresaData?.id) {
+      carregarTodosPedidosCardapio();
+    }
+  }, [showCardapioDigitalModal, empresaData?.id]);
+
+  // ✅ USEEFFECT PARA APLICAR FILTROS QUANDO MUDAREM
+  useEffect(() => {
+    if (todosOsPedidosCardapio.length > 0) {
+      aplicarFiltrosCardapio();
+    }
+  }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
 
   // Função para importar pedido para o carrinho (com confirmação)
   const importarPedidoParaCarrinho = (pedido: any) => {
@@ -19722,26 +19854,133 @@ const PDVPage: React.FC = () => {
                 {/* Lista de Pedidos */}
                 <div className="w-1/3 border-r border-gray-700 flex flex-col">
                   <div className="p-4 border-b border-gray-700">
-                    <h3 className="font-semibold text-white mb-2">Pedidos Pendentes</h3>
-                    <button
-                      onClick={recarregarPedidosCardapio}
-                      disabled={loadingCardapio}
-                      className="text-sm text-orange-400 hover:text-orange-300 disabled:opacity-50"
-                    >
-                      {loadingCardapio ? 'Carregando...' : '🔄 Atualizar'}
-                    </button>
+                    {/* Menu de Status */}
+                    <div className="flex items-center gap-2 mb-4">
+                      {[
+                        { value: 'aguardando', label: 'Aguardando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length },
+                        { value: 'aceitos', label: 'Aceitos', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length },
+                        { value: 'finalizados', label: 'Finalizados', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length }
+                      ].map((status) => (
+                        <button
+                          key={status.value}
+                          onClick={() => filtrarCardapioPorStatus(status.value)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ${
+                            statusFilterCardapio === status.value
+                              ? 'bg-orange-500 text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          {status.label}
+                          <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                            statusFilterCardapio === status.value
+                              ? 'bg-white/20 text-white'
+                              : 'bg-gray-600 text-gray-300'
+                          }`}>
+                            {status.count}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Campo de Busca */}
+                    <div className="mb-3">
+                      <input
+                        type="text"
+                        placeholder="Buscar por número, nome ou telefone..."
+                        value={searchCardapio}
+                        onChange={(e) => filtrarCardapioPorBusca(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+
+                    {/* Filtro de Data e Ações */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowFiltersCardapio(!showFiltersCardapio)}
+                          className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                          title="Filtros de data"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 6h18M7 12h10m-7 6h4"/>
+                          </svg>
+                        </button>
+                        {(dataInicioCardapio || dataFimCardapio) && (
+                          <button
+                            onClick={limparFiltrosCardapio}
+                            className="text-xs text-orange-400 hover:text-orange-300"
+                          >
+                            Limpar filtros
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => carregarTodosPedidosCardapio()}
+                          className="text-sm text-orange-400 hover:text-orange-300"
+                        >
+                          🔄 Atualizar
+                        </button>
+                        <button
+                          onClick={testarSom}
+                          className="text-sm text-blue-400 hover:text-blue-300"
+                        >
+                          🔊 Som
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Filtros de Data (Expansível) */}
+                    {showFiltersCardapio && (
+                      <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-600">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Data Início</label>
+                            <input
+                              type="date"
+                              value={dataInicioCardapio}
+                              onChange={(e) => setDataInicioCardapio(e.target.value)}
+                              className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-orange-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Data Fim</label>
+                            <input
+                              type="date"
+                              value={dataFimCardapio}
+                              onChange={(e) => setDataFimCardapio(e.target.value)}
+                              className="w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-orange-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-y-auto">
-                    {pedidosCardapio.length === 0 ? (
+                    {pedidosCardapioFiltrados.length === 0 ? (
                       <div className="p-6 text-center text-gray-400">
                         <BookOpen size={48} className="mx-auto mb-3 opacity-50" />
-                        <p>Nenhum pedido pendente</p>
-                        <p className="text-sm mt-1">Os novos pedidos aparecerão aqui</p>
+                        <p>
+                          {searchCardapio || dataInicioCardapio || dataFimCardapio
+                            ? 'Nenhum pedido encontrado'
+                            : statusFilterCardapio === 'aguardando'
+                              ? 'Nenhum pedido aguardando'
+                              : statusFilterCardapio === 'aceitos'
+                                ? 'Nenhum pedido aceito'
+                                : 'Nenhum pedido finalizado'
+                          }
+                        </p>
+                        <p className="text-sm mt-1">
+                          {searchCardapio || dataInicioCardapio || dataFimCardapio
+                            ? 'Tente ajustar os filtros'
+                            : 'Os pedidos aparecerão aqui automaticamente'
+                          }
+                        </p>
                       </div>
                     ) : (
                       <div className="p-4 space-y-3">
-                        {pedidosCardapio.map((pedido) => (
+                        {pedidosCardapioFiltrados.map((pedido) => (
                           <div
                             key={pedido.id}
                             className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-orange-500/50 transition-colors"
@@ -19779,20 +20018,41 @@ const PDVPage: React.FC = () => {
                               </div>
                             </div>
 
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => aceitarPedido(pedido.id)}
-                                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm py-2 px-3 rounded transition-colors"
-                              >
-                                ✅ Aceitar
-                              </button>
-                              <button
-                                onClick={() => rejeitarPedido(pedido.id)}
-                                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm py-2 px-3 rounded transition-colors"
-                              >
-                                ❌ Rejeitar
-                              </button>
+                            {/* Status Badge */}
+                            <div className="mb-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                pedido.status_pedido === 'pendente'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : pedido.status_pedido === 'confirmado'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : pedido.status_pedido === 'entregue'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {pedido.status_pedido === 'pendente' && '⏳ Aguardando'}
+                                {pedido.status_pedido === 'confirmado' && '✅ Aceito'}
+                                {pedido.status_pedido === 'entregue' && '🎉 Finalizado'}
+                                {!['pendente', 'confirmado', 'entregue'].includes(pedido.status_pedido) && pedido.status_pedido}
+                              </span>
                             </div>
+
+                            {/* Botões de Ação - Apenas para pedidos pendentes */}
+                            {pedido.status_pedido === 'pendente' && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => aceitarPedido(pedido.id)}
+                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm py-2 px-3 rounded transition-colors"
+                                >
+                                  ✅ Aceitar
+                                </button>
+                                <button
+                                  onClick={() => rejeitarPedido(pedido.id)}
+                                  className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm py-2 px-3 rounded transition-colors"
+                                >
+                                  ❌ Rejeitar
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

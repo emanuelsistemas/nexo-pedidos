@@ -5647,6 +5647,44 @@ const CardapioPublicoPage: React.FC = () => {
     limparPedidoLocalStorage();
   };
 
+  // ✅ FUNÇÃO PARA VERIFICAR STATUS MANUALMENTE
+  const verificarStatusPedido = async () => {
+    if (!pedidoAtual?.id) return;
+
+    console.log('🔍 Verificando status do pedido manualmente:', pedidoAtual.id);
+
+    try {
+      const { data: pedidoAtualizado, error } = await supabase
+        .from('cardapio_digital')
+        .select('id, numero_pedido, status_pedido, data_pedido, valor_total')
+        .eq('id', pedidoAtual.id)
+        .single();
+
+      if (!error && pedidoAtualizado) {
+        console.log('✅ Status verificado:', {
+          pedidoId: pedidoAtualizado.id,
+          statusAnterior: pedidoAtual.status_pedido,
+          statusAtual: pedidoAtualizado.status_pedido
+        });
+
+        // Atualizar pedido atual
+        setPedidoAtual(pedidoAtualizado);
+
+        // Atualizar no localStorage também
+        salvarPedidoLocalStorage(pedidoAtualizado);
+
+        // Mostrar toast de confirmação
+        if (pedidoAtualizado.status_pedido !== pedidoAtual.status_pedido) {
+          console.log('🔄 Status atualizado com sucesso!');
+        }
+      } else {
+        console.error('❌ Erro ao verificar status:', error);
+      }
+    } catch (error) {
+      console.error('❌ Erro na verificação manual:', error);
+    }
+  };
+
   // ✅ FUNÇÃO DE DEBUG PARA VERIFICAR DADOS SALVOS
   const debugLocalStorage = () => {
     console.log('🔍 DEBUG - Dados no localStorage:');
@@ -5688,6 +5726,97 @@ const CardapioPublicoPage: React.FC = () => {
       setTimeout(debugLocalStorage, 1000); // Debug após 1 segundo
     }
   }, [empresaId]);
+
+  // ✅ REALTIME PARA ATUALIZAR STATUS DO PEDIDO ATUAL
+  useEffect(() => {
+    if (!pedidoAtual?.id || !empresaId) return;
+
+    console.log('🔔 Configurando realtime para status do pedido:', {
+      pedidoId: pedidoAtual.id,
+      empresaId,
+      slug
+    });
+
+    // ✅ USAR EMPRESA_ID COMO FILTRO (mais confiável que id específico)
+    const channel = supabase
+      .channel(`pedido_status_empresa_${empresaId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'cardapio_digital',
+          filter: `empresa_id=eq.${empresaId}`
+        },
+        (payload) => {
+          console.log('🔄 Atualização na tabela cardapio_digital:', payload.new);
+          const pedidoAtualizado = payload.new as any;
+
+          // ✅ VERIFICAR SE É O PEDIDO ATUAL
+          if (pedidoAtualizado.id === pedidoAtual.id) {
+            console.log('✅ Status do pedido atual atualizado:', {
+              pedidoId: pedidoAtualizado.id,
+              statusAnterior: pedidoAtual.status_pedido,
+              statusNovo: pedidoAtualizado.status_pedido
+            });
+
+            // Atualizar pedido atual
+            setPedidoAtual(pedidoAtualizado);
+
+            // Atualizar no localStorage também
+            salvarPedidoLocalStorage(pedidoAtualizado);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Status do canal pedido empresa:', status);
+      });
+
+    // Cleanup
+    return () => {
+      console.log('🧹 Limpando canal realtime do pedido empresa');
+      supabase.removeChannel(channel);
+    };
+  }, [pedidoAtual?.id, empresaId, slug]);
+
+  // ✅ POLLING BACKUP PARA GARANTIR ATUALIZAÇÃO DO STATUS
+  useEffect(() => {
+    if (!pedidoAtual?.id || !empresaId) return;
+
+    console.log('⏰ Configurando polling backup para pedido:', pedidoAtual.id);
+
+    const interval = setInterval(async () => {
+      try {
+        const { data: pedidoAtualizado, error } = await supabase
+          .from('cardapio_digital')
+          .select('id, numero_pedido, status_pedido, data_pedido, valor_total')
+          .eq('id', pedidoAtual.id)
+          .single();
+
+        if (!error && pedidoAtualizado && pedidoAtualizado.status_pedido !== pedidoAtual.status_pedido) {
+          console.log('🔄 Polling: Status diferente detectado:', {
+            pedidoId: pedidoAtualizado.id,
+            statusAnterior: pedidoAtual.status_pedido,
+            statusNovo: pedidoAtualizado.status_pedido
+          });
+
+          // Atualizar pedido atual
+          setPedidoAtual(pedidoAtualizado);
+
+          // Atualizar no localStorage também
+          salvarPedidoLocalStorage(pedidoAtualizado);
+        }
+      } catch (error) {
+        console.error('❌ Erro no polling do pedido:', error);
+      }
+    }, 5000); // Verificar a cada 5 segundos
+
+    // Cleanup
+    return () => {
+      console.log('🧹 Limpando polling backup do pedido');
+      clearInterval(interval);
+    };
+  }, [pedidoAtual?.id, pedidoAtual?.status_pedido, empresaId]);
 
   // Carregar pedido do localStorage ao inicializar
   useEffect(() => {
@@ -11851,16 +11980,37 @@ const CardapioPublicoPage: React.FC = () => {
                     Pedido #{pedidoAtual.numero_pedido}
                   </p>
                 </div>
-                <button
-                  onClick={fecharModalStatusPedido}
-                  className={`p-2 rounded-lg transition-colors ${
-                    config.modo_escuro
-                      ? 'text-gray-400 hover:bg-gray-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <X size={24} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Botão de Atualizar Status */}
+                  <button
+                    onClick={verificarStatusPedido}
+                    className={`p-2 rounded-lg transition-colors ${
+                      config.modo_escuro
+                        ? 'text-gray-400 hover:bg-gray-700'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                    title="Atualizar status do pedido"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                      <path d="M21 3v5h-5"/>
+                      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                      <path d="M3 21v-5h5"/>
+                    </svg>
+                  </button>
+
+                  {/* Botão de Fechar */}
+                  <button
+                    onClick={fecharModalStatusPedido}
+                    className={`p-2 rounded-lg transition-colors ${
+                      config.modo_escuro
+                        ? 'text-gray-400 hover:bg-gray-700'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
               </div>
             </div>
 
