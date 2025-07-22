@@ -35,10 +35,14 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ CARREGAR PEDIDOS PENDENTES
   const carregarPedidosPendentes = useCallback(async () => {
-    if (!empresaId || !enabled) return;
+    if (!empresaId || !enabled) {
+      console.log('❌ Não carregando pedidos:', { empresaId, enabled });
+      return;
+    }
 
     try {
       setIsLoading(true);
+      console.log('🔍 Carregando pedidos pendentes para empresa:', empresaId);
 
       const { data, error } = await supabase
         .from('cardapio_digital')
@@ -62,6 +66,7 @@ export const useCardapioDigitalNotifications = ({
       }
 
       const pedidos = data || [];
+      console.log('📊 Pedidos encontrados:', pedidos.length, pedidos);
       setPedidosPendentes(pedidos);
       setContadorPendentes(pedidos.length);
 
@@ -130,7 +135,10 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ CONFIGURAR REALTIME PARA NOVOS PEDIDOS
   useEffect(() => {
-    if (!empresaId || !enabled) return;
+    if (!empresaId || !enabled) {
+      console.log('❌ Hook cardápio digital desabilitado:', { empresaId, enabled });
+      return;
+    }
 
     console.log('🔔 Configurando realtime para pedidos do cardápio digital:', empresaId);
 

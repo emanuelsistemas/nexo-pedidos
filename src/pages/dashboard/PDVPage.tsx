@@ -195,8 +195,18 @@ const PDVPage: React.FC = () => {
     recarregarPedidos: recarregarPedidosCardapio
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
-    enabled: pdvConfig?.cardapio_digital === true
+    enabled: !!empresaData?.id // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA (independente da config PDV)
   });
+
+  // ✅ LOG PARA DEBUG
+  useEffect(() => {
+    console.log('🏢 PDV - Dados da empresa:', {
+      empresaId: empresaData?.id,
+      empresaNome: empresaData?.nome_fantasia,
+      contadorCardapio,
+      pedidosCardapio: pedidosCardapio.length
+    });
+  }, [empresaData, contadorCardapio, pedidosCardapio]);
 
   // Estados para os modais do menu PDV
   const [showPedidosModal, setShowPedidosModal] = useState(false);
@@ -2453,7 +2463,7 @@ const PDVPage: React.FC = () => {
 
     const { data, error } = await supabase
       .from('empresas')
-      .select('regime_tributario')
+      .select('id, nome_fantasia, razao_social, regime_tributario')
       .eq('id', usuarioData.empresa_id)
       .single();
 
@@ -2462,6 +2472,7 @@ const PDVPage: React.FC = () => {
       return;
     }
 
+    console.log('✅ Dados da empresa carregados:', data);
     setEmpresaData(data);
   };
 

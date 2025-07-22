@@ -5531,28 +5531,95 @@ const CardapioPublicoPage: React.FC = () => {
 
   // ✅ FUNÇÕES PARA CONTROLE DE STATUS DO PEDIDO
   const salvarPedidoLocalStorage = (pedido: any) => {
-    if (empresaId) {
-      localStorage.setItem(`pedido_status_${empresaId}`, JSON.stringify(pedido));
+    // ✅ USAR SLUG COMO CHAVE PRINCIPAL (igual à taxa de entrega)
+    const chaveSlug = `pedido_status_slug_${slug}`;
+    const chaveEmpresaId = empresaId ? `pedido_status_${empresaId}` : null;
+
+    console.log('💾 Salvando pedido no localStorage:', {
+      slug,
+      empresaId,
+      chaveSlug,
+      chaveEmpresaId,
+      pedido
+    });
+
+    // Salvar com slug (chave principal)
+    localStorage.setItem(chaveSlug, JSON.stringify(pedido));
+
+    // Salvar com empresaId se disponível (compatibilidade)
+    if (chaveEmpresaId) {
+      localStorage.setItem(chaveEmpresaId, JSON.stringify(pedido));
     }
+
+    // ✅ BACKUP ADICIONAL COM TIMESTAMP
+    localStorage.setItem(`pedido_backup_slug_${slug}`, JSON.stringify({
+      ...pedido,
+      timestamp_backup: Date.now()
+    }));
   };
 
   const carregarPedidoLocalStorage = () => {
-    if (empresaId) {
-      const pedidoSalvo = localStorage.getItem(`pedido_status_${empresaId}`);
-      if (pedidoSalvo) {
+    console.log('📂 Tentando carregar pedido do localStorage:', { slug, empresaId });
+
+    // ✅ PRIORIDADE 1: Tentar carregar por SLUG (mais confiável)
+    if (slug) {
+      const chaveSlug = `pedido_status_slug_${slug}`;
+      const pedidoSlug = localStorage.getItem(chaveSlug);
+
+      if (pedidoSlug) {
         try {
-          return JSON.parse(pedidoSalvo);
+          const pedido = JSON.parse(pedidoSlug);
+          console.log('✅ Pedido carregado por SLUG:', { chaveSlug, pedido });
+          return pedido;
         } catch (error) {
-          console.error('Erro ao carregar pedido do localStorage:', error);
+          console.error('❌ Erro ao fazer parse do pedido por slug:', error);
+        }
+      }
+
+      // Tentar backup por slug
+      const backupSlug = localStorage.getItem(`pedido_backup_slug_${slug}`);
+      if (backupSlug) {
+        try {
+          const backup = JSON.parse(backupSlug);
+          console.log('🔄 Recuperando pedido do backup por SLUG:', backup);
+          return backup;
+        } catch (error) {
+          console.error('❌ Erro ao fazer parse do backup por slug:', error);
         }
       }
     }
+
+    // ✅ PRIORIDADE 2: Tentar carregar por EMPRESA_ID (compatibilidade)
+    if (empresaId) {
+      const pedidoEmpresa = localStorage.getItem(`pedido_status_${empresaId}`);
+      if (pedidoEmpresa) {
+        try {
+          const pedido = JSON.parse(pedidoEmpresa);
+          console.log('✅ Pedido carregado por EMPRESA_ID:', pedido);
+          return pedido;
+        } catch (error) {
+          console.error('❌ Erro ao fazer parse do pedido por empresaId:', error);
+        }
+      }
+    }
+
+    console.log('❌ Nenhum pedido encontrado no localStorage');
     return null;
   };
 
   const limparPedidoLocalStorage = () => {
+    console.log('🗑️ Limpando pedido do localStorage:', { slug, empresaId });
+
+    // Limpar por slug
+    if (slug) {
+      localStorage.removeItem(`pedido_status_slug_${slug}`);
+      localStorage.removeItem(`pedido_backup_slug_${slug}`);
+    }
+
+    // Limpar por empresaId (compatibilidade)
     if (empresaId) {
       localStorage.removeItem(`pedido_status_${empresaId}`);
+      localStorage.removeItem(`pedido_backup_${empresaId}`);
     }
   };
 
@@ -5580,14 +5647,80 @@ const CardapioPublicoPage: React.FC = () => {
     limparPedidoLocalStorage();
   };
 
-  // Carregar pedido do localStorage ao inicializar
+  // ✅ FUNÇÃO DE DEBUG PARA VERIFICAR DADOS SALVOS
+  const debugLocalStorage = () => {
+    console.log('🔍 DEBUG - Dados no localStorage:');
+    console.log('Slug atual:', slug);
+    console.log('EmpresaId atual:', empresaId);
+
+    // Verificar todas as chaves relacionadas ao cardápio
+    const chaves = Object.keys(localStorage).filter(key =>
+      key.includes('pedido_') ||
+      key.includes('cep_') ||
+      key.includes('area_') ||
+      key.includes('bairro_')
+    );
+
+    chaves.forEach(chave => {
+      const valor = localStorage.getItem(chave);
+      console.log(`📋 ${chave}:`, valor);
+    });
+
+    // Verificar especificamente o pedido atual
+    if (slug) {
+      const pedidoSlug = localStorage.getItem(`pedido_status_slug_${slug}`);
+      const backupSlug = localStorage.getItem(`pedido_backup_slug_${slug}`);
+      console.log('🎯 Pedido por SLUG:', pedidoSlug);
+      console.log('🔄 Backup por SLUG:', backupSlug);
+    }
+
+    if (empresaId) {
+      const pedidoEmpresa = localStorage.getItem(`pedido_status_${empresaId}`);
+      const backupEmpresa = localStorage.getItem(`pedido_backup_${empresaId}`);
+      console.log('🎯 Pedido por EMPRESA_ID:', pedidoEmpresa);
+      console.log('🔄 Backup por EMPRESA_ID:', backupEmpresa);
+    }
+  };
+
+  // ✅ EXECUTAR DEBUG AUTOMATICAMENTE
   useEffect(() => {
-    const pedidoSalvo = carregarPedidoLocalStorage();
-    if (pedidoSalvo) {
-      setPedidoAtual(pedidoSalvo);
-      setMostrarTarjaPedido(true);
+    if (empresaId) {
+      setTimeout(debugLocalStorage, 1000); // Debug após 1 segundo
     }
   }, [empresaId]);
+
+  // Carregar pedido do localStorage ao inicializar
+  useEffect(() => {
+    console.log('🔄 useEffect carregamento pedido executado:', { slug, empresaId });
+
+    if (!slug) {
+      console.log('⏳ Aguardando slug ser definido...');
+      return;
+    }
+
+    const pedidoSalvo = carregarPedidoLocalStorage();
+    if (pedidoSalvo) {
+      console.log('✅ Definindo pedido atual e mostrando balão');
+      setPedidoAtual(pedidoSalvo);
+      setMostrarTarjaPedido(true);
+    } else {
+      console.log('❌ Nenhum pedido salvo encontrado');
+      setMostrarTarjaPedido(false);
+    }
+  }, [slug, empresaId]); // ✅ Depende de ambos: slug (principal) e empresaId (backup)
+
+  // ✅ VERIFICAÇÃO ADICIONAL QUANDO EMPRESA É CARREGADA
+  useEffect(() => {
+    if (empresa?.id && !pedidoAtual) {
+      console.log('🔍 Empresa carregada, verificando pedidos salvos novamente...');
+      const pedidoSalvo = carregarPedidoLocalStorage();
+      if (pedidoSalvo) {
+        console.log('🎯 Pedido encontrado após carregamento da empresa');
+        setPedidoAtual(pedidoSalvo);
+        setMostrarTarjaPedido(true);
+      }
+    }
+  }, [empresa?.id]);
 
   // ✅ FUNÇÃO PARA OBTER STATUS DO PEDIDO
   const obterStatusPedido = (status: string) => {
@@ -6109,28 +6242,29 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tarja do Pedido Ativo */}
+      {/* Balão Flutuante do Pedido Ativo */}
       {mostrarTarjaPedido && pedidoAtual && (
-        <div className="bg-green-600 text-white py-3 px-4 text-center relative overflow-hidden shadow-lg">
-          <div className="absolute inset-0 bg-gradient-to-r from-green-600 via-green-500 to-green-600"></div>
-          <div className="relative z-10 flex items-center justify-center gap-3">
-            <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-            <div className="font-bold text-lg">
-              📋 PEDIDO #{pedidoAtual.numero_pedido}
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => setModalStatusPedidoAberto(true)}
+            className="bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group"
+          >
+            <div className="flex items-center justify-center px-4 py-3">
+              {/* Conteúdo */}
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold">
+                  #{pedidoAtual.numero_pedido}
+                </span>
+                <div className="w-2 h-2 bg-white/80 rounded-full"></div>
+              </div>
             </div>
-            <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-          </div>
-          <div className="relative z-10 mt-1">
-            <p className="text-sm font-medium mb-2">
-              {obterStatusPedido(pedidoAtual.status_pedido).titulo}
-            </p>
-            <button
-              onClick={() => setModalStatusPedidoAberto(true)}
-              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 border border-white/30"
-            >
-              👁️ Acompanhar Pedido
-            </button>
-          </div>
+
+            {/* Tooltip */}
+            <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+              Acompanhar Pedido
+              <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+            </div>
+          </button>
         </div>
       )}
 
