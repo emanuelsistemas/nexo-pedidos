@@ -192,7 +192,10 @@ const PDVPage: React.FC = () => {
     isLoading: loadingCardapio,
     aceitarPedido,
     rejeitarPedido,
-    recarregarPedidos: recarregarPedidosCardapio
+    recarregarPedidos: recarregarPedidosCardapio,
+    tocarSomNotificacao,
+    somContinuoAtivo,
+    pararSomContinuo
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
     enabled: !!empresaData?.id // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA (independente da config PDV)
@@ -19855,7 +19858,7 @@ const PDVPage: React.FC = () => {
                 <div className="w-1/3 border-r border-gray-700 flex flex-col">
                   <div className="p-4 border-b border-gray-700">
                     {/* Menu de Status */}
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="grid grid-cols-3 gap-2 mb-4">
                       {[
                         { value: 'aguardando', label: 'Aguardando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length },
                         { value: 'aceitos', label: 'Aceitos', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length },
@@ -19864,14 +19867,14 @@ const PDVPage: React.FC = () => {
                         <button
                           key={status.value}
                           onClick={() => filtrarCardapioPorStatus(status.value)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors ${
+                          className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 transition-colors ${
                             statusFilterCardapio === status.value
                               ? 'bg-orange-500 text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
-                          {status.label}
-                          <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                          <span className="truncate">{status.label}</span>
+                          <span className={`px-1.5 py-0.5 rounded-full text-xs flex-shrink-0 ${
                             statusFilterCardapio === status.value
                               ? 'bg-white/20 text-white'
                               : 'bg-gray-600 text-gray-300'
