@@ -30,8 +30,8 @@ export const useCardapioDigitalNotifications = ({
   const [audioHabilitado, setAudioHabilitado] = useState(false);
   const [somDesabilitadoPeloUsuario, setSomDesabilitadoPeloUsuario] = useState(false);
 
-  // ✅ HOOK DE SOM PARA NOTIFICAÇÕES
-  const [playNotificationSound] = useSound('/sounds/notification.mp3', {
+  // ✅ HOOK DE SOM PARA NOTIFICAÇÕES COM CONTROLES
+  const [playNotificationSound, { stop: stopNotificationSound, isPlaying }] = useSound('/sounds/notification.mp3', {
     volume: 0.8,
     interrupt: true,
     onload: () => {
@@ -80,6 +80,13 @@ export const useCardapioDigitalNotifications = ({
     console.log('🔊 Timestamp:', new Date().toISOString());
     console.log('🔊 Pedidos pendentes:', contadorPendentes);
     console.log('🔊 Áudio habilitado:', audioHabilitado);
+    console.log('🔊 Som desabilitado pelo usuário:', somDesabilitadoPeloUsuario);
+
+    // ✅ NOVA VERIFICAÇÃO: Se foi desabilitado pelo usuário, não tocar (mesmo se forçado)
+    if (somDesabilitadoPeloUsuario && !forcado) {
+      console.log('🔇 Som foi desabilitado pelo usuário, não tocando');
+      return false;
+    }
 
     // Se não está habilitado e é forçado, tentar habilitar
     if (!audioHabilitado && forcado) {
@@ -145,7 +152,7 @@ export const useCardapioDigitalNotifications = ({
 
     console.log('🔊 === FIM DA REPRODUÇÃO DE SOM ===');
     return false;
-  }, [playNotificationSound, contadorPendentes, audioHabilitado, habilitarAudio]);
+  }, [playNotificationSound, contadorPendentes, audioHabilitado, somDesabilitadoPeloUsuario, habilitarAudio]);
 
   // ✅ REFERÊNCIA PARA O INTERVALO DO SOM CONTÍNUO
   const intervalSomRef = useRef<NodeJS.Timeout | null>(null);
@@ -156,6 +163,19 @@ export const useCardapioDigitalNotifications = ({
   // ✅ FUNÇÃO PARA PARAR TODOS OS SONS IMEDIATAMENTE
   const pararTodosSonsImediatamente = useCallback(() => {
     console.log('🔇 PARANDO TODOS OS SONS IMEDIATAMENTE!');
+
+    // ✅ NOVO: Parar useSound primeiro (se estiver tocando)
+    try {
+      if (isPlaying) {
+        console.log('🔇 Parando useSound (estava tocando)...');
+        stopNotificationSound();
+        console.log('✅ useSound parado com sucesso');
+      } else {
+        console.log('🔇 useSound não estava tocando');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao parar useSound:', error);
+    }
 
     // Parar todas as instâncias de áudio ativas
     audioInstancesRef.current.forEach((audio, index) => {
@@ -171,16 +191,30 @@ export const useCardapioDigitalNotifications = ({
     // Limpar array de instâncias
     audioInstancesRef.current = [];
 
-    // Tentar parar o useSound também (se estiver tocando)
+    // ✅ ABORDAGEM AGRESSIVA: Parar TODOS os elementos de áudio da página
     try {
-      // O useSound não tem método stop direto, mas podemos tentar pausar
-      console.log('🔇 Tentando parar useSound...');
+      const allAudioElements = document.querySelectorAll('audio');
+      allAudioElements.forEach((audio, index) => {
+        try {
+          if (!audio.paused) {
+            audio.pause();
+            audio.currentTime = 0;
+            console.log(`🔇 Elemento de áudio da página ${index + 1} parado`);
+          }
+        } catch (error) {
+          console.error(`❌ Erro ao parar elemento de áudio ${index + 1}:`, error);
+        }
+      });
+
+      if (allAudioElements.length > 0) {
+        console.log(`🔇 Total de ${allAudioElements.length} elementos de áudio verificados na página`);
+      }
     } catch (error) {
-      console.error('❌ Erro ao parar useSound:', error);
+      console.error('❌ Erro ao buscar elementos de áudio na página:', error);
     }
 
     console.log('✅ Todos os sons foram parados imediatamente');
-  }, []);
+  }, [isPlaying, stopNotificationSound]);
 
   // ✅ FUNÇÃO PARA INICIAR SOM CONTÍNUO
   const iniciarSomContinuo = useCallback(() => {
