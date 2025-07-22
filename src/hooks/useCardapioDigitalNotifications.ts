@@ -47,29 +47,71 @@ export const useCardapioDigitalNotifications = ({
     }
   });
 
+  // ✅ FUNÇÃO PARA HABILITAR ÁUDIO COM INTERAÇÃO DO USUÁRIO
+  const habilitarAudio = useCallback(async () => {
+    if (audioHabilitado) return true;
+
+    try {
+      console.log('🔊 Habilitando áudio com interação do usuário...');
+      const audio = new Audio('/sounds/notification.mp3');
+      audio.volume = 0.1; // Volume baixo para teste
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        await playPromise;
+        audio.pause();
+        audio.currentTime = 0;
+        setAudioHabilitado(true);
+        console.log('✅ Áudio habilitado com sucesso');
+        return true;
+      }
+    } catch (error) {
+      console.error('❌ Erro ao habilitar áudio:', error);
+    }
+
+    return false;
+  }, [audioHabilitado]);
+
   // ✅ FUNÇÃO PARA TOCAR SOM COM FALLBACK MELHORADO
   const tocarSomNotificacao = useCallback(async (forcado = false) => {
     const tipoSom = forcado ? 'FORÇADO' : 'AUTOMÁTICO';
     console.log(`🔊 === INICIANDO REPRODUÇÃO DE SOM ${tipoSom} ===`);
     console.log('🔊 Timestamp:', new Date().toISOString());
     console.log('🔊 Pedidos pendentes:', contadorPendentes);
+    console.log('🔊 Áudio habilitado:', audioHabilitado);
 
-    // Método 1: Audio API direto (mais confiável)
+    // Se não está habilitado e é forçado, tentar habilitar
+    if (!audioHabilitado && forcado) {
+      const habilitado = await habilitarAudio();
+      if (!habilitado) {
+        console.log('❌ Não foi possível habilitar áudio');
+        return false;
+      }
+    }
+
+    // Se não está habilitado e é automático, não tocar
+    if (!audioHabilitado && !forcado) {
+      console.log('⚠️ Áudio não habilitado, som automático bloqueado');
+      return false;
+    }
+
+    // Método 1: Tentar usar useSound (mais confiável após habilitação)
     try {
-      console.log('🔊 Método 1: Tentando Audio API direto...');
-      const audio = new Audio('/sounds/notification.mp3');
-      audio.volume = 1.0; // Volume máximo
-      audio.preload = 'auto';
+      console.log('🔊 Método 1: Tentando useSound...');
+      playNotificationSound();
+      console.log('✅ useSound executado com sucesso');
+      return true;
+    } catch (error) {
+      console.error('❌ Erro no useSound:', error);
+    }
 
-      // Aguardar carregamento
-      await new Promise((resolve, reject) => {
-        audio.addEventListener('canplaythrough', resolve, { once: true });
-        audio.addEventListener('error', reject, { once: true });
-        audio.load();
-      });
+    // Método 2: Audio API direto
+    try {
+      console.log('🔊 Método 2: Tentando Audio API direto...');
+      const audio = new Audio('/sounds/notification.mp3');
+      audio.volume = 1.0;
 
       const playPromise = audio.play();
-
       if (playPromise !== undefined) {
         await playPromise;
         console.log('✅ Som tocado via Audio API direto');
@@ -79,46 +121,9 @@ export const useCardapioDigitalNotifications = ({
       console.error('❌ Erro no Audio API direto:', error);
     }
 
-    // Método 2: Tentar usar useSound
-    try {
-      console.log('🔊 Método 2: Tentando useSound...');
-      playNotificationSound();
-      console.log('✅ useSound executado com sucesso');
-      return true;
-    } catch (error) {
-      console.error('❌ Erro no useSound:', error);
-    }
-
-    // Método 3: Último recurso - createElement com eventos
-    try {
-      console.log('🔊 Método 3: Último recurso com eventos...');
-      const audioElement = document.createElement('audio');
-      audioElement.src = '/sounds/notification.mp3';
-      audioElement.volume = 1.0;
-      audioElement.preload = 'auto';
-
-      // Adicionar ao DOM temporariamente
-      document.body.appendChild(audioElement);
-
-      const playPromise = audioElement.play();
-      if (playPromise) {
-        await playPromise;
-        console.log('✅ Som tocado via createElement');
-
-        // Remover do DOM após tocar
-        setTimeout(() => {
-          document.body.removeChild(audioElement);
-        }, 1000);
-
-        return true;
-      }
-    } catch (lastError) {
-      console.error('❌ Todos os métodos falharam:', lastError);
-    }
-
     console.log('🔊 === FIM DA REPRODUÇÃO DE SOM ===');
     return false;
-  }, [playNotificationSound, contadorPendentes]);
+  }, [playNotificationSound, contadorPendentes, audioHabilitado, habilitarAudio]);
 
   // ✅ REFERÊNCIA PARA O INTERVALO DO SOM CONTÍNUO
   const intervalSomRef = useRef<NodeJS.Timeout | null>(null);
@@ -393,11 +398,12 @@ export const useCardapioDigitalNotifications = ({
       somContinuoAtivo,
       empresaId,
       enabled,
+      audioHabilitado,
       timestamp: new Date().toISOString()
     });
 
-    // Se há pedidos pendentes e som não está ativo, iniciar
-    if (contadorPendentes > 0 && !somContinuoAtivo && empresaId && enabled) {
+    // Se há pedidos pendentes, áudio habilitado e som não está ativo, iniciar
+    if (contadorPendentes > 0 && !somContinuoAtivo && empresaId && enabled && audioHabilitado) {
       console.log('🔔 DETECTADOS PEDIDOS PENDENTES - INICIANDO SOM CONTÍNUO AUTOMATICAMENTE!');
       setTimeout(() => iniciarSomContinuo(), 1000); // Delay de 1 segundo para garantir estabilidade
     }
@@ -406,7 +412,7 @@ export const useCardapioDigitalNotifications = ({
       console.log('🔕 SEM PEDIDOS PENDENTES - PARANDO SOM CONTÍNUO AUTOMATICAMENTE!');
       pararSomContinuo();
     }
-  }, [contadorPendentes, somContinuoAtivo, empresaId, enabled, iniciarSomContinuo, pararSomContinuo]);
+  }, [contadorPendentes, somContinuoAtivo, empresaId, enabled, audioHabilitado, iniciarSomContinuo, pararSomContinuo]);
 
   // ✅ MONITORAMENTO INICIAL - VERIFICAR PEDIDOS EXISTENTES AO CARREGAR
   useEffect(() => {
@@ -455,6 +461,8 @@ export const useCardapioDigitalNotifications = ({
     recarregarPedidos: carregarPedidosPendentes,
     tocarSomNotificacao,
     somContinuoAtivo,
-    pararSomContinuo
+    pararSomContinuo,
+    habilitarAudio,
+    audioHabilitado
   };
 };

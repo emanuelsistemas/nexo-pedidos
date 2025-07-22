@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate } from 'react-router-dom';
@@ -195,10 +195,12 @@ const PDVPage: React.FC = () => {
     recarregarPedidos: recarregarPedidosCardapio,
     tocarSomNotificacao,
     somContinuoAtivo,
-    pararSomContinuo
+    pararSomContinuo,
+    habilitarAudio,
+    audioHabilitado
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
-    enabled: !!empresaData?.id // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA (independente da config PDV)
+    enabled: !!empresaData?.id && !somMutadoPeloUsuario // ✅ ATIVAR APENAS SE EMPRESA E NÃO MUTADO PELO USUÁRIO
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
@@ -210,19 +212,73 @@ const PDVPage: React.FC = () => {
   const [pedidosCardapioFiltrados, setPedidosCardapioFiltrados] = useState<any[]>([]);
   const [todosOsPedidosCardapio, setTodosOsPedidosCardapio] = useState<any[]>([]);
 
-  // ✅ FUNÇÃO DE TESTE DE SOM
-  const testarSom = () => {
-    console.log('🧪 Testando som manualmente...');
-    try {
-      const audio = new Audio('/sounds/notification.mp3');
-      audio.volume = 0.8;
-      audio.play().then(() => {
-        console.log('✅ Som de teste tocado com sucesso');
-      }).catch((error) => {
-        console.error('❌ Erro ao tocar som de teste:', error);
-      });
-    } catch (error) {
-      console.error('❌ Erro ao criar áudio de teste:', error);
+  // ✅ ESTADO DO SOM DO CARDÁPIO DIGITAL
+  const [somCardapioAtivo, setSomCardapioAtivo] = useState(false);
+  const [somMutadoPeloUsuario, setSomMutadoPeloUsuario] = useState(false);
+
+  // ✅ FUNÇÃO PARA ALTERNAR SOM DO CARDÁPIO DIGITAL
+  const alternarSomCardapio = useCallback(() => {
+    const novoEstado = !somCardapioAtivo;
+    setSomCardapioAtivo(novoEstado);
+
+    if (novoEstado) {
+      // Ativar som - tocar som de teste para habilitar áudio
+      console.log('🔊 Ativando som do cardápio digital...');
+      try {
+        const audio = new Audio('/sounds/notification.mp3');
+        audio.volume = 0.8;
+        audio.play().then(() => {
+          console.log('✅ Som do cardápio ativado com sucesso');
+          toast.success('Som do cardápio ativado!');
+        }).catch((error) => {
+          console.error('❌ Erro ao ativar som:', error);
+          toast.error('Erro ao ativar som');
+        });
+      } catch (error) {
+        console.error('❌ Erro ao ativar som:', error);
+        toast.error('Erro ao ativar som');
+      }
+    } else {
+      console.log('🔇 Som do cardápio desativado');
+      toast.info('Som do cardápio desativado');
+    }
+  }, [somCardapioAtivo]);
+
+  // ✅ FUNÇÃO PARA ALTERNAR SOM (ATIVAR/MUTAR)
+  const alternarSom = async () => {
+    if (!audioHabilitado || somMutadoPeloUsuario) {
+      // Se áudio não está habilitado OU foi mutado pelo usuário, habilitar e ativar
+      console.log('🔊 Habilitando áudio...');
+      const habilitado = await habilitarAudio();
+      if (habilitado) {
+        setSomMutadoPeloUsuario(false); // Resetar flag de mutado
+        toast.success('Som do cardápio ativado!');
+      } else {
+        toast.error('Não foi possível habilitar o áudio');
+      }
+    } else if (audioHabilitado && somContinuoAtivo) {
+      // Se áudio está habilitado e som está ativo, pedir confirmação para mutar
+      const confirmar = window.confirm(
+        '🔇 Deseja realmente desabilitar o som do cardápio digital?\n\n' +
+        'Você não receberá alertas sonoros de novos pedidos até reativar manualmente.'
+      );
+
+      if (confirmar) {
+        console.log('🔇 Mutando som do cardápio por solicitação do usuário...');
+        setSomMutadoPeloUsuario(true); // Marcar como mutado pelo usuário
+        pararSomContinuo();
+        toast.info('Som do cardápio desabilitado');
+      }
+    } else {
+      // Caso não esteja ativo, ativar
+      console.log('🔊 Ativando som do cardápio...');
+      setSomMutadoPeloUsuario(false);
+      const sucesso = await tocarSomNotificacao(true);
+      if (sucesso) {
+        toast.success('Som do cardápio ativado!');
+      } else {
+        toast.error('Erro ao ativar som');
+      }
     }
   };
 
@@ -11418,6 +11474,42 @@ const PDVPage: React.FC = () => {
               HOMOLOG.
             </span>
           )}
+
+          {/* ✅ BOTÃO DE SOM DO CARDÁPIO DIGITAL - só aparece quando cardápio digital está ativo */}
+          {pdvConfig?.cardapio_digital === true && (
+            <button
+              onClick={alternarSom}
+              className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full border transition-all duration-200 ${
+                audioHabilitado && somContinuoAtivo && !somMutadoPeloUsuario
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
+                  : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
+              }`}
+              title={
+                audioHabilitado && somContinuoAtivo && !somMutadoPeloUsuario
+                  ? 'Som do cardápio ativo - Clique para desabilitar'
+                  : 'Som do cardápio desabilitado - Clique para ativar'
+              }
+            >
+              {audioHabilitado && somContinuoAtivo && !somMutadoPeloUsuario ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                  </svg>
+                  SOM
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <line x1="23" y1="9" x2="17" y2="15"/>
+                    <line x1="17" y1="9" x2="23" y2="15"/>
+                  </svg>
+                  SOM
+                </>
+              )}
+            </button>
+          )}
         </div>
         <div className="text-4xl font-bold text-primary-400">
           {formatCurrencyWithoutSymbol(calcularTotal())}
@@ -12318,6 +12410,8 @@ const PDVPage: React.FC = () => {
             )}
             </div>
           </div>
+
+
 
         {/* Área Lateral de Informações - Aparece quando há configurações habilitadas OU pedidos importados */}
         {carrinho.length > 0 && (
@@ -19923,12 +20017,6 @@ const PDVPage: React.FC = () => {
                           className="text-sm text-orange-400 hover:text-orange-300"
                         >
                           🔄 Atualizar
-                        </button>
-                        <button
-                          onClick={testarSom}
-                          className="text-sm text-blue-400 hover:text-blue-300"
-                        >
-                          🔊 Som
                         </button>
                       </div>
                     </div>
