@@ -19,15 +19,16 @@ interface UseCardapioDigitalNotificationsProps {
   enabled?: boolean;
 }
 
-export const useCardapioDigitalNotifications = ({ 
-  empresaId, 
-  enabled = true 
+export const useCardapioDigitalNotifications = ({
+  empresaId,
+  enabled = true
 }: UseCardapioDigitalNotificationsProps) => {
   const [pedidosPendentes, setPedidosPendentes] = useState<PedidoCardapio[]>([]);
   const [contadorPendentes, setContadorPendentes] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [somContinuoAtivo, setSomContinuoAtivo] = useState(false);
   const [audioHabilitado, setAudioHabilitado] = useState(false);
+  const [somDesabilitadoPeloUsuario, setSomDesabilitadoPeloUsuario] = useState(false);
 
   // ✅ HOOK DE SOM PARA NOTIFICAÇÕES
   const [playNotificationSound] = useSound('/sounds/notification.mp3', {
@@ -185,6 +186,19 @@ export const useCardapioDigitalNotifications = ({
       intervalSomRef.current = null;
     }
     setSomContinuoAtivo(false);
+  }, []);
+
+  // ✅ NOVA FUNÇÃO PARA DESABILITAR SOM PELO USUÁRIO
+  const desabilitarSomPeloUsuario = useCallback(() => {
+    console.log('🔇 Som desabilitado pelo usuário');
+    setSomDesabilitadoPeloUsuario(true);
+    pararSomContinuo();
+  }, [pararSomContinuo]);
+
+  // ✅ NOVA FUNÇÃO PARA REABILITAR SOM PELO USUÁRIO
+  const reabilitarSomPeloUsuario = useCallback(() => {
+    console.log('🔊 Som reabilitado pelo usuário');
+    setSomDesabilitadoPeloUsuario(false);
   }, []);
 
   // ✅ CARREGAR PEDIDOS PENDENTES
@@ -402,8 +416,8 @@ export const useCardapioDigitalNotifications = ({
       timestamp: new Date().toISOString()
     });
 
-    // Se há pedidos pendentes, áudio habilitado e som não está ativo, iniciar
-    if (contadorPendentes > 0 && !somContinuoAtivo && empresaId && enabled && audioHabilitado) {
+    // Se há pedidos pendentes, áudio habilitado, som não está ativo E não foi desabilitado pelo usuário, iniciar
+    if (contadorPendentes > 0 && !somContinuoAtivo && empresaId && enabled && audioHabilitado && !somDesabilitadoPeloUsuario) {
       console.log('🔔 DETECTADOS PEDIDOS PENDENTES - INICIANDO SOM CONTÍNUO AUTOMATICAMENTE!');
       setTimeout(() => iniciarSomContinuo(), 1000); // Delay de 1 segundo para garantir estabilidade
     }
@@ -412,7 +426,7 @@ export const useCardapioDigitalNotifications = ({
       console.log('🔕 SEM PEDIDOS PENDENTES - PARANDO SOM CONTÍNUO AUTOMATICAMENTE!');
       pararSomContinuo();
     }
-  }, [contadorPendentes, somContinuoAtivo, empresaId, enabled, audioHabilitado, iniciarSomContinuo, pararSomContinuo]);
+  }, [contadorPendentes, somContinuoAtivo, empresaId, enabled, audioHabilitado, somDesabilitadoPeloUsuario, iniciarSomContinuo, pararSomContinuo]);
 
   // ✅ MONITORAMENTO INICIAL - VERIFICAR PEDIDOS EXISTENTES AO CARREGAR
   useEffect(() => {
@@ -463,6 +477,9 @@ export const useCardapioDigitalNotifications = ({
     somContinuoAtivo,
     pararSomContinuo,
     habilitarAudio,
-    audioHabilitado
+    audioHabilitado,
+    desabilitarSomPeloUsuario,
+    reabilitarSomPeloUsuario,
+    somDesabilitadoPeloUsuario
   };
 };

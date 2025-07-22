@@ -197,7 +197,10 @@ const PDVPage: React.FC = () => {
     somContinuoAtivo,
     pararSomContinuo,
     habilitarAudio,
-    audioHabilitado
+    audioHabilitado,
+    desabilitarSomPeloUsuario,
+    reabilitarSomPeloUsuario,
+    somDesabilitadoPeloUsuario
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
     enabled: !!empresaData?.id // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
@@ -249,12 +252,12 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA ALTERNAR SOM (ATIVAR/MUTAR)
   const alternarSom = async () => {
-    if (!audioHabilitado || somMutadoPeloUsuario) {
-      // Se áudio não está habilitado OU foi mutado pelo usuário, habilitar e ativar
+    if (!audioHabilitado || somDesabilitadoPeloUsuario) {
+      // Se áudio não está habilitado OU foi desabilitado pelo usuário, habilitar e ativar
       console.log('🔊 Habilitando áudio...');
       const habilitado = await habilitarAudio();
       if (habilitado) {
-        setSomMutadoPeloUsuario(false); // Resetar flag de mutado
+        reabilitarSomPeloUsuario(); // Reabilitar som no hook
         toast.success('Som do cardápio ativado!');
       } else {
         toast.error('Não foi possível habilitar o áudio');
@@ -265,7 +268,7 @@ const PDVPage: React.FC = () => {
     } else {
       // Caso não esteja ativo, ativar
       console.log('🔊 Ativando som do cardápio...');
-      setSomMutadoPeloUsuario(false);
+      reabilitarSomPeloUsuario(); // Reabilitar som no hook
       const sucesso = await tocarSomNotificacao(true);
       if (sucesso) {
         toast.success('Som do cardápio ativado!');
@@ -277,9 +280,8 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA CONFIRMAR DESABILITAÇÃO DO SOM
   const confirmarDesabilitarSom = () => {
-    console.log('🔇 Mutando som do cardápio por solicitação do usuário...');
-    setSomMutadoPeloUsuario(true); // Marcar como mutado pelo usuário
-    pararSomContinuo();
+    console.log('🔇 Desabilitando som do cardápio por solicitação do usuário...');
+    desabilitarSomPeloUsuario(); // Desabilitar som no hook
     setShowModalDesabilitarSom(false);
     toast.info('Som do cardápio desabilitado');
   };
@@ -2985,14 +2987,6 @@ const PDVPage: React.FC = () => {
       aplicarFiltrosCardapio();
     }
   }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
-
-  // ✅ USEEFFECT PARA CONTROLAR SOM QUANDO MUTADO PELO USUÁRIO
-  useEffect(() => {
-    if (somMutadoPeloUsuario && somContinuoAtivo) {
-      console.log('🔇 Parando som contínuo - mutado pelo usuário');
-      pararSomContinuo();
-    }
-  }, [somMutadoPeloUsuario, somContinuoAtivo, pararSomContinuo]);
 
   // Função para importar pedido para o carrinho (com confirmação)
   const importarPedidoParaCarrinho = (pedido: any) => {
@@ -11495,17 +11489,17 @@ const PDVPage: React.FC = () => {
             <button
               onClick={alternarSom}
               className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full border transition-all duration-200 ${
-                audioHabilitado && somContinuoAtivo && !somMutadoPeloUsuario
+                audioHabilitado && somContinuoAtivo && !somDesabilitadoPeloUsuario
                   ? 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
                   : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
               }`}
               title={
-                audioHabilitado && somContinuoAtivo && !somMutadoPeloUsuario
+                audioHabilitado && somContinuoAtivo && !somDesabilitadoPeloUsuario
                   ? 'Som do cardápio ativo - Clique para desabilitar'
                   : 'Som do cardápio desabilitado - Clique para ativar'
               }
             >
-              {audioHabilitado && somContinuoAtivo && !somMutadoPeloUsuario ? (
+              {audioHabilitado && somContinuoAtivo && !somDesabilitadoPeloUsuario ? (
                 <>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
