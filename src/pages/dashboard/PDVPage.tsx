@@ -200,7 +200,7 @@ const PDVPage: React.FC = () => {
     audioHabilitado
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
-    enabled: !!empresaData?.id && !somMutadoPeloUsuario // ✅ ATIVAR APENAS SE EMPRESA E NÃO MUTADO PELO USUÁRIO
+    enabled: !!empresaData?.id // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
@@ -215,6 +215,8 @@ const PDVPage: React.FC = () => {
   // ✅ ESTADO DO SOM DO CARDÁPIO DIGITAL
   const [somCardapioAtivo, setSomCardapioAtivo] = useState(false);
   const [somMutadoPeloUsuario, setSomMutadoPeloUsuario] = useState(false);
+  const [showModalHabilitarSom, setShowModalHabilitarSom] = useState(false);
+  const [modalSomJaExibido, setModalSomJaExibido] = useState(false);
 
   // ✅ FUNÇÃO PARA ALTERNAR SOM DO CARDÁPIO DIGITAL
   const alternarSomCardapio = useCallback(() => {
@@ -2978,6 +2980,14 @@ const PDVPage: React.FC = () => {
       aplicarFiltrosCardapio();
     }
   }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
+
+  // ✅ USEEFFECT PARA CONTROLAR SOM QUANDO MUTADO PELO USUÁRIO
+  useEffect(() => {
+    if (somMutadoPeloUsuario && somContinuoAtivo) {
+      console.log('🔇 Parando som contínuo - mutado pelo usuário');
+      pararSomContinuo();
+    }
+  }, [somMutadoPeloUsuario, somContinuoAtivo, pararSomContinuo]);
 
   // Função para importar pedido para o carrinho (com confirmação)
   const importarPedidoParaCarrinho = (pedido: any) => {
