@@ -4648,13 +4648,19 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const cancelarDadosCliente = () => {
+    // ✅ VOLTAR PARA O MODAL DE FINALIZAÇÃO ANTERIOR
     setModalDadosClienteAberto(false);
-    setDadosCliente({
-      nome: '',
-      telefone: '',
-      querNotaFiscal: false,
-      cpfCnpj: ''
-    });
+    setModalFinalizacaoAberto(true);
+
+    // Manter os dados do cliente preenchidos para não perder o progresso
+    // setDadosCliente({
+    //   nome: '',
+    //   telefone: '',
+    //   querNotaFiscal: false,
+    //   cpfCnpj: ''
+    // });
+
+    // Limpar apenas os erros
     setErroDadosCliente(null);
   };
 
@@ -5234,7 +5240,15 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const iniciarFinalizacaoPedido = () => {
-    // Carregar dados salvos do localStorage
+    // ✅ VALIDAR PEDIDO ANTES DE PROSSEGUIR
+    const erros = validarPedidoAntesDeFinalizar();
+
+    if (erros.length > 0) {
+      mostrarErrosValidacao(erros);
+      return;
+    }
+
+    // Se passou na validação, carregar dados salvos do localStorage
     const dadosSalvos = carregarDadosClienteLocalStorage();
     if (dadosSalvos) {
       setDadosCliente(dadosSalvos);
@@ -5247,6 +5261,30 @@ const CardapioPublicoPage: React.FC = () => {
 
   const confirmarFinalizacaoPedido = async () => {
     try {
+      // ✅ VALIDAR DADOS DO CLIENTE
+      const errosCliente: string[] = [];
+
+      if (!dadosCliente.nome || dadosCliente.nome.trim().length < 2) {
+        errosCliente.push('Nome deve ter pelo menos 2 caracteres');
+      }
+
+      if (!dadosCliente.telefone || dadosCliente.telefone.length < 10) {
+        errosCliente.push('Telefone deve ter pelo menos 10 dígitos');
+      }
+
+      // Validar CPF/CNPJ se informado
+      if (dadosCliente.cpfCnpj && dadosCliente.cpfCnpj.length > 0) {
+        const documento = dadosCliente.cpfCnpj.replace(/\D/g, '');
+        if (documento.length !== 11 && documento.length !== 14) {
+          errosCliente.push('CPF deve ter 11 dígitos ou CNPJ deve ter 14 dígitos');
+        }
+      }
+
+      if (errosCliente.length > 0) {
+        mostrarErrosValidacao(errosCliente);
+        return;
+      }
+
       // ✅ SALVAR PEDIDO NA TABELA CARDAPIO_DIGITAL
       const pedidoSalvo = await salvarPedidoCardapioDigital();
 
@@ -5305,7 +5343,190 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const cancelarFinalizacaoPedido = () => {
-    setModalFinalizacaoAberto(false);
+    // ✅ VALIDAR PEDIDO ANTES DE ABRIR MODAL
+    const erros = validarPedidoAntesDeFinalizar();
+
+    if (erros.length > 0) {
+      mostrarErrosValidacao(erros);
+      return;
+    }
+
+    // Se passou na validação, abrir modal
+    setModalFinalizacaoAberto(true);
+  };
+
+  // ✅ FUNÇÃO PARA VALIDAR PEDIDO ANTES DE FINALIZAR
+  const validarPedidoAntesDeFinalizar = () => {
+    const erros: string[] = [];
+
+    // 1. Validar carrinho não vazio
+    const itensCarrinho = obterItensCarrinho();
+    if (itensCarrinho.length === 0) {
+      erros.push('Adicione pelo menos um item ao carrinho');
+      return erros; // Se não tem itens, não precisa validar o resto
+    }
+
+    // 2. Validar valor mínimo do pedido (configuração geral)
+    const valorTotalCarrinho = obterTotalCarrinho();
+    if (config.valor_minimo_pedido && valorTotalCarrinho < config.valor_minimo_pedido) {
+      erros.push(`Valor mínimo do pedido: ${formatarPreco(config.valor_minimo_pedido)}`);
+    }
+
+    // 3. Validar valor mínimo por produto (se configurado)
+    itensCarrinho.forEach((item: any) => {
+      const produto = item.produto;
+      if (produto.valor_minimo_venda && produto.valor_minimo_venda > 0) {
+        const valorTotalItem = (item.precoProduto || produto.preco) * item.quantidade;
+        if (valorTotalItem < produto.valor_minimo_venda) {
+          erros.push(`${produto.nome}: valor mínimo ${formatarPreco(produto.valor_minimo_venda)}`);
+        }
+      }
+    });
+
+    // 4. Validar taxa de entrega (se tem entrega)
+    if (calculoTaxa) {
+      if (!calculoTaxa.valor || calculoTaxa.valor <= 0) {
+        erros.push('Taxa de entrega deve ter um valor válido');
+      }
+    }
+
+    // 5. Validar endereço se tem entrega
+    if (calculoTaxa && cepCliente) {
+      // Validar tipo de endereço
+      if (!tipoEndereco) {
+        erros.push('Selecione o tipo de endereço (Casa ou Condomínio)');
+      } else {
+        // Validar campos obrigatórios por tipo
+        if (tipoEndereco === 'casa') {
+          if (!dadosComplementoEndereco.numero) {
+            erros.push('Número da casa é obrigatório');
+          }
+        } else if (tipoEndereco === 'condominio') {
+          if (!dadosComplementoEndereco.nomeCondominio) {
+            erros.push('Nome do condomínio é obrigatório');
+          }
+          if (!dadosComplementoEndereco.numero) {
+            erros.push('Número/Apartamento é obrigatório');
+          }
+        }
+      }
+
+      // Validar se endereço foi encontrado
+      if (!enderecoEncontrado?.logradouro) {
+        erros.push('Endereço não encontrado para o CEP informado');
+      }
+
+      // Validar bairro
+      if (!enderecoEncontrado?.bairro && !bairroSelecionado) {
+        erros.push('Bairro deve ser selecionado');
+      }
+    }
+
+    // 6. Validar forma de pagamento
+    if (!formaPagamentoSelecionada) {
+      erros.push('Selecione uma forma de pagamento');
+    } else {
+      // Validações específicas por tipo de pagamento
+      if (formaPagamentoSelecionada.tipo === 'dinheiro' && formaPagamentoSelecionada.precisa_troco) {
+        if (!formaPagamentoSelecionada.valor_dinheiro || formaPagamentoSelecionada.valor_dinheiro <= 0) {
+          erros.push('Valor em dinheiro deve ser informado');
+        }
+        const valorTotal = valorTotalCarrinho + (calculoTaxa?.valor || 0) - calcularDescontoCupom();
+        if (formaPagamentoSelecionada.valor_dinheiro < valorTotal) {
+          erros.push('Valor em dinheiro deve ser maior ou igual ao total do pedido');
+        }
+      }
+    }
+
+    return erros;
+  };
+
+  // ✅ FUNÇÃO PARA MOSTRAR ERROS DE VALIDAÇÃO
+  const mostrarErrosValidacao = (erros: string[]) => {
+    // Mostrar modal de erro personalizado
+    const modalErro = document.createElement('div');
+    modalErro.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4';
+
+    const modoEscuro = config.modo_escuro;
+    const bgClass = modoEscuro ? 'bg-gray-800' : 'bg-white';
+    const textClass = modoEscuro ? 'text-white' : 'text-gray-900';
+    const textSecondaryClass = modoEscuro ? 'text-gray-300' : 'text-gray-600';
+    const bgErrorClass = modoEscuro ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-200';
+    const textErrorClass = modoEscuro ? 'text-red-300' : 'text-red-700';
+
+    modalErro.innerHTML = `
+      <div class="${bgClass} rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
+        <div class="text-center mb-6">
+          <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+          </div>
+          <h3 class="text-xl font-bold ${textClass} mb-2">⚠️ Atenção!</h3>
+          <p class="text-sm ${textSecondaryClass} mb-4">
+            Por favor, corrija os seguintes problemas antes de continuar:
+          </p>
+        </div>
+
+        <div class="${bgErrorClass} border rounded-xl p-4 mb-6">
+          <ul class="text-sm ${textErrorClass} space-y-3">
+            ${erros.map((erro, index) => `
+              <li class="flex items-start gap-3">
+                <span class="flex-shrink-0 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                  ${index + 1}
+                </span>
+                <span class="flex-1">${erro}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+
+        <div class="flex gap-3">
+          <button
+            onclick="this.closest('.fixed').remove()"
+            class="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-4 rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            ✅ Entendi, vou corrigir
+          </button>
+        </div>
+
+        <p class="text-xs ${textSecondaryClass} text-center mt-4">
+          💡 Dica: Verifique todos os campos obrigatórios antes de finalizar
+        </p>
+      </div>
+    `;
+
+    document.body.appendChild(modalErro);
+
+    // Focar no botão para acessibilidade
+    const botao = modalErro.querySelector('button');
+    if (botao) {
+      setTimeout(() => botao.focus(), 100);
+    }
+
+    // Remover modal ao clicar fora
+    modalErro.addEventListener('click', (e) => {
+      if (e.target === modalErro) {
+        modalErro.remove();
+      }
+    });
+
+    // Remover modal com ESC
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        modalErro.remove();
+        document.removeEventListener('keydown', handleEsc);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+
+    // Remover modal após 15 segundos
+    setTimeout(() => {
+      if (modalErro.parentNode) {
+        modalErro.remove();
+        document.removeEventListener('keydown', handleEsc);
+      }
+    }, 15000);
   };
 
   // ✅ FUNÇÕES PARA CONTROLE DE STATUS DO PEDIDO
