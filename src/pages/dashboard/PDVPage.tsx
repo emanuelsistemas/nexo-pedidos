@@ -2931,8 +2931,14 @@ const PDVPage: React.FC = () => {
       const pedidos = data || [];
       console.log('✅ carregarTodosPedidosCardapio: Pedidos carregados:', pedidos.length);
       console.log('📊 Status dos pedidos:', pedidos.map(p => ({ numero: p.numero_pedido, status: p.status_pedido })));
+
+      // ✅ ATUALIZAR ESTADO E APLICAR FILTROS IMEDIATAMENTE
       setTodosOsPedidosCardapio(pedidos);
-      aplicarFiltrosCardapio(pedidos);
+
+      // ✅ APLICAR FILTROS IMEDIATAMENTE COM OS NOVOS DADOS
+      setTimeout(() => {
+        aplicarFiltrosCardapio(pedidos);
+      }, 50); // Pequeno delay para garantir que o estado foi atualizado
     } catch (error) {
       console.error('❌ carregarTodosPedidosCardapio: Erro inesperado:', error);
     }
@@ -2990,13 +2996,19 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÕES DE FILTRO DO CARDÁPIO DIGITAL
   const filtrarCardapioPorStatus = (status: string) => {
+    console.log('🔄 filtrarCardapioPorStatus: Mudando para status:', status);
     setStatusFilterCardapio(status);
-    aplicarFiltrosCardapio();
+    // ✅ APLICAR FILTROS IMEDIATAMENTE COM PEQUENO DELAY
+    setTimeout(() => {
+      aplicarFiltrosCardapio();
+    }, 10);
   };
 
   const filtrarCardapioPorBusca = (termo: string) => {
     setSearchCardapio(termo);
-    aplicarFiltrosCardapio();
+    setTimeout(() => {
+      aplicarFiltrosCardapio();
+    }, 10);
   };
 
   const limparFiltrosCardapio = () => {
@@ -3004,7 +3016,9 @@ const PDVPage: React.FC = () => {
     setSearchCardapio('');
     setDataInicioCardapio('');
     setDataFimCardapio('');
-    aplicarFiltrosCardapio();
+    setTimeout(() => {
+      aplicarFiltrosCardapio();
+    }, 10);
   };
 
   // ✅ USEEFFECT PARA SINCRONIZAR REF COM ESTADO DO MODAL
@@ -3021,9 +3035,8 @@ const PDVPage: React.FC = () => {
 
   // ✅ USEEFFECT PARA APLICAR FILTROS QUANDO MUDAREM
   useEffect(() => {
-    if (todosOsPedidosCardapio.length > 0) {
-      aplicarFiltrosCardapio();
-    }
+    // ✅ APLICAR FILTROS SEMPRE QUE HOUVER MUDANÇAS (mesmo com lista vazia)
+    aplicarFiltrosCardapio();
   }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
 
   // ✅ VERIFICAR SE DEVE MOSTRAR MODAL DE SOM INICIAL
@@ -3047,10 +3060,13 @@ const PDVPage: React.FC = () => {
   const aceitarPedidoComMudancaAba = async (pedidoId: string) => {
     const sucesso = await aceitarPedido(pedidoId);
     if (sucesso) {
+      // ✅ RECARREGAR LISTA COMPLETA IMEDIATAMENTE
+      await carregarTodosPedidosCardapio();
+
       // Mudar para aba "Aceitos" após aceitar
       setTimeout(() => {
         setStatusFilterCardapio('aceitos');
-      }, 500); // Delay para dar tempo da lista atualizar
+      }, 100); // Delay reduzido
     }
   };
 
@@ -3058,11 +3074,11 @@ const PDVPage: React.FC = () => {
   const rejeitarPedidoComMudancaAba = async (pedidoId: string) => {
     const sucesso = await rejeitarPedido(pedidoId);
     if (sucesso) {
+      // ✅ RECARREGAR LISTA COMPLETA IMEDIATAMENTE
+      await carregarTodosPedidosCardapio();
+
       // Manter na aba "Aguardando" para ver outros pedidos pendentes
-      // Ou mudar para "Finalizados" se preferir ver os rejeitados
-      // setTimeout(() => {
-      //   setStatusFilterCardapio('finalizados');
-      // }, 500);
+      // (não mudar de aba para que o usuário veja outros pedidos pendentes)
     }
   };
 
