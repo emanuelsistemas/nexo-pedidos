@@ -20225,174 +20225,166 @@ const PDVPage: React.FC = () => {
                               </div>
                             )}
 
-                            {/* Botões para pedidos confirmados */}
-                            {pedido.status_pedido === 'confirmado' && (
+
+
+                            {/* Botões de ação para todos os status (exceto pendente e o status atual) */}
+                            {pedido.status_pedido !== 'pendente' && (
                               <div className="flex flex-col gap-2">
                                 {/* Primeira linha de botões */}
                                 <div className="flex gap-2">
-                                  <button
-                                    onClick={async () => {
-                                      const sucesso = await marcarComoPreparando(pedido.id);
-                                      if (sucesso) {
-                                        await carregarTodosPedidosCardapio();
-                                        setStatusFilterCardapio('preparando');
-                                      }
-                                    }}
-                                    disabled={pedidosProcessando.has(pedido.id)}
-                                    className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
-                                      pedidosProcessando.has(pedido.id)
-                                        ? 'bg-gray-500 cursor-not-allowed'
-                                        : 'bg-yellow-600 hover:bg-yellow-700'
-                                    }`}
-                                  >
-                                    {pedidosProcessando.has(pedido.id) ? (
-                                      <>
-                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        Preparando...
-                                      </>
-                                    ) : (
-                                      <>👨‍🍳 Preparar</>
-                                    )}
-                                  </button>
+                                  {pedido.status_pedido !== 'confirmado' && (
+                                    <button
+                                      onClick={async () => {
+                                        const sucesso = await aceitarPedidoComMudancaAba(pedido.id);
+                                        if (sucesso) {
+                                          await carregarTodosPedidosCardapio();
+                                          // Delay maior para garantir que os dados foram atualizados
+                                          setTimeout(() => {
+                                            setStatusFilterCardapio('confirmado');
+                                          }, 200);
+                                        }
+                                      }}
+                                      disabled={pedidosProcessando.has(pedido.id)}
+                                      className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                        pedidosProcessando.has(pedido.id)
+                                          ? 'bg-gray-500 cursor-not-allowed'
+                                          : 'bg-blue-600 hover:bg-blue-700'
+                                      }`}
+                                    >
+                                      {pedidosProcessando.has(pedido.id) ? (
+                                        <>
+                                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                          Confirmando...
+                                        </>
+                                      ) : (
+                                        <>✅ Confirmar</>
+                                      )}
+                                    </button>
+                                  )}
 
-                                  <button
-                                    onClick={async () => {
-                                      const sucesso = await marcarComoPronto(pedido.id);
-                                      if (sucesso) {
-                                        await carregarTodosPedidosCardapio();
-                                        setStatusFilterCardapio('pronto');
-                                      }
-                                    }}
-                                    disabled={pedidosProcessando.has(pedido.id)}
-                                    className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
-                                      pedidosProcessando.has(pedido.id)
-                                        ? 'bg-gray-500 cursor-not-allowed'
-                                        : 'bg-green-600 hover:bg-green-700'
-                                    }`}
-                                  >
-                                    {pedidosProcessando.has(pedido.id) ? (
-                                      <>
-                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        Finalizando...
-                                      </>
-                                    ) : (
-                                      <>🍽️ Pronto</>
-                                    )}
-                                  </button>
+                                  {pedido.status_pedido !== 'preparando' && (
+                                    <button
+                                      onClick={async () => {
+                                        const sucesso = await marcarComoPreparando(pedido.id);
+                                        if (sucesso) {
+                                          await carregarTodosPedidosCardapio();
+                                          // Delay maior para garantir que os dados foram atualizados
+                                          setTimeout(() => {
+                                            setStatusFilterCardapio('preparando');
+                                          }, 200);
+                                        }
+                                      }}
+                                      disabled={pedidosProcessando.has(pedido.id)}
+                                      className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                        pedidosProcessando.has(pedido.id)
+                                          ? 'bg-gray-500 cursor-not-allowed'
+                                          : 'bg-yellow-600 hover:bg-yellow-700'
+                                      }`}
+                                    >
+                                      {pedidosProcessando.has(pedido.id) ? (
+                                        <>
+                                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                          Preparando...
+                                        </>
+                                      ) : (
+                                        <>👨‍🍳 Preparar</>
+                                      )}
+                                    </button>
+                                  )}
+
+                                  {pedido.status_pedido !== 'pronto' && (
+                                    <button
+                                      onClick={async () => {
+                                        const sucesso = await marcarComoPronto(pedido.id);
+                                        if (sucesso) {
+                                          await carregarTodosPedidosCardapio();
+                                          // Delay maior para garantir que os dados foram atualizados
+                                          setTimeout(() => {
+                                            setStatusFilterCardapio('pronto');
+                                          }, 200);
+                                        }
+                                      }}
+                                      disabled={pedidosProcessando.has(pedido.id)}
+                                      className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                        pedidosProcessando.has(pedido.id)
+                                          ? 'bg-gray-500 cursor-not-allowed'
+                                          : 'bg-green-600 hover:bg-green-700'
+                                      }`}
+                                    >
+                                      {pedidosProcessando.has(pedido.id) ? (
+                                        <>
+                                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                          Finalizando...
+                                        </>
+                                      ) : (
+                                        <>🍽️ Pronto</>
+                                      )}
+                                    </button>
+                                  )}
                                 </div>
 
                                 {/* Segunda linha de botões */}
                                 <div className="flex gap-2">
-                                  <button
-                                    onClick={async () => {
-                                      const sucesso = await marcarComoEntregue(pedido.id);
-                                      if (sucesso) {
-                                        await carregarTodosPedidosCardapio();
-                                        setStatusFilterCardapio('entregue');
-                                      }
-                                    }}
-                                    disabled={pedidosProcessando.has(pedido.id)}
-                                    className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
-                                      pedidosProcessando.has(pedido.id)
-                                        ? 'bg-gray-500 cursor-not-allowed'
-                                        : 'bg-purple-600 hover:bg-purple-700'
-                                    }`}
-                                  >
-                                    {pedidosProcessando.has(pedido.id) ? (
-                                      <>
-                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        Entregando...
-                                      </>
-                                    ) : (
-                                      <>🚚 Entregar</>
-                                    )}
-                                  </button>
+                                  {pedido.status_pedido !== 'entregue' && (
+                                    <button
+                                      onClick={async () => {
+                                        const sucesso = await marcarComoEntregue(pedido.id);
+                                        if (sucesso) {
+                                          await carregarTodosPedidosCardapio();
+                                          // Delay maior para garantir que os dados foram atualizados
+                                          setTimeout(() => {
+                                            setStatusFilterCardapio('entregue');
+                                          }, 200);
+                                        }
+                                      }}
+                                      disabled={pedidosProcessando.has(pedido.id)}
+                                      className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                        pedidosProcessando.has(pedido.id)
+                                          ? 'bg-gray-500 cursor-not-allowed'
+                                          : 'bg-purple-600 hover:bg-purple-700'
+                                      }`}
+                                    >
+                                      {pedidosProcessando.has(pedido.id) ? (
+                                        <>
+                                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                          Entregando...
+                                        </>
+                                      ) : (
+                                        <>🚚 Entregar</>
+                                      )}
+                                    </button>
+                                  )}
 
-                                  <button
-                                    onClick={async () => {
-                                      const sucesso = await rejeitarPedidoComMudancaAba(pedido.id);
-                                      if (sucesso) {
-                                        await carregarTodosPedidosCardapio();
-                                        setStatusFilterCardapio('cancelado');
-                                      }
-                                    }}
-                                    disabled={pedidosProcessando.has(pedido.id)}
-                                    className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
-                                      pedidosProcessando.has(pedido.id)
-                                        ? 'bg-gray-500 cursor-not-allowed'
-                                        : 'bg-red-600 hover:bg-red-700'
-                                    }`}
-                                  >
-                                    {pedidosProcessando.has(pedido.id) ? (
-                                      <>
-                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        Cancelando...
-                                      </>
-                                    ) : (
-                                      <>❌ Cancelar</>
-                                    )}
-                                  </button>
+                                  {pedido.status_pedido !== 'cancelado' && (
+                                    <button
+                                      onClick={async () => {
+                                        const sucesso = await rejeitarPedidoComMudancaAba(pedido.id);
+                                        if (sucesso) {
+                                          await carregarTodosPedidosCardapio();
+                                          // Delay maior para garantir que os dados foram atualizados
+                                          setTimeout(() => {
+                                            setStatusFilterCardapio('cancelado');
+                                          }, 200);
+                                        }
+                                      }}
+                                      disabled={pedidosProcessando.has(pedido.id)}
+                                      className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                        pedidosProcessando.has(pedido.id)
+                                          ? 'bg-gray-500 cursor-not-allowed'
+                                          : 'bg-red-600 hover:bg-red-700'
+                                      }`}
+                                    >
+                                      {pedidosProcessando.has(pedido.id) ? (
+                                        <>
+                                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                          Cancelando...
+                                        </>
+                                      ) : (
+                                        <>❌ Cancelar</>
+                                      )}
+                                    </button>
+                                  )}
                                 </div>
-                              </div>
-                            )}
-
-                            {/* Botões para pedidos em preparação */}
-                            {pedido.status_pedido === 'preparando' && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={async () => {
-                                    const sucesso = await marcarComoPronto(pedido.id);
-                                    if (sucesso) {
-                                      await carregarTodosPedidosCardapio();
-                                      setStatusFilterCardapio('pronto');
-                                    }
-                                  }}
-                                  disabled={pedidosProcessando.has(pedido.id)}
-                                  className={`flex-1 text-white text-sm py-2 px-3 rounded transition-colors flex items-center justify-center gap-2 ${
-                                    pedidosProcessando.has(pedido.id)
-                                      ? 'bg-gray-500 cursor-not-allowed'
-                                      : 'bg-blue-600 hover:bg-blue-700'
-                                  }`}
-                                >
-                                  {pedidosProcessando.has(pedido.id) ? (
-                                    <>
-                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                      Finalizando...
-                                    </>
-                                  ) : (
-                                    <>🍽️ Pronto</>
-                                  )}
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Botões para pedidos prontos */}
-                            {pedido.status_pedido === 'pronto' && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={async () => {
-                                    const sucesso = await marcarComoEntregue(pedido.id);
-                                    if (sucesso) {
-                                      await carregarTodosPedidosCardapio();
-                                      setStatusFilterCardapio('entregue');
-                                    }
-                                  }}
-                                  disabled={pedidosProcessando.has(pedido.id)}
-                                  className={`flex-1 text-white text-sm py-2 px-3 rounded transition-colors flex items-center justify-center gap-2 ${
-                                    pedidosProcessando.has(pedido.id)
-                                      ? 'bg-gray-500 cursor-not-allowed'
-                                      : 'bg-purple-600 hover:bg-purple-700'
-                                  }`}
-                                >
-                                  {pedidosProcessando.has(pedido.id) ? (
-                                    <>
-                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                      Entregando...
-                                    </>
-                                  ) : (
-                                    <>🚚 Entregar</>
-                                  )}
-                                </button>
                               </div>
                             )}
                           </div>
@@ -20461,16 +20453,6 @@ const PDVPage: React.FC = () => {
                             </div>
                           )}
 
-                          {pedidoSelecionado.forma_pagamento_nome && (
-                            <div className="bg-gray-700/50 rounded-lg p-4">
-                              <h3 className="text-sm font-semibold text-gray-300 mb-2">💳 Pagamento</h3>
-                              <p className="text-white">{pedidoSelecionado.forma_pagamento_nome}</p>
-                              {pedidoSelecionado.forma_pagamento_tipo && (
-                                <p className="text-gray-400 text-sm">Tipo: {pedidoSelecionado.forma_pagamento_tipo}</p>
-                              )}
-                            </div>
-                          )}
-
                           {(pedidoSelecionado.observacao_pedido || pedidoSelecionado.observacao_entrega) && (
                             <div className="bg-gray-700/50 rounded-lg p-4">
                               <h3 className="text-sm font-semibold text-gray-300 mb-2">📝 Observações</h3>
@@ -20497,50 +20479,65 @@ const PDVPage: React.FC = () => {
                             </div>
                           )}
                         </div>
-                      </div>
 
-                      {/* Itens do Pedido */}
-                      <div className="p-6">
-                        <h3 className="text-lg font-semibold text-white mb-4">🛒 Itens do Pedido</h3>
-                        <div className="space-y-3">
-                          {pedidoSelecionado.itens_pedido && pedidoSelecionado.itens_pedido.length > 0 ? (
-                            pedidoSelecionado.itens_pedido.map((item: any, index: number) => (
-                            <div key={index} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <h4 className="font-medium text-white">{item.produto_nome || item.nome_produto || 'Produto sem nome'}</h4>
-                                  <p className="text-sm text-gray-400">
-                                    Quantidade: {item.quantidade || 0} x {formatarPreco(item.preco_unitario || 0)}
-                                  </p>
-                                  {item.observacao && (
-                                    <p className="text-xs text-gray-500 mt-1">Obs: {item.observacao}</p>
-                                  )}
-                                  {item.adicionais && item.adicionais.length > 0 && (
-                                    <div className="mt-2">
-                                      <p className="text-xs text-gray-400 mb-1">Adicionais:</p>
-                                      {item.adicionais.map((adicional: any, idx: number) => (
-                                        <p key={idx} className="text-xs text-gray-500">
-                                          + {adicional.nome || adicional.produto_nome || 'Adicional'} ({formatarPreco(adicional.preco || adicional.preco_unitario || 0)})
-                                        </p>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="text-right">
-                                  <p className="font-semibold text-green-400">{formatarPreco(item.preco_total || item.subtotal || 0)}</p>
+                        {/* Itens do Pedido - Movido para ficar antes do Pagamento */}
+                        <div className="mt-4">
+                          <h3 className="text-lg font-semibold text-white mb-4">🛒 Itens do Pedido</h3>
+                          <div className="space-y-3">
+                            {pedidoSelecionado.itens_pedido && pedidoSelecionado.itens_pedido.length > 0 ? (
+                              pedidoSelecionado.itens_pedido.map((item: any, index: number) => (
+                              <div key={index} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h4 className="font-medium text-white">{item.produto_nome || item.nome_produto || 'Produto sem nome'}</h4>
+                                    <p className="text-sm text-gray-400">
+                                      Quantidade: {item.quantidade || 0} x {formatarPreco(item.preco_unitario || 0)}
+                                    </p>
+                                    {item.observacao && (
+                                      <p className="text-xs text-gray-500 mt-1">Obs: {item.observacao}</p>
+                                    )}
+                                    {item.adicionais && item.adicionais.length > 0 && (
+                                      <div className="mt-2">
+                                        <p className="text-xs text-gray-400 mb-1">Adicionais:</p>
+                                        {item.adicionais.map((adicional: any, idx: number) => (
+                                          <p key={idx} className="text-xs text-gray-500">
+                                            + {adicional.nome || adicional.produto_nome || 'Adicional'} ({formatarPreco(adicional.preco || adicional.preco_unitario || 0)})
+                                          </p>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="font-semibold text-green-400">{formatarPreco(item.preco_total || item.subtotal || 0)}</p>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            ))
-                          ) : (
-                            <div className="text-center text-gray-400 py-8">
-                              <p>Nenhum item encontrado para este pedido</p>
-                            </div>
-                          )}
+                              ))
+                            ) : (
+                              <div className="text-center text-gray-400 py-8">
+                                <p>Nenhum item encontrado para este pedido</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Resumo do Pedido */}
-                        <div className="mt-6 bg-gray-700/30 rounded-lg p-4 border border-gray-600">
+                        {/* Card de Pagamento - Agora fica depois dos Itens */}
+                        {pedidoSelecionado.forma_pagamento_nome && (
+                          <div className="mt-4">
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">💳 Pagamento</h3>
+                              <p className="text-white">{pedidoSelecionado.forma_pagamento_nome}</p>
+                              {pedidoSelecionado.forma_pagamento_tipo && (
+                                <p className="text-gray-400 text-sm">Tipo: {pedidoSelecionado.forma_pagamento_tipo}</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Resumo do Pedido */}
+                      <div className="p-6">
+                        <div className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
                           <h4 className="font-semibold text-white mb-3">💰 Resumo</h4>
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">

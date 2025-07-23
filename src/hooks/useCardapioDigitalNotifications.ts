@@ -410,7 +410,7 @@ export const useCardapioDigitalNotifications = ({
         .from('cardapio_digital')
         .update({
           status_pedido: 'preparando',
-          data_atualizacao: new Date().toISOString()
+          updated_at: new Date().toISOString()
         })
         .eq('id', pedidoId);
 
@@ -452,7 +452,7 @@ export const useCardapioDigitalNotifications = ({
         .from('cardapio_digital')
         .update({
           status_pedido: 'pronto',
-          data_atualizacao: new Date().toISOString()
+          updated_at: new Date().toISOString()
         })
         .eq('id', pedidoId);
 
@@ -494,7 +494,7 @@ export const useCardapioDigitalNotifications = ({
         .from('cardapio_digital')
         .update({
           status_pedido: 'entregue',
-          data_atualizacao: new Date().toISOString()
+          updated_at: new Date().toISOString()
         })
         .eq('id', pedidoId);
 
