@@ -20019,26 +20019,26 @@ const PDVPage: React.FC = () => {
                   </div>
 
                   {/* Botões de Status no Header */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {[
                       { value: 'pendente', label: 'Pendente', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length, color: 'bg-orange-500 hover:bg-orange-600' },
                       { value: 'confirmado', label: 'Confirmado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length, color: 'bg-blue-500 hover:bg-blue-600' },
-                      { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length, color: 'bg-yellow-500 hover:bg-yellow-600' },
-                      { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length, color: 'bg-green-500 hover:bg-green-600' },
-                      { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length, color: 'bg-purple-500 hover:bg-purple-600' },
-                      { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length, color: 'bg-gray-500 hover:bg-gray-600' }
+                      { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length, color: 'bg-gray-600 hover:bg-gray-700' },
+                      { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length, color: 'bg-gray-600 hover:bg-gray-700' },
+                      { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length, color: 'bg-gray-600 hover:bg-gray-700' },
+                      { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length, color: 'bg-gray-600 hover:bg-gray-700' }
                     ].map((status) => (
                       <button
                         key={status.value}
                         onClick={() => filtrarCardapioPorStatus(status.value)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all duration-200 flex items-center gap-1.5 ${
+                        className={`px-4 py-2 rounded-full text-sm font-medium text-white transition-all duration-200 flex items-center gap-2 min-w-[120px] justify-center ${
                           statusFilterCardapio === status.value
-                            ? status.color + ' shadow-lg scale-105'
+                            ? status.color
                             : 'bg-gray-600 hover:bg-gray-500'
                         }`}
                       >
                         <span>{status.label}</span>
-                        <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                        <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold min-w-[20px] text-center">
                           {status.count}
                         </span>
                       </button>
