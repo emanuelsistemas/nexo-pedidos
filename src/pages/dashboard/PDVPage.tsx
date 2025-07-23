@@ -20007,13 +20007,42 @@ const PDVPage: React.FC = () => {
             >
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-                <div className="flex items-center gap-3">
-                  <BookOpen size={20} className="text-orange-500" />
-                  <div>
-                    <h2 className="text-lg font-bold text-white">Cardápio Digital</h2>
-                    <p className="text-gray-400 text-xs">
-                      {contadorCardapio > 0 ? `${contadorCardapio} pedido${contadorCardapio > 1 ? 's' : ''} pendente${contadorCardapio > 1 ? 's' : ''}` : 'Nenhum pedido pendente'}
-                    </p>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
+                    <BookOpen size={20} className="text-orange-500" />
+                    <div>
+                      <h2 className="text-lg font-bold text-white">Cardápio Digital</h2>
+                      <p className="text-gray-400 text-xs">
+                        {contadorCardapio > 0 ? `${contadorCardapio} pedido${contadorCardapio > 1 ? 's' : ''} pendente${contadorCardapio > 1 ? 's' : ''}` : 'Nenhum pedido pendente'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Botões de Status no Header */}
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: 'pendente', label: 'Pendente', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length, color: 'bg-orange-500 hover:bg-orange-600' },
+                      { value: 'confirmado', label: 'Confirmado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length, color: 'bg-blue-500 hover:bg-blue-600' },
+                      { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length, color: 'bg-yellow-500 hover:bg-yellow-600' },
+                      { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length, color: 'bg-green-500 hover:bg-green-600' },
+                      { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length, color: 'bg-purple-500 hover:bg-purple-600' },
+                      { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length, color: 'bg-gray-500 hover:bg-gray-600' }
+                    ].map((status) => (
+                      <button
+                        key={status.value}
+                        onClick={() => filtrarCardapioPorStatus(status.value)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all duration-200 flex items-center gap-1.5 ${
+                          statusFilterCardapio === status.value
+                            ? status.color + ' shadow-lg scale-105'
+                            : 'bg-gray-600 hover:bg-gray-500'
+                        }`}
+                      >
+                        <span>{status.label}</span>
+                        <span className="bg-black/20 px-1.5 py-0.5 rounded-full text-xs font-bold">
+                          {status.count}
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <button
@@ -20029,37 +20058,6 @@ const PDVPage: React.FC = () => {
                 {/* Lista de Pedidos */}
                 <div className="w-1/3 border-r border-gray-700 flex flex-col">
                   <div className="p-4 border-b border-gray-700">
-                    {/* Menu de Status */}
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {[
-                        { value: 'pendente', label: 'Pendente', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length },
-                        { value: 'confirmado', label: 'Confirmado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length },
-                        { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length },
-                        { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length },
-                        { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length },
-                        { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length }
-                      ].map((status) => (
-                        <button
-                          key={status.value}
-                          onClick={() => filtrarCardapioPorStatus(status.value)}
-                          className={`min-w-[100px] px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${
-                            statusFilterCardapio === status.value
-                              ? 'bg-orange-500 text-white'
-                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          }`}
-                        >
-                          <span>{status.label}</span>
-                          <span className={`px-1.5 py-0.5 rounded-full text-xs flex-shrink-0 ${
-                            statusFilterCardapio === status.value
-                              ? 'bg-white/20 text-white'
-                              : 'bg-gray-600 text-gray-300'
-                          }`}>
-                            {status.count}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-
                     {/* Campo de Busca */}
                     <div className="mb-3">
                       <input
