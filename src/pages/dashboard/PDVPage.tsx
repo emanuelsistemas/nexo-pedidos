@@ -20227,31 +20227,112 @@ const PDVPage: React.FC = () => {
 
                             {/* Botões para pedidos confirmados */}
                             {pedido.status_pedido === 'confirmado' && (
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={async () => {
-                                    const sucesso = await marcarComoPreparando(pedido.id);
-                                    if (sucesso) {
-                                      await carregarTodosPedidosCardapio();
-                                      setStatusFilterCardapio('preparando');
-                                    }
-                                  }}
-                                  disabled={pedidosProcessando.has(pedido.id)}
-                                  className={`flex-1 text-white text-sm py-2 px-3 rounded transition-colors flex items-center justify-center gap-2 ${
-                                    pedidosProcessando.has(pedido.id)
-                                      ? 'bg-gray-500 cursor-not-allowed'
-                                      : 'bg-orange-600 hover:bg-orange-700'
-                                  }`}
-                                >
-                                  {pedidosProcessando.has(pedido.id) ? (
-                                    <>
-                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                      Preparando...
-                                    </>
-                                  ) : (
-                                    <>👨‍🍳 Preparar</>
-                                  )}
-                                </button>
+                              <div className="flex flex-col gap-2">
+                                {/* Primeira linha de botões */}
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={async () => {
+                                      const sucesso = await marcarComoPreparando(pedido.id);
+                                      if (sucesso) {
+                                        await carregarTodosPedidosCardapio();
+                                        setStatusFilterCardapio('preparando');
+                                      }
+                                    }}
+                                    disabled={pedidosProcessando.has(pedido.id)}
+                                    className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                      pedidosProcessando.has(pedido.id)
+                                        ? 'bg-gray-500 cursor-not-allowed'
+                                        : 'bg-yellow-600 hover:bg-yellow-700'
+                                    }`}
+                                  >
+                                    {pedidosProcessando.has(pedido.id) ? (
+                                      <>
+                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                        Preparando...
+                                      </>
+                                    ) : (
+                                      <>👨‍🍳 Preparar</>
+                                    )}
+                                  </button>
+
+                                  <button
+                                    onClick={async () => {
+                                      const sucesso = await marcarComoPronto(pedido.id);
+                                      if (sucesso) {
+                                        await carregarTodosPedidosCardapio();
+                                        setStatusFilterCardapio('pronto');
+                                      }
+                                    }}
+                                    disabled={pedidosProcessando.has(pedido.id)}
+                                    className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                      pedidosProcessando.has(pedido.id)
+                                        ? 'bg-gray-500 cursor-not-allowed'
+                                        : 'bg-green-600 hover:bg-green-700'
+                                    }`}
+                                  >
+                                    {pedidosProcessando.has(pedido.id) ? (
+                                      <>
+                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                        Finalizando...
+                                      </>
+                                    ) : (
+                                      <>🍽️ Pronto</>
+                                    )}
+                                  </button>
+                                </div>
+
+                                {/* Segunda linha de botões */}
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={async () => {
+                                      const sucesso = await marcarComoEntregue(pedido.id);
+                                      if (sucesso) {
+                                        await carregarTodosPedidosCardapio();
+                                        setStatusFilterCardapio('entregue');
+                                      }
+                                    }}
+                                    disabled={pedidosProcessando.has(pedido.id)}
+                                    className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                      pedidosProcessando.has(pedido.id)
+                                        ? 'bg-gray-500 cursor-not-allowed'
+                                        : 'bg-purple-600 hover:bg-purple-700'
+                                    }`}
+                                  >
+                                    {pedidosProcessando.has(pedido.id) ? (
+                                      <>
+                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                        Entregando...
+                                      </>
+                                    ) : (
+                                      <>🚚 Entregar</>
+                                    )}
+                                  </button>
+
+                                  <button
+                                    onClick={async () => {
+                                      const sucesso = await rejeitarPedidoComMudancaAba(pedido.id);
+                                      if (sucesso) {
+                                        await carregarTodosPedidosCardapio();
+                                        setStatusFilterCardapio('cancelado');
+                                      }
+                                    }}
+                                    disabled={pedidosProcessando.has(pedido.id)}
+                                    className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                      pedidosProcessando.has(pedido.id)
+                                        ? 'bg-gray-500 cursor-not-allowed'
+                                        : 'bg-red-600 hover:bg-red-700'
+                                    }`}
+                                  >
+                                    {pedidosProcessando.has(pedido.id) ? (
+                                      <>
+                                        <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                        Cancelando...
+                                      </>
+                                    ) : (
+                                      <>❌ Cancelar</>
+                                    )}
+                                  </button>
+                                </div>
                               </div>
                             )}
 
