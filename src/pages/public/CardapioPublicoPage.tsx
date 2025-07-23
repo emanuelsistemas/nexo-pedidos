@@ -1410,14 +1410,7 @@ const CardapioPublicoPage: React.FC = () => {
     valor_total: number;
   }>>([]);
 
-  // ✅ DEBUG: Log do estado dos pedidos
-  useEffect(() => {
-    console.log('🛒 Estado dos pedidos ativos:', {
-      mostrarTarjaPedido,
-      pedidosAtivos: pedidosAtivos.length,
-      pedidos: pedidosAtivos
-    });
-  }, [mostrarTarjaPedido, pedidosAtivos]);
+
 
   // Funções para observações
   const abrirModalObservacao = (produtoId: string, itemId?: string) => {
@@ -5299,7 +5292,6 @@ const CardapioPublicoPage: React.FC = () => {
       // handlePedirWhatsApp(); // ✅ COMENTADO TEMPORARIAMENTE
 
       // ✅ SALVAR PEDIDO NO SISTEMA DE MÚLTIPLOS PEDIDOS
-      console.log('🛒 Salvando pedido no sistema de múltiplos pedidos:', pedidoSalvo);
       salvarPedidoLocalStorage(pedidoSalvo);
 
       // ✅ ABRIR MODAL DE STATUS DO PEDIDO
@@ -5307,7 +5299,6 @@ const CardapioPublicoPage: React.FC = () => {
 
       // ✅ MOSTRAR TARJA DE PEDIDOS
       setMostrarTarjaPedido(true);
-      console.log('🛒 Tarja de pedidos ativada, pedidos ativos:', pedidosAtivos.length);
 
       // Limpar carrinho após finalizar pedido
       setQuantidadesProdutos({});
@@ -5586,26 +5577,20 @@ const CardapioPublicoPage: React.FC = () => {
 
       // Atualizar estado dos pedidos ativos
       setPedidosAtivos(pedidosAtivos);
-
-      console.log('🛒 Pedidos salvos no localStorage:', pedidosAtivos);
     } catch (error) {
       console.error('❌ Erro ao salvar pedidos no localStorage:', error);
     }
   };
 
   const carregarPedidosLocalStorage = () => {
-    console.log('🛒 Carregando pedidos do localStorage, slug:', slug, 'empresaId:', empresaId);
-
     // ✅ PRIORIDADE 1: Tentar carregar por SLUG (mais confiável)
     if (slug) {
       const chaveSlug = `pedidos_ativos_slug_${slug}`;
       const pedidosSlugStr = localStorage.getItem(chaveSlug);
-      console.log('🛒 Tentando carregar por slug:', chaveSlug, 'resultado:', pedidosSlugStr);
 
       if (pedidosSlugStr) {
         try {
           const pedidos = JSON.parse(pedidosSlugStr);
-          console.log('🛒 Pedidos carregados por slug:', pedidos);
           return Array.isArray(pedidos) ? pedidos : [];
         } catch (error) {
           console.error('❌ Erro ao fazer parse dos pedidos por slug:', error);
@@ -5629,11 +5614,9 @@ const CardapioPublicoPage: React.FC = () => {
     // ✅ COMPATIBILIDADE: Tentar carregar pedido único antigo e converter para array
     if (slug) {
       const pedidoUnicoSlug = localStorage.getItem(`pedido_status_slug_${slug}`);
-      console.log('🛒 Tentando carregar pedido único por slug:', `pedido_status_slug_${slug}`, 'resultado:', pedidoUnicoSlug);
       if (pedidoUnicoSlug) {
         try {
           const pedido = JSON.parse(pedidoUnicoSlug);
-          console.log('🛒 Pedido único convertido para array:', [pedido]);
           return [pedido]; // Converter para array
         } catch (error) {
           console.error('❌ Erro ao fazer parse do pedido único por slug:', error);
@@ -5643,11 +5626,9 @@ const CardapioPublicoPage: React.FC = () => {
 
     if (empresaId) {
       const pedidoUnicoEmpresa = localStorage.getItem(`pedido_status_${empresaId}`);
-      console.log('🛒 Tentando carregar pedido único por empresaId:', `pedido_status_${empresaId}`, 'resultado:', pedidoUnicoEmpresa);
       if (pedidoUnicoEmpresa) {
         try {
           const pedido = JSON.parse(pedidoUnicoEmpresa);
-          console.log('🛒 Pedido único por empresaId convertido para array:', [pedido]);
           return [pedido]; // Converter para array
         } catch (error) {
           console.error('❌ Erro ao fazer parse do pedido único por empresaId:', error);
@@ -5655,7 +5636,6 @@ const CardapioPublicoPage: React.FC = () => {
       }
     }
 
-    console.log('🛒 Nenhum pedido encontrado no localStorage');
     return [];
   };
 
@@ -5850,27 +5830,21 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Carregar pedidos do localStorage ao inicializar
   useEffect(() => {
-    console.log('🛒 useEffect carregamento inicial, slug:', slug, 'empresaId:', empresaId);
     if (!slug) {
-      console.log('🛒 Slug não disponível, saindo do useEffect');
       return;
     }
 
     const pedidosSalvos = carregarPedidosLocalStorage();
-    console.log('🛒 Pedidos salvos carregados:', pedidosSalvos);
 
     if (pedidosSalvos.length > 0) {
-      console.log('🛒 Definindo pedidos ativos e mostrando tarja');
       setPedidosAtivos(pedidosSalvos);
       setMostrarTarjaPedido(true);
 
       // Se não há pedido atual selecionado, selecionar o mais recente
       if (!pedidoAtual) {
-        console.log('🛒 Definindo pedido atual como o mais recente:', pedidosSalvos[0]);
         setPedidoAtual(pedidosSalvos[0]);
       }
     } else {
-      console.log('🛒 Nenhum pedido salvo, ocultando tarja');
       setMostrarTarjaPedido(false);
       setPedidosAtivos([]);
     }

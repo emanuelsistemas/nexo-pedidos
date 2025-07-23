@@ -207,7 +207,9 @@ const PDVPage: React.FC = () => {
     enabled: !!empresaData?.id, // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
     onPedidoChange: () => {
       // ✅ RECARREGAR LISTA COMPLETA QUANDO HOUVER MUDANÇAS NOS PEDIDOS
-      if (showCardapioDigitalModal) {
+      console.log('🔄 onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
+      if (modalCardapioAbertoRef.current) {
+        console.log('📋 Recarregando lista completa do cardápio...');
         carregarTodosPedidosCardapio();
       }
     }
@@ -347,6 +349,7 @@ const PDVPage: React.FC = () => {
   const [showMovimentosModal, setShowMovimentosModal] = useState(false);
   const [showDescontoTotalModal, setShowDescontoTotalModal] = useState(false);
   const [showCardapioDigitalModal, setShowCardapioDigitalModal] = useState(false);
+  const modalCardapioAbertoRef = useRef(false);
   const [descontoTotal, setDescontoTotal] = useState(0);
   const [tipoDescontoTotal, setTipoDescontoTotal] = useState<'percentual' | 'valor'>('percentual');
   const [descontoGlobal, setDescontoGlobal] = useState(0);
@@ -2897,7 +2900,12 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA CARREGAR TODOS OS PEDIDOS DO CARDÁPIO DIGITAL
   const carregarTodosPedidosCardapio = async () => {
-    if (!empresaData?.id) return;
+    if (!empresaData?.id) {
+      console.log('❌ carregarTodosPedidosCardapio: empresaData.id não encontrado');
+      return;
+    }
+
+    console.log('📋 carregarTodosPedidosCardapio: Iniciando carregamento para empresa:', empresaData.id);
 
     try {
       const { data, error } = await supabase
@@ -2916,14 +2924,16 @@ const PDVPage: React.FC = () => {
         .order('data_pedido', { ascending: false });
 
       if (error) {
+        console.error('❌ carregarTodosPedidosCardapio: Erro na consulta:', error);
         return;
       }
 
       const pedidos = data || [];
+      console.log('✅ carregarTodosPedidosCardapio: Pedidos carregados:', pedidos.length, pedidos);
       setTodosOsPedidosCardapio(pedidos);
       aplicarFiltrosCardapio(pedidos);
     } catch (error) {
-      // Erro ao carregar pedidos do cardápio
+      console.error('❌ carregarTodosPedidosCardapio: Erro inesperado:', error);
     }
   };
 
@@ -2986,6 +2996,11 @@ const PDVPage: React.FC = () => {
     setDataFimCardapio('');
     aplicarFiltrosCardapio();
   };
+
+  // ✅ USEEFFECT PARA SINCRONIZAR REF COM ESTADO DO MODAL
+  useEffect(() => {
+    modalCardapioAbertoRef.current = showCardapioDigitalModal;
+  }, [showCardapioDigitalModal]);
 
   // ✅ USEEFFECT PARA CARREGAR PEDIDOS DO CARDÁPIO QUANDO MODAL ABRIR
   useEffect(() => {
