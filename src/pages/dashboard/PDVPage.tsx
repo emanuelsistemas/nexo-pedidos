@@ -20427,26 +20427,26 @@ const PDVPage: React.FC = () => {
                             <div key={index} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <h4 className="font-medium text-white">{item.nome_produto || 'Produto sem nome'}</h4>
+                                  <h4 className="font-medium text-white">{item.produto_nome || item.nome_produto || 'Produto sem nome'}</h4>
                                   <p className="text-sm text-gray-400">
                                     Quantidade: {item.quantidade || 0} x {formatarPreco(item.preco_unitario || 0)}
                                   </p>
-                                  {item.observacoes && (
-                                    <p className="text-xs text-gray-500 mt-1">Obs: {item.observacoes}</p>
+                                  {item.observacao && (
+                                    <p className="text-xs text-gray-500 mt-1">Obs: {item.observacao}</p>
                                   )}
                                   {item.adicionais && item.adicionais.length > 0 && (
                                     <div className="mt-2">
                                       <p className="text-xs text-gray-400 mb-1">Adicionais:</p>
                                       {item.adicionais.map((adicional: any, idx: number) => (
                                         <p key={idx} className="text-xs text-gray-500">
-                                          + {adicional.nome || 'Adicional'} ({formatarPreco(adicional.preco || 0)})
+                                          + {adicional.nome || adicional.produto_nome || 'Adicional'} ({formatarPreco(adicional.preco || adicional.preco_unitario || 0)})
                                         </p>
                                       ))}
                                     </div>
                                   )}
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-semibold text-green-400">{formatarPreco(item.subtotal || 0)}</p>
+                                  <p className="font-semibold text-green-400">{formatarPreco(item.preco_total || item.subtotal || 0)}</p>
                                 </div>
                               </div>
                             </div>
