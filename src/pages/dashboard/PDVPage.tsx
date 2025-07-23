@@ -275,7 +275,7 @@ const PDVPage: React.FC = () => {
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
-  const [statusFilterCardapio, setStatusFilterCardapio] = useState<string>('confirmado');
+  const [statusFilterCardapio, setStatusFilterCardapio] = useState<string>('pendente');
   const [searchCardapio, setSearchCardapio] = useState('');
   const [showFiltersCardapio, setShowFiltersCardapio] = useState(false);
   const [dataInicioCardapio, setDataInicioCardapio] = useState('');
@@ -3095,7 +3095,7 @@ const PDVPage: React.FC = () => {
 
   const limparFiltrosCardapio = () => {
     console.log('🧹 Limpando filtros do cardápio...');
-    setStatusFilterCardapio('confirmado');
+    setStatusFilterCardapio('pendente');
     setSearchCardapio('');
     setDataInicioCardapio('');
     setDataFimCardapio('');
