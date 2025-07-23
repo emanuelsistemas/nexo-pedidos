@@ -205,14 +205,14 @@ const PDVPage: React.FC = () => {
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
     enabled: !!empresaData?.id, // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
-    onPedidoChange: () => {
+    onPedidoChange: useCallback(() => {
       // ✅ RECARREGAR LISTA COMPLETA QUANDO HOUVER MUDANÇAS NOS PEDIDOS
       console.log('🔄 onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
       if (modalCardapioAbertoRef.current) {
         console.log('📋 Recarregando lista completa do cardápio...');
         carregarTodosPedidosCardapio();
       }
-    }
+    }, []) // ✅ CALLBACK ESTÁVEL - NÃO MUDA NUNCA
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL

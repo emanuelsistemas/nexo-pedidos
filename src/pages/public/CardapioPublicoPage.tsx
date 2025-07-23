@@ -1410,6 +1410,31 @@ const CardapioPublicoPage: React.FC = () => {
     valor_total: number;
   }>>([]);
 
+  // ✅ FUNÇÃO DE TESTE TEMPORÁRIA - REMOVER DEPOIS
+  const adicionarPedidoTeste = () => {
+    const pedidoTeste = {
+      id: 'teste-' + Date.now(),
+      numero_pedido: String(Math.floor(Math.random() * 900000) + 100000).padStart(6, '0'),
+      status_pedido: 'pendente',
+      data_pedido: new Date().toISOString(),
+      valor_total: Math.floor(Math.random() * 50) + 10
+    };
+
+    salvarPedidoLocalStorage(pedidoTeste);
+    setMostrarTarjaPedido(true);
+  };
+
+  // ✅ DISPONIBILIZAR FUNÇÃO DE TESTE NO CONSOLE
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).adicionarPedidoTeste = adicionarPedidoTeste;
+      (window as any).limparTodosPedidos = () => {
+        limparPedidoLocalStorage();
+        setMostrarTarjaPedido(false);
+      };
+    }
+  }, [slug, empresaId]);
+
 
 
   // Funções para observações
