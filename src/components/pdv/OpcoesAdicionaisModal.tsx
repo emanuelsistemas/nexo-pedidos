@@ -95,7 +95,6 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
         .in('adicional_item_id', idsItens);
 
       if (error) {
-        console.error('Erro ao carregar preços dos adicionais:', error);
         return {};
       }
 
@@ -142,7 +141,6 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
         .eq('deletado', false);
 
       if (produtoOpcoesError) {
-        console.error('Erro ao carregar opções adicionais:', produtoOpcoesError);
         showMessage('error', 'Erro ao carregar opções adicionais');
         return;
       }
@@ -170,7 +168,6 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
             ...opcao,
             itens: opcao.itens.filter(item => {
               const temPrecoNaTabela = precosCarregados[item.id]?.[tabelaPrecoSelecionada] > 0;
-              console.log(`Item ${item.nome} (${item.id}): preço na tabela ${tabelaPrecoSelecionada} = ${precosCarregados[item.id]?.[tabelaPrecoSelecionada] || 0}`);
               return temPrecoNaTabela;
             })
           }))
@@ -185,7 +182,6 @@ const OpcoesAdicionaisModal: React.FC<OpcoesAdicionaisModalProps> = ({
       }
 
     } catch (error) {
-      console.error('Erro ao carregar opções adicionais:', error);
       showMessage('error', 'Erro ao carregar opções adicionais');
     } finally {
       setIsLoading(false);

@@ -1157,12 +1157,9 @@ const ConfiguracoesPage: React.FC = () => {
             }
           } else if (pedidosConfigData) {
             // Se encontrou configuração, atualizar os estados
-            console.log('Configuração de pedidos encontrada:', pedidosConfigData);
-
             // Garantir que agrupar_itens seja um booleano
             // Se o campo não existir ou for null, definir como false
             const agruparItensValue = pedidosConfigData.agrupar_itens === true;
-            console.log('Valor de agrupar_itens:', agruparItensValue);
             setAgruparItens(agruparItensValue);
           }
         } catch (error) {

@@ -136,7 +136,7 @@ const DashboardPage: React.FC = () => {
 
         if (!usuarioData?.empresa_id) return;
 
-        console.log('🔔 Dashboard: Configurando realtime para empresa:', usuarioData.empresa_id);
+
 
         // Criar canal único para esta empresa
         const channelName = `dashboard_loja_status_${usuarioData.empresa_id}`;
@@ -186,17 +186,9 @@ const DashboardPage: React.FC = () => {
               }
             }
           )
-          .subscribe((status) => {
-            console.log('📡 Dashboard: Status da subscrição realtime:', status);
-            if (status === 'SUBSCRIBED') {
-              console.log('✅ Dashboard: Realtime conectado com sucesso para empresa:', usuarioData.empresa_id);
-            } else if (status === 'CHANNEL_ERROR') {
-              console.error('❌ Dashboard: Erro na conexão realtime');
-            }
-          });
+          .subscribe();
 
         return () => {
-          console.log('🔔 Dashboard: Removendo canal realtime');
           supabase.removeChannel(channel);
         };
       } catch (error) {
@@ -225,7 +217,7 @@ const DashboardPage: React.FC = () => {
 
         if (!usuarioData?.empresa_id) return;
 
-        console.log('⏰ Dashboard: Configurando polling de backup para empresa:', usuarioData.empresa_id);
+
 
         const interval = setInterval(async () => {
           try {
@@ -260,7 +252,6 @@ const DashboardPage: React.FC = () => {
         }, 3000); // Verificar a cada 3 segundos
 
         return () => {
-          console.log('⏰ Dashboard: Removendo polling de backup');
           clearInterval(interval);
         };
       } catch (error) {
@@ -289,7 +280,7 @@ const DashboardPage: React.FC = () => {
 
         if (!usuarioData?.empresa_id) return;
 
-        console.log('🕐 Configurando realtime para horários de atendimento da empresa:', usuarioData.empresa_id);
+
 
         // Criar canal único para monitorar horários desta empresa
         const channelName = `horarios_atendimento_${usuarioData.empresa_id}`;
@@ -321,17 +312,9 @@ const DashboardPage: React.FC = () => {
               }
             }
           )
-          .subscribe((status) => {
-            console.log('📡 Status da subscrição realtime horários:', status);
-            if (status === 'SUBSCRIBED') {
-              console.log('✅ Realtime de horários conectado com sucesso para empresa:', usuarioData.empresa_id);
-            } else if (status === 'CHANNEL_ERROR') {
-              console.error('❌ Erro na conexão realtime de horários');
-            }
-          });
+          .subscribe();
 
         return () => {
-          console.log('🕐 Removendo canal realtime de horários');
           supabase.removeChannel(channel);
         };
       } catch (error) {
@@ -496,17 +479,14 @@ const DashboardPage: React.FC = () => {
           aberto: configData.cardapio_loja_aberta !== false, // Default true se não definido
           modo_operacao: configData.cardapio_abertura_tipo || 'manual'
         });
-        console.log('📊 Status da loja carregado:', {
-          aberto: configData.cardapio_loja_aberta,
-          modo: configData.cardapio_abertura_tipo
-        });
+
       } else {
         // Se não há configuração PDV, usar valores padrão
         setStoreStatus({
           aberto: true,
           modo_operacao: 'manual'
         });
-        console.log('📊 Usando status padrão da loja (sem configuração PDV)');
+
       }
     } catch (error) {
       console.error('❌ Erro ao carregar status da loja:', error);

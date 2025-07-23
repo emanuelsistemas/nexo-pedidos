@@ -724,7 +724,7 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
   const removerSabor = (index: number) => {
     // ✅ NÃO PERMITIR REMOVER O PRIMEIRO SABOR (PRODUTO PRINCIPAL)
     if (index === 0) {
-      console.log('🍕 MODAL: Não é possível remover o produto principal');
+
       return;
     }
 
@@ -1496,7 +1496,7 @@ const CardapioPublicoPage: React.FC = () => {
 
       // 2. Calcular taxa de entrega
       if (empresaId) {
-        console.log('🚚 Calculando taxa de entrega para CEP:', cep);
+
         const resultadoTaxa = await taxaEntregaService.calcularTaxa(empresaId, cep);
 
         if (resultadoTaxa) {
@@ -2148,7 +2148,7 @@ const CardapioPublicoPage: React.FC = () => {
 
         chaves.forEach(chave => {
           if (localStorage.getItem(chave)) {
-            console.log('🧹 Removendo localStorage antigo:', chave);
+
             localStorage.removeItem(chave);
           }
         });
@@ -2282,7 +2282,7 @@ const CardapioPublicoPage: React.FC = () => {
             .eq('empresa_id', empresaComLogo.id)
             .order('bairro');
 
-          console.log('🏘️ Bairros carregados:', bairrosData);
+
           if (bairrosData) {
             setBairrosDisponiveis(bairrosData);
           }
@@ -2766,15 +2766,11 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Função para formatar sabores de forma compacta (similar ao PDV)
   const formatarSaboresCompacto = (sabores: SaborSelecionado[]) => {
-    console.log('🍕 FORMATANDO SABORES:', sabores);
-
     if (!sabores || sabores.length === 0) {
-      console.log('🍕 SABORES VAZIOS OU NULOS');
       return [];
     }
 
     if (sabores.length === 1) {
-      console.log('🍕 SABOR ÚNICO:', sabores[0].produto.nome);
       return [sabores[0].produto.nome];
     }
 
@@ -2786,7 +2782,6 @@ const CardapioPublicoPage: React.FC = () => {
       return `${fracao} ${sabor.produto.nome}`;
     });
 
-    console.log('🍕 MÚLTIPLOS SABORES FORMATADOS:', resultado);
     return resultado;
   };
 
@@ -4820,13 +4815,7 @@ const CardapioPublicoPage: React.FC = () => {
 
     const { produto } = dadosModalSabores;
 
-    console.log('🍕 CONFIRMANDO SABORES:', {
-      produto: produto.nome,
-      sabores: sabores,
-      quantidadeSabores: sabores.length,
-      precoCalculado,
-      saboresDetalhados: sabores.map(s => ({ nome: s.produto.nome, porcentagem: s.porcentagem }))
-    });
+
 
     // ✅ NOVO FLUXO: Voltar para o card com quantidade 1 e sabores selecionados
     // Definir quantidade como 1 no card
@@ -5535,13 +5524,7 @@ const CardapioPublicoPage: React.FC = () => {
     const chaveSlug = `pedido_status_slug_${slug}`;
     const chaveEmpresaId = empresaId ? `pedido_status_${empresaId}` : null;
 
-    console.log('💾 Salvando pedido no localStorage:', {
-      slug,
-      empresaId,
-      chaveSlug,
-      chaveEmpresaId,
-      pedido
-    });
+
 
     // Salvar com slug (chave principal)
     localStorage.setItem(chaveSlug, JSON.stringify(pedido));
@@ -5559,7 +5542,7 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const carregarPedidoLocalStorage = () => {
-    console.log('📂 Tentando carregar pedido do localStorage:', { slug, empresaId });
+
 
     // ✅ PRIORIDADE 1: Tentar carregar por SLUG (mais confiável)
     if (slug) {
@@ -5569,7 +5552,7 @@ const CardapioPublicoPage: React.FC = () => {
       if (pedidoSlug) {
         try {
           const pedido = JSON.parse(pedidoSlug);
-          console.log('✅ Pedido carregado por SLUG:', { chaveSlug, pedido });
+
           return pedido;
         } catch (error) {
           console.error('❌ Erro ao fazer parse do pedido por slug:', error);
@@ -5581,7 +5564,7 @@ const CardapioPublicoPage: React.FC = () => {
       if (backupSlug) {
         try {
           const backup = JSON.parse(backupSlug);
-          console.log('🔄 Recuperando pedido do backup por SLUG:', backup);
+
           return backup;
         } catch (error) {
           console.error('❌ Erro ao fazer parse do backup por slug:', error);
@@ -5595,7 +5578,7 @@ const CardapioPublicoPage: React.FC = () => {
       if (pedidoEmpresa) {
         try {
           const pedido = JSON.parse(pedidoEmpresa);
-          console.log('✅ Pedido carregado por EMPRESA_ID:', pedido);
+
           return pedido;
         } catch (error) {
           console.error('❌ Erro ao fazer parse do pedido por empresaId:', error);
@@ -5603,12 +5586,12 @@ const CardapioPublicoPage: React.FC = () => {
       }
     }
 
-    console.log('❌ Nenhum pedido encontrado no localStorage');
+
     return null;
   };
 
   const limparPedidoLocalStorage = () => {
-    console.log('🗑️ Limpando pedido do localStorage:', { slug, empresaId });
+
 
     // Limpar por slug
     if (slug) {
@@ -5651,7 +5634,7 @@ const CardapioPublicoPage: React.FC = () => {
   const verificarStatusPedido = async () => {
     if (!pedidoAtual?.id) return;
 
-    console.log('🔍 Verificando status do pedido manualmente:', pedidoAtual.id);
+
 
     try {
       const { data: pedidoAtualizado, error } = await supabase
@@ -5661,11 +5644,7 @@ const CardapioPublicoPage: React.FC = () => {
         .single();
 
       if (!error && pedidoAtualizado) {
-        console.log('✅ Status verificado:', {
-          pedidoId: pedidoAtualizado.id,
-          statusAnterior: pedidoAtual.status_pedido,
-          statusAtual: pedidoAtualizado.status_pedido
-        });
+
 
         // Atualizar pedido atual
         setPedidoAtual(pedidoAtualizado);
@@ -5675,7 +5654,7 @@ const CardapioPublicoPage: React.FC = () => {
 
         // Mostrar toast de confirmação
         if (pedidoAtualizado.status_pedido !== pedidoAtual.status_pedido) {
-          console.log('🔄 Status atualizado com sucesso!');
+
         }
       } else {
         console.error('❌ Erro ao verificar status:', error);
@@ -5685,57 +5664,13 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
-  // ✅ FUNÇÃO DE DEBUG PARA VERIFICAR DADOS SALVOS
-  const debugLocalStorage = () => {
-    console.log('🔍 DEBUG - Dados no localStorage:');
-    console.log('Slug atual:', slug);
-    console.log('EmpresaId atual:', empresaId);
-
-    // Verificar todas as chaves relacionadas ao cardápio
-    const chaves = Object.keys(localStorage).filter(key =>
-      key.includes('pedido_') ||
-      key.includes('cep_') ||
-      key.includes('area_') ||
-      key.includes('bairro_')
-    );
-
-    chaves.forEach(chave => {
-      const valor = localStorage.getItem(chave);
-      console.log(`📋 ${chave}:`, valor);
-    });
-
-    // Verificar especificamente o pedido atual
-    if (slug) {
-      const pedidoSlug = localStorage.getItem(`pedido_status_slug_${slug}`);
-      const backupSlug = localStorage.getItem(`pedido_backup_slug_${slug}`);
-      console.log('🎯 Pedido por SLUG:', pedidoSlug);
-      console.log('🔄 Backup por SLUG:', backupSlug);
-    }
-
-    if (empresaId) {
-      const pedidoEmpresa = localStorage.getItem(`pedido_status_${empresaId}`);
-      const backupEmpresa = localStorage.getItem(`pedido_backup_${empresaId}`);
-      console.log('🎯 Pedido por EMPRESA_ID:', pedidoEmpresa);
-      console.log('🔄 Backup por EMPRESA_ID:', backupEmpresa);
-    }
-  };
-
-  // ✅ EXECUTAR DEBUG AUTOMATICAMENTE
-  useEffect(() => {
-    if (empresaId) {
-      setTimeout(debugLocalStorage, 1000); // Debug após 1 segundo
-    }
-  }, [empresaId]);
+  // Debug removido para produção
 
   // ✅ REALTIME PARA ATUALIZAR STATUS DO PEDIDO ATUAL
   useEffect(() => {
     if (!pedidoAtual?.id || !empresaId) return;
 
-    console.log('🔔 Configurando realtime para status do pedido:', {
-      pedidoId: pedidoAtual.id,
-      empresaId,
-      slug
-    });
+
 
     // ✅ USAR EMPRESA_ID COMO FILTRO (mais confiável que id específico)
     const channel = supabase
@@ -5749,16 +5684,12 @@ const CardapioPublicoPage: React.FC = () => {
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🔄 Atualização na tabela cardapio_digital:', payload.new);
+
           const pedidoAtualizado = payload.new as any;
 
           // ✅ VERIFICAR SE É O PEDIDO ATUAL
           if (pedidoAtualizado.id === pedidoAtual.id) {
-            console.log('✅ Status do pedido atual atualizado:', {
-              pedidoId: pedidoAtualizado.id,
-              statusAnterior: pedidoAtual.status_pedido,
-              statusNovo: pedidoAtualizado.status_pedido
-            });
+
 
             // Atualizar pedido atual
             setPedidoAtual(pedidoAtualizado);
@@ -5768,13 +5699,11 @@ const CardapioPublicoPage: React.FC = () => {
           }
         }
       )
-      .subscribe((status) => {
-        console.log('📡 Status do canal pedido empresa:', status);
-      });
+      .subscribe();
 
     // Cleanup
     return () => {
-      console.log('🧹 Limpando canal realtime do pedido empresa');
+
       supabase.removeChannel(channel);
     };
   }, [pedidoAtual?.id, empresaId, slug]);
@@ -5783,7 +5712,7 @@ const CardapioPublicoPage: React.FC = () => {
   useEffect(() => {
     if (!pedidoAtual?.id || !empresaId) return;
 
-    console.log('⏰ Configurando polling backup para pedido:', pedidoAtual.id);
+
 
     const interval = setInterval(async () => {
       try {
@@ -5794,11 +5723,7 @@ const CardapioPublicoPage: React.FC = () => {
           .single();
 
         if (!error && pedidoAtualizado && pedidoAtualizado.status_pedido !== pedidoAtual.status_pedido) {
-          console.log('🔄 Polling: Status diferente detectado:', {
-            pedidoId: pedidoAtualizado.id,
-            statusAnterior: pedidoAtual.status_pedido,
-            statusNovo: pedidoAtualizado.status_pedido
-          });
+
 
           // Atualizar pedido atual
           setPedidoAtual(pedidoAtualizado);
@@ -5813,27 +5738,22 @@ const CardapioPublicoPage: React.FC = () => {
 
     // Cleanup
     return () => {
-      console.log('🧹 Limpando polling backup do pedido');
+
       clearInterval(interval);
     };
   }, [pedidoAtual?.id, pedidoAtual?.status_pedido, empresaId]);
 
   // Carregar pedido do localStorage ao inicializar
   useEffect(() => {
-    console.log('🔄 useEffect carregamento pedido executado:', { slug, empresaId });
-
     if (!slug) {
-      console.log('⏳ Aguardando slug ser definido...');
       return;
     }
 
     const pedidoSalvo = carregarPedidoLocalStorage();
     if (pedidoSalvo) {
-      console.log('✅ Definindo pedido atual e mostrando balão');
       setPedidoAtual(pedidoSalvo);
       setMostrarTarjaPedido(true);
     } else {
-      console.log('❌ Nenhum pedido salvo encontrado');
       setMostrarTarjaPedido(false);
     }
   }, [slug, empresaId]); // ✅ Depende de ambos: slug (principal) e empresaId (backup)
@@ -5841,10 +5761,8 @@ const CardapioPublicoPage: React.FC = () => {
   // ✅ VERIFICAÇÃO ADICIONAL QUANDO EMPRESA É CARREGADA
   useEffect(() => {
     if (empresa?.id && !pedidoAtual) {
-      console.log('🔍 Empresa carregada, verificando pedidos salvos novamente...');
       const pedidoSalvo = carregarPedidoLocalStorage();
       if (pedidoSalvo) {
-        console.log('🎯 Pedido encontrado após carregamento da empresa');
         setPedidoAtual(pedidoSalvo);
         setMostrarTarjaPedido(true);
       }
@@ -6075,7 +5993,7 @@ const CardapioPublicoPage: React.FC = () => {
         }
       }
 
-      console.log('✅ Pedido salvo com sucesso:', pedidoSalvo);
+
 
       // ✅ ABRIR MODAL DE STATUS DO PEDIDO
       const pedidoParaStatus = {
@@ -8141,26 +8059,14 @@ const CardapioPublicoPage: React.FC = () => {
                                     <button
                                       key={tabela.id}
                                       onClick={() => {
-                                        console.log('🔍 DEBUG - Selecionando tabela:', {
-                                          produtoId: produto.id,
-                                          produtoNome: produto.nome,
-                                          tabelaId: tabela.id,
-                                          tabelaNome: tabela.nome,
-                                          quantidadeSabores: tabela.quantidade_sabores
-                                        });
+
 
                                         setTabelasSelecionadas(prev => {
                                           const novoEstado = {
                                             ...prev,
                                             [produto.id]: tabela.id
                                           };
-                                          console.log('🔍 TABELA SELECIONADA:', {
-                                            produtoId: produto.id,
-                                            tabelaId: tabela.id,
-                                            tabelaNome: tabela.nome,
-                                            quantidadeSabores: tabela.quantidade_sabores,
-                                            novoEstado
-                                          });
+
                                           return novoEstado;
                                         });
 
@@ -8560,7 +8466,7 @@ const CardapioPublicoPage: React.FC = () => {
               <div className="space-y-3">
                 {obterItensCarrinho().map((item) => {
                   const { produto, quantidade, sabores, adicionais, observacao, itemId } = item as any;
-                  console.log('🛒 ITEM DO CARRINHO:', { produto: produto.nome, sabores, itemId });
+
                   return (
                     <div
                       key={itemId}

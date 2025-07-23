@@ -40,13 +40,11 @@ export async function salvarAdicionaisItem(
       .insert(adicionaisData);
 
     if (error) {
-      console.error('Erro ao salvar adicionais:', error);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('Erro ao salvar adicionais:', error);
     return false;
   }
 }
@@ -79,7 +77,6 @@ export async function buscarAdicionaisItem(pdvItemId: string): Promise<ItemSelec
       .eq('deletado', false);
 
     if (error) {
-      console.error('Erro ao buscar adicionais:', error);
       return [];
     }
 

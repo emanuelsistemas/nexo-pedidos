@@ -33,19 +33,7 @@ export const useCardapioDigitalNotifications = ({
   // ✅ HOOK DE SOM PARA NOTIFICAÇÕES COM CONTROLES
   const [playNotificationSound, { stop: stopNotificationSound, isPlaying }] = useSound('/sounds/notification.mp3', {
     volume: 0.8,
-    interrupt: true,
-    onload: () => {
-      console.log('🔊 Som carregado com sucesso');
-    },
-    onloaderror: (error) => {
-      console.error('❌ Erro ao carregar som:', error);
-    },
-    onplay: () => {
-      console.log('▶️ Som sendo reproduzido');
-    },
-    onend: () => {
-      console.log('⏹️ Som finalizado');
-    }
+    interrupt: true
   });
 
   // ✅ FUNÇÃO PARA HABILITAR ÁUDIO COM INTERAÇÃO DO USUÁRIO
@@ -53,7 +41,6 @@ export const useCardapioDigitalNotifications = ({
     if (audioHabilitado) return true;
 
     try {
-      console.log('🔊 Habilitando áudio com interação do usuário...');
       const audio = new Audio('/sounds/notification.mp3');
       audio.volume = 0.1; // Volume baixo para teste
 
@@ -63,11 +50,10 @@ export const useCardapioDigitalNotifications = ({
         audio.pause();
         audio.currentTime = 0;
         setAudioHabilitado(true);
-        console.log('✅ Áudio habilitado com sucesso');
         return true;
       }
     } catch (error) {
-      console.error('❌ Erro ao habilitar áudio:', error);
+      // Erro ao habilitar áudio
     }
 
     return false;
@@ -75,16 +61,8 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ FUNÇÃO PARA TOCAR SOM COM FALLBACK MELHORADO
   const tocarSomNotificacao = useCallback(async (forcado = false) => {
-    const tipoSom = forcado ? 'FORÇADO' : 'AUTOMÁTICO';
-    console.log(`🔊 === INICIANDO REPRODUÇÃO DE SOM ${tipoSom} ===`);
-    console.log('🔊 Timestamp:', new Date().toISOString());
-    console.log('🔊 Pedidos pendentes:', contadorPendentes);
-    console.log('🔊 Áudio habilitado:', audioHabilitado);
-    console.log('🔊 Som desabilitado pelo usuário:', somDesabilitadoPeloUsuario);
-
     // ✅ NOVA VERIFICAÇÃO: Se foi desabilitado pelo usuário, não tocar (mesmo se forçado)
     if (somDesabilitadoPeloUsuario && !forcado) {
-      console.log('🔇 Som foi desabilitado pelo usuário, não tocando');
       return false;
     }
 
@@ -92,30 +70,25 @@ export const useCardapioDigitalNotifications = ({
     if (!audioHabilitado && forcado) {
       const habilitado = await habilitarAudio();
       if (!habilitado) {
-        console.log('❌ Não foi possível habilitar áudio');
         return false;
       }
     }
 
     // Se não está habilitado e é automático, não tocar
     if (!audioHabilitado && !forcado) {
-      console.log('⚠️ Áudio não habilitado, som automático bloqueado');
       return false;
     }
 
     // Método 1: Tentar usar useSound (mais confiável após habilitação)
     try {
-      console.log('🔊 Método 1: Tentando useSound...');
       playNotificationSound();
-      console.log('✅ useSound executado com sucesso');
       return true;
     } catch (error) {
-      console.error('❌ Erro no useSound:', error);
+      // Erro no useSound
     }
 
     // Método 2: Audio API direto
     try {
-      console.log('🔊 Método 2: Tentando Audio API direto...');
       const audio = new Audio('/sounds/notification.mp3');
       audio.volume = 1.0;
 
@@ -127,7 +100,6 @@ export const useCardapioDigitalNotifications = ({
         const index = audioInstancesRef.current.indexOf(audio);
         if (index > -1) {
           audioInstancesRef.current.splice(index, 1);
-          console.log('🔊 Áudio removido da lista de controle');
         }
       });
 
@@ -136,21 +108,18 @@ export const useCardapioDigitalNotifications = ({
         const index = audioInstancesRef.current.indexOf(audio);
         if (index > -1) {
           audioInstancesRef.current.splice(index, 1);
-          console.log('🔊 Áudio removido da lista de controle (erro)');
         }
       });
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         await playPromise;
-        console.log('✅ Som tocado via Audio API direto');
         return true;
       }
     } catch (error) {
-      console.error('❌ Erro no Audio API direto:', error);
+      // Erro no Audio API direto
     }
 
-    console.log('🔊 === FIM DA REPRODUÇÃO DE SOM ===');
     return false;
   }, [playNotificationSound, contadorPendentes, audioHabilitado, somDesabilitadoPeloUsuario, habilitarAudio]);
 
@@ -162,19 +131,13 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ FUNÇÃO PARA PARAR TODOS OS SONS IMEDIATAMENTE
   const pararTodosSonsImediatamente = useCallback(() => {
-    console.log('🔇 PARANDO TODOS OS SONS IMEDIATAMENTE!');
-
     // ✅ NOVO: Parar useSound primeiro (se estiver tocando)
     try {
       if (isPlaying) {
-        console.log('🔇 Parando useSound (estava tocando)...');
         stopNotificationSound();
-        console.log('✅ useSound parado com sucesso');
-      } else {
-        console.log('🔇 useSound não estava tocando');
       }
     } catch (error) {
-      console.error('❌ Erro ao parar useSound:', error);
+      // Erro ao parar useSound
     }
 
     // Parar todas as instâncias de áudio ativas
@@ -182,9 +145,8 @@ export const useCardapioDigitalNotifications = ({
       try {
         audio.pause();
         audio.currentTime = 0;
-        console.log(`🔇 Áudio ${index + 1} parado`);
       } catch (error) {
-        console.error(`❌ Erro ao parar áudio ${index + 1}:`, error);
+        // Erro ao parar áudio
       }
     });
 
@@ -199,48 +161,36 @@ export const useCardapioDigitalNotifications = ({
           if (!audio.paused) {
             audio.pause();
             audio.currentTime = 0;
-            console.log(`🔇 Elemento de áudio da página ${index + 1} parado`);
           }
         } catch (error) {
-          console.error(`❌ Erro ao parar elemento de áudio ${index + 1}:`, error);
+          // Erro ao parar elemento de áudio
         }
       });
-
-      if (allAudioElements.length > 0) {
-        console.log(`🔇 Total de ${allAudioElements.length} elementos de áudio verificados na página`);
-      }
     } catch (error) {
-      console.error('❌ Erro ao buscar elementos de áudio na página:', error);
+      // Erro ao buscar elementos de áudio na página
     }
-
-    console.log('✅ Todos os sons foram parados imediatamente');
   }, [isPlaying, stopNotificationSound]);
 
   // ✅ FUNÇÃO PARA INICIAR SOM CONTÍNUO
   const iniciarSomContinuo = useCallback(() => {
     // Verificações de segurança
     if (somContinuoAtivo) {
-      console.log('⚠️ Som contínuo já está ativo, ignorando...');
       return;
     }
 
     if (contadorPendentes === 0) {
-      console.log('⚠️ Sem pedidos pendentes, não iniciando som...');
       return;
     }
 
     // ✅ NOVA VERIFICAÇÃO: Se foi desabilitado pelo usuário, não iniciar
     if (somDesabilitadoPeloUsuario) {
-      console.log('🔇 Som foi desabilitado pelo usuário, não iniciando...');
       return;
     }
 
-    console.log('🔔 INICIANDO SOM CONTÍNUO - Pedidos pendentes:', contadorPendentes);
     setSomContinuoAtivo(true);
 
     // Limpar intervalo anterior se existir (segurança)
     if (intervalSomRef.current) {
-      console.log('🧹 Limpando intervalo anterior...');
       clearInterval(intervalSomRef.current);
       intervalSomRef.current = null;
     }
@@ -248,35 +198,26 @@ export const useCardapioDigitalNotifications = ({
     // ✅ NOVA LÓGICA: Função para tocar 2 vezes consecutivas (aguardando cada som terminar)
     const tocarDuasVezes = async () => {
       try {
-        console.log('🔔 Tocando som 1/2...');
         await tocarSomNotificacao(true);
 
         // Aguardar o som terminar completamente (duração do som + margem de segurança)
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 segundos para garantir que terminou
 
-        console.log('🔔 Tocando som 2/2...');
         await tocarSomNotificacao(true);
-
-        console.log('✅ Sequência de 2 sons concluída');
       } catch (error) {
-        console.error('❌ Erro ao tocar sequência de sons:', error);
+        // Erro ao tocar sequência de sons
       }
     };
 
     // Tocar 2 vezes imediatamente
-    console.log('🔊 Tocando som inicial (2x)...');
     tocarDuasVezes();
 
     // Configurar intervalo para tocar 2 vezes a cada ciclo
     intervalSomRef.current = setInterval(() => {
-      console.log('🔔 VERIFICAÇÃO PERIÓDICA - Pedidos pendentes:', contadorPendentes);
-
       // Verificar se ainda há pedidos pendentes
       if (contadorPendentes > 0) {
-        console.log('🔔 SOM CONTÍNUO - Tocando 2x novamente...');
         tocarDuasVezes();
       } else {
-        console.log('🔕 PARANDO SOM CONTÍNUO - Sem pedidos pendentes');
         if (intervalSomRef.current) {
           clearInterval(intervalSomRef.current);
           intervalSomRef.current = null;
@@ -285,14 +226,10 @@ export const useCardapioDigitalNotifications = ({
       }
     }, 5000); // ✅ AJUSTADO: 5 segundos de pausa entre ciclos
 
-    console.log('✅ Som contínuo configurado com sucesso!');
-
   }, [contadorPendentes, somContinuoAtivo, somDesabilitadoPeloUsuario, tocarSomNotificacao]);
 
   // ✅ FUNÇÃO PARA PARAR SOM CONTÍNUO
   const pararSomContinuo = useCallback(() => {
-    console.log('🔕 Parando som contínuo manualmente');
-
     // ✅ NOVO: Parar todos os sons imediatamente
     pararTodosSonsImediatamente();
 
@@ -305,8 +242,6 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ NOVA FUNÇÃO PARA DESABILITAR SOM PELO USUÁRIO
   const desabilitarSomPeloUsuario = useCallback(() => {
-    console.log('🔇 Som desabilitado pelo usuário');
-
     // ✅ NOVO: Parar todos os sons imediatamente ANTES de desabilitar
     pararTodosSonsImediatamente();
 
@@ -316,12 +251,10 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ NOVA FUNÇÃO PARA REABILITAR SOM PELO USUÁRIO
   const reabilitarSomPeloUsuario = useCallback(() => {
-    console.log('🔊 Som reabilitado pelo usuário');
     setSomDesabilitadoPeloUsuario(false);
 
     // ✅ NOVO: Se há pedidos pendentes, iniciar som imediatamente
     if (contadorPendentes > 0 && !somContinuoAtivo && audioHabilitado) {
-      console.log('🔔 REABILITAÇÃO: Iniciando som imediatamente - há pedidos pendentes!');
       setTimeout(() => iniciarSomContinuo(), 100); // Delay mínimo apenas para garantir que o estado foi atualizado
     }
   }, [contadorPendentes, somContinuoAtivo, audioHabilitado, iniciarSomContinuo]);
@@ -329,13 +262,11 @@ export const useCardapioDigitalNotifications = ({
   // ✅ CARREGAR PEDIDOS PENDENTES
   const carregarPedidosPendentes = useCallback(async () => {
     if (!empresaId || !enabled) {
-      console.log('❌ Não carregando pedidos:', { empresaId, enabled });
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log('🔍 Carregando pedidos pendentes para empresa:', empresaId);
 
       const { data, error } = await supabase
         .from('cardapio_digital')
@@ -354,7 +285,6 @@ export const useCardapioDigitalNotifications = ({
         .order('data_pedido', { ascending: false });
 
       if (error) {
-        console.error('Erro ao carregar pedidos do cardápio digital:', error);
         return;
       }
 
@@ -362,23 +292,16 @@ export const useCardapioDigitalNotifications = ({
       const contadorAnterior = contadorPendentes;
       const novoContador = pedidos.length;
 
-      console.log('📊 Pedidos encontrados:', {
-        anterior: contadorAnterior,
-        novo: novoContador,
-        pedidos: pedidos.length
-      });
-
       setPedidosPendentes(pedidos);
       setContadorPendentes(novoContador);
 
       // ✅ INICIAR SOM CONTÍNUO SE HÁ PEDIDOS PENDENTES E NÃO FOI DESABILITADO PELO USUÁRIO
       if (novoContador > 0 && !somContinuoAtivo && !somDesabilitadoPeloUsuario) {
-        console.log('🔔 DETECTADOS PEDIDOS PENDENTES - INICIANDO SOM CONTÍNUO IMEDIATAMENTE!');
         setTimeout(() => iniciarSomContinuo(), 200); // Delay reduzido para melhor responsividade
       }
 
     } catch (error) {
-      console.error('Erro ao carregar pedidos:', error);
+      // Erro ao carregar pedidos
     } finally {
       setIsLoading(false);
     }
@@ -396,7 +319,6 @@ export const useCardapioDigitalNotifications = ({
         .eq('id', pedidoId);
 
       if (error) {
-        console.error('Erro ao aceitar pedido:', error);
         showMessage('error', 'Erro ao aceitar pedido');
         return false;
       }
@@ -406,7 +328,6 @@ export const useCardapioDigitalNotifications = ({
       return true;
 
     } catch (error) {
-      console.error('Erro ao aceitar pedido:', error);
       showMessage('error', 'Erro ao aceitar pedido');
       return false;
     }
@@ -424,7 +345,6 @@ export const useCardapioDigitalNotifications = ({
         .eq('id', pedidoId);
 
       if (error) {
-        console.error('Erro ao rejeitar pedido:', error);
         showMessage('error', 'Erro ao rejeitar pedido');
         return false;
       }
@@ -434,7 +354,6 @@ export const useCardapioDigitalNotifications = ({
       return true;
 
     } catch (error) {
-      console.error('Erro ao rejeitar pedido:', error);
       showMessage('error', 'Erro ao rejeitar pedido');
       return false;
     }
@@ -443,15 +362,8 @@ export const useCardapioDigitalNotifications = ({
   // ✅ CONFIGURAR REALTIME PARA NOVOS PEDIDOS
   useEffect(() => {
     if (!empresaId || !enabled) {
-      console.log('❌ Hook cardápio digital desabilitado:', { empresaId, enabled });
       return;
     }
-
-    console.log('🔔 Configurando realtime para pedidos do cardápio digital:', {
-      empresaId,
-      enabled,
-      timestamp: new Date().toISOString()
-    });
 
     const channelName = `cardapio_digital_${empresaId}`;
 
@@ -466,14 +378,7 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🆕🔊 NOVO PEDIDO DETECTADO - TOCANDO SOM!', {
-            payload,
-            timestamp: new Date().toISOString(),
-            empresaId
-          });
-
           // Tocar som de notificação IMEDIATAMENTE
-          console.log('🔊 Chamando tocarSomNotificacao...');
           tocarSomNotificacao();
 
           // Mostrar notificação visual
@@ -481,7 +386,6 @@ export const useCardapioDigitalNotifications = ({
           showMessage('info', `🍽️ Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente}`);
 
           // Recarregar lista de pedidos
-          console.log('🔄 Recarregando lista de pedidos...');
           carregarPedidosPendentes();
         }
       )
@@ -494,8 +398,6 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('📝 Pedido do cardápio digital atualizado:', payload);
-          
           // Recarregar lista se status mudou
           const pedidoAtualizado = payload.new as PedidoCardapio;
           if (payload.old && (payload.old as any).status_pedido !== pedidoAtualizado.status_pedido) {
@@ -504,19 +406,12 @@ export const useCardapioDigitalNotifications = ({
         }
       )
       .subscribe((status) => {
-        console.log('📡 Status do canal cardápio digital:', {
-          status,
-          channelName,
-          empresaId,
-          timestamp: new Date().toISOString()
-        });
-
         if (status === 'SUBSCRIBED') {
-          console.log('✅ REALTIME ATIVO - Aguardando novos pedidos...');
+          // Realtime ativo - aguardando novos pedidos
         } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ ERRO NO CANAL REALTIME');
+          // Erro no canal realtime
         } else if (status === 'TIMED_OUT') {
-          console.error('⏰ TIMEOUT NO CANAL REALTIME');
+          // Timeout no canal realtime
         }
       });
 
@@ -525,36 +420,22 @@ export const useCardapioDigitalNotifications = ({
 
     // Cleanup
     return () => {
-      console.log('🔌 Desconectando canal cardápio digital');
       supabase.removeChannel(channel);
     };
   }, [empresaId, enabled, tocarSomNotificacao, carregarPedidosPendentes]);
 
   // ✅ SOM CONTÍNUO QUANDO HÁ PEDIDOS PENDENTES (MONITORAMENTO ATIVO)
   useEffect(() => {
-    console.log('🔔 MONITORAMENTO ATIVO - Pedidos pendentes:', {
-      contadorPendentes,
-      somContinuoAtivo,
-      empresaId,
-      enabled,
-      audioHabilitado,
-      somDesabilitadoPeloUsuario,
-      timestamp: new Date().toISOString()
-    });
-
     // Se há pedidos pendentes, áudio habilitado, som não está ativo E não foi desabilitado pelo usuário, iniciar
     if (contadorPendentes > 0 && !somContinuoAtivo && empresaId && enabled && audioHabilitado && !somDesabilitadoPeloUsuario) {
-      console.log('🔔 DETECTADOS PEDIDOS PENDENTES - INICIANDO SOM CONTÍNUO AUTOMATICAMENTE!');
       setTimeout(() => iniciarSomContinuo(), 300); // Delay reduzido para melhor responsividade
     }
     // Se não há pedidos pendentes e som está ativo, parar
     else if (contadorPendentes === 0 && somContinuoAtivo) {
-      console.log('🔕 SEM PEDIDOS PENDENTES - PARANDO SOM CONTÍNUO AUTOMATICAMENTE!');
       pararSomContinuo();
     }
     // ✅ NOVO: Se foi desabilitado pelo usuário e som está ativo, parar imediatamente
     else if (somDesabilitadoPeloUsuario && somContinuoAtivo) {
-      console.log('🔇 SOM DESABILITADO PELO USUÁRIO - PARANDO SOM CONTÍNUO IMEDIATAMENTE!');
       pararSomContinuo();
     }
   }, [contadorPendentes, somContinuoAtivo, empresaId, enabled, audioHabilitado, somDesabilitadoPeloUsuario, iniciarSomContinuo, pararSomContinuo]);
@@ -562,12 +443,10 @@ export const useCardapioDigitalNotifications = ({
   // ✅ MONITORAMENTO INICIAL - VERIFICAR PEDIDOS EXISTENTES AO CARREGAR
   useEffect(() => {
     if (empresaId && enabled) {
-      console.log('🔍 VERIFICAÇÃO INICIAL - Carregando pedidos existentes...');
       carregarPedidosPendentes();
 
       // Verificar novamente após 3 segundos para garantir
       const timeoutVerificacao = setTimeout(() => {
-        console.log('🔍 VERIFICAÇÃO SECUNDÁRIA - Recarregando pedidos...');
         carregarPedidosPendentes();
       }, 3000);
 
@@ -579,7 +458,6 @@ export const useCardapioDigitalNotifications = ({
   useEffect(() => {
     return () => {
       if (intervalSomRef.current) {
-        console.log('🧹 Limpando intervalo do som contínuo');
         clearInterval(intervalSomRef.current);
         intervalSomRef.current = null;
       }

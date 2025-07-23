@@ -231,23 +231,18 @@ const PDVPage: React.FC = () => {
 
     if (novoEstado) {
       // Ativar som - tocar som de teste para habilitar áudio
-      console.log('🔊 Ativando som do cardápio digital...');
       try {
         const audio = new Audio('/sounds/notification.mp3');
         audio.volume = 0.8;
         audio.play().then(() => {
-          console.log('✅ Som do cardápio ativado com sucesso');
           toast.success('Som do cardápio ativado!');
         }).catch((error) => {
-          console.error('❌ Erro ao ativar som:', error);
           toast.error('Erro ao ativar som');
         });
       } catch (error) {
-        console.error('❌ Erro ao ativar som:', error);
         toast.error('Erro ao ativar som');
       }
     } else {
-      console.log('🔇 Som do cardápio desativado');
       toast.info('Som do cardápio desativado');
     }
   }, [somCardapioAtivo]);
@@ -256,14 +251,12 @@ const PDVPage: React.FC = () => {
   const alternarSom = async () => {
     if (!audioHabilitado || somDesabilitadoPeloUsuario) {
       // Se áudio não está habilitado OU foi desabilitado pelo usuário, habilitar e ativar
-      console.log('🔊 Habilitando áudio...');
       const habilitado = await habilitarAudio();
       if (habilitado) {
         reabilitarSomPeloUsuario(); // Reabilitar som no hook
 
         // ✅ NOVO: Se há pedidos pendentes, tocar som imediatamente
         if (contadorCardapio > 0) {
-          console.log('🔔 REATIVAÇÃO IMEDIATA: Tocando som - há pedidos pendentes!');
           await tocarSomNotificacao(true);
         }
 
@@ -276,12 +269,11 @@ const PDVPage: React.FC = () => {
       setShowModalDesabilitarSom(true);
     } else {
       // Caso não esteja ativo, ativar
-      console.log('🔊 Ativando som do cardápio...');
       reabilitarSomPeloUsuario(); // Reabilitar som no hook
 
       // ✅ NOVO: Se há pedidos pendentes, tocar som imediatamente
       if (contadorCardapio > 0) {
-        console.log('🔔 ATIVAÇÃO IMEDIATA: Tocando som - há pedidos pendentes!');
+        // Tocar som imediatamente
       }
 
       const sucesso = await tocarSomNotificacao(true);
@@ -295,7 +287,6 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA CONFIRMAR DESABILITAÇÃO DO SOM
   const confirmarDesabilitarSom = () => {
-    console.log('🔇 Desabilitando som do cardápio por solicitação do usuário...');
     desabilitarSomPeloUsuario(); // Desabilitar som no hook
     setShowModalDesabilitarSom(false);
     toast.info('Som do cardápio desabilitado');
@@ -308,14 +299,12 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA CONFIRMAR HABILITAÇÃO DO SOM INICIAL
   const confirmarHabilitarSomInicial = async () => {
-    console.log('🔊 Habilitando som inicial por solicitação do usuário...');
     const habilitado = await habilitarAudio();
     if (habilitado) {
       reabilitarSomPeloUsuario(); // Reabilitar som no hook
 
       // Se há pedidos pendentes, tocar som imediatamente
       if (contadorCardapio > 0) {
-        console.log('🔔 HABILITAÇÃO INICIAL: Tocando som - há pedidos pendentes!');
         await tocarSomNotificacao(true);
       }
 
@@ -328,18 +317,12 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA CANCELAR HABILITAÇÃO DO SOM INICIAL
   const cancelarHabilitarSomInicial = () => {
-    console.log('🔇 Usuário optou por não habilitar som inicial');
     setShowModalHabilitarSomInicial(false);
   };
 
   // ✅ LOG PARA DEBUG
   useEffect(() => {
-    console.log('🏢 PDV - Dados da empresa:', {
-      empresaId: empresaData?.id,
-      empresaNome: empresaData?.nome_fantasia,
-      contadorCardapio,
-      pedidosCardapio: pedidosCardapio.length
-    });
+    // Debug removido
   }, [empresaData, contadorCardapio, pedidosCardapio]);
 
   // Estados para os modais do menu PDV
@@ -660,7 +643,7 @@ const PDVPage: React.FC = () => {
       };
       localStorage.setItem(PDV_STORAGE_KEY, JSON.stringify(pdvState));
     } catch (error) {
-      console.error('Erro ao salvar estado do PDV:', error);
+      // Erro ao salvar estado do PDV
     }
   };
 
@@ -715,7 +698,6 @@ const PDVPage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Erro ao carregar estado do PDV:', error);
       clearPDVState();
     }
   };
@@ -724,7 +706,7 @@ const PDVPage: React.FC = () => {
     try {
       localStorage.removeItem(PDV_STORAGE_KEY);
     } catch (error) {
-      console.error('Erro ao limpar estado do PDV:', error);
+      // Erro ao limpar estado do PDV
     }
   };
 
@@ -848,7 +830,7 @@ const PDVPage: React.FC = () => {
         setUserData({ nome: usuarioData.nome });
       }
     } catch (error) {
-      console.error('Erro ao carregar dados do usuário:', error);
+      // Erro ao carregar dados do usuário
     }
   };
 
@@ -891,7 +873,6 @@ const PDVPage: React.FC = () => {
         valor: descontosValor || []
       });
     } catch (error) {
-      console.error('Erro ao carregar descontos do cliente:', error);
       setDescontosCliente({ prazo: [], valor: [] });
     }
   };
@@ -1046,7 +1027,6 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (error) {
-        console.error('Erro ao carregar detalhes do pedido:', error);
         toast.error('Erro ao carregar detalhes do pedido');
         return;
       }
@@ -1054,7 +1034,6 @@ const PDVPage: React.FC = () => {
       setPedidoDetalhado(pedidoCompleto);
       setShowDetalhePedido(true);
     } catch (error) {
-      console.error('Erro ao carregar detalhes do pedido:', error);
       toast.error('Erro ao carregar detalhes do pedido');
     }
   };
@@ -1105,7 +1084,7 @@ const PDVPage: React.FC = () => {
       }
 
     } catch (error) {
-      console.error('Erro ao carregar configurações de tabela de preços:', error);
+      // Erro ao carregar configurações de tabela de preços
     }
   };
 
@@ -1765,7 +1744,7 @@ const PDVPage: React.FC = () => {
           await new Promise(resolve => setTimeout(resolve, 100));
 
         } else {
-          console.error('❌ USEEFFECT: Falha ao criar venda');
+          // Falha ao criar venda
         }
 
         setCriandoVenda(false);
@@ -1795,7 +1774,7 @@ const PDVPage: React.FC = () => {
                   : carrinhoItem
               ));
             } else {
-              console.error('❌ Erro ao salvar item novo:', item.produto.nome);
+              // Erro ao salvar item novo
             }
           }
 
@@ -1943,7 +1922,7 @@ const PDVPage: React.FC = () => {
         const contador = await contarPedidosPendentes(usuarioData.empresa_id);
         setContadorPedidosPendentes(contador);
       } catch (error) {
-        console.error('Erro ao carregar contador de pedidos:', error);
+        // Erro ao carregar contador de pedidos
       }
     });
   };
@@ -1972,13 +1951,12 @@ const PDVPage: React.FC = () => {
           .eq('tentativa_nfce', true);
 
         if (error) {
-          console.error('Erro ao contar NFC-e pendentes:', error);
           return;
         }
 
         setContadorNfcePendentes(count || 0);
       } catch (error) {
-        console.error('Erro ao carregar contador de NFC-e pendentes:', error);
+        // Erro ao carregar contador de NFC-e pendentes
       }
     });
   };
@@ -2092,7 +2070,7 @@ const PDVPage: React.FC = () => {
           setContadorPedidosPendentes(contador);
         }
       } catch (error) {
-        console.error('Erro ao verificar empresa e atualizar contador:', error);
+        // Erro ao verificar empresa e atualizar contador
       }
     });
   };
@@ -2113,7 +2091,6 @@ const PDVPage: React.FC = () => {
           loadNfeConfig() // ✅ NOVO: Carregar configuração NFe
         ]);
       } catch (error) {
-        console.error('Erro ao carregar dados:', error);
         toast.error('Erro ao carregar dados do PDV');
       } finally {
         setIsLoading(false);
@@ -2429,7 +2406,6 @@ const PDVPage: React.FC = () => {
       return produtosFormatados;
 
     } catch (error) {
-      console.error('Erro ao carregar produtos com preços:', error);
       return [];
     }
   };
@@ -2499,7 +2475,6 @@ const PDVPage: React.FC = () => {
         .eq('empresa_id', usuarioData.empresa_id);
 
       if (error) {
-        console.error('Erro ao carregar estoque:', error);
         return;
       }
 
@@ -2522,7 +2497,7 @@ const PDVPage: React.FC = () => {
 
       setProdutosEstoque(estoqueProcessado);
     } catch (error) {
-      console.error('Erro ao processar estoque:', error);
+      // Erro ao processar estoque
     }
   };
 
@@ -2545,7 +2520,6 @@ const PDVPage: React.FC = () => {
       .single();
 
     if (error && error.code !== 'PGRST116') {
-      console.error('Erro ao carregar configurações do PDV:', error);
       return;
     }
 
@@ -2602,11 +2576,9 @@ const PDVPage: React.FC = () => {
       .single();
 
     if (error) {
-      console.error('Erro ao carregar dados da empresa:', error);
       return;
     }
 
-    console.log('✅ Dados da empresa carregados:', data);
     setEmpresaData(data);
   };
 
@@ -2615,7 +2587,6 @@ const PDVPage: React.FC = () => {
       // Obter dados do usuário para pegar empresa_id
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
-        console.error('Usuário não autenticado');
         return;
       }
 
@@ -2626,7 +2597,6 @@ const PDVPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) {
-        console.error('Empresa não encontrada para o usuário');
         return;
       }
 
@@ -2683,12 +2653,10 @@ const PDVPage: React.FC = () => {
           setFormaPagamentoSelecionada(formasTransformadas[0].id);
         }
       } else {
-        console.warn('⚠️ Nenhuma forma de pagamento configurada para esta empresa');
         setFormasPagamento([]);
         setFormaPagamentoSelecionada('');
       }
     } catch (error) {
-      console.error('Erro ao carregar formas de pagamento:', error);
       // Em caso de erro, manter array vazio para não quebrar a interface
       setFormasPagamento([]);
       setFormaPagamentoSelecionada('');
@@ -2744,7 +2712,7 @@ const PDVPage: React.FC = () => {
 
       setVendedores(vendedoresFiltrados);
     } catch (error) {
-      console.error('Erro ao carregar vendedores:', error);
+      // Erro ao carregar vendedores
     }
   };
 
@@ -2775,7 +2743,6 @@ const PDVPage: React.FC = () => {
         setAmbienteNFe('homologacao');
       }
     } catch (error) {
-      console.error('Erro ao carregar configuração NFe:', error);
       setAmbienteNFe('homologacao'); // Fallback para homologação
     }
   };
@@ -2882,7 +2849,6 @@ const PDVPage: React.FC = () => {
       const pedidosPendentes = pedidosData.filter(p => p.status === 'pendente');
       setContadorPedidosPendentes(pedidosPendentes.length);
     } catch (error) {
-      console.error('Erro ao carregar pedidos:', error);
       toast.error('Erro ao carregar pedidos');
     }
     // Removido setLoadingPedidos(false) para manter consistência
@@ -2943,7 +2909,6 @@ const PDVPage: React.FC = () => {
         .order('data_pedido', { ascending: false });
 
       if (error) {
-        console.error('Erro ao carregar pedidos do cardápio:', error);
         return;
       }
 
@@ -2951,7 +2916,7 @@ const PDVPage: React.FC = () => {
       setTodosOsPedidosCardapio(pedidos);
       aplicarFiltrosCardapio(pedidos);
     } catch (error) {
-      console.error('Erro ao carregar pedidos do cardápio:', error);
+      // Erro ao carregar pedidos do cardápio
     }
   };
 
@@ -3041,7 +3006,6 @@ const PDVPage: React.FC = () => {
       !modalSomInicialJaExibido &&
       pdvConfig !== null // Garantir que as configurações foram carregadas
     ) {
-      console.log('🔔 Exibindo modal de habilitação de som inicial');
       setShowModalHabilitarSomInicial(true);
       setModalSomInicialJaExibido(true);
     }
@@ -3256,7 +3220,6 @@ const PDVPage: React.FC = () => {
               pedidosOrigem = pedidosData.map(p => p.numero);
             }
           } catch (error) {
-            console.error('Erro ao buscar números dos pedidos:', error);
             // Em caso de erro, usar os IDs como fallback
             pedidosOrigem = venda.pedidos_importados;
           }
@@ -3312,7 +3275,6 @@ const PDVPage: React.FC = () => {
       setVendas(vendasFiltradas);
 
     } catch (error: any) {
-      console.error('Erro ao carregar vendas:', error);
       toast.error(`Erro ao carregar vendas: ${error.message}`);
     } finally {
       setLoadingVendas(false);
@@ -3353,7 +3315,7 @@ const PDVPage: React.FC = () => {
                                vendaParaCancelar.protocolo_nfe;
 
       if (isNFCeAutorizada) {
-        console.log('🚫 FRONTEND: Iniciando cancelamento fiscal da NFC-e');
+        // Iniciando cancelamento fiscal da NFC-e
 
         // Validar prazo de 15 minutos para NFC-e
         const dataEmissao = new Date(vendaParaCancelar.data_emissao_nfe || vendaParaCancelar.finalizada_em);
@@ -3372,8 +3334,6 @@ const PDVPage: React.FC = () => {
           protocolo_nfe: vendaParaCancelar.protocolo_nfe
         };
 
-        console.log('📡 FRONTEND: Enviando cancelamento fiscal:', cancelamentoData);
-
         const cancelamentoResponse = await fetch('http://31.97.166.71/backend/public/cancelar-nfce.php', {
           method: 'POST',
           headers: {
@@ -3384,7 +3344,6 @@ const PDVPage: React.FC = () => {
 
         if (!cancelamentoResponse.ok) {
           const errorText = await cancelamentoResponse.text();
-          console.error('❌ FRONTEND: Erro no cancelamento fiscal:', errorText);
           throw new Error('Erro no cancelamento fiscal da NFC-e');
         }
 
@@ -3394,11 +3353,9 @@ const PDVPage: React.FC = () => {
           throw new Error(cancelamentoResult.error || 'Erro no cancelamento fiscal');
         }
 
-        console.log('✅ FRONTEND: NFC-e cancelada fiscalmente com sucesso');
         toast.success('NFC-e cancelada fiscalmente com sucesso!');
       } else {
         // Cancelamento apenas no sistema (sem fiscal)
-        console.log('📋 FRONTEND: Cancelamento apenas no sistema (não fiscal)');
 
         const { error } = await supabase
           .from('pdv')
@@ -3443,7 +3400,6 @@ const PDVPage: React.FC = () => {
       setMotivoCancelamento('');
 
     } catch (error) {
-      console.error('Erro ao cancelar venda:', error);
       toast.error(`Erro ao cancelar venda: ${error.message}`);
     }
   };
@@ -3563,7 +3519,6 @@ const PDVPage: React.FC = () => {
       setItensVenda(itensProcessados);
 
     } catch (error) {
-      console.error('Erro ao carregar itens da venda:', error);
       toast.error('Erro ao carregar itens da venda');
     } finally {
       setLoadingItensVenda(false);
@@ -3657,7 +3612,6 @@ const PDVPage: React.FC = () => {
         .order('created_at', { ascending: true });
 
       if (itensError) {
-        console.error('Erro na query Supabase:', itensError);
         throw itensError;
       }
 
@@ -3702,12 +3656,9 @@ const PDVPage: React.FC = () => {
         };
       });
 
-      console.log('✅ Itens carregados para edição NFC-e:', itensProcessados);
-      console.log('✅ Regime tributário da empresa:', regimeTributario);
       setItensNfceEdicao(itensProcessados);
 
     } catch (error: any) {
-      console.error('Erro ao carregar itens para edição NFC-e:', error);
       toast.error(`Erro ao carregar itens: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setLoadingItensNfce(false);
@@ -3879,14 +3830,7 @@ const PDVPage: React.FC = () => {
       const produtosAtualizadosCount = produtosCadastro.length;
       toast.success(`${produtosAtualizadosCount} produto(s) atualizado(s) com dados do cadastro`);
 
-      console.log('✅ Produtos NFC-e atualizados:', {
-        total: itensVenda.length,
-        atualizados: produtosAtualizadosCount,
-        produtosCadastro
-      });
-
     } catch (error: any) {
-      console.error('Erro ao atualizar dados dos produtos NFC-e:', error);
       toast.error(`Erro ao atualizar produtos: ${error.message}`);
     }
   };
@@ -3988,7 +3932,7 @@ const PDVPage: React.FC = () => {
           .single();
 
         if (pdvConfigError) {
-          console.warn('Erro ao buscar configuração PDV:', pdvConfigError);
+          // Erro ao buscar configuração PDV
         } else {
           configVendaSemProduto = pdvConfigData;
         }
@@ -4013,8 +3957,6 @@ const PDVPage: React.FC = () => {
       const itensAtualizados = itensNfceEdicao.map(item => {
         // ✅ PRODUTO 999999: Usar configuração PDV
         if (item.codigo_produto === '999999' && configVendaSemProduto) {
-          console.log('🔄 Atualizando produto 999999 com configuração PDV:', configVendaSemProduto);
-
           // Mapear situação tributária para CST/CSOSN
           const situacaoTributaria = configVendaSemProduto.venda_sem_produto_situacao_tributaria || 'tributado_integral';
           let cstIcms = null;
@@ -4090,7 +4032,6 @@ const PDVPage: React.FC = () => {
       });
 
       // ✅ NOVO: Salvar alterações na tabela pdv_itens
-      console.log('💾 SALVANDO: Atualizações na tabela pdv_itens...');
 
       // ✅ CORREÇÃO: Função auxiliar para converter valores com segurança
       const parseValue = (value: any) => {
@@ -4112,20 +4053,15 @@ const PDVPage: React.FC = () => {
           origem_produto: item.origem_produto_editavel || 0
         };
 
-        console.log(`💾 SALVANDO: Item ${item.nome_produto}:`, updateData);
-
         const { error: updateError } = await supabase
           .from('pdv_itens')
           .update(updateData)
           .eq('id', item.id);
 
         if (updateError) {
-          console.error('❌ ERRO ao salvar item:', updateError);
           throw new Error(`Erro ao salvar item ${item.nome_produto}: ${updateError.message}`);
         }
       }
-
-      console.log('✅ SALVAMENTO: Todos os itens foram salvos na tabela pdv_itens');
 
       // Aplicar atualizações na interface
       setItensNfceEdicao(itensAtualizados);
@@ -4146,17 +4082,7 @@ const PDVPage: React.FC = () => {
 
       toast.success(mensagem);
 
-      console.log('✅ Produtos atualizados:', {
-        total: itensNfceEdicao.length,
-        produtos_normais: produtosNormaisCount,
-        produtos_999999: produtos999999Count,
-        total_atualizados: totalAtualizados,
-        produtosCadastro,
-        configVendaSemProduto
-      });
-
     } catch (error: any) {
-      console.error('Erro ao atualizar dados dos produtos:', error);
       toast.error(`Erro ao atualizar produtos: ${error.message}`);
     }
   };
@@ -4201,22 +4127,18 @@ const PDVPage: React.FC = () => {
           aliquota_icms: parseValue(item.aliquota_icms_editavel) // ✅ CORREÇÃO: Conversão segura
         };
 
-        console.log(`💾 FRONTEND: Salvando item ${item.nome_produto}:`, updateData);
-
         const { error: updateError } = await supabase
           .from('pdv_itens')
           .update(updateData)
           .eq('id', item.id);
 
         if (updateError) {
-          console.error('Erro ao atualizar item:', updateError);
           throw new Error(`Erro ao salvar modificações do item ${item.nome_produto}: ${updateError.message}`);
         }
       }
 
       // ✅ NOVO: Salvar número da NFC-e se foi editado
       if (vendaParaEditarNfce.numero_documento) {
-        console.log('💾 FRONTEND: Salvando número da NFC-e editado...');
         const { error: updateNumeroError } = await supabase
           .from('pdv')
           .update({
@@ -4225,12 +4147,10 @@ const PDVPage: React.FC = () => {
           .eq('id', vendaParaEditarNfce.id);
 
         if (updateNumeroError) {
-          console.error('Erro ao atualizar número da NFC-e:', updateNumeroError);
           throw new Error('Erro ao salvar número da NFC-e editado');
         }
       }
 
-      console.log('✅ FRONTEND: Modificações salvas, iniciando retransmissão...');
       toast.success('Modificações salvas! Iniciando retransmissão...');
 
       // Preparar dados atualizados dos itens
@@ -4239,13 +4159,6 @@ const PDVPage: React.FC = () => {
 
         // ✅ CORREÇÃO: Usar unidade já salva na tabela pdv_itens
         const unidadeCalculada = item.unidade || 'UN'; // ✅ Usar unidade salva nos itens, fallback 'UN' se não tiver
-
-        console.log(`🔍 REPROCESSAMENTO - Item ${item.nome_produto}:`, {
-          codigo_produto: codigoProduto,
-          unidade_salva_pdv_itens: item.unidade,
-          unidade_final_calculada: unidadeCalculada,
-          fonte_dados: 'pdv_itens (dados já processados)'
-        });
 
         return {
           codigo: codigoProduto,
@@ -9085,11 +8998,9 @@ const PDVPage: React.FC = () => {
             throw new Error('Número da NFC-e não foi reservado corretamente');
           }
 
-          console.log('✅ FRONTEND: Número NFC-e validado:', vendaSalva.numero_documento);
           const proximoNumero = vendaSalva.numero_documento;
 
           const codigoNumerico = Math.floor(10000000 + Math.random() * 90000000).toString();
-          console.log('🔢 FRONTEND: Código numérico gerado:', codigoNumerico);
 
           // ✅ CORREÇÃO: Calcular codigo_uf a partir do estado
           const getCodigoUF = (estado: string): number => {
@@ -9167,29 +9078,15 @@ const PDVPage: React.FC = () => {
             }))
           };
 
-          console.log('📋 FRONTEND: Dados NFC-e preparados:', nfceData);
-          console.log('📦 FRONTEND: Total de produtos:', nfceData.produtos.length);
-          console.log('👤 FRONTEND: Destinatário:', nfceData.destinatario);
-
-          // ✅ DEBUG: Verificar unidade de medida de cada produto
-          nfceData.produtos.forEach((produto, index) => {
-            console.log(`🔍 PRODUTO ${index + 1}:`, {
-              codigo: produto.codigo,
-              descricao: produto.descricao,
-              unidade: produto.unidade,
-              unidade_medida_original: carrinho[index]?.produto?.unidade_medida
-            });
-          });
+          // Dados NFC-e preparados
 
           setEtapaProcessamento('Emitindo NFC-e na SEFAZ...');
 
           // Chamar endpoint de emissão de NFC-e
-          console.log('📡 FRONTEND: Enviando dados para backend...');
           const requestData = {
             empresa_id: usuarioData.empresa_id,
             nfce_data: nfceData
           };
-          console.log('📡 FRONTEND: Dados da requisição:', requestData);
 
           const nfceResponse = await fetch('/backend/public/emitir-nfce.php', {
             method: 'POST',
@@ -9199,47 +9096,31 @@ const PDVPage: React.FC = () => {
             body: JSON.stringify(requestData)
           });
 
-          console.log('📡 FRONTEND: Resposta recebida - Status:', nfceResponse.status);
-
           if (!nfceResponse.ok) {
-            console.error('❌ FRONTEND: Erro HTTP:', nfceResponse.status, nfceResponse.statusText);
 
             // ✅ CORREÇÃO: Capturar e mostrar erro específico do backend
             let errorResponse;
             try {
               errorResponse = await nfceResponse.text();
-              console.error('📋 FRONTEND: Resposta de erro do backend:', errorResponse);
-              console.error('🔍 FRONTEND: Status HTTP recebido:', nfceResponse.status);
-              console.error('🔍 FRONTEND: Headers da resposta:', Object.fromEntries(nfceResponse.headers.entries()));
             } catch (textError) {
-              console.error('❌ FRONTEND: Erro ao capturar resposta de erro:', textError);
               throw new Error(`Erro HTTP ${nfceResponse.status}: ${nfceResponse.statusText}`);
             }
 
             // Tentar fazer parse JSON da resposta de erro
             try {
               const errorJson = JSON.parse(errorResponse);
-              console.error('📋 FRONTEND: Erro JSON do backend:', errorJson);
-              console.error('🔍 FRONTEND: Campos do erro JSON:', Object.keys(errorJson));
 
               // ✅ CORREÇÃO: Mostrar mensagem específica do backend
               const mensagemErro = errorJson.error || errorJson.message || 'Erro desconhecido do backend';
-              console.error('🔍 FRONTEND: Mensagem de erro extraída:', mensagemErro);
               throw new Error(mensagemErro);
             } catch (jsonError) {
-              console.error('❌ FRONTEND: Erro ao fazer parse do JSON de erro:', jsonError);
-              console.error('🔍 FRONTEND: Tipo do erro JSON:', typeof jsonError);
-              console.error('🔍 FRONTEND: Conteúdo do jsonError:', jsonError);
-
               // ✅ CORREÇÃO: Se jsonError for a mensagem específica, usar ela
               if (jsonError instanceof Error && jsonError.message.includes('Status')) {
-                console.error('🔍 FRONTEND: Re-lançando erro específico da SEFAZ');
                 throw jsonError; // Re-lançar o erro específico
               }
 
               // ✅ CORREÇÃO: Verificar se errorResponse contém mensagem específica
               if (errorResponse.includes('ERRO:') || errorResponse.includes('Status')) {
-                console.error('🔍 FRONTEND: Resposta contém erro específico, usando resposta bruta');
                 throw new Error(errorResponse);
               }
 
@@ -9252,23 +9133,16 @@ const PDVPage: React.FC = () => {
           }
 
           const nfceResult = await nfceResponse.json();
-          console.log('📋 FRONTEND: Resultado da emissão:', nfceResult);
 
           if (!nfceResult.success) {
-            console.error('❌ FRONTEND: Erro na emissão:', nfceResult.error);
             // ✅ CORREÇÃO: Mostrar mensagem específica do backend sem prefixo genérico
             throw new Error(nfceResult.error || 'Erro desconhecido na emissão da NFC-e');
           }
-
-          console.log('✅ FRONTEND: NFC-e emitida com sucesso!');
-          console.log('🔑 FRONTEND: Chave:', nfceResult.data.chave);
-          console.log('📋 FRONTEND: Protocolo:', nfceResult.data.protocolo);
 
           setStatusProcessamento('sucesso');
           setEtapaProcessamento('NFC-e emitida com sucesso!');
 
           // Atualizar registro da venda com dados da NFC-e
-          console.log('💾 FRONTEND: Atualizando registro da venda...');
           const updateData = {
             // ✅ NOVO: Não atualizar numero_documento - já foi salvo no início
             chave_nfe: nfceResult.data.chave,
@@ -9278,7 +9152,6 @@ const PDVPage: React.FC = () => {
             data_emissao_nfe: nfceResult.data.data_autorizacao
             // ✅ CORREÇÃO: xml_path e pdf_path removidos - arquivos salvos localmente em /root/nexo-pedidos/backend/storage
           };
-          console.log('💾 FRONTEND: Dados para atualização:', updateData);
 
           const { error: updateError } = await supabase
             .from('pdv')
@@ -9286,24 +9159,19 @@ const PDVPage: React.FC = () => {
             .eq('id', vendaId);
 
           if (updateError) {
-            console.error('❌ FRONTEND: Erro ao atualizar venda:', updateError);
             // Não interrompe o processo, pois a NFC-e já foi emitida
           } else {
-            console.log('✅ FRONTEND: Venda atualizada com dados da NFC-e');
+            // Venda atualizada com dados da NFC-e
           }
 
           // Para NFC-e, fechar automaticamente após 2 segundos de sucesso
-          console.log('⏱️ FRONTEND: Aguardando 2 segundos antes de fechar...');
           await new Promise(resolve => setTimeout(resolve, 2000));
 
         } catch (nfceError) {
-          console.error('❌ FRONTEND: Erro na emissão da NFC-e:', nfceError);
-          console.error('❌ FRONTEND: Stack trace:', (nfceError as Error).stack);
           setStatusProcessamento('erro');
 
           // ✅ CORREÇÃO: Usar mensagem específica do erro
           const mensagemErroEspecifica = (nfceError as Error).message;
-          console.log('🔍 FRONTEND: Mensagem de erro capturada:', mensagemErroEspecifica);
 
           // ✅ NOVO: Atualizar venda com status pendente quando há erro na NFC-e
           try {
@@ -9316,19 +9184,18 @@ const PDVPage: React.FC = () => {
               .eq('id', vendaId);
 
             if (updateError) {
-              console.error('❌ FRONTEND: Erro ao atualizar status da venda:', updateError);
+              // Erro ao atualizar status da venda
             } else {
-              console.log('✅ FRONTEND: Venda marcada como pendente devido ao erro na NFC-e');
+              // Venda marcada como pendente devido ao erro na NFC-e
             }
           } catch (updateError) {
-            console.error('❌ FRONTEND: Erro ao atualizar venda com erro:', updateError);
+            // Erro ao atualizar venda com erro
           }
 
           // ✅ NOVO: Mostrar modal de erro e parar aqui
           setErroProcessamento(mensagemErroEspecifica);
           setEtapaProcessamento(`Erro na NFC-e: ${mensagemErroEspecifica}`);
           setStatusProcessamento('erro');
-          console.log('🛑 FRONTEND: Erro na NFC-e - mostrando modal de erro e limpando carrinho silenciosamente');
 
           // ✅ NOVO: Limpar carrinho silenciosamente (sem toast de sucesso)
           setCarrinho([]);
@@ -9356,7 +9223,6 @@ const PDVPage: React.FC = () => {
 
       // VERIFICAR SE É FINALIZAÇÃO COM IMPRESSÃO
       if (tipoFinalizacao === 'finalizar_com_impressao') {
-        console.log('🖨️ FRONTEND: Preparando dados para impressão');
         setEtapaProcessamento('Carregando dados da empresa...');
 
         try {
@@ -9371,7 +9237,6 @@ const PDVPage: React.FC = () => {
             throw new Error('Dados da empresa não encontrados para impressão');
           }
 
-          console.log('🏢 FRONTEND: Dados da empresa carregados para impressão:', empresaData.razao_social);
           setEtapaProcessamento('Preparando cupom para impressão...');
 
           // Preparar dados completos para impressão
@@ -13784,7 +13649,6 @@ const PDVPage: React.FC = () => {
                         }
                         // Proteção contra duplo clique
                         if (showProcessandoVenda) {
-                          console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                           return;
                         }
                         verificarPixEFinalizar('nfce_com_impressao');
@@ -13815,7 +13679,6 @@ const PDVPage: React.FC = () => {
                         }
                         // Proteção contra duplo clique
                         if (showProcessandoVenda) {
-                          console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                           return;
                         }
                         verificarPixEFinalizar('nfce_sem_impressao');
@@ -13846,7 +13709,6 @@ const PDVPage: React.FC = () => {
                         }
                         // Proteção contra duplo clique
                         if (showProcessandoVenda) {
-                          console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                           return;
                         }
                         finalizarVendaCompleta('nfce_producao');
@@ -13877,7 +13739,6 @@ const PDVPage: React.FC = () => {
                         onClick={() => {
                           // Proteção contra duplo clique
                           if (showProcessandoVenda) {
-                            console.log('🛑 FRONTEND: Bloqueando duplo clique - venda já está sendo processada');
                             return;
                           }
                           finalizarVendaCompleta('producao');
@@ -13968,13 +13829,13 @@ const PDVPage: React.FC = () => {
                           setTipoDocumento('cpf');
                           setCpfCnpjNota(formatCpf(documentoLimpo));
                           setClienteEncontrado(cliente);
-                          console.log('🎯 PDV: CPF do cliente preenchido automaticamente na Nota Fiscal Paulista:', formatCpf(documentoLimpo));
+                          // CPF preenchido automaticamente
                         } else if (documentoLimpo.length === 14) {
                           // CNPJ
                           setTipoDocumento('cnpj');
                           setCpfCnpjNota(formatCnpj(documentoLimpo));
                           setClienteEncontrado(cliente);
-                          console.log('🎯 PDV: CNPJ do cliente preenchido automaticamente na Nota Fiscal Paulista:', formatCnpj(documentoLimpo));
+                          // CNPJ preenchido automaticamente
                         }
                         setErroValidacao(''); // Limpar qualquer erro anterior
                       }
@@ -14095,11 +13956,8 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    console.log('🚀 CONFIRMAR VENDA CLICADO');
-
                     // Proteção contra duplo clique
                     if (showProcessandoVenda) {
-                      console.log('🛑 Venda já sendo processada');
                       return;
                     }
 
@@ -15950,7 +15808,6 @@ const PDVPage: React.FC = () => {
                                     }
                                   }
                                 } catch (error) {
-                                  console.error('Erro ao carregar série NFC-e do usuário:', error);
                                   setSerieNfce(1); // Fallback para série 1
                                 }
                               }}
@@ -19947,8 +19804,7 @@ const PDVPage: React.FC = () => {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(qrCodePix);
-                      // Aqui você pode adicionar um toast de sucesso
-                      console.log('Código PIX copiado!');
+                      // Código PIX copiado
                     }}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 px-3 rounded transition-colors"
                   >
