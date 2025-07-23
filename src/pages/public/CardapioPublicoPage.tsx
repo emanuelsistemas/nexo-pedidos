@@ -1401,6 +1401,24 @@ const CardapioPublicoPage: React.FC = () => {
   } | null>(null);
   const [mostrarTarjaPedido, setMostrarTarjaPedido] = useState(false);
 
+  // ✅ NOVO: Estado para múltiplos pedidos
+  const [pedidosAtivos, setPedidosAtivos] = useState<Array<{
+    id: string;
+    numero_pedido: string;
+    status_pedido: string;
+    data_pedido: string;
+    valor_total: number;
+  }>>([]);
+
+  // ✅ DEBUG: Log do estado dos pedidos
+  useEffect(() => {
+    console.log('🛒 Estado dos pedidos ativos:', {
+      mostrarTarjaPedido,
+      pedidosAtivos: pedidosAtivos.length,
+      pedidos: pedidosAtivos
+    });
+  }, [mostrarTarjaPedido, pedidosAtivos]);
+
   // Funções para observações
   const abrirModalObservacao = (produtoId: string, itemId?: string) => {
     setProdutoObservacaoAtual(itemId || produtoId);
@@ -5280,8 +5298,16 @@ const CardapioPublicoPage: React.FC = () => {
       // Ir para o WhatsApp com os dados do cliente
       // handlePedirWhatsApp(); // ✅ COMENTADO TEMPORARIAMENTE
 
+      // ✅ SALVAR PEDIDO NO SISTEMA DE MÚLTIPLOS PEDIDOS
+      console.log('🛒 Salvando pedido no sistema de múltiplos pedidos:', pedidoSalvo);
+      salvarPedidoLocalStorage(pedidoSalvo);
+
       // ✅ ABRIR MODAL DE STATUS DO PEDIDO
       abrirModalStatusPedido(pedidoSalvo);
+
+      // ✅ MOSTRAR TARJA DE PEDIDOS
+      setMostrarTarjaPedido(true);
+      console.log('🛒 Tarja de pedidos ativada, pedidos ativos:', pedidosAtivos.length);
 
       // Limpar carrinho após finalizar pedido
       setQuantidadesProdutos({});
@@ -5518,91 +5544,161 @@ const CardapioPublicoPage: React.FC = () => {
     }, 15000);
   };
 
-  // ✅ FUNÇÕES PARA CONTROLE DE STATUS DO PEDIDO
+  // ✅ FUNÇÕES PARA CONTROLE DE STATUS DO PEDIDO - MÚLTIPLOS PEDIDOS
   const salvarPedidoLocalStorage = (pedido: any) => {
-    // ✅ USAR SLUG COMO CHAVE PRINCIPAL (igual à taxa de entrega)
-    const chaveSlug = `pedido_status_slug_${slug}`;
-    const chaveEmpresaId = empresaId ? `pedido_status_${empresaId}` : null;
+    // ✅ USAR SLUG COMO CHAVE PRINCIPAL para lista de pedidos
+    const chaveSlug = `pedidos_ativos_slug_${slug}`;
+    const chaveEmpresaId = empresaId ? `pedidos_ativos_${empresaId}` : null;
 
+    try {
+      // Carregar pedidos existentes
+      let pedidosExistentes: any[] = [];
 
+      // Tentar carregar por slug primeiro
+      const pedidosSlugStr = localStorage.getItem(chaveSlug);
+      if (pedidosSlugStr) {
+        pedidosExistentes = JSON.parse(pedidosSlugStr);
+      }
 
-    // Salvar com slug (chave principal)
-    localStorage.setItem(chaveSlug, JSON.stringify(pedido));
+      // Verificar se o pedido já existe na lista
+      const indicePedidoExistente = pedidosExistentes.findIndex(p => p.id === pedido.id);
 
-    // Salvar com empresaId se disponível (compatibilidade)
-    if (chaveEmpresaId) {
-      localStorage.setItem(chaveEmpresaId, JSON.stringify(pedido));
+      if (indicePedidoExistente >= 0) {
+        // Atualizar pedido existente
+        pedidosExistentes[indicePedidoExistente] = pedido;
+      } else {
+        // Adicionar novo pedido no início da lista
+        pedidosExistentes.unshift(pedido);
+      }
+
+      // Manter apenas pedidos não finalizados (pendente, aceito, preparando, pronto)
+      const pedidosAtivos = pedidosExistentes.filter(p =>
+        ['pendente', 'aceito', 'preparando', 'pronto'].includes(p.status_pedido)
+      );
+
+      // Salvar lista atualizada
+      localStorage.setItem(chaveSlug, JSON.stringify(pedidosAtivos));
+
+      // Salvar com empresaId se disponível (compatibilidade)
+      if (chaveEmpresaId) {
+        localStorage.setItem(chaveEmpresaId, JSON.stringify(pedidosAtivos));
+      }
+
+      // Atualizar estado dos pedidos ativos
+      setPedidosAtivos(pedidosAtivos);
+
+      console.log('🛒 Pedidos salvos no localStorage:', pedidosAtivos);
+    } catch (error) {
+      console.error('❌ Erro ao salvar pedidos no localStorage:', error);
     }
-
-    // ✅ BACKUP ADICIONAL COM TIMESTAMP
-    localStorage.setItem(`pedido_backup_slug_${slug}`, JSON.stringify({
-      ...pedido,
-      timestamp_backup: Date.now()
-    }));
   };
 
-  const carregarPedidoLocalStorage = () => {
-
+  const carregarPedidosLocalStorage = () => {
+    console.log('🛒 Carregando pedidos do localStorage, slug:', slug, 'empresaId:', empresaId);
 
     // ✅ PRIORIDADE 1: Tentar carregar por SLUG (mais confiável)
     if (slug) {
-      const chaveSlug = `pedido_status_slug_${slug}`;
-      const pedidoSlug = localStorage.getItem(chaveSlug);
+      const chaveSlug = `pedidos_ativos_slug_${slug}`;
+      const pedidosSlugStr = localStorage.getItem(chaveSlug);
+      console.log('🛒 Tentando carregar por slug:', chaveSlug, 'resultado:', pedidosSlugStr);
 
-      if (pedidoSlug) {
+      if (pedidosSlugStr) {
         try {
-          const pedido = JSON.parse(pedidoSlug);
-
-          return pedido;
+          const pedidos = JSON.parse(pedidosSlugStr);
+          console.log('🛒 Pedidos carregados por slug:', pedidos);
+          return Array.isArray(pedidos) ? pedidos : [];
         } catch (error) {
-          console.error('❌ Erro ao fazer parse do pedido por slug:', error);
-        }
-      }
-
-      // Tentar backup por slug
-      const backupSlug = localStorage.getItem(`pedido_backup_slug_${slug}`);
-      if (backupSlug) {
-        try {
-          const backup = JSON.parse(backupSlug);
-
-          return backup;
-        } catch (error) {
-          console.error('❌ Erro ao fazer parse do backup por slug:', error);
+          console.error('❌ Erro ao fazer parse dos pedidos por slug:', error);
         }
       }
     }
 
     // ✅ PRIORIDADE 2: Tentar carregar por EMPRESA_ID (compatibilidade)
     if (empresaId) {
-      const pedidoEmpresa = localStorage.getItem(`pedido_status_${empresaId}`);
-      if (pedidoEmpresa) {
+      const pedidosEmpresaStr = localStorage.getItem(`pedidos_ativos_${empresaId}`);
+      if (pedidosEmpresaStr) {
         try {
-          const pedido = JSON.parse(pedidoEmpresa);
-
-          return pedido;
+          const pedidos = JSON.parse(pedidosEmpresaStr);
+          return Array.isArray(pedidos) ? pedidos : [];
         } catch (error) {
-          console.error('❌ Erro ao fazer parse do pedido por empresaId:', error);
+          console.error('❌ Erro ao fazer parse dos pedidos por empresaId:', error);
         }
       }
     }
 
-
-    return null;
-  };
-
-  const limparPedidoLocalStorage = () => {
-
-
-    // Limpar por slug
+    // ✅ COMPATIBILIDADE: Tentar carregar pedido único antigo e converter para array
     if (slug) {
-      localStorage.removeItem(`pedido_status_slug_${slug}`);
-      localStorage.removeItem(`pedido_backup_slug_${slug}`);
+      const pedidoUnicoSlug = localStorage.getItem(`pedido_status_slug_${slug}`);
+      console.log('🛒 Tentando carregar pedido único por slug:', `pedido_status_slug_${slug}`, 'resultado:', pedidoUnicoSlug);
+      if (pedidoUnicoSlug) {
+        try {
+          const pedido = JSON.parse(pedidoUnicoSlug);
+          console.log('🛒 Pedido único convertido para array:', [pedido]);
+          return [pedido]; // Converter para array
+        } catch (error) {
+          console.error('❌ Erro ao fazer parse do pedido único por slug:', error);
+        }
+      }
     }
 
-    // Limpar por empresaId (compatibilidade)
     if (empresaId) {
-      localStorage.removeItem(`pedido_status_${empresaId}`);
-      localStorage.removeItem(`pedido_backup_${empresaId}`);
+      const pedidoUnicoEmpresa = localStorage.getItem(`pedido_status_${empresaId}`);
+      console.log('🛒 Tentando carregar pedido único por empresaId:', `pedido_status_${empresaId}`, 'resultado:', pedidoUnicoEmpresa);
+      if (pedidoUnicoEmpresa) {
+        try {
+          const pedido = JSON.parse(pedidoUnicoEmpresa);
+          console.log('🛒 Pedido único por empresaId convertido para array:', [pedido]);
+          return [pedido]; // Converter para array
+        } catch (error) {
+          console.error('❌ Erro ao fazer parse do pedido único por empresaId:', error);
+        }
+      }
+    }
+
+    console.log('🛒 Nenhum pedido encontrado no localStorage');
+    return [];
+  };
+
+  const limparPedidoLocalStorage = (pedidoId?: string) => {
+    if (pedidoId) {
+      // Remover apenas um pedido específico
+      const pedidosAtuais = carregarPedidosLocalStorage();
+      const pedidosFiltrados = pedidosAtuais.filter(p => p.id !== pedidoId);
+
+      // Salvar lista atualizada
+      if (slug) {
+        const chaveSlug = `pedidos_ativos_slug_${slug}`;
+        localStorage.setItem(chaveSlug, JSON.stringify(pedidosFiltrados));
+      }
+      if (empresaId) {
+        const chaveEmpresaId = `pedidos_ativos_${empresaId}`;
+        localStorage.setItem(chaveEmpresaId, JSON.stringify(pedidosFiltrados));
+      }
+
+      // Atualizar estado
+      setPedidosAtivos(pedidosFiltrados);
+
+      // Se removeu o pedido atual, limpar também
+      if (pedidoAtual?.id === pedidoId) {
+        setPedidoAtual(null);
+      }
+    } else {
+      // Limpar todos os pedidos
+      if (slug) {
+        localStorage.removeItem(`pedidos_ativos_slug_${slug}`);
+        localStorage.removeItem(`pedido_status_slug_${slug}`); // Compatibilidade
+        localStorage.removeItem(`pedido_backup_slug_${slug}`); // Compatibilidade
+      }
+
+      if (empresaId) {
+        localStorage.removeItem(`pedidos_ativos_${empresaId}`);
+        localStorage.removeItem(`pedido_status_${empresaId}`); // Compatibilidade
+        localStorage.removeItem(`pedido_backup_${empresaId}`); // Compatibilidade
+      }
+
+      // Limpar estados
+      setPedidosAtivos([]);
+      setPedidoAtual(null);
     }
   };
 
@@ -5610,7 +5706,7 @@ const CardapioPublicoPage: React.FC = () => {
     setPedidoAtual(pedido);
     setModalStatusPedidoAberto(true);
     setMostrarTarjaPedido(false);
-    salvarPedidoLocalStorage(pedido);
+    // Não precisa salvar novamente aqui, já foi salvo na finalização
   };
 
   const fecharModalStatusPedido = () => {
@@ -5625,9 +5721,18 @@ const CardapioPublicoPage: React.FC = () => {
 
   const finalizarAcompanhamentoPedido = () => {
     setModalStatusPedidoAberto(false);
-    setMostrarTarjaPedido(false);
+
+    // Se há apenas um pedido, ocultar a tarja
+    if (pedidosAtivos.length <= 1) {
+      setMostrarTarjaPedido(false);
+    }
+
+    // Remover o pedido atual da lista
+    if (pedidoAtual?.id) {
+      limparPedidoLocalStorage(pedidoAtual.id);
+    }
+
     setPedidoAtual(null);
-    limparPedidoLocalStorage();
   };
 
   // ✅ FUNÇÃO PARA VERIFICAR STATUS MANUALMENTE
@@ -5743,28 +5848,46 @@ const CardapioPublicoPage: React.FC = () => {
     };
   }, [pedidoAtual?.id, pedidoAtual?.status_pedido, empresaId]);
 
-  // Carregar pedido do localStorage ao inicializar
+  // Carregar pedidos do localStorage ao inicializar
   useEffect(() => {
+    console.log('🛒 useEffect carregamento inicial, slug:', slug, 'empresaId:', empresaId);
     if (!slug) {
+      console.log('🛒 Slug não disponível, saindo do useEffect');
       return;
     }
 
-    const pedidoSalvo = carregarPedidoLocalStorage();
-    if (pedidoSalvo) {
-      setPedidoAtual(pedidoSalvo);
+    const pedidosSalvos = carregarPedidosLocalStorage();
+    console.log('🛒 Pedidos salvos carregados:', pedidosSalvos);
+
+    if (pedidosSalvos.length > 0) {
+      console.log('🛒 Definindo pedidos ativos e mostrando tarja');
+      setPedidosAtivos(pedidosSalvos);
       setMostrarTarjaPedido(true);
+
+      // Se não há pedido atual selecionado, selecionar o mais recente
+      if (!pedidoAtual) {
+        console.log('🛒 Definindo pedido atual como o mais recente:', pedidosSalvos[0]);
+        setPedidoAtual(pedidosSalvos[0]);
+      }
     } else {
+      console.log('🛒 Nenhum pedido salvo, ocultando tarja');
       setMostrarTarjaPedido(false);
+      setPedidosAtivos([]);
     }
   }, [slug, empresaId]); // ✅ Depende de ambos: slug (principal) e empresaId (backup)
 
   // ✅ VERIFICAÇÃO ADICIONAL QUANDO EMPRESA É CARREGADA
   useEffect(() => {
-    if (empresa?.id && !pedidoAtual) {
-      const pedidoSalvo = carregarPedidoLocalStorage();
-      if (pedidoSalvo) {
-        setPedidoAtual(pedidoSalvo);
+    if (empresa?.id && pedidosAtivos.length === 0) {
+      const pedidosSalvos = carregarPedidosLocalStorage();
+      if (pedidosSalvos.length > 0) {
+        setPedidosAtivos(pedidosSalvos);
         setMostrarTarjaPedido(true);
+
+        // Se não há pedido atual selecionado, selecionar o mais recente
+        if (!pedidoAtual) {
+          setPedidoAtual(pedidosSalvos[0]);
+        }
       }
     }
   }, [empresa?.id]);
@@ -6289,31 +6412,59 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Balão Flutuante do Pedido Ativo */}
-      {mostrarTarjaPedido && pedidoAtual && (
+      {/* Balão Flutuante dos Pedidos Ativos - MÚLTIPLOS PEDIDOS */}
+      {mostrarTarjaPedido && pedidosAtivos.length > 0 && (
         <div className="fixed bottom-6 right-6 z-50">
-          <button
-            onClick={() => setModalStatusPedidoAberto(true)}
-            className="bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group"
-          >
-            <div className="flex items-center justify-center px-4 py-3">
-              {/* Conteúdo */}
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold">
-                  #{pedidoAtual.numero_pedido}
-                </span>
-                <div className="w-2 h-2 bg-white/80 rounded-full"></div>
-              </div>
-            </div>
+          <div className="flex flex-col gap-2 items-end">
+            {pedidosAtivos.map((pedido, index) => (
+              <button
+                key={pedido.id}
+                onClick={() => {
+                  setPedidoAtual(pedido);
+                  setModalStatusPedidoAberto(true);
+                }}
+                className={`bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 active:scale-95 group ${
+                  index > 0 ? 'ml-2' : ''
+                }`}
+                style={{
+                  animationDelay: `${index * 100}ms`,
+                  animation: 'fadeInUp 0.5s ease-out forwards'
+                }}
+              >
+                <div className="flex items-center justify-center px-4 py-3">
+                  {/* Conteúdo */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold">
+                      #{pedido.numero_pedido}
+                    </span>
+                    <div className="w-2 h-2 bg-white/80 rounded-full animate-pulse"></div>
+                  </div>
+                </div>
 
-            {/* Tooltip */}
-            <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-              Acompanhar Pedido
-              <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
-            </div>
-          </button>
+                {/* Tooltip */}
+                <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
+                  Acompanhar Pedido #{pedido.numero_pedido}
+                  <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
+
+      {/* Estilos CSS para animação dos balões */}
+      <style>{`
+        @keyframes fadeInUp {
+          0% {
+            opacity: 0;
+            transform: translateY(20px) scale(0.8);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
 
       {/* Header com gradiente - Oculto quando carrinho está aberto */}
       <div className={`relative ${config.modo_escuro ? 'bg-gradient-to-r from-gray-800 via-gray-900 to-gray-800' : 'bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800'} shadow-xl transition-all duration-300 ${

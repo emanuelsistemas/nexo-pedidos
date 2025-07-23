@@ -17,11 +17,13 @@ interface PedidoCardapio {
 interface UseCardapioDigitalNotificationsProps {
   empresaId: string;
   enabled?: boolean;
+  onPedidoChange?: () => void; // Callback para quando houver mudanças nos pedidos
 }
 
 export const useCardapioDigitalNotifications = ({
   empresaId,
-  enabled = true
+  enabled = true,
+  onPedidoChange
 }: UseCardapioDigitalNotificationsProps) => {
   const [pedidosPendentes, setPedidosPendentes] = useState<PedidoCardapio[]>([]);
   const [contadorPendentes, setContadorPendentes] = useState(0);
@@ -29,6 +31,7 @@ export const useCardapioDigitalNotifications = ({
   const [somContinuoAtivo, setSomContinuoAtivo] = useState(false);
   const [audioHabilitado, setAudioHabilitado] = useState(false);
   const [somDesabilitadoPeloUsuario, setSomDesabilitadoPeloUsuario] = useState(false);
+  const [pedidosProcessando, setPedidosProcessando] = useState<Set<string>>(new Set());
 
   // ✅ HOOK DE SOM PARA NOTIFICAÇÕES COM CONTROLES
   const [playNotificationSound, { stop: stopNotificationSound, isPlaying }] = useSound('/sounds/notification.mp3', {
@@ -309,10 +312,15 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ ACEITAR PEDIDO
   const aceitarPedido = useCallback(async (pedidoId: string) => {
+    if (pedidosProcessando.has(pedidoId)) return false;
+
     try {
+      // Adicionar pedido ao conjunto de processamento
+      setPedidosProcessando(prev => new Set(prev).add(pedidoId));
+
       const { error } = await supabase
         .from('cardapio_digital')
-        .update({ 
+        .update({
           status_pedido: 'confirmado',
           data_confirmacao: new Date().toISOString()
         })
@@ -325,20 +333,38 @@ export const useCardapioDigitalNotifications = ({
 
       showMessage('success', 'Pedido aceito com sucesso!');
       await carregarPedidosPendentes(); // Recarregar lista
+
+      // Notificar componente pai sobre mudança
+      if (onPedidoChange) {
+        onPedidoChange();
+      }
+
       return true;
 
     } catch (error) {
       showMessage('error', 'Erro ao aceitar pedido');
       return false;
+    } finally {
+      // Remover pedido do conjunto de processamento
+      setPedidosProcessando(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pedidoId);
+        return newSet;
+      });
     }
-  }, [carregarPedidosPendentes]);
+  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
 
   // ✅ REJEITAR PEDIDO
   const rejeitarPedido = useCallback(async (pedidoId: string, motivo?: string) => {
+    if (pedidosProcessando.has(pedidoId)) return false;
+
     try {
+      // Adicionar pedido ao conjunto de processamento
+      setPedidosProcessando(prev => new Set(prev).add(pedidoId));
+
       const { error } = await supabase
         .from('cardapio_digital')
-        .update({ 
+        .update({
           status_pedido: 'cancelado',
           observacao_pedido: motivo ? `Rejeitado: ${motivo}` : 'Pedido rejeitado pelo estabelecimento'
         })
@@ -351,13 +377,26 @@ export const useCardapioDigitalNotifications = ({
 
       showMessage('success', 'Pedido rejeitado');
       await carregarPedidosPendentes(); // Recarregar lista
+
+      // Notificar componente pai sobre mudança
+      if (onPedidoChange) {
+        onPedidoChange();
+      }
+
       return true;
 
     } catch (error) {
       showMessage('error', 'Erro ao rejeitar pedido');
       return false;
+    } finally {
+      // Remover pedido do conjunto de processamento
+      setPedidosProcessando(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pedidoId);
+        return newSet;
+      });
     }
-  }, [carregarPedidosPendentes]);
+  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
 
   // ✅ CONFIGURAR REALTIME PARA NOVOS PEDIDOS
   useEffect(() => {
@@ -387,6 +426,11 @@ export const useCardapioDigitalNotifications = ({
 
           // Recarregar lista de pedidos
           carregarPedidosPendentes();
+
+          // Notificar componente pai sobre mudança
+          if (onPedidoChange) {
+            onPedidoChange();
+          }
         }
       )
       .on(
@@ -402,6 +446,11 @@ export const useCardapioDigitalNotifications = ({
           const pedidoAtualizado = payload.new as PedidoCardapio;
           if (payload.old && (payload.old as any).status_pedido !== pedidoAtualizado.status_pedido) {
             carregarPedidosPendentes();
+
+            // Notificar componente pai sobre mudança
+            if (onPedidoChange) {
+              onPedidoChange();
+            }
           }
         }
       )
@@ -490,6 +539,7 @@ export const useCardapioDigitalNotifications = ({
     desabilitarSomPeloUsuario,
     reabilitarSomPeloUsuario,
     somDesabilitadoPeloUsuario,
-    pararTodosSonsImediatamente
+    pararTodosSonsImediatamente,
+    pedidosProcessando
   };
 };

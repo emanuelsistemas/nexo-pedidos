@@ -200,10 +200,17 @@ const PDVPage: React.FC = () => {
     audioHabilitado,
     desabilitarSomPeloUsuario,
     reabilitarSomPeloUsuario,
-    somDesabilitadoPeloUsuario
+    somDesabilitadoPeloUsuario,
+    pedidosProcessando
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
-    enabled: !!empresaData?.id // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
+    enabled: !!empresaData?.id, // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
+    onPedidoChange: () => {
+      // ✅ RECARREGAR LISTA COMPLETA QUANDO HOUVER MUDANÇAS NOS PEDIDOS
+      if (showCardapioDigitalModal) {
+        carregarTodosPedidosCardapio();
+      }
+    }
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
@@ -3010,6 +3017,29 @@ const PDVPage: React.FC = () => {
       setModalSomInicialJaExibido(true);
     }
   }, [pdvConfig?.cardapio_digital, audioHabilitado, somDesabilitadoPeloUsuario, modalSomInicialJaExibido, pdvConfig]);
+
+  // ✅ FUNÇÃO MELHORADA PARA ACEITAR PEDIDO COM MUDANÇA DE ABA
+  const aceitarPedidoComMudancaAba = async (pedidoId: string) => {
+    const sucesso = await aceitarPedido(pedidoId);
+    if (sucesso) {
+      // Mudar para aba "Aceitos" após aceitar
+      setTimeout(() => {
+        setStatusFilterCardapio('aceitos');
+      }, 500); // Delay para dar tempo da lista atualizar
+    }
+  };
+
+  // ✅ FUNÇÃO MELHORADA PARA REJEITAR PEDIDO COM MUDANÇA DE ABA
+  const rejeitarPedidoComMudancaAba = async (pedidoId: string) => {
+    const sucesso = await rejeitarPedido(pedidoId);
+    if (sucesso) {
+      // Manter na aba "Aguardando" para ver outros pedidos pendentes
+      // Ou mudar para "Finalizados" se preferir ver os rejeitados
+      // setTimeout(() => {
+      //   setStatusFilterCardapio('finalizados');
+      // }, 500);
+    }
+  };
 
   // Função para importar pedido para o carrinho (com confirmação)
   const importarPedidoParaCarrinho = (pedido: any) => {
@@ -20059,16 +20089,40 @@ const PDVPage: React.FC = () => {
                             {pedido.status_pedido === 'pendente' && (
                               <div className="flex gap-2">
                                 <button
-                                  onClick={() => aceitarPedido(pedido.id)}
-                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm py-2 px-3 rounded transition-colors"
+                                  onClick={() => aceitarPedidoComMudancaAba(pedido.id)}
+                                  disabled={pedidosProcessando.has(pedido.id)}
+                                  className={`flex-1 text-white text-sm py-2 px-3 rounded transition-colors flex items-center justify-center gap-2 ${
+                                    pedidosProcessando.has(pedido.id)
+                                      ? 'bg-gray-500 cursor-not-allowed'
+                                      : 'bg-green-600 hover:bg-green-700'
+                                  }`}
                                 >
-                                  ✅ Aceitar
+                                  {pedidosProcessando.has(pedido.id) ? (
+                                    <>
+                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                      Aceitando...
+                                    </>
+                                  ) : (
+                                    <>✅ Aceitar</>
+                                  )}
                                 </button>
                                 <button
-                                  onClick={() => rejeitarPedido(pedido.id)}
-                                  className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm py-2 px-3 rounded transition-colors"
+                                  onClick={() => rejeitarPedidoComMudancaAba(pedido.id)}
+                                  disabled={pedidosProcessando.has(pedido.id)}
+                                  className={`flex-1 text-white text-sm py-2 px-3 rounded transition-colors flex items-center justify-center gap-2 ${
+                                    pedidosProcessando.has(pedido.id)
+                                      ? 'bg-gray-500 cursor-not-allowed'
+                                      : 'bg-red-600 hover:bg-red-700'
+                                  }`}
                                 >
-                                  ❌ Rejeitar
+                                  {pedidosProcessando.has(pedido.id) ? (
+                                    <>
+                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                      Rejeitando...
+                                    </>
+                                  ) : (
+                                    <>❌ Rejeitar</>
+                                  )}
                                 </button>
                               </div>
                             )}
