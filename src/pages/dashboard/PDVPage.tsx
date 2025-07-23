@@ -20166,59 +20166,22 @@ const PDVPage: React.FC = () => {
                                 : 'border-gray-700 hover:border-orange-500/50'
                             }`}
                           >
-                            <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center justify-between mb-3">
                               <div>
                                 <h4 className="font-semibold text-white">#{pedido.numero_pedido}</h4>
-                                <p className="text-sm text-gray-400">{pedido.nome_cliente}</p>
-                                <p className="text-xs text-gray-500">{pedido.telefone_cliente}</p>
                               </div>
                               <div className="text-right">
                                 <p className="font-bold text-green-400">{formatarPreco(pedido.valor_total)}</p>
                                 <p className="text-xs text-gray-500">
-                                  {new Date(pedido.data_pedido).toLocaleTimeString('pt-BR', {
+                                  {pedido.data_pedido ? new Date(pedido.data_pedido).toLocaleTimeString('pt-BR', {
                                     hour: '2-digit',
                                     minute: '2-digit'
-                                  })}
+                                  }) : 'Horário não disponível'}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="mb-3">
-                              <p className="text-xs text-gray-400 mb-1">Itens:</p>
-                              <div className="text-sm text-gray-300">
-                                {pedido.itens_pedido?.slice(0, 2).map((item: any, index: number) => (
-                                  <div key={index} className="truncate">
-                                    {item.quantidade}x {item.produto_nome}
-                                  </div>
-                                ))}
-                                {pedido.itens_pedido?.length > 2 && (
-                                  <div className="text-xs text-gray-500">
-                                    +{pedido.itens_pedido.length - 2} item(s)
-                                  </div>
-                                )}
-                              </div>
-                            </div>
 
-                            {/* Status Badge */}
-                            <div className="mb-3">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                pedido.status_pedido === 'pendente'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : pedido.status_pedido === 'confirmado'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : pedido.status_pedido === 'entregue'
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {pedido.status_pedido === 'pendente' && '⏳ Pendente'}
-                                {pedido.status_pedido === 'confirmado' && '✅ Confirmado'}
-                                {pedido.status_pedido === 'preparando' && '👨‍🍳 Preparando'}
-                                {pedido.status_pedido === 'pronto' && '🍽️ Pronto'}
-                                {pedido.status_pedido === 'entregue' && '🚚 Entregue'}
-                                {pedido.status_pedido === 'cancelado' && '❌ Cancelado'}
-                                {!['pendente', 'confirmado', 'preparando', 'pronto', 'entregue', 'cancelado'].includes(pedido.status_pedido) && pedido.status_pedido}
-                              </span>
-                            </div>
 
                             {/* Botões de Ação baseados no status */}
                             {pedido.status_pedido === 'pendente' && (
@@ -20374,11 +20337,11 @@ const PDVPage: React.FC = () => {
                       <div className="bg-gray-800/50 border-b border-gray-700 p-6">
                         <div className="flex items-start justify-between mb-4">
                           <div>
-                            <h2 className="text-2xl font-bold text-white">#{pedidoSelecionado.numero_pedido}</h2>
+                            <h2 className="text-2xl font-bold text-white">#{pedidoSelecionado.numero_pedido || 'S/N'}</h2>
                             <p className="text-gray-400">Pedido realizado em {pedidoSelecionado.data_pedido ? new Date(pedidoSelecionado.data_pedido).toLocaleString('pt-BR') : 'Data não disponível'}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-2xl font-bold text-green-400">{formatarPreco(pedidoSelecionado.valor_total)}</p>
+                            <p className="text-2xl font-bold text-green-400">{formatarPreco(pedidoSelecionado.valor_total || 0)}</p>
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                               pedidoSelecionado.status_pedido === 'pendente'
                                 ? 'bg-yellow-100 text-yellow-800'
@@ -20464,9 +20427,9 @@ const PDVPage: React.FC = () => {
                             <div key={index} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <h4 className="font-medium text-white">{item.nome_produto}</h4>
+                                  <h4 className="font-medium text-white">{item.nome_produto || 'Produto sem nome'}</h4>
                                   <p className="text-sm text-gray-400">
-                                    Quantidade: {item.quantidade} x {formatarPreco(item.preco_unitario)}
+                                    Quantidade: {item.quantidade || 0} x {formatarPreco(item.preco_unitario || 0)}
                                   </p>
                                   {item.observacoes && (
                                     <p className="text-xs text-gray-500 mt-1">Obs: {item.observacoes}</p>
@@ -20476,14 +20439,14 @@ const PDVPage: React.FC = () => {
                                       <p className="text-xs text-gray-400 mb-1">Adicionais:</p>
                                       {item.adicionais.map((adicional: any, idx: number) => (
                                         <p key={idx} className="text-xs text-gray-500">
-                                          + {adicional.nome} ({formatarPreco(adicional.preco)})
+                                          + {adicional.nome || 'Adicional'} ({formatarPreco(adicional.preco || 0)})
                                         </p>
                                       ))}
                                     </div>
                                   )}
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-semibold text-green-400">{formatarPreco(item.subtotal)}</p>
+                                  <p className="font-semibold text-green-400">{formatarPreco(item.subtotal || 0)}</p>
                                 </div>
                               </div>
                             </div>
@@ -20501,24 +20464,24 @@ const PDVPage: React.FC = () => {
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
                               <span className="text-gray-400">Subtotal produtos:</span>
-                              <span className="text-white">{formatarPreco(pedidoSelecionado.valor_produtos || pedidoSelecionado.valor_total)}</span>
+                              <span className="text-white">{formatarPreco(pedidoSelecionado.valor_produtos || pedidoSelecionado.valor_total || 0)}</span>
                             </div>
-                            {pedidoSelecionado.valor_desconto_cupom > 0 && (
+                            {(pedidoSelecionado.valor_desconto_cupom || 0) > 0 && (
                               <div className="flex justify-between text-sm">
                                 <span className="text-gray-400">Desconto cupom:</span>
-                                <span className="text-red-400">-{formatarPreco(pedidoSelecionado.valor_desconto_cupom)}</span>
+                                <span className="text-red-400">-{formatarPreco(pedidoSelecionado.valor_desconto_cupom || 0)}</span>
                               </div>
                             )}
-                            {pedidoSelecionado.valor_taxa_entrega > 0 && (
+                            {(pedidoSelecionado.valor_taxa_entrega || 0) > 0 && (
                               <div className="flex justify-between text-sm">
                                 <span className="text-gray-400">Taxa de entrega:</span>
-                                <span className="text-white">{formatarPreco(pedidoSelecionado.valor_taxa_entrega)}</span>
+                                <span className="text-white">{formatarPreco(pedidoSelecionado.valor_taxa_entrega || 0)}</span>
                               </div>
                             )}
                             <div className="border-t border-gray-600 pt-2">
                               <div className="flex justify-between font-semibold">
                                 <span className="text-white">Total:</span>
-                                <span className="text-green-400 text-lg">{formatarPreco(pedidoSelecionado.valor_total)}</span>
+                                <span className="text-green-400 text-lg">{formatarPreco(pedidoSelecionado.valor_total || 0)}</span>
                               </div>
                             </div>
                           </div>
