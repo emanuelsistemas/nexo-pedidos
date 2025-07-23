@@ -10557,13 +10557,6 @@ const CardapioPublicoPage: React.FC = () => {
                             )}
                           </div>
                         )}
-                        {formaPagamentoSelecionada.max_parcelas > 1 && (
-                          <p className={`text-xs ${
-                            config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                            Até {formaPagamentoSelecionada.max_parcelas}x
-                          </p>
-                        )}
                       </div>
                       <button
                         onClick={removerFormaPagamento}
@@ -11126,15 +11119,6 @@ const CardapioPublicoPage: React.FC = () => {
                               config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                             }`}>
                               {forma.tipo_chave_pix}: {forma.chave_pix}
-                            </p>
-                          )}
-
-                          {/* Informações de parcelamento */}
-                          {(forma.max_parcelas || forma.forma_pagamento_opcoes.max_parcelas) > 1 && (
-                            <p className={`text-sm mt-1 ${
-                              config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                            }`}>
-                              Até {forma.max_parcelas || forma.forma_pagamento_opcoes.max_parcelas}x
                             </p>
                           )}
                         </div>

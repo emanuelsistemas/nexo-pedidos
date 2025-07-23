@@ -201,7 +201,10 @@ const PDVPage: React.FC = () => {
     desabilitarSomPeloUsuario,
     reabilitarSomPeloUsuario,
     somDesabilitadoPeloUsuario,
-    pedidosProcessando
+    pedidosProcessando,
+    marcarComoPreparando,
+    marcarComoPronto,
+    marcarComoEntregue
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
     enabled: !!empresaData?.id, // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
@@ -216,7 +219,7 @@ const PDVPage: React.FC = () => {
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
-  const [statusFilterCardapio, setStatusFilterCardapio] = useState<string>('pendente');
+  const [statusFilterCardapio, setStatusFilterCardapio] = useState<string>('aguardando');
   const [searchCardapio, setSearchCardapio] = useState('');
   const [showFiltersCardapio, setShowFiltersCardapio] = useState(false);
   const [dataInicioCardapio, setDataInicioCardapio] = useState('');
@@ -326,7 +329,10 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA CANCELAR HABILITAÇÃO DO SOM INICIAL
   const cancelarHabilitarSomInicial = () => {
+    // ✅ CORREÇÃO: Desabilitar som pelo usuário quando escolher "Agora Não"
+    desabilitarSomPeloUsuario();
     setShowModalHabilitarSomInicial(false);
+    toast.info('Som do cardápio desabilitado');
   };
 
   // ✅ LOG PARA DEBUG
@@ -2948,6 +2954,7 @@ const PDVPage: React.FC = () => {
   const aplicarFiltrosCardapio = (pedidosParaFiltrar = todosOsPedidosCardapio) => {
     console.log('🔍 aplicarFiltrosCardapio - Status atual:', statusFilterCardapio);
     console.log('🔍 aplicarFiltrosCardapio - Pedidos para filtrar:', pedidosParaFiltrar.length);
+    console.log('🔍 aplicarFiltrosCardapio - Pedidos recebidos:', pedidosParaFiltrar.map(p => ({ id: p.id, numero: p.numero_pedido, status: p.status_pedido })));
 
     let filtered = [...pedidosParaFiltrar];
 
@@ -2955,14 +2962,40 @@ const PDVPage: React.FC = () => {
     if (statusFilterCardapio !== 'todos') {
       const statusMap = {
         'aguardando': 'pendente',
-        'aceitos': 'confirmado',
-        'finalizados': 'entregue'
+        'confirmado': 'confirmado',
+        'preparando': 'preparando',
+        'pronto': 'pronto',
+        'entregue': 'entregue',
+        'cancelado': 'cancelado'
       };
       const statusFiltro = statusMap[statusFilterCardapio as keyof typeof statusMap] || statusFilterCardapio;
       console.log('🔍 Filtrando por status:', statusFiltro);
 
       const antesDoFiltro = filtered.length;
-      filtered = filtered.filter(pedido => pedido.status_pedido === statusFiltro);
+
+      // ✅ LOG DETALHADO PARA DEBUG
+      console.log('🔍 DEBUG - Status procurado:', statusFiltro);
+      console.log('🔍 DEBUG - Pedidos antes do filtro:', filtered.map(p => ({
+        numero: p.numero_pedido,
+        status: p.status_pedido,
+        statusTipo: typeof p.status_pedido,
+        comparacao: p.status_pedido === statusFiltro
+      })));
+
+      filtered = filtered.filter(pedido => {
+        const match = pedido.status_pedido === statusFiltro;
+        if (!match) {
+          console.log('🔍 DEBUG - Pedido rejeitado:', {
+            numero: pedido.numero_pedido,
+            statusPedido: pedido.status_pedido,
+            statusFiltro: statusFiltro,
+            tipoStatusPedido: typeof pedido.status_pedido,
+            tipoStatusFiltro: typeof statusFiltro
+          });
+        }
+        return match;
+      });
+
       console.log('🔍 Pedidos após filtro de status:', filtered.length, 'de', antesDoFiltro);
     }
 
@@ -3012,6 +3045,7 @@ const PDVPage: React.FC = () => {
   };
 
   const limparFiltrosCardapio = () => {
+    console.log('🧹 Limpando filtros do cardápio...');
     setStatusFilterCardapio('aguardando');
     setSearchCardapio('');
     setDataInicioCardapio('');
@@ -3029,6 +3063,7 @@ const PDVPage: React.FC = () => {
   // ✅ USEEFFECT PARA CARREGAR PEDIDOS DO CARDÁPIO QUANDO MODAL ABRIR
   useEffect(() => {
     if (showCardapioDigitalModal && empresaData?.id) {
+      console.log('🔄 Modal cardápio aberto - Carregando pedidos...');
       carregarTodosPedidosCardapio();
     }
   }, [showCardapioDigitalModal, empresaData?.id]);
@@ -3063,9 +3098,9 @@ const PDVPage: React.FC = () => {
       // ✅ RECARREGAR LISTA COMPLETA IMEDIATAMENTE
       await carregarTodosPedidosCardapio();
 
-      // Mudar para aba "Aceitos" após aceitar
+      // Mudar para aba "Confirmado" após aceitar
       setTimeout(() => {
-        setStatusFilterCardapio('aceitos');
+        setStatusFilterCardapio('confirmado');
       }, 100); // Delay reduzido
     }
   };
@@ -3077,7 +3112,7 @@ const PDVPage: React.FC = () => {
       // ✅ RECARREGAR LISTA COMPLETA IMEDIATAMENTE
       await carregarTodosPedidosCardapio();
 
-      // Manter na aba "Aguardando" para ver outros pedidos pendentes
+      // Manter na aba "Pendente" para ver outros pedidos pendentes
       // (não mudar de aba para que o usuário veja outros pedidos pendentes)
     }
   };
@@ -19951,11 +19986,14 @@ const PDVPage: React.FC = () => {
                 <div className="w-1/3 border-r border-gray-700 flex flex-col">
                   <div className="p-4 border-b border-gray-700">
                     {/* Menu de Status */}
-                    <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
                       {[
-                        { value: 'aguardando', label: 'Aguardando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length },
-                        { value: 'aceitos', label: 'Aceitos', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length },
-                        { value: 'finalizados', label: 'Finalizados', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length }
+                        { value: 'aguardando', label: 'Pendente', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length },
+                        { value: 'confirmado', label: 'Confirmado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length },
+                        { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length },
+                        { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length },
+                        { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length },
+                        { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length }
                       ].map((status) => (
                         <button
                           key={status.value}
@@ -20055,10 +20093,16 @@ const PDVPage: React.FC = () => {
                           {searchCardapio || dataInicioCardapio || dataFimCardapio
                             ? 'Nenhum pedido encontrado'
                             : statusFilterCardapio === 'aguardando'
-                              ? 'Nenhum pedido aguardando'
-                              : statusFilterCardapio === 'aceitos'
-                                ? 'Nenhum pedido aceito'
-                                : 'Nenhum pedido finalizado'
+                              ? 'Nenhum pedido pendente'
+                              : statusFilterCardapio === 'confirmado'
+                                ? 'Nenhum pedido confirmado'
+                                : statusFilterCardapio === 'preparando'
+                                  ? 'Nenhum pedido sendo preparado'
+                                  : statusFilterCardapio === 'pronto'
+                                    ? 'Nenhum pedido pronto'
+                                    : statusFilterCardapio === 'entregue'
+                                      ? 'Nenhum pedido entregue'
+                                      : 'Nenhum pedido cancelado'
                           }
                         </p>
                         <p className="text-sm mt-1">
@@ -20119,14 +20163,17 @@ const PDVPage: React.FC = () => {
                                       ? 'bg-green-100 text-green-800'
                                       : 'bg-gray-100 text-gray-800'
                               }`}>
-                                {pedido.status_pedido === 'pendente' && '⏳ Aguardando'}
-                                {pedido.status_pedido === 'confirmado' && '✅ Aceito'}
-                                {pedido.status_pedido === 'entregue' && '🎉 Finalizado'}
-                                {!['pendente', 'confirmado', 'entregue'].includes(pedido.status_pedido) && pedido.status_pedido}
+                                {pedido.status_pedido === 'pendente' && '⏳ Pendente'}
+                                {pedido.status_pedido === 'confirmado' && '✅ Confirmado'}
+                                {pedido.status_pedido === 'preparando' && '👨‍🍳 Preparando'}
+                                {pedido.status_pedido === 'pronto' && '🍽️ Pronto'}
+                                {pedido.status_pedido === 'entregue' && '🚚 Entregue'}
+                                {pedido.status_pedido === 'cancelado' && '❌ Cancelado'}
+                                {!['pendente', 'confirmado', 'preparando', 'pronto', 'entregue', 'cancelado'].includes(pedido.status_pedido) && pedido.status_pedido}
                               </span>
                             </div>
 
-                            {/* Botões de Ação - Apenas para pedidos pendentes */}
+                            {/* Botões de Ação baseados no status */}
                             {pedido.status_pedido === 'pendente' && (
                               <div className="flex gap-2">
                                 <button
@@ -20163,6 +20210,96 @@ const PDVPage: React.FC = () => {
                                     </>
                                   ) : (
                                     <>❌ Rejeitar</>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Botões para pedidos confirmados */}
+                            {pedido.status_pedido === 'confirmado' && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={async () => {
+                                    const sucesso = await marcarComoPreparando(pedido.id);
+                                    if (sucesso) {
+                                      await carregarTodosPedidosCardapio();
+                                      setStatusFilterCardapio('preparando');
+                                    }
+                                  }}
+                                  disabled={pedidosProcessando.has(pedido.id)}
+                                  className={`flex-1 text-white text-sm py-2 px-3 rounded transition-colors flex items-center justify-center gap-2 ${
+                                    pedidosProcessando.has(pedido.id)
+                                      ? 'bg-gray-500 cursor-not-allowed'
+                                      : 'bg-orange-600 hover:bg-orange-700'
+                                  }`}
+                                >
+                                  {pedidosProcessando.has(pedido.id) ? (
+                                    <>
+                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                      Preparando...
+                                    </>
+                                  ) : (
+                                    <>👨‍🍳 Preparar</>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Botões para pedidos em preparação */}
+                            {pedido.status_pedido === 'preparando' && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={async () => {
+                                    const sucesso = await marcarComoPronto(pedido.id);
+                                    if (sucesso) {
+                                      await carregarTodosPedidosCardapio();
+                                      setStatusFilterCardapio('pronto');
+                                    }
+                                  }}
+                                  disabled={pedidosProcessando.has(pedido.id)}
+                                  className={`flex-1 text-white text-sm py-2 px-3 rounded transition-colors flex items-center justify-center gap-2 ${
+                                    pedidosProcessando.has(pedido.id)
+                                      ? 'bg-gray-500 cursor-not-allowed'
+                                      : 'bg-blue-600 hover:bg-blue-700'
+                                  }`}
+                                >
+                                  {pedidosProcessando.has(pedido.id) ? (
+                                    <>
+                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                      Finalizando...
+                                    </>
+                                  ) : (
+                                    <>🍽️ Pronto</>
+                                  )}
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Botões para pedidos prontos */}
+                            {pedido.status_pedido === 'pronto' && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={async () => {
+                                    const sucesso = await marcarComoEntregue(pedido.id);
+                                    if (sucesso) {
+                                      await carregarTodosPedidosCardapio();
+                                      setStatusFilterCardapio('entregue');
+                                    }
+                                  }}
+                                  disabled={pedidosProcessando.has(pedido.id)}
+                                  className={`flex-1 text-white text-sm py-2 px-3 rounded transition-colors flex items-center justify-center gap-2 ${
+                                    pedidosProcessando.has(pedido.id)
+                                      ? 'bg-gray-500 cursor-not-allowed'
+                                      : 'bg-purple-600 hover:bg-purple-700'
+                                  }`}
+                                >
+                                  {pedidosProcessando.has(pedido.id) ? (
+                                    <>
+                                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                      Entregando...
+                                    </>
+                                  ) : (
+                                    <>🚚 Entregar</>
                                   )}
                                 </button>
                               </div>

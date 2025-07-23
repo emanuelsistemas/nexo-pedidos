@@ -65,8 +65,8 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ FUNÇÃO PARA TOCAR SOM COM FALLBACK MELHORADO
   const tocarSomNotificacao = useCallback(async (forcado = false) => {
-    // ✅ NOVA VERIFICAÇÃO: Se foi desabilitado pelo usuário, não tocar (mesmo se forçado)
-    if (somDesabilitadoPeloUsuario && !forcado) {
+    // ✅ CORREÇÃO: Se foi desabilitado pelo usuário, NUNCA tocar (mesmo se forçado)
+    if (somDesabilitadoPeloUsuario) {
       return false;
     }
 
@@ -399,6 +399,132 @@ export const useCardapioDigitalNotifications = ({
     }
   }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
 
+  // ✅ MARCAR PEDIDO COMO PREPARANDO
+  const marcarComoPreparando = useCallback(async (pedidoId: string) => {
+    if (pedidosProcessando.has(pedidoId)) return false;
+
+    try {
+      setPedidosProcessando(prev => new Set(prev).add(pedidoId));
+
+      const { error } = await supabase
+        .from('cardapio_digital')
+        .update({
+          status_pedido: 'preparando',
+          data_atualizacao: new Date().toISOString()
+        })
+        .eq('id', pedidoId);
+
+      if (error) {
+        console.error('❌ Erro ao marcar pedido como preparando:', error);
+        showMessage('error', 'Erro ao marcar pedido como preparando');
+        return false;
+      }
+
+      showMessage('success', '👨‍🍳 Pedido marcado como preparando');
+      carregarPedidosPendentes();
+
+      if (onPedidoChange) {
+        onPedidoChange();
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Erro inesperado ao marcar como preparando:', error);
+      showMessage('error', 'Erro inesperado ao marcar pedido como preparando');
+      return false;
+    } finally {
+      setPedidosProcessando(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pedidoId);
+        return newSet;
+      });
+    }
+  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
+
+  // ✅ MARCAR PEDIDO COMO PRONTO
+  const marcarComoPronto = useCallback(async (pedidoId: string) => {
+    if (pedidosProcessando.has(pedidoId)) return false;
+
+    try {
+      setPedidosProcessando(prev => new Set(prev).add(pedidoId));
+
+      const { error } = await supabase
+        .from('cardapio_digital')
+        .update({
+          status_pedido: 'pronto',
+          data_atualizacao: new Date().toISOString()
+        })
+        .eq('id', pedidoId);
+
+      if (error) {
+        console.error('❌ Erro ao marcar pedido como pronto:', error);
+        showMessage('error', 'Erro ao marcar pedido como pronto');
+        return false;
+      }
+
+      showMessage('success', '🍽️ Pedido marcado como pronto');
+      carregarPedidosPendentes();
+
+      if (onPedidoChange) {
+        onPedidoChange();
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Erro inesperado ao marcar como pronto:', error);
+      showMessage('error', 'Erro inesperado ao marcar pedido como pronto');
+      return false;
+    } finally {
+      setPedidosProcessando(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pedidoId);
+        return newSet;
+      });
+    }
+  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
+
+  // ✅ MARCAR PEDIDO COMO ENTREGUE
+  const marcarComoEntregue = useCallback(async (pedidoId: string) => {
+    if (pedidosProcessando.has(pedidoId)) return false;
+
+    try {
+      setPedidosProcessando(prev => new Set(prev).add(pedidoId));
+
+      const { error } = await supabase
+        .from('cardapio_digital')
+        .update({
+          status_pedido: 'entregue',
+          data_atualizacao: new Date().toISOString()
+        })
+        .eq('id', pedidoId);
+
+      if (error) {
+        console.error('❌ Erro ao marcar pedido como entregue:', error);
+        showMessage('error', 'Erro ao marcar pedido como entregue');
+        return false;
+      }
+
+      showMessage('success', '🚚 Pedido marcado como entregue');
+      carregarPedidosPendentes();
+
+      if (onPedidoChange) {
+        onPedidoChange();
+      }
+
+      return true;
+    } catch (error) {
+      console.error('❌ Erro inesperado ao marcar como entregue:', error);
+      showMessage('error', 'Erro inesperado ao marcar pedido como entregue');
+      return false;
+    } finally {
+      setPedidosProcessando(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pedidoId);
+        return newSet;
+      });
+    }
+  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
+
   // ✅ CONFIGURAR REALTIME PARA NOVOS PEDIDOS
   useEffect(() => {
     if (!empresaId || !enabled) {
@@ -544,6 +670,9 @@ export const useCardapioDigitalNotifications = ({
     isLoading,
     aceitarPedido,
     rejeitarPedido,
+    marcarComoPreparando,
+    marcarComoPronto,
+    marcarComoEntregue,
     recarregarPedidos: carregarPedidosPendentes,
     tocarSomNotificacao,
     somContinuoAtivo,
