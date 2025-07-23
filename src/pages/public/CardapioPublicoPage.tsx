@@ -1410,30 +1410,56 @@ const CardapioPublicoPage: React.FC = () => {
     valor_total: number;
   }>>([]);
 
-  // ✅ FUNÇÃO DE TESTE TEMPORÁRIA - REMOVER DEPOIS
-  const adicionarPedidoTeste = () => {
-    const pedidoTeste = {
-      id: 'teste-' + Date.now(),
-      numero_pedido: String(Math.floor(Math.random() * 900000) + 100000).padStart(6, '0'),
-      status_pedido: 'pendente',
-      data_pedido: new Date().toISOString(),
-      valor_total: Math.floor(Math.random() * 50) + 10
-    };
+  // ✅ FUNÇÃO PARA SINCRONIZAR PEDIDOS DO BANCO COM LOCALSTORAGE
+  const sincronizarPedidosComBanco = async () => {
+    if (!empresaId) return;
 
-    salvarPedidoLocalStorage(pedidoTeste);
-    setMostrarTarjaPedido(true);
+    try {
+      console.log('🔄 Sincronizando pedidos com banco de dados...');
+
+      // Buscar todos os pedidos ativos do banco
+      const { data: pedidosBanco, error } = await supabase
+        .from('cardapio_digital')
+        .select('id, numero_pedido, status_pedido, data_pedido, valor_total')
+        .eq('empresa_id', empresaId)
+        .in('status_pedido', ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto'])
+        .order('data_pedido', { ascending: false });
+
+      if (error) {
+        console.error('❌ Erro ao buscar pedidos do banco:', error);
+        return;
+      }
+
+      if (pedidosBanco && pedidosBanco.length > 0) {
+        console.log(`✅ Encontrados ${pedidosBanco.length} pedidos ativos no banco:`, pedidosBanco);
+
+        // Salvar todos os pedidos no localStorage
+        const chaveSlug = `pedidos_ativos_slug_${slug}`;
+        localStorage.setItem(chaveSlug, JSON.stringify(pedidosBanco));
+
+        // Atualizar estado
+        setPedidosAtivos(pedidosBanco);
+        setMostrarTarjaPedido(true);
+
+        console.log('✅ Pedidos sincronizados com sucesso!');
+      } else {
+        console.log('ℹ️ Nenhum pedido ativo encontrado no banco');
+        setPedidosAtivos([]);
+        setMostrarTarjaPedido(false);
+      }
+    } catch (error) {
+      console.error('❌ Erro na sincronização:', error);
+    }
   };
 
-  // ✅ DISPONIBILIZAR FUNÇÃO DE TESTE NO CONSOLE
+  // ✅ SINCRONIZAR PEDIDOS QUANDO EMPRESA FOR CARREGADA
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).adicionarPedidoTeste = adicionarPedidoTeste;
-      (window as any).limparTodosPedidos = () => {
-        limparPedidoLocalStorage();
-        setMostrarTarjaPedido(false);
-      };
+    if (empresaId && slug) {
+      sincronizarPedidosComBanco();
     }
-  }, [slug, empresaId]);
+  }, [empresaId, slug]);
+
+
 
 
 
@@ -5560,6 +5586,68 @@ const CardapioPublicoPage: React.FC = () => {
     }, 15000);
   };
 
+  // ✅ FUNÇÃO PARA RECUPERAR PEDIDOS DE TODAS AS FONTES POSSÍVEIS
+  const recuperarTodosPedidos = () => {
+    const chaveSlug = `pedidos_ativos_slug_${slug}`;
+    const chaveEmpresaId = empresaId ? `pedidos_ativos_${empresaId}` : null;
+    const chaveAntiga = `pedido_status_slug_${slug}`;
+
+    let pedidosEncontrados: any[] = [];
+
+    try {
+      // 1. Tentar carregar por slug (principal)
+      const pedidosSlugStr = localStorage.getItem(chaveSlug);
+      if (pedidosSlugStr) {
+        const pedidosSlug = JSON.parse(pedidosSlugStr);
+        if (Array.isArray(pedidosSlug)) {
+          pedidosEncontrados = [...pedidosSlug];
+        }
+      }
+
+      // 2. Tentar carregar por empresa_id (backup)
+      if (pedidosEncontrados.length === 0 && chaveEmpresaId) {
+        const pedidosEmpresaStr = localStorage.getItem(chaveEmpresaId);
+        if (pedidosEmpresaStr) {
+          const pedidosEmpresa = JSON.parse(pedidosEmpresaStr);
+          if (Array.isArray(pedidosEmpresa)) {
+            pedidosEncontrados = [...pedidosEmpresa];
+          }
+        }
+      }
+
+      // 3. Tentar carregar pedido único antigo (migração)
+      if (pedidosEncontrados.length === 0) {
+        const pedidoAntigoStr = localStorage.getItem(chaveAntiga);
+        if (pedidoAntigoStr) {
+          const pedidoAntigo = JSON.parse(pedidoAntigoStr);
+          if (pedidoAntigo && pedidoAntigo.id) {
+            pedidosEncontrados = [pedidoAntigo];
+          }
+        }
+      }
+
+      // 4. Filtrar apenas pedidos ativos
+      const pedidosAtivos = pedidosEncontrados.filter(p =>
+        p && p.id && ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto'].includes(p.status_pedido)
+      );
+
+      console.log('🔄 Recuperação de pedidos:', {
+        chaveSlug,
+        chaveEmpresaId,
+        chaveAntiga,
+        pedidosEncontrados: pedidosEncontrados.length,
+        pedidosAtivos: pedidosAtivos.length,
+        pedidos: pedidosAtivos
+      });
+
+      return pedidosAtivos;
+
+    } catch (error) {
+      console.error('❌ Erro ao recuperar pedidos:', error);
+      return [];
+    }
+  };
+
   // ✅ FUNÇÕES PARA CONTROLE DE STATUS DO PEDIDO - MÚLTIPLOS PEDIDOS
   const salvarPedidoLocalStorage = (pedido: any) => {
     // ✅ USAR SLUG COMO CHAVE PRINCIPAL para lista de pedidos
@@ -5587,9 +5675,9 @@ const CardapioPublicoPage: React.FC = () => {
         pedidosExistentes.unshift(pedido);
       }
 
-      // Manter apenas pedidos não finalizados (pendente, aceito, preparando, pronto)
+      // Manter apenas pedidos não finalizados (pendente, confirmado, preparando, pronto)
       const pedidosAtivos = pedidosExistentes.filter(p =>
-        ['pendente', 'aceito', 'preparando', 'pronto'].includes(p.status_pedido)
+        ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto'].includes(p.status_pedido)
       );
 
       // Salvar lista atualizada
@@ -5667,7 +5755,7 @@ const CardapioPublicoPage: React.FC = () => {
   const limparPedidoLocalStorage = (pedidoId?: string) => {
     if (pedidoId) {
       // Remover apenas um pedido específico
-      const pedidosAtuais = carregarPedidosLocalStorage();
+      const pedidosAtuais = recuperarTodosPedidos();
       const pedidosFiltrados = pedidosAtuais.filter(p => p.id !== pedidoId);
 
       // Salvar lista atualizada
@@ -5776,15 +5864,13 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Debug removido para produção
 
-  // ✅ REALTIME PARA ATUALIZAR STATUS DO PEDIDO ATUAL
+  // ✅ REALTIME PARA ATUALIZAR STATUS DE TODOS OS PEDIDOS EM TEMPO REAL
   useEffect(() => {
-    if (!pedidoAtual?.id || !empresaId) return;
+    if (!empresaId) return;
 
-
-
-    // ✅ USAR EMPRESA_ID COMO FILTRO (mais confiável que id específico)
+    // ✅ USAR EMPRESA_ID COMO FILTRO para monitorar TODOS os pedidos da empresa
     const channel = supabase
-      .channel(`pedido_status_empresa_${empresaId}`)
+      .channel(`pedidos_status_empresa_${empresaId}`)
       .on(
         'postgres_changes',
         {
@@ -5794,18 +5880,20 @@ const CardapioPublicoPage: React.FC = () => {
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-
           const pedidoAtualizado = payload.new as any;
 
-          // ✅ VERIFICAR SE É O PEDIDO ATUAL
-          if (pedidoAtualizado.id === pedidoAtual.id) {
+          // ✅ VERIFICAR SE É UM DOS PEDIDOS ATIVOS
+          const pedidosAtuais = recuperarTodosPedidos();
+          const pedidoExiste = pedidosAtuais.find(p => p.id === pedidoAtualizado.id);
 
-
-            // Atualizar pedido atual
-            setPedidoAtual(pedidoAtualizado);
-
-            // Atualizar no localStorage também
+          if (pedidoExiste) {
+            // Atualizar o pedido específico no localStorage
             salvarPedidoLocalStorage(pedidoAtualizado);
+
+            // Se é o pedido atual sendo visualizado, atualizar também
+            if (pedidoAtual?.id === pedidoAtualizado.id) {
+              setPedidoAtual(pedidoAtualizado);
+            }
           }
         }
       )
@@ -5813,10 +5901,9 @@ const CardapioPublicoPage: React.FC = () => {
 
     // Cleanup
     return () => {
-
       supabase.removeChannel(channel);
     };
-  }, [pedidoAtual?.id, empresaId, slug]);
+  }, [empresaId, slug]); // Removido pedidoAtual?.id da dependência
 
   // ✅ POLLING BACKUP PARA GARANTIR ATUALIZAÇÃO DO STATUS
   useEffect(() => {
@@ -5859,7 +5946,7 @@ const CardapioPublicoPage: React.FC = () => {
       return;
     }
 
-    const pedidosSalvos = carregarPedidosLocalStorage();
+    const pedidosSalvos = recuperarTodosPedidos();
 
     if (pedidosSalvos.length > 0) {
       setPedidosAtivos(pedidosSalvos);
@@ -5878,7 +5965,7 @@ const CardapioPublicoPage: React.FC = () => {
   // ✅ VERIFICAÇÃO ADICIONAL QUANDO EMPRESA É CARREGADA
   useEffect(() => {
     if (empresa?.id && pedidosAtivos.length === 0) {
-      const pedidosSalvos = carregarPedidosLocalStorage();
+      const pedidosSalvos = recuperarTodosPedidos();
       if (pedidosSalvos.length > 0) {
         setPedidosAtivos(pedidosSalvos);
         setMostrarTarjaPedido(true);

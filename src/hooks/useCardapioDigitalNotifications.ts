@@ -430,10 +430,10 @@ export const useCardapioDigitalNotifications = ({
           const novoPedido = payload.new as PedidoCardapio;
           showMessage('info', `🍽️ Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente}`);
 
-          // Recarregar lista de pedidos
+          // Recarregar lista de pedidos pendentes
           carregarPedidosPendentes();
 
-          // Notificar componente pai sobre mudança
+          // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
           console.log('🔄 Chamando onPedidoChange callback...');
           console.log('🔄 Callback ainda disponível:', !!onPedidoChange);
           if (onPedidoChange) {
@@ -453,15 +453,18 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          // Recarregar lista se status mudou
-          const pedidoAtualizado = payload.new as PedidoCardapio;
-          if (payload.old && (payload.old as any).status_pedido !== pedidoAtualizado.status_pedido) {
-            carregarPedidosPendentes();
+          console.log('🔄 Pedido atualizado via Realtime:', payload.new);
 
-            // Notificar componente pai sobre mudança
-            if (onPedidoChange) {
-              onPedidoChange();
-            }
+          // ✅ SEMPRE recarregar lista de pedidos pendentes quando houver UPDATE
+          carregarPedidosPendentes();
+
+          // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
+          console.log('🔄 UPDATE - Chamando onPedidoChange callback...');
+          if (onPedidoChange) {
+            console.log('✅ UPDATE - Executando callback onPedidoChange');
+            onPedidoChange();
+          } else {
+            console.log('❌ UPDATE - onPedidoChange callback não definido');
           }
         }
       )

@@ -2929,7 +2929,8 @@ const PDVPage: React.FC = () => {
       }
 
       const pedidos = data || [];
-      console.log('✅ carregarTodosPedidosCardapio: Pedidos carregados:', pedidos.length, pedidos);
+      console.log('✅ carregarTodosPedidosCardapio: Pedidos carregados:', pedidos.length);
+      console.log('📊 Status dos pedidos:', pedidos.map(p => ({ numero: p.numero_pedido, status: p.status_pedido })));
       setTodosOsPedidosCardapio(pedidos);
       aplicarFiltrosCardapio(pedidos);
     } catch (error) {
@@ -2939,6 +2940,9 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA APLICAR FILTROS NO CARDÁPIO DIGITAL
   const aplicarFiltrosCardapio = (pedidosParaFiltrar = todosOsPedidosCardapio) => {
+    console.log('🔍 aplicarFiltrosCardapio - Status atual:', statusFilterCardapio);
+    console.log('🔍 aplicarFiltrosCardapio - Pedidos para filtrar:', pedidosParaFiltrar.length);
+
     let filtered = [...pedidosParaFiltrar];
 
     // Aplicar filtro de status
@@ -2949,7 +2953,11 @@ const PDVPage: React.FC = () => {
         'finalizados': 'entregue'
       };
       const statusFiltro = statusMap[statusFilterCardapio as keyof typeof statusMap] || statusFilterCardapio;
+      console.log('🔍 Filtrando por status:', statusFiltro);
+
+      const antesDoFiltro = filtered.length;
       filtered = filtered.filter(pedido => pedido.status_pedido === statusFiltro);
+      console.log('🔍 Pedidos após filtro de status:', filtered.length, 'de', antesDoFiltro);
     }
 
     // Aplicar filtro de busca
@@ -2975,6 +2983,8 @@ const PDVPage: React.FC = () => {
       });
     }
 
+    console.log('🔍 Resultado final do filtro:', filtered.length, 'pedidos');
+    console.log('🔍 Pedidos filtrados:', filtered.map(p => ({ id: p.id, numero: p.numero_pedido, status: p.status_pedido })));
     setPedidosCardapioFiltrados(filtered);
   };
 
