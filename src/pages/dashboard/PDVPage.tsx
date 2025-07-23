@@ -356,6 +356,7 @@ const PDVPage: React.FC = () => {
   const [showDescontoTotalModal, setShowDescontoTotalModal] = useState(false);
   const [showCardapioDigitalModal, setShowCardapioDigitalModal] = useState(false);
   const modalCardapioAbertoRef = useRef(false);
+  const [pedidoSelecionado, setPedidoSelecionado] = useState<any>(null);
   const [descontoTotal, setDescontoTotal] = useState(0);
   const [tipoDescontoTotal, setTipoDescontoTotal] = useState<'percentual' | 'valor'>('percentual');
   const [descontoGlobal, setDescontoGlobal] = useState(0);
@@ -3011,6 +3012,12 @@ const PDVPage: React.FC = () => {
     console.log('🔄 filtrarCardapioPorStatus: Mudando para status:', status);
     setStatusFilterCardapio(status);
     // ✅ NÃO CHAMAR aplicarFiltrosCardapio AQUI - O useEffect já faz isso
+  };
+
+  // ✅ FUNÇÃO PARA SELECIONAR PEDIDO
+  const selecionarPedido = (pedido: any) => {
+    console.log('🎯 Pedido selecionado:', pedido.numero_pedido);
+    setPedidoSelecionado(pedido);
   };
 
   const filtrarCardapioPorBusca = (termo: string) => {
@@ -20085,7 +20092,12 @@ const PDVPage: React.FC = () => {
                         {pedidosCardapioFiltrados.map((pedido) => (
                           <div
                             key={pedido.id}
-                            className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-orange-500/50 transition-colors"
+                            onClick={() => selecionarPedido(pedido)}
+                            className={`bg-gray-800/50 rounded-lg p-4 border transition-colors cursor-pointer ${
+                              pedidoSelecionado?.id === pedido.id
+                                ? 'border-orange-500 bg-orange-500/10'
+                                : 'border-gray-700 hover:border-orange-500/50'
+                            }`}
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div>
@@ -20280,12 +20292,145 @@ const PDVPage: React.FC = () => {
                 </div>
 
                 {/* Área de Detalhes */}
-                <div className="flex-1 flex items-center justify-center bg-gray-800/30">
-                  <div className="text-center text-gray-400">
-                    <BookOpen size={64} className="mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-semibold mb-2">Selecione um pedido</h3>
-                    <p className="text-sm">Clique em um pedido para ver os detalhes</p>
-                  </div>
+                <div className="flex-1 bg-gray-800/30">
+                  {!pedidoSelecionado ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center text-gray-400">
+                        <BookOpen size={64} className="mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-semibold mb-2">Selecione um pedido</h3>
+                        <p className="text-sm">Clique em um pedido para ver os detalhes</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-full overflow-y-auto">
+                      {/* Header do Pedido */}
+                      <div className="bg-gray-800/50 border-b border-gray-700 p-6">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h2 className="text-2xl font-bold text-white">#{pedidoSelecionado.numero_pedido}</h2>
+                            <p className="text-gray-400">Pedido realizado em {new Date(pedidoSelecionado.data_pedido).toLocaleString('pt-BR')}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-green-400">{formatarPreco(pedidoSelecionado.valor_total)}</p>
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                              pedidoSelecionado.status_pedido === 'pendente'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : pedidoSelecionado.status_pedido === 'confirmado'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : pedidoSelecionado.status_pedido === 'preparando'
+                                    ? 'bg-orange-100 text-orange-800'
+                                    : pedidoSelecionado.status_pedido === 'pronto'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : pedidoSelecionado.status_pedido === 'entregue'
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {pedidoSelecionado.status_pedido === 'pendente' && '⏳ Pendente'}
+                              {pedidoSelecionado.status_pedido === 'confirmado' && '✅ Confirmado'}
+                              {pedidoSelecionado.status_pedido === 'preparando' && '👨‍🍳 Preparando'}
+                              {pedidoSelecionado.status_pedido === 'pronto' && '🍽️ Pronto'}
+                              {pedidoSelecionado.status_pedido === 'entregue' && '🚚 Entregue'}
+                              {pedidoSelecionado.status_pedido === 'cancelado' && '❌ Cancelado'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Informações do Cliente */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="bg-gray-700/50 rounded-lg p-4">
+                            <h3 className="text-sm font-semibold text-gray-300 mb-2">👤 Cliente</h3>
+                            <p className="text-white font-medium">{pedidoSelecionado.nome_cliente}</p>
+                            <p className="text-gray-400 text-sm">{pedidoSelecionado.telefone_cliente}</p>
+                          </div>
+
+                          {pedidoSelecionado.endereco_entrega && (
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">📍 Endereço</h3>
+                              <p className="text-white text-sm">{pedidoSelecionado.endereco_entrega}</p>
+                            </div>
+                          )}
+
+                          {pedidoSelecionado.forma_pagamento && (
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">💳 Pagamento</h3>
+                              <p className="text-white">{pedidoSelecionado.forma_pagamento}</p>
+                            </div>
+                          )}
+
+                          {pedidoSelecionado.observacoes && (
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">📝 Observações</h3>
+                              <p className="text-white text-sm">{pedidoSelecionado.observacoes}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Itens do Pedido */}
+                      <div className="p-6">
+                        <h3 className="text-lg font-semibold text-white mb-4">🛒 Itens do Pedido</h3>
+                        <div className="space-y-3">
+                          {pedidoSelecionado.itens_pedido?.map((item: any, index: number) => (
+                            <div key={index} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-white">{item.nome_produto}</h4>
+                                  <p className="text-sm text-gray-400">
+                                    Quantidade: {item.quantidade} x {formatarPreco(item.preco_unitario)}
+                                  </p>
+                                  {item.observacoes && (
+                                    <p className="text-xs text-gray-500 mt-1">Obs: {item.observacoes}</p>
+                                  )}
+                                  {item.adicionais && item.adicionais.length > 0 && (
+                                    <div className="mt-2">
+                                      <p className="text-xs text-gray-400 mb-1">Adicionais:</p>
+                                      {item.adicionais.map((adicional: any, idx: number) => (
+                                        <p key={idx} className="text-xs text-gray-500">
+                                          + {adicional.nome} ({formatarPreco(adicional.preco)})
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-semibold text-green-400">{formatarPreco(item.subtotal)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Resumo do Pedido */}
+                        <div className="mt-6 bg-gray-700/30 rounded-lg p-4 border border-gray-600">
+                          <h4 className="font-semibold text-white mb-3">💰 Resumo</h4>
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-400">Subtotal:</span>
+                              <span className="text-white">{formatarPreco(pedidoSelecionado.valor_subtotal || pedidoSelecionado.valor_total)}</span>
+                            </div>
+                            {pedidoSelecionado.valor_desconto > 0 && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-400">Desconto:</span>
+                                <span className="text-red-400">-{formatarPreco(pedidoSelecionado.valor_desconto)}</span>
+                              </div>
+                            )}
+                            {pedidoSelecionado.taxa_entrega > 0 && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-400">Taxa de entrega:</span>
+                                <span className="text-white">{formatarPreco(pedidoSelecionado.taxa_entrega)}</span>
+                              </div>
+                            )}
+                            <div className="border-t border-gray-600 pt-2">
+                              <div className="flex justify-between font-semibold">
+                                <span className="text-white">Total:</span>
+                                <span className="text-green-400 text-lg">{formatarPreco(pedidoSelecionado.valor_total)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
