@@ -213,9 +213,65 @@ const PDVPage: React.FC = () => {
       console.log('🔄 onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
       if (modalCardapioAbertoRef.current) {
         console.log('📋 Recarregando lista completa do cardápio...');
-        carregarTodosPedidosCardapio();
+        // ✅ USAR FUNÇÃO INLINE PARA EVITAR DEPENDÊNCIA CIRCULAR
+        (async () => {
+          if (!empresaData?.id) {
+            console.log('❌ carregarTodosPedidosCardapio: empresaData.id não encontrado');
+            return;
+          }
+
+          console.log('📋 carregarTodosPedidosCardapio: Iniciando carregamento para empresa:', empresaData.id);
+
+          try {
+            const { data, error } = await supabase
+              .from('cardapio_digital')
+              .select(`
+                id,
+                numero_pedido,
+                nome_cliente,
+                telefone_cliente,
+                valor_total,
+                status_pedido,
+                data_pedido,
+                endereco_entrega,
+                forma_pagamento_nome,
+                forma_pagamento_tipo,
+                observacao_pedido,
+                observacao_entrega,
+                valor_produtos,
+                valor_desconto_cupom,
+                valor_taxa_entrega,
+                itens_pedido,
+                cupom_codigo,
+                cupom_descricao,
+                cupom_valor_desconto
+              `)
+              .eq('empresa_id', empresaData.id)
+              .order('data_pedido', { ascending: false });
+
+            if (error) {
+              console.error('❌ carregarTodosPedidosCardapio: Erro na consulta:', error);
+              return;
+            }
+
+            const pedidos = data || [];
+            console.log('✅ carregarTodosPedidosCardapio: Pedidos carregados:', pedidos.length);
+            console.log('📊 Status dos pedidos:', pedidos.map(p => ({ numero: p.numero_pedido, status: p.status_pedido })));
+
+            // ✅ ATUALIZAR ESTADO E APLICAR FILTROS IMEDIATAMENTE
+            setTodosOsPedidosCardapio(pedidos);
+
+            // ✅ APLICAR FILTROS COM PEQUENO DELAY PARA GARANTIR QUE O ESTADO FOI ATUALIZADO
+            setTimeout(() => {
+              console.log('🔄 Aplicando filtros após carregar pedidos...');
+              aplicarFiltrosCardapio(pedidos);
+            }, 50);
+          } catch (error) {
+            console.error('❌ carregarTodosPedidosCardapio: Erro inesperado:', error);
+          }
+        })();
       }
-    }, []) // ✅ CALLBACK ESTÁVEL - NÃO MUDA NUNCA
+    }, [empresaData?.id]) // ✅ APENAS DEPENDÊNCIA NECESSÁRIA
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
@@ -2925,7 +2981,18 @@ const PDVPage: React.FC = () => {
           valor_total,
           status_pedido,
           data_pedido,
-          itens_pedido
+          endereco_entrega,
+          forma_pagamento_nome,
+          forma_pagamento_tipo,
+          observacao_pedido,
+          observacao_entrega,
+          valor_produtos,
+          valor_desconto_cupom,
+          valor_taxa_entrega,
+          itens_pedido,
+          cupom_codigo,
+          cupom_descricao,
+          cupom_valor_desconto
         `)
         .eq('empresa_id', empresaData.id)
         .order('data_pedido', { ascending: false });
@@ -2944,6 +3011,7 @@ const PDVPage: React.FC = () => {
 
       // ✅ APLICAR FILTROS IMEDIATAMENTE COM OS NOVOS DADOS
       setTimeout(() => {
+        console.log('🔄 Aplicando filtros após carregar pedidos...');
         aplicarFiltrosCardapio(pedidos);
       }, 50); // Pequeno delay para garantir que o estado foi atualizado
     } catch (error) {
@@ -3037,6 +3105,7 @@ const PDVPage: React.FC = () => {
   // ✅ USEEFFECT PARA SINCRONIZAR REF COM ESTADO DO MODAL
   useEffect(() => {
     modalCardapioAbertoRef.current = showCardapioDigitalModal;
+    console.log('🔄 Modal cardápio estado atualizado:', showCardapioDigitalModal);
   }, [showCardapioDigitalModal]);
 
   // ✅ USEEFFECT PARA CARREGAR PEDIDOS DO CARDÁPIO QUANDO MODAL ABRIR
@@ -19937,12 +20006,12 @@ const PDVPage: React.FC = () => {
               className="w-full h-full bg-background-card flex flex-col"
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-700">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
                 <div className="flex items-center gap-3">
-                  <BookOpen size={24} className="text-orange-500" />
+                  <BookOpen size={20} className="text-orange-500" />
                   <div>
-                    <h2 className="text-xl font-bold text-white">Cardápio Digital</h2>
-                    <p className="text-gray-400 text-sm">
+                    <h2 className="text-lg font-bold text-white">Cardápio Digital</h2>
+                    <p className="text-gray-400 text-xs">
                       {contadorCardapio > 0 ? `${contadorCardapio} pedido${contadorCardapio > 1 ? 's' : ''} pendente${contadorCardapio > 1 ? 's' : ''}` : 'Nenhum pedido pendente'}
                     </p>
                   </div>
@@ -19951,7 +20020,7 @@ const PDVPage: React.FC = () => {
                   onClick={() => setShowCardapioDigitalModal(false)}
                   className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                 >
-                  <X size={24} />
+                  <X size={20} />
                 </button>
               </div>
 
@@ -20308,7 +20377,7 @@ const PDVPage: React.FC = () => {
                         <div className="flex items-start justify-between mb-4">
                           <div>
                             <h2 className="text-2xl font-bold text-white">#{pedidoSelecionado.numero_pedido}</h2>
-                            <p className="text-gray-400">Pedido realizado em {new Date(pedidoSelecionado.data_pedido).toLocaleString('pt-BR')}</p>
+                            <p className="text-gray-400">Pedido realizado em {pedidoSelecionado.data_pedido ? new Date(pedidoSelecionado.data_pedido).toLocaleString('pt-BR') : 'Data não disponível'}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-2xl font-bold text-green-400">{formatarPreco(pedidoSelecionado.valor_total)}</p>
@@ -20350,17 +20419,39 @@ const PDVPage: React.FC = () => {
                             </div>
                           )}
 
-                          {pedidoSelecionado.forma_pagamento && (
+                          {pedidoSelecionado.forma_pagamento_nome && (
                             <div className="bg-gray-700/50 rounded-lg p-4">
                               <h3 className="text-sm font-semibold text-gray-300 mb-2">💳 Pagamento</h3>
-                              <p className="text-white">{pedidoSelecionado.forma_pagamento}</p>
+                              <p className="text-white">{pedidoSelecionado.forma_pagamento_nome}</p>
+                              {pedidoSelecionado.forma_pagamento_tipo && (
+                                <p className="text-gray-400 text-sm">Tipo: {pedidoSelecionado.forma_pagamento_tipo}</p>
+                              )}
                             </div>
                           )}
 
-                          {pedidoSelecionado.observacoes && (
+                          {(pedidoSelecionado.observacao_pedido || pedidoSelecionado.observacao_entrega) && (
                             <div className="bg-gray-700/50 rounded-lg p-4">
                               <h3 className="text-sm font-semibold text-gray-300 mb-2">📝 Observações</h3>
-                              <p className="text-white text-sm">{pedidoSelecionado.observacoes}</p>
+                              {pedidoSelecionado.observacao_pedido && (
+                                <p className="text-white text-sm mb-2">
+                                  <span className="text-gray-400">Pedido:</span> {pedidoSelecionado.observacao_pedido}
+                                </p>
+                              )}
+                              {pedidoSelecionado.observacao_entrega && (
+                                <p className="text-white text-sm">
+                                  <span className="text-gray-400">Entrega:</span> {pedidoSelecionado.observacao_entrega}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {pedidoSelecionado.cupom_codigo && (
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">🎫 Cupom de Desconto</h3>
+                              <p className="text-white font-medium">{pedidoSelecionado.cupom_codigo}</p>
+                              {pedidoSelecionado.cupom_descricao && (
+                                <p className="text-gray-400 text-sm">{pedidoSelecionado.cupom_descricao}</p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -20370,7 +20461,8 @@ const PDVPage: React.FC = () => {
                       <div className="p-6">
                         <h3 className="text-lg font-semibold text-white mb-4">🛒 Itens do Pedido</h3>
                         <div className="space-y-3">
-                          {pedidoSelecionado.itens_pedido?.map((item: any, index: number) => (
+                          {pedidoSelecionado.itens_pedido && pedidoSelecionado.itens_pedido.length > 0 ? (
+                            pedidoSelecionado.itens_pedido.map((item: any, index: number) => (
                             <div key={index} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
@@ -20397,7 +20489,12 @@ const PDVPage: React.FC = () => {
                                 </div>
                               </div>
                             </div>
-                          ))}
+                            ))
+                          ) : (
+                            <div className="text-center text-gray-400 py-8">
+                              <p>Nenhum item encontrado para este pedido</p>
+                            </div>
+                          )}
                         </div>
 
                         {/* Resumo do Pedido */}
@@ -20405,19 +20502,19 @@ const PDVPage: React.FC = () => {
                           <h4 className="font-semibold text-white mb-3">💰 Resumo</h4>
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Subtotal:</span>
-                              <span className="text-white">{formatarPreco(pedidoSelecionado.valor_subtotal || pedidoSelecionado.valor_total)}</span>
+                              <span className="text-gray-400">Subtotal produtos:</span>
+                              <span className="text-white">{formatarPreco(pedidoSelecionado.valor_produtos || pedidoSelecionado.valor_total)}</span>
                             </div>
-                            {pedidoSelecionado.valor_desconto > 0 && (
+                            {pedidoSelecionado.valor_desconto_cupom > 0 && (
                               <div className="flex justify-between text-sm">
-                                <span className="text-gray-400">Desconto:</span>
-                                <span className="text-red-400">-{formatarPreco(pedidoSelecionado.valor_desconto)}</span>
+                                <span className="text-gray-400">Desconto cupom:</span>
+                                <span className="text-red-400">-{formatarPreco(pedidoSelecionado.valor_desconto_cupom)}</span>
                               </div>
                             )}
-                            {pedidoSelecionado.taxa_entrega > 0 && (
+                            {pedidoSelecionado.valor_taxa_entrega > 0 && (
                               <div className="flex justify-between text-sm">
                                 <span className="text-gray-400">Taxa de entrega:</span>
-                                <span className="text-white">{formatarPreco(pedidoSelecionado.taxa_entrega)}</span>
+                                <span className="text-white">{formatarPreco(pedidoSelecionado.valor_taxa_entrega)}</span>
                               </div>
                             )}
                             <div className="border-t border-gray-600 pt-2">
