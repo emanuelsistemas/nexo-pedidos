@@ -219,7 +219,7 @@ const PDVPage: React.FC = () => {
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
-  const [statusFilterCardapio, setStatusFilterCardapio] = useState<string>('aguardando');
+  const [statusFilterCardapio, setStatusFilterCardapio] = useState<string>('confirmado');
   const [searchCardapio, setSearchCardapio] = useState('');
   const [showFiltersCardapio, setShowFiltersCardapio] = useState(false);
   const [dataInicioCardapio, setDataInicioCardapio] = useState('');
@@ -2950,49 +2950,28 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ USEEFFECT PARA APLICAR FILTROS QUANDO QUALQUER FILTRO MUDA
+  useEffect(() => {
+    console.log('🔄 useEffect: Aplicando filtros - Status:', statusFilterCardapio, 'Pedidos:', todosOsPedidosCardapio.length);
+    aplicarFiltrosCardapio();
+  }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
+
   // ✅ FUNÇÃO PARA APLICAR FILTROS NO CARDÁPIO DIGITAL
   const aplicarFiltrosCardapio = (pedidosParaFiltrar = todosOsPedidosCardapio) => {
     console.log('🔍 aplicarFiltrosCardapio - Status atual:', statusFilterCardapio);
     console.log('🔍 aplicarFiltrosCardapio - Pedidos para filtrar:', pedidosParaFiltrar.length);
-    console.log('🔍 aplicarFiltrosCardapio - Pedidos recebidos:', pedidosParaFiltrar.map(p => ({ id: p.id, numero: p.numero_pedido, status: p.status_pedido })));
 
     let filtered = [...pedidosParaFiltrar];
 
     // Aplicar filtro de status
     if (statusFilterCardapio !== 'todos') {
-      const statusMap = {
-        'aguardando': 'pendente',
-        'confirmado': 'confirmado',
-        'preparando': 'preparando',
-        'pronto': 'pronto',
-        'entregue': 'entregue',
-        'cancelado': 'cancelado'
-      };
-      const statusFiltro = statusMap[statusFilterCardapio as keyof typeof statusMap] || statusFilterCardapio;
+      const statusFiltro = statusFilterCardapio;
       console.log('🔍 Filtrando por status:', statusFiltro);
 
       const antesDoFiltro = filtered.length;
 
-      // ✅ LOG DETALHADO PARA DEBUG
-      console.log('🔍 DEBUG - Status procurado:', statusFiltro);
-      console.log('🔍 DEBUG - Pedidos antes do filtro:', filtered.map(p => ({
-        numero: p.numero_pedido,
-        status: p.status_pedido,
-        statusTipo: typeof p.status_pedido,
-        comparacao: p.status_pedido === statusFiltro
-      })));
-
       filtered = filtered.filter(pedido => {
         const match = pedido.status_pedido === statusFiltro;
-        if (!match) {
-          console.log('🔍 DEBUG - Pedido rejeitado:', {
-            numero: pedido.numero_pedido,
-            statusPedido: pedido.status_pedido,
-            statusFiltro: statusFiltro,
-            tipoStatusPedido: typeof pedido.status_pedido,
-            tipoStatusFiltro: typeof statusFiltro
-          });
-        }
         return match;
       });
 
@@ -3031,28 +3010,21 @@ const PDVPage: React.FC = () => {
   const filtrarCardapioPorStatus = (status: string) => {
     console.log('🔄 filtrarCardapioPorStatus: Mudando para status:', status);
     setStatusFilterCardapio(status);
-    // ✅ APLICAR FILTROS IMEDIATAMENTE COM PEQUENO DELAY
-    setTimeout(() => {
-      aplicarFiltrosCardapio();
-    }, 10);
+    // ✅ NÃO CHAMAR aplicarFiltrosCardapio AQUI - O useEffect já faz isso
   };
 
   const filtrarCardapioPorBusca = (termo: string) => {
     setSearchCardapio(termo);
-    setTimeout(() => {
-      aplicarFiltrosCardapio();
-    }, 10);
+    // ✅ NÃO CHAMAR aplicarFiltrosCardapio AQUI - O useEffect já faz isso
   };
 
   const limparFiltrosCardapio = () => {
     console.log('🧹 Limpando filtros do cardápio...');
-    setStatusFilterCardapio('aguardando');
+    setStatusFilterCardapio('confirmado');
     setSearchCardapio('');
     setDataInicioCardapio('');
     setDataFimCardapio('');
-    setTimeout(() => {
-      aplicarFiltrosCardapio();
-    }, 10);
+    // ✅ NÃO CHAMAR aplicarFiltrosCardapio AQUI - O useEffect já faz isso
   };
 
   // ✅ USEEFFECT PARA SINCRONIZAR REF COM ESTADO DO MODAL
@@ -3068,11 +3040,7 @@ const PDVPage: React.FC = () => {
     }
   }, [showCardapioDigitalModal, empresaData?.id]);
 
-  // ✅ USEEFFECT PARA APLICAR FILTROS QUANDO MUDAREM
-  useEffect(() => {
-    // ✅ APLICAR FILTROS SEMPRE QUE HOUVER MUDANÇAS (mesmo com lista vazia)
-    aplicarFiltrosCardapio();
-  }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
+  // ✅ USEEFFECT DUPLICADO REMOVIDO - JÁ EXISTE UM ACIMA
 
   // ✅ VERIFICAR SE DEVE MOSTRAR MODAL DE SOM INICIAL
   useEffect(() => {
@@ -19986,9 +19954,9 @@ const PDVPage: React.FC = () => {
                 <div className="w-1/3 border-r border-gray-700 flex flex-col">
                   <div className="p-4 border-b border-gray-700">
                     {/* Menu de Status */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
+                    <div className="flex flex-wrap gap-2 mb-4">
                       {[
-                        { value: 'aguardando', label: 'Pendente', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length },
+                        { value: 'pendente', label: 'Pendente', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length },
                         { value: 'confirmado', label: 'Confirmado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length },
                         { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length },
                         { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length },
@@ -19998,13 +19966,13 @@ const PDVPage: React.FC = () => {
                         <button
                           key={status.value}
                           onClick={() => filtrarCardapioPorStatus(status.value)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 transition-colors ${
+                          className={`min-w-[100px] px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1 transition-colors whitespace-nowrap ${
                             statusFilterCardapio === status.value
                               ? 'bg-orange-500 text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
-                          <span className="truncate">{status.label}</span>
+                          <span>{status.label}</span>
                           <span className={`px-1.5 py-0.5 rounded-full text-xs flex-shrink-0 ${
                             statusFilterCardapio === status.value
                               ? 'bg-white/20 text-white'
@@ -20092,7 +20060,7 @@ const PDVPage: React.FC = () => {
                         <p>
                           {searchCardapio || dataInicioCardapio || dataFimCardapio
                             ? 'Nenhum pedido encontrado'
-                            : statusFilterCardapio === 'aguardando'
+                            : statusFilterCardapio === 'pendente'
                               ? 'Nenhum pedido pendente'
                               : statusFilterCardapio === 'confirmado'
                                 ? 'Nenhum pedido confirmado'
