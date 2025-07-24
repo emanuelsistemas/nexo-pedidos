@@ -5080,11 +5080,7 @@ const PDVPage: React.FC = () => {
 
         if (formaCorrespondente) {
           setFormaPagamentoSelecionada(formaCorrespondente.id);
-          console.log('✅ Forma de pagamento selecionada automaticamente:', {
-            nome: formaCorrespondente.nome,
-            id: formaCorrespondente.id,
-            pedido_forma: pedido.forma_pagamento_nome
-          });
+          // Forma de pagamento selecionada automaticamente
         } else {
           console.log('⚠️ Forma de pagamento não encontrada:', {
             pedido_forma: pedido.forma_pagamento_nome,
@@ -6820,7 +6816,7 @@ const PDVPage: React.FC = () => {
         const produtosAgrupados = carrinho.reduce((acc, item) => {
           // Pular produtos de venda sem produto
           if (item.vendaSemProduto || item.produto.codigo === '999999') {
-            console.log(`⏭️ FRONTEND: Pulando verificação de estoque - Venda sem produto: ${item.produto.nome}`);
+            // Pulando verificação de estoque para venda sem produto
             return acc;
           }
 
@@ -6838,11 +6834,8 @@ const PDVPage: React.FC = () => {
         // Verificar cada produto único
         for (const [produtoId, dadosProduto] of Object.entries(produtosAgrupados)) {
           // Verificar se existe movimentação de estoque para este produto desta venda
-          console.log(`🔍 FRONTEND: Verificando movimentações de estoque para produto ${produtoId}, venda ${numeroVenda}`);
-
-          // Filtrar movimentações dos últimos 5 minutos para evitar dados históricos corrompidos
+          // Verificando movimentações de estoque
           const cincoMinutosAtras = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-          console.log(`⏰ FRONTEND: Filtrando movimentações após: ${cincoMinutosAtras}`);
 
           const { data: movimentacaoEstoque, error: estoqueError } = await supabase
             .from('produto_estoque')
@@ -6852,21 +6845,6 @@ const PDVPage: React.FC = () => {
             .ilike('observacao', `%Venda PDV #${numeroVenda}%`)
             .gte('data_hora_movimento', cincoMinutosAtras)
             .order('data_hora_movimento', { ascending: false });
-
-          console.log(`📊 FRONTEND: Query executada - Produto: ${produtoId}, Venda: ${numeroVenda}`);
-          console.log(`📊 FRONTEND: Movimentações encontradas (${movimentacaoEstoque?.length || 0}):`, movimentacaoEstoque);
-
-          // Log detalhado de cada movimentação
-          if (movimentacaoEstoque && movimentacaoEstoque.length > 0) {
-            movimentacaoEstoque.forEach((mov, index) => {
-              console.log(`📋 FRONTEND: Movimentação ${index + 1}:`, {
-                id: mov.id,
-                quantidade: mov.quantidade,
-                observacao: mov.observacao,
-                data_hora: mov.data_hora_movimento
-              });
-            });
-          }
 
           if (estoqueError) {
             console.error('Erro ao verificar movimentação de estoque:', estoqueError);
@@ -6889,10 +6867,10 @@ const PDVPage: React.FC = () => {
             return false;
           }
 
-          console.log(`✅ Estoque verificado para ${dadosProduto.produto.nome}: ${quantidadeMovimentada} unidades baixadas`);
+          // Estoque verificado com sucesso
         }
 
-        console.log('✅ Baixa de estoque verificada com sucesso para todos os itens');
+        // Baixa de estoque verificada
       }
 
       setEtapaProcessamento('Verificando opções adicionais...');
@@ -7680,24 +7658,19 @@ const PDVPage: React.FC = () => {
 
   // Função intermediária para verificar PIX antes de finalizar
   const verificarPixEFinalizar = (tipoFinalizacao: string) => {
-    console.log('🔍 VERIFICANDO PIX ANTES DE FINALIZAR:', tipoFinalizacao);
+    // Verificando PIX antes de finalizar
 
     if (tipoPagamento === 'vista') {
       // Pagamento à vista - verificar forma selecionada
       const forma = formasPagamento.find(f => f.id === formaPagamentoSelecionada);
-      console.log('🔍 PIX CHECK FINALIZAÇÃO À VISTA:', {
-        forma_nome: forma?.nome,
-        tipo: forma?.tipo,
-        utilizar_chave_pix: forma?.utilizar_chave_pix,
-        tem_chave_pix: !!forma?.chave_pix
-      });
+      // Verificando PIX à vista
 
       if (forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix) {
-        console.log('✅ PIX DETECTADO À VISTA - Salvando tipo de finalização e abrindo modal PIX');
+        // PIX detectado à vista
         setTipoFinalizacaoPendente(tipoFinalizacao);
         abrirModalPix();
       } else {
-        console.log('❌ PIX não detectado à vista - Finalizando diretamente');
+        // PIX não detectado - finalizando diretamente
         finalizarVendaCompleta(tipoFinalizacao);
       }
     } else if (tipoPagamento === 'parcial') {
@@ -7776,9 +7749,6 @@ const PDVPage: React.FC = () => {
   // Função para gerar número sequencial da venda
   const gerarNumeroVenda = async (empresaId: string): Promise<string> => {
     try {
-      console.log('🔢 FRONTEND: Gerando número de venda para empresa:', empresaId);
-
-      // Buscar o maior número de venda da empresa (não o mais recente por data)
       const { data, error } = await supabase
         .from('pdv')
         .select('numero_venda')
@@ -7788,37 +7758,20 @@ const PDVPage: React.FC = () => {
         .limit(1);
 
       if (error && error.code !== 'PGRST116') {
-        console.error('❌ FRONTEND: Erro ao buscar último número de venda:', error);
-        // Em caso de erro, usar timestamp como fallback
-        const fallbackNumero = `PDV-${Date.now()}`;
-        console.log('🔄 FRONTEND: Usando fallback:', fallbackNumero);
-        return fallbackNumero;
+        console.error('❌ Erro ao buscar último número de venda:', error);
+        return `PDV-${Date.now()}`;
       }
-
-      console.log('📊 FRONTEND: Dados encontrados:', data);
-      console.log('📊 FRONTEND: Quantidade de registros:', data?.length || 0);
 
       let proximoNumero = 1;
       if (data && data.length > 0 && data[0].numero_venda) {
-        // Extrair número da string (formato: PDV-000001)
         const ultimoNumero = data[0].numero_venda.replace('PDV-', '');
         proximoNumero = parseInt(ultimoNumero) + 1;
-        console.log(`📊 FRONTEND: Último número encontrado: ${data[0].numero_venda}`);
-        console.log(`➕ FRONTEND: Incrementando para: ${proximoNumero}`);
-      } else {
-        console.log('📊 FRONTEND: Nenhum registro encontrado, iniciando do número 1');
       }
 
-      // Formatar com zeros à esquerda (6 dígitos)
-      const novoNumero = `PDV-${proximoNumero.toString().padStart(6, '0')}`;
-      console.log(`🎯 FRONTEND: Novo número de venda gerado: ${novoNumero}`);
-      return novoNumero;
+      return `PDV-${proximoNumero.toString().padStart(6, '0')}`;
     } catch (error) {
-      console.error('❌ FRONTEND: Erro ao gerar número de venda:', error);
-      // Fallback para timestamp
-      const fallbackNumero = `PDV-${Date.now()}`;
-      console.log('🔄 FRONTEND: Usando fallback por erro:', fallbackNumero);
-      return fallbackNumero;
+      console.error('❌ Erro ao gerar número de venda:', error);
+      return `PDV-${Date.now()}`;
     }
   };
 
@@ -8702,18 +8655,12 @@ const PDVPage: React.FC = () => {
 
   // Função principal para finalizar e salvar a venda
   const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_impressao') => {
-    const executionId = Date.now(); // ID único para esta execução
-    console.log(`🚀 FRONTEND: INICIANDO finalizarVendaCompleta - ID: ${executionId}, Tipo: ${tipoFinalizacao}`);
-    console.log(`🚀 FRONTEND: showProcessandoVenda atual: ${showProcessandoVenda}`);
-
     if (carrinho.length === 0) {
-      console.log(`❌ FRONTEND: Carrinho vazio - ID: ${executionId}`);
       toast.error('Carrinho vazio! Adicione itens antes de finalizar.');
       return;
     }
 
     // Abrir modal de processamento
-    console.log(`📋 FRONTEND: Abrindo modal de processamento - ID: ${executionId}`);
     setShowProcessandoVenda(true);
     setEtapaProcessamento('Iniciando processamento da venda...');
     setVendaProcessadaId(null);
@@ -8890,8 +8837,7 @@ const PDVPage: React.FC = () => {
       if (tipoFinalizacao.startsWith('nfce_')) {
         setEtapaProcessamento('Reservando número da NFC-e...');
         numeroDocumentoNfce = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
-        console.log('🔢 FRONTEND: Número NFC-e reservado:', numeroDocumentoNfce);
-        setNumeroDocumentoReservado(numeroDocumentoNfce); // ✅ Salvar no estado para mostrar no modal
+        setNumeroDocumentoReservado(numeroDocumentoNfce);
 
         // ✅ CORREÇÃO: Buscar série do usuário (SEM FALLBACK - Lei Fundamental #2)
         const { data: usuarioSerieData, error: serieError } = await supabase
@@ -8911,9 +8857,7 @@ const PDVPage: React.FC = () => {
         }
 
         const serieUsuario = usuarioSerieData.serie_nfce; // ✅ SEM FALLBACK
-        setSerieDocumentoReservado(serieUsuario); // ✅ Salvar série no estado para mostrar no modal
-        console.log('🔢 FRONTEND: Série NFC-e do usuário:', serieUsuario);
-        console.log('🔢 FRONTEND: Dados completos da série:', usuarioSerieData);
+        setSerieDocumentoReservado(serieUsuario);
       }
 
       // ✅ NOVO: Coletar todos os vendedores únicos do carrinho
@@ -8940,7 +8884,6 @@ const PDVPage: React.FC = () => {
 
       // Converter para array de IDs
       const vendedoresIds = Array.from(vendedoresUnicos.keys());
-      console.log('🧑‍💼 FRONTEND: Vendedores coletados:', Array.from(vendedoresUnicos.values()));
 
       // ✅ NOVO: Calcular valores de desconto detalhados (com arredondamento para 2 casas decimais)
       const valorDescontoItens = Math.round(calcularDescontoItens() * 100) / 100;
@@ -8973,14 +8916,7 @@ const PDVPage: React.FC = () => {
         ...pagamentoData
       };
 
-      // ✅ LOGS DETALHADOS: Verificar dados antes da inserção
-      console.log('🔍 DADOS DA VENDA ANTES DA INSERÇÃO:');
-      console.log('  - Tipo Finalização:', tipoFinalizacao);
-      console.log('  - Número Documento:', numeroDocumentoNfce);
-      console.log('  - Série Reservada (estado):', serieDocumentoReservado);
-      console.log('  - Série no vendaData:', vendaData.serie_documento);
-      console.log('  - Modelo Documento:', vendaData.modelo_documento);
-      console.log('  - Tentativa NFC-e:', vendaData.tentativa_nfce);
+      // Dados da venda preparados
 
       // ✅ CORREÇÃO: UPDATE ou INSERT baseado na venda em andamento
       let vendaInserida;
@@ -8989,12 +8925,6 @@ const PDVPage: React.FC = () => {
       if (vendaEmAndamento) {
         // ✅ ATUALIZAR venda em andamento existente (sempre que há venda em andamento)
         setEtapaProcessamento('Finalizando venda em andamento...');
-        console.log('🔄 ATUALIZANDO venda em andamento ID:', vendaEmAndamento.id);
-        console.log('🔍 Dados da venda em andamento:', {
-          id: vendaEmAndamento.id,
-          numero_venda: vendaEmAndamento.numero_venda,
-          status_atual: 'aberta'
-        });
 
         // ✅ CORREÇÃO: Para venda em andamento, não sobrescrever série/número que já estão corretos
         const { serie_documento, numero_documento, ...vendaDataSemSerie } = vendaData;
@@ -9015,11 +8945,11 @@ const PDVPage: React.FC = () => {
         vendaInserida = result.data;
         vendaError = result.error;
 
-        console.log('✅ VENDA EM ANDAMENTO ATUALIZADA:');
+        // Venda em andamento atualizada
       } else {
         // ✅ CRIAR nova venda (apenas se não há venda em andamento)
         setEtapaProcessamento('Salvando venda no banco de dados...');
-        console.log('➕ CRIANDO nova venda (sem venda em andamento)');
+        // Criando nova venda
 
         const result = await supabase
           .from('pdv')
@@ -9030,14 +8960,8 @@ const PDVPage: React.FC = () => {
         vendaInserida = result.data;
         vendaError = result.error;
 
-        console.log('✅ NOVA VENDA CRIADA:');
+        // Nova venda criada
       }
-
-      // ✅ LOGS DETALHADOS: Verificar dados após operação
-      console.log('  - ID:', vendaInserida?.id);
-      console.log('  - Série Documento:', vendaInserida?.serie_documento);
-      console.log('  - Número Documento:', vendaInserida?.numero_documento);
-      console.log('  - Modelo Documento:', vendaInserida?.modelo_documento);
 
       if (vendaError) {
         console.error('Erro ao salvar venda:', vendaError);
@@ -9054,7 +8978,6 @@ const PDVPage: React.FC = () => {
       // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
       let configVendaSemProduto = null;
       if (carrinho.some(item => item.produto.codigo === '999999')) {
-        console.log('🔍 FRONTEND: Produto 999999 detectado, buscando configurações PDV...');
         const { data: pdvConfigData } = await supabase
           .from('pdv_config')
           .select(`
@@ -9075,7 +8998,6 @@ const PDVPage: React.FC = () => {
           .single();
 
         configVendaSemProduto = pdvConfigData;
-        console.log('📋 FRONTEND: Configurações PDV carregadas:', configVendaSemProduto);
       }
 
       // Preparar itens para inserção
@@ -9089,23 +9011,10 @@ const PDVPage: React.FC = () => {
         // ✅ CORREÇÃO: Dados fiscais - usar configuração PDV para produto 999999
         let dadosFiscais = {};
         if (item.produto.codigo === '999999' && configVendaSemProduto) {
-          console.log(`🔍 FRONTEND: Aplicando dados fiscais PDV para item ${item.produto.nome}`);
-          console.log(`📋 FRONTEND: Configuração completa PDV:`, configVendaSemProduto);
-
-          // Mapear situação tributária para códigos CST/CSOSN
+          // Aplicar dados fiscais da configuração PDV
           const situacaoTributaria = configVendaSemProduto.venda_sem_produto_situacao_tributaria;
-          console.log(`🎯 FRONTEND: Situação tributária configurada: "${situacaoTributaria}"`);
-
-          // ✅ CORREÇÃO: Usar campos CST/CSOSN diretos da configuração PDV (SEM MAPEAMENTO)
           const cstIcms = configVendaSemProduto.venda_sem_produto_cst;
           const csosnIcms = configVendaSemProduto.venda_sem_produto_csosn;
-
-          console.log(`✅ FRONTEND: Usando CST/CSOSN diretos da configuração PDV:`, {
-            cst_icms_configurado: cstIcms,
-            csosn_icms_configurado: csosnIcms,
-            regime_tributario: regimeTributario,
-            situacao_tributaria_ignorada: situacaoTributaria
-          });
 
           dadosFiscais = {
             // ✅ SEM FALLBACK: Usar dados diretos da configuração PDV
@@ -9177,8 +9086,7 @@ const PDVPage: React.FC = () => {
 
       if (vendaEmAndamento) {
         // ✅ VENDA EM ANDAMENTO: Sempre verificar itens existentes para UPDATE/INSERT
-        console.log('🔍 FRONTEND: Verificando itens existentes na venda em andamento...');
-        console.log('🔍 FRONTEND: Venda em andamento ID:', vendaEmAndamento.id);
+        // Verificando itens existentes na venda em andamento
 
         // Buscar itens já salvos na venda
         const { data: itensExistentes, error: buscarError } = await supabase
@@ -9195,8 +9103,7 @@ const PDVPage: React.FC = () => {
           return;
         }
 
-        console.log('📋 FRONTEND: Itens existentes encontrados:', itensExistentes?.length || 0);
-        console.log('📋 FRONTEND: Itens no carrinho:', carrinho.length);
+        // Itens encontrados para processamento
 
         // ✅ CORREÇÃO: Processar cada item do carrinho individualmente
         for (const [index, item] of carrinho.entries()) {
@@ -9208,7 +9115,7 @@ const PDVPage: React.FC = () => {
           if (item.pdv_item_id) {
             // Item tem pdv_item_id - verificar se ainda existe no banco
             itemExistente = itensExistentes?.find(existente => existente.id === item.pdv_item_id);
-            console.log(`🔍 FRONTEND: Item com pdv_item_id ${item.pdv_item_id} ${itemExistente ? 'encontrado' : 'não encontrado'} no banco`);
+            // Item verificado no banco
           } else {
             // Item sem pdv_item_id - verificar se já existe por código/produto_id
             if (item.vendaSemProduto) {
@@ -9218,12 +9125,12 @@ const PDVPage: React.FC = () => {
               // Para produto normal, verificar por produto_id
               itemExistente = itensExistentes?.find(existente => existente.produto_id === item.produto.id);
             }
-            console.log(`🔍 FRONTEND: Item sem pdv_item_id (${item.produto.nome}) ${itemExistente ? 'encontrado' : 'não encontrado'} no banco`);
+            // Item verificado por produto
           }
 
           if (itemExistente) {
             // ✅ ITEM EXISTE: Fazer UPDATE apenas se veio de venda recuperada
-            console.log(`🔄 FRONTEND: Atualizando item existente: ${item.produto.nome} (ID: ${itemExistente.id})`);
+            // Atualizando item existente
 
             const { error: updateError } = await supabase
               .from('pdv_itens')
@@ -9247,10 +9154,10 @@ const PDVPage: React.FC = () => {
               throw new Error(`Erro ao atualizar item: ${updateError.message}`);
             }
 
-            console.log(`✅ FRONTEND: Item atualizado: ${item.produto.nome}`);
+            // Item atualizado com sucesso
           } else {
             // ✅ ITEM NÃO EXISTE OU É NOVO: Sempre fazer INSERT
-            console.log(`➕ FRONTEND: Inserindo novo item: ${item.produto.nome}`);
+            // Inserindo novo item
 
             const { error: insertError } = await supabase
               .from('pdv_itens')
@@ -9261,11 +9168,11 @@ const PDVPage: React.FC = () => {
               throw new Error(`Erro ao inserir item: ${insertError.message}`);
             }
 
-            console.log(`✅ FRONTEND: Item inserido: ${item.produto.nome}`);
+            // Item inserido com sucesso
           }
         }
 
-        console.log('✅ FRONTEND: Todos os itens processados com sucesso');
+        // Todos os itens processados
       } else {
         // ✅ VENDA NOVA: Inserir todos os itens normalmente
         console.log('➕ FRONTEND: Inserindo todos os itens (venda nova)...');
@@ -9400,18 +9307,16 @@ const PDVPage: React.FC = () => {
       // Atualizar estoque se configurado para PDV
       if (tipoControle === 'pdv') {
         setEtapaProcessamento('Atualizando estoque...');
-        console.log('🔄 FRONTEND: Iniciando baixa de estoque para venda:', numeroVenda);
-        console.log('🔄 FRONTEND: Tipo de controle:', tipoControle);
-        console.log('🔄 FRONTEND: Itens do carrinho:', carrinho.length);
+        // Iniciando baixa de estoque
 
         for (const item of carrinho) {
           // ✅ EXCEÇÃO: Pular controle de estoque para venda sem produto (código 999999)
           if (item.vendaSemProduto || item.produto.codigo === '999999') {
-            console.log(`⏭️ FRONTEND: Pulando controle de estoque - Venda sem produto: ${item.produto.nome}`);
+            // Pulando controle de estoque para venda sem produto
             continue;
           }
 
-          console.log(`🔄 FRONTEND: Baixando estoque - Produto: ${item.produto.nome}, Quantidade: ${item.quantidade}`);
+          // Baixando estoque do produto
 
           const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
             p_produto_id: item.produto.id,
@@ -9428,10 +9333,10 @@ const PDVPage: React.FC = () => {
             toast.error('ERRO: Falha na baixa de estoque: ' + estoqueError.message);
             return;
           } else {
-            console.log(`✅ FRONTEND: Estoque baixado com sucesso - Produto: ${item.produto.nome}`);
+            // Estoque baixado com sucesso
           }
         }
-        console.log('✅ FRONTEND: Baixa de estoque concluída para todos os itens');
+        // Baixa de estoque concluída
 
         // Aguardar um pouco para garantir que todas as movimentações foram processadas
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -9506,14 +9411,12 @@ const PDVPage: React.FC = () => {
 
       // VERIFICAR SE É EMISSÃO DE NFC-e
       if (tipoFinalizacao.startsWith('nfce_')) {
-        console.log('🚀 FRONTEND: Iniciando processo de emissão NFC-e');
-        console.log('📋 FRONTEND: Tipo finalização:', tipoFinalizacao);
-        console.log('👤 FRONTEND: Empresa ID:', usuarioData.empresa_id);
+        // Iniciando processo de emissão NFC-e
 
         setEtapaProcessamento('Carregando dados da empresa...');
 
         // ✅ CORREÇÃO: Buscar dados da empresa (igual à NFe que funciona)
-        console.log('🏢 FRONTEND: Buscando dados da empresa...');
+        // Buscando dados da empresa
         const { data: empresaData } = await supabase
           .from('empresas')
           .select('*')
@@ -9523,10 +9426,10 @@ const PDVPage: React.FC = () => {
         if (!empresaData) {
           throw new Error('Dados da empresa não encontrados');
         }
-        console.log('✅ FRONTEND: Dados da empresa carregados:', empresaData.razao_social);
+        // Dados da empresa carregados
 
         // ✅ NOVO: Buscar série da NFC-e do usuário logado
-        console.log('🔢 FRONTEND: Buscando série da NFC-e do usuário...');
+        // Buscando série da NFC-e
         const { data: usuarioSerieData } = await supabase
           .from('usuarios')
           .select('serie_nfce')
@@ -9534,10 +9437,10 @@ const PDVPage: React.FC = () => {
           .single();
 
         const serieUsuario = usuarioSerieData?.serie_nfce || 1; // Fallback para série 1
-        console.log('✅ FRONTEND: Série da NFC-e do usuário:', serieUsuario);
+        // Série da NFC-e obtida
 
         // Buscar configuração NFe
-        console.log('⚙️ FRONTEND: Buscando configuração NFe...');
+        // Buscando configuração NFe
         const { data: nfeConfigData, error: nfeConfigError } = await supabase
           .from('nfe_config')
           .select('ambiente')
@@ -9552,14 +9455,14 @@ const PDVPage: React.FC = () => {
         if (!nfeConfigData) {
           throw new Error('Configuração NFe não encontrada');
         }
-        console.log('✅ FRONTEND: Configuração NFe carregada:', nfeConfigData.ambiente);
+        // Configuração NFe carregada
 
         setEtapaProcessamento('Preparando dados para NFC-e...');
 
         try {
           // ✅ NOVO: Validar se número foi salvo corretamente
           setEtapaProcessamento('Validando numeração da NFC-e...');
-          console.log('🔍 FRONTEND: Validando número NFC-e salvo para venda:', vendaId);
+          // Validando número NFC-e
 
           const { data: vendaSalva, error: validacaoError } = await supabase
             .from('pdv')
