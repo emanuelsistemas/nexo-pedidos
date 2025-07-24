@@ -4872,6 +4872,17 @@ const PDVPage: React.FC = () => {
 
       setCarrinho(novosItens);
 
+      // ✅ IMPORTAR CLIENTE DO CARDÁPIO DIGITAL
+      if (pedido.nome_cliente && !clienteSelecionado) {
+        const clienteCardapio = {
+          id: `cardapio_cliente_${pedido.id}`, // ID temporário para cliente do cardápio
+          nome: pedido.nome_cliente,
+          telefone: pedido.telefone_cliente || null,
+          documento: pedido.cpf_cnpj_cliente || null
+        };
+        setClienteSelecionado(clienteCardapio);
+      }
+
       // Fechar modal do cardápio digital
       setShowCardapioDigitalModal(false);
 
@@ -12704,9 +12715,10 @@ const PDVPage: React.FC = () => {
 
 
 
-        {/* Área Lateral de Informações - Aparece quando há configurações habilitadas OU pedidos importados */}
+        {/* Área Lateral de Informações - Aparece quando há configurações habilitadas OU pedidos importados OU itens do cardápio digital */}
         {carrinho.length > 0 && (
           pedidosImportados.length > 0 ||
+          carrinho.some(item => item.cardapio_digital) ||
           (pdvConfig?.seleciona_clientes ||
            pdvConfig?.vendedor ||
            pdvConfig?.comandas ||
@@ -12766,8 +12778,8 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Cliente - Aparece se configuração habilitada OU se há pedidos importados */}
-              {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0) && (
+              {/* Cliente - Aparece se configuração habilitada OU se há pedidos importados OU itens do cardápio digital */}
+              {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0 || carrinho.some(item => item.cardapio_digital)) && (
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
                   {/* Cliente selecionado manualmente */}
                   {pdvConfig?.seleciona_clientes ? (
@@ -12820,8 +12832,8 @@ const PDVPage: React.FC = () => {
                       </button>
                     )
                   ) : (
-                    /* Cliente dos pedidos importados */
-                    pedidosImportados.length > 0 && pedidosImportados[0]?.cliente && (
+                    /* Cliente dos pedidos importados OU do cardápio digital */
+                    (pedidosImportados.length > 0 && pedidosImportados[0]?.cliente) ? (
                       <div className="space-y-1">
                         <div className="flex items-center gap-1">
                           <User size={12} className="text-blue-400" />
@@ -12835,6 +12847,23 @@ const PDVPage: React.FC = () => {
                           <div className="text-xs text-gray-500 truncate">{pedidosImportados[0].cliente.email}</div>
                         )}
                       </div>
+                    ) : (
+                      /* Cliente do cardápio digital */
+                      clienteSelecionado && carrinho.some(item => item.cardapio_digital) && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <User size={12} className="text-blue-400" />
+                            <div className="text-xs text-blue-400 font-medium">Cliente do Cardápio</div>
+                          </div>
+                          <div className="text-white text-xs font-medium truncate">{clienteSelecionado.nome}</div>
+                          {clienteSelecionado.telefone && (
+                            <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
+                          )}
+                          {clienteSelecionado.documento && (
+                            <div className="text-xs text-gray-500 truncate">{clienteSelecionado.documento}</div>
+                          )}
+                        </div>
+                      )
                     )
                   )}
                 </div>
@@ -12888,7 +12917,6 @@ const PDVPage: React.FC = () => {
                   </div>
                 </div>
               )}
-
 
 
               {/* Opções de Faturamento - Descontos do Cliente */}
