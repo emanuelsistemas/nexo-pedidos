@@ -20563,15 +20563,15 @@ const PDVPage: React.FC = () => {
                             {/* Botões de ação para todos os status (exceto pendente e o status atual) */}
                             {pedido.status_pedido !== 'pendente' && (
                               <div className="flex flex-col gap-2">
-                                {/* Primeira linha de botões */}
-                                <div className="flex gap-2">
-                                  {pedido.status_pedido !== 'confirmado' && (
+                                {/* Botões dinâmicos de status - Mostra todos os status possíveis exceto o atual e pendente */}
+                                <div className="flex flex-wrap gap-2">
+                                  {/* Botão Confirmar */}
+                                  {pedido.status_pedido !== 'confirmado' && pedido.status_pedido !== 'pendente' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await aceitarPedidoComMudancaAba(pedido.id);
                                         if (sucesso) {
                                           await carregarTodosPedidosCardapio();
-                                          // Delay maior para garantir que os dados foram atualizados
                                           setTimeout(() => {
                                             setStatusFilterCardapio('confirmado');
                                           }, 200);
@@ -20595,13 +20595,13 @@ const PDVPage: React.FC = () => {
                                     </button>
                                   )}
 
-                                  {pedido.status_pedido !== 'preparando' && (
+                                  {/* Botão Preparar */}
+                                  {pedido.status_pedido !== 'preparando' && pedido.status_pedido !== 'pendente' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await marcarComoPreparando(pedido.id);
                                         if (sucesso) {
                                           await carregarTodosPedidosCardapio();
-                                          // Delay maior para garantir que os dados foram atualizados
                                           setTimeout(() => {
                                             setStatusFilterCardapio('preparando');
                                           }, 200);
@@ -20625,13 +20625,13 @@ const PDVPage: React.FC = () => {
                                     </button>
                                   )}
 
-                                  {pedido.status_pedido !== 'pronto' && (
+                                  {/* Botão Pronto */}
+                                  {pedido.status_pedido !== 'pronto' && pedido.status_pedido !== 'pendente' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await marcarComoPronto(pedido.id);
                                         if (sucesso) {
                                           await carregarTodosPedidosCardapio();
-                                          // Delay maior para garantir que os dados foram atualizados
                                           setTimeout(() => {
                                             setStatusFilterCardapio('pronto');
                                           }, 200);
@@ -20654,18 +20654,14 @@ const PDVPage: React.FC = () => {
                                       )}
                                     </button>
                                   )}
-                                </div>
 
-                                {/* Segunda linha de botões */}
-                                <div className="flex gap-2">
-                                  {/* Botão Saiu para Entrega - Aparece quando status = pronto */}
-                                  {pedido.status_pedido === 'pronto' && (
+                                  {/* Botão Saiu para Entrega */}
+                                  {pedido.status_pedido !== 'saiu_para_entrega' && pedido.status_pedido !== 'pendente' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await marcarComoSaiuParaEntrega(pedido.id);
                                         if (sucesso) {
                                           await carregarTodosPedidosCardapio();
-                                          // Delay maior para garantir que os dados foram atualizados
                                           setTimeout(() => {
                                             setStatusFilterCardapio('saiu_para_entrega');
                                           }, 200);
@@ -20689,14 +20685,13 @@ const PDVPage: React.FC = () => {
                                     </button>
                                   )}
 
-                                  {/* Botão Entregar - Aparece quando status = saiu_para_entrega */}
-                                  {pedido.status_pedido === 'saiu_para_entrega' && (
+                                  {/* Botão Entregar */}
+                                  {pedido.status_pedido !== 'entregue' && pedido.status_pedido !== 'pendente' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await marcarComoEntregue(pedido.id);
                                         if (sucesso) {
                                           await carregarTodosPedidosCardapio();
-                                          // Delay maior para garantir que os dados foram atualizados
                                           setTimeout(() => {
                                             setStatusFilterCardapio('entregue');
                                           }, 200);
@@ -20719,7 +20714,10 @@ const PDVPage: React.FC = () => {
                                       )}
                                     </button>
                                   )}
+                                </div>
 
+                                {/* Linha separada para Faturar, status Faturado e Cancelar */}
+                                <div className="flex gap-2">
                                   {/* Botão Faturar - Aparece apenas quando status = entregue */}
                                   {pedido.status_pedido === 'entregue' && (
                                     <button
@@ -20727,7 +20725,7 @@ const PDVPage: React.FC = () => {
                                         setPedidoParaFaturar(pedido);
                                         setShowConfirmFaturarPedido(true);
                                       }}
-                                      className="flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700"
+                                      className="flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700"
                                     >
                                       💰 Faturar
                                     </button>
@@ -20747,7 +20745,8 @@ const PDVPage: React.FC = () => {
                                     </div>
                                   )}
 
-                                  {pedido.status_pedido !== 'cancelado' && (
+                                  {/* Botão Cancelar - Aparece em todos os status exceto cancelado e faturado */}
+                                  {pedido.status_pedido !== 'cancelado' && pedido.status_pedido !== 'faturado' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await rejeitarPedidoComMudancaAba(pedido.id);
