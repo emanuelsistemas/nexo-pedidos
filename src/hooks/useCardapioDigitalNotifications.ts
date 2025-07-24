@@ -25,7 +25,6 @@ export const useCardapioDigitalNotifications = ({
   enabled = true,
   onPedidoChange
 }: UseCardapioDigitalNotificationsProps) => {
-  console.log('🔧 Hook inicializado com callback:', !!onPedidoChange);
   const [pedidosPendentes, setPedidosPendentes] = useState<PedidoCardapio[]>([]);
   const [contadorPendentes, setContadorPendentes] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -533,9 +532,6 @@ export const useCardapioDigitalNotifications = ({
 
     const channelName = `cardapio_digital_${empresaId}`;
 
-    console.log('🔗 Configurando Realtime para empresa:', empresaId);
-    console.log('🔄 Callback onPedidoChange disponível:', !!onPedidoChange);
-
     const channel = supabase
       .channel(channelName)
       .on(
@@ -547,8 +543,6 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🆕 Novo pedido recebido via Realtime:', payload.new);
-
           // Tocar som de notificação IMEDIATAMENTE
           tocarSomNotificacao();
 
@@ -560,13 +554,8 @@ export const useCardapioDigitalNotifications = ({
           carregarPedidosPendentes();
 
           // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
-          console.log('🔄 Chamando onPedidoChange callback...');
-          console.log('🔄 Callback ainda disponível:', !!onPedidoChange);
           if (onPedidoChange) {
-            console.log('✅ Executando callback onPedidoChange');
             onPedidoChange();
-          } else {
-            console.log('❌ onPedidoChange callback não definido');
           }
         }
       )
@@ -579,18 +568,12 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🔄 Pedido atualizado via Realtime:', payload.new);
-
           // ✅ SEMPRE recarregar lista de pedidos pendentes quando houver UPDATE
           carregarPedidosPendentes();
 
           // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
-          console.log('🔄 UPDATE - Chamando onPedidoChange callback...');
           if (onPedidoChange) {
-            console.log('✅ UPDATE - Executando callback onPedidoChange');
             onPedidoChange();
-          } else {
-            console.log('❌ UPDATE - onPedidoChange callback não definido');
           }
         }
       )

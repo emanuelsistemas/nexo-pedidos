@@ -212,11 +212,9 @@ const PDVPage: React.FC = () => {
       // ✅ RECARREGAR LISTA COMPLETA QUANDO HOUVER MUDANÇAS NOS PEDIDOS
       console.log('🔄 onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
       if (modalCardapioAbertoRef.current) {
-        console.log('📋 Recarregando lista completa do cardápio...');
         // ✅ USAR FUNÇÃO INLINE PARA EVITAR DEPENDÊNCIA CIRCULAR
         (async () => {
           if (!empresaData?.id) {
-            console.log('❌ carregarTodosPedidosCardapio: empresaData.id não encontrado');
             return;
           }
 
@@ -251,7 +249,6 @@ const PDVPage: React.FC = () => {
               .order('data_pedido', { ascending: false });
 
             if (error) {
-              console.error('❌ carregarTodosPedidosCardapio: Erro na consulta:', error);
               return;
             }
 
@@ -261,13 +258,10 @@ const PDVPage: React.FC = () => {
             // ✅ ATUALIZAR ESTADO E APLICAR FILTROS IMEDIATAMENTE
             setTodosOsPedidosCardapio(pedidos);
 
-            // ✅ APLICAR FILTROS COM PEQUENO DELAY PARA GARANTIR QUE O ESTADO FOI ATUALIZADO
-            setTimeout(() => {
-
-              aplicarFiltrosCardapio(pedidos);
-            }, 50);
+            // ✅ APLICAR FILTROS IMEDIATAMENTE COM OS DADOS RECEBIDOS (SEM DELAY)
+            aplicarFiltrosCardapio(pedidos);
           } catch (error) {
-            console.error('❌ carregarTodosPedidosCardapio: Erro inesperado:', error);
+            // Erro inesperado
           }
         })();
       }
@@ -2964,7 +2958,6 @@ const PDVPage: React.FC = () => {
   // ✅ FUNÇÃO PARA CARREGAR TODOS OS PEDIDOS DO CARDÁPIO DIGITAL
   const carregarTodosPedidosCardapio = async () => {
     if (!empresaData?.id) {
-      console.log('❌ carregarTodosPedidosCardapio: empresaData.id não encontrado');
       return;
     }
 
@@ -2999,7 +2992,6 @@ const PDVPage: React.FC = () => {
         .order('data_pedido', { ascending: false });
 
       if (error) {
-        console.error('❌ carregarTodosPedidosCardapio: Erro na consulta:', error);
         return;
       }
 
@@ -3009,13 +3001,10 @@ const PDVPage: React.FC = () => {
       // ✅ ATUALIZAR ESTADO E APLICAR FILTROS IMEDIATAMENTE
       setTodosOsPedidosCardapio(pedidos);
 
-      // ✅ APLICAR FILTROS IMEDIATAMENTE COM OS NOVOS DADOS
-      setTimeout(() => {
-
-        aplicarFiltrosCardapio(pedidos);
-      }, 50); // Pequeno delay para garantir que o estado foi atualizado
+      // ✅ APLICAR FILTROS IMEDIATAMENTE COM OS DADOS RECEBIDOS (SEM DELAY)
+      aplicarFiltrosCardapio(pedidos);
     } catch (error) {
-      console.error('❌ carregarTodosPedidosCardapio: Erro inesperado:', error);
+      // Erro inesperado
     }
   };
 
@@ -3027,23 +3016,11 @@ const PDVPage: React.FC = () => {
 
   // ✅ FUNÇÃO PARA APLICAR FILTROS NO CARDÁPIO DIGITAL
   const aplicarFiltrosCardapio = (pedidosParaFiltrar = todosOsPedidosCardapio) => {
-
-
     let filtered = [...pedidosParaFiltrar];
 
     // Aplicar filtro de status
     if (statusFilterCardapio !== 'todos') {
-      const statusFiltro = statusFilterCardapio;
-
-
-      const antesDoFiltro = filtered.length;
-
-      filtered = filtered.filter(pedido => {
-        const match = pedido.status_pedido === statusFiltro;
-        return match;
-      });
-
-
+      filtered = filtered.filter(pedido => pedido.status_pedido === statusFilterCardapio);
     }
 
     // Aplicar filtro de busca
@@ -3069,21 +3046,17 @@ const PDVPage: React.FC = () => {
       });
     }
 
-    console.log('🔍 Resultado final do filtro:', filtered.length, 'pedidos');
-    console.log('🔍 Pedidos filtrados:', filtered.map(p => ({ id: p.id, numero: p.numero_pedido, status: p.status_pedido })));
     setPedidosCardapioFiltrados(filtered);
   };
 
   // ✅ FUNÇÕES DE FILTRO DO CARDÁPIO DIGITAL
   const filtrarCardapioPorStatus = (status: string) => {
-    console.log('🔄 filtrarCardapioPorStatus: Mudando para status:', status);
     setStatusFilterCardapio(status);
     // ✅ NÃO CHAMAR aplicarFiltrosCardapio AQUI - O useEffect já faz isso
   };
 
   // ✅ FUNÇÃO PARA SELECIONAR PEDIDO
   const selecionarPedido = (pedido: any) => {
-    console.log('🎯 Pedido selecionado:', pedido.numero_pedido);
     setPedidoSelecionado(pedido);
   };
 
@@ -3093,7 +3066,6 @@ const PDVPage: React.FC = () => {
   };
 
   const limparFiltrosCardapio = () => {
-    console.log('🧹 Limpando filtros do cardápio...');
     setStatusFilterCardapio('pendente');
     setSearchCardapio('');
     setDataInicioCardapio('');
@@ -3104,13 +3076,11 @@ const PDVPage: React.FC = () => {
   // ✅ USEEFFECT PARA SINCRONIZAR REF COM ESTADO DO MODAL
   useEffect(() => {
     modalCardapioAbertoRef.current = showCardapioDigitalModal;
-    console.log('🔄 Modal cardápio estado atualizado:', showCardapioDigitalModal);
   }, [showCardapioDigitalModal]);
 
   // ✅ USEEFFECT PARA CARREGAR PEDIDOS DO CARDÁPIO QUANDO MODAL ABRIR
   useEffect(() => {
     if (showCardapioDigitalModal && empresaData?.id) {
-      console.log('🔄 Modal cardápio aberto - Carregando pedidos...');
       carregarTodosPedidosCardapio();
     }
   }, [showCardapioDigitalModal, empresaData?.id]);

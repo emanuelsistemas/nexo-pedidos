@@ -982,6 +982,8 @@ const SeletorSaboresModalCardapio: React.FC<SeletorSaboresModalProps> = ({
 
 const CardapioPublicoPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
+
+
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [grupos, setGrupos] = useState<any[]>([]);
@@ -1415,8 +1417,6 @@ const CardapioPublicoPage: React.FC = () => {
     if (!empresaId) return;
 
     try {
-      console.log('🔄 Sincronizando pedidos com banco de dados...');
-
       // Buscar todos os pedidos ativos do banco
       const { data: pedidosBanco, error } = await supabase
         .from('cardapio_digital')
@@ -1431,8 +1431,6 @@ const CardapioPublicoPage: React.FC = () => {
       }
 
       if (pedidosBanco && pedidosBanco.length > 0) {
-        console.log(`✅ Encontrados ${pedidosBanco.length} pedidos ativos no banco:`, pedidosBanco);
-
         // Salvar todos os pedidos no localStorage
         const chaveSlug = `pedidos_ativos_slug_${slug}`;
         localStorage.setItem(chaveSlug, JSON.stringify(pedidosBanco));
@@ -1440,10 +1438,7 @@ const CardapioPublicoPage: React.FC = () => {
         // Atualizar estado
         setPedidosAtivos(pedidosBanco);
         setMostrarTarjaPedido(true);
-
-        console.log('✅ Pedidos sincronizados com sucesso!');
       } else {
-        console.log('ℹ️ Nenhum pedido ativo encontrado no banco');
         setPedidosAtivos([]);
         setMostrarTarjaPedido(false);
       }
@@ -4212,12 +4207,6 @@ const CardapioPublicoPage: React.FC = () => {
         const { originalId } = adicionalDesvinculado;
 
         setExcedentesAgrupados(prevExcedentes => {
-          console.log('Adicionando de volta aos excedentes:', {
-            originalId,
-            nome: adicionalDesvinculado.nome,
-            excedentesAtuais: prevExcedentes[originalId]?.quantidadeTotal || 0
-          });
-
           if (prevExcedentes[originalId]) {
             // Se já existe, apenas incrementar a quantidade
             return {
@@ -5631,15 +5620,6 @@ const CardapioPublicoPage: React.FC = () => {
         p && p.id && ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto'].includes(p.status_pedido)
       );
 
-      console.log('🔄 Recuperação de pedidos:', {
-        chaveSlug,
-        chaveEmpresaId,
-        chaveAntiga,
-        pedidosEncontrados: pedidosEncontrados.length,
-        pedidosAtivos: pedidosAtivos.length,
-        pedidos: pedidosAtivos
-      });
-
       return pedidosAtivos;
 
     } catch (error) {
@@ -5842,8 +5822,6 @@ const CardapioPublicoPage: React.FC = () => {
         .single();
 
       if (!error && pedidoAtualizado) {
-
-
         // Atualizar pedido atual
         setPedidoAtual(pedidoAtualizado);
 
@@ -5920,8 +5898,6 @@ const CardapioPublicoPage: React.FC = () => {
           .single();
 
         if (!error && pedidoAtualizado && pedidoAtualizado.status_pedido !== pedidoAtual.status_pedido) {
-
-
           // Atualizar pedido atual
           setPedidoAtual(pedidoAtualizado);
 
