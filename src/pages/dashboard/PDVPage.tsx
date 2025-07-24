@@ -20281,6 +20281,19 @@ const PDVPage: React.FC = () => {
                                     </button>
                                   )}
 
+                                  {/* Botão Faturar - Aparece apenas quando status = entregue */}
+                                  {pedido.status_pedido === 'entregue' && (
+                                    <button
+                                      onClick={() => {
+                                        // TODO: Implementar função de faturamento
+                                        toast.info('Funcionalidade de faturamento em desenvolvimento');
+                                      }}
+                                      className="flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700"
+                                    >
+                                      💰 Faturar
+                                    </button>
+                                  )}
+
                                   {pedido.status_pedido !== 'cancelado' && (
                                     <button
                                       onClick={async () => {
