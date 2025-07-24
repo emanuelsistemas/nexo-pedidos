@@ -5388,6 +5388,11 @@ const CardapioPublicoPage: React.FC = () => {
     }
   };
 
+  // ✅ FUNÇÃO PARA FECHAR O MODAL DE FINALIZAÇÃO (botão X)
+  const fecharModalFinalizacao = () => {
+    setModalFinalizacaoAberto(false);
+  };
+
   const cancelarFinalizacaoPedido = () => {
     // ✅ VALIDAR PEDIDO ANTES DE ABRIR MODAL
     const erros = validarPedidoAntesDeFinalizar();
@@ -9888,7 +9893,7 @@ const CardapioPublicoPage: React.FC = () => {
                   </p>
                 </div>
                 <button
-                  onClick={cancelarFinalizacaoPedido}
+                  onClick={fecharModalFinalizacao}
                   className={`p-2 rounded-lg transition-colors ${
                     config.modo_escuro
                       ? 'text-gray-400 hover:bg-gray-800'
@@ -10675,7 +10680,7 @@ const CardapioPublicoPage: React.FC = () => {
             }`}>
               {/* Botão Cancelar */}
               <button
-                onClick={cancelarFinalizacaoPedido}
+                onClick={fecharModalFinalizacao}
                 className={`w-full py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
                   config.modo_escuro
                     ? 'bg-gray-700 text-gray-300 hover:bg-gray-600 border border-gray-600'
