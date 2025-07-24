@@ -265,10 +265,12 @@ export const useCardapioDigitalNotifications = ({
   // ✅ CARREGAR PEDIDOS PENDENTES
   const carregarPedidosPendentes = useCallback(async () => {
     if (!empresaId || !enabled) {
+      console.log('❌ [HOOK] carregarPedidosPendentes: empresaId ou enabled inválido');
       return;
     }
 
     try {
+      console.log('🔍 [HOOK] Carregando pedidos pendentes para empresa:', empresaId);
       setIsLoading(true);
 
       const { data, error } = await supabase
@@ -288,12 +290,21 @@ export const useCardapioDigitalNotifications = ({
         .order('data_pedido', { ascending: false });
 
       if (error) {
+        console.error('❌ [HOOK] Erro ao carregar pedidos pendentes:', error);
         return;
       }
 
       const pedidos = data || [];
       const contadorAnterior = contadorPendentes;
       const novoContador = pedidos.length;
+
+      console.log('✅ [HOOK] Pedidos pendentes carregados:', novoContador);
+      console.log('📊 [HOOK] Contador anterior:', contadorAnterior, '→ Novo contador:', novoContador);
+      console.log('📋 [HOOK] Lista de pedidos pendentes:', pedidos.map(p => ({
+        id: p.id,
+        numero: p.numero_pedido,
+        cliente: p.nome_cliente
+      })));
 
       setPedidosPendentes(pedidos);
       setContadorPendentes(novoContador);
@@ -543,6 +554,15 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
+          console.log('🆕 [REALTIME] Novo pedido recebido via Realtime:', payload.new);
+          console.log('🆕 [REALTIME] Dados do novo pedido:', {
+            id: payload.new.id,
+            numero_pedido: payload.new.numero_pedido,
+            status_pedido: payload.new.status_pedido,
+            nome_cliente: payload.new.nome_cliente,
+            empresa_id: payload.new.empresa_id
+          });
+
           // Tocar som de notificação IMEDIATAMENTE
           tocarSomNotificacao();
 
@@ -551,11 +571,17 @@ export const useCardapioDigitalNotifications = ({
           showMessage('info', `🍽️ Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente}`);
 
           // Recarregar lista de pedidos pendentes
+          console.log('🔄 [REALTIME] Recarregando lista de pedidos pendentes...');
           carregarPedidosPendentes();
 
           // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
+          console.log('🔄 [REALTIME] Chamando onPedidoChange callback...');
+          console.log('🔄 [REALTIME] Callback disponível:', !!onPedidoChange);
           if (onPedidoChange) {
+            console.log('✅ [REALTIME] Executando callback onPedidoChange');
             onPedidoChange();
+          } else {
+            console.log('❌ [REALTIME] onPedidoChange callback não definido');
           }
         }
       )

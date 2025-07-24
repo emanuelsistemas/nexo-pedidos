@@ -210,62 +210,17 @@ const PDVPage: React.FC = () => {
     enabled: !!empresaData?.id, // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
     onPedidoChange: useCallback(() => {
       // ✅ RECARREGAR LISTA COMPLETA QUANDO HOUVER MUDANÇAS NOS PEDIDOS
-      console.log('🔄 onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
+      console.log('🔄 [CALLBACK] onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
+      console.log('🔄 [CALLBACK] Estado atual - todosOsPedidosCardapio.length:', todosOsPedidosCardapio.length);
+      console.log('🔄 [CALLBACK] Estado atual - pedidosCardapioFiltrados.length:', pedidosCardapioFiltrados.length);
+      console.log('🔄 [CALLBACK] Status filter atual:', statusFilterCardapio);
+
       if (modalCardapioAbertoRef.current) {
-        // ✅ USAR FUNÇÃO INLINE PARA EVITAR DEPENDÊNCIA CIRCULAR
-        (async () => {
-          if (!empresaData?.id) {
-            return;
-          }
-
-
-
-          try {
-            const { data, error } = await supabase
-              .from('cardapio_digital')
-              .select(`
-                id,
-                numero_pedido,
-                nome_cliente,
-                telefone_cliente,
-                valor_total,
-                status_pedido,
-                data_pedido,
-                endereco_entrega,
-                forma_pagamento_nome,
-                forma_pagamento_tipo,
-                observacao_pedido,
-                observacao_entrega,
-                valor_produtos,
-                valor_desconto_cupom,
-                valor_taxa_entrega,
-                itens_pedido,
-                cupom_codigo,
-                cupom_descricao,
-                cupom_valor_desconto
-              `)
-              .eq('empresa_id', empresaData.id)
-              .order('updated_at', { ascending: false })
-              .order('data_pedido', { ascending: false });
-
-            if (error) {
-              return;
-            }
-
-            const pedidos = data || [];
-
-
-            // ✅ ATUALIZAR ESTADO E APLICAR FILTROS IMEDIATAMENTE
-            setTodosOsPedidosCardapio(pedidos);
-
-            // ✅ APLICAR FILTROS IMEDIATAMENTE COM OS DADOS RECEBIDOS (SEM DELAY)
-            aplicarFiltrosCardapio(pedidos);
-          } catch (error) {
-            // Erro inesperado
-          }
-        })();
+        console.log('📋 [CALLBACK] Modal está aberto - Chamando carregarTodosPedidosCardapio...');
+        // ✅ USAR FUNÇÃO EXISTENTE PARA EVITAR DEPENDÊNCIA CIRCULAR
+        carregarTodosPedidosCardapio();
       }
-    }, [empresaData?.id]) // ✅ APENAS DEPENDÊNCIA NECESSÁRIA
+    }, []) // ✅ SEM DEPENDÊNCIAS PARA EVITAR DEPENDÊNCIA CIRCULAR
   });
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
@@ -3010,7 +2965,10 @@ const PDVPage: React.FC = () => {
 
   // ✅ USEEFFECT PARA APLICAR FILTROS QUANDO QUALQUER FILTRO MUDA
   useEffect(() => {
-
+    console.log('🔄 [USEEFFECT] Filtros mudaram - Aplicando filtros...');
+    console.log('🔄 [USEEFFECT] statusFilterCardapio:', statusFilterCardapio);
+    console.log('🔄 [USEEFFECT] searchCardapio:', searchCardapio);
+    console.log('🔄 [USEEFFECT] todosOsPedidosCardapio.length:', todosOsPedidosCardapio.length);
     aplicarFiltrosCardapio();
   }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
 
@@ -3046,7 +3004,14 @@ const PDVPage: React.FC = () => {
       });
     }
 
+    console.log('🔍 [FILTRO] Resultado final do filtro:', filtered.length, 'pedidos');
+    console.log('🔍 [FILTRO] Pedidos filtrados:', filtered.map(p => ({ id: p.id, numero: p.numero_pedido, status: p.status_pedido })));
+    console.log('📝 [FILTRO] Atualizando estado pedidosCardapioFiltrados com', filtered.length, 'pedidos');
+
+    // ✅ VERIFICAR SE REALMENTE ESTÁ ATUALIZANDO O ESTADO
+    const estadoAnterior = pedidosCardapioFiltrados.length;
     setPedidosCardapioFiltrados(filtered);
+    console.log('📊 [FILTRO] Estado anterior:', estadoAnterior, '→ Novo estado:', filtered.length);
   };
 
   // ✅ FUNÇÕES DE FILTRO DO CARDÁPIO DIGITAL
