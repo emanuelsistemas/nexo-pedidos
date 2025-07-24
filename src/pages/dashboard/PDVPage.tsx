@@ -567,6 +567,10 @@ const PDVPage: React.FC = () => {
   const [showConfirmImportarPedido, setShowConfirmImportarPedido] = useState(false);
   const [pedidoParaImportar, setPedidoParaImportar] = useState<any>(null);
 
+  // Estados para confirmação de faturamento do cardápio digital
+  const [showConfirmFaturarPedido, setShowConfirmFaturarPedido] = useState(false);
+  const [pedidoParaFaturar, setPedidoParaFaturar] = useState<any>(null);
+
   // Estados para descontos do cliente
   const [descontosCliente, setDescontosCliente] = useState<{
     prazo: Array<{ id: string; prazo_dias: number; percentual: number; tipo: 'desconto' | 'acrescimo' }>;
@@ -957,6 +961,15 @@ const PDVPage: React.FC = () => {
       setShowConfirmImportarPedido(false);
       setPedidoParaImportar(null);
       setShowPedidosModal(false); // Fechar o modal de pedidos também
+    }
+  };
+
+  // Função para confirmar faturamento do pedido do cardápio digital
+  const confirmarFaturarPedido = () => {
+    if (pedidoParaFaturar) {
+      executarFaturamentoPedidoCardapio(pedidoParaFaturar);
+      setShowConfirmFaturarPedido(false);
+      setPedidoParaFaturar(null);
     }
   };
 
@@ -4601,6 +4614,77 @@ const PDVPage: React.FC = () => {
     } catch (error: any) {
       toast.error(`Erro ao gerar link: ${error.message}`);
       return null;
+    }
+  };
+
+  // Função que executa o faturamento do pedido do cardápio digital
+  const executarFaturamentoPedidoCardapio = (pedido: any) => {
+    try {
+      // Limpar carrinho atual
+      setCarrinho([]);
+      setClienteSelecionado(null);
+      setVendedorSelecionado(null);
+      setDescontoPrazoSelecionado(null);
+
+      // Importar cliente do pedido
+      if (pedido.nome_cliente) {
+        const clienteImportado = {
+          id: `cardapio_${pedido.id}`, // ID temporário para cliente do cardápio
+          nome: pedido.nome_cliente,
+          telefone: pedido.telefone_cliente || '',
+          documento: pedido.documento_cliente || ''
+        };
+        setClienteSelecionado(clienteImportado);
+
+        // Preencher automaticamente CPF/CNPJ na Nota Fiscal se disponível
+        if (pedido.documento_cliente && pedido.documento_cliente.trim()) {
+          const documentoLimpo = pedido.documento_cliente.replace(/\D/g, '');
+          if (documentoLimpo.length === 11) {
+            setTipoDocumento('cpf');
+            setCpfCnpjNota(formatCpf(documentoLimpo));
+            setClienteEncontrado(clienteImportado);
+          } else if (documentoLimpo.length === 14) {
+            setTipoDocumento('cnpj');
+            setCpfCnpjNota(formatCnpj(documentoLimpo));
+            setClienteEncontrado(clienteImportado);
+          }
+          setErroValidacao('');
+        }
+      }
+
+      // Converter itens do pedido para formato do carrinho
+      const itensCardapio = JSON.parse(pedido.itens || '[]');
+      const novosItens: ItemCarrinho[] = itensCardapio.map((item: any, index: number) => {
+        // Criar produto temporário baseado no item do cardápio
+        const produtoTemp = {
+          id: `cardapio_produto_${item.id || index}`,
+          nome: item.nome,
+          preco: item.preco_unitario || item.preco || 0,
+          categoria: 'Cardápio Digital',
+          ativo: true
+        };
+
+        return {
+          id: `cardapio_item_${pedido.id}_${index}`,
+          produto: produtoTemp,
+          quantidade: item.quantidade || 1,
+          subtotal: (item.quantidade || 1) * (item.preco_unitario || item.preco || 0),
+          pedido_origem_id: pedido.id,
+          pedido_origem_numero: pedido.numero_pedido,
+          cardapio_digital: true // Marcar como item do cardápio digital
+        };
+      });
+
+      setCarrinho(novosItens);
+
+      // Fechar modal do cardápio digital
+      setShowCardapioDigitalModal(false);
+
+      // Mostrar mensagem de sucesso
+      toast.success(`Pedido #${pedido.numero_pedido} importado para faturamento!`);
+
+    } catch (error) {
+      toast.error('Erro ao importar pedido para faturamento');
     }
   };
 
@@ -17349,6 +17433,69 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* Modal de Confirmação - Faturar Pedido do Cardápio Digital */}
+      <AnimatePresence>
+        {showConfirmFaturarPedido && pedidoParaFaturar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-background-card rounded-lg p-6 max-w-md w-full"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-400">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">Faturar Pedido</h3>
+                  <p className="text-gray-400 text-sm">Importar para o PDV</p>
+                </div>
+              </div>
+
+              <p className="text-gray-300 mb-4">
+                Deseja importar este pedido do cardápio digital para o PDV e gerar a nota fiscal?
+              </p>
+
+              <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
+                <p className="text-green-400 font-medium">Pedido #{pedidoParaFaturar.numero_pedido}</p>
+                <p className="text-blue-400">Cliente: {pedidoParaFaturar.nome_cliente}</p>
+                <p className="text-gray-300">Valor: {formatarPreco(pedidoParaFaturar.valor_total)}</p>
+              </div>
+
+              <p className="text-yellow-400 text-sm mb-6">
+                ⚠️ O carrinho atual será limpo e substituído pelos itens deste pedido.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowConfirmFaturarPedido(false);
+                    setPedidoParaFaturar(null);
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarFaturarPedido}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  💰 Faturar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Modal de Confirmação - Remover Pedido Importado */}
       <AnimatePresence>
         {showConfirmRemovePedidoImportado && pedidoParaRemover && (
@@ -20285,8 +20432,8 @@ const PDVPage: React.FC = () => {
                                   {pedido.status_pedido === 'entregue' && (
                                     <button
                                       onClick={() => {
-                                        // TODO: Implementar função de faturamento
-                                        toast.info('Funcionalidade de faturamento em desenvolvimento');
+                                        setPedidoParaFaturar(pedido);
+                                        setShowConfirmFaturarPedido(true);
                                       }}
                                       className="flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 bg-indigo-600 hover:bg-indigo-700"
                                     >
