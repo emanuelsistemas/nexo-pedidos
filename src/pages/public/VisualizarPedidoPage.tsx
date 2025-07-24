@@ -226,6 +226,7 @@ const VisualizarPedidoPage: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'pendente': return 'Pendente';
+      case 'saiu_para_entrega': return 'Saiu para Entrega';
       case 'entregue': return 'Entregue';
       case 'faturado': return 'Faturado';
       case 'cancelado': return 'Cancelado';
@@ -236,6 +237,7 @@ const VisualizarPedidoPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pendente': return 'text-yellow-400';
+      case 'saiu_para_entrega': return 'text-indigo-400';
       case 'entregue': return 'text-green-400';
       case 'faturado': return 'text-green-400';
       case 'cancelado': return 'text-red-400';

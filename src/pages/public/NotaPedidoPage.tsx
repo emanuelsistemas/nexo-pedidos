@@ -317,6 +317,7 @@ const NotaPedidoPage: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'pendente': return 'PENDENTE';
+      case 'saiu_para_entrega': return 'SAIU PARA ENTREGA';
       case 'entregue': return 'ENTREGUE';
       case 'faturado': return 'FATURADO';
       case 'cancelado': return 'CANCELADO';

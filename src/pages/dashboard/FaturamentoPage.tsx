@@ -266,6 +266,7 @@ const FaturamentoPage: React.FC = () => {
       case 'confirmado': return 'bg-blue-500/10 text-blue-500';
       case 'em_preparo': return 'bg-orange-500/10 text-orange-500';
       case 'em_entrega': return 'bg-purple-500/10 text-purple-500';
+      case 'saiu_para_entrega': return 'bg-indigo-500/10 text-indigo-500';
       case 'entregue': return 'bg-teal-500/10 text-teal-500';
       case 'cancelado': return 'bg-red-500/10 text-red-500';
       default: return 'bg-gray-500/10 text-gray-500';
@@ -288,6 +289,7 @@ const FaturamentoPage: React.FC = () => {
       case 'confirmado': return 'Confirmado';
       case 'em_preparo': return 'Em Preparo';
       case 'em_entrega': return 'Em Entrega';
+      case 'saiu_para_entrega': return 'Saiu para Entrega';
       case 'entregue': return 'Entregue';
       case 'cancelado': return 'Cancelado';
       default: return 'Pendente'; // Fallback para status desconhecido

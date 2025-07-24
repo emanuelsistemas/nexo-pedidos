@@ -513,6 +513,47 @@ export const useCardapioDigitalNotifications = ({
     }
   }, [pedidosProcessando]); // ✅ APENAS DEPENDÊNCIAS NECESSÁRIAS
 
+  // ✅ MARCAR PEDIDO COMO SAIU PARA ENTREGA - NOVO STATUS
+  const marcarComoSaiuParaEntrega = useCallback(async (pedidoId: string) => {
+    if (pedidosProcessando.has(pedidoId)) return false;
+
+    try {
+      setPedidosProcessando(prev => new Set(prev).add(pedidoId));
+
+      const { error } = await supabase
+        .from('cardapio_digital')
+        .update({
+          status_pedido: 'saiu_para_entrega',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', pedidoId);
+
+      if (error) {
+        showMessage('error', 'Erro ao marcar pedido como saiu para entrega');
+        return false;
+      }
+
+      showMessage('success', '🚚 Pedido saiu para entrega');
+      carregarPedidosPendentes();
+
+      const currentCallback = onPedidoChangeRef.current;
+      if (currentCallback) {
+        currentCallback();
+      }
+
+      return true;
+    } catch (error) {
+      showMessage('error', 'Erro inesperado ao marcar pedido como saiu para entrega');
+      return false;
+    } finally {
+      setPedidosProcessando(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(pedidoId);
+        return newSet;
+      });
+    }
+  }, [pedidosProcessando]); // ✅ APENAS DEPENDÊNCIAS NECESSÁRIAS
+
   // ✅ MARCAR PEDIDO COMO ENTREGUE - ESTABILIZADO
   const marcarComoEntregue = useCallback(async (pedidoId: string) => {
     if (pedidosProcessando.has(pedidoId)) return false;
@@ -688,6 +729,7 @@ export const useCardapioDigitalNotifications = ({
     rejeitarPedido,
     marcarComoPreparando,
     marcarComoPronto,
+    marcarComoSaiuParaEntrega,
     marcarComoEntregue,
     recarregarPedidos: carregarPedidosPendentes,
     tocarSomNotificacao,

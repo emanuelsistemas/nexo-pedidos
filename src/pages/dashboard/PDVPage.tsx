@@ -211,6 +211,7 @@ const PDVPage: React.FC = () => {
     pedidosProcessando,
     marcarComoPreparando,
     marcarComoPronto,
+    marcarComoSaiuParaEntrega,
     marcarComoEntregue
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
@@ -20351,6 +20352,7 @@ const PDVPage: React.FC = () => {
                       { value: 'confirmado', label: 'Confirmado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length, color: 'bg-blue-500 hover:bg-blue-600' },
                       { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length, color: 'bg-yellow-500 hover:bg-yellow-600' },
                       { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length, color: 'bg-green-500 hover:bg-green-600' },
+                      { value: 'saiu_para_entrega', label: 'Saiu para Entrega', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'saiu_para_entrega').length, color: 'bg-indigo-500 hover:bg-indigo-600' },
                       { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length, color: 'bg-purple-500 hover:bg-purple-600' },
                       { value: 'faturado', label: 'Faturado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'faturado').length, color: 'bg-emerald-500 hover:bg-emerald-600' },
                       { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length, color: 'bg-red-500 hover:bg-red-600' }
@@ -20656,7 +20658,39 @@ const PDVPage: React.FC = () => {
 
                                 {/* Segunda linha de botões */}
                                 <div className="flex gap-2">
-                                  {pedido.status_pedido !== 'entregue' && (
+                                  {/* Botão Saiu para Entrega - Aparece quando status = pronto */}
+                                  {pedido.status_pedido === 'pronto' && (
+                                    <button
+                                      onClick={async () => {
+                                        const sucesso = await marcarComoSaiuParaEntrega(pedido.id);
+                                        if (sucesso) {
+                                          await carregarTodosPedidosCardapio();
+                                          // Delay maior para garantir que os dados foram atualizados
+                                          setTimeout(() => {
+                                            setStatusFilterCardapio('saiu_para_entrega');
+                                          }, 200);
+                                        }
+                                      }}
+                                      disabled={pedidosProcessando.has(pedido.id)}
+                                      className={`flex-1 text-white text-xs py-2 px-2 rounded transition-colors flex items-center justify-center gap-1 ${
+                                        pedidosProcessando.has(pedido.id)
+                                          ? 'bg-gray-500 cursor-not-allowed'
+                                          : 'bg-indigo-600 hover:bg-indigo-700'
+                                      }`}
+                                    >
+                                      {pedidosProcessando.has(pedido.id) ? (
+                                        <>
+                                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                          Saindo...
+                                        </>
+                                      ) : (
+                                        <>🚚 Saiu para Entrega</>
+                                      )}
+                                    </button>
+                                  )}
+
+                                  {/* Botão Entregar - Aparece quando status = saiu_para_entrega */}
+                                  {pedido.status_pedido === 'saiu_para_entrega' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await marcarComoEntregue(pedido.id);
@@ -20681,7 +20715,7 @@ const PDVPage: React.FC = () => {
                                           Entregando...
                                         </>
                                       ) : (
-                                        <>🚚 Entregar</>
+                                        <>✅ Entregar</>
                                       )}
                                     </button>
                                   )}
