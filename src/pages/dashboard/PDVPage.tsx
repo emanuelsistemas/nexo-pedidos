@@ -965,9 +965,9 @@ const PDVPage: React.FC = () => {
   };
 
   // Função para confirmar faturamento do pedido do cardápio digital
-  const confirmarFaturarPedido = () => {
+  const confirmarFaturarPedido = async () => {
     if (pedidoParaFaturar) {
-      executarFaturamentoPedidoCardapio(pedidoParaFaturar);
+      await executarFaturamentoPedidoCardapio(pedidoParaFaturar);
       setShowConfirmFaturarPedido(false);
       setPedidoParaFaturar(null);
     }
@@ -4705,7 +4705,7 @@ const PDVPage: React.FC = () => {
   };
 
   // Função que executa o faturamento do pedido do cardápio digital
-  const executarFaturamentoPedidoCardapio = (pedido: any) => {
+  const executarFaturamentoPedidoCardapio = async (pedido: any) => {
     try {
       // Limpar carrinho atual
       setCarrinho([]);
@@ -4741,7 +4741,33 @@ const PDVPage: React.FC = () => {
 
       // Converter itens do pedido para formato do carrinho
       const itensCardapio = Array.isArray(pedido.itens_pedido) ? pedido.itens_pedido : JSON.parse(pedido.itens_pedido || '[]');
+
+      // ✅ BUSCAR FOTOS DOS PRODUTOS
+      let fotosData: any[] = [];
+      try {
+        const produtosIds = itensCardapio
+          .map((item: any) => item.produto_id)
+          .filter(Boolean);
+
+        if (produtosIds.length > 0) {
+          const { data: fotosResult } = await supabase
+            .from('produto_fotos')
+            .select('produto_id, url, principal')
+            .in('produto_id', produtosIds)
+            .eq('principal', true);
+
+          if (fotosResult) {
+            fotosData = fotosResult;
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao buscar fotos dos produtos:', error);
+      }
+
       const novosItens: ItemCarrinho[] = itensCardapio.map((item: any, index: number) => {
+        // ✅ BUSCAR FOTO DO PRODUTO ESPECÍFICO
+        const foto = fotosData.find(f => f.produto_id === item.produto_id);
+
         // Criar produto temporário baseado no item do cardápio com campos obrigatórios do PDV
         const produtoTemp = {
           id: item.produto_id || `cardapio_produto_${item.id || index}`,
@@ -4754,7 +4780,8 @@ const PDVPage: React.FC = () => {
           promocao: false,
           grupo_id: null,
           unidade_medida_id: null,
-          produto_fotos: []
+          produto_fotos: foto ? [{ url: foto.url, principal: true }] : [], // ✅ INCLUIR FOTO
+          foto_url: foto?.url || null // ✅ CAMPO ADICIONAL PARA COMPATIBILIDADE
         };
 
         const quantidade = item.quantidade || 1;
