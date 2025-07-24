@@ -6915,7 +6915,7 @@ const CardapioPublicoPage: React.FC = () => {
                     </div>
 
                     {/* Controles de Quantidade do Produto Principal */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => decrementarQuantidadeItemCarrinho(itemId)}
                         disabled={lojaAberta === false}
@@ -6977,6 +6977,50 @@ const CardapioPublicoPage: React.FC = () => {
                         }`}
                       >
                         <Plus size={12} />
+                      </button>
+
+                      {/* Separador visual */}
+                      <div className={`w-px h-4 mx-1 ${
+                        config.modo_escuro ? 'bg-gray-600' : 'bg-gray-300'
+                      }`}></div>
+
+                      {/* Botão de Observação */}
+                      <button
+                        onClick={() => abrirModalObservacao(produto.id, itemId)}
+                        disabled={lojaAberta === false}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                          lojaAberta === false
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : observacao
+                            ? config.modo_escuro
+                              ? 'bg-blue-600 text-white hover:bg-blue-500'
+                              : 'bg-blue-500 text-white hover:bg-blue-600'
+                            : config.modo_escuro
+                            ? 'bg-gray-600 text-gray-400 hover:bg-gray-500 hover:text-white'
+                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300 hover:text-gray-700'
+                        }`}
+                        title={observacao ? 'Editar observação' : 'Adicionar observação'}
+                      >
+                        <Edit size={10} />
+                      </button>
+
+                      {/* Botão de Remover */}
+                      <button
+                        onClick={() => {
+                          setProdutoParaRemover(itemId);
+                          setModalRemoverItemAberto(true);
+                        }}
+                        disabled={lojaAberta === false}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                          lojaAberta === false
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : config.modo_escuro
+                            ? 'bg-red-600 text-white hover:bg-red-500'
+                            : 'bg-red-500 text-white hover:bg-red-600'
+                        }`}
+                        title="Remover item"
+                      >
+                        <Trash2 size={10} />
                       </button>
                     </div>
                   </div>

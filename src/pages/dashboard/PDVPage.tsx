@@ -1574,9 +1574,10 @@ const PDVPage: React.FC = () => {
       if (item.id === 'fiados') {
         return pdvConfig?.fiado === true; // ✅ CORRIGIDO: Usar configuração PDV
       }
-      // Se for o item 'venda-sem-produto', só mostrar se a configuração estiver habilitada
+      // Se for o item 'venda-sem-produto', só mostrar se a configuração estiver habilitada E não houver itens do cardápio digital
       if (item.id === 'venda-sem-produto') {
-        return pdvConfig?.venda_sem_produto === true;
+        const temItensCardapioDigital = carrinho.some(item => item.cardapio_digital === true);
+        return pdvConfig?.venda_sem_produto === true && !temItensCardapioDigital;
       }
       // Se for o item 'desconto-total', só mostrar se a configuração estiver habilitada E houver itens no carrinho
       if (item.id === 'desconto-total') {
