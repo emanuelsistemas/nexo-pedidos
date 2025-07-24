@@ -4617,6 +4617,55 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Função para marcar pedido do cardápio digital como faturado
+  const marcarPedidoCardapioComoFaturado = async (vendaId: string, numeroVenda: string) => {
+    try {
+      // Verificar se há itens do cardápio digital no carrinho
+      const itensCardapio = carrinho.filter(item => item.cardapio_digital && item.pedido_origem_id);
+
+      if (itensCardapio.length === 0) {
+        console.log('🔍 [FATURAMENTO] Nenhum item do cardápio digital encontrado no carrinho');
+        return;
+      }
+
+      // Obter IDs únicos dos pedidos do cardápio digital
+      const pedidosIds = [...new Set(itensCardapio.map(item => item.pedido_origem_id))];
+
+      console.log('🔥 [FATURAMENTO] Marcando pedidos do cardápio como faturados:', {
+        pedidos_ids: pedidosIds,
+        venda_id: vendaId,
+        numero_venda: numeroVenda
+      });
+
+      // Atualizar status dos pedidos para 'faturado'
+      for (const pedidoId of pedidosIds) {
+        const { error } = await supabase
+          .from('cardapio_digital')
+          .update({
+            status_pedido: 'faturado',
+            venda_pdv_id: vendaId,
+            numero_venda_pdv: numeroVenda,
+            data_faturamento: new Date().toISOString()
+          })
+          .eq('id', pedidoId);
+
+        if (error) {
+          console.error('❌ [FATURAMENTO] Erro ao marcar pedido como faturado:', error);
+        } else {
+          console.log('✅ [FATURAMENTO] Pedido marcado como faturado:', pedidoId);
+        }
+      }
+
+      // Recarregar pedidos do cardápio digital para atualizar a interface
+      if (showCardapioDigitalModal) {
+        carregarTodosPedidosCardapio();
+      }
+
+    } catch (error) {
+      console.error('❌ [FATURAMENTO] Erro ao marcar pedidos como faturados:', error);
+    }
+  };
+
   // Função que executa o faturamento do pedido do cardápio digital
   const executarFaturamentoPedidoCardapio = (pedido: any) => {
     try {
@@ -4653,25 +4702,43 @@ const PDVPage: React.FC = () => {
       }
 
       // Converter itens do pedido para formato do carrinho
-      const itensCardapio = JSON.parse(pedido.itens || '[]');
+      const itensCardapio = Array.isArray(pedido.itens_pedido) ? pedido.itens_pedido : JSON.parse(pedido.itens_pedido || '[]');
       const novosItens: ItemCarrinho[] = itensCardapio.map((item: any, index: number) => {
-        // Criar produto temporário baseado no item do cardápio
+        // Criar produto temporário baseado no item do cardápio com campos obrigatórios do PDV
         const produtoTemp = {
-          id: `cardapio_produto_${item.id || index}`,
-          nome: item.nome,
+          id: item.produto_id || `cardapio_produto_${item.id || index}`,
+          nome: item.produto_nome || item.nome || 'Produto do Cardápio',
           preco: item.preco_unitario || item.preco || 0,
+          codigo: `CARD_${index + 1}`, // Código obrigatório
+          descricao: item.produto_nome || item.nome || 'Produto importado do cardápio digital',
           categoria: 'Cardápio Digital',
-          ativo: true
+          ativo: true,
+          promocao: false,
+          grupo_id: null,
+          unidade_medida_id: null,
+          produto_fotos: []
         };
+
+        const quantidade = item.quantidade || 1;
+        const precoUnitario = item.preco_unitario || item.preco || 0;
+        const subtotal = quantidade * precoUnitario;
 
         return {
           id: `cardapio_item_${pedido.id}_${index}`,
           produto: produtoTemp,
-          quantidade: item.quantidade || 1,
-          subtotal: (item.quantidade || 1) * (item.preco_unitario || item.preco || 0),
+          quantidade: quantidade,
+          subtotal: subtotal,
           pedido_origem_id: pedido.id,
           pedido_origem_numero: pedido.numero_pedido,
-          cardapio_digital: true // Marcar como item do cardápio digital
+          cardapio_digital: true, // Marcar como item do cardápio digital
+          // Campos adicionais para compatibilidade com o PDV
+          observacao: item.observacao || null,
+          sabores: item.sabores || [],
+          descricaoSabores: item.sabores && item.sabores.length > 0 ?
+            item.sabores.map((s: any) => s.nome || s).join(', ') : null,
+          adicionais: item.adicionais || [],
+          tabela_preco_id: item.tabela_preco_id || null,
+          tabela_preco_nome: null
         };
       });
 
@@ -9624,6 +9691,9 @@ const PDVPage: React.FC = () => {
           valorTotal: valorTotal
         }
       }));
+
+      // ✅ MARCAR PEDIDO DO CARDÁPIO DIGITAL COMO FATURADO
+      await marcarPedidoCardapioComoFaturado(vendaId, numeroVenda);
 
       // ✅ NOVO: Limpar venda em andamento (adaptado do sistema de rascunhos NFe)
       setVendaEmAndamento(null);
@@ -20095,6 +20165,7 @@ const PDVPage: React.FC = () => {
                       { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length, color: 'bg-yellow-500 hover:bg-yellow-600' },
                       { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length, color: 'bg-green-500 hover:bg-green-600' },
                       { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length, color: 'bg-purple-500 hover:bg-purple-600' },
+                      { value: 'faturado', label: 'Faturado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'faturado').length, color: 'bg-emerald-500 hover:bg-emerald-600' },
                       { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length, color: 'bg-red-500 hover:bg-red-600' }
                     ].map((status) => (
                       <button
@@ -20439,6 +20510,20 @@ const PDVPage: React.FC = () => {
                                     >
                                       💰 Faturar
                                     </button>
+                                  )}
+
+                                  {/* Tag Faturado - Aparece quando status = faturado */}
+                                  {pedido.status_pedido === 'faturado' && (
+                                    <div className="flex-1 bg-emerald-600/20 border border-emerald-500/30 rounded px-2 py-2 text-center">
+                                      <div className="text-emerald-400 text-xs font-medium flex items-center justify-center gap-1">
+                                        ✅ Faturado
+                                      </div>
+                                      {pedido.numero_venda_pdv && (
+                                        <div className="text-emerald-300 text-xs mt-1">
+                                          Venda #{pedido.numero_venda_pdv}
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
 
                                   {pedido.status_pedido !== 'cancelado' && (
