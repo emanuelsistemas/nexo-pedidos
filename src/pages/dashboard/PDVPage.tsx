@@ -4883,6 +4883,28 @@ const PDVPage: React.FC = () => {
         setClienteSelecionado(clienteCardapio);
       }
 
+      // ✅ SELECIONAR FORMA DE PAGAMENTO DO CARDÁPIO DIGITAL
+      if (pedido.forma_pagamento_nome && formasPagamento.length > 0) {
+        // Buscar forma de pagamento correspondente pelo nome
+        const formaCorrespondente = formasPagamento.find(forma =>
+          forma.nome?.toLowerCase() === pedido.forma_pagamento_nome.toLowerCase()
+        );
+
+        if (formaCorrespondente) {
+          setFormaPagamentoSelecionada(formaCorrespondente.id);
+          console.log('✅ Forma de pagamento selecionada automaticamente:', {
+            nome: formaCorrespondente.nome,
+            id: formaCorrespondente.id,
+            pedido_forma: pedido.forma_pagamento_nome
+          });
+        } else {
+          console.log('⚠️ Forma de pagamento não encontrada:', {
+            pedido_forma: pedido.forma_pagamento_nome,
+            formas_disponiveis: formasPagamento.map(f => f.nome)
+          });
+        }
+      }
+
       // Fechar modal do cardápio digital
       setShowCardapioDigitalModal(false);
 
