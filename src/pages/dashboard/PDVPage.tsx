@@ -4742,6 +4742,51 @@ const PDVPage: React.FC = () => {
         };
       });
 
+      // ✅ ADICIONAR TAXA DE ENTREGA COMO ITEM SEPARADO (se houver)
+      if (pedido.valor_taxa_entrega && pedido.valor_taxa_entrega > 0) {
+        // Criar item de taxa de entrega usando o sistema de "Venda sem Produto"
+        const produtoTaxaEntrega = {
+          id: `taxa-entrega-${pedido.id}`,
+          nome: 'Taxa de Entrega',
+          preco: pedido.valor_taxa_entrega,
+          codigo: '999999', // Código fixo para venda sem produto
+          descricao: 'Taxa de entrega do cardápio digital',
+          categoria: 'Serviços',
+          ativo: true,
+          promocao: false,
+          grupo_id: null,
+          unidade_medida_id: null,
+          produto_fotos: [],
+          unidade_medida: 'UN',
+          // Dados fiscais para taxa de entrega (serviço)
+          ncm: pdvConfig?.venda_sem_produto_ncm || '22021000',
+          cfop: pdvConfig?.venda_sem_produto_cfop || '5102',
+          codigo_barras: null
+        };
+
+        const itemTaxaEntrega: ItemCarrinho = {
+          id: `taxa-entrega-${pedido.id}-${Date.now()}`,
+          produto: produtoTaxaEntrega,
+          quantidade: 1,
+          subtotal: pedido.valor_taxa_entrega,
+          pedido_origem_id: pedido.id,
+          pedido_origem_numero: pedido.numero_pedido,
+          cardapio_digital: true,
+          vendaSemProduto: true, // Marcar como venda sem produto
+          nome: 'Taxa de Entrega', // Nome personalizado
+          preco: pedido.valor_taxa_entrega,
+          observacao: `Taxa de entrega - Pedido #${pedido.numero_pedido}`,
+          sabores: [],
+          descricaoSabores: null,
+          adicionais: [],
+          tabela_preco_id: null,
+          tabela_preco_nome: null
+        };
+
+        // Adicionar taxa de entrega aos itens
+        novosItens.push(itemTaxaEntrega);
+      }
+
       setCarrinho(novosItens);
 
       // Fechar modal do cardápio digital
