@@ -19983,13 +19983,13 @@ const PDVPage: React.FC = () => {
               <div className="flex-1 flex overflow-hidden">
                 {/* Lista de Pedidos */}
                 <div className="w-1/3 border-r border-gray-700 flex flex-col">
-                  <div className="p-4 border-b border-gray-700">
+                  <div className="p-2 border-b border-gray-700">
                     {/* Filtro de Data e Ações */}
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setShowFiltersCardapio(!showFiltersCardapio)}
-                          className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                           title="Filtros de data"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -20016,7 +20016,7 @@ const PDVPage: React.FC = () => {
                     </div>
 
                     {/* Campo de Busca */}
-                    <div className="mb-3">
+                    <div className="mb-1">
                       <input
                         type="text"
                         placeholder="Buscar por número, nome ou telefone..."
@@ -20028,7 +20028,7 @@ const PDVPage: React.FC = () => {
 
                     {/* Filtros de Data (Expansível) */}
                     {showFiltersCardapio && (
-                      <div className="mt-3 p-3 bg-gray-800/50 rounded-lg border border-gray-600">
+                      <div className="mt-1 p-3 bg-gray-800/50 rounded-lg border border-gray-600">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs text-gray-400 mb-1">Data Início</label>
