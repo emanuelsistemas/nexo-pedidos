@@ -20061,19 +20061,8 @@ const PDVPage: React.FC = () => {
                 {/* Lista de Pedidos */}
                 <div className="w-1/3 border-r border-gray-700 flex flex-col">
                   <div className="p-4 border-b border-gray-700">
-                    {/* Campo de Busca */}
-                    <div className="mb-3">
-                      <input
-                        type="text"
-                        placeholder="Buscar por número, nome ou telefone..."
-                        value={searchCardapio}
-                        onChange={(e) => filtrarCardapioPorBusca(e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-orange-500"
-                      />
-                    </div>
-
                     {/* Filtro de Data e Ações */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setShowFiltersCardapio(!showFiltersCardapio)}
@@ -20101,6 +20090,17 @@ const PDVPage: React.FC = () => {
                           🔄 Atualizar
                         </button>
                       </div>
+                    </div>
+
+                    {/* Campo de Busca */}
+                    <div className="mb-3">
+                      <input
+                        type="text"
+                        placeholder="Buscar por número, nome ou telefone..."
+                        value={searchCardapio}
+                        onChange={(e) => filtrarCardapioPorBusca(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                      />
                     </div>
 
                     {/* Filtros de Data (Expansível) */}
