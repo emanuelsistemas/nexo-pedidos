@@ -4840,12 +4840,13 @@ const PDVPage: React.FC = () => {
           vendaSemProduto: true, // Marcar como venda sem produto
           nome: 'Taxa de Entrega', // Nome personalizado
           preco: pedido.valor_taxa_entrega,
-          observacao: `Taxa de entrega - Pedido #${pedido.numero_pedido}`,
+          observacao: null, // ✅ REMOVER OBSERVAÇÃO para cardápio digital
           sabores: [],
           descricaoSabores: null,
           adicionais: [],
           tabela_preco_id: null,
-          tabela_preco_nome: null
+          tabela_preco_nome: null,
+          taxaEntregaCardapio: true // ✅ MARCAR COMO TAXA DE ENTREGA DO CARDÁPIO
         };
 
         // Adicionar taxa de entrega aos itens
@@ -11934,7 +11935,11 @@ const PDVPage: React.FC = () => {
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 {item.vendaSemProduto ? (
-                                  <DollarSign size={14} className="text-green-400" />
+                                  item.taxaEntregaCardapio ? (
+                                    <Bike size={14} className="text-blue-400" />
+                                  ) : (
+                                    <DollarSign size={14} className="text-green-400" />
+                                  )
                                 ) : (
                                   <Package size={14} className="text-gray-700" />
                                 )}
@@ -12046,7 +12051,7 @@ const PDVPage: React.FC = () => {
                                           )}
                                         </>
                                       )}
-                                      {item.vendaSemProduto && (
+                                      {item.vendaSemProduto && !item.taxaEntregaCardapio && (
                                         <span className="text-green-400">Venda sem produto</span>
                                       )}
                                       {/* ✅ NOVO: Mostrar valor unitário quando tem adicionais */}
