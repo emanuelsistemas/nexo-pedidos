@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Modal Status Pedido</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .success {
+            background-color: #28a745;
+        }
+        .success:hover {
+            background-color: #1e7e34;
+        }
+        .info {
+            background-color: #17a2b8;
+        }
+        .info:hover {
+            background-color: #117a8b;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #e9ecef;
+        }
+        .code {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Teste Modal Status Pedido #000009</h1>
+        
+        <div class="status">
+            <h3>Status Atual:</h3>
+            <div id="statusAtual">Verificando...</div>
+        </div>
+
+        <h3>Ações de Teste:</h3>
+        
+        <button class="button" onclick="adicionarPedidoLocalStorage()">
+            1. Adicionar Pedido #000009 ao LocalStorage
+        </button>
+        
+        <button class="button success" onclick="abrirCardapio()">
+            2. Abrir Cardápio Digital
+        </button>
+        
+        <button class="button info" onclick="verificarLocalStorage()">
+            3. Verificar LocalStorage
+        </button>
+        
+        <button class="button" onclick="limparLocalStorage()">
+            4. Limpar LocalStorage
+        </button>
+
+        <div class="status">
+            <h3>Instruções:</h3>
+            <ol>
+                <li>Clique em "Adicionar Pedido #000009 ao LocalStorage"</li>
+                <li>Clique em "Abrir Cardápio Digital"</li>
+                <li>No cardápio, você deve ver uma tarja vermelha com o pedido</li>
+                <li>Clique na tarja para abrir o modal de status</li>
+                <li>Verifique se mostra "Saiu para Entrega" corretamente</li>
+            </ol>
+        </div>
+
+        <div id="resultado" class="status" style="display: none;">
+            <h3>Resultado:</h3>
+            <div id="resultadoTexto"></div>
+        </div>
+    </div>
+
+    <script>
+        // Dados do pedido #000009 para teste
+        const pedidoTeste = {
+            id: "f9b7b6aa-f859-474c-a9d6-5f49c2804f63",
+            numero_pedido: "000009",
+            status_pedido: "saiu_para_entrega",
+            data_pedido: "2025-07-24T16:01:26.133117+00:00",
+            valor_total: 23.90,
+            nome_cliente: "emanuel",
+            telefone_cliente: "(12) 99999-9999"
+        };
+
+        function adicionarPedidoLocalStorage() {
+            try {
+                // Adicionar para o slug 'emanuel'
+                const chave = 'pedidos_ativos_slug_emanuel';
+                const pedidosExistentes = JSON.parse(localStorage.getItem(chave) || '[]');
+                
+                // Verificar se já existe
+                const indiceExistente = pedidosExistentes.findIndex(p => p.id === pedidoTeste.id);
+                
+                if (indiceExistente >= 0) {
+                    pedidosExistentes[indiceExistente] = pedidoTeste;
+                } else {
+                    pedidosExistentes.unshift(pedidoTeste);
+                }
+                
+                localStorage.setItem(chave, JSON.stringify(pedidosExistentes));
+                
+                mostrarResultado('✅ Pedido #000009 adicionado ao LocalStorage com status "saiu_para_entrega"', 'success');
+                verificarLocalStorage();
+            } catch (error) {
+                mostrarResultado('❌ Erro: ' + error.message, 'error');
+            }
+        }
+
+        function abrirCardapio() {
+            window.open('http://localhost:5173/cardapio/emanuel', '_blank');
+            mostrarResultado('🌐 Cardápio digital aberto em nova aba', 'info');
+        }
+
+        function verificarLocalStorage() {
+            try {
+                const chave = 'pedidos_ativos_slug_emanuel';
+                const pedidos = JSON.parse(localStorage.getItem(chave) || '[]');
+                
+                const statusDiv = document.getElementById('statusAtual');
+                
+                if (pedidos.length === 0) {
+                    statusDiv.innerHTML = '❌ Nenhum pedido encontrado no LocalStorage';
+                } else {
+                    const pedido009 = pedidos.find(p => p.numero_pedido === '000009');
+                    if (pedido009) {
+                        statusDiv.innerHTML = `
+                            ✅ Pedido #000009 encontrado<br>
+                            <strong>Status:</strong> ${pedido009.status_pedido}<br>
+                            <strong>Cliente:</strong> ${pedido009.nome_cliente}<br>
+                            <strong>Data:</strong> ${new Date(pedido009.data_pedido).toLocaleString('pt-BR')}
+                        `;
+                    } else {
+                        statusDiv.innerHTML = '⚠️ Pedido #000009 não encontrado no LocalStorage';
+                    }
+                }
+            } catch (error) {
+                document.getElementById('statusAtual').innerHTML = '❌ Erro ao verificar: ' + error.message;
+            }
+        }
+
+        function limparLocalStorage() {
+            try {
+                localStorage.removeItem('pedidos_ativos_slug_emanuel');
+                mostrarResultado('🧹 LocalStorage limpo', 'info');
+                verificarLocalStorage();
+            } catch (error) {
+                mostrarResultado('❌ Erro ao limpar: ' + error.message, 'error');
+            }
+        }
+
+        function mostrarResultado(texto, tipo) {
+            const resultadoDiv = document.getElementById('resultado');
+            const resultadoTexto = document.getElementById('resultadoTexto');
+            
+            resultadoTexto.innerHTML = texto;
+            resultadoDiv.style.display = 'block';
+            
+            // Aplicar cor baseada no tipo
+            if (tipo === 'success') {
+                resultadoDiv.style.backgroundColor = '#d4edda';
+                resultadoDiv.style.borderColor = '#c3e6cb';
+            } else if (tipo === 'error') {
+                resultadoDiv.style.backgroundColor = '#f8d7da';
+                resultadoDiv.style.borderColor = '#f5c6cb';
+            } else {
+                resultadoDiv.style.backgroundColor = '#d1ecf1';
+                resultadoDiv.style.borderColor = '#bee5eb';
+            }
+        }
+
+        // Verificar status inicial
+        verificarLocalStorage();
+    </script>
+</body>
+</html>

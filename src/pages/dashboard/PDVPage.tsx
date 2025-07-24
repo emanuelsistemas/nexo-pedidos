@@ -40,7 +40,8 @@ import {
   Maximize2,
   Minimize2,
   Camera,
-  Save
+  Save,
+  Copy
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -2955,7 +2956,9 @@ const PDVPage: React.FC = () => {
           itens_pedido,
           cupom_codigo,
           cupom_descricao,
-          cupom_valor_desconto
+          cupom_valor_desconto,
+          quer_nota_fiscal,
+          cpf_cnpj_cliente
         `)
         .eq('empresa_id', empresaData.id)
         .order('updated_at', { ascending: false })
@@ -3136,6 +3139,22 @@ const PDVPage: React.FC = () => {
 
       // Manter na aba "Pendente" para ver outros pedidos pendentes
       // (não mudar de aba para que o usuário veja outros pedidos pendentes)
+    }
+  };
+
+  // ✅ FUNÇÃO PARA COPIAR CPF/CNPJ (APENAS NÚMEROS)
+  const copiarCpfCnpj = async (cpfCnpj: string) => {
+    try {
+      // Remover máscara - manter apenas números
+      const apenasNumeros = cpfCnpj.replace(/\D/g, '');
+
+      // Copiar para área de transferência
+      await navigator.clipboard.writeText(apenasNumeros);
+
+      // Exibir toast de confirmação
+      toast.success(`CPF/CNPJ copiado: ${apenasNumeros}`);
+    } catch (error) {
+      toast.error('Erro ao copiar CPF/CNPJ');
     }
   };
 
@@ -20371,28 +20390,11 @@ const PDVPage: React.FC = () => {
               exit={{ scale: 0.9, opacity: 0 }}
               className="w-full h-full bg-background-card flex flex-col"
             >
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-3">
-                    <BookOpen size={20} className="text-orange-500" />
-                    <div>
-                      <h2 className="text-lg font-bold text-white">Cardápio Digital</h2>
-                      {/* Contador de pedidos - "Nenhum pedido pendente" oculto temporariamente */}
-                      {contadorCardapio > 0 && (
-                        <p className="text-gray-400 text-xs">
-                          {`${contadorCardapio} pedido${contadorCardapio > 1 ? 's' : ''} pendente${contadorCardapio > 1 ? 's' : ''}`}
-                        </p>
-                      )}
-                      {/* Para reativar: descomente a linha abaixo e remova a condicional acima */}
-                      {/* <p className="text-gray-400 text-xs">
-                        {contadorCardapio > 0 ? `${contadorCardapio} pedido${contadorCardapio > 1 ? 's' : ''} pendente${contadorCardapio > 1 ? 's' : ''}` : 'Nenhum pedido pendente'}
-                      </p> */}
-                    </div>
-                  </div>
-
-                  {/* Botões de Status no Header */}
-                  <div className="flex flex-wrap gap-3">
+              {/* ✅ HEADER OCULTO - MOSTRAR APENAS AS ABAS */}
+              {/* Header com apenas botão fechar */}
+              <div className="flex items-center justify-between px-6 py-2 border-b border-gray-700">
+                {/* Botões de Status (Abas) */}
+                <div className="flex flex-wrap gap-3">
                     {[
                       { value: 'pendente', label: 'Pendente', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length, color: 'bg-orange-500 hover:bg-orange-600' },
                       { value: 'confirmado', label: 'Confirmado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length, color: 'bg-blue-500 hover:bg-blue-600' },
@@ -20422,8 +20424,8 @@ const PDVPage: React.FC = () => {
                         </span>
                       </button>
                     ))}
-                  </div>
                 </div>
+
                 <button
                   onClick={() => setShowCardapioDigitalModal(false)}
                   className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
@@ -20548,6 +20550,27 @@ const PDVPage: React.FC = () => {
                             <div className="flex items-center justify-between mb-3">
                               <div>
                                 <h4 className="font-semibold text-white">#{pedido.numero_pedido}</h4>
+                                {/* ✅ TAG DE NOTA FISCAL */}
+                                {pedido.quer_nota_fiscal && pedido.cpf_cnpj_cliente && (
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                      📄 Nota Fiscal
+                                    </span>
+                                    <span className="text-xs text-gray-400 font-mono">
+                                      {pedido.cpf_cnpj_cliente}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Evitar que clique no card
+                                        copiarCpfCnpj(pedido.cpf_cnpj_cliente);
+                                      }}
+                                      className="p-1 text-gray-400 hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors"
+                                      title="Copiar CPF/CNPJ (apenas números)"
+                                    >
+                                      <Copy size={12} />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                               <div className="text-right">
                                 <p className="font-bold text-green-400">{formatarPreco(pedido.valor_total)}</p>

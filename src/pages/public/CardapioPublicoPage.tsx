@@ -1422,7 +1422,7 @@ const CardapioPublicoPage: React.FC = () => {
         .from('cardapio_digital')
         .select('id, numero_pedido, status_pedido, data_pedido, valor_total')
         .eq('empresa_id', empresaId)
-        .in('status_pedido', ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto'])
+        .in('status_pedido', ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega'])
         .order('data_pedido', { ascending: false });
 
       if (error) {
@@ -5625,7 +5625,7 @@ const CardapioPublicoPage: React.FC = () => {
 
       // 4. Filtrar apenas pedidos ativos
       const pedidosAtivos = pedidosEncontrados.filter(p =>
-        p && p.id && ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto'].includes(p.status_pedido)
+        p && p.id && ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega'].includes(p.status_pedido)
       );
 
       return pedidosAtivos;
@@ -5663,9 +5663,9 @@ const CardapioPublicoPage: React.FC = () => {
         pedidosExistentes.unshift(pedido);
       }
 
-      // Manter apenas pedidos não finalizados (pendente, confirmado, preparando, pronto)
+      // Manter apenas pedidos não finalizados (pendente, confirmado, preparando, pronto, saiu_para_entrega)
       const pedidosAtivos = pedidosExistentes.filter(p =>
-        ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto'].includes(p.status_pedido)
+        ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega'].includes(p.status_pedido)
       );
 
       // Salvar lista atualizada
@@ -5987,11 +5987,18 @@ const CardapioPublicoPage: React.FC = () => {
         borderCor: 'border-blue-200'
       },
       'pronto': {
-        titulo: 'Pedido Pronto - Saiu para Entrega',
+        titulo: 'Pedido Pronto para Entrega',
         icone: 'loading',
         cor: 'text-purple-500',
         bgCor: 'bg-purple-50',
         borderCor: 'border-purple-200'
+      },
+      'saiu_para_entrega': {
+        titulo: 'Saiu para Entrega',
+        icone: 'loading',
+        cor: 'text-indigo-500',
+        bgCor: 'bg-indigo-50',
+        borderCor: 'border-indigo-200'
       },
       'entregue': {
         titulo: 'Pedido Entregue',
