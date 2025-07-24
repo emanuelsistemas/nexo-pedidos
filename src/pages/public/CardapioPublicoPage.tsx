@@ -1422,7 +1422,7 @@ const CardapioPublicoPage: React.FC = () => {
         .from('cardapio_digital')
         .select('id, numero_pedido, status_pedido, data_pedido, valor_total')
         .eq('empresa_id', empresaId)
-        .in('status_pedido', ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega'])
+        .in('status_pedido', ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega', 'entregue', 'cancelado'])
         .order('data_pedido', { ascending: false });
 
       if (error) {
@@ -5623,9 +5623,9 @@ const CardapioPublicoPage: React.FC = () => {
         }
       }
 
-      // 4. Filtrar apenas pedidos ativos
+      // 4. Filtrar apenas pedidos válidos (incluindo entregue e cancelado para acompanhamento)
       const pedidosAtivos = pedidosEncontrados.filter(p =>
-        p && p.id && ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega'].includes(p.status_pedido)
+        p && p.id && ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega', 'entregue', 'cancelado'].includes(p.status_pedido)
       );
 
       return pedidosAtivos;
@@ -5663,10 +5663,25 @@ const CardapioPublicoPage: React.FC = () => {
         pedidosExistentes.unshift(pedido);
       }
 
-      // Manter apenas pedidos não finalizados (pendente, confirmado, preparando, pronto, saiu_para_entrega)
-      const pedidosAtivos = pedidosExistentes.filter(p =>
-        ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega'].includes(p.status_pedido)
-      );
+      // Manter todos os pedidos ativos (incluindo entregue e cancelado para acompanhamento)
+      // Remover apenas pedidos finalizados há mais de 24 horas
+      const agora = new Date();
+      const umDiaAtras = new Date(agora.getTime() - 24 * 60 * 60 * 1000);
+
+      const pedidosAtivos = pedidosExistentes.filter(p => {
+        if (!['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega', 'entregue', 'cancelado'].includes(p.status_pedido)) {
+          return false;
+        }
+
+        // Manter pedidos não finalizados sempre
+        if (['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega'].includes(p.status_pedido)) {
+          return true;
+        }
+
+        // Para pedidos finalizados (entregue/cancelado), manter apenas se foram finalizados nas últimas 24h
+        const dataPedido = new Date(p.data_pedido);
+        return dataPedido > umDiaAtras;
+      });
 
       // Salvar lista atualizada
       localStorage.setItem(chaveSlug, JSON.stringify(pedidosAtivos));
@@ -6006,6 +6021,13 @@ const CardapioPublicoPage: React.FC = () => {
         cor: 'text-green-500',
         bgCor: 'bg-green-50',
         borderCor: 'border-green-200'
+      },
+      'cancelado': {
+        titulo: 'Pedido Cancelado',
+        icone: 'check',
+        cor: 'text-red-500',
+        bgCor: 'bg-red-50',
+        borderCor: 'border-red-200'
       }
     };
 
@@ -12228,10 +12250,14 @@ const CardapioPublicoPage: React.FC = () => {
 
                 {/* Aguardando Estabelecimento */}
                 <div className="flex items-center gap-3">
-                  {['confirmado', 'preparando', 'pronto', 'entregue'].includes(pedidoAtual.status_pedido) ? (
+                  {['confirmado', 'preparando', 'pronto', 'saiu_para_entrega', 'entregue'].includes(pedidoAtual.status_pedido) ? (
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                       <Check size={14} className="text-white" />
                     </div>
+                  ) : pedidoAtual.status_pedido === 'cancelado' ? (
+                    <div className={`w-6 h-6 rounded-full border-2 ${
+                      config.modo_escuro ? 'border-gray-600' : 'border-gray-300'
+                    }`}></div>
                   ) : (
                     <div className="w-6 h-6 rounded-full border-2 border-yellow-500 animate-spin">
                       <div className="w-1.5 h-1.5 bg-yellow-500 rounded-full ml-0.5 mt-0.5"></div>
@@ -12246,7 +12272,7 @@ const CardapioPublicoPage: React.FC = () => {
 
                 {/* Pedido Sendo Feito */}
                 <div className="flex items-center gap-3">
-                  {['preparando', 'pronto', 'entregue'].includes(pedidoAtual.status_pedido) ? (
+                  {['preparando', 'pronto', 'saiu_para_entrega', 'entregue'].includes(pedidoAtual.status_pedido) ? (
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                       <Check size={14} className="text-white" />
                     </div>
@@ -12266,9 +12292,31 @@ const CardapioPublicoPage: React.FC = () => {
                   </span>
                 </div>
 
+                {/* Pedido Pronto */}
+                <div className="flex items-center gap-3">
+                  {['pronto', 'saiu_para_entrega', 'entregue'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <Check size={14} className="text-white" />
+                    </div>
+                  ) : ['preparando'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full border-2 border-orange-500 animate-spin">
+                      <div className="w-1.5 h-1.5 bg-orange-500 rounded-full ml-0.5 mt-0.5"></div>
+                    </div>
+                  ) : (
+                    <div className={`w-6 h-6 rounded-full border-2 ${
+                      config.modo_escuro ? 'border-gray-600' : 'border-gray-300'
+                    }`}></div>
+                  )}
+                  <span className={`text-sm font-medium ${
+                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Pedido Pronto
+                  </span>
+                </div>
+
                 {/* Saiu para Entrega */}
                 <div className="flex items-center gap-3">
-                  {['entregue'].includes(pedidoAtual.status_pedido) ? (
+                  {['saiu_para_entrega', 'entregue'].includes(pedidoAtual.status_pedido) ? (
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                       <Check size={14} className="text-white" />
                     </div>
@@ -12294,6 +12342,10 @@ const CardapioPublicoPage: React.FC = () => {
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                       <Check size={14} className="text-white" />
                     </div>
+                  ) : ['saiu_para_entrega'].includes(pedidoAtual.status_pedido) ? (
+                    <div className="w-6 h-6 rounded-full border-2 border-indigo-500 animate-spin">
+                      <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full ml-0.5 mt-0.5"></div>
+                    </div>
                   ) : (
                     <div className={`w-6 h-6 rounded-full border-2 ${
                       config.modo_escuro ? 'border-gray-600' : 'border-gray-300'
@@ -12305,6 +12357,20 @@ const CardapioPublicoPage: React.FC = () => {
                     Pedido Entregue
                   </span>
                 </div>
+
+                {/* Cancelado - só aparece se o pedido foi cancelado */}
+                {pedidoAtual.status_pedido === 'cancelado' && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+                      <X size={14} className="text-white" />
+                    </div>
+                    <span className={`text-sm font-medium ${
+                      config.modo_escuro ? 'text-red-400' : 'text-red-600'
+                    }`}>
+                      Pedido Cancelado
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Informações do Pedido */}
