@@ -5044,7 +5044,7 @@ const PDVPage: React.FC = () => {
           // Buscar cliente real na tabela de clientes
           const { data: clienteReal, error } = await supabase
             .from('clientes')
-            .select('id, nome, telefone, documento, tipo_documento, email')
+            .select('id, nome, telefone, documento, tipo_documento, emails')
             .eq('empresa_id', empresaData.id)
             .or(`nome.ilike.%${pedido.nome_cliente}%,telefone.eq.${pedido.telefone_cliente || ''},documento.eq.${pedido.cpf_cnpj_cliente || ''}`)
             .limit(1)
