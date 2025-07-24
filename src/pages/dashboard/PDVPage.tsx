@@ -3098,6 +3098,8 @@ const PDVPage: React.FC = () => {
     if (showCardapioDigitalModal && empresaData?.id) {
       // ✅ SEMPRE RESETAR PARA ABA "PENDENTE" QUANDO ABRIR O MODAL
       setStatusFilterCardapio('pendente');
+      // ✅ RESETAR PEDIDO SELECIONADO PARA MOSTRAR APENAS A LISTA
+      setPedidoSelecionado(null);
       carregarTodosPedidosCardapio();
     }
   }, [showCardapioDigitalModal, empresaData?.id]);
