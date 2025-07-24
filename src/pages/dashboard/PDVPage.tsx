@@ -220,7 +220,7 @@ const PDVPage: React.FC = () => {
             return;
           }
 
-          console.log('📋 carregarTodosPedidosCardapio: Iniciando carregamento para empresa:', empresaData.id);
+
 
           try {
             const { data, error } = await supabase
@@ -256,15 +256,14 @@ const PDVPage: React.FC = () => {
             }
 
             const pedidos = data || [];
-            console.log('✅ carregarTodosPedidosCardapio: Pedidos carregados:', pedidos.length);
-            console.log('📊 Status dos pedidos:', pedidos.map(p => ({ numero: p.numero_pedido, status: p.status_pedido })));
+
 
             // ✅ ATUALIZAR ESTADO E APLICAR FILTROS IMEDIATAMENTE
             setTodosOsPedidosCardapio(pedidos);
 
             // ✅ APLICAR FILTROS COM PEQUENO DELAY PARA GARANTIR QUE O ESTADO FOI ATUALIZADO
             setTimeout(() => {
-              console.log('🔄 Aplicando filtros após carregar pedidos...');
+
               aplicarFiltrosCardapio(pedidos);
             }, 50);
           } catch (error) {
@@ -2969,7 +2968,7 @@ const PDVPage: React.FC = () => {
       return;
     }
 
-    console.log('📋 carregarTodosPedidosCardapio: Iniciando carregamento para empresa:', empresaData.id);
+
 
     try {
       const { data, error } = await supabase
@@ -3005,15 +3004,14 @@ const PDVPage: React.FC = () => {
       }
 
       const pedidos = data || [];
-      console.log('✅ carregarTodosPedidosCardapio: Pedidos carregados:', pedidos.length);
-      console.log('📊 Status dos pedidos:', pedidos.map(p => ({ numero: p.numero_pedido, status: p.status_pedido })));
+
 
       // ✅ ATUALIZAR ESTADO E APLICAR FILTROS IMEDIATAMENTE
       setTodosOsPedidosCardapio(pedidos);
 
       // ✅ APLICAR FILTROS IMEDIATAMENTE COM OS NOVOS DADOS
       setTimeout(() => {
-        console.log('🔄 Aplicando filtros após carregar pedidos...');
+
         aplicarFiltrosCardapio(pedidos);
       }, 50); // Pequeno delay para garantir que o estado foi atualizado
     } catch (error) {
@@ -3023,21 +3021,20 @@ const PDVPage: React.FC = () => {
 
   // ✅ USEEFFECT PARA APLICAR FILTROS QUANDO QUALQUER FILTRO MUDA
   useEffect(() => {
-    console.log('🔄 useEffect: Aplicando filtros - Status:', statusFilterCardapio, 'Pedidos:', todosOsPedidosCardapio.length);
+
     aplicarFiltrosCardapio();
   }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
 
   // ✅ FUNÇÃO PARA APLICAR FILTROS NO CARDÁPIO DIGITAL
   const aplicarFiltrosCardapio = (pedidosParaFiltrar = todosOsPedidosCardapio) => {
-    console.log('🔍 aplicarFiltrosCardapio - Status atual:', statusFilterCardapio);
-    console.log('🔍 aplicarFiltrosCardapio - Pedidos para filtrar:', pedidosParaFiltrar.length);
+
 
     let filtered = [...pedidosParaFiltrar];
 
     // Aplicar filtro de status
     if (statusFilterCardapio !== 'todos') {
       const statusFiltro = statusFilterCardapio;
-      console.log('🔍 Filtrando por status:', statusFiltro);
+
 
       const antesDoFiltro = filtered.length;
 
@@ -3046,7 +3043,7 @@ const PDVPage: React.FC = () => {
         return match;
       });
 
-      console.log('🔍 Pedidos após filtro de status:', filtered.length, 'de', antesDoFiltro);
+
     }
 
     // Aplicar filtro de busca
@@ -20458,35 +20455,9 @@ const PDVPage: React.FC = () => {
                               <p className="text-white text-sm">{pedidoSelecionado.endereco_entrega}</p>
                             </div>
                           )}
-
-                          {(pedidoSelecionado.observacao_pedido || pedidoSelecionado.observacao_entrega) && (
-                            <div className="bg-gray-700/50 rounded-lg p-4">
-                              <h3 className="text-sm font-semibold text-gray-300 mb-2">📝 Observações</h3>
-                              {pedidoSelecionado.observacao_pedido && (
-                                <p className="text-white text-sm mb-2">
-                                  <span className="text-gray-400">Pedido:</span> {pedidoSelecionado.observacao_pedido}
-                                </p>
-                              )}
-                              {pedidoSelecionado.observacao_entrega && (
-                                <p className="text-white text-sm">
-                                  <span className="text-gray-400">Entrega:</span> {pedidoSelecionado.observacao_entrega}
-                                </p>
-                              )}
-                            </div>
-                          )}
-
-                          {pedidoSelecionado.cupom_codigo && (
-                            <div className="bg-gray-700/50 rounded-lg p-4">
-                              <h3 className="text-sm font-semibold text-gray-300 mb-2">🎫 Cupom de Desconto</h3>
-                              <p className="text-white font-medium">{pedidoSelecionado.cupom_codigo}</p>
-                              {pedidoSelecionado.cupom_descricao && (
-                                <p className="text-gray-400 text-sm">{pedidoSelecionado.cupom_descricao}</p>
-                              )}
-                            </div>
-                          )}
                         </div>
 
-                        {/* Itens do Pedido - Movido para ficar antes do Pagamento */}
+                        {/* Itens do Pedido - Movido para ficar antes das Observações */}
                         <div className="mt-4">
                           <h3 className="text-lg font-semibold text-white mb-4">🛒 Itens do Pedido</h3>
                           <div className="space-y-3">
@@ -20527,14 +20498,45 @@ const PDVPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Card de Pagamento - Agora fica depois dos Itens */}
-                        {pedidoSelecionado.forma_pagamento_nome && (
-                          <div className="mt-4">
+                        {/* Cards de Observações e Pagamento na mesma linha */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                          {/* Observações - Lado Esquerdo */}
+                          {(pedidoSelecionado.observacao_pedido || pedidoSelecionado.observacao_entrega) && (
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">📝 Observações</h3>
+                              {pedidoSelecionado.observacao_pedido && (
+                                <p className="text-white text-sm mb-2">
+                                  <span className="text-gray-400">Pedido:</span> {pedidoSelecionado.observacao_pedido}
+                                </p>
+                              )}
+                              {pedidoSelecionado.observacao_entrega && (
+                                <p className="text-white text-sm">
+                                  <span className="text-gray-400">Entrega:</span> {pedidoSelecionado.observacao_entrega}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Pagamento - Lado Direito */}
+                          {pedidoSelecionado.forma_pagamento_nome && (
                             <div className="bg-gray-700/50 rounded-lg p-4">
                               <h3 className="text-sm font-semibold text-gray-300 mb-2">💳 Pagamento</h3>
                               <p className="text-white">{pedidoSelecionado.forma_pagamento_nome}</p>
                               {pedidoSelecionado.forma_pagamento_tipo && (
                                 <p className="text-gray-400 text-sm">Tipo: {pedidoSelecionado.forma_pagamento_tipo}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Cupom de Desconto - Linha separada se houver */}
+                        {pedidoSelecionado.cupom_codigo && (
+                          <div className="mt-4">
+                            <div className="bg-gray-700/50 rounded-lg p-4">
+                              <h3 className="text-sm font-semibold text-gray-300 mb-2">🎫 Cupom de Desconto</h3>
+                              <p className="text-white font-medium">{pedidoSelecionado.cupom_codigo}</p>
+                              {pedidoSelecionado.cupom_descricao && (
+                                <p className="text-gray-400 text-sm">{pedidoSelecionado.cupom_descricao}</p>
                               )}
                             </div>
                           </div>
