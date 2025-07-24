@@ -4716,19 +4716,36 @@ const PDVPage: React.FC = () => {
       setVendedorSelecionado(null);
       setDescontoPrazoSelecionado(null);
 
-      // Importar cliente do pedido
+      // ✅ CORREÇÃO: Importar cliente real do pedido (se existir) ou criar temporário
       if (pedido.nome_cliente) {
-        const clienteImportado = {
-          id: `cardapio_${pedido.id}`, // ID temporário para cliente do cardápio
-          nome: pedido.nome_cliente,
-          telefone: pedido.telefone_cliente || '',
-          documento: pedido.documento_cliente || ''
-        };
+        let clienteImportado;
+
+        if (pedido.cliente_id) {
+          // ✅ USAR CLIENTE REAL se existe no pedido
+          clienteImportado = {
+            id: pedido.cliente_id, // ID real do cliente
+            nome: pedido.nome_cliente,
+            telefone: pedido.telefone_cliente || '',
+            documento: pedido.cpf_cnpj_cliente || '',
+            tipo_documento: pedido.cpf_cnpj_cliente ? (pedido.cpf_cnpj_cliente.replace(/\D/g, '').length === 11 ? 'cpf' : 'cnpj') : null
+          };
+          console.log('✅ Usando cliente REAL do cardápio digital:', clienteImportado);
+        } else {
+          // ✅ FALLBACK: Criar cliente temporário se não existe cliente_id
+          clienteImportado = {
+            id: `cardapio_${pedido.id}`, // ID temporário para cliente do cardápio
+            nome: pedido.nome_cliente,
+            telefone: pedido.telefone_cliente || '',
+            documento: pedido.cpf_cnpj_cliente || ''
+          };
+          console.log('⚠️ Usando cliente TEMPORÁRIO do cardápio digital:', clienteImportado);
+        }
+
         setClienteSelecionado(clienteImportado);
 
-        // Preencher automaticamente CPF/CNPJ na Nota Fiscal se disponível
-        if (pedido.documento_cliente && pedido.documento_cliente.trim()) {
-          const documentoLimpo = pedido.documento_cliente.replace(/\D/g, '');
+        // ✅ CORREÇÃO: Preencher automaticamente CPF/CNPJ na Nota Fiscal se disponível
+        if (pedido.cpf_cnpj_cliente && pedido.cpf_cnpj_cliente.trim()) {
+          const documentoLimpo = pedido.cpf_cnpj_cliente.replace(/\D/g, '');
           if (documentoLimpo.length === 11) {
             setTipoDocumento('cpf');
             setCpfCnpjNota(formatCpf(documentoLimpo));
@@ -4875,15 +4892,37 @@ const PDVPage: React.FC = () => {
 
       setCarrinho(novosItens);
 
-      // ✅ IMPORTAR CLIENTE DO CARDÁPIO DIGITAL
+      // ✅ BUSCAR CLIENTE REAL DO CARDÁPIO DIGITAL
       if (pedido.nome_cliente && !clienteSelecionado) {
-        const clienteCardapio = {
-          id: `cardapio_cliente_${pedido.id}`, // ID temporário para cliente do cardápio
-          nome: pedido.nome_cliente,
-          telefone: pedido.telefone_cliente || null,
-          documento: pedido.cpf_cnpj_cliente || null
-        };
-        setClienteSelecionado(clienteCardapio);
+        try {
+          // Buscar cliente real na tabela de clientes
+          const { data: clienteReal, error } = await supabase
+            .from('clientes')
+            .select('id, nome, telefone, documento, tipo_documento, email')
+            .eq('empresa_id', empresaData.id)
+            .or(`nome.ilike.%${pedido.nome_cliente}%,telefone.eq.${pedido.telefone_cliente || ''},documento.eq.${pedido.cpf_cnpj_cliente || ''}`)
+            .limit(1)
+            .single();
+
+          if (clienteReal && !error) {
+            setClienteSelecionado(clienteReal);
+            console.log('✅ Cliente real encontrado e selecionado:', {
+              id: clienteReal.id,
+              nome: clienteReal.nome,
+              telefone: clienteReal.telefone,
+              documento: clienteReal.documento
+            });
+          } else {
+            console.log('⚠️ Cliente não encontrado na tabela de clientes:', {
+              nome: pedido.nome_cliente,
+              telefone: pedido.telefone_cliente,
+              documento: pedido.cpf_cnpj_cliente,
+              error: error?.message
+            });
+          }
+        } catch (error) {
+          console.error('❌ Erro ao buscar cliente real:', error);
+        }
       }
 
       // ✅ SELECIONAR FORMA DE PAGAMENTO DO CARDÁPIO DIGITAL
@@ -8597,13 +8636,20 @@ const PDVPage: React.FC = () => {
       setEtapaProcessamento('Preparando dados do cliente...');
       let clienteData = null;
       if (clienteSelecionado) {
+        // ✅ VERIFICAR SE É CLIENTE TEMPORÁRIO DO CARDÁPIO DIGITAL
+        const isClienteTemporario = clienteSelecionado.id?.toString().startsWith('cardapio_');
+
         clienteData = {
-          cliente_id: clienteSelecionado.id,
+          cliente_id: isClienteTemporario ? null : clienteSelecionado.id, // ✅ NÃO SALVAR ID TEMPORÁRIO
           nome_cliente: clienteSelecionado.nome,
           telefone_cliente: clienteSelecionado.telefone,
           documento_cliente: clienteSelecionado.documento,
           tipo_documento_cliente: clienteSelecionado.tipo_documento
         };
+
+        if (isClienteTemporario) {
+          console.log('⚠️ Cliente temporário do cardápio digital - não salvando cliente_id:', clienteSelecionado.id);
+        }
       } else if (pedidosImportados.length > 0 && pedidosImportados[0]?.cliente) {
         const cliente = pedidosImportados[0].cliente;
         clienteData = {
