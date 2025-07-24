@@ -3024,9 +3024,46 @@ const PDVPage: React.FC = () => {
     // ✅ NÃO CHAMAR aplicarFiltrosCardapio AQUI - O useEffect já faz isso
   };
 
-  // ✅ FUNÇÃO PARA SELECIONAR PEDIDO
-  const selecionarPedido = (pedido: any) => {
-    setPedidoSelecionado(pedido);
+  // ✅ FUNÇÃO PARA SELECIONAR PEDIDO COM BUSCA DE FOTOS
+  const selecionarPedido = async (pedido: any) => {
+    try {
+      // Primeiro, definir o pedido selecionado
+      setPedidoSelecionado(pedido);
+
+      // Buscar fotos dos produtos nos itens do pedido
+      if (pedido.itens_pedido && pedido.itens_pedido.length > 0) {
+        const produtosIds = pedido.itens_pedido
+          .map((item: any) => item.produto_id)
+          .filter(Boolean);
+
+        if (produtosIds.length > 0) {
+          const { data: fotosData } = await supabase
+            .from('produto_fotos')
+            .select('produto_id, url, principal')
+            .in('produto_id', produtosIds)
+            .eq('principal', true);
+
+          // Adicionar fotos aos itens do pedido
+          const itensComFotos = pedido.itens_pedido.map((item: any) => {
+            const foto = fotosData?.find(f => f.produto_id === item.produto_id);
+            return {
+              ...item,
+              produto_foto: foto?.url || null
+            };
+          });
+
+          // Atualizar pedido selecionado com fotos
+          setPedidoSelecionado({
+            ...pedido,
+            itens_pedido: itensComFotos
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar fotos dos produtos:', error);
+      // Mesmo com erro, manter o pedido selecionado
+      setPedidoSelecionado(pedido);
+    }
   };
 
   const filtrarCardapioPorBusca = (termo: string) => {
@@ -12062,8 +12099,8 @@ const PDVPage: React.FC = () => {
                                       </div>
                                     )}
 
-                                    {/* Informações de origem do pedido */}
-                                    {item.pedido_origem_numero && (
+                                    {/* Informações de origem do pedido - Ocultar apenas para cardápio digital */}
+                                    {item.pedido_origem_numero && !item.cardapio_digital && (
                                       <div className="text-xs text-green-400 mt-1 lg:mt-0">
                                         📦 Pedido #{item.pedido_origem_numero}
                                       </div>
