@@ -3087,6 +3087,8 @@ const PDVPage: React.FC = () => {
   // ✅ USEEFFECT PARA CARREGAR PEDIDOS DO CARDÁPIO QUANDO MODAL ABRIR
   useEffect(() => {
     if (showCardapioDigitalModal && empresaData?.id) {
+      // ✅ SEMPRE RESETAR PARA ABA "PENDENTE" QUANDO ABRIR O MODAL
+      setStatusFilterCardapio('pendente');
       carregarTodosPedidosCardapio();
     }
   }, [showCardapioDigitalModal, empresaData?.id]);
