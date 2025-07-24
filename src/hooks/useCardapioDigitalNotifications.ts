@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { showMessage } from '../utils/toast';
 import useSound from 'use-sound';
@@ -25,6 +25,27 @@ export const useCardapioDigitalNotifications = ({
   enabled = true,
   onPedidoChange
 }: UseCardapioDigitalNotificationsProps) => {
+  // ✅ USAR useRef PARA EVITAR RE-RENDERIZAÇÕES
+  const empresaIdRef = useRef(empresaId);
+  const enabledRef = useRef(enabled);
+  const onPedidoChangeRef = useRef(onPedidoChange);
+  const isInitializedRef = useRef(false);
+
+  // ✅ ATUALIZAR REFS QUANDO PROPS MUDAREM
+  empresaIdRef.current = empresaId;
+  enabledRef.current = enabled;
+  onPedidoChangeRef.current = onPedidoChange;
+
+  // ✅ LOG APENAS UMA VEZ NA INICIALIZAÇÃO
+  if (!isInitializedRef.current) {
+    console.log('🔧 [HOOK-INIT] Hook useCardapioDigitalNotifications inicializado com:', {
+      empresaId,
+      enabled,
+      onPedidoChange: !!onPedidoChange
+    });
+    isInitializedRef.current = true;
+  }
+
   const [pedidosPendentes, setPedidosPendentes] = useState<PedidoCardapio[]>([]);
   const [contadorPendentes, setContadorPendentes] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -262,15 +283,18 @@ export const useCardapioDigitalNotifications = ({
     }
   }, [contadorPendentes, somContinuoAtivo, audioHabilitado, iniciarSomContinuo]);
 
-  // ✅ CARREGAR PEDIDOS PENDENTES
-  const carregarPedidosPendentes = useCallback(async () => {
-    if (!empresaId || !enabled) {
+  // ✅ CARREGAR PEDIDOS PENDENTES - ESTABILIZADO COM useRef + CALLBACK INTELIGENTE
+  const carregarPedidosPendentes = useCallback(async (chamarCallback = false) => {
+    const currentEmpresaId = empresaIdRef.current;
+    const currentEnabled = enabledRef.current;
+
+    if (!currentEmpresaId || !currentEnabled) {
       console.log('❌ [HOOK] carregarPedidosPendentes: empresaId ou enabled inválido');
       return;
     }
 
     try {
-      console.log('🔍 [HOOK] Carregando pedidos pendentes para empresa:', empresaId);
+      console.log('🔍 [HOOK] Carregando pedidos pendentes para empresa:', currentEmpresaId);
       setIsLoading(true);
 
       const { data, error } = await supabase
@@ -285,7 +309,7 @@ export const useCardapioDigitalNotifications = ({
           data_pedido,
           itens_pedido
         `)
-        .eq('empresa_id', empresaId)
+        .eq('empresa_id', currentEmpresaId)
         .eq('status_pedido', 'pendente')
         .order('data_pedido', { ascending: false });
 
@@ -309,6 +333,21 @@ export const useCardapioDigitalNotifications = ({
       setPedidosPendentes(pedidos);
       setContadorPendentes(novoContador);
 
+      // ✅ SE HOUVE AUMENTO NO CONTADOR OU chamarCallback=true, NOTIFICAR COMPONENTE PAI
+      if ((novoContador > contadorAnterior) || chamarCallback) {
+        console.log('🔔 [HOOK] Novo pedido detectado ou callback solicitado - Notificando componente pai');
+        const currentCallback = onPedidoChangeRef.current;
+        if (currentCallback && typeof currentCallback === 'function') {
+          console.log('✅ [HOOK] Executando callback onPedidoChange');
+          try {
+            currentCallback();
+            console.log('✅ [HOOK] Callback executado com sucesso');
+          } catch (error) {
+            console.error('❌ [HOOK] Erro ao executar callback:', error);
+          }
+        }
+      }
+
       // ✅ INICIAR SOM CONTÍNUO SE HÁ PEDIDOS PENDENTES E NÃO FOI DESABILITADO PELO USUÁRIO
       if (novoContador > 0 && !somContinuoAtivo && !somDesabilitadoPeloUsuario) {
         setTimeout(() => iniciarSomContinuo(), 200); // Delay reduzido para melhor responsividade
@@ -319,9 +358,9 @@ export const useCardapioDigitalNotifications = ({
     } finally {
       setIsLoading(false);
     }
-  }, [empresaId, enabled, contadorPendentes, somContinuoAtivo, somDesabilitadoPeloUsuario, iniciarSomContinuo]);
+  }, []); // ✅ SEM DEPENDÊNCIAS - USAR REFS
 
-  // ✅ ACEITAR PEDIDO
+  // ✅ ACEITAR PEDIDO - ESTABILIZADO
   const aceitarPedido = useCallback(async (pedidoId: string) => {
     if (pedidosProcessando.has(pedidoId)) return false;
 
@@ -346,8 +385,9 @@ export const useCardapioDigitalNotifications = ({
       await carregarPedidosPendentes(); // Recarregar lista
 
       // Notificar componente pai sobre mudança
-      if (onPedidoChange) {
-        onPedidoChange();
+      const currentCallback = onPedidoChangeRef.current;
+      if (currentCallback) {
+        currentCallback();
       }
 
       return true;
@@ -363,9 +403,9 @@ export const useCardapioDigitalNotifications = ({
         return newSet;
       });
     }
-  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
+  }, [pedidosProcessando]); // ✅ APENAS DEPENDÊNCIAS NECESSÁRIAS
 
-  // ✅ REJEITAR PEDIDO
+  // ✅ REJEITAR PEDIDO - ESTABILIZADO
   const rejeitarPedido = useCallback(async (pedidoId: string, motivo?: string) => {
     if (pedidosProcessando.has(pedidoId)) return false;
 
@@ -390,8 +430,9 @@ export const useCardapioDigitalNotifications = ({
       await carregarPedidosPendentes(); // Recarregar lista
 
       // Notificar componente pai sobre mudança
-      if (onPedidoChange) {
-        onPedidoChange();
+      const currentCallback = onPedidoChangeRef.current;
+      if (currentCallback) {
+        currentCallback();
       }
 
       return true;
@@ -407,9 +448,9 @@ export const useCardapioDigitalNotifications = ({
         return newSet;
       });
     }
-  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
+  }, [pedidosProcessando]); // ✅ APENAS DEPENDÊNCIAS NECESSÁRIAS
 
-  // ✅ MARCAR PEDIDO COMO PREPARANDO
+  // ✅ MARCAR PEDIDO COMO PREPARANDO - ESTABILIZADO
   const marcarComoPreparando = useCallback(async (pedidoId: string) => {
     if (pedidosProcessando.has(pedidoId)) return false;
 
@@ -433,8 +474,9 @@ export const useCardapioDigitalNotifications = ({
       showMessage('success', '👨‍🍳 Pedido marcado como preparando');
       carregarPedidosPendentes();
 
-      if (onPedidoChange) {
-        onPedidoChange();
+      const currentCallback = onPedidoChangeRef.current;
+      if (currentCallback) {
+        currentCallback();
       }
 
       return true;
@@ -449,9 +491,9 @@ export const useCardapioDigitalNotifications = ({
         return newSet;
       });
     }
-  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
+  }, [pedidosProcessando]); // ✅ APENAS DEPENDÊNCIAS NECESSÁRIAS
 
-  // ✅ MARCAR PEDIDO COMO PRONTO
+  // ✅ MARCAR PEDIDO COMO PRONTO - ESTABILIZADO
   const marcarComoPronto = useCallback(async (pedidoId: string) => {
     if (pedidosProcessando.has(pedidoId)) return false;
 
@@ -475,8 +517,9 @@ export const useCardapioDigitalNotifications = ({
       showMessage('success', '🍽️ Pedido marcado como pronto');
       carregarPedidosPendentes();
 
-      if (onPedidoChange) {
-        onPedidoChange();
+      const currentCallback = onPedidoChangeRef.current;
+      if (currentCallback) {
+        currentCallback();
       }
 
       return true;
@@ -491,9 +534,9 @@ export const useCardapioDigitalNotifications = ({
         return newSet;
       });
     }
-  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
+  }, [pedidosProcessando]); // ✅ APENAS DEPENDÊNCIAS NECESSÁRIAS
 
-  // ✅ MARCAR PEDIDO COMO ENTREGUE
+  // ✅ MARCAR PEDIDO COMO ENTREGUE - ESTABILIZADO
   const marcarComoEntregue = useCallback(async (pedidoId: string) => {
     if (pedidosProcessando.has(pedidoId)) return false;
 
@@ -517,8 +560,9 @@ export const useCardapioDigitalNotifications = ({
       showMessage('success', '🚚 Pedido marcado como entregue');
       carregarPedidosPendentes();
 
-      if (onPedidoChange) {
-        onPedidoChange();
+      const currentCallback = onPedidoChangeRef.current;
+      if (currentCallback) {
+        currentCallback();
       }
 
       return true;
@@ -533,15 +577,21 @@ export const useCardapioDigitalNotifications = ({
         return newSet;
       });
     }
-  }, [carregarPedidosPendentes, onPedidoChange, pedidosProcessando]);
+  }, [pedidosProcessando]); // ✅ APENAS DEPENDÊNCIAS NECESSÁRIAS
 
-  // ✅ CONFIGURAR REALTIME PARA NOVOS PEDIDOS
+  // ✅ CONFIGURAR REALTIME PARA NOVOS PEDIDOS - REATIVO
   useEffect(() => {
+    console.log('🔧 [REALTIME-SETUP] useEffect executado - empresaId:', empresaId, 'enabled:', enabled);
+
     if (!empresaId || !enabled) {
+      console.log('❌ [REALTIME-SETUP] Não configurando Realtime - empresaId:', empresaId, 'enabled:', enabled);
       return;
     }
 
+    console.log('🔧 [REALTIME-SETUP] Configurando Realtime para empresa:', empresaId);
     const channelName = `cardapio_digital_${empresaId}`;
+    console.log('🔧 [REALTIME-SETUP] Nome do canal:', channelName);
+    console.log('🔧 [REALTIME-SETUP] Callback disponível:', !!onPedidoChangeRef.current);
 
     const channel = supabase
       .channel(channelName)
@@ -554,13 +604,15 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
+          console.log('🆕 [REALTIME] *** EVENTO INSERT DETECTADO ***');
+          console.log('🆕 [REALTIME] Payload completo:', payload);
           console.log('🆕 [REALTIME] Novo pedido recebido via Realtime:', payload.new);
           console.log('🆕 [REALTIME] Dados do novo pedido:', {
-            id: payload.new.id,
-            numero_pedido: payload.new.numero_pedido,
-            status_pedido: payload.new.status_pedido,
-            nome_cliente: payload.new.nome_cliente,
-            empresa_id: payload.new.empresa_id
+            id: payload.new?.id,
+            numero_pedido: payload.new?.numero_pedido,
+            status_pedido: payload.new?.status_pedido,
+            nome_cliente: payload.new?.nome_cliente,
+            empresa_id: payload.new?.empresa_id
           });
 
           // Tocar som de notificação IMEDIATAMENTE
@@ -576,12 +628,22 @@ export const useCardapioDigitalNotifications = ({
 
           // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
           console.log('🔄 [REALTIME] Chamando onPedidoChange callback...');
-          console.log('🔄 [REALTIME] Callback disponível:', !!onPedidoChange);
-          if (onPedidoChange) {
+          const currentCallback = onPedidoChangeRef.current;
+          console.log('🔄 [REALTIME] Callback disponível:', !!currentCallback);
+          console.log('🔄 [REALTIME] Tipo do callback:', typeof currentCallback);
+          console.log('🔄 [REALTIME] Callback function:', currentCallback);
+
+          if (currentCallback && typeof currentCallback === 'function') {
             console.log('✅ [REALTIME] Executando callback onPedidoChange');
-            onPedidoChange();
+            try {
+              currentCallback();
+              console.log('✅ [REALTIME] Callback executado com sucesso');
+            } catch (error) {
+              console.error('❌ [REALTIME] Erro ao executar callback:', error);
+            }
           } else {
-            console.log('❌ [REALTIME] onPedidoChange callback não definido');
+            console.log('❌ [REALTIME] onPedidoChange callback não definido ou não é função');
+            console.log('❌ [REALTIME] Valor atual do callback:', currentCallback);
           }
         }
       )
@@ -594,33 +656,54 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
+          console.log('🔄 [REALTIME] *** EVENTO UPDATE DETECTADO ***');
+          console.log('🔄 [REALTIME] Payload UPDATE:', payload);
+
           // ✅ SEMPRE recarregar lista de pedidos pendentes quando houver UPDATE
           carregarPedidosPendentes();
 
           // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
-          if (onPedidoChange) {
-            onPedidoChange();
+          const currentCallback = onPedidoChangeRef.current;
+          if (currentCallback) {
+            console.log('🔄 [REALTIME] Executando callback UPDATE');
+            currentCallback();
           }
         }
       )
       .subscribe((status) => {
+        console.log('📡 [REALTIME-SETUP] Status da subscription:', status);
         if (status === 'SUBSCRIBED') {
-          // Realtime ativo - aguardando novos pedidos
+          console.log('✅ [REALTIME-SETUP] Realtime ativo - aguardando novos pedidos');
+          console.log('✅ [REALTIME-SETUP] Canal configurado para empresa:', empresaId);
+          console.log('✅ [REALTIME-SETUP] Filtro aplicado: empresa_id=eq.' + empresaId);
         } else if (status === 'CHANNEL_ERROR') {
-          // Erro no canal realtime
+          console.error('❌ [REALTIME-SETUP] Erro no canal realtime');
         } else if (status === 'TIMED_OUT') {
-          // Timeout no canal realtime
+          console.warn('⏰ [REALTIME-SETUP] Timeout no canal realtime');
+        } else {
+          console.log('📡 [REALTIME-SETUP] Status desconhecido:', status);
         }
       });
 
     // Carregar pedidos iniciais
     carregarPedidosPendentes();
 
+    console.log('✅ [REALTIME-SETUP] Subscription criada para canal:', channelName);
+
+    // ✅ TESTE DE CONEXÃO REALTIME
+    setTimeout(() => {
+      console.log('🧪 [REALTIME-TEST] Testando conexão Realtime...');
+      console.log('🧪 [REALTIME-TEST] Status do canal:', channel.state);
+      console.log('🧪 [REALTIME-TEST] Empresa ID atual:', empresaId);
+      console.log('🧪 [REALTIME-TEST] Callback atual:', !!onPedidoChangeRef.current);
+    }, 5000);
+
     // Cleanup
     return () => {
+      console.log('🔌 [REALTIME-SETUP] Desconectando canal:', channelName);
       supabase.removeChannel(channel);
     };
-  }, [empresaId, enabled, tocarSomNotificacao, carregarPedidosPendentes]);
+  }, [empresaId, enabled]); // ✅ REAGIR QUANDO empresaId OU enabled MUDAREM
 
   // ✅ SOM CONTÍNUO QUANDO HÁ PEDIDOS PENDENTES (MONITORAMENTO ATIVO)
   useEffect(() => {
@@ -638,9 +721,12 @@ export const useCardapioDigitalNotifications = ({
     }
   }, [contadorPendentes, somContinuoAtivo, empresaId, enabled, audioHabilitado, somDesabilitadoPeloUsuario, iniciarSomContinuo, pararSomContinuo]);
 
-  // ✅ MONITORAMENTO INICIAL - VERIFICAR PEDIDOS EXISTENTES AO CARREGAR
+  // ✅ MONITORAMENTO INICIAL - VERIFICAR PEDIDOS EXISTENTES AO CARREGAR - ESTABILIZADO
   useEffect(() => {
-    if (empresaId && enabled) {
+    const currentEmpresaId = empresaIdRef.current;
+    const currentEnabled = enabledRef.current;
+
+    if (currentEmpresaId && currentEnabled) {
       carregarPedidosPendentes();
 
       // Verificar novamente após 3 segundos para garantir
@@ -650,7 +736,7 @@ export const useCardapioDigitalNotifications = ({
 
       return () => clearTimeout(timeoutVerificacao);
     }
-  }, [empresaId, enabled, carregarPedidosPendentes]);
+  }, []); // ✅ SEM DEPENDÊNCIAS - EXECUTAR APENAS UMA VEZ
 
   // ✅ CLEANUP DO INTERVALO AO DESMONTAR
   useEffect(() => {
@@ -662,16 +748,18 @@ export const useCardapioDigitalNotifications = ({
     };
   }, []);
 
-  // ✅ POLLING BACKUP (a cada 10 segundos)
+  // ✅ POLLING INTELIGENTE (a cada 5 segundos) - CHAMA CALLBACK QUANDO DETECTA MUDANÇAS
   useEffect(() => {
-    if (!enabled) return;
-
     const interval = setInterval(() => {
-      carregarPedidosPendentes();
-    }, 10000); // 10 segundos
+      const currentEnabled = enabledRef.current;
+      if (currentEnabled) {
+        console.log('🔄 [POLLING] Verificando novos pedidos...');
+        carregarPedidosPendentes(true); // ✅ SEMPRE CHAMAR CALLBACK NO POLLING
+      }
+    }, 5000); // 5 segundos - mais responsivo
 
     return () => clearInterval(interval);
-  }, [carregarPedidosPendentes, enabled]);
+  }, []); // ✅ SEM DEPENDÊNCIAS - USAR REFS
 
   return {
     pedidosPendentes,

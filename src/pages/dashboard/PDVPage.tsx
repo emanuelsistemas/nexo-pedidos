@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { useNavigate } from 'react-router-dom';
@@ -185,6 +185,18 @@ const PDVPage: React.FC = () => {
   const [pdvConfig, setPdvConfig] = useState<any>(null);
   const [empresaData, setEmpresaData] = useState<any>(null);
 
+  // ✅ CALLBACK ESTÁVEL PARA NOTIFICAÇÕES
+  const onPedidoChangeStable = useCallback(() => {
+    console.log('🔄 [CALLBACK] onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
+    console.log('🔄 [CALLBACK] empresaData?.id:', empresaData?.id);
+    if (modalCardapioAbertoRef.current) {
+      console.log('📋 [CALLBACK] Modal está aberto - Chamando carregarTodosPedidosCardapio...');
+      carregarTodosPedidosCardapio();
+    } else {
+      console.log('📋 [CALLBACK] Modal não está aberto - não recarregando');
+    }
+  }, [empresaData?.id]); // ✅ ADICIONAR empresaData?.id como dependência
+
   // ✅ HOOK PARA NOTIFICAÇÕES DO CARDÁPIO DIGITAL
   const {
     pedidosPendentes: pedidosCardapio,
@@ -207,21 +219,14 @@ const PDVPage: React.FC = () => {
     marcarComoEntregue
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
-    enabled: !!empresaData?.id, // ✅ ATIVAR SEMPRE QUE TIVER EMPRESA
-    onPedidoChange: useCallback(() => {
-      // ✅ RECARREGAR LISTA COMPLETA QUANDO HOUVER MUDANÇAS NOS PEDIDOS
-      console.log('🔄 [CALLBACK] onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
-      console.log('🔄 [CALLBACK] Estado atual - todosOsPedidosCardapio.length:', todosOsPedidosCardapio.length);
-      console.log('🔄 [CALLBACK] Estado atual - pedidosCardapioFiltrados.length:', pedidosCardapioFiltrados.length);
-      console.log('🔄 [CALLBACK] Status filter atual:', statusFilterCardapio);
-
-      if (modalCardapioAbertoRef.current) {
-        console.log('📋 [CALLBACK] Modal está aberto - Chamando carregarTodosPedidosCardapio...');
-        // ✅ USAR FUNÇÃO EXISTENTE PARA EVITAR DEPENDÊNCIA CIRCULAR
-        carregarTodosPedidosCardapio();
-      }
-    }, []) // ✅ SEM DEPENDÊNCIAS PARA EVITAR DEPENDÊNCIA CIRCULAR
+    enabled: !!empresaData?.id,
+    onPedidoChange: onPedidoChangeStable
   });
+
+  // ✅ LOG OTIMIZADO PARA EVITAR RE-RENDERS EXCESSIVOS
+  useEffect(() => {
+    console.log('🔧 [HOOK-STATUS] Hook status changed - contadorCardapio:', contadorCardapio, 'empresaId:', empresaData?.id);
+  }, [contadorCardapio, empresaData?.id]);
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
   const [statusFilterCardapio, setStatusFilterCardapio] = useState<string>('pendente');
