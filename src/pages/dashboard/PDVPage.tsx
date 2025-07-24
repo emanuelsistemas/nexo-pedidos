@@ -20650,41 +20650,121 @@ const PDVPage: React.FC = () => {
                           )}
                         </div>
 
-                        {/* Itens do Pedido - Movido para ficar antes das Observações */}
+                        {/* Itens do Pedido - Estilo Carrinho Compacto */}
                         <div className="mt-4">
                           <h3 className="text-lg font-semibold text-white mb-4">🛒 Itens do Pedido</h3>
                           <div className="space-y-3">
                             {pedidoSelecionado.itens_pedido && pedidoSelecionado.itens_pedido.length > 0 ? (
                               pedidoSelecionado.itens_pedido.map((item: any, index: number) => (
                               <div key={index} className="bg-gray-700/30 rounded-lg p-4 border border-gray-600">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <h4 className="font-medium text-white">{item.produto_nome || item.nome_produto || 'Produto sem nome'}</h4>
-                                    <p className="text-sm text-gray-400">
-                                      Quantidade: {item.quantidade || 0} x {formatarPreco(item.preco_unitario || 0)}
-                                    </p>
-                                    {item.observacao && (
-                                      <p className="text-xs text-gray-500 mt-1">Obs: {item.observacao}</p>
-                                    )}
-                                    {item.adicionais && item.adicionais.length > 0 && (
-                                      <div className="mt-2">
-                                        <p className="text-xs text-gray-400 mb-1">Adicionais:</p>
-                                        {item.adicionais.map((adicional: any, idx: number) => (
-                                          <p key={idx} className="text-xs text-gray-500">
-                                            + {adicional.nome || adicional.produto_nome || 'Adicional'} ({formatarPreco(adicional.preco || adicional.preco_unitario || 0)})
-                                          </p>
-                                        ))}
-                                      </div>
-                                    )}
+                                <div className="flex items-start gap-4">
+                                  {/* Foto do Produto */}
+                                  <div className="w-16 h-16 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
+                                    {item.produto_foto ? (
+                                      <img
+                                        src={item.produto_foto}
+                                        alt={item.produto_nome || item.nome_produto || 'Produto'}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div className={`w-full h-full flex items-center justify-center ${item.produto_foto ? 'hidden' : ''}`}>
+                                      <Package size={20} className="text-gray-500" />
+                                    </div>
                                   </div>
-                                  <div className="text-right">
-                                    <p className="font-semibold text-green-400">{formatarPreco(item.preco_total || item.subtotal || 0)}</p>
+
+                                  {/* Informações do Produto */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <h4 className="font-medium text-white text-base leading-tight">
+                                          {item.produto_nome || item.nome_produto || 'Produto sem nome'}
+                                        </h4>
+
+                                        {/* Preço com desconto (se houver) */}
+                                        <div className="mt-1">
+                                          {item.desconto_aplicado || item.promocao_ativa ? (
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-gray-400 line-through text-sm">
+                                                {formatarPreco(item.preco_original || item.preco_unitario || 0)}
+                                              </span>
+                                              <span className="text-green-400 font-medium">
+                                                {formatarPreco(item.preco_unitario || 0)}
+                                              </span>
+                                              {item.percentual_desconto && (
+                                                <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded">
+                                                  {item.percentual_desconto}% OFF
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="text-gray-300">
+                                              {formatarPreco(item.preco_unitario || 0)}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Quantidade */}
+                                        <p className="text-sm text-gray-400 mt-1">
+                                          {formatarPreco(item.preco_unitario || 0)} x {item.quantidade || 0} = {formatarPreco(item.preco_total || item.subtotal || 0)}
+                                        </p>
+
+                                        {/* Sabores (para pizzas) */}
+                                        {item.sabores && item.sabores.length > 0 && (
+                                          <div className="mt-2">
+                                            <p className="text-xs text-gray-400 mb-1">Sabores:</p>
+                                            {item.sabores.map((sabor: any, idx: number) => (
+                                              <p key={idx} className="text-xs text-blue-400">
+                                                • {sabor.nome || sabor.produto_nome || 'Sabor'}
+                                                {sabor.porcentagem && ` (${sabor.porcentagem}%)`}
+                                              </p>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {/* Adicionais */}
+                                        {item.adicionais && item.adicionais.length > 0 && (
+                                          <div className="mt-2">
+                                            <p className="text-xs text-gray-400 mb-1">Adicionais:</p>
+                                            {item.adicionais.map((adicional: any, idx: number) => (
+                                              <p key={idx} className="text-xs text-purple-400">
+                                                + {adicional.nome || adicional.produto_nome || 'Adicional'}
+                                                ({formatarPreco(adicional.preco || adicional.preco_unitario || 0)})
+                                              </p>
+                                            ))}
+                                          </div>
+                                        )}
+
+                                        {/* Observação */}
+                                        {item.observacao && (
+                                          <p className="text-xs text-yellow-400 mt-2 bg-yellow-500/10 rounded px-2 py-1">
+                                            💬 {item.observacao}
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {/* Valor Total do Item */}
+                                      <div className="text-right ml-4">
+                                        <p className="font-bold text-green-400 text-lg">
+                                          {formatarPreco(item.preco_total || item.subtotal || 0)}
+                                        </p>
+                                        {item.desconto_aplicado && (
+                                          <p className="text-xs text-green-400">
+                                            Economia: {formatarPreco(item.valor_desconto || 0)}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
                               ))
                             ) : (
                               <div className="text-center text-gray-400 py-8">
+                                <Package size={48} className="mx-auto mb-3 opacity-50" />
                                 <p>Nenhum item encontrado para este pedido</p>
                               </div>
                             )}
