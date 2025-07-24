@@ -4742,14 +4742,16 @@ const PDVPage: React.FC = () => {
       // Converter itens do pedido para formato do carrinho
       const itensCardapio = Array.isArray(pedido.itens_pedido) ? pedido.itens_pedido : JSON.parse(pedido.itens_pedido || '[]');
 
-      // ✅ BUSCAR FOTOS DOS PRODUTOS
+      // ✅ BUSCAR DADOS COMPLETOS DOS PRODUTOS (FOTOS E CÓDIGOS)
       let fotosData: any[] = [];
+      let produtosData: any[] = [];
       try {
         const produtosIds = itensCardapio
           .map((item: any) => item.produto_id)
           .filter(Boolean);
 
         if (produtosIds.length > 0) {
+          // Buscar fotos dos produtos
           const { data: fotosResult } = await supabase
             .from('produto_fotos')
             .select('produto_id, url, principal')
@@ -4759,29 +4761,44 @@ const PDVPage: React.FC = () => {
           if (fotosResult) {
             fotosData = fotosResult;
           }
+
+          // Buscar dados completos dos produtos (incluindo código)
+          const { data: produtosResult } = await supabase
+            .from('produtos')
+            .select('id, codigo, nome, preco, descricao, categoria, ativo, promocao, grupo_id, unidade_medida_id, ncm, cfop, codigo_barras')
+            .in('id', produtosIds);
+
+          if (produtosResult) {
+            produtosData = produtosResult;
+          }
         }
       } catch (error) {
-        console.error('Erro ao buscar fotos dos produtos:', error);
+        console.error('Erro ao buscar dados dos produtos:', error);
       }
 
       const novosItens: ItemCarrinho[] = itensCardapio.map((item: any, index: number) => {
-        // ✅ BUSCAR FOTO DO PRODUTO ESPECÍFICO
+        // ✅ BUSCAR FOTO E DADOS DO PRODUTO ESPECÍFICO
         const foto = fotosData.find(f => f.produto_id === item.produto_id);
+        const produtoReal = produtosData.find(p => p.id === item.produto_id);
 
         // Criar produto temporário baseado no item do cardápio com campos obrigatórios do PDV
         const produtoTemp = {
           id: item.produto_id || `cardapio_produto_${item.id || index}`,
-          nome: item.produto_nome || item.nome || 'Produto do Cardápio',
-          preco: item.preco_unitario || item.preco || 0,
-          codigo: `CARD_${index + 1}`, // Código obrigatório
-          descricao: item.produto_nome || item.nome || 'Produto importado do cardápio digital',
-          categoria: 'Cardápio Digital',
-          ativo: true,
-          promocao: false,
-          grupo_id: null,
-          unidade_medida_id: null,
+          nome: item.produto_nome || item.nome || produtoReal?.nome || 'Produto do Cardápio',
+          preco: item.preco_unitario || item.preco || produtoReal?.preco || 0,
+          codigo: produtoReal?.codigo || `CARD_${index + 1}`, // ✅ USAR CÓDIGO REAL DO PRODUTO
+          descricao: item.produto_nome || item.nome || produtoReal?.descricao || 'Produto importado do cardápio digital',
+          categoria: produtoReal?.categoria || 'Cardápio Digital',
+          ativo: produtoReal?.ativo ?? true,
+          promocao: produtoReal?.promocao ?? false,
+          grupo_id: produtoReal?.grupo_id || null,
+          unidade_medida_id: produtoReal?.unidade_medida_id || null,
           produto_fotos: foto ? [{ url: foto.url, principal: true }] : [], // ✅ INCLUIR FOTO
-          foto_url: foto?.url || null // ✅ CAMPO ADICIONAL PARA COMPATIBILIDADE
+          foto_url: foto?.url || null, // ✅ CAMPO ADICIONAL PARA COMPATIBILIDADE
+          // ✅ INCLUIR DADOS FISCAIS REAIS DO PRODUTO
+          ncm: produtoReal?.ncm || null,
+          cfop: produtoReal?.cfop || null,
+          codigo_barras: produtoReal?.codigo_barras || null
         };
 
         const quantidade = item.quantidade || 1;
@@ -12042,7 +12059,10 @@ const PDVPage: React.FC = () => {
                                     <div className="flex items-center gap-2 text-xs text-gray-400">
                                       {!item.vendaSemProduto && (
                                         <>
-                                          <span>Código {item.produto.codigo}</span>
+                                          {/* Ocultar código apenas para importação do cardápio digital */}
+                                          {!item.cardapio_digital && (
+                                            <span>Código {item.produto.codigo}</span>
+                                          )}
                                           {item.produto.codigo_barras && item.produto.codigo_barras.trim() !== '' && (
                                             <div className="flex items-center gap-1">
                                               <QrCode size={10} className="text-gray-500" />
