@@ -247,6 +247,7 @@ const PDVPage: React.FC = () => {
                 cupom_valor_desconto
               `)
               .eq('empresa_id', empresaData.id)
+              .order('updated_at', { ascending: false })
               .order('data_pedido', { ascending: false });
 
             if (error) {
@@ -2995,6 +2996,7 @@ const PDVPage: React.FC = () => {
           cupom_valor_desconto
         `)
         .eq('empresa_id', empresaData.id)
+        .order('updated_at', { ascending: false })
         .order('data_pedido', { ascending: false });
 
       if (error) {
@@ -20023,10 +20025,10 @@ const PDVPage: React.FC = () => {
                     {[
                       { value: 'pendente', label: 'Pendente', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pendente').length, color: 'bg-orange-500 hover:bg-orange-600' },
                       { value: 'confirmado', label: 'Confirmado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'confirmado').length, color: 'bg-blue-500 hover:bg-blue-600' },
-                      { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length, color: 'bg-gray-600 hover:bg-gray-700' },
-                      { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length, color: 'bg-gray-600 hover:bg-gray-700' },
-                      { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length, color: 'bg-gray-600 hover:bg-gray-700' },
-                      { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length, color: 'bg-gray-600 hover:bg-gray-700' }
+                      { value: 'preparando', label: 'Preparando', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'preparando').length, color: 'bg-yellow-500 hover:bg-yellow-600' },
+                      { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length, color: 'bg-green-500 hover:bg-green-600' },
+                      { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length, color: 'bg-purple-500 hover:bg-purple-600' },
+                      { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length, color: 'bg-red-500 hover:bg-red-600' }
                     ].map((status) => (
                       <button
                         key={status.value}
@@ -20035,6 +20037,10 @@ const PDVPage: React.FC = () => {
                           statusFilterCardapio === status.value
                             ? status.color
                             : 'bg-gray-600 hover:bg-gray-500'
+                        } ${
+                          status.value === 'pendente' && status.count > 0
+                            ? 'animate-pulse'
+                            : ''
                         }`}
                       >
                         <span>{status.label}</span>
