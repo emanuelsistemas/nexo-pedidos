@@ -187,13 +187,8 @@ const PDVPage: React.FC = () => {
 
   // ✅ CALLBACK ESTÁVEL PARA NOTIFICAÇÕES
   const onPedidoChangeStable = useCallback(() => {
-    console.log('🔄 [CALLBACK] onPedidoChange chamado - Modal aberto:', modalCardapioAbertoRef.current);
-    console.log('🔄 [CALLBACK] empresaData?.id:', empresaData?.id);
     if (modalCardapioAbertoRef.current) {
-      console.log('📋 [CALLBACK] Modal está aberto - Chamando carregarTodosPedidosCardapio...');
       carregarTodosPedidosCardapio();
-    } else {
-      console.log('📋 [CALLBACK] Modal não está aberto - não recarregando');
     }
   }, [empresaData?.id]); // ✅ ADICIONAR empresaData?.id como dependência
 
@@ -223,9 +218,9 @@ const PDVPage: React.FC = () => {
     onPedidoChange: onPedidoChangeStable
   });
 
-  // ✅ LOG OTIMIZADO PARA EVITAR RE-RENDERS EXCESSIVOS
+  // ✅ HOOK STATUS TRACKING (sem logs)
   useEffect(() => {
-    console.log('🔧 [HOOK-STATUS] Hook status changed - contadorCardapio:', contadorCardapio, 'empresaId:', empresaData?.id);
+    // Status tracking silencioso
   }, [contadorCardapio, empresaData?.id]);
 
   // ✅ ESTADOS PARA FILTROS DO CARDÁPIO DIGITAL
@@ -2970,10 +2965,6 @@ const PDVPage: React.FC = () => {
 
   // ✅ USEEFFECT PARA APLICAR FILTROS QUANDO QUALQUER FILTRO MUDA
   useEffect(() => {
-    console.log('🔄 [USEEFFECT] Filtros mudaram - Aplicando filtros...');
-    console.log('🔄 [USEEFFECT] statusFilterCardapio:', statusFilterCardapio);
-    console.log('🔄 [USEEFFECT] searchCardapio:', searchCardapio);
-    console.log('🔄 [USEEFFECT] todosOsPedidosCardapio.length:', todosOsPedidosCardapio.length);
     aplicarFiltrosCardapio();
   }, [statusFilterCardapio, searchCardapio, dataInicioCardapio, dataFimCardapio, todosOsPedidosCardapio]);
 
@@ -3009,14 +3000,8 @@ const PDVPage: React.FC = () => {
       });
     }
 
-    console.log('🔍 [FILTRO] Resultado final do filtro:', filtered.length, 'pedidos');
-    console.log('🔍 [FILTRO] Pedidos filtrados:', filtered.map(p => ({ id: p.id, numero: p.numero_pedido, status: p.status_pedido })));
-    console.log('📝 [FILTRO] Atualizando estado pedidosCardapioFiltrados com', filtered.length, 'pedidos');
-
-    // ✅ VERIFICAR SE REALMENTE ESTÁ ATUALIZANDO O ESTADO
-    const estadoAnterior = pedidosCardapioFiltrados.length;
+    // ✅ ATUALIZAR ESTADO DOS PEDIDOS FILTRADOS
     setPedidosCardapioFiltrados(filtered);
-    console.log('📊 [FILTRO] Estado anterior:', estadoAnterior, '→ Novo estado:', filtered.length);
   };
 
   // ✅ FUNÇÕES DE FILTRO DO CARDÁPIO DIGITAL
@@ -4575,9 +4560,6 @@ const PDVPage: React.FC = () => {
   // Função para gerar o link público do pedido
   const gerarLinkPedido = async (pedido: any) => {
     try {
-      console.log('Pedido recebido:', pedido); // Debug
-      console.log('empresa_id:', pedido.empresa_id); // Debug
-
       // Se não temos empresa_id no pedido, buscar do usuário atual
       let empresaId = pedido.empresa_id;
       if (!empresaId) {
@@ -4617,7 +4599,6 @@ const PDVPage: React.FC = () => {
 
       return url;
     } catch (error: any) {
-      console.error('Erro ao gerar link do pedido:', error);
       toast.error(`Erro ao gerar link: ${error.message}`);
       return null;
     }
@@ -11354,22 +11335,17 @@ const PDVPage: React.FC = () => {
                   setPedidosFiltrados(pedidosData);
                   setContadorPedidosPendentes(pedidosData.length);
                 } catch (error) {
-                  console.error('Erro ao carregar pedidos silencioso:', error);
+                  // Silenciar erro de carregamento
                 }
               };
 
               setTimeout(() => loadPedidosSilencioso(), 500);
             }
           )
-          .subscribe((status) => {
-            console.log(`📋 Status Realtime modal: ${status}`);
-            if (status === 'SUBSCRIBED') {
-              console.log('✅ Realtime do modal ativo!');
-            }
-          });
+          .subscribe();
 
       } catch (error) {
-        console.error('Erro ao configurar Realtime do modal:', error);
+        // Silenciar erro de configuração do Realtime
       }
     };
 
@@ -19951,9 +19927,16 @@ const PDVPage: React.FC = () => {
                     <BookOpen size={20} className="text-orange-500" />
                     <div>
                       <h2 className="text-lg font-bold text-white">Cardápio Digital</h2>
-                      <p className="text-gray-400 text-xs">
+                      {/* Contador de pedidos - "Nenhum pedido pendente" oculto temporariamente */}
+                      {contadorCardapio > 0 && (
+                        <p className="text-gray-400 text-xs">
+                          {`${contadorCardapio} pedido${contadorCardapio > 1 ? 's' : ''} pendente${contadorCardapio > 1 ? 's' : ''}`}
+                        </p>
+                      )}
+                      {/* Para reativar: descomente a linha abaixo e remova a condicional acima */}
+                      {/* <p className="text-gray-400 text-xs">
                         {contadorCardapio > 0 ? `${contadorCardapio} pedido${contadorCardapio > 1 ? 's' : ''} pendente${contadorCardapio > 1 ? 's' : ''}` : 'Nenhum pedido pendente'}
-                      </p>
+                      </p> */}
                     </div>
                   </div>
 
@@ -20358,26 +20341,6 @@ const PDVPage: React.FC = () => {
                           </div>
                           <div className="text-right">
                             <p className="text-2xl font-bold text-green-400">{formatarPreco(pedidoSelecionado.valor_total || 0)}</p>
-                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                              pedidoSelecionado.status_pedido === 'pendente'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : pedidoSelecionado.status_pedido === 'confirmado'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : pedidoSelecionado.status_pedido === 'preparando'
-                                    ? 'bg-orange-100 text-orange-800'
-                                    : pedidoSelecionado.status_pedido === 'pronto'
-                                      ? 'bg-purple-100 text-purple-800'
-                                      : pedidoSelecionado.status_pedido === 'entregue'
-                                        ? 'bg-green-100 text-green-800'
-                                        : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {pedidoSelecionado.status_pedido === 'pendente' && '⏳ Pendente'}
-                              {pedidoSelecionado.status_pedido === 'confirmado' && '✅ Confirmado'}
-                              {pedidoSelecionado.status_pedido === 'preparando' && '👨‍🍳 Preparando'}
-                              {pedidoSelecionado.status_pedido === 'pronto' && '🍽️ Pronto'}
-                              {pedidoSelecionado.status_pedido === 'entregue' && '🚚 Entregue'}
-                              {pedidoSelecionado.status_pedido === 'cancelado' && '❌ Cancelado'}
-                            </span>
                           </div>
                         </div>
 

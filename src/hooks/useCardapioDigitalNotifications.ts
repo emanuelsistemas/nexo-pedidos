@@ -36,13 +36,8 @@ export const useCardapioDigitalNotifications = ({
   enabledRef.current = enabled;
   onPedidoChangeRef.current = onPedidoChange;
 
-  // ✅ LOG APENAS UMA VEZ NA INICIALIZAÇÃO
+  // ✅ INICIALIZAÇÃO APENAS UMA VEZ
   if (!isInitializedRef.current) {
-    console.log('🔧 [HOOK-INIT] Hook useCardapioDigitalNotifications inicializado com:', {
-      empresaId,
-      enabled,
-      onPedidoChange: !!onPedidoChange
-    });
     isInitializedRef.current = true;
   }
 
@@ -289,12 +284,10 @@ export const useCardapioDigitalNotifications = ({
     const currentEnabled = enabledRef.current;
 
     if (!currentEmpresaId || !currentEnabled) {
-      console.log('❌ [HOOK] carregarPedidosPendentes: empresaId ou enabled inválido');
       return;
     }
 
     try {
-      console.log('🔍 [HOOK] Carregando pedidos pendentes para empresa:', currentEmpresaId);
       setIsLoading(true);
 
       const { data, error } = await supabase
@@ -314,7 +307,6 @@ export const useCardapioDigitalNotifications = ({
         .order('data_pedido', { ascending: false });
 
       if (error) {
-        console.error('❌ [HOOK] Erro ao carregar pedidos pendentes:', error);
         return;
       }
 
@@ -322,28 +314,17 @@ export const useCardapioDigitalNotifications = ({
       const contadorAnterior = contadorPendentes;
       const novoContador = pedidos.length;
 
-      console.log('✅ [HOOK] Pedidos pendentes carregados:', novoContador);
-      console.log('📊 [HOOK] Contador anterior:', contadorAnterior, '→ Novo contador:', novoContador);
-      console.log('📋 [HOOK] Lista de pedidos pendentes:', pedidos.map(p => ({
-        id: p.id,
-        numero: p.numero_pedido,
-        cliente: p.nome_cliente
-      })));
-
       setPedidosPendentes(pedidos);
       setContadorPendentes(novoContador);
 
       // ✅ SE HOUVE AUMENTO NO CONTADOR OU chamarCallback=true, NOTIFICAR COMPONENTE PAI
       if ((novoContador > contadorAnterior) || chamarCallback) {
-        console.log('🔔 [HOOK] Novo pedido detectado ou callback solicitado - Notificando componente pai');
         const currentCallback = onPedidoChangeRef.current;
         if (currentCallback && typeof currentCallback === 'function') {
-          console.log('✅ [HOOK] Executando callback onPedidoChange');
           try {
             currentCallback();
-            console.log('✅ [HOOK] Callback executado com sucesso');
           } catch (error) {
-            console.error('❌ [HOOK] Erro ao executar callback:', error);
+            // Silenciar erro
           }
         }
       }
@@ -466,7 +447,6 @@ export const useCardapioDigitalNotifications = ({
         .eq('id', pedidoId);
 
       if (error) {
-        console.error('❌ Erro ao marcar pedido como preparando:', error);
         showMessage('error', 'Erro ao marcar pedido como preparando');
         return false;
       }
@@ -481,7 +461,6 @@ export const useCardapioDigitalNotifications = ({
 
       return true;
     } catch (error) {
-      console.error('❌ Erro inesperado ao marcar como preparando:', error);
       showMessage('error', 'Erro inesperado ao marcar pedido como preparando');
       return false;
     } finally {
@@ -509,7 +488,6 @@ export const useCardapioDigitalNotifications = ({
         .eq('id', pedidoId);
 
       if (error) {
-        console.error('❌ Erro ao marcar pedido como pronto:', error);
         showMessage('error', 'Erro ao marcar pedido como pronto');
         return false;
       }
@@ -524,7 +502,6 @@ export const useCardapioDigitalNotifications = ({
 
       return true;
     } catch (error) {
-      console.error('❌ Erro inesperado ao marcar como pronto:', error);
       showMessage('error', 'Erro inesperado ao marcar pedido como pronto');
       return false;
     } finally {
@@ -552,7 +529,6 @@ export const useCardapioDigitalNotifications = ({
         .eq('id', pedidoId);
 
       if (error) {
-        console.error('❌ Erro ao marcar pedido como entregue:', error);
         showMessage('error', 'Erro ao marcar pedido como entregue');
         return false;
       }
@@ -567,7 +543,6 @@ export const useCardapioDigitalNotifications = ({
 
       return true;
     } catch (error) {
-      console.error('❌ Erro inesperado ao marcar como entregue:', error);
       showMessage('error', 'Erro inesperado ao marcar pedido como entregue');
       return false;
     } finally {
@@ -581,17 +556,11 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ CONFIGURAR REALTIME PARA NOVOS PEDIDOS - REATIVO
   useEffect(() => {
-    console.log('🔧 [REALTIME-SETUP] useEffect executado - empresaId:', empresaId, 'enabled:', enabled);
-
     if (!empresaId || !enabled) {
-      console.log('❌ [REALTIME-SETUP] Não configurando Realtime - empresaId:', empresaId, 'enabled:', enabled);
       return;
     }
 
-    console.log('🔧 [REALTIME-SETUP] Configurando Realtime para empresa:', empresaId);
     const channelName = `cardapio_digital_${empresaId}`;
-    console.log('🔧 [REALTIME-SETUP] Nome do canal:', channelName);
-    console.log('🔧 [REALTIME-SETUP] Callback disponível:', !!onPedidoChangeRef.current);
 
     const channel = supabase
       .channel(channelName)
@@ -604,17 +573,6 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🆕 [REALTIME] *** EVENTO INSERT DETECTADO ***');
-          console.log('🆕 [REALTIME] Payload completo:', payload);
-          console.log('🆕 [REALTIME] Novo pedido recebido via Realtime:', payload.new);
-          console.log('🆕 [REALTIME] Dados do novo pedido:', {
-            id: payload.new?.id,
-            numero_pedido: payload.new?.numero_pedido,
-            status_pedido: payload.new?.status_pedido,
-            nome_cliente: payload.new?.nome_cliente,
-            empresa_id: payload.new?.empresa_id
-          });
-
           // Tocar som de notificação IMEDIATAMENTE
           tocarSomNotificacao();
 
@@ -623,27 +581,17 @@ export const useCardapioDigitalNotifications = ({
           showMessage('info', `🍽️ Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente}`);
 
           // Recarregar lista de pedidos pendentes
-          console.log('🔄 [REALTIME] Recarregando lista de pedidos pendentes...');
           carregarPedidosPendentes();
 
           // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
-          console.log('🔄 [REALTIME] Chamando onPedidoChange callback...');
           const currentCallback = onPedidoChangeRef.current;
-          console.log('🔄 [REALTIME] Callback disponível:', !!currentCallback);
-          console.log('🔄 [REALTIME] Tipo do callback:', typeof currentCallback);
-          console.log('🔄 [REALTIME] Callback function:', currentCallback);
 
           if (currentCallback && typeof currentCallback === 'function') {
-            console.log('✅ [REALTIME] Executando callback onPedidoChange');
             try {
               currentCallback();
-              console.log('✅ [REALTIME] Callback executado com sucesso');
             } catch (error) {
-              console.error('❌ [REALTIME] Erro ao executar callback:', error);
+              // Silenciar erro
             }
-          } else {
-            console.log('❌ [REALTIME] onPedidoChange callback não definido ou não é função');
-            console.log('❌ [REALTIME] Valor atual do callback:', currentCallback);
           }
         }
       )
@@ -656,51 +604,23 @@ export const useCardapioDigitalNotifications = ({
           filter: `empresa_id=eq.${empresaId}`
         },
         (payload) => {
-          console.log('🔄 [REALTIME] *** EVENTO UPDATE DETECTADO ***');
-          console.log('🔄 [REALTIME] Payload UPDATE:', payload);
-
           // ✅ SEMPRE recarregar lista de pedidos pendentes quando houver UPDATE
           carregarPedidosPendentes();
 
           // ✅ SEMPRE notificar componente pai sobre mudança (para atualizar modal completo)
           const currentCallback = onPedidoChangeRef.current;
           if (currentCallback) {
-            console.log('🔄 [REALTIME] Executando callback UPDATE');
             currentCallback();
           }
         }
       )
-      .subscribe((status) => {
-        console.log('📡 [REALTIME-SETUP] Status da subscription:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ [REALTIME-SETUP] Realtime ativo - aguardando novos pedidos');
-          console.log('✅ [REALTIME-SETUP] Canal configurado para empresa:', empresaId);
-          console.log('✅ [REALTIME-SETUP] Filtro aplicado: empresa_id=eq.' + empresaId);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('❌ [REALTIME-SETUP] Erro no canal realtime');
-        } else if (status === 'TIMED_OUT') {
-          console.warn('⏰ [REALTIME-SETUP] Timeout no canal realtime');
-        } else {
-          console.log('📡 [REALTIME-SETUP] Status desconhecido:', status);
-        }
-      });
+      .subscribe();
 
     // Carregar pedidos iniciais
     carregarPedidosPendentes();
 
-    console.log('✅ [REALTIME-SETUP] Subscription criada para canal:', channelName);
-
-    // ✅ TESTE DE CONEXÃO REALTIME
-    setTimeout(() => {
-      console.log('🧪 [REALTIME-TEST] Testando conexão Realtime...');
-      console.log('🧪 [REALTIME-TEST] Status do canal:', channel.state);
-      console.log('🧪 [REALTIME-TEST] Empresa ID atual:', empresaId);
-      console.log('🧪 [REALTIME-TEST] Callback atual:', !!onPedidoChangeRef.current);
-    }, 5000);
-
     // Cleanup
     return () => {
-      console.log('🔌 [REALTIME-SETUP] Desconectando canal:', channelName);
       supabase.removeChannel(channel);
     };
   }, [empresaId, enabled]); // ✅ REAGIR QUANDO empresaId OU enabled MUDAREM
@@ -753,7 +673,6 @@ export const useCardapioDigitalNotifications = ({
     const interval = setInterval(() => {
       const currentEnabled = enabledRef.current;
       if (currentEnabled) {
-        console.log('🔄 [POLLING] Verificando novos pedidos...');
         carregarPedidosPendentes(true); // ✅ SEMPRE CHAMAR CALLBACK NO POLLING
       }
     }, 5000); // 5 segundos - mais responsivo
