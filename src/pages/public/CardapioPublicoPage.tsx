@@ -4264,6 +4264,9 @@ const CardapioPublicoPage: React.FC = () => {
       }
     }
 
+    // ✅ OBTER OBSERVAÇÃO ORIGINAL DO PRODUTO PARA REPLICAR NOS ITENS DESMEMBRADOS
+    const observacaoOriginal = observacoesSelecionadas[produtoOrganizacao.id];
+
     // Adicionar cada item individual ao carrinho exatamente como foi organizado
     itensOrganizados.forEach((item, index) => {
       // Gerar ID único para o carrinho com delay para garantir unicidade
@@ -4281,7 +4284,7 @@ const CardapioPublicoPage: React.FC = () => {
         produtoId: produtoOrganizacao.id,
         quantidade: 1,
         adicionais: adicionaisFormatados,
-        observacao: undefined,
+        observacao: observacaoOriginal, // ✅ REPLICAR OBSERVAÇÃO ORIGINAL PARA CADA ITEM DESMEMBRADO
         ordemAdicao: Date.now() + index
       };
 
