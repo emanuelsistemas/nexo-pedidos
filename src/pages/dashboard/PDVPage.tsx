@@ -4801,10 +4801,50 @@ const PDVPage: React.FC = () => {
             fotosData = fotosResult;
           }
 
-          // Buscar dados completos dos produtos (incluindo código)
+          // Buscar dados completos dos produtos (TODOS OS CAMPOS FISCAIS para NFC-e)
           const { data: produtosResult } = await supabase
             .from('produtos')
-            .select('id, codigo, nome, preco, descricao, categoria, ativo, promocao, grupo_id, unidade_medida_id, ncm, cfop, codigo_barras')
+            .select(`
+              id,
+              nome,
+              preco,
+              codigo,
+              codigo_barras,
+              descricao,
+              grupo_id,
+              promocao,
+              tipo_desconto,
+              valor_desconto,
+              estoque_inicial,
+              desconto_quantidade,
+              quantidade_minima,
+              tipo_desconto_quantidade,
+              valor_desconto_quantidade,
+              percentual_desconto_quantidade,
+              unidade_medida_id,
+              ncm,
+              cfop,
+              origem_produto,
+              situacao_tributaria,
+              cst_icms,
+              csosn_icms,
+              cst_pis,
+              cst_cofins,
+              cst_ipi,
+              aliquota_icms,
+              aliquota_pis,
+              aliquota_cofins,
+              aliquota_ipi,
+              valor_ipi,
+              cest,
+              margem_st,
+              peso_liquido,
+              unidade_medida:unidade_medida_id (
+                id,
+                sigla,
+                nome
+              )
+            `)
             .in('id', produtosIds);
 
           if (produtosResult) {
@@ -4820,24 +4860,88 @@ const PDVPage: React.FC = () => {
         const foto = fotosData.find(f => f.produto_id === item.produto_id);
         const produtoReal = produtosData.find(p => p.id === item.produto_id);
 
-        // Criar produto temporário baseado no item do cardápio com campos obrigatórios do PDV
+        // ✅ VALIDAÇÕES CRÍTICAS SEM FALLBACKS - DADOS FISCAIS OBRIGATÓRIOS
+        if (!produtoReal) {
+          throw new Error(`Produto não encontrado no cadastro: ${item.produto_nome || item.produto_id}`);
+        }
+
+        if (!produtoReal.unidade_medida || !produtoReal.unidade_medida.sigla) {
+          throw new Error(`Unidade do produto ${produtoReal.nome} é obrigatória para NFC-e. Configure a unidade de medida no cadastro do produto.`);
+        }
+
+        if (!produtoReal.ncm) {
+          throw new Error(`NCM do produto ${produtoReal.nome} é obrigatório para NFC-e. Configure o NCM no cadastro do produto.`);
+        }
+
+        if (!produtoReal.cfop) {
+          throw new Error(`CFOP do produto ${produtoReal.nome} é obrigatório para NFC-e. Configure o CFOP no cadastro do produto.`);
+        }
+
+        if (produtoReal.origem_produto === null || produtoReal.origem_produto === undefined) {
+          throw new Error(`Origem do produto ${produtoReal.nome} é obrigatória para NFC-e. Configure a origem no cadastro do produto.`);
+        }
+
+        // ✅ VALIDAÇÃO CRÍTICA: Verificar se produto existe e tem unidade de medida
+        if (!produtoReal) {
+          console.error(`❌ Produto não encontrado no cadastro: ${item.produto_id}`);
+          throw new Error(`Produto ${item.produto_nome || 'desconhecido'} não encontrado no cadastro`);
+        }
+
+        if (!produtoReal.unidade_medida || !produtoReal.unidade_medida.sigla) {
+          console.error(`❌ Produto sem unidade de medida: ${produtoReal.nome} (ID: ${produtoReal.id})`);
+          throw new Error(`Produto "${produtoReal.nome}" não possui unidade de medida configurada. Configure a unidade de medida no cadastro do produto antes de emitir NFC-e.`);
+        }
+
+        // ✅ CRIAR PRODUTO COM DADOS REAIS DO CADASTRO (SEM FALLBACKS)
         const produtoTemp = {
-          id: item.produto_id || `cardapio_produto_${item.id || index}`,
-          nome: item.produto_nome || item.nome || produtoReal?.nome || 'Produto do Cardápio',
-          preco: item.preco_unitario || item.preco || produtoReal?.preco || 0,
-          codigo: produtoReal?.codigo || `CARD_${index + 1}`, // ✅ USAR CÓDIGO REAL DO PRODUTO
-          descricao: item.produto_nome || item.nome || produtoReal?.descricao || 'Produto importado do cardápio digital',
-          categoria: produtoReal?.categoria || 'Cardápio Digital',
-          ativo: produtoReal?.ativo ?? true,
-          promocao: produtoReal?.promocao ?? false,
-          grupo_id: produtoReal?.grupo_id || null,
-          unidade_medida_id: produtoReal?.unidade_medida_id || null,
-          produto_fotos: foto ? [{ url: foto.url, principal: true }] : [], // ✅ INCLUIR FOTO
-          foto_url: foto?.url || null, // ✅ CAMPO ADICIONAL PARA COMPATIBILIDADE
-          // ✅ INCLUIR DADOS FISCAIS REAIS DO PRODUTO
-          ncm: produtoReal?.ncm || null,
-          cfop: produtoReal?.cfop || null,
-          codigo_barras: produtoReal?.codigo_barras || null
+          // Dados básicos do produto real
+          id: produtoReal.id,
+          nome: produtoReal.nome,
+          preco: produtoReal.preco,
+          codigo: produtoReal.codigo,
+          descricao: produtoReal.descricao,
+          categoria: produtoReal.categoria,
+          ativo: produtoReal.ativo,
+          promocao: produtoReal.promocao,
+          grupo_id: produtoReal.grupo_id,
+          unidade_medida_id: produtoReal.unidade_medida_id,
+
+          // Fotos do produto
+          produto_fotos: foto ? [{ url: foto.url, principal: true }] : [],
+          foto_url: foto?.url || null,
+
+          // ✅ DADOS FISCAIS REAIS (SEM FALLBACKS) - OBRIGATÓRIOS PARA NFC-e
+          codigo_barras: produtoReal.codigo_barras,
+          ncm: produtoReal.ncm,
+          cfop: produtoReal.cfop,
+          origem_produto: produtoReal.origem_produto,
+          situacao_tributaria: produtoReal.situacao_tributaria,
+          cst_icms: produtoReal.cst_icms,
+          csosn_icms: produtoReal.csosn_icms,
+          cst_pis: produtoReal.cst_pis,
+          cst_cofins: produtoReal.cst_cofins,
+          cst_ipi: produtoReal.cst_ipi,
+          aliquota_icms: produtoReal.aliquota_icms,
+          aliquota_pis: produtoReal.aliquota_pis,
+          aliquota_cofins: produtoReal.aliquota_cofins,
+          aliquota_ipi: produtoReal.aliquota_ipi,
+          valor_ipi: produtoReal.valor_ipi,
+          cest: produtoReal.cest,
+          margem_st: produtoReal.margem_st,
+          peso_liquido: produtoReal.peso_liquido,
+
+          // ✅ UNIDADE DE MEDIDA REAL (OBRIGATÓRIA)
+          unidade_medida: produtoReal.unidade_medida,
+
+          // Campos de desconto e estoque do produto
+          tipo_desconto: produtoReal.tipo_desconto,
+          valor_desconto: produtoReal.valor_desconto,
+          estoque_inicial: produtoReal.estoque_inicial,
+          desconto_quantidade: produtoReal.desconto_quantidade,
+          quantidade_minima: produtoReal.quantidade_minima,
+          tipo_desconto_quantidade: produtoReal.tipo_desconto_quantidade,
+          valor_desconto_quantidade: produtoReal.valor_desconto_quantidade,
+          percentual_desconto_quantidade: produtoReal.percentual_desconto_quantidade
         };
 
         const quantidade = item.quantidade || 1;
@@ -4878,11 +4982,34 @@ const PDVPage: React.FC = () => {
           grupo_id: null,
           unidade_medida_id: null,
           produto_fotos: [],
-          unidade_medida: 'UN',
-          // Dados fiscais para taxa de entrega (serviço)
-          ncm: pdvConfig?.venda_sem_produto_ncm || '22021000',
-          cfop: pdvConfig?.venda_sem_produto_cfop || '5102',
-          codigo_barras: null
+          unidade_medida: { sigla: 'UN', nome: 'Unidade', id: null },
+
+          // ✅ EXATAMENTE OS MESMOS DADOS FISCAIS QUE A VENDA SEM PRODUTO USA (SEM FALLBACKS)
+          codigo_barras: null,
+          ncm: pdvConfig?.venda_sem_produto_ncm,
+          cfop: pdvConfig?.venda_sem_produto_cfop,
+          origem_produto: pdvConfig?.venda_sem_produto_origem,
+          situacao_tributaria: pdvConfig?.venda_sem_produto_situacao_tributaria,
+          cst_icms: pdvConfig?.venda_sem_produto_cst,
+          csosn_icms: pdvConfig?.venda_sem_produto_csosn,
+          cest: pdvConfig?.venda_sem_produto_cest,
+          margem_st: pdvConfig?.venda_sem_produto_margem_st,
+          aliquota_icms: pdvConfig?.venda_sem_produto_aliquota_icms,
+          aliquota_pis: pdvConfig?.venda_sem_produto_aliquota_pis,
+          aliquota_cofins: pdvConfig?.venda_sem_produto_aliquota_cofins,
+          cst_pis: pdvConfig?.venda_sem_produto_cst_pis,
+          cst_cofins: pdvConfig?.venda_sem_produto_cst_cofins,
+          peso_liquido: pdvConfig?.venda_sem_produto_peso_liquido,
+
+          // Campos de desconto (não aplicáveis para taxa de entrega)
+          tipo_desconto: null,
+          valor_desconto: null,
+          estoque_inicial: null,
+          desconto_quantidade: false,
+          quantidade_minima: null,
+          tipo_desconto_quantidade: null,
+          valor_desconto_quantidade: null,
+          percentual_desconto_quantidade: null
         };
 
         const itemTaxaEntrega: ItemCarrinho = {
