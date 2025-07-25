@@ -664,6 +664,9 @@ const PDVPage: React.FC = () => {
   const [itemEditandoQuantidade, setItemEditandoQuantidade] = useState<string | null>(null);
   const [quantidadeEditando, setQuantidadeEditando] = useState('');
 
+  // ✅ NOVO: Estado para efeito de carregamento no carrinho
+  const [carregandoNovoItem, setCarregandoNovoItem] = useState(false);
+
   // Funções para localStorage
   const savePDVState = () => {
     try {
@@ -11782,11 +11785,23 @@ const PDVPage: React.FC = () => {
     toast.success('PDV limpo com sucesso!');
   };
 
-  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSearchKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchTerm.trim()) {
       // Se há produtos filtrados, adicionar o primeiro
       if (produtosFiltrados.length > 0) {
-        adicionarAoCarrinho(produtosFiltrados[0]);
+        // ✅ NOVO: Ativar efeito de carregamento
+        setCarregandoNovoItem(true);
+
+        try {
+          await adicionarAoCarrinho(produtosFiltrados[0]);
+
+          // ✅ NOVO: Aguardar um pouco para mostrar o efeito de carregamento
+          await new Promise(resolve => setTimeout(resolve, 800));
+        } finally {
+          // ✅ NOVO: Desativar efeito de carregamento
+          setCarregandoNovoItem(false);
+        }
+
         // Limpar o campo de pesquisa após adicionar o produto
         setSearchTerm('');
         // Manter o foco no campo para próxima digitação
@@ -12409,6 +12424,56 @@ const PDVPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    {/* ✅ NOVO: Card de carregamento - aparece no topo quando está carregando novo item */}
+                    {carregandoNovoItem && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5"
+                      >
+                        <div className="flex gap-2.5">
+                          {/* Número sequencial do item - Carregando */}
+                          <div className="w-5 h-5 bg-blue-500/20 border border-blue-500/40 rounded-full flex items-center justify-center flex-shrink-0 self-center">
+                            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                          </div>
+
+                          {/* Foto do Produto - Carregando */}
+                          <div className="w-12 h-12 lg:w-10 lg:h-10 bg-blue-500/20 rounded overflow-hidden flex-shrink-0 relative self-start">
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin"></div>
+                            </div>
+                          </div>
+
+                          {/* Informações do Produto - Carregando */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                {/* Nome do produto - Skeleton */}
+                                <div className="h-4 bg-blue-400/20 rounded animate-pulse mb-1"></div>
+
+                                {/* Preço - Skeleton */}
+                                <div className="h-3 bg-blue-400/10 rounded animate-pulse w-16"></div>
+                              </div>
+
+                              {/* Valor total - Skeleton */}
+                              <div className="ml-2 text-right">
+                                <div className="h-4 bg-blue-400/20 rounded animate-pulse w-12"></div>
+                              </div>
+                            </div>
+
+                            {/* Texto de carregamento */}
+                            <div className="mt-1 text-xs text-blue-400 flex items-center gap-1">
+                              <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></div>
+                              <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                              <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                              <span className="ml-1">Adicionando produto...</span>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
                     {carrinho.map((item, index) => (
                       <motion.div
                         key={item.id}
@@ -18364,13 +18429,25 @@ const PDVPage: React.FC = () => {
                       placeholder="Pesquisar produtos por nome ou código..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      onKeyDown={(e) => {
+                      onKeyDown={async (e) => {
                         if (e.key === 'Escape') {
                           setShowAreaProdutos(false);
                         } else if (e.key === 'Enter' && searchTerm.trim()) {
                           // Se há produtos filtrados, adicionar o primeiro
                           if (produtosFiltrados.length > 0) {
-                            adicionarAoCarrinho(produtosFiltrados[0]);
+                            // ✅ NOVO: Ativar efeito de carregamento
+                            setCarregandoNovoItem(true);
+
+                            try {
+                              await adicionarAoCarrinho(produtosFiltrados[0]);
+
+                              // ✅ NOVO: Aguardar um pouco para mostrar o efeito de carregamento
+                              await new Promise(resolve => setTimeout(resolve, 800));
+                            } finally {
+                              // ✅ NOVO: Desativar efeito de carregamento
+                              setCarregandoNovoItem(false);
+                            }
+
                             // Limpar o campo de pesquisa após adicionar o produto
                             setSearchTerm('');
                             // ✅ NOVO: Só fechar o modal se não abrir o modal de quantidade
@@ -18470,8 +18547,20 @@ const PDVPage: React.FC = () => {
                           key={produto.id}
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            adicionarAoCarrinho(produto);
+                          onClick={async () => {
+                            // ✅ NOVO: Ativar efeito de carregamento
+                            setCarregandoNovoItem(true);
+
+                            try {
+                              await adicionarAoCarrinho(produto);
+
+                              // ✅ NOVO: Aguardar um pouco para mostrar o efeito de carregamento
+                              await new Promise(resolve => setTimeout(resolve, 800));
+                            } finally {
+                              // ✅ NOVO: Desativar efeito de carregamento
+                              setCarregandoNovoItem(false);
+                            }
+
                             // ✅ NOVO: Só fechar o modal se não abrir o modal de quantidade
                             if (!pdvConfig?.vendas_itens_multiplicacao) {
                               setShowAreaProdutos(false);
