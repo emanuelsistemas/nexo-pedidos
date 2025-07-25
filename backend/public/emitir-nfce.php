@@ -160,6 +160,7 @@ function buscarConfiguracoesFiscaisVendaSemProduto($empresaId) {
             $dadosFiscais['csosn_icms'] = '102';   // Simples Nacional
             break;
         case 'tributado_st':
+        case 'st':  // ✅ CORREÇÃO: Aceitar também 'st' (valor do banco)
             $dadosFiscais['cst_icms'] = '60';      // Regime Normal - ICMS cobrado anteriormente por ST
             $dadosFiscais['csosn_icms'] = '500';   // Simples Nacional - ICMS cobrado anteriormente por ST
             break;
@@ -1070,7 +1071,14 @@ try {
         }
 
         $std->CFOP = preg_replace('/[^0-9]/', '', $produto['cfop']);
-        logDetalhado('120', "Validando CFOP limpo do produto {$nItem}", ['cfop_original' => $produto['cfop'], 'cfop_limpo' => $std->CFOP, 'tamanho' => strlen($std->CFOP)]);
+        logDetalhado('120', "CFOP aplicado ao XML do produto {$nItem}", [
+            'cfop_original' => $produto['cfop'],
+            'cfop_limpo' => $std->CFOP,
+            'tamanho' => strlen($std->CFOP),
+            'codigo_produto' => $produto['codigo'],
+            'descricao_produto' => $produto['descricao'] ?? 'N/A'
+        ]);
+
         if (strlen($std->CFOP) !== 4) {
             logDetalhado('121', "ERRO: CFOP do produto {$nItem} com tamanho inválido", ['cfop' => $std->CFOP, 'tamanho' => strlen($std->CFOP)]);
             throw new Exception("CFOP do produto {$nItem} deve ter 4 dígitos");
@@ -1165,10 +1173,14 @@ try {
             // ✅ EMPRESA SIMPLES NACIONAL: Usar CSOSN REAL (SEM FALLBACKS)
             $std->CSOSN = $produtoFiscal['csosn_icms']; // ✅ CSOSN REAL do produto (já validado)
 
-            logDetalhado('127.1', "Produto {$nItem} - Empresa Simples Nacional - Usando CSOSN real", [
-                'csosn' => $std->CSOSN,
-                'origem' => $std->orig,
-                'regime' => $regimeTributario
+            logDetalhado('127.1', "CSOSN aplicado ao XML do produto {$nItem}", [
+                'csosn_aplicado' => $std->CSOSN,
+                'cfop_aplicado' => $std->CFOP,
+                'origem_aplicada' => $std->orig,
+                'regime' => $regimeTributario,
+                'codigo_produto' => $produto['codigo'],
+                'descricao_produto' => $produto['descricao'] ?? 'N/A',
+                'COMBINACAO_FISCAL' => "CFOP {$std->CFOP} + CSOSN {$std->CSOSN}"
             ]);
 
             // Para CSOSN 500 (ST), adicionar campos específicos obrigatórios

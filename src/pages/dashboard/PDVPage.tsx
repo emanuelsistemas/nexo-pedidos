@@ -9609,9 +9609,18 @@ const PDVPage: React.FC = () => {
               descricao: p.descricao,
               ncm: p.ncm,
               cfop: p.cfop,
+              csosn_icms: p.csosn_icms,
+              cst_icms: p.cst_icms,
+              aliquota_icms: p.aliquota_icms,
+              origem_produto: p.origem_produto,
               valor: p.valor_unitario
             })) || []
           });
+
+          // Log específico para o item 2 (taxa de entrega)
+          if (requestData.nfce_data.produtos?.length >= 2) {
+            console.log('🔍 [EMISSÃO NFC-e] ITEM 2 (Taxa de Entrega) - Dados Fiscais Detalhados:', requestData.nfce_data.produtos[1]);
+          }
 
           console.log('🔍 [EMISSÃO NFC-e] Enviando requisição para:', '/backend/public/emitir-nfce.php');
 

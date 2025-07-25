@@ -1742,6 +1742,8 @@ const CardapioPublicoPage: React.FC = () => {
       : 'Área de entrega confirmada!';
 
     showMessage('success', mensagem);
+
+    // Área de entrega confirmada, usuário pode agora adicionar itens no carrinho
   };
 
   // Confirmar endereço salvo
@@ -1756,6 +1758,8 @@ const CardapioPublicoPage: React.FC = () => {
       setCalculoTaxa(enderecoSalvo.taxa);
 
       showMessage('success', `Endereço confirmado! Taxa: R$ ${enderecoSalvo.taxa.valor.toFixed(2)}`);
+
+      // Endereço confirmado, usuário pode agora adicionar itens no carrinho
     }
   };
 
@@ -2350,36 +2354,49 @@ const CardapioPublicoPage: React.FC = () => {
           }
         }
 
-        // Verificar se há endereço salvo e validá-lo
+        // ✅ CARREGAR DADOS SALVOS SILENCIOSAMENTE (sem mostrar modais)
+        // Os dados de endereço são carregados para exibição, mas o usuário sempre
+        // deve escolher o tipo de entrega primeiro
+
         const areaJaValidada = localStorage.getItem(`area_validada_${empresaComLogo.id}`);
-
         if (areaJaValidada) {
-          // Aguardar empresaId estar disponível antes de validar
-          const aguardarEmpresaId = () => {
-            if (empresaComLogo?.id) {
-              // Validar endereço salvo de forma assíncrona
-              (async () => {
-                const enderecoValido = await validarEnderecoSalvo(empresaComLogo.id);
+          // Carregar dados salvos nos estados para exibir na interface
+          const cepSalvo = localStorage.getItem(`cep_cliente_${empresaComLogo.id}`);
+          const enderecoSalvoStr = localStorage.getItem(`endereco_encontrado_${empresaComLogo.id}`);
+          const taxaSalvaStr = localStorage.getItem(`taxa_entrega_${empresaComLogo.id}`);
+          const bairroSalvo = localStorage.getItem(`bairro_selecionado_${empresaComLogo.id}`);
 
-                if (enderecoValido) {
-                  // Mostrar modal de confirmação de endereço
-                  setModalConfirmacaoEndereco(true);
-                } else {
-                  // Endereço não é mais válido, mostrar modal normal
-                  setModalAreaEntregaAberto(true);
-                }
-              })();
-            } else {
-              setTimeout(aguardarEmpresaId, 100);
+          if (cepSalvo) setCepCliente(cepSalvo);
+          if (bairroSalvo) setBairroSelecionado(bairroSalvo);
+
+          if (enderecoSalvoStr) {
+            try {
+              setEnderecoEncontrado(JSON.parse(enderecoSalvoStr));
+            } catch (e) {
+              console.error('Erro ao carregar endereço salvo:', e);
             }
-          };
+          }
 
-          aguardarEmpresaId();
-        } else {
-          // Primeira vez, mostrar modal normal
+          if (taxaSalvaStr) {
+            try {
+              setCalculoTaxa(JSON.parse(taxaSalvaStr));
+            } catch (e) {
+              console.error('Erro ao carregar taxa salva:', e);
+            }
+          }
+
+          setAreaValidada(true);
+        }
+
+        // ✅ MOSTRAR MODAL DE TIPO DE ENTREGA SEMPRE (se habilitado)
+        // O usuário deve escolher o tipo de entrega toda vez que acessar a página
+        if (pdvConfigData.retirada_balcao_cardapio) {
           setTimeout(() => {
-            setModalAreaEntregaAberto(true);
-          }, 2000);
+            setModalTipoEntregaAberto(true);
+          }, 2000); // Aguardar 2 segundos para a página carregar
+        } else {
+          // Se retirada no balcão estiver desabilitada, assumir entrega automaticamente
+          setTipoEntregaSelecionado('entrega');
         }
       }
 
@@ -5284,27 +5301,63 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const handlePedirCarrinhoCompleto = () => {
-    // Se a opção "Retirada no Balcão" estiver ativa, mostrar modal de seleção primeiro
-    if (config.retirada_balcao_cardapio) {
-      setModalTipoEntregaAberto(true);
-    } else {
-      // Caso contrário, ir direto para o modal de finalização (assumindo entrega)
-      setTipoEntregaSelecionado('entrega');
-      setModalFinalizacaoAberto(true);
-    }
+    // O tipo de entrega já foi escolhido no início da página
+    // Ir direto para o modal de finalização
+    setModalFinalizacaoAberto(true);
   };
 
   // Função para confirmar tipo de entrega e prosseguir
   const confirmarTipoEntrega = (tipo: 'entrega' | 'retirada') => {
     setTipoEntregaSelecionado(tipo);
     setModalTipoEntregaAberto(false);
-    setModalFinalizacaoAberto(true);
+
+    // Se for retirada, apenas fechar modal e deixar página fluir normalmente
+    if (tipo === 'retirada') {
+      // Usuário vai adicionar itens no carrinho e depois clicar em "Finalizar Pedido"
+      return;
+    }
+
+    // Se for entrega, verificar se precisa validar área de entrega
+    if (tipo === 'entrega' && taxaEntregaConfig?.habilitado) {
+      // Verificar se já tem área validada
+      const areaJaValidada = empresaId && localStorage.getItem(`area_validada_${empresaId}`) === 'true';
+
+      if (areaJaValidada) {
+        // Validar endereço salvo
+        validarEnderecoSalvoEProsseguir();
+      } else {
+        // Primeira vez, mostrar modal de área de entrega
+        setModalAreaEntregaAberto(true);
+      }
+    }
+    // Se não tem taxa de entrega configurada para entrega, apenas fechar modal
   };
 
   // Função para fechar modal de tipo de entrega
   const fecharModalTipoEntrega = () => {
     setModalTipoEntregaAberto(false);
     setTipoEntregaSelecionado(null);
+  };
+
+  // Função para validar endereço salvo
+  const validarEnderecoSalvoEProsseguir = async () => {
+    if (!empresaId) return;
+
+    try {
+      const enderecoValido = await validarEnderecoSalvo(empresaId);
+
+      if (enderecoValido) {
+        // Endereço válido, mostrar modal de confirmação
+        setModalConfirmacaoEndereco(true);
+      } else {
+        // Endereço não é mais válido, mostrar modal de área de entrega
+        setModalAreaEntregaAberto(true);
+      }
+    } catch (error) {
+      console.error('Erro ao validar endereço salvo:', error);
+      // Em caso de erro, mostrar modal de área de entrega
+      setModalAreaEntregaAberto(true);
+    }
   };
 
   const iniciarFinalizacaoPedido = () => {
