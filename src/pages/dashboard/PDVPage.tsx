@@ -55,6 +55,7 @@ import OpcoesAdicionaisModal from '../../components/pdv/OpcoesAdicionaisModal';
 import SeletorSaboresModal from '../../components/pdv/SeletorSaboresModal';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import { salvarAdicionaisItem } from '../../utils/pdvAdicionaisUtils'; // ✅ NOVO: Import da função utilitária
+import LoadingScreen from '../../components/dashboard/LoadingScreen';
 
 // ✅ NOVO: Declaração de tipo para timeout de validação
 declare global {
@@ -466,6 +467,10 @@ const PDVPage: React.FC = () => {
 
   // Estado para controlar visibilidade da área de produtos
   const [showAreaProdutos, setShowAreaProdutos] = useState(false);
+
+  // ✅ NOVO: Estados para pré-carregamento de imagens
+  const [imagensPreCarregadas, setImagensPreCarregadas] = useState<Set<string>>(new Set());
+  const [preCarregandoImagens, setPreCarregandoImagens] = useState(false);
 
   // Estados para o modal de Pedidos
   const [pedidos, setPedidos] = useState<any[]>([]);
@@ -5295,7 +5300,6 @@ const PDVPage: React.FC = () => {
           setTipoDocumento('cnpj');
           setCpfCnpjNota(formatCnpj(documentoLimpo));
           setClienteEncontrado(clienteImportado);
-          console.log('🎯 PDV: CNPJ do cliente importado preenchido automaticamente na Nota Fiscal Paulista:', formatCnpj(documentoLimpo));
         }
         setErroValidacao(''); // Limpar qualquer erro anterior
       }
@@ -6667,6 +6671,56 @@ const PDVPage: React.FC = () => {
     if (!produto.produto_fotos || produto.produto_fotos.length === 0) return null;
     const fotoPrincipal = produto.produto_fotos.find(foto => foto.principal);
     return fotoPrincipal || produto.produto_fotos[0];
+  };
+
+  // ✅ NOVA FUNÇÃO: Pré-carregar imagens dos produtos
+  const preCarregarImagens = async (produtos: Produto[]) => {
+    if (preCarregandoImagens) return; // Evitar múltiplas execuções simultâneas
+
+    setPreCarregandoImagens(true);
+    const novasImagensCarregadas = new Set(imagensPreCarregadas);
+
+    // Coletar todas as URLs de imagens dos produtos
+    const urlsImagens = produtos
+      .map(produto => getFotoPrincipal(produto)?.url)
+      .filter(url => url && !novasImagensCarregadas.has(url)) as string[];
+
+    if (urlsImagens.length === 0) {
+      setPreCarregandoImagens(false);
+      return;
+    }
+
+    console.log(`🖼️ Pré-carregando ${urlsImagens.length} imagens dos produtos...`);
+
+    // Pré-carregar imagens em lotes para não sobrecarregar
+    const LOTE_SIZE = 10;
+    for (let i = 0; i < urlsImagens.length; i += LOTE_SIZE) {
+      const lote = urlsImagens.slice(i, i + LOTE_SIZE);
+
+      await Promise.allSettled(
+        lote.map(url => {
+          return new Promise<void>((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+              novasImagensCarregadas.add(url);
+              resolve();
+            };
+            img.onerror = () => {
+              console.warn(`❌ Erro ao pré-carregar imagem: ${url}`);
+              resolve(); // Continuar mesmo com erro
+            };
+            img.src = url;
+          });
+        })
+      );
+
+      // Pequena pausa entre lotes para não bloquear a UI
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
+    setImagensPreCarregadas(novasImagensCarregadas);
+    setPreCarregandoImagens(false);
+    console.log(`✅ Pré-carregamento concluído! ${novasImagensCarregadas.size} imagens em cache.`);
   };
 
   const abrirGaleria = (produto: Produto, event: React.MouseEvent) => {
@@ -9524,8 +9578,6 @@ const PDVPage: React.FC = () => {
             if (pedidoError) {
               console.error(`Erro ao atualizar pedido ${pedido.numero}:`, pedidoError);
               // Não interrompe o processo, apenas loga o erro
-            } else {
-              console.log(`✅ Pedido ${pedido.numero} atualizado para 'faturado' com sucesso`);
             }
           }
 
@@ -9719,30 +9771,7 @@ const PDVPage: React.FC = () => {
             nfce_data: nfceData
           };
 
-          console.log('🔍 [EMISSÃO NFC-e] Dados completos enviados para backend:', {
-            empresa_id: requestData.empresa_id,
-            nfce_data: requestData.nfce_data,
-            produtos_count: requestData.nfce_data.produtos?.length || 0,
-            produtos_detalhes: requestData.nfce_data.produtos?.map((p, index) => ({
-              item: index + 1,
-              codigo: p.codigo,
-              descricao: p.descricao,
-              ncm: p.ncm,
-              cfop: p.cfop,
-              csosn_icms: p.csosn_icms,
-              cst_icms: p.cst_icms,
-              aliquota_icms: p.aliquota_icms,
-              origem_produto: p.origem_produto,
-              valor: p.valor_unitario
-            })) || []
-          });
 
-          // Log específico para o item 2 (taxa de entrega)
-          if (requestData.nfce_data.produtos?.length >= 2) {
-            console.log('🔍 [EMISSÃO NFC-e] ITEM 2 (Taxa de Entrega) - Dados Fiscais Detalhados:', requestData.nfce_data.produtos[1]);
-          }
-
-          console.log('🔍 [EMISSÃO NFC-e] Enviando requisição para:', '/backend/public/emitir-nfce.php');
 
           const nfceResponse = await fetch('/backend/public/emitir-nfce.php', {
             method: 'POST',
@@ -9752,8 +9781,7 @@ const PDVPage: React.FC = () => {
             body: JSON.stringify(requestData)
           });
 
-          console.log('🔍 [EMISSÃO NFC-e] Status da resposta:', nfceResponse.status);
-          console.log('🔍 [EMISSÃO NFC-e] Headers da resposta:', Object.fromEntries(nfceResponse.headers.entries()));
+
 
           if (!nfceResponse.ok) {
             console.error('❌ [EMISSÃO NFC-e] Resposta com erro HTTP:', nfceResponse.status);
@@ -9762,7 +9790,6 @@ const PDVPage: React.FC = () => {
             let errorResponse;
             try {
               errorResponse = await nfceResponse.text();
-              console.log('🔍 [EMISSÃO NFC-e] Resposta de erro bruta:', errorResponse);
             } catch (textError) {
               console.error('❌ [EMISSÃO NFC-e] Erro ao ler resposta de erro:', textError);
               throw new Error(`Erro HTTP ${nfceResponse.status}: ${nfceResponse.statusText}`);
@@ -9798,10 +9825,8 @@ const PDVPage: React.FC = () => {
           let nfceResult;
           try {
             const responseText = await nfceResponse.text();
-            console.log('🔍 [EMISSÃO NFC-e] Resposta de sucesso bruta:', responseText);
 
             nfceResult = JSON.parse(responseText);
-            console.log('✅ [EMISSÃO NFC-e] Resposta de sucesso parseada:', nfceResult);
           } catch (parseError) {
             console.error('❌ [EMISSÃO NFC-e] Erro ao parsear resposta de sucesso:', parseError);
             throw new Error('Resposta inválida do servidor de NFC-e');
@@ -12136,9 +12161,11 @@ const PDVPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-500"></div>
-      </div>
+      <LoadingScreen
+        message="Carregando PDV..."
+        subMessage={preCarregandoImagens ? "Pré-carregando imagens dos produtos" : undefined}
+        showSubLoading={preCarregandoImagens}
+      />
     );
   }
 
@@ -18284,6 +18311,17 @@ const PDVPage: React.FC = () => {
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                   <Package size={20} />
                   Produtos
+                  {preCarregandoImagens && (
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-400"></div>
+                      <span className="text-xs">Carregando imagens...</span>
+                    </div>
+                  )}
+                  {!preCarregandoImagens && imagensPreCarregadas.size > 0 && (
+                    <div className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded">
+                      ✓ {imagensPreCarregadas.size} imagens em cache
+                    </div>
+                  )}
                 </h3>
 
                 <div className="flex items-center gap-2">
@@ -18450,11 +18488,18 @@ const PDVPage: React.FC = () => {
                             }}
                           >
                             {getFotoPrincipal(produto) ? (
-                              <img
-                                src={getFotoPrincipal(produto)!.url}
-                                alt={produto.nome}
-                                className="w-full h-full object-cover hover:opacity-90 transition-opacity"
-                              />
+                              <>
+                                <img
+                                  src={getFotoPrincipal(produto)!.url}
+                                  alt={produto.nome}
+                                  className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                />
+                                {/* Indicador de imagem em cache */}
+                                {imagensPreCarregadas.has(getFotoPrincipal(produto)!.url) && (
+                                  <div className="absolute bottom-0.5 right-0.5 w-2 h-2 bg-green-400 rounded-full"
+                                       title="Imagem pré-carregada"></div>
+                                )}
+                              </>
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <Package size={20} className="text-gray-700" />

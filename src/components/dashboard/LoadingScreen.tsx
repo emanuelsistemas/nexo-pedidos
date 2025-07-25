@@ -2,7 +2,17 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import Logo from '../comum/Logo';
 
-const LoadingScreen: React.FC = () => {
+interface LoadingScreenProps {
+  message?: string;
+  subMessage?: string;
+  showSubLoading?: boolean;
+}
+
+const LoadingScreen: React.FC<LoadingScreenProps> = ({
+  message = "Carregando...",
+  subMessage,
+  showSubLoading = false
+}) => {
   return (
     <div className="fixed inset-0 bg-background-dark flex items-center justify-center z-50">
       <div className="text-center">
@@ -17,10 +27,23 @@ const LoadingScreen: React.FC = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.5 }}
-          className="mt-6 text-gray-400"
+          className="mt-6 text-gray-400 text-lg"
         >
-          Carregando...
+          {message}
         </motion.div>
+        {subMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
+            className="mt-3 text-gray-500 text-sm flex items-center justify-center gap-2"
+          >
+            {showSubLoading && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500"></div>
+            )}
+            {subMessage}
+          </motion.div>
+        )}
       </div>
     </div>
   );
