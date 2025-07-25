@@ -426,6 +426,9 @@ const ProdutosPage: React.FC = () => {
   const [produtoInsumos, setProdutoInsumos] = useState<any[]>([]);
   const [showModalInsumos, setShowModalInsumos] = useState(false);
   const [editingInsumo, setEditingInsumo] = useState<any | null>(null);
+  const [materiasPrimas, setMateriasPrimas] = useState<any[]>([]);
+  const [loadingMateriasPrimas, setLoadingMateriasPrimas] = useState(false);
+  const [insumosSelecionados, setInsumosSelecionados] = useState<{[key: string]: {selecionado: boolean, quantidade: string}}>({});
   const [produtosParaInsumos, setProdutosParaInsumos] = useState<any[]>([]);
   const [gruposParaInsumos, setGruposParaInsumos] = useState<any[]>([]);
   const [searchTermInsumos, setSearchTermInsumos] = useState('');
@@ -2570,6 +2573,66 @@ const ProdutosPage: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao carregar insumos:', error);
       showMessage('error', 'Erro ao carregar insumos do produto');
+    }
+  };
+
+  // Função para carregar produtos que são matéria-prima
+  const loadMateriasPrimas = async () => {
+    setLoadingMateriasPrimas(true);
+    try {
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      // Buscar produtos marcados como matéria-prima
+      const { data: produtosData, error: produtosError } = await supabase
+        .from('produtos')
+        .select(`
+          id,
+          nome,
+          unidade_medida_id,
+          unidade_medida (
+            id,
+            sigla,
+            nome,
+            fracionado
+          )
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('materia_prima', true)
+        .eq('ativo', true)
+        .eq('deletado', false)
+        .order('nome');
+
+      if (produtosError) throw produtosError;
+
+      setMateriasPrimas(produtosData || []);
+
+      // Inicializar estado dos insumos selecionados
+      const estadoInicial: {[key: string]: {selecionado: boolean, quantidade: string}} = {};
+      (produtosData || []).forEach(produto => {
+        // Verificar se este produto já está nos insumos do produto atual
+        const insumoExistente = produtoInsumos.find(insumo => insumo.produto_id === produto.id);
+        estadoInicial[produto.id] = {
+          selecionado: !!insumoExistente,
+          quantidade: insumoExistente ? insumoExistente.quantidade.toString() : ''
+        };
+      });
+      setInsumosSelecionados(estadoInicial);
+
+    } catch (error: any) {
+      console.error('Erro ao carregar matérias-primas:', error);
+      showMessage('error', 'Erro ao carregar matérias-primas');
+    } finally {
+      setLoadingMateriasPrimas(false);
     }
   };
 
@@ -8786,7 +8849,10 @@ const ProdutosPage: React.FC = () => {
                             </h3>
                             <button
                               type="button"
-                              onClick={() => setShowModalInsumos(true)}
+                              onClick={() => {
+                                setShowModalInsumos(true);
+                                loadMateriasPrimas();
+                              }}
                               className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -9253,13 +9319,115 @@ const ProdutosPage: React.FC = () => {
               </div>
 
               <div className="overflow-y-auto max-h-[60vh]">
-                {/* Aqui será implementado o seletor de produtos */}
-                <div className="text-center py-8">
-                  <p className="text-gray-400">Modal de insumos em desenvolvimento...</p>
-                  <p className="text-gray-500 text-sm mt-2">
-                    Aqui será implementado o seletor de produtos e configuração de quantidades
-                  </p>
-                </div>
+                {loadingMateriasPrimas ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin"></div>
+                    <span className="ml-3 text-gray-400">Carregando matérias-primas...</span>
+                  </div>
+                ) : materiasPrimas.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-gray-500 mb-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-3">
+                        <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                      </svg>
+                    </div>
+                    <p className="text-gray-500 text-sm">
+                      Nenhuma matéria-prima encontrada.
+                    </p>
+                    <p className="text-gray-600 text-xs mt-1">
+                      Marque produtos como "Matéria prima" para que apareçam aqui.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {materiasPrimas.map((produto) => {
+                      const isSelecionado = insumosSelecionados[produto.id]?.selecionado || false;
+                      const quantidade = insumosSelecionados[produto.id]?.quantidade || '';
+                      const unidadeMedida = produto.unidade_medida;
+                      const isFracionado = unidadeMedida?.fracionado || false;
+
+                      return (
+                        <div key={produto.id} className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-start gap-3">
+                            {/* Checkbox de seleção */}
+                            <div className="flex items-center pt-1">
+                              <input
+                                type="checkbox"
+                                id={`insumo-${produto.id}`}
+                                checked={isSelecionado}
+                                onChange={(e) => {
+                                  setInsumosSelecionados(prev => ({
+                                    ...prev,
+                                    [produto.id]: {
+                                      ...prev[produto.id],
+                                      selecionado: e.target.checked,
+                                      quantidade: e.target.checked ? prev[produto.id]?.quantidade || '' : ''
+                                    }
+                                  }));
+                                }}
+                                className="rounded border-gray-600 text-primary-500 focus:ring-primary-500/20"
+                              />
+                            </div>
+
+                            {/* Informações do produto */}
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 bg-primary-500/20 rounded-lg flex items-center justify-center">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
+                                    <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                                  </svg>
+                                </div>
+                                <div>
+                                  <label
+                                    htmlFor={`insumo-${produto.id}`}
+                                    className="text-white font-medium cursor-pointer"
+                                  >
+                                    {produto.nome}
+                                  </label>
+                                  <p className="text-gray-400 text-sm">
+                                    Unidade: {unidadeMedida?.sigla || 'N/A'} ({unidadeMedida?.nome || 'Não definida'})
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Campo de quantidade (só aparece se selecionado) */}
+                              {isSelecionado && (
+                                <div className="mt-3 pl-13">
+                                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Quantidade por porção ({unidadeMedida?.sigla || 'UN'})
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={quantidade}
+                                    onChange={(e) => {
+                                      setInsumosSelecionados(prev => ({
+                                        ...prev,
+                                        [produto.id]: {
+                                          ...prev[produto.id],
+                                          quantidade: e.target.value
+                                        }
+                                      }));
+                                    }}
+                                    step={isFracionado ? "0.001" : "1"}
+                                    min="0"
+                                    placeholder={`Ex: ${isFracionado ? '0.250' : '1'}`}
+                                    className="w-full bg-gray-900/50 border border-gray-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                                  />
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {isFracionado
+                                      ? 'Use até 3 casas decimais (ex: 0.250 para 250g)'
+                                      : 'Use números inteiros (ex: 1, 2, 3)'
+                                    }
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 pt-4 border-t border-gray-700">
@@ -9280,12 +9448,36 @@ const ProdutosPage: React.FC = () => {
                     variant="primary"
                     className="flex-1"
                     onClick={() => {
-                      // Implementar lógica de salvar insumo
+                      // Processar insumos selecionados
+                      const novosInsumos: any[] = [];
+
+                      Object.entries(insumosSelecionados).forEach(([produtoId, config]) => {
+                        if (config.selecionado && config.quantidade && parseFloat(config.quantidade) > 0) {
+                          const produto = materiasPrimas.find(p => p.id === produtoId);
+                          if (produto) {
+                            novosInsumos.push({
+                              produto_id: produtoId,
+                              nome: produto.nome,
+                              quantidade: parseFloat(config.quantidade),
+                              unidade_medida: produto.unidade_medida?.sigla || 'UN'
+                            });
+                          }
+                        }
+                      });
+
+                      // Atualizar lista de insumos do produto
+                      setProdutoInsumos(novosInsumos);
+
+                      // Fechar modal
                       setShowModalInsumos(false);
                       setEditingInsumo(null);
+
+                      // Mostrar mensagem de sucesso
+                      showMessage('success', `${novosInsumos.length} insumo(s) adicionado(s) com sucesso!`);
                     }}
+                    disabled={!Object.values(insumosSelecionados).some(config => config.selecionado && config.quantidade && parseFloat(config.quantidade) > 0)}
                   >
-                    {editingInsumo ? 'Atualizar' : 'Adicionar'}
+                    Adicionar Selecionados
                   </Button>
                 </div>
               </div>

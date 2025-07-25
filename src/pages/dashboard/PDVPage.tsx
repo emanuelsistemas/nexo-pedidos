@@ -230,6 +230,12 @@ const PDVPage: React.FC = () => {
     aceitarAutomaticamente: pdvConfig?.aceitar_pedido_automatico_cardapio || false
   });
 
+  // ✅ DEBUG: Log da configuração de aceitar automaticamente
+  useEffect(() => {
+    console.log('🔧 [PDV-CONFIG] Configuração aceitar_pedido_automatico_cardapio:', pdvConfig?.aceitar_pedido_automatico_cardapio);
+    console.log('🔧 [PDV-CONFIG] pdvConfig completo:', pdvConfig);
+  }, [pdvConfig?.aceitar_pedido_automatico_cardapio]);
+
   // ✅ HOOK STATUS TRACKING (sem logs)
   useEffect(() => {
     // Status tracking silencioso

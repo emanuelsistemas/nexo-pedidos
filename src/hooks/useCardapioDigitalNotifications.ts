@@ -40,6 +40,12 @@ export const useCardapioDigitalNotifications = ({
   onPedidoChangeRef.current = onPedidoChange;
   aceitarAutomaticamenteRef.current = aceitarAutomaticamente;
 
+  // ✅ DEBUG: Log da configuração de aceitar automaticamente
+  useEffect(() => {
+    console.log('🤖 [HOOK-CONFIG] aceitarAutomaticamente mudou para:', aceitarAutomaticamente);
+    console.log('🤖 [HOOK-CONFIG] aceitarAutomaticamenteRef.current:', aceitarAutomaticamenteRef.current);
+  }, [aceitarAutomaticamente]);
+
   // ✅ INICIALIZAÇÃO APENAS UMA VEZ
   if (!isInitializedRef.current) {
     isInitializedRef.current = true;
@@ -286,6 +292,7 @@ export const useCardapioDigitalNotifications = ({
   const carregarPedidosPendentes = useCallback(async (chamarCallback = false) => {
     const currentEmpresaId = empresaIdRef.current;
     const currentEnabled = enabledRef.current;
+    const currentAceitarAuto = aceitarAutomaticamenteRef.current;
 
     if (!currentEmpresaId || !currentEnabled) {
       return;
@@ -318,6 +325,29 @@ export const useCardapioDigitalNotifications = ({
       const pedidos = data || [];
       const contadorAnterior = contadorPendentes;
       const novoContador = pedidos.length;
+
+      // ✅ VERIFICAR SE HÁ NOVOS PEDIDOS PARA ACEITAR AUTOMATICAMENTE
+      if (currentAceitarAuto && novoContador > contadorAnterior) {
+        console.log('🤖 [POLLING-AUTO] Novos pedidos detectados via polling - Verificando para aceitar automaticamente');
+        console.log('🤖 [POLLING-AUTO] Contador anterior:', contadorAnterior, '→ Novo contador:', novoContador);
+
+        // Pegar apenas os novos pedidos (os primeiros da lista, já que está ordenado por data desc)
+        const novosPedidos = pedidos.slice(0, novoContador - contadorAnterior);
+
+        for (const novoPedido of novosPedidos) {
+          console.log('🤖 [POLLING-AUTO] Processando novo pedido:', {
+            id: novoPedido.id,
+            numero_pedido: novoPedido.numero_pedido,
+            nome_cliente: novoPedido.nome_cliente
+          });
+
+          // Aceitar automaticamente após um pequeno delay
+          setTimeout(async () => {
+            console.log('🤖 [POLLING-AUTO] Executando aceitação automática via polling para pedido #' + novoPedido.numero_pedido);
+            await aceitarPedidoAutomaticamente(novoPedido.id, novoPedido.numero_pedido, novoPedido.nome_cliente);
+          }, 500);
+        }
+      }
 
       setPedidosPendentes(pedidos);
       setContadorPendentes(novoContador);
@@ -646,18 +676,32 @@ export const useCardapioDigitalNotifications = ({
           // Mostrar notificação visual
           const novoPedido = payload.new as PedidoCardapio;
 
+          // ✅ DEBUG: Log detalhado do novo pedido
+          console.log('🆕 [REALTIME-INSERT] Novo pedido detectado:', {
+            id: novoPedido.id,
+            numero_pedido: novoPedido.numero_pedido,
+            nome_cliente: novoPedido.nome_cliente,
+            status_pedido: novoPedido.status_pedido
+          });
+
           // ✅ VERIFICAR SE DEVE ACEITAR AUTOMATICAMENTE
           const deveAceitarAuto = aceitarAutomaticamenteRef.current;
+          console.log('🤖 [AUTO-CHECK] deveAceitarAuto:', deveAceitarAuto);
+          console.log('🤖 [AUTO-CHECK] status_pedido:', novoPedido.status_pedido);
 
           if (deveAceitarAuto && novoPedido.status_pedido === 'pendente') {
+            console.log('✅ [AUTO-CHECK] Condições atendidas - Iniciando aceitação automática');
             // Mostrar notificação de aceite automático
             showMessage('info', `🤖 Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente} - Aceitando automaticamente...`);
 
             // Aguardar um pouco para garantir que o pedido foi inserido completamente
             setTimeout(async () => {
+              console.log('🤖 [AUTO-TIMEOUT] Executando aceitação automática após timeout');
               await aceitarPedidoAutomaticamente(novoPedido.id, novoPedido.numero_pedido, novoPedido.nome_cliente);
             }, 1000);
           } else {
+            console.log('❌ [AUTO-CHECK] Condições não atendidas - Notificação normal');
+            console.log('❌ [AUTO-CHECK] Motivo:', !deveAceitarAuto ? 'aceitar automático desabilitado' : 'status não é pendente');
             // Notificação normal
             showMessage('info', `🍽️ Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente}`);
           }
@@ -754,6 +798,8 @@ export const useCardapioDigitalNotifications = ({
   useEffect(() => {
     const interval = setInterval(() => {
       const currentEnabled = enabledRef.current;
+      const currentAceitarAuto = aceitarAutomaticamenteRef.current;
+      console.log('🔄 [POLLING] Verificando novos pedidos... enabled:', currentEnabled, 'aceitarAuto:', currentAceitarAuto);
       if (currentEnabled) {
         carregarPedidosPendentes(true); // ✅ SEMPRE CHAMAR CALLBACK NO POLLING
       }
