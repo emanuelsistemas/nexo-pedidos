@@ -8964,13 +8964,17 @@ const ProdutosPage: React.FC = () => {
                                   if (error) throw error;
 
                                   showMessage('success', 'Insumos salvos com sucesso!');
+
+                                  // Recarregar a lista de produtos para mostrar as alterações
+                                  loadGrupos();
+
                                 } catch (error: any) {
                                   showMessage('error', 'Erro ao salvar insumos: ' + error.message);
                                 }
                               }
                             }}
                           >
-                            Salvar Insumos
+                            💾 Salvar Alterações
                           </Button>
                         </div>
                       </div>

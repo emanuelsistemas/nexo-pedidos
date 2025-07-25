@@ -3153,6 +3153,97 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ FUNÇÃO PARA IMPRIMIR PEDIDO DO CARDÁPIO DIGITAL
+  const imprimirPedidoCardapio = async (pedido: any) => {
+    try {
+      console.log('🖨️ [CARDAPIO-PRINT] Iniciando impressão do pedido:', pedido.numero_pedido);
+
+      // Verificar configuração de impressão
+      const usarImpressao50mm = pdvConfig?.tipo_impressao_50mm === true && pdvConfig?.tipo_impressao_80mm === false;
+      console.log('🖨️ [CARDAPIO-PRINT] Tipo de impressão:', usarImpressao50mm ? '50MM' : '80MM');
+
+      // Obter dados da empresa
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Empresa não encontrada');
+        return;
+      }
+
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('*')
+        .eq('id', usuarioData.empresa_id)
+        .single();
+
+      if (!empresaData) {
+        toast.error('Dados da empresa não encontrados');
+        return;
+      }
+
+      // Preparar itens do pedido com validação
+      let itens = [];
+      try {
+        if (pedido.itens_pedido) {
+          if (typeof pedido.itens_pedido === 'string') {
+            itens = JSON.parse(pedido.itens_pedido);
+          } else if (Array.isArray(pedido.itens_pedido)) {
+            itens = pedido.itens_pedido;
+          } else {
+            console.warn('🖨️ [CARDAPIO-PRINT] Formato de itens_pedido não reconhecido:', typeof pedido.itens_pedido);
+            itens = [];
+          }
+        }
+      } catch (error) {
+        console.error('🖨️ [CARDAPIO-PRINT] Erro ao parsear itens_pedido:', error);
+        console.log('🖨️ [CARDAPIO-PRINT] Valor original:', pedido.itens_pedido);
+        itens = [];
+      }
+
+      console.log('🖨️ [CARDAPIO-PRINT] Itens processados:', itens);
+
+      // Preparar dados para impressão
+      const dadosImpressao = {
+        empresa: {
+          razao_social: empresaData.razao_social,
+          nome_fantasia: empresaData.nome_fantasia,
+          cnpj: empresaData.documento,
+          inscricao_estadual: empresaData.inscricao_estadual,
+          endereco: empresaData.endereco,
+          bairro: empresaData.bairro,
+          cidade: empresaData.cidade,
+          uf: empresaData.uf,
+          cep: empresaData.cep,
+          telefone: empresaData.telefone
+        },
+        pedido: {
+          numero: pedido.numero_pedido,
+          data: new Date(pedido.data_pedido).toLocaleString('pt-BR'),
+          valor_total: pedido.valor_total,
+          status: pedido.status_pedido,
+          tipo_entrega: pedido.tipo_entrega
+        },
+        cliente: {
+          nome_cliente: pedido.nome_cliente,
+          telefone_cliente: pedido.telefone_cliente
+        },
+        itens: itens
+      };
+
+      // Gerar e imprimir cupom
+      await gerarEImprimirCupomCardapio(dadosImpressao, usarImpressao50mm);
+
+    } catch (error) {
+      console.error('❌ [CARDAPIO-PRINT] Erro ao imprimir pedido:', error);
+      toast.error('Erro ao imprimir pedido');
+    }
+  };
+
   // ✅ FUNÇÃO PARA SELECIONAR PEDIDO COM BUSCA DE FOTOS
   const selecionarPedido = async (pedido: any) => {
     try {
@@ -11811,6 +11902,240 @@ const PDVPage: React.FC = () => {
 
     } catch (error) {
       console.error('❌ FRONTEND: Erro ao gerar cupom:', error);
+      throw error;
+    }
+  };
+
+  // ✅ FUNÇÃO PARA GERAR E IMPRIMIR CUPOM DO CARDÁPIO DIGITAL
+  const gerarEImprimirCupomCardapio = async (dadosImpressao: any, usarImpressao50mm: boolean = false) => {
+    try {
+      console.log('🖨️ [CARDAPIO-CUPOM] Gerando cupom do pedido:', dadosImpressao.pedido.numero);
+      console.log('🖨️ [CARDAPIO-CUPOM] Tipo de impressão:', usarImpressao50mm ? '50MM' : '80MM');
+
+      // Função para formatar moeda
+      const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+          style: 'currency',
+          currency: 'BRL'
+        }).format(value);
+      };
+
+      // Gerar CSS baseado no tipo de impressão
+      const gerarCSSImpressao = () => {
+        if (usarImpressao50mm) {
+          // CSS para impressão 50mm
+          return `
+            @media print {
+              @page {
+                margin: 0;
+                size: 1.97in auto; /* 50mm = 1.97 polegadas */
+              }
+              html {
+                width: 1.97in !important;
+                font-size: 10pt !important;
+              }
+              body {
+                width: 1.97in !important;
+                padding: 0.05in !important;
+                transform: scale(1) !important;
+                zoom: 1 !important;
+              }
+              * {
+                max-width: none !important;
+                overflow: visible !important;
+                -webkit-text-size-adjust: none !important;
+              }
+            }
+
+            @media screen {
+              body {
+                width: 1.97in !important;
+              }
+            }
+
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 10px;
+              font-weight: 600;
+              color: #000000;
+              text-shadow: 0.3px 0 0 currentColor;
+              line-height: 1.1;
+              letter-spacing: 0.1px;
+              margin: 0;
+              padding: 0.05in !important;
+              -webkit-text-size-adjust: none !important;
+            }
+          `;
+        } else {
+          // CSS para impressão 80mm
+          return `
+            @media print {
+              @page {
+                margin: 0;
+                size: 3.15in auto; /* 80mm = 3.15 polegadas */
+              }
+              html {
+                width: 3.15in !important;
+                font-size: 12pt !important;
+              }
+              body {
+                width: 3.15in !important;
+                padding: 0.1in !important;
+                transform: scale(1) !important;
+                zoom: 1 !important;
+              }
+              * {
+                max-width: none !important;
+                overflow: visible !important;
+                -webkit-text-size-adjust: none !important;
+              }
+            }
+
+            @media screen {
+              body {
+                width: 3.15in !important;
+              }
+            }
+
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              font-weight: 600;
+              color: #000000;
+              text-shadow: 0.3px 0 0 currentColor;
+              line-height: 1.2;
+              letter-spacing: 0.2px;
+              margin: 0;
+              padding: 0.1in !important;
+              -webkit-text-size-adjust: none !important;
+            }
+          `;
+        }
+      };
+
+      // Gerar HTML do cupom
+      const htmlCupom = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Pedido Cardápio Digital #${dadosImpressao.pedido.numero}</title>
+          <style>
+            ${gerarCSSImpressao()}
+
+            .bold {
+              font-weight: 900;
+            }
+
+            .center {
+              text-align: center;
+            }
+
+            .linha {
+              border-top: 1px dashed #000;
+              margin: 5px 0;
+            }
+
+            .item {
+              margin: 2px 0;
+            }
+
+            .item-linha {
+              display: flex;
+              justify-content: space-between;
+            }
+
+            .valor-monetario {
+              font-weight: 900;
+            }
+
+            .total-section {
+              font-size: ${usarImpressao50mm ? '12px' : '14px'} !important;
+              border-top: 1px solid #000;
+              border-bottom: 1px solid #000;
+              padding: 3px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="center">
+            <div class="bold">${dadosImpressao.empresa.razao_social}</div>
+            ${dadosImpressao.empresa.nome_fantasia ? `<div class="bold">${dadosImpressao.empresa.nome_fantasia}</div>` : ''}
+            <div>CNPJ: ${dadosImpressao.empresa.cnpj}</div>
+            <div>${dadosImpressao.empresa.endereco}</div>
+            <div>${dadosImpressao.empresa.bairro} - ${dadosImpressao.empresa.cidade}/${dadosImpressao.empresa.uf}</div>
+            <div>CEP: ${dadosImpressao.empresa.cep}</div>
+            ${dadosImpressao.empresa.telefone ? `<div>Tel: ${dadosImpressao.empresa.telefone}</div>` : ''}
+          </div>
+
+          <div class="linha"></div>
+
+          <div class="center bold">PEDIDO CARDÁPIO DIGITAL</div>
+          <div class="center">Pedido: ${dadosImpressao.pedido.numero}</div>
+          <div class="center">${dadosImpressao.pedido.data}</div>
+          <div class="center">Status: ${dadosImpressao.pedido.status.toUpperCase()}</div>
+          ${dadosImpressao.pedido.tipo_entrega ? `<div class="center">Tipo: ${dadosImpressao.pedido.tipo_entrega.toUpperCase()}</div>` : ''}
+
+          <div class="linha"></div>
+
+          ${dadosImpressao.cliente?.nome_cliente ? `
+            <div class="center">
+              <div class="bold">CLIENTE: ${dadosImpressao.cliente.nome_cliente}</div>
+              ${dadosImpressao.cliente.telefone_cliente ? `<div>Tel: ${dadosImpressao.cliente.telefone_cliente}</div>` : ''}
+            </div>
+            <div class="linha"></div>
+          ` : ''}
+
+          ${dadosImpressao.itens && dadosImpressao.itens.length > 0 ? dadosImpressao.itens.map(item => `
+            <div class="item">
+              <div class="bold">${item.nome || 'Item sem nome'}</div>
+              <div class="item-linha">
+                <span>${item.quantidade || 1} x ${formatCurrency(item.preco || 0)}</span>
+                <span class="valor-monetario">${formatCurrency((item.quantidade || 1) * (item.preco || 0))}</span>
+              </div>
+              ${item.observacao ? `<div style="font-size: 10px; color: #666; margin-top: 1px;">Obs: ${item.observacao}</div>` : ''}
+            </div>
+          `).join('') : '<div class="item"><div class="bold">Nenhum item encontrado</div></div>'}
+
+          <div class="linha"></div>
+
+          <div class="item-linha bold total-section">
+            <span>TOTAL:</span>
+            <span class="valor-monetario">${formatCurrency(dadosImpressao.pedido.valor_total)}</span>
+          </div>
+
+          <div class="linha"></div>
+
+          <div class="center">
+            <div>Pedido realizado via Cardápio Digital</div>
+            <div>Obrigado pela preferência!</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            };
+          </script>
+        </body>
+        </html>
+      `;
+
+      // Abrir janela de impressão
+      const janelaImpressao = window.open('', '_blank', 'width=400,height=600');
+      if (janelaImpressao) {
+        janelaImpressao.document.write(htmlCupom);
+        janelaImpressao.document.close();
+        console.log('✅ [CARDAPIO-CUPOM] Janela de impressão aberta');
+        toast.success(`Cupom do pedido #${dadosImpressao.pedido.numero} enviado para impressão!`);
+      } else {
+        throw new Error('Não foi possível abrir janela de impressão. Verifique se pop-ups estão bloqueados.');
+      }
+
+    } catch (error) {
+      console.error('❌ [CARDAPIO-CUPOM] Erro ao gerar cupom:', error);
       throw error;
     }
   };
@@ -21356,6 +21681,24 @@ const PDVPage: React.FC = () => {
                           >
                             <div className="flex items-center justify-between mb-3">
                               <div>
+                                {/* Botão Imprimir Pedido */}
+                                <div className="flex items-center gap-2 mb-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation(); // Evitar seleção do pedido
+                                      imprimirPedidoCardapio(pedido);
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+                                    title="Imprimir o pedido"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <polyline points="6,9 6,2 18,2 18,9"></polyline>
+                                      <path d="M6,18H4a2,2,0,0,1-2-2V11a2,2,0,0,1,2-2H20a2,2,0,0,1,2,2v5a2,2,0,0,1-2,2H18"></path>
+                                      <rect x="6" y="14" width="12" height="8"></rect>
+                                    </svg>
+                                    Imprimir o pedido
+                                  </button>
+                                </div>
                                 <div className="flex items-center gap-2 mb-1">
                                   <h4 className="font-semibold text-white">#{pedido.numero_pedido}</h4>
                                   {/* ✅ TAG DE TIPO DE ENTREGA */}
