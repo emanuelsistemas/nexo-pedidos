@@ -3157,6 +3157,7 @@ const PDVPage: React.FC = () => {
   const imprimirPedidoCardapio = async (pedido: any) => {
     try {
       console.log('🖨️ [CARDAPIO-PRINT] Iniciando impressão do pedido:', pedido.numero_pedido);
+      console.log('🖨️ [CARDAPIO-PRINT] Dados completos do pedido:', pedido);
 
       // Verificar configuração de impressão
       const usarImpressao50mm = pdvConfig?.tipo_impressao_50mm === true && pdvConfig?.tipo_impressao_80mm === false;
@@ -12088,12 +12089,22 @@ const PDVPage: React.FC = () => {
 
           ${dadosImpressao.itens && dadosImpressao.itens.length > 0 ? dadosImpressao.itens.map(item => `
             <div class="item">
-              <div class="bold">${item.nome || 'Item sem nome'}</div>
+              <div class="bold">${item.produto_nome || item.nome || 'Item sem nome'}</div>
               <div class="item-linha">
-                <span>${item.quantidade || 1} x ${formatCurrency(item.preco || 0)}</span>
-                <span class="valor-monetario">${formatCurrency((item.quantidade || 1) * (item.preco || 0))}</span>
+                <span>${item.quantidade || 1} x ${formatCurrency(item.preco_unitario || item.preco || 0)}</span>
+                <span class="valor-monetario">${formatCurrency(item.preco_total || ((item.quantidade || 1) * (item.preco_unitario || item.preco || 0)))}</span>
               </div>
               ${item.observacao ? `<div style="font-size: 10px; color: #666; margin-top: 1px;">Obs: ${item.observacao}</div>` : ''}
+              ${item.sabores && item.sabores.length > 0 ? `
+                <div style="font-size: 10px; color: #666; margin-top: 1px;">
+                  Sabores: ${item.sabores.map(sabor => sabor.produto?.nome || sabor.nome || 'Sabor').join(', ')}
+                </div>
+              ` : ''}
+              ${item.adicionais && item.adicionais.length > 0 ? `
+                <div style="font-size: 10px; color: #666; margin-top: 1px;">
+                  Adicionais: ${item.adicionais.map(adicional => `${adicional.quantidade || 1}x ${adicional.nome}`).join(', ')}
+                </div>
+              ` : ''}
             </div>
           `).join('') : '<div class="item"><div class="bold">Nenhum item encontrado</div></div>'}
 

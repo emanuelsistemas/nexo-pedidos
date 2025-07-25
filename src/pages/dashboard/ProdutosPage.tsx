@@ -8953,28 +8953,13 @@ const ProdutosPage: React.FC = () => {
                             variant="primary"
                             className="flex-1"
                             onClick={async () => {
-                              // Salvar insumos no produto
-                              if (editingProduto) {
-                                try {
-                                  const { error } = await supabase
-                                    .from('produtos')
-                                    .update({ insumos: produtoInsumos })
-                                    .eq('id', editingProduto.id);
-
-                                  if (error) throw error;
-
-                                  showMessage('success', 'Insumos salvos com sucesso!');
-
-                                  // Recarregar a lista de produtos para mostrar as alterações
-                                  loadGrupos();
-
-                                } catch (error: any) {
-                                  showMessage('error', 'Erro ao salvar insumos: ' + error.message);
-                                }
-                              }
+                              // Simular o evento de submit do formulário (igual ao botão Concluir das outras abas)
+                              const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+                              await handleSubmitProduto(fakeEvent);
                             }}
+                            disabled={isLoading}
                           >
-                            💾 Salvar Alterações
+                            {isLoading ? 'Salvando...' : 'Concluir'}
                           </Button>
                         </div>
                       </div>
