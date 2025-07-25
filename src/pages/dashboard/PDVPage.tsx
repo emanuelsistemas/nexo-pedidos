@@ -2809,8 +2809,13 @@ const PDVPage: React.FC = () => {
   };
 
   const loadPedidos = async () => {
+    console.log('🔍 [PEDIDOS] Iniciando carregamento de pedidos...');
+
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return;
+    if (!userData.user) {
+      console.log('❌ [PEDIDOS] Usuário não autenticado');
+      return;
+    }
 
     const { data: usuarioData } = await supabase
       .from('usuarios')
@@ -2818,7 +2823,12 @@ const PDVPage: React.FC = () => {
       .eq('id', userData.user.id)
       .single();
 
-    if (!usuarioData?.empresa_id) return;
+    if (!usuarioData?.empresa_id) {
+      console.log('❌ [PEDIDOS] Empresa não encontrada');
+      return;
+    }
+
+    console.log('🔍 [PEDIDOS] Carregando pedidos para empresa:', usuarioData.empresa_id);
 
     // Removido setLoadingPedidos(true) para evitar loading visual desnecessário
     try {
@@ -2871,8 +2881,22 @@ const PDVPage: React.FC = () => {
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [PEDIDOS] Erro na consulta:', error);
+        throw error;
+      }
+
       let pedidosData = data || [];
+      console.log('📊 [PEDIDOS] Pedidos carregados:', {
+        total: pedidosData.length,
+        pendentes: pedidosData.filter(p => p.status === 'pendente').length,
+        pedidos: pedidosData.map(p => ({
+          id: p.id,
+          numero: p.numero,
+          status: p.status,
+          deletado: p.deletado
+        }))
+      });
 
       // Buscar nomes dos usuários se houver pedidos com usuario_id
       if (pedidosData.length > 0) {
@@ -2917,23 +2941,34 @@ const PDVPage: React.FC = () => {
 
   // Função para aplicar filtros nos pedidos
   const aplicarFiltrosPedidos = (pedidosParaFiltrar = pedidos) => {
+    console.log('🔍 [FILTROS] Aplicando filtros:', {
+      statusFilter: statusFilterPedidos,
+      searchTerm: searchPedidos,
+      totalPedidos: pedidosParaFiltrar.length
+    });
+
     let filtered = [...pedidosParaFiltrar];
 
     // Aplicar filtro de status
     if (statusFilterPedidos !== 'todos') {
+      const beforeFilter = filtered.length;
       filtered = filtered.filter(pedido => pedido.status === statusFilterPedidos);
+      console.log(`🔍 [FILTROS] Filtro de status '${statusFilterPedidos}': ${beforeFilter} → ${filtered.length}`);
     }
 
     // Aplicar filtro de busca
     if (searchPedidos.trim()) {
+      const beforeFilter = filtered.length;
       const termoLower = searchPedidos.toLowerCase();
       filtered = filtered.filter(pedido =>
         (pedido.numero && pedido.numero.toString().includes(termoLower)) ||
         (pedido.cliente?.nome && pedido.cliente.nome.toLowerCase().includes(termoLower)) ||
         (pedido.cliente?.telefone && pedido.cliente.telefone.includes(searchPedidos))
       );
+      console.log(`🔍 [FILTROS] Filtro de busca '${searchPedidos}': ${beforeFilter} → ${filtered.length}`);
     }
 
+    console.log('✅ [FILTROS] Resultado final:', filtered.length, 'pedidos');
     setPedidosFiltrados(filtered);
   };
 
