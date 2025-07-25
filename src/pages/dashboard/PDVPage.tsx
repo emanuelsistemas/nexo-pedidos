@@ -674,6 +674,9 @@ const PDVPage: React.FC = () => {
   // ✅ DEBUG: Estado para medir tempo de delay
   const [debugTimestamp, setDebugTimestamp] = useState<number>(0);
 
+  // ✅ NOVO: Modal de loading para primeiro item
+  const [loadingPrimeiroItem, setLoadingPrimeiroItem] = useState(false);
+
   // ✅ DEBUG: Monitorar mudanças nos estados de loading
   useEffect(() => {
     console.log('📊 [STATE DEBUG] Estados mudaram:');
@@ -11857,6 +11860,13 @@ const PDVPage: React.FC = () => {
       if (produtosFiltrados.length > 0) {
         console.log('🔥 [PDV DEBUG] Iniciando processamento em background...');
 
+        // ✅ NOVO: Verificar se é o primeiro item para ativar modal especial
+        const isPrimeiroItem = carrinho.length === 0;
+        if (isPrimeiroItem) {
+          console.log('🔥 [PDV DEBUG] Primeiro item detectado - ativando modal de loading');
+          setLoadingPrimeiroItem(true);
+        }
+
         // ✅ CORREÇÃO: Processar em background sem bloquear a UI
         (async () => {
           try {
@@ -11880,6 +11890,12 @@ const PDVPage: React.FC = () => {
             setCodigoBuscando('');
             setEnterPressionado(false);
             setDebugTimestamp(0);
+
+            // ✅ NOVO: Desativar modal do primeiro item
+            if (isPrimeiroItem) {
+              console.log('🔥 [PDV DEBUG] Desativando modal do primeiro item');
+              setLoadingPrimeiroItem(false);
+            }
           }
         })();
 
@@ -18543,6 +18559,12 @@ const PDVPage: React.FC = () => {
 
                           // Se há produtos filtrados, processar em background SEM AWAIT
                           if (produtosFiltrados.length > 0) {
+                            // ✅ NOVO: Verificar se é o primeiro item para ativar modal especial
+                            const isPrimeiroItem = carrinho.length === 0;
+                            if (isPrimeiroItem) {
+                              setLoadingPrimeiroItem(true);
+                            }
+
                             // ✅ CORREÇÃO: Processar em background sem bloquear a UI
                             (async () => {
                               try {
@@ -18556,6 +18578,11 @@ const PDVPage: React.FC = () => {
                                 setCarregandoNovoItem(false);
                                 setCodigoBuscando('');
                                 setEnterPressionado(false);
+
+                                // ✅ NOVO: Desativar modal do primeiro item
+                                if (isPrimeiroItem) {
+                                  setLoadingPrimeiroItem(false);
+                                }
                               }
                             })();
 
@@ -21944,6 +21971,57 @@ const PDVPage: React.FC = () => {
                   OK
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Loading para Primeiro Item */}
+      <AnimatePresence>
+        {loadingPrimeiroItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-gray-800/90 backdrop-blur-md border border-gray-600/50 rounded-2xl p-8 flex flex-col items-center gap-6 shadow-2xl"
+            >
+              {/* Spinner Grande */}
+              <div className="relative">
+                <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-400 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-r-blue-300 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+              </div>
+
+              {/* Texto de Loading */}
+              <div className="text-center">
+                <h3 className="text-xl font-semibold text-white mb-2">
+                  Preparando seu primeiro item...
+                </h3>
+                <p className="text-gray-300 text-sm">
+                  Configurando sistema de pagamentos e carrinho
+                </p>
+              </div>
+
+              {/* Pontos Animados */}
+              <div className="flex gap-1">
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+
+              {/* Código sendo processado */}
+              {codigoBuscando && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-2">
+                  <span className="text-blue-300 text-sm">
+                    Processando código: <span className="font-mono font-bold">{codigoBuscando}</span>
+                  </span>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
