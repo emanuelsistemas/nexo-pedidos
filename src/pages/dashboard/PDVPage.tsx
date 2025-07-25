@@ -1379,12 +1379,10 @@ const PDVPage: React.FC = () => {
         setShowPedidosModal(true);
         setSearchPedidos('');
 
-        // Carregar pedidos em background apenas se necessário
-        if (pedidos.length === 0) {
-          setTimeout(() => {
-            loadPedidos();
-          }, 100);
-        }
+        // ✅ SEMPRE CARREGAR PEDIDOS QUANDO MODAL ABRIR (para garantir dados atualizados)
+        setTimeout(() => {
+          loadPedidos();
+        }, 100);
       }
     },
     {
@@ -2809,13 +2807,8 @@ const PDVPage: React.FC = () => {
   };
 
   const loadPedidos = async () => {
-    console.log('🔍 [PEDIDOS] Iniciando carregamento de pedidos...');
-
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      console.log('❌ [PEDIDOS] Usuário não autenticado');
-      return;
-    }
+    if (!userData.user) return;
 
     const { data: usuarioData } = await supabase
       .from('usuarios')
@@ -2823,12 +2816,7 @@ const PDVPage: React.FC = () => {
       .eq('id', userData.user.id)
       .single();
 
-    if (!usuarioData?.empresa_id) {
-      console.log('❌ [PEDIDOS] Empresa não encontrada');
-      return;
-    }
-
-    console.log('🔍 [PEDIDOS] Carregando pedidos para empresa:', usuarioData.empresa_id);
+    if (!usuarioData?.empresa_id) return;
 
     // Removido setLoadingPedidos(true) para evitar loading visual desnecessário
     try {
@@ -2881,22 +2869,8 @@ const PDVPage: React.FC = () => {
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (error) {
-        console.error('❌ [PEDIDOS] Erro na consulta:', error);
-        throw error;
-      }
-
+      if (error) throw error;
       let pedidosData = data || [];
-      console.log('📊 [PEDIDOS] Pedidos carregados:', {
-        total: pedidosData.length,
-        pendentes: pedidosData.filter(p => p.status === 'pendente').length,
-        pedidos: pedidosData.map(p => ({
-          id: p.id,
-          numero: p.numero,
-          status: p.status,
-          deletado: p.deletado
-        }))
-      });
 
       // Buscar nomes dos usuários se houver pedidos com usuario_id
       if (pedidosData.length > 0) {
@@ -2941,34 +2915,23 @@ const PDVPage: React.FC = () => {
 
   // Função para aplicar filtros nos pedidos
   const aplicarFiltrosPedidos = (pedidosParaFiltrar = pedidos) => {
-    console.log('🔍 [FILTROS] Aplicando filtros:', {
-      statusFilter: statusFilterPedidos,
-      searchTerm: searchPedidos,
-      totalPedidos: pedidosParaFiltrar.length
-    });
-
     let filtered = [...pedidosParaFiltrar];
 
     // Aplicar filtro de status
     if (statusFilterPedidos !== 'todos') {
-      const beforeFilter = filtered.length;
       filtered = filtered.filter(pedido => pedido.status === statusFilterPedidos);
-      console.log(`🔍 [FILTROS] Filtro de status '${statusFilterPedidos}': ${beforeFilter} → ${filtered.length}`);
     }
 
     // Aplicar filtro de busca
     if (searchPedidos.trim()) {
-      const beforeFilter = filtered.length;
       const termoLower = searchPedidos.toLowerCase();
       filtered = filtered.filter(pedido =>
         (pedido.numero && pedido.numero.toString().includes(termoLower)) ||
         (pedido.cliente?.nome && pedido.cliente.nome.toLowerCase().includes(termoLower)) ||
         (pedido.cliente?.telefone && pedido.cliente.telefone.includes(searchPedidos))
       );
-      console.log(`🔍 [FILTROS] Filtro de busca '${searchPedidos}': ${beforeFilter} → ${filtered.length}`);
     }
 
-    console.log('✅ [FILTROS] Resultado final:', filtered.length, 'pedidos');
     setPedidosFiltrados(filtered);
   };
 
@@ -4801,44 +4764,18 @@ const PDVPage: React.FC = () => {
   // Função para marcar pedido do cardápio digital como faturado
   const marcarPedidoCardapioComoFaturado = async (vendaId: string, numeroVenda: string) => {
     try {
-      console.log('🔍 [FATURAMENTO] Iniciando marcação de faturamento:', {
-        vendaId,
-        numeroVenda,
-        carrinhoLength: carrinho.length
-      });
-
       // Verificar se há itens do cardápio digital no carrinho
       const itensCardapio = carrinho.filter(item => item.cardapio_digital && item.pedido_origem_id);
 
-      console.log('🔍 [FATURAMENTO] Itens do cardápio encontrados:', {
-        total_itens_carrinho: carrinho.length,
-        itens_cardapio: itensCardapio.length,
-        itens_detalhes: itensCardapio.map(item => ({
-          id: item.id,
-          nome: item.nome,
-          pedido_origem_id: item.pedido_origem_id,
-          cardapio_digital: item.cardapio_digital
-        }))
-      });
-
       if (itensCardapio.length === 0) {
-        console.log('🔍 [FATURAMENTO] Nenhum item do cardápio digital encontrado no carrinho');
         return;
       }
 
       // Obter IDs únicos dos pedidos do cardápio digital
       const pedidosIds = [...new Set(itensCardapio.map(item => item.pedido_origem_id))];
 
-      console.log('🔥 [FATURAMENTO] Marcando pedidos do cardápio como faturados:', {
-        pedidos_ids: pedidosIds,
-        venda_id: vendaId,
-        numero_venda: numeroVenda
-      });
-
       // Atualizar status dos pedidos para 'faturado'
       for (const pedidoId of pedidosIds) {
-        console.log('🔄 [FATURAMENTO] Atualizando pedido:', pedidoId);
-
         const { data, error } = await supabase
           .from('cardapio_digital')
           .update({
@@ -4852,17 +4789,7 @@ const PDVPage: React.FC = () => {
           .select(); // ✅ ADICIONAR select para ver o que foi atualizado
 
         if (error) {
-          console.error('❌ [FATURAMENTO] Erro ao marcar pedido como faturado:', {
-            pedidoId,
-            error: error.message,
-            details: error
-          });
-        } else {
-          console.log('✅ [FATURAMENTO] Pedido marcado como faturado:', {
-            pedidoId,
-            data_retornada: data,
-            numero_venda: numeroVenda
-          });
+          console.error('❌ [FATURAMENTO] Erro ao marcar pedido como faturado:', error);
         }
       }
 
@@ -7900,13 +7827,7 @@ const PDVPage: React.FC = () => {
         return forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix;
       });
 
-      console.log('🔍 PIX CHECK FINALIZAÇÃO PARCIAL:', {
-        tem_pix: temPix,
-        pagamentos: pagamentosParciais.length
-      });
-
       if (temPix) {
-        console.log('✅ PIX DETECTADO NO PARCIAL - Salvando tipo de finalização e abrindo modal PIX');
         setTipoFinalizacaoPendente(tipoFinalizacao);
         abrirModalPixParcial();
       } else {
@@ -7918,7 +7839,6 @@ const PDVPage: React.FC = () => {
 
   // Função para confirmar recebimento PIX
   const confirmarRecebimentoPix = () => {
-    console.log('✅ PIX CONFIRMADO - Continuando finalização:', tipoFinalizacaoPendente);
     setShowModalPix(false);
 
     // Continuar com a finalização usando o tipo salvo
@@ -9102,17 +9022,7 @@ const PDVPage: React.FC = () => {
       const valorDescontoItens = Math.round(calcularDescontoItens() * 100) / 100;
       const valorDescontoTotal = Math.round(descontoGlobal * 100) / 100;
 
-      console.log('🔍 [FINALIZAÇÃO] Preparando dados da venda...');
-      console.log('🔍 [FINALIZAÇÃO] Valores calculados:', {
-        valorSubtotal,
-        valorDesconto,
-        valorDescontoItens,
-        valorDescontoTotal,
-        valorTotal,
-        tipoFinalizacao
-      });
-      console.log('🔍 [FINALIZAÇÃO] Dados de pagamento:', pagamentoData);
-      console.log('🔍 [FINALIZAÇÃO] Dados do cliente:', clienteData);
+
 
       const vendaData = {
         empresa_id: usuarioData.empresa_id,
@@ -9141,26 +9051,16 @@ const PDVPage: React.FC = () => {
         ...pagamentoData
       };
 
-      console.log('🔍 [FINALIZAÇÃO] Dados da venda preparados:', vendaData);
-
       // ✅ CORREÇÃO: UPDATE ou INSERT baseado na venda em andamento
       let vendaInserida;
       let vendaError;
 
-      console.log('🔍 [FINALIZAÇÃO] Verificando se há venda em andamento:', {
-        vendaEmAndamento: vendaEmAndamento ? vendaEmAndamento.id : 'Nenhuma',
-        statusVenda: vendaEmAndamento?.status_venda
-      });
-
       if (vendaEmAndamento) {
         // ✅ ATUALIZAR venda em andamento existente (sempre que há venda em andamento)
         setEtapaProcessamento('Finalizando venda em andamento...');
-        console.log('🔍 [FINALIZAÇÃO] Atualizando venda em andamento ID:', vendaEmAndamento.id);
 
         // ✅ CORREÇÃO: Para venda em andamento, não sobrescrever série/número que já estão corretos
         const { serie_documento, numero_documento, ...vendaDataSemSerie } = vendaData;
-
-        console.log('🔍 [FINALIZAÇÃO] Dados para atualização (sem série/número):', vendaDataSemSerie);
 
         const result = await supabase
           .from('pdv')
@@ -9178,17 +9078,10 @@ const PDVPage: React.FC = () => {
         vendaInserida = result.data;
         vendaError = result.error;
 
-        console.log('🔍 [FINALIZAÇÃO] Resultado da atualização:', {
-          vendaInserida,
-          vendaError: vendaError?.message || 'Nenhum erro'
-        });
-
         // Venda em andamento atualizada
       } else {
         // ✅ CRIAR nova venda (apenas se não há venda em andamento)
         setEtapaProcessamento('Salvando venda no banco de dados...');
-        console.log('🔍 [FINALIZAÇÃO] Criando nova venda');
-        console.log('🔍 [FINALIZAÇÃO] Dados completos da venda:', vendaData);
 
         const result = await supabase
           .from('pdv')
@@ -9199,15 +9092,8 @@ const PDVPage: React.FC = () => {
         vendaInserida = result.data;
         vendaError = result.error;
 
-        console.log('🔍 [FINALIZAÇÃO] Resultado da inserção:', {
-          vendaInserida,
-          vendaError: vendaError?.message || 'Nenhum erro'
-        });
-
         // Nova venda criada
       }
-
-      console.log('🔍 [FINALIZAÇÃO] Verificando resultado final do salvamento...');
 
       if (vendaError) {
         console.error('❌ [FINALIZAÇÃO] Erro ao salvar venda:', vendaError);
@@ -9238,12 +9124,7 @@ const PDVPage: React.FC = () => {
       const vendaId = vendaInserida.id;
       setVendaProcessadaId(vendaId);
 
-      console.log('✅ [FINALIZAÇÃO] Venda salva com sucesso:', {
-        vendaId,
-        serie_documento: vendaInserida.serie_documento,
-        numero_documento: vendaInserida.numero_documento,
-        modelo_documento: vendaInserida.modelo_documento
-      });
+
 
       // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
       let configVendaSemProduto = null;
@@ -11938,7 +11819,7 @@ const PDVPage: React.FC = () => {
     setShowProdutoNaoEncontrado(true);
   };
 
-  // Realtime para o modal de pedidos - atualiza automaticamente quando modal está aberto
+  // ✅ REALTIME MELHORADO PARA MODAL DE PEDIDOS - Baseado no padrão do cardápio digital
   useEffect(() => {
     if (!showPedidosModal) return;
 
@@ -11957,11 +11838,13 @@ const PDVPage: React.FC = () => {
 
         if (!usuarioData?.empresa_id) return;
 
+        const channelName = `pedidos-modal-${usuarioData.empresa_id}-${Date.now()}`;
+
         modalSubscription = supabase
-          .channel(`pedidos-modal-${Date.now()}`)
+          .channel(channelName)
           .on('postgres_changes',
             {
-              event: '*',
+              event: 'INSERT',
               schema: 'public',
               table: 'pedidos',
               filter: `empresa_id=eq.${usuarioData.empresa_id}`
@@ -11969,6 +11852,7 @@ const PDVPage: React.FC = () => {
             (payload) => {
               // Recarregar pedidos automaticamente sem loading visível
               const loadPedidosSilencioso = async () => {
+
                 const { data: userData } = await supabase.auth.getUser();
                 if (!userData.user) return;
 
@@ -11989,10 +11873,11 @@ const PDVPage: React.FC = () => {
                       created_at,
                       status,
                       valor_total,
+                      empresa_id,
                       desconto_prazo_id,
                       desconto_valor_id,
                       usuario_id,
-                      cliente:clientes(id, nome, telefone),
+                      cliente:clientes(id, nome, telefone, documento),
                       pedidos_itens(
                         id,
                         quantidade,
@@ -12010,6 +11895,11 @@ const PDVPage: React.FC = () => {
                           valor_desconto,
                           unidade_medida_id,
                           grupo_id,
+                          ncm,
+                          cfop,
+                          cst_icms,
+                          cst_pis,
+                          cst_cofins,
                           unidade_medida:unidade_medida_id (
                             id,
                             sigla,
@@ -12020,7 +11910,6 @@ const PDVPage: React.FC = () => {
                       )
                     `)
                     .eq('empresa_id', usuarioData.empresa_id)
-                    .eq('status', 'pendente')
                     .eq('deletado', false)
                     .order('created_at', { ascending: false })
                     .limit(100);
@@ -12058,8 +11947,125 @@ const PDVPage: React.FC = () => {
                   }
 
                   setPedidos(pedidosData);
-                  setPedidosFiltrados(pedidosData);
-                  setContadorPedidosPendentes(pedidosData.length);
+                  // ✅ APLICAR FILTROS APÓS CARREGAR
+                  aplicarFiltrosPedidos(pedidosData);
+                  // ✅ ATUALIZAR CONTADOR APENAS COM PEDIDOS PENDENTES
+                  const pedidosPendentes = pedidosData.filter(p => p.status === 'pendente');
+                  setContadorPedidosPendentes(pedidosPendentes.length);
+                } catch (error) {
+                  // Silenciar erro de carregamento
+                }
+              };
+
+              setTimeout(() => loadPedidosSilencioso(), 500);
+            }
+          )
+          .on('postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'pedidos',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              // Recarregar pedidos automaticamente
+              const loadPedidosSilencioso = async () => {
+
+                const { data: userData } = await supabase.auth.getUser();
+                if (!userData.user) return;
+
+                const { data: usuarioData } = await supabase
+                  .from('usuarios')
+                  .select('empresa_id')
+                  .eq('id', userData.user.id)
+                  .single();
+
+                if (!usuarioData?.empresa_id) return;
+
+                try {
+                  const { data, error } = await supabase
+                    .from('pedidos')
+                    .select(`
+                      id,
+                      numero,
+                      created_at,
+                      status,
+                      valor_total,
+                      empresa_id,
+                      desconto_prazo_id,
+                      desconto_valor_id,
+                      usuario_id,
+                      cliente:clientes(id, nome, telefone, documento),
+                      pedidos_itens(
+                        id,
+                        quantidade,
+                        valor_unitario,
+                        valor_total,
+                        produto:produtos(
+                          id,
+                          nome,
+                          preco,
+                          codigo,
+                          codigo_barras,
+                          descricao,
+                          promocao,
+                          tipo_desconto,
+                          valor_desconto,
+                          unidade_medida_id,
+                          grupo_id,
+                          ncm,
+                          cfop,
+                          cst_icms,
+                          cst_pis,
+                          cst_cofins,
+                          unidade_medida:unidade_medida_id (
+                            id,
+                            sigla,
+                            nome
+                          ),
+                          produto_fotos(url, principal)
+                        )
+                      )
+                    `)
+                    .eq('empresa_id', usuarioData.empresa_id)
+                    .eq('deletado', false)
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+
+                  if (error) throw error;
+                  let pedidosData = data || [];
+
+                  // Buscar nomes dos usuários se houver pedidos com usuario_id
+                  if (pedidosData.length > 0) {
+                    const usuarioIds = [...new Set(pedidosData.filter(p => p.usuario_id).map(p => p.usuario_id))];
+
+                    if (usuarioIds.length > 0) {
+                      const { data: usuariosData } = await supabase
+                        .from('usuarios')
+                        .select('id, nome')
+                        .in('id', usuarioIds);
+
+                      if (usuariosData) {
+                        const usuariosMap = usuariosData.reduce((acc, user) => {
+                          acc[user.id] = user.nome;
+                          return acc;
+                        }, {} as Record<string, string>);
+
+                        pedidosData = pedidosData.map(pedido => ({
+                          ...pedido,
+                          usuario: pedido.usuario_id ? {
+                            id: pedido.usuario_id,
+                            nome: usuariosMap[pedido.usuario_id] || 'Usuário não encontrado'
+                          } : null
+                        }));
+                      }
+                    }
+                  }
+
+                  setPedidos(pedidosData);
+                  aplicarFiltrosPedidos(pedidosData);
+                  const pedidosPendentes = pedidosData.filter(p => p.status === 'pendente');
+                  setContadorPedidosPendentes(pedidosPendentes.length);
                 } catch (error) {
                   // Silenciar erro de carregamento
                 }
@@ -12087,6 +12093,19 @@ const PDVPage: React.FC = () => {
       if (modalSubscription) {
         modalSubscription.unsubscribe();
       }
+    };
+  }, [showPedidosModal]);
+
+  // ✅ POLLING INTELIGENTE PARA PEDIDOS - Backup do realtime
+  useEffect(() => {
+    if (!showPedidosModal) return;
+
+    const interval = setInterval(() => {
+      loadPedidos(); // Usar a função existente que já tem logs
+    }, 10000); // 10 segundos - mais conservador que o cardápio
+
+    return () => {
+      clearInterval(interval);
     };
   }, [showPedidosModal]);
 
@@ -15080,10 +15099,7 @@ const PDVPage: React.FC = () => {
                        statusFilterPedidos === 'cancelado' ? 'Pedidos Cancelados' :
                        'Pedidos'}
                     </h3>
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      <span className="text-xs text-green-400">Atualização automática</span>
-                    </div>
+
                   </div>
                   <div className="flex items-center gap-2">
                     <button
