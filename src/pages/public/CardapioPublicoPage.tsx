@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, AlertCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag, Check } from 'lucide-react';
+import { ChevronDown, Clock, Minus, Plus, ShoppingCart, X, Trash2, CheckCircle, AlertCircle, ArrowDown, List, Package, ChevronUp, Edit, MessageSquare, ShoppingBag, Check, Bike, Store, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { showMessage } from '../../utils/toast';
 import FotoGaleria from '../../components/comum/FotoGaleria';
@@ -479,6 +479,7 @@ interface CardapioConfig {
   cardapio_fotos_minimizadas?: boolean;
   trabalha_com_pizzas?: boolean;
   ocultar_grupos_cardapio?: boolean;
+  retirada_balcao_cardapio?: boolean;
 }
 
 // Interfaces para o modal de sabores
@@ -1200,6 +1201,10 @@ const CardapioPublicoPage: React.FC = () => {
 
   // Estado para o modal de finalização do pedido
   const [modalFinalizacaoAberto, setModalFinalizacaoAberto] = useState(false);
+
+  // Estados para seleção de tipo de entrega
+  const [modalTipoEntregaAberto, setModalTipoEntregaAberto] = useState(false);
+  const [tipoEntregaSelecionado, setTipoEntregaSelecionado] = useState<'entrega' | 'retirada' | null>(null);
 
   // Estados para cupons de desconto
   const [modalCupomAberto, setModalCupomAberto] = useState(false);
@@ -2289,7 +2294,7 @@ const CardapioPublicoPage: React.FC = () => {
       // 1. Buscar configuração PDV pelo slug personalizado
       const { data: pdvConfigData, error: configError } = await supabase
         .from('pdv_config')
-        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas, ocultar_grupos_cardapio')
+        .select('empresa_id, cardapio_url_personalizada, modo_escuro_cardapio, exibir_fotos_itens_cardapio, cardapio_fotos_minimizadas, logo_url, cardapio_digital, trabalha_com_pizzas, ocultar_grupos_cardapio, retirada_balcao_cardapio')
         .eq('cardapio_url_personalizada', slug)
         .single();
 
@@ -2449,7 +2454,8 @@ const CardapioPublicoPage: React.FC = () => {
         mostrar_fotos: pdvConfigData.exibir_fotos_itens_cardapio !== false, // Default true se não definido
         cardapio_fotos_minimizadas: pdvConfigData.cardapio_fotos_minimizadas || false,
         trabalha_com_pizzas: pdvConfigData.trabalha_com_pizzas || false,
-        ocultar_grupos_cardapio: pdvConfigData.ocultar_grupos_cardapio || false
+        ocultar_grupos_cardapio: pdvConfigData.ocultar_grupos_cardapio || false,
+        retirada_balcao_cardapio: pdvConfigData.retirada_balcao_cardapio || false
       }));
 
       // 3. Buscar produtos ativos da empresa com unidades de medida
@@ -5278,8 +5284,27 @@ const CardapioPublicoPage: React.FC = () => {
   };
 
   const handlePedirCarrinhoCompleto = () => {
-    // Abrir modal de finalização em vez de ir direto para o WhatsApp
+    // Se a opção "Retirada no Balcão" estiver ativa, mostrar modal de seleção primeiro
+    if (config.retirada_balcao_cardapio) {
+      setModalTipoEntregaAberto(true);
+    } else {
+      // Caso contrário, ir direto para o modal de finalização (assumindo entrega)
+      setTipoEntregaSelecionado('entrega');
+      setModalFinalizacaoAberto(true);
+    }
+  };
+
+  // Função para confirmar tipo de entrega e prosseguir
+  const confirmarTipoEntrega = (tipo: 'entrega' | 'retirada') => {
+    setTipoEntregaSelecionado(tipo);
+    setModalTipoEntregaAberto(false);
     setModalFinalizacaoAberto(true);
+  };
+
+  // Função para fechar modal de tipo de entrega
+  const fecharModalTipoEntrega = () => {
+    setModalTipoEntregaAberto(false);
+    setTipoEntregaSelecionado(null);
   };
 
   const iniciarFinalizacaoPedido = () => {
@@ -9945,6 +9970,118 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       )}
 
+      {/* Modal de Seleção de Tipo de Entrega */}
+      {modalTipoEntregaAberto && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={`text-xl font-bold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Como você quer receber?
+                  </h3>
+                  <p className={`text-sm mt-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Escolha entre entrega ou retirada no balcão
+                  </p>
+                </div>
+                <button
+                  onClick={fecharModalTipoEntrega}
+                  className={`p-2 rounded-lg transition-colors ${
+                    config.modo_escuro
+                      ? 'text-gray-400 hover:bg-gray-700'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Opção Entrega */}
+              <button
+                onClick={() => confirmarTipoEntrega('entrega')}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                  config.modo_escuro
+                    ? 'border-gray-600 bg-gray-700/50 hover:border-blue-500 hover:bg-blue-900/20'
+                    : 'border-gray-300 bg-gray-50 hover:border-blue-500 hover:bg-blue-50'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    config.modo_escuro ? 'bg-blue-900/50' : 'bg-blue-100'
+                  }`}>
+                    <Bike className={`w-6 h-6 ${
+                      config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                    }`} />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className={`font-semibold text-lg ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      🚴 Entrega
+                    </h4>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Receba seu pedido no endereço informado
+                    </p>
+                  </div>
+                  <ChevronRight className={`w-5 h-5 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Opção Retirada */}
+              <button
+                onClick={() => confirmarTipoEntrega('retirada')}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                  config.modo_escuro
+                    ? 'border-gray-600 bg-gray-700/50 hover:border-green-500 hover:bg-green-900/20'
+                    : 'border-gray-300 bg-gray-50 hover:border-green-500 hover:bg-green-50'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    config.modo_escuro ? 'bg-green-900/50' : 'bg-green-100'
+                  }`}>
+                    <Store className={`w-6 h-6 ${
+                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                    }`} />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className={`font-semibold text-lg ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      🏪 Retirada no Balcão
+                    </h4>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Retire seu pedido diretamente no estabelecimento
+                    </p>
+                  </div>
+                  <ChevronRight className={`w-5 h-5 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`} />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Finalização do Pedido */}
       {modalFinalizacaoAberto && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50">
@@ -9966,6 +10103,28 @@ const CardapioPublicoPage: React.FC = () => {
                     config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                   }`}>
                     {obterQuantidadeTotalItens()} {obterQuantidadeTotalItens() === 1 ? 'item' : 'itens'} • {config.mostrar_precos ? formatarPreco(obterTotalCarrinho()) : 'Preços ocultos'}
+                    {tipoEntregaSelecionado && (
+                      <>
+                        {' • '}
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                          tipoEntregaSelecionado === 'entrega'
+                            ? config.modo_escuro ? 'bg-blue-900/50 text-blue-400' : 'bg-blue-100 text-blue-700'
+                            : config.modo_escuro ? 'bg-green-900/50 text-green-400' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {tipoEntregaSelecionado === 'entrega' ? (
+                            <>
+                              <Bike size={12} />
+                              Entrega
+                            </>
+                          ) : (
+                            <>
+                              <Store size={12} />
+                              Retirada
+                            </>
+                          )}
+                        </span>
+                      </>
+                    )}
                   </p>
                 </div>
                 <button

@@ -8863,6 +8863,18 @@ const PDVPage: React.FC = () => {
       const valorDescontoItens = Math.round(calcularDescontoItens() * 100) / 100;
       const valorDescontoTotal = Math.round(descontoGlobal * 100) / 100;
 
+      console.log('🔍 [FINALIZAÇÃO] Preparando dados da venda...');
+      console.log('🔍 [FINALIZAÇÃO] Valores calculados:', {
+        valorSubtotal,
+        valorDesconto,
+        valorDescontoItens,
+        valorDescontoTotal,
+        valorTotal,
+        tipoFinalizacao
+      });
+      console.log('🔍 [FINALIZAÇÃO] Dados de pagamento:', pagamentoData);
+      console.log('🔍 [FINALIZAÇÃO] Dados do cliente:', clienteData);
+
       const vendaData = {
         empresa_id: usuarioData.empresa_id,
         usuario_id: userData.user.id,
@@ -8890,7 +8902,7 @@ const PDVPage: React.FC = () => {
         ...pagamentoData
       };
 
-      // Dados da venda preparados
+      console.log('🔍 [FINALIZAÇÃO] Dados da venda preparados:', vendaData);
 
       // ✅ CORREÇÃO: UPDATE ou INSERT baseado na venda em andamento
       let vendaInserida;
@@ -8956,8 +8968,17 @@ const PDVPage: React.FC = () => {
         // Nova venda criada
       }
 
+      console.log('🔍 [FINALIZAÇÃO] Verificando resultado final do salvamento...');
+
       if (vendaError) {
-        console.error('Erro ao salvar venda:', vendaError);
+        console.error('❌ [FINALIZAÇÃO] Erro ao salvar venda:', vendaError);
+        console.error('❌ [FINALIZAÇÃO] Detalhes completos do erro:', {
+          message: vendaError.message,
+          details: vendaError.details,
+          hint: vendaError.hint,
+          code: vendaError.code,
+          stack: vendaError.stack
+        });
         setEtapaProcessamento('Erro ao salvar venda: ' + vendaError.message);
         await new Promise(resolve => setTimeout(resolve, 3000));
         setShowProcessandoVenda(false);
@@ -8965,8 +8986,25 @@ const PDVPage: React.FC = () => {
         return;
       }
 
+      if (!vendaInserida?.id) {
+        console.error('❌ [FINALIZAÇÃO] Venda não retornou ID válido');
+        console.error('❌ [FINALIZAÇÃO] Dados retornados:', vendaInserida);
+        setEtapaProcessamento('Erro: Venda não foi salva corretamente');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        setShowProcessandoVenda(false);
+        toast.error('Venda não foi salva corretamente no banco de dados!');
+        return;
+      }
+
       const vendaId = vendaInserida.id;
       setVendaProcessadaId(vendaId);
+
+      console.log('✅ [FINALIZAÇÃO] Venda salva com sucesso:', {
+        vendaId,
+        serie_documento: vendaInserida.serie_documento,
+        numero_documento: vendaInserida.numero_documento,
+        modelo_documento: vendaInserida.modelo_documento
+      });
 
       // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
       let configVendaSemProduto = null;
@@ -9561,6 +9599,22 @@ const PDVPage: React.FC = () => {
             nfce_data: nfceData
           };
 
+          console.log('🔍 [EMISSÃO NFC-e] Dados completos enviados para backend:', {
+            empresa_id: requestData.empresa_id,
+            nfce_data: requestData.nfce_data,
+            produtos_count: requestData.nfce_data.produtos?.length || 0,
+            produtos_detalhes: requestData.nfce_data.produtos?.map((p, index) => ({
+              item: index + 1,
+              codigo: p.codigo,
+              descricao: p.descricao,
+              ncm: p.ncm,
+              cfop: p.cfop,
+              valor: p.valor_unitario
+            })) || []
+          });
+
+          console.log('🔍 [EMISSÃO NFC-e] Enviando requisição para:', '/backend/public/emitir-nfce.php');
+
           const nfceResponse = await fetch('/backend/public/emitir-nfce.php', {
             method: 'POST',
             headers: {
@@ -9569,13 +9623,19 @@ const PDVPage: React.FC = () => {
             body: JSON.stringify(requestData)
           });
 
+          console.log('🔍 [EMISSÃO NFC-e] Status da resposta:', nfceResponse.status);
+          console.log('🔍 [EMISSÃO NFC-e] Headers da resposta:', Object.fromEntries(nfceResponse.headers.entries()));
+
           if (!nfceResponse.ok) {
+            console.error('❌ [EMISSÃO NFC-e] Resposta com erro HTTP:', nfceResponse.status);
 
             // ✅ CORREÇÃO: Capturar e mostrar erro específico do backend
             let errorResponse;
             try {
               errorResponse = await nfceResponse.text();
+              console.log('🔍 [EMISSÃO NFC-e] Resposta de erro bruta:', errorResponse);
             } catch (textError) {
+              console.error('❌ [EMISSÃO NFC-e] Erro ao ler resposta de erro:', textError);
               throw new Error(`Erro HTTP ${nfceResponse.status}: ${nfceResponse.statusText}`);
             }
 
@@ -9605,9 +9665,21 @@ const PDVPage: React.FC = () => {
             }
           }
 
-          const nfceResult = await nfceResponse.json();
+          // Processar resposta de sucesso
+          let nfceResult;
+          try {
+            const responseText = await nfceResponse.text();
+            console.log('🔍 [EMISSÃO NFC-e] Resposta de sucesso bruta:', responseText);
+
+            nfceResult = JSON.parse(responseText);
+            console.log('✅ [EMISSÃO NFC-e] Resposta de sucesso parseada:', nfceResult);
+          } catch (parseError) {
+            console.error('❌ [EMISSÃO NFC-e] Erro ao parsear resposta de sucesso:', parseError);
+            throw new Error('Resposta inválida do servidor de NFC-e');
+          }
 
           if (!nfceResult.success) {
+            console.error('❌ [EMISSÃO NFC-e] Backend retornou erro:', nfceResult);
             // ✅ CORREÇÃO: Mostrar mensagem específica do backend sem prefixo genérico
             throw new Error(nfceResult.error || 'Erro desconhecido na emissão da NFC-e');
           }

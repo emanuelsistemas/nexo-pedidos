@@ -241,7 +241,8 @@ function validarDadosFiscaisPorRegime($produtoFiscal, $regimeTributario, $codigo
     logDetalhado('FISCAL_VALIDATION', "Validando dados fiscais por regime", [
         'produto' => $codigoProduto,
         'regime_tributario' => $regimeTributario,
-        'is_simples' => $isSimples
+        'is_simples' => $isSimples,
+        'dados_fiscais_completos' => $produtoFiscal
     ]);
 
     if ($isSimples) {
@@ -1123,14 +1124,27 @@ try {
         logDetalhado('127', "Criando ICMS para produto {$nItem}");
 
         // ✅ BUSCAR DADOS FISCAIS REAIS DO PRODUTO PARA ICMS (LEI DOS DADOS REAIS)
+        logDetalhado('126.1', "Buscando dados fiscais para produto {$nItem}", ['codigo' => $produto['codigo'], 'empresa_id' => $empresaId]);
         $produtoFiscal = buscarDadosFiscaisProduto($produto['codigo'], $empresaId);
+
         if (!$produtoFiscal) {
+            logDetalhado('126.2', "ERRO: Dados fiscais não encontrados", ['codigo' => $produto['codigo']]);
             throw new Exception("Dados fiscais não encontrados para produto {$produto['codigo']}");
         }
 
+        logDetalhado('126.3', "Dados fiscais encontrados para produto {$nItem}", $produtoFiscal);
+
         // ✅ VALIDAR DADOS FISCAIS CONFORME REGIME TRIBUTÁRIO (SEM FALLBACKS)
         $regimeTributario = (int)($empresa['regime_tributario'] ?? 1);
-        validarDadosFiscaisPorRegime($produtoFiscal, $regimeTributario, $produto['codigo']);
+        logDetalhado('126.4', "Validando dados fiscais por regime", ['regime' => $regimeTributario, 'codigo' => $produto['codigo']]);
+
+        try {
+            validarDadosFiscaisPorRegime($produtoFiscal, $regimeTributario, $produto['codigo']);
+            logDetalhado('126.5', "Validação fiscal aprovada para produto {$nItem}");
+        } catch (Exception $e) {
+            logDetalhado('126.6', "ERRO na validação fiscal", ['erro' => $e->getMessage(), 'codigo' => $produto['codigo']]);
+            throw $e;
+        }
 
         $std = new stdClass();
         $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
