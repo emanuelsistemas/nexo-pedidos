@@ -5004,8 +5004,8 @@ const PDVPage: React.FC = () => {
         };
       });
 
-      // ✅ ADICIONAR TAXA DE ENTREGA COMO ITEM SEPARADO (se houver)
-      if (pedido.valor_taxa_entrega && pedido.valor_taxa_entrega > 0) {
+      // ✅ ADICIONAR TAXA DE ENTREGA COMO ITEM SEPARADO (se houver E não for retirada)
+      if (pedido.valor_taxa_entrega && pedido.valor_taxa_entrega > 0 && pedido.tipo_entrega !== 'retirada') {
         // ✅ NOVA LÓGICA: Encontrar item de maior valor para duplicar suas configurações fiscais
         let itemMaiorValor = null;
         let maiorValor = 0;
@@ -5161,6 +5161,10 @@ const PDVPage: React.FC = () => {
 
           novosItens.unshift(itemTaxaEntrega);
         }
+      } else if (pedido.valor_taxa_entrega && pedido.valor_taxa_entrega > 0 && pedido.tipo_entrega === 'retirada') {
+        // ✅ LOG: Informar que taxa de entrega não foi adicionada por ser retirada
+        console.log('🏪 RETIRADA: Taxa de entrega não adicionada (R$', pedido.valor_taxa_entrega, ') - Pedido é do tipo retirada');
+        toast.info(`Pedido #${pedido.numero_pedido} é retirada - Taxa de entrega não adicionada`);
       }
 
       setCarrinho(novosItens);

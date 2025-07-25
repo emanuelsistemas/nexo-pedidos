@@ -5566,21 +5566,24 @@ const CardapioPublicoPage: React.FC = () => {
       }
     }
 
-    // 6. Validar forma de pagamento
-    if (!formaPagamentoSelecionada) {
-      erros.push('Selecione uma forma de pagamento');
-    } else {
-      // Validações específicas por tipo de pagamento
-      if (formaPagamentoSelecionada.tipo === 'dinheiro' && formaPagamentoSelecionada.precisa_troco) {
-        if (!formaPagamentoSelecionada.valor_dinheiro || formaPagamentoSelecionada.valor_dinheiro <= 0) {
-          erros.push('Valor em dinheiro deve ser informado');
-        }
-        const valorTotal = valorTotalCarrinho + (calculoTaxa?.valor || 0) - calcularDescontoCupom();
-        if (formaPagamentoSelecionada.valor_dinheiro < valorTotal) {
-          erros.push('Valor em dinheiro deve ser maior ou igual ao total do pedido');
+    // 6. Validar forma de pagamento - ✅ NOVA LÓGICA: só obrigatório para entrega
+    if (tipoEntregaSelecionado === 'entrega') {
+      if (!formaPagamentoSelecionada) {
+        erros.push('Selecione uma forma de pagamento');
+      } else {
+        // Validações específicas por tipo de pagamento
+        if (formaPagamentoSelecionada.tipo === 'dinheiro' && formaPagamentoSelecionada.precisa_troco) {
+          if (!formaPagamentoSelecionada.valor_dinheiro || formaPagamentoSelecionada.valor_dinheiro <= 0) {
+            erros.push('Valor em dinheiro deve ser informado');
+          }
+          const valorTotal = valorTotalCarrinho + (calculoTaxa?.valor || 0) - calcularDescontoCupom();
+          if (formaPagamentoSelecionada.valor_dinheiro < valorTotal) {
+            erros.push('Valor em dinheiro deve ser maior ou igual ao total do pedido');
+          }
         }
       }
     }
+    // Para retirada, forma de pagamento será definida no estabelecimento
 
     return erros;
   };
@@ -6247,10 +6250,10 @@ const CardapioPublicoPage: React.FC = () => {
         distancia_km: tipoEntregaSelecionado === 'entrega' ? (calculoTaxa?.distancia_km || null) : null,
         tempo_estimado_minutos: tipoEntregaSelecionado === 'entrega' ? (calculoTaxa?.tempo_estimado || null) : null,
 
-        // Forma de pagamento
-        forma_pagamento_nome: formaPagamentoSelecionada?.nome || null,
-        forma_pagamento_tipo: formaPagamentoSelecionada?.tipo || null,
-        forma_pagamento_detalhes: formaPagamentoSelecionada ? {
+        // ✅ NOVA LÓGICA: Forma de pagamento - só salvar se for entrega
+        forma_pagamento_nome: tipoEntregaSelecionado === 'entrega' ? (formaPagamentoSelecionada?.nome || null) : null,
+        forma_pagamento_tipo: tipoEntregaSelecionado === 'entrega' ? (formaPagamentoSelecionada?.tipo || null) : null,
+        forma_pagamento_detalhes: (tipoEntregaSelecionado === 'entrega' && formaPagamentoSelecionada) ? {
           chave_pix: formaPagamentoSelecionada.chave_pix || null,
           tipo_chave_pix: formaPagamentoSelecionada.tipo_chave_pix || null,
           precisa_troco: formaPagamentoSelecionada.precisa_troco || null,
@@ -10839,12 +10842,13 @@ const CardapioPublicoPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Seção Forma de Pagamento */}
-              <div className={`mt-4 p-4 rounded-lg border ${
-                config.modo_escuro
-                  ? 'bg-gray-800 border-gray-600'
-                  : 'bg-gray-50 border-gray-200'
-              }`}>
+              {/* Seção Forma de Pagamento - ✅ NOVA LÓGICA: só aparece para entrega */}
+              {tipoEntregaSelecionado === 'entrega' && (
+                <div className={`mt-4 p-4 rounded-lg border ${
+                  config.modo_escuro
+                    ? 'bg-gray-800 border-gray-600'
+                    : 'bg-gray-50 border-gray-200'
+                }`}>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className={`font-semibold ${
                     config.modo_escuro ? 'text-white' : 'text-gray-900'
@@ -10919,7 +10923,8 @@ const CardapioPublicoPage: React.FC = () => {
                     Nenhuma forma de pagamento selecionada
                   </p>
                 )}
-              </div>
+                </div>
+              )}
 
               {/* Seção Cupom de Desconto */}
               <div className={`mt-4 p-4 rounded-lg border ${
