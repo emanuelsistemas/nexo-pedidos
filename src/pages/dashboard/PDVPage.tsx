@@ -4373,62 +4373,9 @@ const PDVPage: React.FC = () => {
         }
       }
 
-      // ✅ CORREÇÃO CRÍTICA: Reavaliar próximo número disponível antes de reprocessar
-      console.log('🔍 REPROCESSAMENTO: Reavaliando próximo número disponível...');
-
-      let numeroParaUsar: number;
-
-      if (vendaParaEditarNfce.numero_documento && editandoNumeroNfce) {
-        // Se o usuário editou o número manualmente, validar se está disponível
-        const numeroEditado = parseInt(vendaParaEditarNfce.numero_documento.toString());
-        console.log('🔢 REPROCESSAMENTO: Usuário editou número para:', numeroEditado);
-
-        // ✅ VALIDAÇÃO COMPLETA: Verificar se número já existe (mesma empresa, mesmo modelo, mesma série)
-        const { data: numeroExistente, error: validationError } = await supabase
-          .from('pdv')
-          .select('id, numero_documento, status_fiscal, serie_documento')
-          .eq('empresa_id', usuarioData.empresa_id)
-          .eq('modelo_documento', 65) // NFC-e
-          .eq('numero_documento', numeroEditado)
-          .neq('id', vendaParaEditarNfce.id) // Excluir a própria venda
-          .maybeSingle(); // Usar maybeSingle para não dar erro se não encontrar
-
-        if (validationError) {
-          throw new Error(`Erro ao validar numeração: ${validationError.message}`);
-        }
-
-        if (numeroExistente) {
-          throw new Error(`❌ NÚMERO ${numeroEditado} JÁ EXISTE! Série ${numeroExistente.serie_documento}, Status: ${numeroExistente.status_fiscal}. Escolha outro número.`);
-        }
-
-        numeroParaUsar = numeroEditado;
-        console.log('✅ REPROCESSAMENTO: Número editado validado:', numeroParaUsar);
-      } else {
-        // Gerar próximo número disponível automaticamente
-        numeroParaUsar = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
-        console.log('🔢 REPROCESSAMENTO: Próximo número gerado automaticamente:', numeroParaUsar);
-      }
-
-      // Salvar o número reavaliado no banco ANTES de enviar para SEFAZ
-      const { error: updateNumeroError } = await supabase
-        .from('pdv')
-        .update({
-          numero_documento: numeroParaUsar
-        })
-        .eq('id', vendaParaEditarNfce.id);
-
-      if (updateNumeroError) {
-        throw new Error('Erro ao salvar número da NFC-e reavaliado');
-      }
-
-      // Atualizar o estado local para refletir o número correto
-      setVendaParaEditarNfce(prev => ({
-        ...prev,
-        numero_documento: numeroParaUsar
-      }));
-
-      console.log('✅ REPROCESSAMENTO: Número atualizado no banco:', numeroParaUsar);
-      toast.success('Modificações salvas! Iniciando retransmissão...');
+      // ✅ SIMPLIFICADO: Usar número já validado e salvo anteriormente
+      console.log('🔍 REPROCESSAMENTO: Usando número já validado:', vendaParaEditarNfce.numero_documento);
+      toast.success('Iniciando retransmissão...');
 
       // Preparar dados atualizados dos itens
       const itensAtualizados = itensNfceEdicao.map(item => {
@@ -4510,7 +4457,7 @@ const PDVPage: React.FC = () => {
         },
         ambiente: nfeConfigData.ambiente,
         identificacao: {
-          numero: numeroParaUsar, // ✅ CORREÇÃO: Usar número validado e atualizado
+          numero: vendaParaEditarNfce.numero_documento, // ✅ CORREÇÃO: Usar número já validado e salvo
           serie: serieUsuario, // ✅ NOVO: Série individual do usuário logado
           codigo_numerico: Math.floor(Math.random() * 99999999).toString().padStart(8, '0'),
           natureza_operacao: 'Venda de mercadoria'
