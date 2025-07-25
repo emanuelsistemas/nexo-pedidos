@@ -3367,21 +3367,24 @@ const ProdutosPage: React.FC = () => {
       camposComErro.push({ campo: 'unidade_medida_id', aba: 'dados' });
     }
 
-    // ✅ VALIDAÇÃO DE PREÇO: Lógica refinada
+    // ✅ VALIDAÇÃO DE PREÇO: Lógica refinada - Matéria prima não precisa de preço
     if (!novoProduto.preco || novoProduto.preco <= 0) {
-      // Se preço padrão está vazio/zero, verificar se trabalha com tabelas
-      if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
-        // Se trabalha com tabelas de preços, verificar se pelo menos uma tabela tem preço
-        const temPeloMenosUmPreco = Object.values(precosTabelas).some(preco => preco > 0);
+      // ✅ EXCEÇÃO: Produtos marcados como matéria-prima não precisam de preço
+      if (!novoProduto.materia_prima) {
+        // Se preço padrão está vazio/zero, verificar se trabalha com tabelas
+        if (trabalhaComTabelaPrecos && tabelasPrecos.length > 0) {
+          // Se trabalha com tabelas de preços, verificar se pelo menos uma tabela tem preço
+          const temPeloMenosUmPreco = Object.values(precosTabelas).some(preco => preco > 0);
 
-        if (!temPeloMenosUmPreco) {
-          camposObrigatorios.push('Pelo menos um preço das tabelas deve ser preenchido');
-          camposComErro.push({ campo: 'preco_tabelas', aba: 'dados' });
+          if (!temPeloMenosUmPreco) {
+            camposObrigatorios.push('Pelo menos um preço das tabelas deve ser preenchido');
+            camposComErro.push({ campo: 'preco_tabelas', aba: 'dados' });
+          }
+        } else {
+          // Se não trabalha com tabelas de preços, exigir preço padrão
+          camposObrigatorios.push('Preço do produto');
+          camposComErro.push({ campo: 'preco', aba: 'dados' });
         }
-      } else {
-        // Se não trabalha com tabelas de preços, exigir preço padrão
-        camposObrigatorios.push('Preço do produto');
-        camposComErro.push({ campo: 'preco', aba: 'dados' });
       }
     }
     // Se preço padrão tem valor > 0, não precisa validar mais nada

@@ -18,23 +18,27 @@ interface UseCardapioDigitalNotificationsProps {
   empresaId: string;
   enabled?: boolean;
   onPedidoChange?: () => void; // Callback para quando houver mudanças nos pedidos
+  aceitarAutomaticamente?: boolean; // Se deve aceitar pedidos automaticamente
 }
 
 export const useCardapioDigitalNotifications = ({
   empresaId,
   enabled = true,
-  onPedidoChange
+  onPedidoChange,
+  aceitarAutomaticamente = false
 }: UseCardapioDigitalNotificationsProps) => {
   // ✅ USAR useRef PARA EVITAR RE-RENDERIZAÇÕES
   const empresaIdRef = useRef(empresaId);
   const enabledRef = useRef(enabled);
   const onPedidoChangeRef = useRef(onPedidoChange);
+  const aceitarAutomaticamenteRef = useRef(aceitarAutomaticamente);
   const isInitializedRef = useRef(false);
 
   // ✅ ATUALIZAR REFS QUANDO PROPS MUDAREM
   empresaIdRef.current = empresaId;
   enabledRef.current = enabled;
   onPedidoChangeRef.current = onPedidoChange;
+  aceitarAutomaticamenteRef.current = aceitarAutomaticamente;
 
   // ✅ INICIALIZAÇÃO APENAS UMA VEZ
   if (!isInitializedRef.current) {
@@ -596,6 +600,27 @@ export const useCardapioDigitalNotifications = ({
     }
   }, [pedidosProcessando]); // ✅ APENAS DEPENDÊNCIAS NECESSÁRIAS
 
+  // ✅ FUNÇÃO PARA ACEITAR PEDIDO AUTOMATICAMENTE
+  const aceitarPedidoAutomaticamente = useCallback(async (pedidoId: string, numeroPedido: string, nomeCliente: string) => {
+    try {
+      console.log(`🤖 [AUTO-ACEITAR] Tentando aceitar automaticamente pedido #${numeroPedido} de ${nomeCliente}`);
+
+      const sucesso = await aceitarPedido(pedidoId);
+
+      if (sucesso) {
+        console.log(`✅ [AUTO-ACEITAR] Pedido #${numeroPedido} aceito automaticamente com sucesso!`);
+        showMessage('success', `🤖 Pedido #${numeroPedido} aceito automaticamente!`);
+      } else {
+        console.log(`❌ [AUTO-ACEITAR] Falha ao aceitar automaticamente pedido #${numeroPedido}`);
+      }
+
+      return sucesso;
+    } catch (error) {
+      console.error(`❌ [AUTO-ACEITAR] Erro ao aceitar automaticamente pedido #${numeroPedido}:`, error);
+      return false;
+    }
+  }, [aceitarPedido]);
+
   // ✅ CONFIGURAR REALTIME PARA NOVOS PEDIDOS - REATIVO
   useEffect(() => {
     if (!empresaId || !enabled) {
@@ -614,13 +639,28 @@ export const useCardapioDigitalNotifications = ({
           table: 'cardapio_digital',
           filter: `empresa_id=eq.${empresaId}`
         },
-        (payload) => {
+        async (payload) => {
           // Tocar som de notificação IMEDIATAMENTE
           tocarSomNotificacao();
 
           // Mostrar notificação visual
           const novoPedido = payload.new as PedidoCardapio;
-          showMessage('info', `🍽️ Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente}`);
+
+          // ✅ VERIFICAR SE DEVE ACEITAR AUTOMATICAMENTE
+          const deveAceitarAuto = aceitarAutomaticamenteRef.current;
+
+          if (deveAceitarAuto && novoPedido.status_pedido === 'pendente') {
+            // Mostrar notificação de aceite automático
+            showMessage('info', `🤖 Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente} - Aceitando automaticamente...`);
+
+            // Aguardar um pouco para garantir que o pedido foi inserido completamente
+            setTimeout(async () => {
+              await aceitarPedidoAutomaticamente(novoPedido.id, novoPedido.numero_pedido, novoPedido.nome_cliente);
+            }, 1000);
+          } else {
+            // Notificação normal
+            showMessage('info', `🍽️ Novo pedido #${novoPedido.numero_pedido} de ${novoPedido.nome_cliente}`);
+          }
 
           // Recarregar lista de pedidos pendentes
           carregarPedidosPendentes();

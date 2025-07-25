@@ -226,7 +226,8 @@ const PDVPage: React.FC = () => {
   } = useCardapioDigitalNotifications({
     empresaId: empresaData?.id || '',
     enabled: !!empresaData?.id,
-    onPedidoChange: onPedidoChangeStable
+    onPedidoChange: onPedidoChangeStable,
+    aceitarAutomaticamente: pdvConfig?.aceitar_pedido_automatico_cardapio || false
   });
 
   // ✅ HOOK STATUS TRACKING (sem logs)
