@@ -8896,12 +8896,20 @@ const PDVPage: React.FC = () => {
       let vendaInserida;
       let vendaError;
 
+      console.log('🔍 [FINALIZAÇÃO] Verificando se há venda em andamento:', {
+        vendaEmAndamento: vendaEmAndamento ? vendaEmAndamento.id : 'Nenhuma',
+        statusVenda: vendaEmAndamento?.status_venda
+      });
+
       if (vendaEmAndamento) {
         // ✅ ATUALIZAR venda em andamento existente (sempre que há venda em andamento)
         setEtapaProcessamento('Finalizando venda em andamento...');
+        console.log('🔍 [FINALIZAÇÃO] Atualizando venda em andamento ID:', vendaEmAndamento.id);
 
         // ✅ CORREÇÃO: Para venda em andamento, não sobrescrever série/número que já estão corretos
         const { serie_documento, numero_documento, ...vendaDataSemSerie } = vendaData;
+
+        console.log('🔍 [FINALIZAÇÃO] Dados para atualização (sem série/número):', vendaDataSemSerie);
 
         const result = await supabase
           .from('pdv')
@@ -8919,11 +8927,17 @@ const PDVPage: React.FC = () => {
         vendaInserida = result.data;
         vendaError = result.error;
 
+        console.log('🔍 [FINALIZAÇÃO] Resultado da atualização:', {
+          vendaInserida,
+          vendaError: vendaError?.message || 'Nenhum erro'
+        });
+
         // Venda em andamento atualizada
       } else {
         // ✅ CRIAR nova venda (apenas se não há venda em andamento)
         setEtapaProcessamento('Salvando venda no banco de dados...');
-        // Criando nova venda
+        console.log('🔍 [FINALIZAÇÃO] Criando nova venda');
+        console.log('🔍 [FINALIZAÇÃO] Dados completos da venda:', vendaData);
 
         const result = await supabase
           .from('pdv')
@@ -8933,6 +8947,11 @@ const PDVPage: React.FC = () => {
 
         vendaInserida = result.data;
         vendaError = result.error;
+
+        console.log('🔍 [FINALIZAÇÃO] Resultado da inserção:', {
+          vendaInserida,
+          vendaError: vendaError?.message || 'Nenhum erro'
+        });
 
         // Nova venda criada
       }
