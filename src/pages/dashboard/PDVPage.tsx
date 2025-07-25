@@ -668,6 +668,9 @@ const PDVPage: React.FC = () => {
   const [carregandoNovoItem, setCarregandoNovoItem] = useState(false);
   const [codigoBuscando, setCodigoBuscando] = useState<string>('');
 
+  // ✅ CORREÇÃO: Estado específico para capturar Enter IMEDIATAMENTE
+  const [enterPressionado, setEnterPressionado] = useState(false);
+
   // Funções para localStorage
   const savePDVState = () => {
     try {
@@ -11788,29 +11791,26 @@ const PDVPage: React.FC = () => {
 
   const handleSearchKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchTerm.trim()) {
+      // ✅ CORREÇÃO: ATIVAR LOADING INSTANTANEAMENTE NO MOMENTO DO ENTER
+      const codigoDigitado = searchTerm.trim();
+      setCodigoBuscando(codigoDigitado);
+      setEnterPressionado(true);
+      setCarregandoNovoItem(true);
+      setSearchTerm(''); // Limpar campo imediatamente
+
       // Se há produtos filtrados, adicionar o primeiro
       if (produtosFiltrados.length > 0) {
-        // ✅ CORREÇÃO: Capturar código e ativar efeito de carregamento IMEDIATAMENTE
-        const codigoDigitado = searchTerm.trim();
-        setCodigoBuscando(codigoDigitado);
-        setCarregandoNovoItem(true);
-
-        // Limpar o campo de pesquisa imediatamente para feedback visual
-        setSearchTerm('');
-
         try {
-          // Aguardar um frame para garantir que o loading apareça
-          await new Promise(resolve => requestAnimationFrame(resolve));
-
-          // Agora sim chamar a função de adicionar
+          // Processar em background - loading já está ativo
           await adicionarAoCarrinho(produtosFiltrados[0]);
 
-          // Aguardar um pouco mais para mostrar o efeito
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Aguardar um pouco para mostrar o efeito
+          await new Promise(resolve => setTimeout(resolve, 300));
         } finally {
           // Desativar efeito de carregamento
           setCarregandoNovoItem(false);
           setCodigoBuscando('');
+          setEnterPressionado(false);
         }
 
         // Manter o foco no campo para próxima digitação
@@ -11819,10 +11819,15 @@ const PDVPage: React.FC = () => {
           input.focus();
         }, 10);
       } else {
-        // Produto não encontrado - extrair o termo de busca real
-        let termoBusca = searchTerm.trim();
-        if (searchTerm.includes('*')) {
-          const partes = searchTerm.split('*');
+        // Produto não encontrado - desativar loading e mostrar modal
+        setCarregandoNovoItem(false);
+        setEnterPressionado(false);
+        setCodigoBuscando('');
+
+        // Extrair o termo de busca real
+        let termoBusca = codigoDigitado;
+        if (codigoDigitado.includes('*')) {
+          const partes = codigoDigitado.split('*');
           if (partes.length >= 2) {
             termoBusca = partes.slice(1).join('*').trim(); // Pega tudo após o primeiro *
           }
@@ -11831,8 +11836,7 @@ const PDVPage: React.FC = () => {
         // Mostrar modal de produto não encontrado
         mostrarProdutoNaoEncontrado(termoBusca);
 
-        // Limpar o campo e manter o foco
-        setSearchTerm('');
+        // Manter o foco
         setTimeout(() => {
           const input = e.target as HTMLInputElement;
           input.focus();
@@ -12433,8 +12437,8 @@ const PDVPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {/* ✅ NOVO: Card de carregamento - aparece no topo quando está carregando novo item */}
-                    {carregandoNovoItem && (
+                    {/* ✅ NOVO: Card de carregamento - aparece INSTANTANEAMENTE quando Enter é pressionado */}
+                    {(carregandoNovoItem || enterPressionado) && (
                       <motion.div
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -18444,29 +18448,26 @@ const PDVPage: React.FC = () => {
                         if (e.key === 'Escape') {
                           setShowAreaProdutos(false);
                         } else if (e.key === 'Enter' && searchTerm.trim()) {
+                          // ✅ CORREÇÃO: ATIVAR LOADING INSTANTANEAMENTE NO MOMENTO DO ENTER
+                          const codigoDigitado = searchTerm.trim();
+                          setCodigoBuscando(codigoDigitado);
+                          setEnterPressionado(true);
+                          setCarregandoNovoItem(true);
+                          setSearchTerm(''); // Limpar campo imediatamente
+
                           // Se há produtos filtrados, adicionar o primeiro
                           if (produtosFiltrados.length > 0) {
-                            // ✅ CORREÇÃO: Capturar código e ativar efeito de carregamento IMEDIATAMENTE
-                            const codigoDigitado = searchTerm.trim();
-                            setCodigoBuscando(codigoDigitado);
-                            setCarregandoNovoItem(true);
-
-                            // Limpar o campo de pesquisa imediatamente para feedback visual
-                            setSearchTerm('');
-
                             try {
-                              // Aguardar um frame para garantir que o loading apareça
-                              await new Promise(resolve => requestAnimationFrame(resolve));
-
-                              // Agora sim chamar a função de adicionar
+                              // Processar em background - loading já está ativo
                               await adicionarAoCarrinho(produtosFiltrados[0]);
 
-                              // Aguardar um pouco mais para mostrar o efeito
-                              await new Promise(resolve => setTimeout(resolve, 500));
+                              // Aguardar um pouco para mostrar o efeito
+                              await new Promise(resolve => setTimeout(resolve, 300));
                             } finally {
                               // Desativar efeito de carregamento
                               setCarregandoNovoItem(false);
                               setCodigoBuscando('');
+                              setEnterPressionado(false);
                             }
 
                             // ✅ NOVO: Só fechar o modal se não abrir o modal de quantidade
@@ -18478,10 +18479,15 @@ const PDVPage: React.FC = () => {
                               }, 10);
                             }
                           } else {
-                            // Produto não encontrado - extrair o termo de busca real
-                            let termoBusca = searchTerm.trim();
-                            if (searchTerm.includes('*')) {
-                              const partes = searchTerm.split('*');
+                            // Produto não encontrado - desativar loading e mostrar modal
+                            setCarregandoNovoItem(false);
+                            setEnterPressionado(false);
+                            setCodigoBuscando('');
+
+                            // Extrair o termo de busca real
+                            let termoBusca = codigoDigitado;
+                            if (codigoDigitado.includes('*')) {
+                              const partes = codigoDigitado.split('*');
                               if (partes.length >= 2) {
                                 termoBusca = partes.slice(1).join('*').trim(); // Pega tudo após o primeiro *
                               }
@@ -18490,8 +18496,7 @@ const PDVPage: React.FC = () => {
                             // Mostrar modal de produto não encontrado
                             mostrarProdutoNaoEncontrado(termoBusca);
 
-                            // Limpar o campo e manter o foco
-                            setSearchTerm('');
+                            // Manter o foco
                             setTimeout(() => {
                               const input = e.target as HTMLInputElement;
                               input.focus();
