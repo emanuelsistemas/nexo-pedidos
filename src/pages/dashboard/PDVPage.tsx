@@ -986,6 +986,14 @@ const PDVPage: React.FC = () => {
   // Função para confirmar faturamento do pedido do cardápio digital
   const confirmarFaturarPedido = async () => {
     if (pedidoParaFaturar) {
+      // ✅ VALIDAÇÃO: Verificar se o pedido já foi faturado
+      if (pedidoParaFaturar.status_faturamento === 'faturado') {
+        toast.error(`Pedido #${pedidoParaFaturar.numero_pedido} já foi faturado! Venda #${pedidoParaFaturar.numero_venda_pdv}`);
+        setShowConfirmFaturarPedido(false);
+        setPedidoParaFaturar(null);
+        return;
+      }
+
       await executarFaturamentoPedidoCardapio(pedidoParaFaturar);
       setShowConfirmFaturarPedido(false);
       setPedidoParaFaturar(null);
@@ -1000,7 +1008,6 @@ const PDVPage: React.FC = () => {
       case 'preparando': return 'text-orange-400';
       case 'pronto': return 'text-green-400';
       case 'entregue': return 'text-green-500';
-      case 'faturado': return 'text-green-600';
       case 'cancelado': return 'text-red-400';
       default: return 'text-gray-400';
     }
@@ -2975,7 +2982,9 @@ const PDVPage: React.FC = () => {
           cupom_descricao,
           cupom_valor_desconto,
           quer_nota_fiscal,
-          cpf_cnpj_cliente
+          cpf_cnpj_cliente,
+          status_faturamento,
+          numero_venda_pdv
         `)
         .eq('empresa_id', empresaData.id)
         .order('updated_at', { ascending: false })
@@ -4779,7 +4788,8 @@ const PDVPage: React.FC = () => {
         const { error } = await supabase
           .from('cardapio_digital')
           .update({
-            status_pedido: 'faturado',
+            // ✅ CORREÇÃO: NÃO alterar status_pedido - manter como 'entregue'
+            status_faturamento: 'faturado', // ✅ NOVO: Campo de controle de faturamento
             venda_pdv_id: vendaId,
             numero_venda_pdv: numeroVenda,
             data_faturamento: new Date().toISOString()
@@ -20788,7 +20798,6 @@ const PDVPage: React.FC = () => {
                       { value: 'pronto', label: 'Pronto', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'pronto').length, color: 'bg-green-500 hover:bg-green-600' },
                       { value: 'saiu_para_entrega', label: 'Saiu para Entrega', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'saiu_para_entrega').length, color: 'bg-indigo-500 hover:bg-indigo-600' },
                       { value: 'entregue', label: 'Entregue', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'entregue').length, color: 'bg-purple-500 hover:bg-purple-600' },
-                      { value: 'faturado', label: 'Faturado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'faturado').length, color: 'bg-emerald-500 hover:bg-emerald-600' },
                       { value: 'cancelado', label: 'Cancelado', count: todosOsPedidosCardapio.filter(p => p.status_pedido === 'cancelado').length, color: 'bg-red-500 hover:bg-red-600' }
                     ].map((status) => (
                       <button
@@ -21185,8 +21194,8 @@ const PDVPage: React.FC = () => {
 
                                 {/* Linha separada para Faturar, status Faturado e Cancelar */}
                                 <div className="flex gap-2">
-                                  {/* Botão Faturar - Aparece apenas quando status = entregue */}
-                                  {pedido.status_pedido === 'entregue' && (
+                                  {/* Botão Faturar - Aparece apenas quando status = entregue E não foi faturado */}
+                                  {pedido.status_pedido === 'entregue' && pedido.status_faturamento !== 'faturado' && (
                                     <button
                                       onClick={() => {
                                         setPedidoParaFaturar(pedido);
@@ -21198,8 +21207,8 @@ const PDVPage: React.FC = () => {
                                     </button>
                                   )}
 
-                                  {/* Tag Faturado - Aparece quando status = faturado */}
-                                  {pedido.status_pedido === 'faturado' && (
+                                  {/* Tag Faturado - Aparece quando status_faturamento = faturado */}
+                                  {pedido.status_faturamento === 'faturado' && (
                                     <div className="flex-1 bg-emerald-600/20 border border-emerald-500/30 rounded px-2 py-2 text-center">
                                       <div className="text-emerald-400 text-xs font-medium flex items-center justify-center gap-1">
                                         ✅ Faturado
@@ -21213,7 +21222,7 @@ const PDVPage: React.FC = () => {
                                   )}
 
                                   {/* Botão Cancelar - Aparece em todos os status exceto cancelado e faturado */}
-                                  {pedido.status_pedido !== 'cancelado' && pedido.status_pedido !== 'faturado' && (
+                                  {pedido.status_pedido !== 'cancelado' && pedido.status_faturamento !== 'faturado' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await rejeitarPedidoComMudancaAba(pedido.id);
