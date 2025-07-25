@@ -4766,8 +4766,25 @@ const PDVPage: React.FC = () => {
   // Função para marcar pedido do cardápio digital como faturado
   const marcarPedidoCardapioComoFaturado = async (vendaId: string, numeroVenda: string) => {
     try {
+      console.log('🔍 [FATURAMENTO] Iniciando marcação de faturamento:', {
+        vendaId,
+        numeroVenda,
+        carrinhoLength: carrinho.length
+      });
+
       // Verificar se há itens do cardápio digital no carrinho
       const itensCardapio = carrinho.filter(item => item.cardapio_digital && item.pedido_origem_id);
+
+      console.log('🔍 [FATURAMENTO] Itens do cardápio encontrados:', {
+        total_itens_carrinho: carrinho.length,
+        itens_cardapio: itensCardapio.length,
+        itens_detalhes: itensCardapio.map(item => ({
+          id: item.id,
+          nome: item.nome,
+          pedido_origem_id: item.pedido_origem_id,
+          cardapio_digital: item.cardapio_digital
+        }))
+      });
 
       if (itensCardapio.length === 0) {
         console.log('🔍 [FATURAMENTO] Nenhum item do cardápio digital encontrado no carrinho');
@@ -4785,7 +4802,9 @@ const PDVPage: React.FC = () => {
 
       // Atualizar status dos pedidos para 'faturado'
       for (const pedidoId of pedidosIds) {
-        const { error } = await supabase
+        console.log('🔄 [FATURAMENTO] Atualizando pedido:', pedidoId);
+
+        const { data, error } = await supabase
           .from('cardapio_digital')
           .update({
             // ✅ CORREÇÃO: NÃO alterar status_pedido - manter como 'entregue'
@@ -4794,12 +4813,21 @@ const PDVPage: React.FC = () => {
             numero_venda_pdv: numeroVenda,
             data_faturamento: new Date().toISOString()
           })
-          .eq('id', pedidoId);
+          .eq('id', pedidoId)
+          .select(); // ✅ ADICIONAR select para ver o que foi atualizado
 
         if (error) {
-          console.error('❌ [FATURAMENTO] Erro ao marcar pedido como faturado:', error);
+          console.error('❌ [FATURAMENTO] Erro ao marcar pedido como faturado:', {
+            pedidoId,
+            error: error.message,
+            details: error
+          });
         } else {
-          console.log('✅ [FATURAMENTO] Pedido marcado como faturado:', pedidoId);
+          console.log('✅ [FATURAMENTO] Pedido marcado como faturado:', {
+            pedidoId,
+            data_retornada: data,
+            numero_venda: numeroVenda
+          });
         }
       }
 
