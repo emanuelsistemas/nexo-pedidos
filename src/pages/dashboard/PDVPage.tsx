@@ -5006,71 +5006,161 @@ const PDVPage: React.FC = () => {
 
       // ✅ ADICIONAR TAXA DE ENTREGA COMO ITEM SEPARADO (se houver)
       if (pedido.valor_taxa_entrega && pedido.valor_taxa_entrega > 0) {
-        // Criar item de taxa de entrega usando o sistema de "Venda sem Produto"
-        const produtoTaxaEntrega = {
-          id: `taxa-entrega-${pedido.id}`,
-          nome: 'Taxa de Entrega',
-          preco: pedido.valor_taxa_entrega,
-          codigo: '999999', // Código fixo para venda sem produto
-          descricao: 'Taxa de entrega do cardápio digital',
-          categoria: 'Serviços',
-          ativo: true,
-          promocao: false,
-          grupo_id: null,
-          unidade_medida_id: null,
-          produto_fotos: [],
-          unidade_medida: { sigla: 'UN', nome: 'Unidade', id: null },
+        // ✅ NOVA LÓGICA: Encontrar item de maior valor para duplicar suas configurações fiscais
+        let itemMaiorValor = null;
+        let maiorValor = 0;
 
-          // ✅ EXATAMENTE OS MESMOS DADOS FISCAIS QUE A VENDA SEM PRODUTO USA (SEM FALLBACKS)
-          codigo_barras: null,
-          ncm: pdvConfig?.venda_sem_produto_ncm,
-          cfop: pdvConfig?.venda_sem_produto_cfop,
-          origem_produto: pdvConfig?.venda_sem_produto_origem,
-          situacao_tributaria: pdvConfig?.venda_sem_produto_situacao_tributaria,
-          cst_icms: pdvConfig?.venda_sem_produto_cst,
-          csosn_icms: pdvConfig?.venda_sem_produto_csosn,
-          cest: pdvConfig?.venda_sem_produto_cest,
-          margem_st: pdvConfig?.venda_sem_produto_margem_st,
-          aliquota_icms: pdvConfig?.venda_sem_produto_aliquota_icms,
-          aliquota_pis: pdvConfig?.venda_sem_produto_aliquota_pis,
-          aliquota_cofins: pdvConfig?.venda_sem_produto_aliquota_cofins,
-          cst_pis: pdvConfig?.venda_sem_produto_cst_pis,
-          cst_cofins: pdvConfig?.venda_sem_produto_cst_cofins,
-          peso_liquido: pdvConfig?.venda_sem_produto_peso_liquido,
+        novosItens.forEach(item => {
+          const valorItem = item.quantidade * (item.produto?.preco || 0);
+          if (valorItem > maiorValor) {
+            maiorValor = valorItem;
+            itemMaiorValor = item;
+          }
+        });
 
-          // Campos de desconto (não aplicáveis para taxa de entrega)
-          tipo_desconto: null,
-          valor_desconto: null,
-          estoque_inicial: null,
-          desconto_quantidade: false,
-          quantidade_minima: null,
-          tipo_desconto_quantidade: null,
-          valor_desconto_quantidade: null,
-          percentual_desconto_quantidade: null
-        };
+        if (itemMaiorValor && itemMaiorValor.produto) {
+          // ✅ DUPLICAR PRODUTO DE MAIOR VALOR E TRANSFORMAR EM TAXA DE ENTREGA
+          const produtoTaxaEntrega = {
+            // Manter ID único para taxa de entrega
+            id: `taxa-entrega-${pedido.id}`,
 
-        const itemTaxaEntrega: ItemCarrinho = {
-          id: `taxa-entrega-${pedido.id}-${Date.now()}`,
-          produto: produtoTaxaEntrega,
-          quantidade: 1,
-          subtotal: pedido.valor_taxa_entrega,
-          pedido_origem_id: pedido.id,
-          pedido_origem_numero: pedido.numero_pedido,
-          cardapio_digital: true,
-          vendaSemProduto: true, // Marcar como venda sem produto
-          nome: 'Taxa de Entrega', // Nome personalizado
-          preco: pedido.valor_taxa_entrega,
-          observacao: null, // ✅ REMOVER OBSERVAÇÃO para cardápio digital
-          sabores: [],
-          descricaoSabores: null,
-          adicionais: [],
-          tabela_preco_id: null,
-          tabela_preco_nome: null,
-          taxaEntregaCardapio: true // ✅ MARCAR COMO TAXA DE ENTREGA DO CARDÁPIO
-        };
+            // ✅ ALTERAR APENAS NOME E PREÇO - MANTER TODOS OS DADOS FISCAIS
+            nome: 'Taxa de Entrega',
+            preco: pedido.valor_taxa_entrega,
 
-        // Adicionar taxa de entrega aos itens
-        novosItens.push(itemTaxaEntrega);
+            // ✅ MANTER TODOS OS DADOS FISCAIS DO PRODUTO DE MAIOR VALOR
+            codigo: itemMaiorValor.produto.codigo,
+            descricao: 'Taxa de entrega do cardápio digital',
+            categoria: itemMaiorValor.produto.categoria,
+            ativo: itemMaiorValor.produto.ativo,
+            promocao: false, // Taxa não tem promoção
+            grupo_id: itemMaiorValor.produto.grupo_id,
+            unidade_medida_id: itemMaiorValor.produto.unidade_medida_id,
+            unidade_medida: itemMaiorValor.produto.unidade_medida,
+
+            // ✅ REMOVER FOTO (conforme solicitado)
+            produto_fotos: [],
+            foto_url: null,
+
+            // ✅ MANTER EXATAMENTE OS MESMOS DADOS FISCAIS DO PRODUTO DE MAIOR VALOR
+            codigo_barras: itemMaiorValor.produto.codigo_barras,
+            ncm: itemMaiorValor.produto.ncm,
+            cfop: itemMaiorValor.produto.cfop,
+            origem_produto: itemMaiorValor.produto.origem_produto,
+            situacao_tributaria: itemMaiorValor.produto.situacao_tributaria,
+            cst_icms: itemMaiorValor.produto.cst_icms,
+            csosn_icms: itemMaiorValor.produto.csosn_icms,
+            cst_pis: itemMaiorValor.produto.cst_pis,
+            cst_cofins: itemMaiorValor.produto.cst_cofins,
+            cst_ipi: itemMaiorValor.produto.cst_ipi,
+            aliquota_icms: itemMaiorValor.produto.aliquota_icms,
+            aliquota_pis: itemMaiorValor.produto.aliquota_pis,
+            aliquota_cofins: itemMaiorValor.produto.aliquota_cofins,
+            aliquota_ipi: itemMaiorValor.produto.aliquota_ipi,
+            valor_ipi: itemMaiorValor.produto.valor_ipi,
+            cest: itemMaiorValor.produto.cest,
+            margem_st: itemMaiorValor.produto.margem_st,
+            peso_liquido: itemMaiorValor.produto.peso_liquido,
+
+            // Campos de desconto (não aplicáveis para taxa de entrega)
+            tipo_desconto: null,
+            valor_desconto: null,
+            estoque_inicial: null,
+            desconto_quantidade: false,
+            quantidade_minima: null,
+            tipo_desconto_quantidade: null,
+            valor_desconto_quantidade: null,
+            percentual_desconto_quantidade: null
+          };
+
+          const itemTaxaEntrega: ItemCarrinho = {
+            id: `taxa-entrega-${pedido.id}-${Date.now()}`,
+            produto: produtoTaxaEntrega,
+            quantidade: 1,
+            subtotal: pedido.valor_taxa_entrega,
+            pedido_origem_id: pedido.id,
+            pedido_origem_numero: pedido.numero_pedido,
+            cardapio_digital: true,
+            nome: 'Taxa de Entrega', // Nome personalizado
+            preco: pedido.valor_taxa_entrega,
+            observacao: null,
+            sabores: [],
+            descricaoSabores: null,
+            adicionais: [],
+            tabela_preco_id: null,
+            tabela_preco_nome: null,
+            taxaEntregaCardapio: true // ✅ MARCAR COMO TAXA DE ENTREGA DO CARDÁPIO
+          };
+
+          // ✅ ADICIONAR TAXA DE ENTREGA NA PRIMEIRA POSIÇÃO (conforme solicitado)
+          novosItens.unshift(itemTaxaEntrega);
+        } else {
+          // ✅ FALLBACK: Se não houver itens, usar configuração padrão
+          console.warn('⚠️ Nenhum item encontrado para duplicar configurações fiscais. Usando configuração padrão.');
+
+          const produtoTaxaEntrega = {
+            id: `taxa-entrega-${pedido.id}`,
+            nome: 'Taxa de Entrega',
+            preco: pedido.valor_taxa_entrega,
+            codigo: '999999',
+            descricao: 'Taxa de entrega do cardápio digital',
+            categoria: 'Serviços',
+            ativo: true,
+            promocao: false,
+            grupo_id: null,
+            unidade_medida_id: null,
+            produto_fotos: [],
+            unidade_medida: { sigla: 'UN', nome: 'Unidade', id: null },
+
+            // Usar configurações padrão do PDV
+            codigo_barras: null,
+            ncm: pdvConfig?.venda_sem_produto_ncm,
+            cfop: pdvConfig?.venda_sem_produto_cfop,
+            origem_produto: pdvConfig?.venda_sem_produto_origem,
+            situacao_tributaria: pdvConfig?.venda_sem_produto_situacao_tributaria,
+            cst_icms: pdvConfig?.venda_sem_produto_cst,
+            csosn_icms: pdvConfig?.venda_sem_produto_csosn,
+            cest: pdvConfig?.venda_sem_produto_cest,
+            margem_st: pdvConfig?.venda_sem_produto_margem_st,
+            aliquota_icms: pdvConfig?.venda_sem_produto_aliquota_icms,
+            aliquota_pis: pdvConfig?.venda_sem_produto_aliquota_pis,
+            aliquota_cofins: pdvConfig?.venda_sem_produto_aliquota_cofins,
+            cst_pis: pdvConfig?.venda_sem_produto_cst_pis,
+            cst_cofins: pdvConfig?.venda_sem_produto_cst_cofins,
+            peso_liquido: pdvConfig?.venda_sem_produto_peso_liquido,
+
+            tipo_desconto: null,
+            valor_desconto: null,
+            estoque_inicial: null,
+            desconto_quantidade: false,
+            quantidade_minima: null,
+            tipo_desconto_quantidade: null,
+            valor_desconto_quantidade: null,
+            percentual_desconto_quantidade: null
+          };
+
+          const itemTaxaEntrega: ItemCarrinho = {
+            id: `taxa-entrega-${pedido.id}-${Date.now()}`,
+            produto: produtoTaxaEntrega,
+            quantidade: 1,
+            subtotal: pedido.valor_taxa_entrega,
+            pedido_origem_id: pedido.id,
+            pedido_origem_numero: pedido.numero_pedido,
+            cardapio_digital: true,
+            vendaSemProduto: true,
+            nome: 'Taxa de Entrega',
+            preco: pedido.valor_taxa_entrega,
+            observacao: null,
+            sabores: [],
+            descricaoSabores: null,
+            adicionais: [],
+            tabela_preco_id: null,
+            tabela_preco_nome: null,
+            taxaEntregaCardapio: true
+          };
+
+          novosItens.unshift(itemTaxaEntrega);
+        }
       }
 
       setCarrinho(novosItens);

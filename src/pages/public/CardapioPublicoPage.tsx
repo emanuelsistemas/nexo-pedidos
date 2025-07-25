@@ -6157,22 +6157,22 @@ const CardapioPublicoPage: React.FC = () => {
         if (clienteExistente) {
           clienteId = clienteExistente.id;
         } else {
-          // Criar novo cliente
+          // ✅ NOVA LÓGICA: Criar novo cliente - só salvar dados de endereço se for entrega
           const novoCliente = {
             empresa_id: empresaId,
             nome: dadosCliente.nome,
             telefone: dadosCliente.telefone,
             documento: dadosCliente.cpfCnpj || null,
             tipo_documento: dadosCliente.cpfCnpj ? (dadosCliente.cpfCnpj.length <= 14 ? 'CPF' : 'CNPJ') : null,
-            cep: cepCliente || null,
-            endereco: enderecoEncontrado?.logradouro || null,
-            numero: dadosComplementoEndereco.numero || null,
-            complemento: dadosComplementoEndereco.complemento || null,
-            bairro: enderecoEncontrado?.bairro || bairroSelecionado || null,
-            cidade: enderecoEncontrado?.localidade || null,
-            estado: enderecoEncontrado?.uf || null,
-            tipo_residencia: tipoEndereco || null,
-            ponto_referencia: dadosComplementoEndereco.proximoA || null
+            cep: tipoEntregaSelecionado === 'entrega' ? (cepCliente || null) : null,
+            endereco: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.logradouro || null) : null,
+            numero: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.numero || null) : null,
+            complemento: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.complemento || null) : null,
+            bairro: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.bairro || bairroSelecionado || null) : null,
+            cidade: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.localidade || null) : null,
+            estado: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.uf || null) : null,
+            tipo_residencia: tipoEntregaSelecionado === 'entrega' ? (tipoEndereco || null) : null,
+            ponto_referencia: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.proximoA || null) : null
           };
 
           const { data: clienteCriado, error: clienteError } = await supabase
@@ -6209,7 +6209,8 @@ const CardapioPublicoPage: React.FC = () => {
 
       // 4. Calcular valores
       const valorProdutos = obterTotalCarrinho();
-      const valorTaxaEntrega = calculoTaxa?.valor || 0;
+      // ✅ NOVA LÓGICA: Taxa de entrega só é aplicada se for entrega
+      const valorTaxaEntrega = (tipoEntregaSelecionado === 'entrega' && calculoTaxa?.valor) ? calculoTaxa.valor : 0;
       const valorDescontoCupom = calcularDescontoCupom();
       const valorTotal = valorProdutos + valorTaxaEntrega - valorDescontoCupom;
 
@@ -6226,25 +6227,25 @@ const CardapioPublicoPage: React.FC = () => {
         quer_nota_fiscal: dadosCliente.querNotaFiscal || false,
         cpf_cnpj_cliente: dadosCliente.cpfCnpj || null,
 
-        // Dados de entrega
+        // ✅ NOVA LÓGICA: Dados de entrega - só salvar se for entrega
         tipo_entrega: tipoEntregaSelecionado || 'entrega',
-        tem_entrega: !!calculoTaxa,
-        cep_entrega: cepCliente || null,
-        endereco_entrega: enderecoEncontrado?.logradouro || null,
-        numero_entrega: dadosComplementoEndereco.numero || null,
-        complemento_entrega: dadosComplementoEndereco.complemento || null,
-        bairro_entrega: enderecoEncontrado?.bairro || bairroSelecionado || null,
-        cidade_entrega: enderecoEncontrado?.localidade || null,
-        estado_entrega: enderecoEncontrado?.uf || null,
-        tipo_endereco: tipoEndereco || null,
-        nome_condominio: dadosComplementoEndereco.nomeCondominio || null,
-        bloco_endereco: dadosComplementoEndereco.bloco || null,
-        proximo_a: dadosComplementoEndereco.proximoA || null,
+        tem_entrega: tipoEntregaSelecionado === 'entrega' && !!calculoTaxa,
+        cep_entrega: tipoEntregaSelecionado === 'entrega' ? (cepCliente || null) : null,
+        endereco_entrega: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.logradouro || null) : null,
+        numero_entrega: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.numero || null) : null,
+        complemento_entrega: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.complemento || null) : null,
+        bairro_entrega: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.bairro || bairroSelecionado || null) : null,
+        cidade_entrega: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.localidade || null) : null,
+        estado_entrega: tipoEntregaSelecionado === 'entrega' ? (enderecoEncontrado?.uf || null) : null,
+        tipo_endereco: tipoEntregaSelecionado === 'entrega' ? (tipoEndereco || null) : null,
+        nome_condominio: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.nomeCondominio || null) : null,
+        bloco_endereco: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.bloco || null) : null,
+        proximo_a: tipoEntregaSelecionado === 'entrega' ? (dadosComplementoEndereco.proximoA || null) : null,
 
-        // Taxa de entrega
-        valor_taxa_entrega: valorTaxaEntrega,
-        distancia_km: calculoTaxa?.distancia_km || null,
-        tempo_estimado_minutos: calculoTaxa?.tempo_estimado || null,
+        // ✅ NOVA LÓGICA: Taxa de entrega - só salvar se for entrega
+        valor_taxa_entrega: tipoEntregaSelecionado === 'entrega' ? valorTaxaEntrega : 0,
+        distancia_km: tipoEntregaSelecionado === 'entrega' ? (calculoTaxa?.distancia_km || null) : null,
+        tempo_estimado_minutos: tipoEntregaSelecionado === 'entrega' ? (calculoTaxa?.tempo_estimado || null) : null,
 
         // Forma de pagamento
         forma_pagamento_nome: formaPagamentoSelecionada?.nome || null,
