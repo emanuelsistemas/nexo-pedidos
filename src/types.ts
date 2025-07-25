@@ -47,6 +47,17 @@ export interface Produto {
   produto_alcoolico?: boolean;
   // Campo para exibir desconto por quantidade mínima no cardápio digital
   exibir_desconto_qtd_minimo_no_cardapio_digital?: boolean;
+  // Campo para indicar se o produto é matéria-prima
+  materia_prima?: boolean;
+  // Campo para insumos do produto
+  insumos?: ProdutoInsumo[];
+}
+
+export interface ProdutoInsumo {
+  produto_id: string;
+  nome: string;
+  quantidade: number;
+  unidade_medida: string;
 }
 
 export interface Grupo {

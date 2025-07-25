@@ -346,6 +346,10 @@ const ProdutosPage: React.FC = () => {
     promocao_data_inicio: '',
     promocao_data_fim: '',
     promocao_data_cardapio: false,
+    // Campo para matéria-prima
+    materia_prima: false,
+    // Campo para insumos
+    insumos: [],
   });
 
   // Estado para controlar o valor formatado do preço
@@ -405,7 +409,7 @@ const ProdutosPage: React.FC = () => {
   const [dropdownAbertoProdutos, setDropdownAbertoProdutos] = useState<{[key: string]: boolean}>({});
 
   // Estados para as abas
-  const [activeTab, setActiveTab] = useState<'dados' | 'fotos' | 'estoque' | 'adicionais' | 'impostos'>('dados');
+  const [activeTab, setActiveTab] = useState<'dados' | 'fotos' | 'estoque' | 'adicionais' | 'impostos' | 'insumos'>('dados');
   const [produtoFotos, setProdutoFotos] = useState<ProdutoFoto[]>([]);
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -417,6 +421,16 @@ const ProdutosPage: React.FC = () => {
   // Estados para a galeria de fotos
   const [isGaleriaOpen, setIsGaleriaOpen] = useState(false);
   const [currentFotoIndex, setCurrentFotoIndex] = useState(0);
+
+  // Estados para insumos
+  const [produtoInsumos, setProdutoInsumos] = useState<any[]>([]);
+  const [showModalInsumos, setShowModalInsumos] = useState(false);
+  const [editingInsumo, setEditingInsumo] = useState<any | null>(null);
+  const [produtosParaInsumos, setProdutosParaInsumos] = useState<any[]>([]);
+  const [gruposParaInsumos, setGruposParaInsumos] = useState<any[]>([]);
+  const [searchTermInsumos, setSearchTermInsumos] = useState('');
+  const [produtoSelecionado, setProdutoSelecionado] = useState<any | null>(null);
+  const [quantidadeInsumo, setQuantidadeInsumo] = useState('');
 
   // Estado para unidades de medida
   const [unidadesMedida, setUnidadesMedida] = useState<UnidadeMedida[]>([]);
@@ -2325,7 +2339,7 @@ const ProdutosPage: React.FC = () => {
     setEditingProduto(null);
     setSelectedOpcoes([]);
 
-    // Sempre resetar para a aba "Dados Gerais" ao adicionar novo produto
+    // Sempre resetar para a aba "Geral" ao adicionar novo produto
     setActiveTab('dados');
 
     const nextCode = await getNextAvailableCode();
@@ -2523,6 +2537,42 @@ const ProdutosPage: React.FC = () => {
     }
   };
 
+  // Função para carregar os insumos de um produto
+  const loadProdutoInsumos = async (produtoId: string) => {
+    if (!produtoId) return;
+
+    try {
+      // Obter a empresa_id do usuário atual
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Usuário não autenticado');
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) throw usuarioError;
+
+      // Buscar o produto com seus insumos
+      const { data: produtoData, error: produtoError } = await supabase
+        .from('produtos')
+        .select('insumos')
+        .eq('id', produtoId)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (produtoError) throw produtoError;
+
+      // Definir os insumos no estado
+      const insumos = produtoData.insumos || [];
+      setProdutoInsumos(insumos);
+    } catch (error: any) {
+      console.error('Erro ao carregar insumos:', error);
+      showMessage('error', 'Erro ao carregar insumos do produto');
+    }
+  };
+
   const handleEditProduto = async (grupo: Grupo, produto: Produto) => {
     try {
       // ✅ NOVO: Ativar loading para este produto específico
@@ -2623,6 +2673,10 @@ const ProdutosPage: React.FC = () => {
       promocao_data_inicio: (produto as any).promocao_data_inicio || '',
       promocao_data_fim: (produto as any).promocao_data_fim || '',
       promocao_data_cardapio: (produto as any).promocao_data_cardapio || false,
+      // Campo para matéria-prima
+      materia_prima: produto.materia_prima || false,
+      // Campo para insumos
+      insumos: produto.insumos || [],
     };
 
     // Definir o estado do novo produto
@@ -2634,6 +2688,10 @@ const ProdutosPage: React.FC = () => {
 
     // ✅ CORREÇÃO: Recarregar configuração de cardápio digital da empresa na edição
     await carregarConfiguracaoCardapioDigital();
+
+    // Carregar insumos do produto
+    const insumos = produto.insumos || [];
+    setProdutoInsumos(insumos);
 
     // Garantir que os códigos CST/CSOSN estejam preenchidos
     if (produtoState.situacao_tributaria && (!produtoState.cst_icms || !produtoState.csosn_icms)) {
@@ -3293,7 +3351,7 @@ const ProdutosPage: React.FC = () => {
       camposComErro.push({ campo: 'grupo', aba: 'dados' });
     }
 
-    // Validar campos da aba "Dados Gerais"
+    // Validar campos da aba "Geral"
     if (!novoProduto.codigo?.trim()) {
       camposObrigatorios.push('Código do produto');
       camposComErro.push({ campo: 'codigo', aba: 'dados' });
@@ -4227,7 +4285,7 @@ const ProdutosPage: React.FC = () => {
 
       // Abrir sidebar para edição do produto clonado
       setShowSidebar(true);
-      setActiveTab('dados'); // Abrir na aba de dados gerais
+      setActiveTab('dados'); // Abrir na aba geral
 
       showMessage('success', 'Produto clonado com sucesso! Fotos e configurações foram copiadas.');
 
@@ -4650,6 +4708,11 @@ const ProdutosPage: React.FC = () => {
     // Resetar campos de ordenação do produto
     setProdutoOrdenacaoCardapioHabilitada(false);
     setProdutoOrdenacaoCardapioDigital('');
+
+    // Resetar insumos
+    setProdutoInsumos([]);
+    setShowModalInsumos(false);
+    setEditingInsumo(null);
 
     // Definir uma flag para indicar que o formulário foi resetado
     setFormularioResetado(true);
@@ -6220,7 +6283,7 @@ const ProdutosPage: React.FC = () => {
                         }`}
                         onClick={() => setActiveTab('dados')}
                       >
-                        Dados Gerais
+                        Geral
                       </button>
                       <button
                         className={`px-4 py-2 font-medium text-sm ${
@@ -6281,6 +6344,26 @@ const ProdutosPage: React.FC = () => {
                         onClick={() => setActiveTab('impostos')}
                       >
                         Impostos
+                      </button>
+                      <button
+                        className={`px-4 py-2 font-medium text-sm ${
+                          activeTab === 'insumos'
+                            ? 'text-primary-500 border-b-2 border-primary-500'
+                            : editingProduto
+                              ? 'text-gray-400 hover:text-white'
+                              : 'text-gray-600 cursor-not-allowed'
+                        }`}
+                        onClick={() => {
+                          if (editingProduto) {
+                            // Carregar insumos do produto ao mudar para a aba
+                            loadProdutoInsumos(editingProduto.id);
+                            setActiveTab('insumos');
+                          } else {
+                            showMessage('info', 'Salve o produto primeiro para gerenciar insumos');
+                          }
+                        }}
+                      >
+                        Insumos {!editingProduto && <span title="Salve o produto primeiro">🔒</span>}
                       </button>
                     </div>
 
@@ -7347,6 +7430,30 @@ const ProdutosPage: React.FC = () => {
                           </div>
                         )}
 
+                        {/* Campo Matéria Prima */}
+                        <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-gray-800/30">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="materia-prima"
+                              checked={novoProduto.materia_prima}
+                              onChange={(e) => {
+                                setNovoProduto(prev => ({
+                                  ...prev,
+                                  materia_prima: e.target.checked
+                                }));
+                              }}
+                              className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                            />
+                            <label htmlFor="materia-prima" className="text-sm font-medium text-white cursor-pointer">
+                              Matéria prima
+                            </label>
+                          </div>
+                          <p className="text-sm text-gray-400 mt-2 ml-6">
+                            📦 Marque esta opção se este produto pode ser usado como insumo/matéria-prima para outros produtos
+                          </p>
+                        </div>
+
                         {/* Seção de Opções Adicionais ocultada conforme solicitado */}
 
                         <div className={`flex pt-4 ${isLoading ? '' : 'gap-4'}`}>
@@ -7395,7 +7502,7 @@ const ProdutosPage: React.FC = () => {
                               onClick={() => setActiveTab('dados')}
                               className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
                             >
-                              Voltar para Dados Gerais
+                              Voltar para Geral
                             </button>
                           </div>
                         ) : (
@@ -7538,7 +7645,7 @@ const ProdutosPage: React.FC = () => {
                               onClick={() => setActiveTab('dados')}
                               className="mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
                             >
-                              Voltar para Dados Gerais
+                              Voltar para Geral
                             </button>
                           </div>
                         ) : (
@@ -8652,6 +8759,142 @@ const ProdutosPage: React.FC = () => {
                         </div>
                       </div>
                     )}
+
+                    {activeTab === 'insumos' && (
+                      <div className="space-y-6">
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-white font-medium flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
+                                <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                              </svg>
+                              Insumos do Produto
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={() => setShowModalInsumos(true)}
+                              className="px-3 py-1.5 bg-primary-500 hover:bg-primary-600 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                              </svg>
+                              Adicionar Insumo
+                            </button>
+                          </div>
+
+                          <p className="text-gray-400 text-sm mb-4">
+                            Configure quais produtos serão descontados do estoque quando este produto for vendido.
+                          </p>
+
+                          {produtoInsumos.length === 0 ? (
+                            <div className="text-center py-8">
+                              <div className="text-gray-500 mb-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-3">
+                                  <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                                </svg>
+                              </div>
+                              <p className="text-gray-500 text-sm">
+                                Nenhum insumo configurado para este produto.
+                              </p>
+                              <p className="text-gray-600 text-xs mt-1">
+                                Clique em "Adicionar Insumo" para começar.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {produtoInsumos.map((insumo, index) => (
+                                <div key={index} className="bg-gray-900/50 border border-gray-600 rounded-lg p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-primary-500/20 rounded-lg flex items-center justify-center">
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary-400">
+                                            <path d="M3 3h18v18H3zM9 9h6v6H9z"></path>
+                                          </svg>
+                                        </div>
+                                        <div>
+                                          <h4 className="text-white font-medium text-sm">{insumo.nome}</h4>
+                                          <p className="text-gray-400 text-xs">
+                                            Quantidade: {insumo.quantidade} {insumo.unidade_medida}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingInsumo(insumo);
+                                          setShowModalInsumos(true);
+                                        }}
+                                        className="p-1.5 text-gray-400 hover:text-primary-400 transition-colors"
+                                        title="Editar insumo"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                        </svg>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const novosInsumos = produtoInsumos.filter((_, i) => i !== index);
+                                          setProdutoInsumos(novosInsumos);
+                                          showMessage('success', 'Insumo removido com sucesso');
+                                        }}
+                                        className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
+                                        title="Remover insumo"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <polyline points="3 6 5 6 21 6"></polyline>
+                                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex gap-4 pt-4">
+                          <Button
+                            type="button"
+                            variant="text"
+                            className="flex-1"
+                            onClick={() => setActiveTab('dados')}
+                          >
+                            Voltar
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="primary"
+                            className="flex-1"
+                            onClick={async () => {
+                              // Salvar insumos no produto
+                              if (editingProduto) {
+                                try {
+                                  const { error } = await supabase
+                                    .from('produtos')
+                                    .update({ insumos: produtoInsumos })
+                                    .eq('id', editingProduto.id);
+
+                                  if (error) throw error;
+
+                                  showMessage('success', 'Insumos salvos com sucesso!');
+                                } catch (error: any) {
+                                  showMessage('error', 'Erro ao salvar insumos: ' + error.message);
+                                }
+                              }
+                            }}
+                          >
+                            Salvar Insumos
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -8944,6 +9187,91 @@ const ProdutosPage: React.FC = () => {
                     disabled={!novoProduto.cest}
                   >
                     Confirmar Seleção
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Seleção de Insumos */}
+      <AnimatePresence>
+        {showModalInsumos && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowModalInsumos(false);
+              setEditingInsumo(null);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-gray-900 rounded-xl border border-gray-700 p-6 w-full max-w-4xl max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">
+                    {editingInsumo ? 'Editar Insumo' : 'Adicionar Insumo'}
+                  </h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Selecione um produto para usar como insumo e defina a quantidade
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowModalInsumos(false);
+                    setEditingInsumo(null);
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+
+              <div className="overflow-y-auto max-h-[60vh]">
+                {/* Aqui será implementado o seletor de produtos */}
+                <div className="text-center py-8">
+                  <p className="text-gray-400">Modal de insumos em desenvolvimento...</p>
+                  <p className="text-gray-500 text-sm mt-2">
+                    Aqui será implementado o seletor de produtos e configuração de quantidades
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-700">
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="text"
+                    className="flex-1"
+                    onClick={() => {
+                      setShowModalInsumos(false);
+                      setEditingInsumo(null);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="flex-1"
+                    onClick={() => {
+                      // Implementar lógica de salvar insumo
+                      setShowModalInsumos(false);
+                      setEditingInsumo(null);
+                    }}
+                  >
+                    {editingInsumo ? 'Atualizar' : 'Adicionar'}
                   </Button>
                 </div>
               </div>
