@@ -3004,6 +3004,7 @@ const PDVPage: React.FC = () => {
           endereco_entrega,
           forma_pagamento_nome,
           forma_pagamento_tipo,
+          forma_pagamento_detalhes,
           observacao_pedido,
           observacao_entrega,
           valor_produtos,
@@ -3187,7 +3188,7 @@ const PDVPage: React.FC = () => {
         return;
       }
 
-      // Preparar itens do pedido com validação
+      // Preparar itens do pedido com validação e enriquecimento de dados
       let itens = [];
       try {
         if (pedido.itens_pedido) {
@@ -3206,7 +3207,26 @@ const PDVPage: React.FC = () => {
         itens = [];
       }
 
-      console.log('🖨️ [CARDAPIO-PRINT] Itens processados:', itens);
+      // Enriquecer itens com informações de promoção e desconto
+      const itensEnriquecidos = itens.map(item => {
+        // Verificar se há promoção (preço unitário menor que preço original)
+        const precoUnitario = item.preco_unitario || item.preco || 0;
+        const precoOriginal = item.preco_original || precoUnitario;
+        const temPromocao = precoOriginal > precoUnitario;
+
+        // Verificar desconto por quantidade (baseado nos campos do produto)
+        const temDescontoQuantidade = item.desconto_quantidade || false;
+
+        return {
+          ...item,
+          promocao: temPromocao,
+          desconto_quantidade: temDescontoQuantidade,
+          preco_original: precoOriginal,
+          preco_unitario: precoUnitario
+        };
+      });
+
+      console.log('🖨️ [CARDAPIO-PRINT] Itens processados e enriquecidos:', itensEnriquecidos);
 
       // Preparar dados para impressão
       const dadosImpressao = {
@@ -3233,7 +3253,7 @@ const PDVPage: React.FC = () => {
           nome_cliente: pedido.nome_cliente,
           telefone_cliente: pedido.telefone_cliente
         },
-        itens: itens
+        itens: itensEnriquecidos
       };
 
       // Gerar e imprimir cupom
@@ -9044,7 +9064,13 @@ const PDVPage: React.FC = () => {
 
   // Função principal para finalizar e salvar a venda
   const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_impressao') => {
+    console.log('🔍 [DEBUG] ===== INICIANDO FINALIZAÇÃO DE VENDA =====');
+    console.log('🔍 [DEBUG] Tipo de finalização:', tipoFinalizacao);
+    console.log('🔍 [DEBUG] Estado do carrinho:', carrinho);
+    console.log('🔍 [DEBUG] Quantidade de itens no carrinho:', carrinho.length);
+
     if (carrinho.length === 0) {
+      console.log('🔍 [DEBUG] Carrinho vazio, abortando finalização');
       toast.error('Carrinho vazio! Adicione itens antes de finalizar.');
       return;
     }
@@ -9409,8 +9435,55 @@ const PDVPage: React.FC = () => {
       const itensNaoSalvos = carrinho.filter(item => !item.pdv_item_id);
       const itensJaSalvos = carrinho.filter(item => item.pdv_item_id);
 
-      const itensParaInserir = itensNaoSalvos.map(item => {
-        const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
+      console.log('🔍 [DEBUG] ===== PREPARANDO ITENS PARA INSERÇÃO =====');
+      console.log('🔍 [DEBUG] Itens não salvos:', itensNaoSalvos);
+      console.log('🔍 [DEBUG] Itens já salvos:', itensJaSalvos);
+      console.log('🔍 [DEBUG] Quantidade itens não salvos:', itensNaoSalvos.length);
+      console.log('🔍 [DEBUG] Quantidade itens já salvos:', itensJaSalvos.length);
+
+      console.log('🔍 [DEBUG] ===== INICIANDO MAPEAMENTO DOS ITENS =====');
+      console.log('🔍 [DEBUG] itensNaoSalvos é array:', Array.isArray(itensNaoSalvos));
+      console.log('🔍 [DEBUG] itensNaoSalvos.length:', itensNaoSalvos.length);
+      console.log('🔍 [DEBUG] Vai tentar fazer .map() em:', itensNaoSalvos);
+
+      let itensParaInserir = [];
+
+      if (itensNaoSalvos.length === 0) {
+        console.log('🔍 [DEBUG] Array vazio, não deveria fazer map. Retornando array vazio.');
+        itensParaInserir = [];
+      } else {
+        console.log('🔍 [DEBUG] Array tem itens, fazendo map...');
+        itensParaInserir = itensNaoSalvos.map((item, index) => {
+        console.log(`🔍 [DEBUG] ===== PROCESSANDO ITEM ${index + 1}/${itensNaoSalvos.length} =====`);
+        console.log(`🔍 [DEBUG] Item completo:`, JSON.stringify(item, null, 2));
+        console.log(`🔍 [DEBUG] Tipo do item:`, typeof item);
+        console.log(`🔍 [DEBUG] Item é null:`, item === null);
+        console.log(`🔍 [DEBUG] Item é undefined:`, item === undefined);
+
+        if (item) {
+          console.log(`🔍 [DEBUG] Propriedades do item:`, Object.keys(item));
+          console.log(`🔍 [DEBUG] item.quantidade:`, item.quantidade);
+          console.log(`🔍 [DEBUG] Tipo de item.quantidade:`, typeof item.quantidade);
+          console.log(`🔍 [DEBUG] item.subtotal:`, item.subtotal);
+          console.log(`🔍 [DEBUG] Tipo de item.subtotal:`, typeof item.subtotal);
+          console.log(`🔍 [DEBUG] item.desconto:`, item.desconto);
+        }
+
+        console.log(`🔍 [DEBUG] ===== CALCULANDO PREÇO UNITÁRIO =====`);
+        console.log(`🔍 [DEBUG] Tem desconto:`, !!item.desconto);
+
+        let precoUnitario;
+        if (item.desconto) {
+          console.log(`🔍 [DEBUG] Usando preço com desconto:`, item.desconto.precoComDesconto);
+          precoUnitario = item.desconto.precoComDesconto;
+        } else {
+          console.log(`🔍 [DEBUG] Calculando: item.subtotal / item.quantidade`);
+          console.log(`🔍 [DEBUG] item.subtotal:`, item.subtotal);
+          console.log(`🔍 [DEBUG] item.quantidade:`, item.quantidade);
+          console.log(`🔍 [DEBUG] parseFloat(item.quantidade):`, parseFloat(item.quantidade));
+          precoUnitario = item.subtotal / parseFloat(item.quantidade);
+          console.log(`🔍 [DEBUG] Resultado precoUnitario:`, precoUnitario);
+        }
 
         // ✅ CORREÇÃO: Para venda sem produto, produto_id deve ser null
         const produtoId = item.vendaSemProduto ? null : item.produto.id;
@@ -9487,9 +9560,13 @@ const PDVPage: React.FC = () => {
           ...dadosFiscais
         };
       });
+      } // Fechar condição do else
 
       // ✅ CORREÇÃO: Verificar itens existentes e fazer UPDATE/INSERT conforme necessário
       setEtapaProcessamento('Salvando itens da venda...');
+      console.log('🔍 [DEBUG] ===== SALVANDO ITENS DA VENDA =====');
+      console.log('🔍 [DEBUG] itensParaInserir:', itensParaInserir);
+      console.log('🔍 [DEBUG] vendaEmAndamento:', vendaEmAndamento);
 
       if (vendaEmAndamento) {
         // ✅ VENDA EM ANDAMENTO: Sempre verificar itens existentes para UPDATE/INSERT
@@ -9513,73 +9590,53 @@ const PDVPage: React.FC = () => {
         // Itens encontrados para processamento
 
         // ✅ CORREÇÃO: Processar cada item do carrinho individualmente
-        for (const [index, item] of carrinho.entries()) {
-          const itemData = itensParaInserir[index];
+        console.log('🔍 [DEBUG] ===== PROCESSANDO ITENS DO CARRINHO =====');
+        console.log('🔍 [DEBUG] carrinho.length:', carrinho.length);
+        console.log('🔍 [DEBUG] itensParaInserir.length:', itensParaInserir.length);
 
-          // ✅ CORREÇÃO: Verificar se item já existe no banco de dados
-          let itemExistente = null;
+        // ✅ CORREÇÃO CIRÚRGICA: Processar itens já salvos separadamente
+        console.log('🔍 [DEBUG] ===== PROCESSANDO ITENS JÁ SALVOS (UPDATE) =====');
+        for (const item of itensJaSalvos) {
+          console.log(`🔍 [DEBUG] Processando item já salvo:`, item);
 
-          if (item.pdv_item_id) {
-            // Item tem pdv_item_id - verificar se ainda existe no banco
-            itemExistente = itensExistentes?.find(existente => existente.id === item.pdv_item_id);
-            // Item verificado no banco
-          } else {
-            // Item sem pdv_item_id - verificar se já existe por código/produto_id
-            if (item.vendaSemProduto) {
-              // Para venda sem produto, verificar por código 999999
-              itemExistente = itensExistentes?.find(existente => existente.codigo_produto === '999999');
-            } else {
-              // Para produto normal, verificar por produto_id
-              itemExistente = itensExistentes?.find(existente => existente.produto_id === item.produto.id);
-            }
-            // Item verificado por produto
+          if (!item.pdv_item_id) {
+            console.error(`❌ [ERRO CRÍTICO] Item marcado como já salvo mas sem pdv_item_id:`, item);
+            throw new Error(`ERRO CRÍTICO: Item inconsistente - marcado como salvo mas sem ID`);
           }
 
-          if (itemExistente) {
-            // ✅ ITEM EXISTE: Fazer UPDATE apenas se veio de venda recuperada
-            // Atualizando item existente
-
-            const { error: updateError } = await supabase
-              .from('pdv_itens')
-              .update({
-                quantidade: itemData.quantidade,
-                valor_unitario: itemData.valor_unitario,
-                valor_total_item: itemData.valor_total_item,
-                tem_desconto: itemData.tem_desconto,
-                valor_desconto_aplicado: itemData.valor_desconto_aplicado,
-                vendedor_id: itemData.vendedor_id,
-                vendedor_nome: itemData.vendedor_nome,
-                observacao_item: itemData.observacao_item,
-                tabela_preco_id: itemData.tabela_preco_id,
-                tabela_preco_nome: itemData.tabela_preco_nome,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', itemExistente.id);
-
-            if (updateError) {
-              console.error(`❌ Erro ao atualizar item ${item.produto.nome}:`, updateError);
-              throw new Error(`Erro ao atualizar item: ${updateError.message}`);
-            }
-
-            // Item atualizado com sucesso
-          } else {
-            // ✅ ITEM NÃO EXISTE OU É NOVO: Sempre fazer INSERT
-            // Inserindo novo item
-
-            const { error: insertError } = await supabase
-              .from('pdv_itens')
-              .insert(itemData);
-
-            if (insertError) {
-              console.error(`❌ Erro ao inserir item ${item.produto.nome}:`, insertError);
-              throw new Error(`Erro ao inserir item: ${insertError.message}`);
-            }
-
-            // Item inserido com sucesso
+          const itemExistente = itensExistentes?.find(existente => existente.id === item.pdv_item_id);
+          if (!itemExistente) {
+            console.error(`❌ [ERRO CRÍTICO] Item com pdv_item_id ${item.pdv_item_id} não encontrado no banco`);
+            throw new Error(`ERRO CRÍTICO: Item com ID ${item.pdv_item_id} não existe no banco`);
           }
+
+          // ✅ FAZER UPDATE DO ITEM EXISTENTE (SEM DADOS FISCAIS - APENAS CAMPOS BÁSICOS)
+          const { error: updateError } = await supabase
+            .from('pdv_itens')
+            .update({
+              quantidade: parseFloat(item.quantidade),
+              valor_unitario: parseFloat(item.preco),
+              valor_total_item: parseFloat(item.subtotal),
+              tem_desconto: item.temDesconto || false,
+              valor_desconto_aplicado: parseFloat(item.valorDescontoAplicado || 0),
+              vendedor_id: item.vendedor?.id || null,
+              vendedor_nome: item.vendedor?.nome || null,
+              observacao_item: item.observacao || null,
+              tabela_preco_id: item.tabela_preco_id || null,
+              tabela_preco_nome: item.tabela_preco_nome || null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.pdv_item_id);
+
+          if (updateError) {
+            console.error(`❌ Erro ao atualizar item ${item.produto?.nome}:`, updateError);
+            throw new Error(`Erro ao atualizar item: ${updateError.message}`);
+          }
+
+          console.log(`✅ Item ${item.produto?.nome} atualizado com sucesso`);
         }
 
-        // Todos os itens processados
+        console.log('✅ Todos os itens já salvos processados com sucesso');
       } else {
         // ✅ VENDA NOVA: Inserir apenas itens que ainda não foram salvos
         if (itensParaInserir.length > 0) {
@@ -9712,20 +9769,37 @@ const PDVPage: React.FC = () => {
       // Atualizar estoque se configurado para PDV
       if (tipoControle === 'pdv') {
         setEtapaProcessamento('Atualizando estoque...');
-        // Iniciando baixa de estoque
+        console.log('🔍 [DEBUG] Iniciando baixa de estoque. Carrinho:', carrinho);
+        console.log('🔍 [DEBUG] Total de itens no carrinho:', carrinho.length);
 
-        for (const item of carrinho) {
+        for (let i = 0; i < carrinho.length; i++) {
+          const item = carrinho[i];
+          console.log(`🔍 [DEBUG] Processando item ${i + 1}/${carrinho.length}:`, item);
           // ✅ EXCEÇÃO: Pular controle de estoque para venda sem produto (código 999999)
           if (item.vendaSemProduto || item.produto.codigo === '999999') {
             // Pulando controle de estoque para venda sem produto
             continue;
           }
 
+          // ✅ VALIDAÇÕES DE SEGURANÇA PARA BAIXA DE ESTOQUE
+          console.log(`🔍 [DEBUG] Validando item ${i + 1}:`);
+          console.log(`🔍 [DEBUG] - item existe:`, !!item);
+          console.log(`🔍 [DEBUG] - item.produto existe:`, !!item?.produto);
+          console.log(`🔍 [DEBUG] - item.produto.id existe:`, !!item?.produto?.id);
+          console.log(`🔍 [DEBUG] - item.quantidade existe:`, !!item?.quantidade);
+          console.log(`🔍 [DEBUG] - item.quantidade valor:`, item?.quantidade);
+
+          if (!item || !item.produto || !item.produto.id || !item.quantidade) {
+            console.warn(`⚠️ [DEBUG] Item ${i + 1} inválido no carrinho, pulando baixa de estoque:`, item);
+            continue;
+          }
+
           // Baixando estoque do produto
+          console.log(`📦 [DEBUG] Baixando estoque item ${i + 1}: ${item.produto.nome} - Quantidade: ${item.quantidade}`);
 
           const { error: estoqueError } = await supabase.rpc('atualizar_estoque_produto', {
             p_produto_id: item.produto.id,
-            p_quantidade: -item.quantidade, // Quantidade negativa para baixa
+            p_quantidade: -parseFloat(item.quantidade), // Quantidade negativa para baixa
             p_tipo_operacao: 'venda_pdv',
             p_observacao: `Venda PDV #${numeroVenda}`
           });
@@ -9742,6 +9816,66 @@ const PDVPage: React.FC = () => {
           }
         }
         // Baixa de estoque concluída
+
+        // ✅ NOVO: Baixa automática de matérias-primas/insumos
+        setEtapaProcessamento('Processando baixa de insumos...');
+        console.log('🔍 [DEBUG] Iniciando processamento de insumos');
+
+        for (let j = 0; j < carrinho.length; j++) {
+          const item = carrinho[j];
+          console.log(`🔍 [DEBUG] Processando insumos do item ${j + 1}/${carrinho.length}:`, item);
+          // ✅ EXCEÇÃO: Pular controle de insumos para venda sem produto (código 999999)
+          if (item.vendaSemProduto || item.produto.codigo === '999999') {
+            continue;
+          }
+
+          // ✅ VALIDAÇÕES DE SEGURANÇA
+          if (!item || !item.produto || !item.quantidade) {
+            console.warn('⚠️ Item inválido no carrinho, pulando processamento de insumos:', item);
+            continue;
+          }
+
+          // Verificar se o produto possui insumos configurados
+          if (item.produto.insumos && Array.isArray(item.produto.insumos) && item.produto.insumos.length > 0) {
+            console.log(`🔍 Produto ${item.produto.nome} possui ${item.produto.insumos.length} insumo(s) configurado(s)`);
+
+            // Processar cada insumo do produto
+            for (const insumo of item.produto.insumos) {
+              // ✅ VALIDAÇÕES DE SEGURANÇA PARA INSUMO
+              if (!insumo || !insumo.produto_id || !insumo.quantidade || !insumo.nome) {
+                console.warn('⚠️ Insumo inválido, pulando:', insumo);
+                continue;
+              }
+
+              const quantidadeInsumoTotal = parseFloat(insumo.quantidade) * parseFloat(item.quantidade);
+
+              // ✅ VALIDAR SE A QUANTIDADE CALCULADA É VÁLIDA
+              if (isNaN(quantidadeInsumoTotal) || quantidadeInsumoTotal <= 0) {
+                console.warn(`⚠️ Quantidade inválida calculada para insumo ${insumo.nome}: ${quantidadeInsumoTotal}`);
+                continue;
+              }
+
+              console.log(`📦 Baixando insumo: ${insumo.nome} - Quantidade: ${quantidadeInsumoTotal} ${insumo.unidade_medida || ''}`);
+
+              const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
+                p_produto_id: insumo.produto_id,
+                p_quantidade: -quantidadeInsumoTotal, // Quantidade negativa para baixa
+                p_tipo_operacao: 'consumo_insumo',
+                p_observacao: `Consumo de insumo - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome}`
+              });
+
+              if (insumoError) {
+                console.error('❌ FRONTEND: Erro ao baixar insumo:', insumoError);
+                console.error(`❌ Insumo: ${insumo.nome} (${insumo.produto_id})`);
+                // Não interromper a venda por erro de insumo, apenas logar
+                console.warn(`⚠️ Continuando venda apesar do erro no insumo ${insumo.nome}`);
+              } else {
+                console.log(`✅ Insumo baixado com sucesso: ${insumo.nome} - ${quantidadeInsumoTotal} ${insumo.unidade_medida || ''}`);
+              }
+            }
+          }
+        }
+        console.log('✅ Processamento de insumos concluído');
 
         // Aguardar um pouco para garantir que todas as movimentações foram processadas
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -12087,26 +12221,61 @@ const PDVPage: React.FC = () => {
             <div class="linha"></div>
           ` : ''}
 
-          ${dadosImpressao.itens && dadosImpressao.itens.length > 0 ? dadosImpressao.itens.map(item => `
+          ${dadosImpressao.itens && dadosImpressao.itens.length > 0 ? dadosImpressao.itens.map(item => {
+            // Verificar se há promoção ou desconto
+            const temPromocao = item.promocao || (item.preco_original && item.preco_original > (item.preco_unitario || item.preco || 0));
+            const temDescontoQuantidade = item.desconto_quantidade;
+            const precoUnitario = item.preco_unitario || item.preco || 0;
+            const precoOriginal = item.preco_original || precoUnitario;
+            const quantidade = item.quantidade || 1;
+            const precoTotal = item.preco_total || (quantidade * precoUnitario);
+
+            return `
             <div class="item">
               <div class="bold">${item.produto_nome || item.nome || 'Item sem nome'}</div>
-              <div class="item-linha">
-                <span>${item.quantidade || 1} x ${formatCurrency(item.preco_unitario || item.preco || 0)}</span>
-                <span class="valor-monetario">${formatCurrency(item.preco_total || ((item.quantidade || 1) * (item.preco_unitario || item.preco || 0)))}</span>
-              </div>
+
+              ${(() => {
+                // Mostrar preços com indicadores de promoção/desconto
+                if (temPromocao && precoOriginal > precoUnitario) {
+                  return `
+                    <div class="item-linha">
+                      <span>
+                        ${quantidade} x
+                        <span style="text-decoration: line-through; color: #666; font-size: 10px;">${formatCurrency(precoOriginal)}</span>
+                        <span style="color: #22c55e; font-weight: bold;">${formatCurrency(precoUnitario)}</span>
+                        ${temPromocao ? '<span style="color: #22c55e; font-size: 9px;"> 🏷️PROMO</span>' : ''}
+                        ${temDescontoQuantidade ? '<span style="color: #3b82f6; font-size: 9px;"> 📦QTD</span>' : ''}
+                      </span>
+                      <span class="valor-monetario">${formatCurrency(precoTotal)}</span>
+                    </div>
+                  `;
+                } else {
+                  return `
+                    <div class="item-linha">
+                      <span>${quantidade} x ${formatCurrency(precoUnitario)}</span>
+                      <span class="valor-monetario">${formatCurrency(precoTotal)}</span>
+                    </div>
+                  `;
+                }
+              })()}
+
               ${item.observacao ? `<div style="font-size: 10px; color: #666; margin-top: 1px;">Obs: ${item.observacao}</div>` : ''}
+
               ${item.sabores && item.sabores.length > 0 ? `
                 <div style="font-size: 10px; color: #666; margin-top: 1px;">
                   Sabores: ${item.sabores.map(sabor => sabor.produto?.nome || sabor.nome || 'Sabor').join(', ')}
                 </div>
               ` : ''}
+
               ${item.adicionais && item.adicionais.length > 0 ? `
-                <div style="font-size: 10px; color: #666; margin-top: 1px;">
-                  Adicionais: ${item.adicionais.map(adicional => `${adicional.quantidade || 1}x ${adicional.nome}`).join(', ')}
-                </div>
+                ${item.adicionais.map(adicional => `
+                  <div style="margin-left: 15px; font-size: 10px; color: #666; margin-top: 1px; font-weight: bold;">
+                    + ${adicional.quantidade || 1}x ${adicional.nome} - ${formatCurrency((adicional.preco || 0) * (adicional.quantidade || 1))}
+                  </div>
+                `).join('')}
               ` : ''}
-            </div>
-          `).join('') : '<div class="item"><div class="bold">Nenhum item encontrado</div></div>'}
+            </div>`;
+          }).join('') : '<div class="item"><div class="bold">Nenhum item encontrado</div></div>'}
 
           <div class="linha"></div>
 
@@ -22214,6 +22383,44 @@ const PDVPage: React.FC = () => {
                               <p className="text-white">{pedidoSelecionado.forma_pagamento_nome}</p>
                               {pedidoSelecionado.forma_pagamento_tipo && (
                                 <p className="text-gray-400 text-sm">Tipo: {pedidoSelecionado.forma_pagamento_tipo}</p>
+                              )}
+
+                              {/* Detalhes específicos da forma de pagamento */}
+                              {pedidoSelecionado.forma_pagamento_detalhes && (
+                                <div className="mt-2 space-y-1">
+                                  {/* PIX */}
+                                  {pedidoSelecionado.forma_pagamento_tipo === 'pix' && pedidoSelecionado.forma_pagamento_detalhes.chave_pix && (
+                                    <p className="text-blue-400 text-sm">
+                                      {pedidoSelecionado.forma_pagamento_detalhes.tipo_chave_pix}: {pedidoSelecionado.forma_pagamento_detalhes.chave_pix}
+                                    </p>
+                                  )}
+
+                                  {/* Dinheiro com troco */}
+                                  {pedidoSelecionado.forma_pagamento_tipo === 'dinheiro' && (
+                                    <div className="text-sm">
+                                      {pedidoSelecionado.forma_pagamento_detalhes.precisa_troco ? (
+                                        <>
+                                          <p className="text-green-400">
+                                            Valor informado: {formatarPreco(pedidoSelecionado.forma_pagamento_detalhes.valor_dinheiro || 0)}
+                                          </p>
+                                          <p className="text-yellow-400">
+                                            Troco: {formatarPreco(pedidoSelecionado.forma_pagamento_detalhes.troco || 0)}
+                                          </p>
+                                        </>
+                                      ) : (
+                                        <p className="text-gray-400">Pagamento exato (sem troco)</p>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Cartão com parcelas */}
+                                  {(pedidoSelecionado.forma_pagamento_tipo === 'cartao_credito' || pedidoSelecionado.forma_pagamento_tipo === 'cartao_debito') &&
+                                   pedidoSelecionado.forma_pagamento_detalhes.max_parcelas > 1 && (
+                                    <p className="text-purple-400 text-sm">
+                                      Até {pedidoSelecionado.forma_pagamento_detalhes.max_parcelas}x
+                                    </p>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}

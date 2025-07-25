@@ -3888,6 +3888,14 @@ const CardapioPublicoPage: React.FC = () => {
     }, 0);
   };
 
+  // ✅ FUNÇÃO PARA OBTER TOTAL FINAL (incluindo taxa de entrega e desconto de cupom)
+  const obterTotalFinal = () => {
+    const totalProdutos = obterTotalCarrinho();
+    const taxaEntrega = (tipoEntregaSelecionado === 'entrega' && calculoTaxa?.valor) ? calculoTaxa.valor : 0;
+    const descontoCupom = calcularDescontoCupom();
+    return totalProdutos + taxaEntrega - descontoCupom;
+  };
+
   const obterQuantidadeTotalItens = () => {
     // Contar itens separados no carrinho
     return Object.values(itensCarrinhoSeparados).reduce((total, item) => total + item.quantidade, 0);
@@ -6250,10 +6258,10 @@ const CardapioPublicoPage: React.FC = () => {
         distancia_km: tipoEntregaSelecionado === 'entrega' ? (calculoTaxa?.distancia_km || null) : null,
         tempo_estimado_minutos: tipoEntregaSelecionado === 'entrega' ? (calculoTaxa?.tempo_estimado || null) : null,
 
-        // ✅ NOVA LÓGICA: Forma de pagamento - só salvar se for entrega
-        forma_pagamento_nome: tipoEntregaSelecionado === 'entrega' ? (formaPagamentoSelecionada?.nome || null) : null,
-        forma_pagamento_tipo: tipoEntregaSelecionado === 'entrega' ? (formaPagamentoSelecionada?.tipo || null) : null,
-        forma_pagamento_detalhes: (tipoEntregaSelecionado === 'entrega' && formaPagamentoSelecionada) ? {
+        // ✅ NOVA LÓGICA: Forma de pagamento - salvar sempre que selecionada
+        forma_pagamento_nome: formaPagamentoSelecionada?.nome || null,
+        forma_pagamento_tipo: formaPagamentoSelecionada?.tipo || null,
+        forma_pagamento_detalhes: formaPagamentoSelecionada ? {
           chave_pix: formaPagamentoSelecionada.chave_pix || null,
           tipo_chave_pix: formaPagamentoSelecionada.tipo_chave_pix || null,
           precisa_troco: formaPagamentoSelecionada.precisa_troco || null,
@@ -9842,7 +9850,11 @@ const CardapioPublicoPage: React.FC = () => {
 
       {/* Modal de Observação */}
       {modalObservacaoAberto && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            fecharModalObservacao();
+          }
+        }}>
           <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
             config.modo_escuro ? 'bg-gray-800' : 'bg-white'
           }`}>
