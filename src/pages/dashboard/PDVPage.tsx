@@ -56,6 +56,13 @@ import SeletorSaboresModal from '../../components/pdv/SeletorSaboresModal';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import { salvarAdicionaisItem } from '../../utils/pdvAdicionaisUtils'; // ✅ NOVO: Import da função utilitária
 
+// ✅ NOVO: Declaração de tipo para timeout de validação
+declare global {
+  interface Window {
+    validationTimeout: NodeJS.Timeout;
+  }
+}
+
 interface Produto {
   id: string;
   nome: string;
@@ -417,6 +424,11 @@ const PDVPage: React.FC = () => {
   const [editandoNumeroNfce, setEditandoNumeroNfce] = useState(false);
   const [numeroNfceEditavel, setNumeroNfceEditavel] = useState<string>('');
   const [serieNfce, setSerieNfce] = useState<number>(1); // ✅ NOVO: Estado para série da NFC-e
+
+  // ✅ NOVO: Estados para validação em tempo real do número
+  const [validandoNumero, setValidandoNumero] = useState(false);
+  const [numeroValido, setNumeroValido] = useState<boolean | null>(null);
+  const [mensagemValidacao, setMensagemValidacao] = useState<string>('');
 
   // ✅ NOVO: Estados para emissão de NFC-e no modal de itens
   const [cpfCnpjModalItens, setCpfCnpjModalItens] = useState('');
@@ -4241,6 +4253,76 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para validar número em tempo real
+  const validarNumeroNfceTempoReal = async (numero: string) => {
+    if (!numero || numero.trim() === '') {
+      setNumeroValido(null);
+      setMensagemValidacao('');
+      return;
+    }
+
+    const numeroInt = parseInt(numero);
+    if (isNaN(numeroInt) || numeroInt <= 0) {
+      setNumeroValido(false);
+      setMensagemValidacao('Número deve ser maior que zero');
+      return;
+    }
+
+    try {
+      setValidandoNumero(true);
+
+      // Obter dados do usuário para validação
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        setNumeroValido(false);
+        setMensagemValidacao('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id, serie_nfce')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        setNumeroValido(false);
+        setMensagemValidacao('Empresa não encontrada');
+        return;
+      }
+
+      // ✅ VALIDAÇÃO COMPLETA: Verificar se número já existe
+      const { data: numeroExistente, error: validationError } = await supabase
+        .from('pdv')
+        .select('id, numero_documento, status_fiscal, serie_documento')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('modelo_documento', 65) // NFC-e
+        .eq('numero_documento', numeroInt)
+        .neq('id', vendaParaEditarNfce?.id || '') // Excluir a própria venda
+        .maybeSingle();
+
+      if (validationError) {
+        setNumeroValido(false);
+        setMensagemValidacao(`Erro na validação: ${validationError.message}`);
+        return;
+      }
+
+      if (numeroExistente) {
+        setNumeroValido(false);
+        setMensagemValidacao(`Número ${numeroInt} já existe! Série ${numeroExistente.serie_documento}, Status: ${numeroExistente.status_fiscal}`);
+      } else {
+        setNumeroValido(true);
+        setMensagemValidacao(`Número ${numeroInt} disponível ✓`);
+      }
+
+    } catch (error: any) {
+      setNumeroValido(false);
+      setMensagemValidacao(`Erro: ${error.message}`);
+    } finally {
+      setValidandoNumero(false);
+    }
+  };
+
   // ✅ NOVA: Função para reprocessar NFC-e
   const reprocessarNfce = async () => {
     if (!vendaParaEditarNfce) return;
@@ -4291,20 +4373,61 @@ const PDVPage: React.FC = () => {
         }
       }
 
-      // ✅ NOVO: Salvar número da NFC-e se foi editado
-      if (vendaParaEditarNfce.numero_documento) {
-        const { error: updateNumeroError } = await supabase
-          .from('pdv')
-          .update({
-            numero_documento: vendaParaEditarNfce.numero_documento
-          })
-          .eq('id', vendaParaEditarNfce.id);
+      // ✅ CORREÇÃO CRÍTICA: Reavaliar próximo número disponível antes de reprocessar
+      console.log('🔍 REPROCESSAMENTO: Reavaliando próximo número disponível...');
 
-        if (updateNumeroError) {
-          throw new Error('Erro ao salvar número da NFC-e editado');
+      let numeroParaUsar: number;
+
+      if (vendaParaEditarNfce.numero_documento && editandoNumeroNfce) {
+        // Se o usuário editou o número manualmente, validar se está disponível
+        const numeroEditado = parseInt(vendaParaEditarNfce.numero_documento.toString());
+        console.log('🔢 REPROCESSAMENTO: Usuário editou número para:', numeroEditado);
+
+        // ✅ VALIDAÇÃO COMPLETA: Verificar se número já existe (mesma empresa, mesmo modelo, mesma série)
+        const { data: numeroExistente, error: validationError } = await supabase
+          .from('pdv')
+          .select('id, numero_documento, status_fiscal, serie_documento')
+          .eq('empresa_id', usuarioData.empresa_id)
+          .eq('modelo_documento', 65) // NFC-e
+          .eq('numero_documento', numeroEditado)
+          .neq('id', vendaParaEditarNfce.id) // Excluir a própria venda
+          .maybeSingle(); // Usar maybeSingle para não dar erro se não encontrar
+
+        if (validationError) {
+          throw new Error(`Erro ao validar numeração: ${validationError.message}`);
         }
+
+        if (numeroExistente) {
+          throw new Error(`❌ NÚMERO ${numeroEditado} JÁ EXISTE! Série ${numeroExistente.serie_documento}, Status: ${numeroExistente.status_fiscal}. Escolha outro número.`);
+        }
+
+        numeroParaUsar = numeroEditado;
+        console.log('✅ REPROCESSAMENTO: Número editado validado:', numeroParaUsar);
+      } else {
+        // Gerar próximo número disponível automaticamente
+        numeroParaUsar = await gerarProximoNumeroNFCe(usuarioData.empresa_id);
+        console.log('🔢 REPROCESSAMENTO: Próximo número gerado automaticamente:', numeroParaUsar);
       }
 
+      // Salvar o número reavaliado no banco ANTES de enviar para SEFAZ
+      const { error: updateNumeroError } = await supabase
+        .from('pdv')
+        .update({
+          numero_documento: numeroParaUsar
+        })
+        .eq('id', vendaParaEditarNfce.id);
+
+      if (updateNumeroError) {
+        throw new Error('Erro ao salvar número da NFC-e reavaliado');
+      }
+
+      // Atualizar o estado local para refletir o número correto
+      setVendaParaEditarNfce(prev => ({
+        ...prev,
+        numero_documento: numeroParaUsar
+      }));
+
+      console.log('✅ REPROCESSAMENTO: Número atualizado no banco:', numeroParaUsar);
       toast.success('Modificações salvas! Iniciando retransmissão...');
 
       // Preparar dados atualizados dos itens
@@ -4387,7 +4510,7 @@ const PDVPage: React.FC = () => {
         },
         ambiente: nfeConfigData.ambiente,
         identificacao: {
-          numero: vendaParaEditarNfce.numero_documento || await gerarProximoNumeroNFCe(usuarioData.empresa_id), // ✅ Usa número editado
+          numero: numeroParaUsar, // ✅ CORREÇÃO: Usar número validado e atualizado
           serie: serieUsuario, // ✅ NOVO: Série individual do usuário logado
           codigo_numerico: Math.floor(Math.random() * 99999999).toString().padStart(8, '0'),
           natureza_operacao: 'Venda de mercadoria'
@@ -18846,17 +18969,67 @@ const PDVPage: React.FC = () => {
                           <label className="block text-blue-300 text-xs font-medium mb-1">Número:</label>
                           <div className="flex items-center gap-2">
                             {editandoNumeroNfce ? (
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  value={numeroNfceEditavel}
-                                  onChange={(e) => setNumeroNfceEditavel(e.target.value)}
-                                  className="w-24 bg-gray-700 border border-gray-600 rounded px-3 py-1 text-white text-sm"
-                                  placeholder="Número"
-                                  min="1"
-                                />
-                                <button
+                              <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    value={numeroNfceEditavel}
+                                    onChange={(e) => {
+                                      const valor = e.target.value;
+                                      setNumeroNfceEditavel(valor);
+
+                                      // ✅ VALIDAÇÃO EM TEMPO REAL
+                                      if (valor && valor.trim() !== '') {
+                                        // Debounce para evitar muitas consultas
+                                        clearTimeout(window.validationTimeout);
+                                        window.validationTimeout = setTimeout(() => {
+                                          validarNumeroNfceTempoReal(valor);
+                                        }, 500);
+                                      } else {
+                                        setNumeroValido(null);
+                                        setMensagemValidacao('');
+                                      }
+                                    }}
+                                    className={`w-24 bg-gray-700 border rounded px-3 py-1 text-white text-sm ${
+                                      numeroValido === true ? 'border-green-500' :
+                                      numeroValido === false ? 'border-red-500' :
+                                      'border-gray-600'
+                                    }`}
+                                    placeholder="Número"
+                                    min="1"
+                                  />
+                                  {validandoNumero && (
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                                  )}
+                                  {numeroValido === true && (
+                                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                  {numeroValido === false && (
+                                    <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  )}
+                                </div>
+                                {/* Mensagem de validação */}
+                                {mensagemValidacao && (
+                                  <div className={`text-xs px-2 py-1 rounded ${
+                                    numeroValido === true ? 'text-green-400 bg-green-500/10' :
+                                    'text-red-400 bg-red-500/10'
+                                  }`}>
+                                    {mensagemValidacao}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2">
+                                  <button
                                   onClick={() => {
+                                    // ✅ VALIDAÇÃO: Só permitir salvar se número for válido
+                                    if (numeroValido !== true) {
+                                      toast.error('Número inválido ou já em uso!');
+                                      return;
+                                    }
+
                                     const novoNumero = parseInt(numeroNfceEditavel) || vendaParaEditarNfce.numero_documento;
 
                                     // Salvar o número editado no estado do modal
@@ -18872,13 +19045,21 @@ const PDVPage: React.FC = () => {
                                         : venda
                                     ));
 
+                                    // Limpar estados de validação
                                     setEditandoNumeroNfce(false);
+                                    setNumeroValido(null);
+                                    setMensagemValidacao('');
 
                                     // Mostrar feedback visual
                                     toast.success(`Número da NFC-e alterado para #${novoNumero}`);
                                   }}
-                                  className="text-green-400 hover:text-green-300 p-1"
-                                  title="Salvar"
+                                  disabled={numeroValido !== true}
+                                  className={`p-1 ${
+                                    numeroValido === true
+                                      ? 'text-green-400 hover:text-green-300'
+                                      : 'text-gray-500 cursor-not-allowed'
+                                  }`}
+                                  title={numeroValido === true ? "Salvar" : "Número inválido"}
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -18888,12 +19069,17 @@ const PDVPage: React.FC = () => {
                                   onClick={() => {
                                     setEditandoNumeroNfce(false);
                                     setNumeroNfceEditavel(vendaParaEditarNfce.numero_documento?.toString() || '');
+                                    // ✅ LIMPAR estados de validação
+                                    setNumeroValido(null);
+                                    setMensagemValidacao('');
+                                    setValidandoNumero(false);
                                   }}
                                   className="text-red-400 hover:text-red-300 p-1"
                                   title="Cancelar"
                                 >
                                   <X size={16} />
                                 </button>
+                                </div>
                               </div>
                             ) : (
                               <div className="flex items-center gap-2">
@@ -18904,6 +19090,10 @@ const PDVPage: React.FC = () => {
                                   onClick={() => {
                                     setEditandoNumeroNfce(true);
                                     setNumeroNfceEditavel(vendaParaEditarNfce.numero_documento?.toString() || '');
+                                    // ✅ LIMPAR estados de validação ao iniciar edição
+                                    setNumeroValido(null);
+                                    setMensagemValidacao('');
+                                    setValidandoNumero(false);
                                   }}
                                   className="text-gray-400 hover:text-white p-1"
                                   title="Editar número"
