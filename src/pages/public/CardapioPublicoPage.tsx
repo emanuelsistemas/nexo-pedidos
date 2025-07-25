@@ -10842,6 +10842,35 @@ const CardapioPublicoPage: React.FC = () => {
                 )}
               </div>
 
+              {/* Seção Informativa para Retirada - ✅ NOVA LÓGICA: só aparece para retirada */}
+              {tipoEntregaSelecionado === 'retirada' && (
+                <div className={`mt-4 p-4 rounded-lg border ${
+                  config.modo_escuro
+                    ? 'bg-yellow-900/30 border-yellow-600'
+                    : 'bg-yellow-50 border-yellow-200'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`text-2xl ${
+                      config.modo_escuro ? 'text-yellow-400' : 'text-yellow-600'
+                    }`}>
+                      💳
+                    </div>
+                    <div>
+                      <h4 className={`font-semibold ${
+                        config.modo_escuro ? 'text-yellow-400' : 'text-yellow-600'
+                      }`}>
+                        Pagamento no Estabelecimento
+                      </h4>
+                      <p className={`text-sm ${
+                        config.modo_escuro ? 'text-yellow-300' : 'text-yellow-700'
+                      }`}>
+                        O pagamento será realizado diretamente no estabelecimento na hora da retirada
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Seção Forma de Pagamento - ✅ NOVA LÓGICA: só aparece para entrega */}
               {tipoEntregaSelecionado === 'entrega' && (
                 <div className={`mt-4 p-4 rounded-lg border ${
