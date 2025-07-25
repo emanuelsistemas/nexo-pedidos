@@ -6227,6 +6227,7 @@ const CardapioPublicoPage: React.FC = () => {
         cpf_cnpj_cliente: dadosCliente.cpfCnpj || null,
 
         // Dados de entrega
+        tipo_entrega: tipoEntregaSelecionado || 'entrega',
         tem_entrega: !!calculoTaxa,
         cep_entrega: cepCliente || null,
         endereco_entrega: enderecoEncontrado?.logradouro || null,
@@ -10697,18 +10698,29 @@ const CardapioPublicoPage: React.FC = () => {
                   }`}>
                     {tipoEntregaSelecionado === 'retirada' ? '🏪 Tipo de Entrega' : '🏠 Tipo de Endereço'}
                   </h4>
-                  {tipoEntregaSelecionado === 'retirada' && config.retirada_balcao_cardapio && (
+                  {config.retirada_balcao_cardapio && (
                     <button
                       onClick={() => {
-                        setTipoEntregaSelecionado('entrega');
-                        // Se tem taxa de entrega configurada, verificar área
-                        if (taxaEntregaConfig?.habilitado) {
-                          const areaJaValidada = empresaId && localStorage.getItem(`area_validada_${empresaId}`) === 'true';
-                          if (areaJaValidada) {
-                            validarEnderecoSalvoEProsseguir();
-                          } else {
-                            setModalAreaEntregaAberto(true);
+                        if (tipoEntregaSelecionado === 'retirada') {
+                          // Mudando de retirada para entrega
+                          setTipoEntregaSelecionado('entrega');
+                          // Se tem taxa de entrega configurada, verificar área
+                          if (taxaEntregaConfig?.habilitado) {
+                            const areaJaValidada = empresaId && localStorage.getItem(`area_validada_${empresaId}`) === 'true';
+                            if (areaJaValidada) {
+                              validarEnderecoSalvoEProsseguir();
+                            } else {
+                              setModalAreaEntregaAberto(true);
+                            }
                           }
+                        } else {
+                          // Mudando de entrega para retirada
+                          setTipoEntregaSelecionado('retirada');
+                          // Limpar dados de área de entrega
+                          setAreaValidada(false);
+                          setCalculoTaxa(null);
+                          setEnderecoEncontrado(null);
+                          setCepCliente('');
                         }
                       }}
                       className={`text-sm px-3 py-1 rounded-lg transition-colors ${
@@ -10717,7 +10729,7 @@ const CardapioPublicoPage: React.FC = () => {
                           : 'text-blue-600 hover:bg-blue-50'
                       }`}
                     >
-                      Alterar
+                      {tipoEntregaSelecionado === 'retirada' ? 'Alterar para entrega' : 'Alterar para retirada no balcão'}
                     </button>
                   )}
                 </div>
