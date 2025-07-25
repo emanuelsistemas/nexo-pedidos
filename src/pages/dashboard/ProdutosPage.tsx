@@ -3738,6 +3738,10 @@ const ProdutosPage: React.FC = () => {
           promocao_data_inicio: novoProduto.promocao_data_habilitada ? novoProduto.promocao_data_inicio : null,
           promocao_data_fim: novoProduto.promocao_data_habilitada ? novoProduto.promocao_data_fim : null,
           promocao_data_cardapio: novoProduto.promocao_data_cardapio || false,
+          // ✅ NOVO CAMPO: Matéria prima
+          materia_prima: novoProduto.materia_prima || false,
+          // ✅ NOVO CAMPO: Insumos
+          insumos: novoProduto.insumos || [],
           empresa_id: usuarioData.empresa_id
         };
 
@@ -3797,6 +3801,10 @@ const ProdutosPage: React.FC = () => {
           promocao_data_cardapio: novoProduto.promocao_data_cardapio || false,
           ordenacao_cardapio_habilitada: produtoOrdenacaoCardapioHabilitada,
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
+          // ✅ NOVO CAMPO: Matéria prima
+          materia_prima: novoProduto.materia_prima || false,
+          // ✅ NOVO CAMPO: Insumos
+          insumos: novoProduto.insumos || [],
         };
 
 
@@ -4062,6 +4070,9 @@ const ProdutosPage: React.FC = () => {
         cardapio_digital: produtoOriginal.cardapio_digital || false,
         exibir_promocao_cardapio: produtoOriginal.exibir_promocao_cardapio || false,
         controla_estoque_cardapio: produtoOriginal.controla_estoque_cardapio || false,
+        // ✅ NOVOS CAMPOS: Matéria prima e insumos
+        materia_prima: produtoOriginal.materia_prima || false,
+        insumos: produtoOriginal.insumos || [],
         // Campos obrigatórios
         grupo_id: grupo.id,
         empresa_id: usuarioData.empresa_id,

@@ -3079,6 +3079,73 @@ const PDVPage: React.FC = () => {
     // ✅ NÃO CHAMAR aplicarFiltrosCardapio AQUI - O useEffect já faz isso
   };
 
+  // ✅ FUNÇÃO PARA ATUALIZAR CONFIGURAÇÕES DO CARDÁPIO DIGITAL
+  const atualizarConfigCardapio = async (field: string, value: boolean) => {
+    try {
+      // Atualizar o estado local primeiro
+      setPdvConfig(prev => ({ ...prev, [field]: value }));
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Obter empresa_id do usuário
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        throw new Error('Empresa não encontrada');
+      }
+
+      // Verificar se já existe uma configuração
+      const { data: existingConfig } = await supabase
+        .from('pdv_config')
+        .select('id')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      if (existingConfig) {
+        // Atualizar configuração existente
+        const { error } = await supabase
+          .from('pdv_config')
+          .update({ [field]: value })
+          .eq('empresa_id', usuarioData.empresa_id);
+
+        if (error) throw error;
+      } else {
+        // Criar nova configuração
+        const { error } = await supabase
+          .from('pdv_config')
+          .insert([{
+            empresa_id: usuarioData.empresa_id,
+            [field]: value
+          }]);
+
+        if (error) throw error;
+      }
+
+      // Disparar evento customizado para notificar mudanças
+      const pdvConfigEvent = new CustomEvent('pdvConfigChanged', {
+        detail: {
+          field,
+          value,
+          config: { ...pdvConfig, [field]: value }
+        }
+      });
+      window.dispatchEvent(pdvConfigEvent);
+
+      toast.success(`Configuração ${field === 'impressao_automatica_cardapio' ? 'impressão automática' : 'aceitar pedido automaticamente'} ${value ? 'ativada' : 'desativada'} com sucesso!`);
+
+    } catch (error: any) {
+      console.error('Erro ao atualizar configuração:', error);
+      toast.error(`Erro ao atualizar configuração: ${error.message}`);
+      // Reverter estado local em caso de erro
+      setPdvConfig(prev => ({ ...prev, [field]: !value }));
+    }
+  };
+
   // ✅ FUNÇÃO PARA SELECIONAR PEDIDO COM BUSCA DE FOTOS
   const selecionarPedido = async (pedido: any) => {
     try {
@@ -21170,13 +21237,36 @@ const PDVPage: React.FC = () => {
                           </button>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => carregarTodosPedidosCardapio()}
-                          className="text-sm text-orange-400 hover:text-orange-300"
-                        >
-                          🔄 Atualizar
-                        </button>
+                      <div className="flex gap-4 items-center">
+                        {/* Impressão Automática */}
+                        <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={pdvConfig?.impressao_automatica_cardapio || false}
+                            onChange={(e) => {
+                              const novoValor = e.target.checked;
+                              // Atualizar configuração no banco
+                              atualizarConfigCardapio('impressao_automatica_cardapio', novoValor);
+                            }}
+                            className="w-4 h-4 text-orange-500 bg-gray-700 border-gray-600 rounded focus:ring-orange-500 focus:ring-2"
+                          />
+                          <span>Impressão automática</span>
+                        </label>
+
+                        {/* Aceitar Pedido Automaticamente */}
+                        <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={pdvConfig?.aceitar_pedido_automatico_cardapio || false}
+                            onChange={(e) => {
+                              const novoValor = e.target.checked;
+                              // Atualizar configuração no banco
+                              atualizarConfigCardapio('aceitar_pedido_automatico_cardapio', novoValor);
+                            }}
+                            className="w-4 h-4 text-orange-500 bg-gray-700 border-gray-600 rounded focus:ring-orange-500 focus:ring-2"
+                          />
+                          <span>Aceitar pedido automaticamente</span>
+                        </label>
                       </div>
                     </div>
 
