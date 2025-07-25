@@ -643,7 +643,6 @@ const ProdutosPage: React.FC = () => {
     loadAvailableOpcoes();
     loadUnidadesMedida();
     loadTipoControleEstoque();
-    console.log('🚀 PRODUTOS: Chamando loadProdutosEstoque() no carregamento inicial');
     loadProdutosEstoque();
     loadOpcoesAdicionaisConfig();
     loadRegimeTributario();
@@ -1921,13 +1920,11 @@ const ProdutosPage: React.FC = () => {
   };
 
   const loadProdutosEstoque = async () => {
-    console.log('🔄 PRODUTOS ESTOQUE: Iniciando carregamento...');
     setLoadingProdutosEstoque(true);
 
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
-        console.log('❌ PRODUTOS ESTOQUE: Usuário não encontrado');
         setLoadingProdutosEstoque(false);
         return;
       }
@@ -1939,12 +1936,9 @@ const ProdutosPage: React.FC = () => {
         .single();
 
       if (!usuarioData?.empresa_id) {
-        console.log('❌ PRODUTOS ESTOQUE: Empresa não encontrada');
         setLoadingProdutosEstoque(false);
         return;
       }
-
-      console.log('✅ PRODUTOS ESTOQUE: Empresa encontrada:', usuarioData.empresa_id);
 
       // Buscar todos os produtos da empresa
       const { data: produtosData, error: produtosError } = await supabase
@@ -1955,12 +1949,9 @@ const ProdutosPage: React.FC = () => {
 
       if (produtosError) throw produtosError;
       if (!produtosData || produtosData.length === 0) {
-        console.log('ℹ️ PRODUTOS ESTOQUE: Nenhum produto encontrado');
         setLoadingProdutosEstoque(false);
         return;
       }
-
-      console.log('✅ PRODUTOS ESTOQUE: Processando', produtosData.length, 'produtos...');
 
       // Criar um objeto para armazenar as informações de estoque de cada produto
       const estoqueInfo: Record<string, { total: number, naoFaturado: number }> = {};
@@ -2029,12 +2020,10 @@ const ProdutosPage: React.FC = () => {
 
       // Atualizar o estado com as informações de estoque de todos os produtos
       setProdutosEstoque(estoqueInfo);
-      console.log('✅ PRODUTOS ESTOQUE: Carregamento concluído!', Object.keys(estoqueInfo).length, 'produtos processados');
     } catch (error: any) {
-      console.error('❌ PRODUTOS ESTOQUE: Erro ao carregar:', error);
+      console.error('Erro ao carregar estoque dos produtos:', error);
     } finally {
       setLoadingProdutosEstoque(false);
-      console.log('🔄 PRODUTOS ESTOQUE: Loading definido como false');
     }
   };
 
@@ -2994,7 +2983,6 @@ const ProdutosPage: React.FC = () => {
       await loadEstoqueMovimentos(editingProduto.id);
 
       // Atualizar o estoque na grid
-      console.log('🔄 PRODUTOS: Chamando loadProdutosEstoque() após movimento de estoque');
       await loadProdutosEstoque();
 
       // Limpar o formulário
@@ -3837,7 +3825,6 @@ const ProdutosPage: React.FC = () => {
           }
 
           // Atualizar estoque em background
-          console.log('🔄 PRODUTOS: Chamando loadProdutosEstoque() em background após operação');
           loadProdutosEstoque(); // Sem await
         } catch (error) {
           console.error('Erro nas operações em background:', error);
@@ -5471,42 +5458,21 @@ const ProdutosPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-1 mb-0.5">
               <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700 text-gray-300">
                 Estoque: {
-                  (() => {
-                    const isLoading = loadingProdutosEstoque;
-                    const hasEstoqueData = Object.keys(produtosEstoque).length > 0;
-                    const estoqueInfo = produtosEstoque[produto.id];
-
-                    console.log(`🏷️ PRODUTOS ESTOQUE RENDER [${produto.nome}]:`, {
-                      produtoId: produto.id,
-                      isLoading,
-                      hasEstoqueData,
-                      estoqueInfo,
-                      condition1: isLoading && !hasEstoqueData,
-                      condition2: estoqueInfo !== undefined
-                    });
-
-                    if (isLoading && !hasEstoqueData) {
-                      console.log(`🔄 PRODUTOS ESTOQUE RENDER [${produto.nome}]: Mostrando loading`);
-                      return (
-                        <span className="inline-flex items-center gap-1">
-                          <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                          <span className="text-gray-400">...</span>
-                        </span>
-                      );
-                    } else if (estoqueInfo !== undefined) {
-                      const valor = formatarEstoque(estoqueInfo.total, produto);
-                      console.log(`✅ PRODUTOS ESTOQUE RENDER [${produto.nome}]: Mostrando estoque:`, valor);
-                      return valor;
-                    } else {
-                      console.log(`❌ PRODUTOS ESTOQUE RENDER [${produto.nome}]: Mostrando 0 (fallback)`);
-                      return '0';
-                    }
-                  })()
+                  loadingProdutosEstoque && Object.keys(produtosEstoque).length === 0 ? (
+                    <span className="inline-flex items-center gap-1">
+                      <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-gray-400">...</span>
+                    </span>
+                  ) : (
+                    produtosEstoque[produto.id] !== undefined
+                      ? formatarEstoque(produtosEstoque[produto.id].total, produto)
+                      : '0'
+                  )
                 }
               </span>
-              {tipoControleEstoque === 'pedidos' && estoqueInfo && estoqueInfo.naoFaturado > 0 && (
+              {tipoControleEstoque === 'pedidos' && produtosEstoque[produto.id] && produtosEstoque[produto.id].naoFaturado > 0 && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-yellow-900/30 text-yellow-400">
-                  Não Faturado: {formatarEstoque(estoqueInfo.naoFaturado, produto)}
+                  Não Faturado: {formatarEstoque(produtosEstoque[produto.id].naoFaturado, produto)}
                 </span>
               )}
             </div>

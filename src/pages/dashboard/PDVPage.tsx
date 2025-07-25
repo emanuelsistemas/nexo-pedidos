@@ -2154,15 +2154,11 @@ const PDVPage: React.FC = () => {
     await withSessionCheck(async () => {
       try {
         setIsLoading(true);
-        console.log('🚀 PDV: Carregando dados iniciais...');
         await Promise.all([
           loadProdutos(),
           loadGrupos(),
           loadClientes(),
-          (async () => {
-            console.log('🔄 PDV: Chamando loadEstoque() no carregamento inicial');
-            await loadEstoque();
-          })(),
+          loadEstoque(),
           loadPdvConfig(),
           loadFormasPagamento(),
           loadVendedores(),
@@ -2535,18 +2531,13 @@ const PDVPage: React.FC = () => {
   };
 
   const loadEstoque = async () => {
-    console.log('🔄 ESTOQUE: Iniciando carregamento de estoque...');
     setLoadingEstoque(true);
-    console.log('🔄 ESTOQUE: loadingEstoque definido como true');
 
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) {
-      console.log('❌ ESTOQUE: Usuário não encontrado');
       setLoadingEstoque(false);
       return;
     }
-
-    console.log('✅ ESTOQUE: Usuário encontrado:', userData.user.id);
 
     const { data: usuarioData } = await supabase
       .from('usuarios')
@@ -2555,15 +2546,11 @@ const PDVPage: React.FC = () => {
       .single();
 
     if (!usuarioData?.empresa_id) {
-      console.log('❌ ESTOQUE: Empresa não encontrada');
       setLoadingEstoque(false);
       return;
     }
 
-    console.log('✅ ESTOQUE: Empresa encontrada:', usuarioData.empresa_id);
-
     try {
-      console.log('🔍 ESTOQUE: Buscando dados de estoque...');
       // Buscar estoque dos produtos
       const { data: estoqueData, error } = await supabase
         .from('produto_estoque')
@@ -2571,12 +2558,9 @@ const PDVPage: React.FC = () => {
         .eq('empresa_id', usuarioData.empresa_id);
 
       if (error) {
-        console.log('❌ ESTOQUE: Erro ao buscar dados:', error);
         setLoadingEstoque(false);
         return;
       }
-
-      console.log('✅ ESTOQUE: Dados recebidos:', estoqueData?.length || 0, 'registros');
 
       // Processar dados de estoque
       const estoqueProcessado: Record<string, EstoqueProduto> = {};
@@ -2595,16 +2579,11 @@ const PDVPage: React.FC = () => {
         });
       }
 
-      console.log('✅ ESTOQUE: Dados processados:', Object.keys(estoqueProcessado).length, 'produtos');
-      console.log('📊 ESTOQUE: Produtos com estoque:', estoqueProcessado);
-
       setProdutosEstoque(estoqueProcessado);
-      console.log('✅ ESTOQUE: Estado atualizado');
     } catch (error) {
-      console.log('❌ ESTOQUE: Erro ao processar:', error);
+      // Erro ao processar estoque
     } finally {
       setLoadingEstoque(false);
-      console.log('🔄 ESTOQUE: loadingEstoque definido como false');
     }
   };
 
@@ -9264,14 +9243,6 @@ const PDVPage: React.FC = () => {
       const itensNaoSalvos = carrinho.filter(item => !item.pdv_item_id);
       const itensJaSalvos = carrinho.filter(item => item.pdv_item_id);
 
-      console.log('📊 Análise de itens para finalização:', {
-        total: carrinho.length,
-        jaSalvos: itensJaSalvos.length,
-        naoSalvos: itensNaoSalvos.length,
-        itensJaSalvos: itensJaSalvos.map(i => ({ nome: i.produto.nome, id: i.pdv_item_id })),
-        itensNaoSalvos: itensNaoSalvos.map(i => ({ nome: i.produto.nome, id: i.id }))
-      });
-
       const itensParaInserir = itensNaoSalvos.map(item => {
         const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
 
@@ -9446,8 +9417,6 @@ const PDVPage: React.FC = () => {
       } else {
         // ✅ VENDA NOVA: Inserir apenas itens que ainda não foram salvos
         if (itensParaInserir.length > 0) {
-          console.log(`➕ FRONTEND: Inserindo ${itensParaInserir.length} itens novos...`);
-
           const { error: itensError } = await supabase
             .from('pdv_itens')
             .insert(itensParaInserir);
@@ -9460,10 +9429,6 @@ const PDVPage: React.FC = () => {
             toast.error('Erro ao salvar itens: ' + itensError.message);
             return;
           }
-
-          console.log('✅ FRONTEND: Todos os itens novos inseridos com sucesso');
-        } else {
-          console.log('ℹ️ FRONTEND: Nenhum item novo para inserir (todos já foram salvos)');
         }
       }
 
@@ -9619,12 +9584,6 @@ const PDVPage: React.FC = () => {
       // VERIFICAÇÃO CRÍTICA: Confirmar se tudo foi salvo corretamente
       // ✅ CORREÇÃO: Usar total de itens esperados (incluindo já salvos + novos inseridos)
       const totalItensEsperados = itensJaSalvos.length + itensParaInserir.length;
-      console.log('🔍 Verificação final:', {
-        itensJaSalvos: itensJaSalvos.length,
-        itensParaInserir: itensParaInserir.length,
-        totalEsperado: totalItensEsperados,
-        carrinhoOriginal: carrinho.length
-      });
       const vendaVerificada = await verificarVendaNoBanco(vendaId, numeroVenda, totalItensEsperados, tipoControle);
 
       if (!vendaVerificada) {
@@ -10273,7 +10232,6 @@ const PDVPage: React.FC = () => {
 
       // Recarregar estoque se necessário
       if (pdvConfig?.baixa_estoque_pdv) {
-        console.log('🔄 PDV: Chamando loadEstoque() após finalização de venda');
         loadEstoque();
       }
 
@@ -11827,7 +11785,6 @@ const PDVPage: React.FC = () => {
 
       // Recarregar estoque se necessário
       if (pdvConfig?.baixa_estoque_pdv) {
-        console.log('🔄 PDV: Chamando loadEstoque() após reset do PDV');
         loadEstoque();
       }
     }, 1500);
@@ -18787,53 +18744,23 @@ const PDVPage: React.FC = () => {
                             {/* Estoque - Compacto */}
                             <div className="text-xs text-gray-300 mb-0.5">
                               Estoque: {
-                                (() => {
-                                  const isLoading = loadingEstoque;
-                                  const hasEstoqueData = Object.keys(produtosEstoque).length > 0;
-                                  const produtoEstoque = produtosEstoque[produto.id];
-                                  const estoqueInicial = produto.estoque_inicial;
-
-                                  console.log(`🏷️ ESTOQUE RENDER [${produto.nome}]:`, {
-                                    produtoId: produto.id,
-                                    isLoading,
-                                    hasEstoqueData,
-                                    produtoEstoque,
-                                    estoqueInicial,
-                                    condition1: isLoading && !hasEstoqueData,
-                                    condition2: produtoEstoque !== undefined,
-                                    condition3: estoqueInicial,
-                                    condition4: isLoading
-                                  });
-
-                                  if (isLoading && !hasEstoqueData) {
-                                    console.log(`🔄 ESTOQUE RENDER [${produto.nome}]: Mostrando loading (condição 1)`);
-                                    return (
-                                      <span className="inline-flex items-center gap-1">
-                                        <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                                        <span className="text-gray-400">...</span>
-                                      </span>
-                                    );
-                                  } else if (produtoEstoque !== undefined) {
-                                    const valor = formatarEstoque(produtoEstoque.total, produto);
-                                    console.log(`✅ ESTOQUE RENDER [${produto.nome}]: Mostrando estoque processado:`, valor);
-                                    return valor;
-                                  } else if (estoqueInicial) {
-                                    const valor = formatarEstoque(estoqueInicial, produto);
-                                    console.log(`📦 ESTOQUE RENDER [${produto.nome}]: Mostrando estoque inicial:`, valor);
-                                    return valor;
-                                  } else if (isLoading) {
-                                    console.log(`🔄 ESTOQUE RENDER [${produto.nome}]: Mostrando loading (condição 4)`);
-                                    return (
-                                      <span className="inline-flex items-center gap-1">
-                                        <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                                        <span className="text-gray-400">...</span>
-                                      </span>
-                                    );
-                                  } else {
-                                    console.log(`❌ ESTOQUE RENDER [${produto.nome}]: Mostrando 0 (fallback)`);
-                                    return '0';
-                                  }
-                                })()
+                                loadingEstoque && Object.keys(produtosEstoque).length === 0 ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                    <span className="text-gray-400">...</span>
+                                  </span>
+                                ) : (
+                                  produtosEstoque[produto.id] !== undefined
+                                    ? formatarEstoque(produtosEstoque[produto.id].total, produto)
+                                    : produto.estoque_inicial
+                                      ? formatarEstoque(produto.estoque_inicial, produto)
+                                      : loadingEstoque ? (
+                                        <span className="inline-flex items-center gap-1">
+                                          <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                          <span className="text-gray-400">...</span>
+                                        </span>
+                                      ) : '0'
+                                )
                               }
                             </div>
 
