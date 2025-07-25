@@ -1206,6 +1206,9 @@ const CardapioPublicoPage: React.FC = () => {
   const [modalTipoEntregaAberto, setModalTipoEntregaAberto] = useState(false);
   const [tipoEntregaSelecionado, setTipoEntregaSelecionado] = useState<'entrega' | 'retirada' | null>(null);
 
+  // Estado para controlar quando a página deve ser exibida
+  const [paginaProntaParaExibir, setPaginaProntaParaExibir] = useState(false);
+
   // Estados para cupons de desconto
   const [modalCupomAberto, setModalCupomAberto] = useState(false);
   const [codigoCupom, setCodigoCupom] = useState('');
@@ -2391,12 +2394,14 @@ const CardapioPublicoPage: React.FC = () => {
         // ✅ MOSTRAR MODAL DE TIPO DE ENTREGA SEMPRE (se habilitado)
         // O usuário deve escolher o tipo de entrega toda vez que acessar a página
         if (pdvConfigData.retirada_balcao_cardapio) {
-          setTimeout(() => {
-            setModalTipoEntregaAberto(true);
-          }, 2000); // Aguardar 2 segundos para a página carregar
+          // Mostrar modal imediatamente após carregamento
+          setModalTipoEntregaAberto(true);
+          // Não liberar a página até que o usuário escolha
         } else {
           // Se retirada no balcão estiver desabilitada, assumir entrega automaticamente
           setTipoEntregaSelecionado('entrega');
+          // Liberar a página imediatamente
+          setPaginaProntaParaExibir(true);
         }
       }
 
@@ -5315,6 +5320,9 @@ const CardapioPublicoPage: React.FC = () => {
     setTipoEntregaSelecionado(tipo);
     setModalTipoEntregaAberto(false);
 
+    // Liberar a exibição da página após escolher o tipo
+    setPaginaProntaParaExibir(true);
+
     // Se for retirada, apenas fechar modal e deixar página fluir normalmente
     if (tipo === 'retirada') {
       // Usuário vai adicionar itens no carrinho e depois clicar em "Finalizar Pedido"
@@ -6500,6 +6508,112 @@ const CardapioPublicoPage: React.FC = () => {
           empresa={empresa}
         />
       )}
+
+      {/* Modal de Seleção de Tipo de Entrega - Sempre visível quando ativo */}
+      {modalTipoEntregaAberto && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
+            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`p-6 border-b ${
+              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center justify-center">
+                <div className="text-center">
+                  <h3 className={`text-xl font-bold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    Como você quer receber?
+                  </h3>
+                  <p className={`text-sm mt-1 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    Escolha entre entrega ou retirada no balcão
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              {/* Opção Entrega */}
+              <button
+                onClick={() => confirmarTipoEntrega('entrega')}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                  config.modo_escuro
+                    ? 'border-gray-600 bg-gray-700/50 hover:border-blue-500 hover:bg-blue-900/20'
+                    : 'border-gray-300 bg-gray-50 hover:border-blue-500 hover:bg-blue-50'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    config.modo_escuro ? 'bg-blue-900/50' : 'bg-blue-100'
+                  }`}>
+                    <Bike className={`w-6 h-6 ${
+                      config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
+                    }`} />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className={`font-semibold text-lg ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      🚴 Entrega
+                    </h4>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Receba seu pedido no endereço informado
+                    </p>
+                  </div>
+                  <ChevronRight className={`w-5 h-5 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Opção Retirada */}
+              <button
+                onClick={() => confirmarTipoEntrega('retirada')}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                  config.modo_escuro
+                    ? 'border-gray-600 bg-gray-700/50 hover:border-green-500 hover:bg-green-900/20'
+                    : 'border-gray-300 bg-gray-50 hover:border-green-500 hover:bg-green-50'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    config.modo_escuro ? 'bg-green-900/50' : 'bg-green-100'
+                  }`}>
+                    <Store className={`w-6 h-6 ${
+                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                    }`} />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className={`font-semibold text-lg ${
+                      config.modo_escuro ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      🏪 Retirada no Balcão
+                    </h4>
+                    <p className={`text-sm ${
+                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
+                    }`}>
+                      Retire seu pedido diretamente no estabelecimento
+                    </p>
+                  </div>
+                  <ChevronRight className={`w-5 h-5 ${
+                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
+                  }`} />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Conteúdo da página - só aparece após escolher tipo de entrega */}
+      {paginaProntaParaExibir && (
+        <>
 
       {/* Estilos CSS customizados para animação de entrada suave */}
       <style>{`
@@ -10027,117 +10141,7 @@ const CardapioPublicoPage: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Seleção de Tipo de Entrega */}
-      {modalTipoEntregaAberto && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className={`w-full max-w-md rounded-2xl shadow-2xl ${
-            config.modo_escuro ? 'bg-gray-800' : 'bg-white'
-          }`}>
-            {/* Header */}
-            <div className={`p-6 border-b ${
-              config.modo_escuro ? 'border-gray-700' : 'border-gray-200'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className={`text-xl font-bold ${
-                    config.modo_escuro ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Como você quer receber?
-                  </h3>
-                  <p className={`text-sm mt-1 ${
-                    config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                  }`}>
-                    Escolha entre entrega ou retirada no balcão
-                  </p>
-                </div>
-                <button
-                  onClick={fecharModalTipoEntrega}
-                  className={`p-2 rounded-lg transition-colors ${
-                    config.modo_escuro
-                      ? 'text-gray-400 hover:bg-gray-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <X size={24} />
-                </button>
-              </div>
-            </div>
 
-            {/* Content */}
-            <div className="p-6 space-y-4">
-              {/* Opção Entrega */}
-              <button
-                onClick={() => confirmarTipoEntrega('entrega')}
-                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-                  config.modo_escuro
-                    ? 'border-gray-600 bg-gray-700/50 hover:border-blue-500 hover:bg-blue-900/20'
-                    : 'border-gray-300 bg-gray-50 hover:border-blue-500 hover:bg-blue-50'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    config.modo_escuro ? 'bg-blue-900/50' : 'bg-blue-100'
-                  }`}>
-                    <Bike className={`w-6 h-6 ${
-                      config.modo_escuro ? 'text-blue-400' : 'text-blue-600'
-                    }`} />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className={`font-semibold text-lg ${
-                      config.modo_escuro ? 'text-white' : 'text-gray-900'
-                    }`}>
-                      🚴 Entrega
-                    </h4>
-                    <p className={`text-sm ${
-                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
-                      Receba seu pedido no endereço informado
-                    </p>
-                  </div>
-                  <ChevronRight className={`w-5 h-5 ${
-                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
-                  }`} />
-                </div>
-              </button>
-
-              {/* Opção Retirada */}
-              <button
-                onClick={() => confirmarTipoEntrega('retirada')}
-                className={`w-full p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-                  config.modo_escuro
-                    ? 'border-gray-600 bg-gray-700/50 hover:border-green-500 hover:bg-green-900/20'
-                    : 'border-gray-300 bg-gray-50 hover:border-green-500 hover:bg-green-50'
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    config.modo_escuro ? 'bg-green-900/50' : 'bg-green-100'
-                  }`}>
-                    <Store className={`w-6 h-6 ${
-                      config.modo_escuro ? 'text-green-400' : 'text-green-600'
-                    }`} />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className={`font-semibold text-lg ${
-                      config.modo_escuro ? 'text-white' : 'text-gray-900'
-                    }`}>
-                      🏪 Retirada no Balcão
-                    </h4>
-                    <p className={`text-sm ${
-                      config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
-                    }`}>
-                      Retire seu pedido diretamente no estabelecimento
-                    </p>
-                  </div>
-                  <ChevronRight className={`w-5 h-5 ${
-                    config.modo_escuro ? 'text-gray-400' : 'text-gray-500'
-                  }`} />
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal de Finalização do Pedido */}
       {modalFinalizacaoAberto && (
@@ -12714,6 +12718,8 @@ const CardapioPublicoPage: React.FC = () => {
       )}
 
     </div>
+        </>
+      )}
     </>
   );
 };
