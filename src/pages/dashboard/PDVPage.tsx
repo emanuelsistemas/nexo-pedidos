@@ -666,6 +666,7 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Estado para efeito de carregamento no carrinho
   const [carregandoNovoItem, setCarregandoNovoItem] = useState(false);
+  const [codigoBuscando, setCodigoBuscando] = useState<string>('');
 
   // Funções para localStorage
   const savePDVState = () => {
@@ -11789,21 +11790,29 @@ const PDVPage: React.FC = () => {
     if (e.key === 'Enter' && searchTerm.trim()) {
       // Se há produtos filtrados, adicionar o primeiro
       if (produtosFiltrados.length > 0) {
-        // ✅ NOVO: Ativar efeito de carregamento
+        // ✅ CORREÇÃO: Capturar código e ativar efeito de carregamento IMEDIATAMENTE
+        const codigoDigitado = searchTerm.trim();
+        setCodigoBuscando(codigoDigitado);
         setCarregandoNovoItem(true);
 
+        // Limpar o campo de pesquisa imediatamente para feedback visual
+        setSearchTerm('');
+
         try {
+          // Aguardar um frame para garantir que o loading apareça
+          await new Promise(resolve => requestAnimationFrame(resolve));
+
+          // Agora sim chamar a função de adicionar
           await adicionarAoCarrinho(produtosFiltrados[0]);
 
-          // ✅ NOVO: Aguardar um pouco para mostrar o efeito de carregamento
-          await new Promise(resolve => setTimeout(resolve, 800));
+          // Aguardar um pouco mais para mostrar o efeito
+          await new Promise(resolve => setTimeout(resolve, 500));
         } finally {
-          // ✅ NOVO: Desativar efeito de carregamento
+          // Desativar efeito de carregamento
           setCarregandoNovoItem(false);
+          setCodigoBuscando('');
         }
 
-        // Limpar o campo de pesquisa após adicionar o produto
-        setSearchTerm('');
         // Manter o foco no campo para próxima digitação
         setTimeout(() => {
           const input = e.target as HTMLInputElement;
@@ -12467,7 +12476,9 @@ const PDVPage: React.FC = () => {
                               <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce"></div>
                               <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                               <div className="w-1 h-1 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                              <span className="ml-1">Adicionando produto...</span>
+                              <span className="ml-1">
+                                {codigoBuscando ? `Buscando código: ${codigoBuscando}` : 'Adicionando produto...'}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -18435,21 +18446,29 @@ const PDVPage: React.FC = () => {
                         } else if (e.key === 'Enter' && searchTerm.trim()) {
                           // Se há produtos filtrados, adicionar o primeiro
                           if (produtosFiltrados.length > 0) {
-                            // ✅ NOVO: Ativar efeito de carregamento
+                            // ✅ CORREÇÃO: Capturar código e ativar efeito de carregamento IMEDIATAMENTE
+                            const codigoDigitado = searchTerm.trim();
+                            setCodigoBuscando(codigoDigitado);
                             setCarregandoNovoItem(true);
 
+                            // Limpar o campo de pesquisa imediatamente para feedback visual
+                            setSearchTerm('');
+
                             try {
+                              // Aguardar um frame para garantir que o loading apareça
+                              await new Promise(resolve => requestAnimationFrame(resolve));
+
+                              // Agora sim chamar a função de adicionar
                               await adicionarAoCarrinho(produtosFiltrados[0]);
 
-                              // ✅ NOVO: Aguardar um pouco para mostrar o efeito de carregamento
-                              await new Promise(resolve => setTimeout(resolve, 800));
+                              // Aguardar um pouco mais para mostrar o efeito
+                              await new Promise(resolve => setTimeout(resolve, 500));
                             } finally {
-                              // ✅ NOVO: Desativar efeito de carregamento
+                              // Desativar efeito de carregamento
                               setCarregandoNovoItem(false);
+                              setCodigoBuscando('');
                             }
 
-                            // Limpar o campo de pesquisa após adicionar o produto
-                            setSearchTerm('');
                             // ✅ NOVO: Só fechar o modal se não abrir o modal de quantidade
                             if (!pdvConfig?.vendas_itens_multiplicacao) {
                               // Manter o foco no campo para próxima digitação
@@ -18548,16 +18567,20 @@ const PDVPage: React.FC = () => {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={async () => {
-                            // ✅ NOVO: Ativar efeito de carregamento
+                            // ✅ CORREÇÃO: Ativar efeito de carregamento IMEDIATAMENTE
                             setCarregandoNovoItem(true);
 
                             try {
+                              // Aguardar um frame para garantir que o loading apareça
+                              await new Promise(resolve => requestAnimationFrame(resolve));
+
+                              // Agora sim chamar a função de adicionar
                               await adicionarAoCarrinho(produto);
 
-                              // ✅ NOVO: Aguardar um pouco para mostrar o efeito de carregamento
-                              await new Promise(resolve => setTimeout(resolve, 800));
+                              // Aguardar um pouco mais para mostrar o efeito
+                              await new Promise(resolve => setTimeout(resolve, 500));
                             } finally {
-                              // ✅ NOVO: Desativar efeito de carregamento
+                              // Desativar efeito de carregamento
                               setCarregandoNovoItem(false);
                             }
 
