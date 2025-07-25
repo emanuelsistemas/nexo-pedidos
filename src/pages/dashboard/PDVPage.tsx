@@ -11832,7 +11832,7 @@ const PDVPage: React.FC = () => {
     toast.success('PDV limpo com sucesso!');
   };
 
-  const handleSearchKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchTerm.trim()) {
       // ✅ DEBUG: Marcar início do processo
       const startTime = performance.now();
@@ -11843,7 +11843,7 @@ const PDVPage: React.FC = () => {
       console.log('🔥 [PDV DEBUG] Código digitado:', codigoDigitado);
       console.log('🔥 [PDV DEBUG] Produtos filtrados:', produtosFiltrados.length);
 
-      // ✅ CORREÇÃO: ATIVAR LOADING INSTANTANEAMENTE NO MOMENTO DO ENTER
+      // ✅ CORREÇÃO DEFINITIVA: ATIVAR LOADING INSTANTANEAMENTE E PROCESSAR EM BACKGROUND
       console.log('🔥 [PDV DEBUG] Ativando estados de loading...');
       setCodigoBuscando(codigoDigitado);
       setEnterPressionado(true);
@@ -11853,31 +11853,35 @@ const PDVPage: React.FC = () => {
 
       console.log('🔥 [PDV DEBUG] Estados ativados! Tempo desde Enter:', (performance.now() - startTime).toFixed(2), 'ms');
 
-      // Se há produtos filtrados, adicionar o primeiro
+      // Se há produtos filtrados, processar em background SEM AWAIT
       if (produtosFiltrados.length > 0) {
-        try {
-          console.log('🔥 [PDV DEBUG] Iniciando adicionarAoCarrinho...');
-          const beforeAdd = performance.now();
+        console.log('🔥 [PDV DEBUG] Iniciando processamento em background...');
 
-          // Processar em background - loading já está ativo
-          await adicionarAoCarrinho(produtosFiltrados[0]);
+        // ✅ CORREÇÃO: Processar em background sem bloquear a UI
+        (async () => {
+          try {
+            const beforeAdd = performance.now();
 
-          const afterAdd = performance.now();
-          console.log('🔥 [PDV DEBUG] adicionarAoCarrinho concluído! Tempo:', (afterAdd - beforeAdd).toFixed(2), 'ms');
+            // Processar em background - loading já está ativo
+            await adicionarAoCarrinho(produtosFiltrados[0]);
 
-          // Aguardar um pouco para mostrar o efeito
-          await new Promise(resolve => setTimeout(resolve, 300));
+            const afterAdd = performance.now();
+            console.log('🔥 [PDV DEBUG] adicionarAoCarrinho concluído! Tempo:', (afterAdd - beforeAdd).toFixed(2), 'ms');
 
-          const totalTime = performance.now() - startTime;
-          console.log('🔥 [PDV DEBUG] Processo completo! Tempo total:', totalTime.toFixed(2), 'ms');
-        } finally {
-          // Desativar efeito de carregamento
-          console.log('🔥 [PDV DEBUG] Desativando loading...');
-          setCarregandoNovoItem(false);
-          setCodigoBuscando('');
-          setEnterPressionado(false);
-          setDebugTimestamp(0);
-        }
+            // Aguardar um pouco para mostrar o efeito
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            const totalTime = performance.now() - startTime;
+            console.log('🔥 [PDV DEBUG] Processo completo! Tempo total:', totalTime.toFixed(2), 'ms');
+          } finally {
+            // Desativar efeito de carregamento
+            console.log('🔥 [PDV DEBUG] Desativando loading...');
+            setCarregandoNovoItem(false);
+            setCodigoBuscando('');
+            setEnterPressionado(false);
+            setDebugTimestamp(0);
+          }
+        })();
 
         // Manter o foco no campo para próxima digitação
         setTimeout(() => {
@@ -18530,27 +18534,30 @@ const PDVPage: React.FC = () => {
                         if (e.key === 'Escape') {
                           setShowAreaProdutos(false);
                         } else if (e.key === 'Enter' && searchTerm.trim()) {
-                          // ✅ CORREÇÃO: ATIVAR LOADING INSTANTANEAMENTE NO MOMENTO DO ENTER
+                          // ✅ CORREÇÃO DEFINITIVA: ATIVAR LOADING INSTANTANEAMENTE E PROCESSAR EM BACKGROUND
                           const codigoDigitado = searchTerm.trim();
                           setCodigoBuscando(codigoDigitado);
                           setEnterPressionado(true);
                           setCarregandoNovoItem(true);
                           setSearchTerm(''); // Limpar campo imediatamente
 
-                          // Se há produtos filtrados, adicionar o primeiro
+                          // Se há produtos filtrados, processar em background SEM AWAIT
                           if (produtosFiltrados.length > 0) {
-                            try {
-                              // Processar em background - loading já está ativo
-                              await adicionarAoCarrinho(produtosFiltrados[0]);
+                            // ✅ CORREÇÃO: Processar em background sem bloquear a UI
+                            (async () => {
+                              try {
+                                // Processar em background - loading já está ativo
+                                await adicionarAoCarrinho(produtosFiltrados[0]);
 
-                              // Aguardar um pouco para mostrar o efeito
-                              await new Promise(resolve => setTimeout(resolve, 300));
-                            } finally {
-                              // Desativar efeito de carregamento
-                              setCarregandoNovoItem(false);
-                              setCodigoBuscando('');
-                              setEnterPressionado(false);
-                            }
+                                // Aguardar um pouco para mostrar o efeito
+                                await new Promise(resolve => setTimeout(resolve, 300));
+                              } finally {
+                                // Desativar efeito de carregamento
+                                setCarregandoNovoItem(false);
+                                setCodigoBuscando('');
+                                setEnterPressionado(false);
+                              }
+                            })();
 
                             // ✅ NOVO: Só fechar o modal se não abrir o modal de quantidade
                             if (!pdvConfig?.vendas_itens_multiplicacao) {
