@@ -309,166 +309,99 @@ try {
     ]);
 
     // Validar método
-    logDetalhado('004', 'Validando método HTTP', ['method' => $_SERVER['REQUEST_METHOD']]);
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('Método não permitido. Use POST.');
     }
 
     // Receber dados
-    logDetalhado('005', 'Lendo dados de entrada');
     $rawInput = file_get_contents('php://input');
-    logDetalhado('006', 'Dados brutos recebidos', ['size' => strlen($rawInput), 'preview' => substr($rawInput, 0, 200)]);
-
     $input = json_decode($rawInput, true);
 
     if (!$input) {
-        logDetalhado('007', 'ERRO: Falha ao decodificar JSON', ['json_error' => json_last_error_msg()]);
         throw new Exception('Dados JSON inválidos: ' . json_last_error_msg());
     }
-
-    logDetalhado('008', 'JSON decodificado com sucesso', ['keys' => array_keys($input)]);
 
     // Parâmetros obrigatórios para multi-tenant
     $empresaId = $input['empresa_id'] ?? null;
     $nfceData = $input['nfce_data'] ?? null;
-
-    logDetalhado('009', 'Parâmetros extraídos', ['empresa_id' => $empresaId, 'has_nfce_data' => !empty($nfceData)]);
     
     // Validações multi-tenant
-    logDetalhado('010', 'Iniciando validações multi-tenant');
-
     if (!$empresaId) {
-        logDetalhado('011', 'ERRO: empresa_id não fornecido');
         throw new Exception('empresa_id é obrigatório');
     }
 
     if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $empresaId)) {
-        logDetalhado('012', 'ERRO: empresa_id com formato inválido', ['empresa_id' => $empresaId]);
         throw new Exception('empresa_id inválido');
     }
 
     if (!$nfceData) {
-        logDetalhado('013', 'ERRO: nfce_data não fornecido');
         throw new Exception('nfce_data é obrigatório');
     }
 
-    logDetalhado('014', 'Validações básicas concluídas', ['empresa_id' => $empresaId]);
-    logDetalhado('015', 'Dados NFC-e recebidos', $nfceData);
-
-    // ✅ CORREÇÃO: Usar dados da empresa do payload (igual à NFe que funciona)
-    logDetalhado('016', 'Extraindo dados da empresa do payload (seguindo padrão NFe)');
-
     // Verificar se dados da empresa estão no payload
     if (!isset($nfceData['empresa'])) {
-        logDetalhado('017.ERROR', 'Dados da empresa não encontrados no payload');
         throw new Exception('Dados da empresa são obrigatórios no payload');
     }
 
     $empresa = $nfceData['empresa'];
-    logDetalhado('018', 'Dados da empresa extraídos do payload', [
-        'razao_social' => $empresa['razao_social'] ?? 'NULL',
-        'cnpj' => $empresa['cnpj'] ?? 'NULL',
-        'uf' => $empresa['uf'] ?? 'NULL',
-        'total_campos' => count($empresa),
-        'campos_disponiveis' => array_keys($empresa)
-    ]);
 
     // Verificar se ambiente está no payload
     if (!isset($nfceData['ambiente'])) {
-        logDetalhado('019.ERROR', 'Ambiente não encontrado no payload');
         throw new Exception('Ambiente é obrigatório no payload');
     }
 
     $ambiente = $nfceData['ambiente'] === 'producao' ? 1 : 2;
-    logDetalhado('020', 'Ambiente extraído do payload', ['ambiente' => $ambiente]);
 
-    logDetalhado('021', 'Configurações extraídas do payload com sucesso', [
-        'empresa_razao' => $empresa['razao_social'] ?? 'NULL',
-        'ambiente' => $ambiente
-    ]);
-    
-    // Validar dados obrigatórios da empresa (SEM FALLBACKS)
-    error_log("🔍 NFCE: Validando dados obrigatórios da empresa...");
-
+    // Validar dados obrigatórios da empresa
     if (empty($empresa['razao_social'])) {
-        error_log("❌ NFCE: Razão social vazia");
         throw new Exception('Razão social da empresa é obrigatória');
     }
-    error_log("✅ NFCE: Razão social: {$empresa['razao_social']}");
 
     if (empty($empresa['cnpj'])) {
-        error_log("❌ NFCE: CNPJ vazio");
         throw new Exception('CNPJ da empresa é obrigatório');
     }
-    error_log("✅ NFCE: CNPJ: {$empresa['cnpj']}");
 
     if (empty($empresa['uf'])) {
-        error_log("❌ NFCE: UF vazia");
         throw new Exception('UF da empresa é obrigatória');
     }
-    error_log("✅ NFCE: UF: {$empresa['uf']}");
 
     if (empty($empresa['codigo_municipio'])) {
-        error_log("❌ NFCE: Código município vazio");
         throw new Exception('Código do município da empresa é obrigatório');
     }
-    error_log("✅ NFCE: Código município: {$empresa['codigo_municipio']}");
 
     if (empty($empresa['inscricao_estadual'])) {
-        error_log("❌ NFCE: IE vazia");
         throw new Exception('Inscrição Estadual da empresa é obrigatória');
     }
-    error_log("✅ NFCE: IE: {$empresa['inscricao_estadual']}");
 
     if (empty($empresa['regime_tributario'])) {
-        error_log("❌ NFCE: Regime tributário vazio");
         throw new Exception('Regime tributário da empresa é obrigatório');
     }
-    error_log("✅ NFCE: Regime tributário: {$empresa['regime_tributario']}");
-    
-    // Validar CSC obrigatório para NFC-e (SEM FALLBACKS)
-    error_log("🔍 NFCE: Validando CSC obrigatório...");
-    // ✅ CORREÇÃO: Usar ambiente do payload, não de variável indefinida
+
+    // Validar CSC obrigatório para NFC-e
     $ambiente = $nfceData['ambiente'] === 'producao' ? 1 : 2;
     $cscField = $ambiente == 1 ? 'csc_producao' : 'csc_homologacao';
     $cscIdField = $ambiente == 1 ? 'csc_id_producao' : 'csc_id_homologacao';
     $ambienteTexto = $ambiente == 1 ? 'produção' : 'homologação';
 
-    error_log("📋 NFCE: Ambiente: {$ambiente} ({$ambienteTexto}), Campo CSC: {$cscField}, Campo CSC ID: {$cscIdField}");
-
     if (empty($empresa[$cscField])) {
-        error_log("❌ NFCE: CSC de {$ambienteTexto} não configurado");
         throw new Exception("CSC de {$ambienteTexto} é obrigatório para emissão de NFC-e");
     }
-    error_log("✅ NFCE: CSC de {$ambienteTexto}: " . substr($empresa[$cscField], 0, 8) . "...");
 
     if (empty($empresa[$cscIdField])) {
-        error_log("❌ NFCE: CSC ID de {$ambienteTexto} não configurado");
         throw new Exception("CSC ID de {$ambienteTexto} é obrigatório para emissão de NFC-e");
     }
-    error_log("✅ NFCE: CSC ID de {$ambienteTexto}: {$empresa[$cscIdField]}");
 
-    error_log("✅ NFCE: Configurações validadas - Ambiente: {$ambiente}, CSC configurado");
-    
-    // Carregar certificado (MÉTODO MULTI-TENANT)
-    error_log("🔍 NFCE: Carregando certificado digital...");
+    // Carregar certificado
     $certificadoPath = "../storage/certificados/empresa_{$empresaId}.pfx";
     $metadataPath = "../storage/certificados/empresa_{$empresaId}.json";
 
-    error_log("📁 NFCE: Caminho certificado: {$certificadoPath}");
-    error_log("📁 NFCE: Caminho metadata: {$metadataPath}");
-
     if (!file_exists($certificadoPath)) {
-        error_log("❌ NFCE: Certificado não encontrado: {$certificadoPath}");
         throw new Exception('Certificado digital não encontrado para esta empresa');
     }
-    error_log("✅ NFCE: Certificado encontrado");
 
     if (!file_exists($metadataPath)) {
-        error_log("❌ NFCE: Metadata não encontrado: {$metadataPath}");
         throw new Exception('Metadados do certificado não encontrados');
     }
-    error_log("✅ NFCE: Metadata encontrado");
 
     $certificado = file_get_contents($certificadoPath);
     $metadata = json_decode(file_get_contents($metadataPath), true);
@@ -1128,60 +1061,32 @@ try {
             throw new Exception("Erro no container de impostos do produto {$nItem}: " . $impostoError->getMessage());
         }
 
-        // 2. SEGUNDO: ICMS - OBRIGATÓRIO (USANDO DADOS REAIS DO PRODUTO)
-        logDetalhado('127', "Criando ICMS para produto {$nItem}");
-
-        // ✅ BUSCAR DADOS FISCAIS REAIS DO PRODUTO PARA ICMS (LEI DOS DADOS REAIS)
-        logDetalhado('126.1', "Buscando dados fiscais para produto {$nItem}", ['codigo' => $produto['codigo'], 'empresa_id' => $empresaId]);
+        // 🔍 DEBUG: Buscar dados fiscais do produto
+        error_log("🔍 PRODUTO {$nItem}: Buscando dados fiscais - Código: {$produto['codigo']}, Descrição: " . ($produto['descricao'] ?? 'N/A'));
         $produtoFiscal = buscarDadosFiscaisProduto($produto['codigo'], $empresaId);
 
         if (!$produtoFiscal) {
-            logDetalhado('126.2', "ERRO: Dados fiscais não encontrados", ['codigo' => $produto['codigo']]);
+            error_log("❌ PRODUTO {$nItem}: Dados fiscais não encontrados - Código: {$produto['codigo']}");
             throw new Exception("Dados fiscais não encontrados para produto {$produto['codigo']}");
         }
 
-        logDetalhado('126.3', "Dados fiscais encontrados para produto {$nItem}", $produtoFiscal);
+        // 🔍 DEBUG: Mostrar dados fiscais encontrados
+        error_log("✅ PRODUTO {$nItem}: Dados fiscais encontrados - CFOP: {$produtoFiscal['cfop']}, CSOSN: {$produtoFiscal['csosn_icms']}, CST: {$produtoFiscal['cst_icms']}");
 
-        // ✅ VALIDAR DADOS FISCAIS CONFORME REGIME TRIBUTÁRIO (SEM FALLBACKS)
         $regimeTributario = (int)($empresa['regime_tributario'] ?? 1);
-        logDetalhado('126.4', "Validando dados fiscais por regime", ['regime' => $regimeTributario, 'codigo' => $produto['codigo']]);
-
-        try {
-            validarDadosFiscaisPorRegime($produtoFiscal, $regimeTributario, $produto['codigo']);
-            logDetalhado('126.5', "Validação fiscal aprovada para produto {$nItem}");
-        } catch (Exception $e) {
-            logDetalhado('126.6', "ERRO na validação fiscal", ['erro' => $e->getMessage(), 'codigo' => $produto['codigo']]);
-            throw $e;
-        }
+        validarDadosFiscaisPorRegime($produtoFiscal, $regimeTributario, $produto['codigo']);
 
         $std = new stdClass();
         $std->item = $nItem; // ✅ CORREÇÃO: usar 'item' igual à NFe que funciona
         $std->orig = (int)($produtoFiscal['origem_produto'] ?? 0); // ✅ ORIGEM REAL do produto
 
-        // ✅ USAR REGIME TRIBUTÁRIO VALIDADO PARA DETERMINAR CST/CSOSN
         $isSimples = in_array($regimeTributario, [1, 2]); // 1 ou 2 = Simples Nacional
 
-        logDetalhado('127.0', "Regime tributário validado - usando dados fiscais corretos", [
-            'regime_tributario' => $regimeTributario,
-            'is_simples' => $isSimples,
-            'produto' => $nItem,
-            'csosn_icms' => $produtoFiscal['csosn_icms'] ?? 'NULL',
-            'cst_icms' => $produtoFiscal['cst_icms'] ?? 'NULL'
-        ]);
-
         if ($isSimples) {
-            // ✅ EMPRESA SIMPLES NACIONAL: Usar CSOSN REAL (SEM FALLBACKS)
-            $std->CSOSN = $produtoFiscal['csosn_icms']; // ✅ CSOSN REAL do produto (já validado)
+            $std->CSOSN = $produtoFiscal['csosn_icms'];
 
-            logDetalhado('127.1', "CSOSN aplicado ao XML do produto {$nItem}", [
-                'csosn_aplicado' => $std->CSOSN,
-                'cfop_aplicado' => $std->CFOP,
-                'origem_aplicada' => $std->orig,
-                'regime' => $regimeTributario,
-                'codigo_produto' => $produto['codigo'],
-                'descricao_produto' => $produto['descricao'] ?? 'N/A',
-                'COMBINACAO_FISCAL' => "CFOP {$std->CFOP} + CSOSN {$std->CSOSN}"
-            ]);
+            // 🔍 DEBUG: Mostrar combinação fiscal aplicada
+            error_log("🎯 PRODUTO {$nItem}: COMBINAÇÃO FISCAL APLICADA - CFOP: {$produtoFiscal['cfop']} + CSOSN: {$std->CSOSN} - Descrição: " . ($produto['descricao'] ?? 'N/A'));
 
             // Para CSOSN 500 (ST), adicionar campos específicos obrigatórios
             if ($std->CSOSN === '500') {

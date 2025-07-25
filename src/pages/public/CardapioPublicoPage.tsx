@@ -5275,12 +5275,13 @@ const CardapioPublicoPage: React.FC = () => {
       if (config.mostrar_precos) {
         const totalProdutos = obterTotalCarrinho();
         const taxaEntrega = calculoTaxa?.valor || 0;
-        const totalGeral = totalProdutos + taxaEntrega;
+        const totalGeral = totalProdutos + (tipoEntregaSelecionado === 'entrega' ? taxaEntrega : 0);
 
         mensagem += `*Resumo do Pedido:*\n`;
         mensagem += `Produtos: ${formatarPreco(totalProdutos)}\n`;
 
-        if (taxaEntrega > 0 && areaValidada) {
+        // Informações de entrega baseadas no tipo selecionado
+        if (tipoEntregaSelecionado === 'entrega' && taxaEntrega > 0 && areaValidada) {
           mensagem += `Taxa de entrega: ${formatarPreco(taxaEntrega)}\n`;
           if (enderecoEncontrado) {
             mensagem += `Endereço: ${enderecoEncontrado.logradouro ? enderecoEncontrado.logradouro + ', ' : ''}${enderecoEncontrado.bairro}, ${enderecoEncontrado.localidade} - ${enderecoEncontrado.uf} (${cepCliente})\n`;
@@ -5290,6 +5291,9 @@ const CardapioPublicoPage: React.FC = () => {
           if (calculoTaxa?.tempo_estimado) {
             mensagem += `Tempo estimado: ${calculoTaxa.tempo_estimado} minutos\n`;
           }
+        } else if (tipoEntregaSelecionado === 'retirada') {
+          mensagem += `🏪 *Retirada no Balcão*\n`;
+          mensagem += `Cliente irá retirar o pedido no estabelecimento\n`;
         }
 
         mensagem += `\n*Total Geral: ${formatarPreco(totalGeral)}*`;
@@ -10550,8 +10554,8 @@ const CardapioPublicoPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Seção Taxa de Entrega */}
-              {taxaEntregaConfig && areaValidada && calculoTaxa && (
+              {/* Seção Taxa de Entrega - Só aparece para entrega */}
+              {tipoEntregaSelecionado === 'entrega' && taxaEntregaConfig && areaValidada && calculoTaxa && (
                 <div className={`mt-4 p-4 rounded-lg ${
                   config.modo_escuro ? 'bg-gray-800' : 'bg-gray-50'
                 }`}>
@@ -10677,22 +10681,72 @@ const CardapioPublicoPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Seção Tipo de Endereço */}
-              {taxaEntregaConfig && areaValidada && calculoTaxa && (
-                <div className={`mt-4 p-4 rounded-lg border ${
-                  config.modo_escuro
-                    ? 'bg-gray-800 border-gray-600'
-                    : 'bg-gray-50 border-gray-200'
-                }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className={`font-semibold ${
-                      config.modo_escuro ? 'text-white' : 'text-gray-900'
-                    }`}>
-                      🏠 Tipo de Endereço
-                    </h4>
-                  </div>
+              {/* Seção Tipo de Entrega/Endereço */}
+              <div className={`mt-4 p-4 rounded-lg border ${
+                config.modo_escuro
+                  ? 'bg-gray-800 border-gray-600'
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className={`font-semibold ${
+                    config.modo_escuro ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    {tipoEntregaSelecionado === 'retirada' ? '🏪 Tipo de Entrega' : '🏠 Tipo de Endereço'}
+                  </h4>
+                  {tipoEntregaSelecionado === 'retirada' && config.retirada_balcao_cardapio && (
+                    <button
+                      onClick={() => {
+                        setTipoEntregaSelecionado('entrega');
+                        // Se tem taxa de entrega configurada, verificar área
+                        if (taxaEntregaConfig?.habilitado) {
+                          const areaJaValidada = empresaId && localStorage.getItem(`area_validada_${empresaId}`) === 'true';
+                          if (areaJaValidada) {
+                            validarEnderecoSalvoEProsseguir();
+                          } else {
+                            setModalAreaEntregaAberto(true);
+                          }
+                        }
+                      }}
+                      className={`text-sm px-3 py-1 rounded-lg transition-colors ${
+                        config.modo_escuro
+                          ? 'text-blue-400 hover:bg-gray-700'
+                          : 'text-blue-600 hover:bg-blue-50'
+                      }`}
+                    >
+                      Alterar
+                    </button>
+                  )}
+                </div>
 
-                  {tipoEndereco ? (
+                {tipoEntregaSelecionado === 'retirada' ? (
+                  <div className={`p-3 rounded-lg ${
+                    config.modo_escuro
+                      ? 'bg-green-900/30 border border-green-600'
+                      : 'bg-green-50 border border-green-200'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <Store className={`w-5 h-5 ${
+                        config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                      }`} />
+                      <div>
+                        <span className={`font-medium ${
+                          config.modo_escuro ? 'text-green-400' : 'text-green-600'
+                        }`}>
+                          Retirada no Balcão
+                        </span>
+                        <p className={`text-sm ${
+                          config.modo_escuro ? 'text-green-300' : 'text-green-700'
+                        }`}>
+                          Retire seu pedido diretamente no estabelecimento
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Conteúdo original para entrega
+                  taxaEntregaConfig && areaValidada && calculoTaxa && (
+                    <>
+                      {tipoEndereco ? (
                     <div className={`p-3 rounded-lg ${
                       config.modo_escuro
                         ? 'bg-blue-900/30 border border-blue-600'
@@ -10763,8 +10817,10 @@ const CardapioPublicoPage: React.FC = () => {
                       </button>
                     </div>
                   )}
-                </div>
-              )}
+                    </>
+                  )
+                )}
+              </div>
 
               {/* Seção Forma de Pagamento */}
               <div className={`mt-4 p-4 rounded-lg border ${
@@ -10941,7 +10997,7 @@ const CardapioPublicoPage: React.FC = () => {
                   <span className={`text-xl font-bold ${
                     config.modo_escuro ? 'text-green-400' : 'text-green-600'
                   }`}>
-                    {config.mostrar_precos ? formatarPreco(obterTotalCarrinho() + (calculoTaxa?.valor || 0) - calcularDescontoCupom()) : 'Preços ocultos'}
+                    {config.mostrar_precos ? formatarPreco(obterTotalCarrinho() + (tipoEntregaSelecionado === 'entrega' ? (calculoTaxa?.valor || 0) : 0) - calcularDescontoCupom()) : 'Preços ocultos'}
                   </span>
                 </div>
                 {config.mostrar_precos && (
@@ -10949,7 +11005,7 @@ const CardapioPublicoPage: React.FC = () => {
                     config.modo_escuro ? 'text-gray-400' : 'text-gray-600'
                   }`}>
                     <div>Produtos: {formatarPreco(obterTotalCarrinho())}</div>
-                    {calculoTaxa && (
+                    {tipoEntregaSelecionado === 'entrega' && calculoTaxa && (
                       <div>Taxa de entrega: {formatarPreco(calculoTaxa.valor)}</div>
                     )}
                     {cupomAplicado && (

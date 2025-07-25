@@ -18420,9 +18420,11 @@ const PDVPage: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card border border-gray-800 rounded-lg p-8 max-w-md w-full mx-4"
+              className="bg-background-card border border-gray-800 rounded-lg p-8 max-w-md w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
             >
-              <div className="text-center">
+              {/* Conteúdo com scroll */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="text-center">
                 {/* Ícone baseado no status */}
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${
                   statusProcessamento === 'sucesso'
@@ -18496,8 +18498,8 @@ const PDVPage: React.FC = () => {
                 )}
 
                 {/* Etapa atual */}
-                <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
-                  <p className="text-gray-300 text-sm leading-relaxed">
+                <div className="bg-gray-800/50 rounded-lg p-4 mb-6 max-h-60 overflow-y-auto">
+                  <p className="text-gray-300 text-sm leading-relaxed break-words">
                     {etapaProcessamento}
                   </p>
 
@@ -18562,9 +18564,31 @@ const PDVPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Aviso importante - apenas durante processamento */}
+                {statusProcessamento === 'processando' && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                    <p className="text-yellow-300 text-xs">
+                      ⚠️ Não feche esta janela durante o processamento
+                    </p>
+                  </div>
+                )}
+
+                {/* Aviso para impressão */}
+                {statusProcessamento === 'aguardando_impressao' && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                    <p className="text-blue-300 text-xs">
+                      🖨️ Escolha se deseja imprimir o cupom ou finalizar sem impressão
+                    </p>
+                  </div>
+                )}
+                </div>
+              </div>
+
+              {/* Área de botões fixa no final */}
+              <div className="flex-shrink-0 pt-4 border-t border-gray-800">
                 {/* Botões para impressão */}
                 {statusProcessamento === 'aguardando_impressao' && (
-                  <div className="mt-6 space-y-3">
+                  <div className="space-y-3">
                     {/* Botão Imprimir */}
                     <button
                       onClick={executarImpressao}
@@ -18588,9 +18612,7 @@ const PDVPage: React.FC = () => {
 
                 {/* Botões para erro */}
                 {statusProcessamento === 'erro' && (
-                  <div className="mt-6 space-y-3">
-
-
+                  <div className="space-y-3">
                     {/* Botão Fechar */}
                     <button
                       onClick={() => {
@@ -18602,24 +18624,6 @@ const PDVPage: React.FC = () => {
                     >
                       Fechar
                     </button>
-                  </div>
-                )}
-
-                {/* Aviso importante - apenas durante processamento */}
-                {statusProcessamento === 'processando' && (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                    <p className="text-yellow-300 text-xs">
-                      ⚠️ Não feche esta janela durante o processamento
-                    </p>
-                  </div>
-                )}
-
-                {/* Aviso para impressão */}
-                {statusProcessamento === 'aguardando_impressao' && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                    <p className="text-blue-300 text-xs">
-                      🖨️ Escolha se deseja imprimir o cupom ou finalizar sem impressão
-                    </p>
                   </div>
                 )}
               </div>
