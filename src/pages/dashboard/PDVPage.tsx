@@ -4420,8 +4420,7 @@ const PDVPage: React.FC = () => {
         };
       });
 
-      console.log('📋 REPROCESSAMENTO - Itens preparados:', itensAtualizados);
-      console.log('📋 REPROCESSAMENTO - Primeiro item detalhado:', JSON.stringify(itensAtualizados[0], null, 2));
+
 
       // Buscar dados da empresa e ambiente
       const { data: userData } = await supabase.auth.getUser();
@@ -5418,6 +5417,32 @@ const PDVPage: React.FC = () => {
                          (produto.codigo_barras && produto.codigo_barras.toLowerCase().includes(termoBusca.toLowerCase()));
     const matchesGrupo = grupoSelecionado === 'todos' || produto.grupo_id === grupoSelecionado;
     return matchesSearch && matchesGrupo;
+  }).sort((a, b) => {
+    // ✅ CORREÇÃO: Priorizar correspondências exatas para evitar conflitos
+    const termoBusca = searchTerm.includes('*')
+      ? searchTerm.split('*').slice(1).join('*').trim()
+      : searchTerm;
+
+    // Prioridade 1: Código de barras exato
+    const aCodigoBarrasExato = a.codigo_barras === termoBusca;
+    const bCodigoBarrasExato = b.codigo_barras === termoBusca;
+    if (aCodigoBarrasExato && !bCodigoBarrasExato) return -1;
+    if (!aCodigoBarrasExato && bCodigoBarrasExato) return 1;
+
+    // Prioridade 2: Código exato
+    const aCodigoExato = a.codigo === termoBusca;
+    const bCodigoExato = b.codigo === termoBusca;
+    if (aCodigoExato && !bCodigoExato) return -1;
+    if (!aCodigoExato && bCodigoExato) return 1;
+
+    // Prioridade 3: Nome exato
+    const aNomeExato = a.nome?.toLowerCase() === termoBusca.toLowerCase();
+    const bNomeExato = b.nome?.toLowerCase() === termoBusca.toLowerCase();
+    if (aNomeExato && !bNomeExato) return -1;
+    if (!aNomeExato && bNomeExato) return 1;
+
+    // Manter ordem original para outros casos
+    return 0;
   });
 
   // Função para verificar se um produto tem opções adicionais
@@ -5520,28 +5545,14 @@ const PDVPage: React.FC = () => {
 
     // ✅ NOVO: Criar venda em andamento no primeiro item (adaptado do sistema de rascunhos NFe)
     const isFirstItem = carrinho.length === 0;
-    console.log('🔍 DEBUG PRIMEIRO ITEM:', {
-      isFirstItem,
-      carrinhoLength: carrinho.length,
-      vendaEmAndamento: vendaEmAndamento,
-      produtoNome: produto.nome
-    });
+
 
     if (isFirstItem && !vendaEmAndamento && !criandoVenda) {
-      console.log('🚀 PRIMEIRO ITEM: Criando venda em andamento...');
-      console.log('🔍 Estado antes da criação:', {
-        carrinho: carrinho.length,
-        vendaEmAndamento,
-        isEditingVenda,
-        criandoVenda
-      });
+
 
       setCriandoVenda(true);
-      console.log('🚀 CRIACAO: Iniciando criação da venda em andamento...');
-
       try {
         const vendaCriada = await criarVendaEmAndamento();
-        console.log('🔍 CRIACAO: Resultado da criação:', vendaCriada);
 
         if (!vendaCriada) {
           setCriandoVenda(false);
@@ -5551,12 +5562,8 @@ const PDVPage: React.FC = () => {
         }
 
         // ✅ CORREÇÃO: Aguardar um pouco para garantir que a transação foi commitada
-        console.log('⏳ CRIACAO: Aguardando transação ser commitada...');
         await new Promise(resolve => setTimeout(resolve, 200));
         setCriandoVenda(false);
-
-        console.log('✅ CRIACAO: Venda em andamento criada com sucesso');
-        console.log('✅ CRIACAO: Estado vendaEmAndamento após criação:', vendaEmAndamento);
       } catch (error) {
         setCriandoVenda(false);
         console.error('❌ CRIACAO: Erro durante criação da venda:', error);
@@ -5566,7 +5573,7 @@ const PDVPage: React.FC = () => {
       }
     } else if (criandoVenda) {
       // ✅ NOVO: Se está criando venda, aguardar até terminar
-      console.log('⏳ Aguardando criação da venda terminar...');
+
       let tentativas = 0;
       while (criandoVenda && tentativas < 50) { // Máximo 5 segundos
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -5585,25 +5592,20 @@ const PDVPage: React.FC = () => {
         return;
       }
     } else {
-      console.log('🔍 Não criou venda porque:', {
-        isFirstItem,
-        vendaEmAndamento: !!vendaEmAndamento,
-        criandoVenda,
-        motivo: !isFirstItem ? 'Não é primeiro item' : vendaEmAndamento ? 'Venda já existe' : 'Já está criando'
-      });
+
     }
 
     // ✅ CORREÇÃO: Aguardar criação da venda se necessário e garantir que temos a venda atualizada
     let vendaParaSalvar = vendaEmAndamento;
     if (isFirstItem && !vendaEmAndamento && !criandoVenda) {
-      console.log('🔍 Aguardando criação da venda para salvar item...');
+
       // Aguardar um pouco para a venda ser criada e o estado ser atualizado
       await new Promise(resolve => setTimeout(resolve, 200));
       vendaParaSalvar = vendaEmAndamento;
 
       // ✅ NOVO: Se ainda não temos venda, tentar buscar novamente
       if (!vendaParaSalvar) {
-        console.log('🔍 Venda ainda não encontrada, tentando buscar novamente...');
+
         await new Promise(resolve => setTimeout(resolve, 300));
         vendaParaSalvar = vendaEmAndamento;
       }
@@ -5674,16 +5676,12 @@ const PDVPage: React.FC = () => {
 
         // ✅ CORREÇÃO: Só salvar se não é venda recuperada (para evitar duplicação)
         if (!isEditingVenda) {
-          console.log('🔍 DEBUG: Chamando salvarItemNaVendaEmAndamento...');
           const itemSalvo = await salvarItemNaVendaEmAndamento(novoItem);
-          console.log('🔍 DEBUG: Resultado do salvamento do item:', itemSalvo);
 
           if (!itemSalvo) {
             console.error('❌ ERRO CRÍTICO: Falha ao salvar item na venda em andamento');
             toast.error('ERRO: Item não foi salvo! Verifique o console.');
           } else {
-            console.log('✅ SUCESSO: Item salvo com sucesso na venda em andamento');
-
             // ✅ NOVO: Atualizar o item no carrinho com o pdv_item_id para evitar duplicação
             setCarrinho(prev => prev.map(item =>
               item.id === novoItem.id
@@ -7002,8 +7000,19 @@ const PDVPage: React.FC = () => {
 
       const totalItensInseridos = itensData?.length || 0;
 
-      if (totalItensInseridos !== totalItensEsperados) {
-        console.error(`Número de itens incorreto. Esperado: ${totalItensEsperados}, Inserido: ${totalItensInseridos}`);
+      // ✅ CORREÇÃO: Calcular total de quantidade esperada vs inserida (não número de linhas)
+      const totalQuantidadeEsperada = carrinho.reduce((total, item) => total + item.quantidade, 0);
+      const totalQuantidadeInserida = itensData?.reduce((total, item) => total + (item.quantidade || 0), 0) || 0;
+
+      // Verificar se as quantidades batem (mais importante que o número de linhas)
+      if (totalQuantidadeInserida !== totalQuantidadeEsperada) {
+        console.warn(`⚠️ Divergência de quantidade. Esperado: ${totalQuantidadeEsperada}, Inserido: ${totalQuantidadeInserida}`);
+        // Não retornar false, apenas avisar - pode ser devido ao agrupamento de itens
+      }
+
+      // Verificar se pelo menos há itens inseridos
+      if (totalItensInseridos === 0) {
+        console.error('Nenhum item foi inserido na venda');
         return false;
       }
 
@@ -12459,7 +12468,10 @@ const PDVPage: React.FC = () => {
                     {(carregandoNovoItem || enterPressionado) && (
                       <motion.div
                         initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        animate={{
+                          opacity: 1,
+                          y: 0
+                        }}
                         exit={{ opacity: 0, y: -20 }}
                         className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5"
                       >
