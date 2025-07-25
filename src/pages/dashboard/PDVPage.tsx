@@ -19023,35 +19023,55 @@ const PDVPage: React.FC = () => {
                                 )}
                                 <div className="flex items-center gap-2">
                                   <button
-                                  onClick={() => {
+                                  onClick={async () => {
                                     // ✅ VALIDAÇÃO: Só permitir salvar se número for válido
                                     if (numeroValido !== true) {
                                       toast.error('Número inválido ou já em uso!');
                                       return;
                                     }
 
-                                    const novoNumero = parseInt(numeroNfceEditavel) || vendaParaEditarNfce.numero_documento;
+                                    try {
+                                      const novoNumero = parseInt(numeroNfceEditavel) || vendaParaEditarNfce.numero_documento;
 
-                                    // Salvar o número editado no estado do modal
-                                    setVendaParaEditarNfce(prev => ({
-                                      ...prev,
-                                      numero_documento: novoNumero
-                                    }));
+                                      // ✅ CORREÇÃO CRÍTICA: Salvar no banco de dados IMEDIATAMENTE
+                                      console.log('💾 SALVANDO: Atualizando número no banco para:', novoNumero);
+                                      const { error: updateError } = await supabase
+                                        .from('pdv')
+                                        .update({
+                                          numero_documento: novoNumero
+                                        })
+                                        .eq('id', vendaParaEditarNfce.id);
 
-                                    // ✅ NOVO: Atualizar também o estado da lista de vendas em tempo real
-                                    setVendas(prev => prev.map(venda =>
-                                      venda.id === vendaParaEditarNfce.id
-                                        ? { ...venda, numero_documento: novoNumero }
-                                        : venda
-                                    ));
+                                      if (updateError) {
+                                        throw new Error(`Erro ao salvar número: ${updateError.message}`);
+                                      }
 
-                                    // Limpar estados de validação
-                                    setEditandoNumeroNfce(false);
-                                    setNumeroValido(null);
-                                    setMensagemValidacao('');
+                                      // Salvar o número editado no estado do modal
+                                      setVendaParaEditarNfce(prev => ({
+                                        ...prev,
+                                        numero_documento: novoNumero
+                                      }));
 
-                                    // Mostrar feedback visual
-                                    toast.success(`Número da NFC-e alterado para #${novoNumero}`);
+                                      // ✅ NOVO: Atualizar também o estado da lista de vendas em tempo real
+                                      setVendas(prev => prev.map(venda =>
+                                        venda.id === vendaParaEditarNfce.id
+                                          ? { ...venda, numero_documento: novoNumero }
+                                          : venda
+                                      ));
+
+                                      // Limpar estados de validação
+                                      setEditandoNumeroNfce(false);
+                                      setNumeroValido(null);
+                                      setMensagemValidacao('');
+
+                                      // Mostrar feedback visual
+                                      toast.success(`✅ Número da NFC-e salvo no banco: #${novoNumero}`);
+                                      console.log('✅ SALVANDO: Número atualizado com sucesso no banco:', novoNumero);
+
+                                    } catch (error: any) {
+                                      console.error('❌ ERRO ao salvar número:', error);
+                                      toast.error(`Erro ao salvar número: ${error.message}`);
+                                    }
                                   }}
                                   disabled={numeroValido !== true}
                                   className={`p-1 ${
