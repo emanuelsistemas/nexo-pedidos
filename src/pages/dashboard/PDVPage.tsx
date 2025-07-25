@@ -671,6 +671,24 @@ const PDVPage: React.FC = () => {
   // ✅ CORREÇÃO: Estado específico para capturar Enter IMEDIATAMENTE
   const [enterPressionado, setEnterPressionado] = useState(false);
 
+  // ✅ DEBUG: Estado para medir tempo de delay
+  const [debugTimestamp, setDebugTimestamp] = useState<number>(0);
+
+  // ✅ DEBUG: Monitorar mudanças nos estados de loading
+  useEffect(() => {
+    console.log('📊 [STATE DEBUG] Estados mudaram:');
+    console.log('📊 [STATE DEBUG] - carregandoNovoItem:', carregandoNovoItem);
+    console.log('📊 [STATE DEBUG] - enterPressionado:', enterPressionado);
+    console.log('📊 [STATE DEBUG] - codigoBuscando:', codigoBuscando);
+    console.log('📊 [STATE DEBUG] - debugTimestamp:', debugTimestamp);
+
+    if (carregandoNovoItem || enterPressionado) {
+      const currentTime = performance.now();
+      const delay = debugTimestamp > 0 ? currentTime - debugTimestamp : 0;
+      console.log('📊 [STATE DEBUG] Loading ATIVO! Delay desde Enter:', delay.toFixed(2), 'ms');
+    }
+  }, [carregandoNovoItem, enterPressionado, codigoBuscando, debugTimestamp]);
+
   // Funções para localStorage
   const savePDVState = () => {
     try {
@@ -5440,11 +5458,23 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
+    // ✅ DEBUG: Log início da função
+    const funcStartTime = performance.now();
+    console.log('🛒 [CARRINHO DEBUG] ===== INICIANDO adicionarAoCarrinho =====');
+    console.log('🛒 [CARRINHO DEBUG] Produto:', produto.nome);
+    console.log('🛒 [CARRINHO DEBUG] Quantidade personalizada:', quantidadePersonalizada);
+
     // ✅ CORREÇÃO: Verificar opções adicionais ANTES de qualquer outro fluxo
+    console.log('🛒 [CARRINHO DEBUG] Verificando opções adicionais...');
+    const beforeOpcoes = performance.now();
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
+    const afterOpcoes = performance.now();
+    console.log('🛒 [CARRINHO DEBUG] Opções adicionais verificadas:', temOpcoesAdicionais, 'Tempo:', (afterOpcoes - beforeOpcoes).toFixed(2), 'ms');
 
     // ✅ FLUXO SEQUENCIAL: Verificar se precisa selecionar vendedor primeiro
+    console.log('🛒 [CARRINHO DEBUG] Verificando vendedor...');
     if (pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
+      console.log('🛒 [CARRINHO DEBUG] Precisa selecionar vendedor - abrindo modal');
       setProdutoAguardandoVendedor(produto);
       setAguardandoSelecaoVendedor(true);
       setShowVendedorModal(true);
@@ -5456,7 +5486,9 @@ const PDVPage: React.FC = () => {
     }
 
     // ✅ VERIFICAR: Modal de quantidade (apenas se não veio do fluxo do vendedor)
+    console.log('🛒 [CARRINHO DEBUG] Verificando modal de quantidade...');
     if (pdvConfig?.vendas_itens_multiplicacao && !quantidadePersonalizada && !searchTerm.includes('*')) {
+      console.log('🛒 [CARRINHO DEBUG] Precisa definir quantidade - abrindo modal');
       setProdutoParaQuantidade(produto);
       setQuantidadeModal(1);
       setQuantidadeModalInput('1');
@@ -5606,7 +5638,12 @@ const PDVPage: React.FC = () => {
       }
     }
 
+    console.log('🛒 [CARRINHO DEBUG] Adicionando item ao carrinho...');
+    const beforeSetCarrinho = performance.now();
+
     setCarrinho(prev => {
+      console.log('🛒 [CARRINHO DEBUG] Executando setCarrinho - carrinho atual tem', prev.length, 'itens');
+
       // Verificar se deve agrupar itens baseado na configuração
       const deveAgrupar = pdvConfig?.agrupa_itens === true;
 
@@ -5615,6 +5652,7 @@ const PDVPage: React.FC = () => {
         const itemExistente = prev.find(item => item.produto.id === produto.id);
 
         if (itemExistente) {
+          console.log('🛒 [CARRINHO DEBUG] Item existente encontrado - agrupando');
           return prev.map(item =>
             item.produto.id === produto.id
               ? {
@@ -5626,13 +5664,18 @@ const PDVPage: React.FC = () => {
               : item
           );
         } else {
+          console.log('🛒 [CARRINHO DEBUG] Novo item - adicionando ao carrinho');
           return [...prev, novoItem];
         }
       } else {
         // Comportamento novo: sempre adiciona como item separado
+        console.log('🛒 [CARRINHO DEBUG] Sempre separado - adicionando novo item');
         return [...prev, novoItem];
       }
     });
+
+    const afterSetCarrinho = performance.now();
+    console.log('🛒 [CARRINHO DEBUG] setCarrinho executado! Tempo:', (afterSetCarrinho - beforeSetCarrinho).toFixed(2), 'ms');
 
     // ✅ CORREÇÃO: Aguardar venda ser criada antes de salvar item
     const aguardarVendaEsalvarItem = async () => {
@@ -11791,26 +11834,49 @@ const PDVPage: React.FC = () => {
 
   const handleSearchKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchTerm.trim()) {
-      // ✅ CORREÇÃO: ATIVAR LOADING INSTANTANEAMENTE NO MOMENTO DO ENTER
+      // ✅ DEBUG: Marcar início do processo
+      const startTime = performance.now();
       const codigoDigitado = searchTerm.trim();
+
+      console.log('🔥 [PDV DEBUG] ===== ENTER PRESSIONADO =====');
+      console.log('🔥 [PDV DEBUG] Timestamp:', new Date().toISOString());
+      console.log('🔥 [PDV DEBUG] Código digitado:', codigoDigitado);
+      console.log('🔥 [PDV DEBUG] Produtos filtrados:', produtosFiltrados.length);
+
+      // ✅ CORREÇÃO: ATIVAR LOADING INSTANTANEAMENTE NO MOMENTO DO ENTER
+      console.log('🔥 [PDV DEBUG] Ativando estados de loading...');
       setCodigoBuscando(codigoDigitado);
       setEnterPressionado(true);
       setCarregandoNovoItem(true);
+      setDebugTimestamp(startTime);
       setSearchTerm(''); // Limpar campo imediatamente
+
+      console.log('🔥 [PDV DEBUG] Estados ativados! Tempo desde Enter:', (performance.now() - startTime).toFixed(2), 'ms');
 
       // Se há produtos filtrados, adicionar o primeiro
       if (produtosFiltrados.length > 0) {
         try {
+          console.log('🔥 [PDV DEBUG] Iniciando adicionarAoCarrinho...');
+          const beforeAdd = performance.now();
+
           // Processar em background - loading já está ativo
           await adicionarAoCarrinho(produtosFiltrados[0]);
 
+          const afterAdd = performance.now();
+          console.log('🔥 [PDV DEBUG] adicionarAoCarrinho concluído! Tempo:', (afterAdd - beforeAdd).toFixed(2), 'ms');
+
           // Aguardar um pouco para mostrar o efeito
           await new Promise(resolve => setTimeout(resolve, 300));
+
+          const totalTime = performance.now() - startTime;
+          console.log('🔥 [PDV DEBUG] Processo completo! Tempo total:', totalTime.toFixed(2), 'ms');
         } finally {
           // Desativar efeito de carregamento
+          console.log('🔥 [PDV DEBUG] Desativando loading...');
           setCarregandoNovoItem(false);
           setCodigoBuscando('');
           setEnterPressionado(false);
+          setDebugTimestamp(0);
         }
 
         // Manter o foco no campo para próxima digitação
@@ -11820,9 +11886,11 @@ const PDVPage: React.FC = () => {
         }, 10);
       } else {
         // Produto não encontrado - desativar loading e mostrar modal
+        console.log('🔥 [PDV DEBUG] Produto não encontrado, desativando loading...');
         setCarregandoNovoItem(false);
         setEnterPressionado(false);
         setCodigoBuscando('');
+        setDebugTimestamp(0);
 
         // Extrair o termo de busca real
         let termoBusca = codigoDigitado;
@@ -12441,9 +12509,23 @@ const PDVPage: React.FC = () => {
                     {(carregandoNovoItem || enterPressionado) && (
                       <motion.div
                         initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        animate={{
+                          opacity: 1,
+                          y: 0,
+                          onComplete: () => {
+                            const currentTime = performance.now();
+                            const delay = debugTimestamp > 0 ? currentTime - debugTimestamp : 0;
+                            console.log('🎯 [CARD DEBUG] Card de loading APARECEU! Delay desde Enter:', delay.toFixed(2), 'ms');
+                            console.log('🎯 [CARD DEBUG] Estados ativos - carregandoNovoItem:', carregandoNovoItem, 'enterPressionado:', enterPressionado);
+                          }
+                        }}
                         exit={{ opacity: 0, y: -20 }}
                         className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5"
+                        onAnimationStart={() => {
+                          const currentTime = performance.now();
+                          const delay = debugTimestamp > 0 ? currentTime - debugTimestamp : 0;
+                          console.log('🎯 [CARD DEBUG] Card de loading INICIANDO animação! Delay desde Enter:', delay.toFixed(2), 'ms');
+                        }}
                       >
                         <div className="flex gap-2.5">
                           {/* Número sequencial do item - Carregando */}
