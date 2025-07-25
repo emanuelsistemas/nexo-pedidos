@@ -5119,6 +5119,7 @@ const PDVPage: React.FC = () => {
             pedido_origem_id: pedido.id,
             pedido_origem_numero: pedido.numero_pedido,
             cardapio_digital: true,
+            vendaSemProduto: true, // ✅ CORREÇÃO: Marcar como venda sem produto para evitar erro de UUID
             nome: 'Taxa de Entrega', // Nome personalizado
             preco: pedido.valor_taxa_entrega,
             observacao: null,
