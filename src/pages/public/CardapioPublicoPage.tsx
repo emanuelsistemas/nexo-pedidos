@@ -1428,7 +1428,7 @@ const CardapioPublicoPage: React.FC = () => {
       // Buscar todos os pedidos ativos do banco
       const { data: pedidosBanco, error } = await supabase
         .from('cardapio_digital')
-        .select('id, numero_pedido, status_pedido, data_pedido, valor_total')
+        .select('id, numero_pedido, status_pedido, data_pedido, valor_total, tipo_entrega')
         .eq('empresa_id', empresaId)
         .in('status_pedido', ['pendente', 'confirmado', 'aceito', 'preparando', 'pronto', 'saiu_para_entrega', 'entregue', 'cancelado'])
         .order('data_pedido', { ascending: false });
@@ -12598,27 +12598,29 @@ const CardapioPublicoPage: React.FC = () => {
                   </span>
                 </div>
 
-                {/* Saiu para Entrega */}
-                <div className="flex items-center gap-3">
-                  {['saiu_para_entrega', 'entregue'].includes(pedidoAtual.status_pedido) ? (
-                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                      <Check size={14} className="text-white" />
-                    </div>
-                  ) : ['pronto'].includes(pedidoAtual.status_pedido) ? (
-                    <div className="w-6 h-6 rounded-full border-2 border-purple-500 animate-spin">
-                      <div className="w-1.5 h-1.5 bg-purple-500 rounded-full ml-0.5 mt-0.5"></div>
-                    </div>
-                  ) : (
-                    <div className={`w-6 h-6 rounded-full border-2 ${
-                      config.modo_escuro ? 'border-gray-600' : 'border-gray-300'
-                    }`}></div>
-                  )}
-                  <span className={`text-sm font-medium ${
-                    config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    Saiu para Entrega
-                  </span>
-                </div>
+                {/* Saiu para Entrega - só aparece quando tipo_entrega !== 'retirada' */}
+                {pedidoAtual.tipo_entrega !== 'retirada' && (
+                  <div className="flex items-center gap-3">
+                    {['saiu_para_entrega', 'entregue'].includes(pedidoAtual.status_pedido) ? (
+                      <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                        <Check size={14} className="text-white" />
+                      </div>
+                    ) : ['pronto'].includes(pedidoAtual.status_pedido) ? (
+                      <div className="w-6 h-6 rounded-full border-2 border-purple-500 animate-spin">
+                        <div className="w-1.5 h-1.5 bg-purple-500 rounded-full ml-0.5 mt-0.5"></div>
+                      </div>
+                    ) : (
+                      <div className={`w-6 h-6 rounded-full border-2 ${
+                        config.modo_escuro ? 'border-gray-600' : 'border-gray-300'
+                      }`}></div>
+                    )}
+                    <span className={`text-sm font-medium ${
+                      config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Saiu para Entrega
+                    </span>
+                  </div>
+                )}
 
                 {/* Entregue */}
                 <div className="flex items-center gap-3">
@@ -12626,7 +12628,11 @@ const CardapioPublicoPage: React.FC = () => {
                     <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                       <Check size={14} className="text-white" />
                     </div>
-                  ) : ['saiu_para_entrega'].includes(pedidoAtual.status_pedido) ? (
+                  ) : (
+                    // Para retirada: animar quando pronto, para entrega: animar quando saiu_para_entrega
+                    (pedidoAtual.tipo_entrega === 'retirada' && ['pronto'].includes(pedidoAtual.status_pedido)) ||
+                    (pedidoAtual.tipo_entrega !== 'retirada' && ['saiu_para_entrega'].includes(pedidoAtual.status_pedido))
+                  ) ? (
                     <div className="w-6 h-6 rounded-full border-2 border-indigo-500 animate-spin">
                       <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full ml-0.5 mt-0.5"></div>
                     </div>
@@ -12638,7 +12644,7 @@ const CardapioPublicoPage: React.FC = () => {
                   <span className={`text-sm font-medium ${
                     config.modo_escuro ? 'text-gray-300' : 'text-gray-700'
                   }`}>
-                    Pedido Entregue
+                    {pedidoAtual.tipo_entrega === 'retirada' ? 'Pedido Retirado' : 'Pedido Entregue'}
                   </span>
                 </div>
 

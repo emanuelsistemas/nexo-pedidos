@@ -2949,6 +2949,7 @@ const PDVPage: React.FC = () => {
           valor_total,
           status_pedido,
           data_pedido,
+          tipo_entrega,
           endereco_entrega,
           forma_pagamento_nome,
           forma_pagamento_tipo,
@@ -20683,7 +20684,19 @@ const PDVPage: React.FC = () => {
                           >
                             <div className="flex items-center justify-between mb-3">
                               <div>
-                                <h4 className="font-semibold text-white">#{pedido.numero_pedido}</h4>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="font-semibold text-white">#{pedido.numero_pedido}</h4>
+                                  {/* ✅ TAG DE TIPO DE ENTREGA */}
+                                  {pedido.tipo_entrega === 'retirada' ? (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30">
+                                      🏪 Retirada
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                      🚴 Entrega
+                                    </span>
+                                  )}
+                                </div>
                                 {/* ✅ TAG DE NOTA FISCAL */}
                                 {pedido.quer_nota_fiscal && pedido.cpf_cnpj_cliente && (
                                   <div className="mt-1 flex items-center gap-2">
@@ -20858,8 +20871,8 @@ const PDVPage: React.FC = () => {
                                     </button>
                                   )}
 
-                                  {/* Botão Saiu para Entrega */}
-                                  {pedido.status_pedido !== 'saiu_para_entrega' && pedido.status_pedido !== 'pendente' && (
+                                  {/* Botão Saiu para Entrega - só aparece quando tipo_entrega !== 'retirada' */}
+                                  {pedido.status_pedido !== 'saiu_para_entrega' && pedido.status_pedido !== 'pendente' && pedido.tipo_entrega !== 'retirada' && (
                                     <button
                                       onClick={async () => {
                                         const sucesso = await marcarComoSaiuParaEntrega(pedido.id);

@@ -300,6 +300,7 @@ export const useCardapioDigitalNotifications = ({
           valor_total,
           status_pedido,
           data_pedido,
+          tipo_entrega,
           itens_pedido
         `)
         .eq('empresa_id', currentEmpresaId)
