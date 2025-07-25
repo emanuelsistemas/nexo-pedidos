@@ -1581,10 +1581,9 @@ const PDVPage: React.FC = () => {
       if (item.id === 'fiados') {
         return pdvConfig?.fiado === true; // ✅ CORRIGIDO: Usar configuração PDV
       }
-      // Se for o item 'venda-sem-produto', só mostrar se a configuração estiver habilitada E não houver itens do cardápio digital
+      // Se for o item 'venda-sem-produto', só mostrar se a configuração estiver habilitada
       if (item.id === 'venda-sem-produto') {
-        const temItensCardapioDigital = carrinho.some(item => item.cardapio_digital === true);
-        return pdvConfig?.venda_sem_produto === true && !temItensCardapioDigital;
+        return pdvConfig?.venda_sem_produto === true;
       }
       // Se for o item 'desconto-total', só mostrar se a configuração estiver habilitada E houver itens no carrinho
       if (item.id === 'desconto-total') {
@@ -18401,6 +18400,32 @@ const PDVPage: React.FC = () => {
                   <p className="text-gray-300 text-sm leading-relaxed">
                     {etapaProcessamento}
                   </p>
+
+                  {/* ✅ NOVO: Botão para copiar log de erro */}
+                  {statusProcessamento === 'erro' && erroProcessamento && (
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-gray-400">Log do erro:</span>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const logCompleto = `#${numeroVendaProcessada || 'PDV-' + Date.now()}\n\n${erroProcessamento}`;
+                              await navigator.clipboard.writeText(logCompleto);
+                              toast.success('Log de erro copiado!');
+                            } catch (error) {
+                              toast.error('Erro ao copiar log');
+                            }
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded-lg transition-colors text-xs"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Copiar Log
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* ✅ NOVO: Instrução específica para erro na NFC-e */}

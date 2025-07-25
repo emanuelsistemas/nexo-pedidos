@@ -139,6 +139,8 @@ function buscarConfiguracoesFiscaisVendaSemProduto($empresaId) {
     // ✅ MAPEAR configurações PDV para formato esperado pelo sistema fiscal
     $dadosFiscais = [
         'codigo' => '999999',
+        'cfop' => $config['venda_sem_produto_cfop'] ?? '5102', // ✅ CORREÇÃO: Incluir CFOP da configuração PDV
+        'ncm' => $config['venda_sem_produto_ncm'] ?? '22021000', // ✅ CORREÇÃO: Incluir NCM da configuração PDV
         'origem_produto' => (int)($config['venda_sem_produto_origem'] ?? 0),
         'margem_st' => (float)($config['venda_sem_produto_margem_st'] ?? 0),
         'cest' => $config['venda_sem_produto_cest'] ?? '',

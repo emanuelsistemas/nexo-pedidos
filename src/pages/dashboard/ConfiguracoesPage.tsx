@@ -285,7 +285,8 @@ const ConfiguracoesPage: React.FC = () => {
     cardapio_abertura_tipo: 'automatico',
     cardapio_loja_aberta: true,
     trabalha_com_pizzas: false,
-    ocultar_grupos_cardapio: false
+    ocultar_grupos_cardapio: false,
+    retirada_balcao_cardapio: false
   });
 
   // Estado para controlar as abas do PDV
@@ -3073,7 +3074,8 @@ const ConfiguracoesPage: React.FC = () => {
           cardapio_abertura_tipo: config.cardapio_abertura_tipo || 'automatico',
           cardapio_loja_aberta: config.cardapio_loja_aberta !== undefined ? config.cardapio_loja_aberta : true,
           trabalha_com_pizzas: config.trabalha_com_pizzas || false,
-          ocultar_grupos_cardapio: config.ocultar_grupos_cardapio || false
+          ocultar_grupos_cardapio: config.ocultar_grupos_cardapio || false,
+          retirada_balcao_cardapio: config.retirada_balcao_cardapio || false
         });
 
         // Atualizar também o estado separado do rodapé
@@ -3197,7 +3199,8 @@ const ConfiguracoesPage: React.FC = () => {
         cardapio_abertura_tipo: 'automatico',
         cardapio_loja_aberta: true,
         trabalha_com_pizzas: false,
-        ocultar_grupos_cardapio: false
+        ocultar_grupos_cardapio: false,
+        retirada_balcao_cardapio: false
       });
 
       // Atualizar também o estado separado do rodapé
@@ -4017,6 +4020,7 @@ const ConfiguracoesPage: React.FC = () => {
           cardapio_loja_aberta: field === 'cardapio_loja_aberta' ? value : true,
           trabalha_com_pizzas: field === 'trabalha_com_pizzas' ? value : false,
           ocultar_grupos_cardapio: field === 'ocultar_grupos_cardapio' ? value : false,
+          retirada_balcao_cardapio: field === 'retirada_balcao_cardapio' ? value : false,
           ocultar_finalizar_com_impressao: field === 'ocultar_finalizar_com_impressao' ? value : false,
           ocultar_finalizar_sem_impressao: field === 'ocultar_finalizar_sem_impressao' ? value : false,
           ocultar_nfce_com_impressao: field === 'ocultar_nfce_com_impressao' ? value : false,
@@ -4113,7 +4117,8 @@ const ConfiguracoesPage: React.FC = () => {
         ocultar_producao: 'Ocultar "Produção"',
         modo_escuro_cardapio: 'Modo Escuro do Cardápio',
         exibir_fotos_itens_cardapio: 'Exibir Fotos nos Itens Principal',
-        trabalha_com_pizzas: 'Trabalha com Pizzas'
+        trabalha_com_pizzas: 'Trabalha com Pizzas',
+        retirada_balcao_cardapio: 'Retirada no Balcão'
       };
 
       const fieldName = fieldNames[field] || field;
@@ -7274,6 +7279,22 @@ const ConfiguracoesPage: React.FC = () => {
                             <h5 className="text-white font-medium">Trabalha com Pizzas</h5>
                             <p className="text-sm text-gray-400 mt-1">
                               Habilita funcionalidades específicas para pizzarias no cardápio digital.
+                            </p>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={pdvConfig.retirada_balcao_cardapio}
+                            onChange={(e) => handlePdvConfigChange('retirada_balcao_cardapio', e.target.checked)}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                            style={{ borderRadius: '50%' }}
+                          />
+                          <div>
+                            <h5 className="text-white font-medium">Retirada no Balcão</h5>
+                            <p className="text-sm text-gray-400 mt-1">
+                              Habilita opção de retirada no balcão para clientes no cardápio digital.
                             </p>
                           </div>
                         </label>

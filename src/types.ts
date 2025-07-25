@@ -179,6 +179,12 @@ export interface PDVConfig {
   venda_sem_produto_peso_liquido?: number;
   venda_sem_produto_cst?: string;
   venda_sem_produto_csosn?: string;
+  // Campos do cardápio digital
+  modo_escuro_cardapio?: boolean;
+  exibir_fotos_itens_cardapio?: boolean;
+  cardapio_fotos_minimizadas?: boolean;
+  trabalha_com_pizzas?: boolean;
+  retirada_balcao_cardapio?: boolean;
   created_at?: string;
   updated_at?: string;
 }
