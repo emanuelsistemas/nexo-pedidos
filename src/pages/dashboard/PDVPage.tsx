@@ -1351,14 +1351,101 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para detectar e corrigir vendas órfãs
+  const detectarECorrigirVendasOrfas = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar vendas com status 'aberta' desta empresa
+      const { data: vendasOrfas, error } = await supabase
+        .from('pdv')
+        .select('id, numero_venda, created_at')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('status_venda', 'aberta');
+
+      if (error) {
+        console.error('❌ Erro ao buscar vendas órfãs:', error);
+        return;
+      }
+
+      if (vendasOrfas && vendasOrfas.length > 0) {
+        console.log(`🔍 Encontradas ${vendasOrfas.length} vendas órfãs (status 'aberta')`);
+
+        // Verificar se há venda sendo editada atualmente
+        const temVendaEmAndamento = vendaEmAndamento !== null;
+
+        if (!temVendaEmAndamento) {
+          // Não há venda em andamento, corrigir todas as órfãs
+          const { error: updateError } = await supabase
+            .from('pdv')
+            .update({
+              status_venda: 'salva',
+              updated_at: new Date().toISOString()
+            })
+            .eq('empresa_id', usuarioData.empresa_id)
+            .eq('status_venda', 'aberta');
+
+          if (updateError) {
+            console.error('❌ Erro ao corrigir vendas órfãs:', updateError);
+          } else {
+            console.log(`✅ ${vendasOrfas.length} vendas órfãs corrigidas (status voltou para 'salva')`);
+
+            // Mostrar notificação discreta
+            const numerosVendas = vendasOrfas.map(v => v.numero_venda).join(', ');
+            toast.info(`🔄 ${vendasOrfas.length} venda(s) recuperada(s): ${numerosVendas}`);
+          }
+        } else {
+          // Há venda em andamento, corrigir apenas as outras
+          const vendasParaCorrigir = vendasOrfas.filter(v => v.id !== vendaEmAndamento.id);
+
+          if (vendasParaCorrigir.length > 0) {
+            const idsParaCorrigir = vendasParaCorrigir.map(v => v.id);
+
+            const { error: updateError } = await supabase
+              .from('pdv')
+              .update({
+                status_venda: 'salva',
+                updated_at: new Date().toISOString()
+              })
+              .in('id', idsParaCorrigir);
+
+            if (updateError) {
+              console.error('❌ Erro ao corrigir vendas órfãs:', updateError);
+            } else {
+              console.log(`✅ ${vendasParaCorrigir.length} vendas órfãs corrigidas (excluindo venda em andamento)`);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao detectar vendas órfãs:', error);
+    }
+  };
+
   // useEffect para carregamento inicial - SEM dependências para evitar recarregamentos
   useEffect(() => {
-    loadData();
-    loadPDVState(); // Carrega o estado salvo do PDV
-    loadContadorPedidos(); // Carrega contador inicial
-    loadContadorNfcePendentes(); // Carrega contador de NFC-e pendentes
-    loadUserData(); // Carrega dados do usuário
-    carregarConfigTabelaPrecos(); // ✅ NOVO: Carregar configurações de tabela de preços
+    const initializeData = async () => {
+      loadData();
+      loadPDVState(); // Carrega o estado salvo do PDV
+      loadContadorPedidos(); // Carrega contador inicial
+      loadContadorNfcePendentes(); // Carrega contador de NFC-e pendentes
+      loadUserData(); // Carrega dados do usuário
+      carregarConfigTabelaPrecos(); // ✅ NOVO: Carregar configurações de tabela de preços
+
+      // ✅ NOVO: Detectar e corrigir vendas órfãs após carregar dados
+      await detectarECorrigirVendasOrfas();
+    };
+
+    initializeData();
 
     // Adiciona listener para salvar antes de fechar a página
     const handleBeforeUnload = () => {
