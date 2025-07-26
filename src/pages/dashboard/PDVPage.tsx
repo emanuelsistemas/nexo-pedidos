@@ -2291,6 +2291,7 @@ const PDVPage: React.FC = () => {
         codigo_barras,
         descricao,
         promocao,
+        producao,
         tipo_desconto,
         valor_desconto,
         desconto_quantidade,
@@ -2521,6 +2522,7 @@ const PDVPage: React.FC = () => {
             codigo_barras,
             descricao,
             promocao,
+            producao,
             tipo_desconto,
             valor_desconto,
             desconto_quantidade,
@@ -3353,7 +3355,7 @@ const PDVPage: React.FC = () => {
       console.log('🏭 [PRODUCAO-PRINT] Itens recebidos:', itens);
 
       // 1. BUSCAR DADOS DOS PRODUTOS PARA VERIFICAR CAMPO 'producao' E 'grupo'
-      const produtoIds = itens.map(item => item.produto_id).filter(Boolean);
+      const produtoIds = itens.map(item => item.produto_id || item.produto?.id).filter(Boolean);
 
       console.log('🏭 [PRODUCAO-PRINT] Produto IDs extraídos:', produtoIds);
 
@@ -3361,7 +3363,8 @@ const PDVPage: React.FC = () => {
         console.log('🏭 [PRODUCAO-PRINT] ❌ Nenhum produto_id encontrado nos itens');
         console.log('🏭 [PRODUCAO-PRINT] Estrutura dos itens:', itens.map(item => ({
           produto_id: item.produto_id,
-          nome: item.produto_nome || item.nome,
+          produto_objeto_id: item.produto?.id,
+          nome: item.produto_nome || item.nome || item.produto?.nome,
           keys: Object.keys(item)
         })));
         return;
@@ -3396,9 +3399,10 @@ const PDVPage: React.FC = () => {
       // 2. FILTRAR APENAS ITENS QUE TÊM PRODUÇÃO = TRUE
       console.log('🏭 [PRODUCAO-PRINT] Filtrando itens de produção...');
       const itensProducao = itens.filter(item => {
-        const produto = produtosData?.find(p => p.id === item.produto_id);
+        const produtoId = item.produto_id || item.produto?.id;
+        const produto = produtosData?.find(p => p.id === produtoId);
         const temProducao = produto?.producao === true;
-        console.log(`🏭 [PRODUCAO-PRINT] Item ${item.produto_nome || item.nome}: producao=${produto?.producao}, incluir=${temProducao}`);
+        console.log(`🏭 [PRODUCAO-PRINT] Item ${item.produto_nome || item.nome || item.produto?.nome}: producao=${produto?.producao}, incluir=${temProducao}`);
         return temProducao;
       });
 
@@ -3421,8 +3425,9 @@ const PDVPage: React.FC = () => {
       const itensPorGrupo = new Map();
 
       itensProducao.forEach(item => {
-        const produto = produtosData?.find(p => p.id === item.produto_id);
-        console.log(`🏭 [PRODUCAO-PRINT] Processando item: ${item.produto_nome || item.nome}`);
+        const produtoId = item.produto_id || item.produto?.id;
+        const produto = produtosData?.find(p => p.id === produtoId);
+        console.log(`🏭 [PRODUCAO-PRINT] Processando item: ${item.produto_nome || item.nome || item.produto?.nome}`);
         console.log(`🏭 [PRODUCAO-PRINT] Produto encontrado:`, produto);
 
         if (produto?.grupo) {
@@ -3442,10 +3447,11 @@ const PDVPage: React.FC = () => {
           itensPorGrupo.get(grupoId).itens.push({
             ...item,
             produto_nome: produto.nome,
-            produto_codigo: produto.codigo
+            produto_codigo: produto.codigo,
+            produto_id: produtoId // Garantir que o produto_id está correto
           });
         } else {
-          console.log(`🏭 [PRODUCAO-PRINT] ⚠️ Item sem grupo válido: ${item.produto_nome || item.nome}`);
+          console.log(`🏭 [PRODUCAO-PRINT] ⚠️ Item sem grupo válido: ${item.produto_nome || item.nome || item.produto?.nome}`);
         }
       });
 
@@ -6514,79 +6520,7 @@ const PDVPage: React.FC = () => {
     setVendaSemProdutoAguardando(null); // Limpar venda sem produto aguardando
   };
 
-  // ✅ NOVO: Função para continuar fluxo após todos os modais obrigatórios
-  const continuarFluxoAposModais = async (produto: Produto, quantidade: number) => {
-    // Verificar se há opções adicionais ANTES de qualquer outro fluxo
-    const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
 
-    // ✅ FLUXO SEQUENCIAL: Verificar se precisa selecionar vendedor
-    if (pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
-      setProdutoAguardandoVendedor(produto);
-      setAguardandoSelecaoVendedor(true);
-      setShowVendedorModal(true);
-      // ✅ NOVO: Se também tem multiplicação ativa, salvar para usar no fluxo sequencial
-      if (pdvConfig?.vendas_itens_multiplicacao && !searchTerm.includes('*')) {
-        setQuantidadeAguardandoVendedor(0); // 0 indica que deve abrir modal de quantidade depois
-      }
-      return;
-    }
-
-    // ✅ VERIFICAR: Modal de quantidade (apenas se não veio do fluxo do vendedor)
-    if (pdvConfig?.vendas_itens_multiplicacao && !searchTerm.includes('*')) {
-      setProdutoParaQuantidade(produto);
-      setQuantidadeModal(quantidade);
-      setQuantidadeModalInput(quantidade.toString());
-      setShowQuantidadeModal(true);
-      return;
-    }
-
-    // Verificar se o produto tem sabores (pizzas)
-    if (produto.trabalha_com_pizzas && produto.tabelas_precos && produto.tabelas_precos.length > 0) {
-      setProdutoSelecionadoSabores(produto);
-      setTabelaPrecoSelecionada(produto.tabelas_precos[0]);
-      setShowSeletorSabores(true);
-      return; // Não continuar com adição normal
-    }
-
-    // ✅ CORRIGIDO: Calcular o preço final considerando promoções E desconto por quantidade
-    const precoFinal = calcularPrecoComDescontoQuantidade(produto, quantidade);
-
-    // Criar o item do carrinho
-    const novoItem: ItemCarrinho = {
-      id: `${produto.id}-${Date.now()}-${Math.random()}`, // ID único
-      produto,
-      quantidade: quantidade,
-      subtotal: precoFinal * quantidade,
-      temOpcoesAdicionais,
-      vendedor_id: vendedorSelecionado?.id,
-      vendedor_nome: vendedorSelecionado?.nome,
-      nomeCliente: nomeCliente || undefined,
-      comandaNumero: comandaNumero || undefined,
-      mesaNumero: mesaNumero || undefined
-    };
-
-    // ✅ VERIFICAR: Se o produto tem opções adicionais, abrir modal
-    if (temOpcoesAdicionais) {
-      setProdutoSelecionado(produto);
-      setQuantidadeSelecionada(quantidade);
-      setItemCarrinhoTemporario(novoItem);
-      setShowAdicionaisModal(true);
-      return;
-    }
-
-    // Adicionar ao carrinho diretamente
-    setCarrinho(prev => [...prev, novoItem]);
-
-    // Limpar busca se necessário
-    if (searchTerm) {
-      setSearchTerm('');
-    }
-
-    // Fechar modal de produtos se estiver aberto
-    if (showAreaProdutos) {
-      setShowAreaProdutos(false);
-    }
-  };
 
   // ✅ NOVO: Funções para modal de Nome do Cliente (PRIMEIRA PRIORIDADE)
   const confirmarNomeCliente = () => {
@@ -6598,47 +6532,15 @@ const PDVPage: React.FC = () => {
       return;
     }
 
-    // Fechar modal e continuar fluxo
+    // Fechar modal
     setShowNomeClienteModal(false);
 
-    // Verificar próximo modal necessário
-    if (pdvConfig?.comandas && !comandaNumero) {
-      // Transferir dados para comanda
-      if (produtoAguardandoNomeCliente) {
-        setProdutoAguardandoComandaMesa(produtoAguardandoNomeCliente);
-        setQuantidadeAguardandoComandaMesa(quantidadeAguardandoNomeCliente);
-        setProdutoAguardandoNomeCliente(null);
-        setQuantidadeAguardandoNomeCliente(1);
-      } else if (vendaSemProdutoAguardandoNomeCliente) {
-        setVendaSemProdutoAguardandoComandaMesa(vendaSemProdutoAguardandoNomeCliente);
-        setVendaSemProdutoAguardandoNomeCliente(null);
-      }
-      setShowComandaModal(true);
-      return;
-    }
-
-    if (pdvConfig?.mesas && !mesaNumero) {
-      // Transferir dados para mesa
-      if (produtoAguardandoNomeCliente) {
-        setProdutoAguardandoComandaMesa(produtoAguardandoNomeCliente);
-        setQuantidadeAguardandoComandaMesa(quantidadeAguardandoNomeCliente);
-        setProdutoAguardandoNomeCliente(null);
-        setQuantidadeAguardandoNomeCliente(1);
-      } else if (vendaSemProdutoAguardandoNomeCliente) {
-        setVendaSemProdutoAguardandoComandaMesa(vendaSemProdutoAguardandoNomeCliente);
-        setVendaSemProdutoAguardandoNomeCliente(null);
-      }
-      setShowMesaModal(true);
-      return;
-    }
-
-    // Se não há mais modais obrigatórios, continuar fluxo
+    // Continuar fluxo - chamar adicionarAoCarrinho novamente (mesmo padrão do modal de quantidade)
     if (produtoAguardandoNomeCliente) {
-      continuarFluxoAposModais(produtoAguardandoNomeCliente, quantidadeAguardandoNomeCliente);
+      adicionarAoCarrinho(produtoAguardandoNomeCliente, quantidadeAguardandoNomeCliente);
       setProdutoAguardandoNomeCliente(null);
       setQuantidadeAguardandoNomeCliente(1);
     } else if (vendaSemProdutoAguardandoNomeCliente) {
-      // Para venda sem produto, continuar com verificações normais
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoNomeCliente.nome, vendaSemProdutoAguardandoNomeCliente.preco);
       setVendaSemProdutoAguardandoNomeCliente(null);
     }
@@ -6668,22 +6570,15 @@ const PDVPage: React.FC = () => {
       return;
     }
 
-    // Fechar modal e continuar fluxo
+    // Fechar modal
     setShowComandaModal(false);
 
-    // Verificar próximo modal necessário
-    if (pdvConfig?.mesas && !mesaNumero) {
-      setShowMesaModal(true);
-      return;
-    }
-
-    // Se não há mais modais obrigatórios, continuar fluxo
+    // Continuar fluxo - chamar adicionarAoCarrinho novamente (mesmo padrão do modal de quantidade)
     if (produtoAguardandoComandaMesa) {
-      continuarFluxoAposModais(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
+      adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
       setProdutoAguardandoComandaMesa(null);
       setQuantidadeAguardandoComandaMesa(1);
     } else if (vendaSemProdutoAguardandoComandaMesa) {
-      // Para venda sem produto, continuar com verificações normais
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoComandaMesa.nome, vendaSemProdutoAguardandoComandaMesa.preco);
       setVendaSemProdutoAguardandoComandaMesa(null);
     }
@@ -6704,16 +6599,15 @@ const PDVPage: React.FC = () => {
       return;
     }
 
-    // Fechar modal e continuar fluxo
+    // Fechar modal
     setShowMesaModal(false);
 
-    // Não há mais modais obrigatórios após mesa, continuar fluxo
+    // Continuar fluxo - chamar adicionarAoCarrinho novamente (mesmo padrão do modal de quantidade)
     if (produtoAguardandoComandaMesa) {
-      continuarFluxoAposModais(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
+      adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
       setProdutoAguardandoComandaMesa(null);
       setQuantidadeAguardandoComandaMesa(1);
     } else if (vendaSemProdutoAguardandoComandaMesa) {
-      // Para venda sem produto, continuar com verificações normais
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoComandaMesa.nome, vendaSemProdutoAguardandoComandaMesa.preco);
       setVendaSemProdutoAguardandoComandaMesa(null);
     }
@@ -9418,6 +9312,78 @@ const PDVPage: React.FC = () => {
       }
 
       const numeroVendaSalva = vendaEmAndamento.numero_venda;
+
+      // ✅ NOVO: Verificar se há itens de produção e imprimir cupons
+      console.log('🖨️ [SALVAR-VENDA] Verificando itens de produção...');
+      console.log('🖨️ [SALVAR-VENDA] Carrinho atual:', carrinho.map(item => ({
+        nome: item.produto?.nome || item.nome,
+        vendaSemProduto: item.vendaSemProduto,
+        produto_id: item.produto?.id
+      })));
+      console.log('🖨️ [SALVAR-VENDA] Produtos carregados:', produtos.map(p => ({
+        id: p.id,
+        nome: p.nome,
+        producao: p.producao
+      })));
+
+      // ✅ TESTE: Verificar especificamente o produto X Salada
+      const xSalada = produtos.find(p => p.nome?.includes('Salada'));
+      if (xSalada) {
+        console.log('🖨️ [SALVAR-VENDA] TESTE - X Salada encontrado:', {
+          id: xSalada.id,
+          nome: xSalada.nome,
+          producao: xSalada.producao,
+          tipo_producao: typeof xSalada.producao
+        });
+      } else {
+        console.log('🖨️ [SALVAR-VENDA] TESTE - X Salada NÃO encontrado nos produtos');
+      }
+
+      try {
+        // Verificar se há itens com produção = true
+        const itensComProducao = carrinho.filter(item => {
+          if (item.vendaSemProduto) {
+            console.log('🖨️ [SALVAR-VENDA] Item ignorado (venda sem produto):', item.nome);
+            return false;
+          }
+          const produto = produtos.find(p => p.id === item.produto.id);
+          console.log('🖨️ [SALVAR-VENDA] Verificando item:', {
+            nome: item.produto?.nome,
+            produto_id: item.produto?.id,
+            produto_encontrado: !!produto,
+            producao: produto?.producao
+          });
+          return produto?.producao === true;
+        });
+
+        console.log('🖨️ [SALVAR-VENDA] Itens com produção encontrados:', itensComProducao.length);
+
+        if (itensComProducao.length > 0) {
+          console.log('🖨️ [SALVAR-VENDA] Encontrados', itensComProducao.length, 'itens de produção');
+
+          // Preparar dados do pedido para impressão
+          const pedidoParaImpressao = {
+            numero_pedido: numeroVendaSalva,
+            nome_cliente: clienteSelecionado?.nome || 'Cliente não informado',
+            telefone_cliente: clienteSelecionado?.telefone || '',
+            created_at: new Date().toISOString()
+          };
+
+          // Usar configuração de impressão 50mm ou 80mm
+          const usarImpressao50mm = pdvConfig?.tipo_impressao_50mm || false;
+
+          console.log('🖨️ [SALVAR-VENDA] Iniciando impressão de cupons de produção...');
+          // Imprimir cupons de produção
+          await imprimirCuponsProducaoPorGrupo(pedidoParaImpressao, itensComProducao, usarImpressao50mm);
+
+          console.log('🖨️ [SALVAR-VENDA] ✅ Cupons de produção enviados para impressão');
+        } else {
+          console.log('🖨️ [SALVAR-VENDA] Nenhum item de produção encontrado');
+        }
+      } catch (errorImpressao) {
+        console.error('❌ [SALVAR-VENDA] Erro ao imprimir cupons de produção:', errorImpressao);
+        // Não interromper o salvamento por erro de impressão
+      }
 
       // ✅ CORREÇÃO: Limpar PDV após salvar a venda
       console.log('🧹 Limpando PDV após salvar venda:', numeroVendaSalva);
