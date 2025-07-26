@@ -20232,6 +20232,9 @@ const PDVPage: React.FC = () => {
                           whileHover={{ scale: 1.02 }}
                           whileTap={{ scale: 0.98 }}
                           onClick={async () => {
+                            // ✅ CORREÇÃO: Fechar o modal de produtos IMEDIATAMENTE (igual ao comportamento da busca por código)
+                            setShowAreaProdutos(false);
+
                             // ✅ CORREÇÃO: Ativar efeito de carregamento IMEDIATAMENTE
                             setCarregandoNovoItem(true);
 
@@ -20239,19 +20242,14 @@ const PDVPage: React.FC = () => {
                               // Aguardar um frame para garantir que o loading apareça
                               await new Promise(resolve => requestAnimationFrame(resolve));
 
-                              // Agora sim chamar a função de adicionar
+                              // Agora sim chamar a função de adicionar (que vai abrir os modais necessários)
                               await adicionarAoCarrinho(produto);
 
                               // Aguardar um pouco mais para mostrar o efeito
-                              await new Promise(resolve => setTimeout(resolve, 500));
+                              await new Promise(resolve => setTimeout(resolve, 300));
                             } finally {
                               // Desativar efeito de carregamento
                               setCarregandoNovoItem(false);
-                            }
-
-                            // ✅ NOVO: Só fechar o modal se não abrir o modal de quantidade
-                            if (!pdvConfig?.vendas_itens_multiplicacao) {
-                              setShowAreaProdutos(false);
                             }
                           }}
                           className="bg-gray-800 rounded overflow-hidden border border-gray-700 hover:border-gray-600 transition-colors cursor-pointer flex flex-col"
