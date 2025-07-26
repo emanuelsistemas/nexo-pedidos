@@ -22379,9 +22379,14 @@ const PDVPage: React.FC = () => {
               <div className="flex gap-3">
                 <button
                   onClick={async () => {
+                    // Fechar modal imediatamente
+                    setShowSalvarVendaModal(false);
+
+                    // Salvar venda
                     const sucesso = await salvarVendaEmAndamento();
-                    if (sucesso) {
-                      setShowSalvarVendaModal(false);
+                    if (!sucesso) {
+                      // Se falhou, reabrir o modal
+                      setShowSalvarVendaModal(true);
                     }
                   }}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
