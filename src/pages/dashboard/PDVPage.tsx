@@ -15666,8 +15666,23 @@ const PDVPage: React.FC = () => {
                           </div>
                         </div>
                         <div className="text-white text-xs font-medium truncate">{clienteSelecionado.nome}</div>
-                        {clienteSelecionado.telefone && (
-                          <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
+
+                        {/* Exibir múltiplos telefones formatados um abaixo do outro */}
+                        {(clienteSelecionado.telefones && clienteSelecionado.telefones.length > 0) ? (
+                          <div className="space-y-0.5">
+                            {clienteSelecionado.telefones.map((telefone, index) => (
+                              <div key={index} className="text-xs text-gray-400 flex items-center gap-1">
+                                <span>{formatarTelefone(telefone.numero, telefone.tipo)}</span>
+                                {telefone.whatsapp && (
+                                  <span className="text-green-400 text-xs">WhatsApp</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : clienteSelecionado.telefone && (
+                          <div className="text-xs text-gray-400">
+                            {formatarTelefone(clienteSelecionado.telefone, clienteSelecionado.telefone.replace(/\D/g, '').length === 11 ? 'Celular' : 'Fixo')}
+                          </div>
                         )}
                         {/* Botões só aparecem quando NÃO há pedidos importados */}
                         {pedidosImportados.length === 0 && (
@@ -15734,9 +15749,25 @@ const PDVPage: React.FC = () => {
                             <div className="text-xs text-blue-400 font-medium">Cliente do Cardápio</div>
                           </div>
                           <div className="text-white text-xs font-medium truncate">{clienteSelecionado.nome}</div>
-                          {clienteSelecionado.telefone && (
-                            <div className="text-xs text-gray-400">{clienteSelecionado.telefone}</div>
+
+                          {/* Exibir múltiplos telefones formatados um abaixo do outro */}
+                          {(clienteSelecionado.telefones && clienteSelecionado.telefones.length > 0) ? (
+                            <div className="space-y-0.5">
+                              {clienteSelecionado.telefones.map((telefone, index) => (
+                                <div key={index} className="text-xs text-gray-400 flex items-center gap-1">
+                                  <span>{formatarTelefone(telefone.numero, telefone.tipo)}</span>
+                                  {telefone.whatsapp && (
+                                    <span className="text-green-400 text-xs">WhatsApp</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : clienteSelecionado.telefone && (
+                            <div className="text-xs text-gray-400">
+                              {formatarTelefone(clienteSelecionado.telefone, clienteSelecionado.telefone.replace(/\D/g, '').length === 11 ? 'Celular' : 'Fixo')}
+                            </div>
                           )}
+
                           {clienteSelecionado.documento && (
                             <div className="text-xs text-gray-500 truncate">{clienteSelecionado.documento}</div>
                           )}
