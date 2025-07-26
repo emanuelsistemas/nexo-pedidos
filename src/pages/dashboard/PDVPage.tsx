@@ -14520,7 +14520,8 @@ const PDVPage: React.FC = () => {
            pdvConfig?.vendedor ||
            pdvConfig?.comandas ||
            pdvConfig?.mesas ||
-           pdvConfig?.exibe_foto_item)
+           pdvConfig?.exibe_foto_item ||
+           pdvConfig?.solicitar_nome_cliente)
         ) && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
@@ -14666,6 +14667,34 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
 
+              {/* ✅ NOVO: Nome do Cliente - Aparece se configuração habilitada */}
+              {pdvConfig?.solicitar_nome_cliente && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <User size={12} className="text-blue-400" />
+                      <div className="text-xs text-blue-400 font-medium">Nome do Cliente</div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-white text-xs font-medium">
+                        {nomeCliente || 'Nenhum informado'}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const novoNome = prompt('Digite o nome do cliente:', nomeCliente);
+                          if (novoNome !== null) {
+                            setNomeCliente(novoNome.trim());
+                          }
+                        }}
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        {nomeCliente ? 'Editar' : 'Informar'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Vendedor - Aparece se configuração habilitada */}
               {pdvConfig?.vendedor && (
                 <div className="bg-green-500/10 border border-green-500/30 rounded p-2">
@@ -14689,7 +14718,7 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Comanda - Aparece se configuração habilitada */}
+              {/* ✅ ATUALIZADO: Comanda - Aparece se configuração habilitada */}
               {pdvConfig?.comandas && (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-2">
                   <div className="space-y-1">
@@ -14697,12 +14726,36 @@ const PDVPage: React.FC = () => {
                       <FileText size={12} className="text-yellow-400" />
                       <div className="text-xs text-yellow-400 font-medium">Comanda</div>
                     </div>
-                    <div className="text-white text-xs font-medium">Em desenvolvimento</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-white text-xs font-medium">
+                        {comandaNumero ? `Nº ${comandaNumero}` : 'Nenhuma selecionada'}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const novoNumero = prompt('Digite o número da comanda:', comandaNumero);
+                          if (novoNumero !== null) {
+                            const numero = novoNumero.trim();
+                            if (!/^\d+$/.test(numero)) {
+                              alert('Digite apenas números inteiros para a comanda');
+                              return;
+                            }
+                            if (!validarComanda(numero)) {
+                              alert(`Comanda ${numero} não existe. Range válido: ${rangesConfig.comandas.inicio} a ${rangesConfig.comandas.fim}`);
+                              return;
+                            }
+                            setComandaNumero(numero);
+                          }
+                        }}
+                        className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
+                      >
+                        {comandaNumero ? 'Editar' : 'Selecionar'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Mesa - Aparece se configuração habilitada */}
+              {/* ✅ ATUALIZADO: Mesa - Aparece se configuração habilitada */}
               {pdvConfig?.mesas && (
                 <div className="bg-purple-500/10 border border-purple-500/30 rounded p-2">
                   <div className="space-y-1">
@@ -14710,7 +14763,31 @@ const PDVPage: React.FC = () => {
                       <Grid3X3 size={12} className="text-purple-400" />
                       <div className="text-xs text-purple-400 font-medium">Mesa</div>
                     </div>
-                    <div className="text-white text-xs font-medium">Em desenvolvimento</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-white text-xs font-medium">
+                        {mesaNumero ? `Nº ${mesaNumero}` : 'Nenhuma selecionada'}
+                      </div>
+                      <button
+                        onClick={() => {
+                          const novoNumero = prompt('Digite o número da mesa:', mesaNumero);
+                          if (novoNumero !== null) {
+                            const numero = novoNumero.trim();
+                            if (!/^\d+$/.test(numero)) {
+                              alert('Digite apenas números inteiros para a mesa');
+                              return;
+                            }
+                            if (!validarMesa(numero)) {
+                              alert(`Mesa ${numero} não existe. Range válido: ${rangesConfig.mesas.inicio} a ${rangesConfig.mesas.fim}`);
+                              return;
+                            }
+                            setMesaNumero(numero);
+                          }
+                        }}
+                        className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        {mesaNumero ? 'Editar' : 'Selecionar'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
