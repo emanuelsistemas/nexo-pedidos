@@ -22464,47 +22464,52 @@ const PDVPage: React.FC = () => {
                     <p className="text-sm">Todas as vendas foram finalizadas</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     {vendasAbertas.map((venda) => (
                       <div
                         key={venda.id}
-                        className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:bg-gray-800/70 transition-colors"
+                        className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:bg-gray-800/70 transition-colors flex flex-col h-full"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-4 mb-2">
-                              <div className="text-white font-medium">
-                                📋 {venda.numero_venda}
-                              </div>
-                              {venda.numero_documento && venda.serie_documento && (
-                                <div className="text-blue-400 text-sm">
-                                  🧾 NFC-e #{venda.numero_documento} Série {venda.serie_documento}
-                                </div>
-                              )}
-                              <div className="text-gray-400 text-sm">
-                                {new Date(venda.created_at).toLocaleString('pt-BR')}
-                              </div>
+                        {/* Header do card */}
+                        <div className="mb-3">
+                          <div className="text-white font-medium mb-1">
+                            📋 {venda.numero_venda}
+                          </div>
+                          {venda.numero_documento && venda.serie_documento && (
+                            <div className="text-blue-400 text-xs">
+                              🧾 NFC-e #{venda.numero_documento} Série {venda.serie_documento}
                             </div>
+                          )}
+                          <div className="text-gray-400 text-xs mt-1">
+                            {new Date(venda.created_at).toLocaleString('pt-BR')}
+                          </div>
+                        </div>
 
-                            <div className="flex items-center gap-6 text-sm text-gray-300">
-                              <div>
-                                <span className="text-gray-400">Itens:</span> {venda.totalItens}
+                        {/* Informações principais */}
+                        <div className="space-y-2 text-sm flex-1">
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Itens:</span>
+                            <span className="text-gray-300">{venda.totalItens}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-400">Total:</span>
+                            <span className="text-green-400 font-medium">{formatCurrency(venda.valor_total || 0)}</span>
+                          </div>
+                          {venda.nome_cliente && (
+                            <div>
+                              <div className="text-gray-400 text-xs">Cliente:</div>
+                              <div className="text-gray-300 text-sm">{venda.nome_cliente}</div>
+                              <div className="flex gap-2 mt-1">
+                                {venda.mesa_numero && (
+                                  <span className="text-blue-400 text-xs bg-blue-500/20 px-2 py-1 rounded">Mesa: {venda.mesa_numero}</span>
+                                )}
+                                {venda.comanda_numero && (
+                                  <span className="text-green-400 text-xs bg-green-500/20 px-2 py-1 rounded">Comanda: {venda.comanda_numero}</span>
+                                )}
                               </div>
-                              <div>
-                                <span className="text-gray-400">Total:</span> {formatCurrency(venda.valor_total || 0)}
-                              </div>
-                              {venda.nome_cliente && (
-                                <div>
-                                  <span className="text-gray-400">Cliente:</span> {venda.nome_cliente}
-                                  {venda.mesa_numero && (
-                                    <span className="text-blue-400 ml-2">Mesa: {venda.mesa_numero}</span>
-                                  )}
-                                  {venda.comanda_numero && (
-                                    <span className="text-green-400 ml-2">Comanda: {venda.comanda_numero}</span>
-                                  )}
-                                </div>
-                              )}
                             </div>
+                          )}
+                        </div>
 
                             {venda.itens && venda.itens.length > 0 && (
                               <div className="mt-3 pt-3 border-t border-gray-700">
@@ -22538,16 +22543,15 @@ const PDVPage: React.FC = () => {
                                 )}
                               </div>
                             )}
-                          </div>
 
-                          <div className="ml-4">
-                            <button
-                              onClick={() => recuperarVendaSalva(venda.id)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
-                            >
-                              🔄 Recuperar
-                            </button>
-                          </div>
+                        {/* Botão de recuperar */}
+                        <div className="mt-4 pt-3 border-t border-gray-700">
+                          <button
+                            onClick={() => recuperarVendaSalva(venda.id)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors font-medium text-sm"
+                          >
+                            🔄 Recuperar
+                          </button>
                         </div>
                       </div>
                     ))}
