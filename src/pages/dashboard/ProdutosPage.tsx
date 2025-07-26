@@ -2835,10 +2835,12 @@ const ProdutosPage: React.FC = () => {
     setShowSidebar(true);
 
     try {
+      // ✅ CORRIGIDO: Filtrar apenas adicionais não deletados
       const { data: opcoesData } = await supabase
         .from('produtos_opcoes_adicionais')
         .select('opcao_id')
-        .eq('produto_id', produto.id);
+        .eq('produto_id', produto.id)
+        .eq('deletado', false);
 
       setSelectedOpcoes((opcoesData || []).map(o => o.opcao_id));
 
@@ -4530,6 +4532,9 @@ const ProdutosPage: React.FC = () => {
         ...prev,
         [produtoId]: prev[produtoId].filter(opcao => opcao.id !== opcaoId)
       }));
+
+      // ✅ NOVO: Atualizar também o estado de opções selecionadas
+      setSelectedOpcoes(prev => prev.filter(id => id !== opcaoId));
 
       showMessage('success', 'Adicional removido com sucesso!');
     } catch (error: any) {
