@@ -230,11 +230,7 @@ const PDVPage: React.FC = () => {
     aceitarAutomaticamente: pdvConfig?.aceitar_pedido_automatico_cardapio || false
   });
 
-  // ✅ DEBUG: Log da configuração de aceitar automaticamente
-  useEffect(() => {
-    console.log('🔧 [PDV-CONFIG] Configuração aceitar_pedido_automatico_cardapio:', pdvConfig?.aceitar_pedido_automatico_cardapio);
-    console.log('🔧 [PDV-CONFIG] pdvConfig completo:', pdvConfig);
-  }, [pdvConfig?.aceitar_pedido_automatico_cardapio]);
+
 
   // ✅ HOOK STATUS TRACKING (sem logs)
   useEffect(() => {
@@ -9760,35 +9756,15 @@ const PDVPage: React.FC = () => {
 
         // ✅ NOVO: Baixa automática de insumos
         setEtapaProcessamento('Processando baixa de insumos...');
-        console.log('🔍 [INSUMOS] Iniciando baixa automática de insumos...');
-        console.log('🔍 [INSUMOS] Total de itens no carrinho:', carrinho.length);
 
-        for (const [index, item] of carrinho.entries()) {
-          console.log(`🔍 [INSUMOS] ===== PROCESSANDO ITEM ${index + 1}/${carrinho.length} =====`);
-          console.log(`🔍 [INSUMOS] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
-          console.log(`🔍 [INSUMOS] Quantidade vendida: ${item.quantidade}`);
-
+        for (const item of carrinho) {
           // ✅ EXCEÇÃO: Pular insumos para venda sem produto (código 999999)
           if (item.vendaSemProduto || item.produto.codigo === '999999') {
-            console.log(`⚠️ [INSUMOS] Pulando insumos para venda sem produto: ${item.produto.nome}`);
             continue;
           }
 
-          // ✅ DEBUG: Verificar estrutura completa do produto
-          console.log(`🔍 [INSUMOS] Estrutura do produto:`, {
-            id: item.produto.id,
-            nome: item.produto.nome,
-            codigo: item.produto.codigo,
-            temInsumos: !!item.produto.insumos,
-            tipoInsumos: typeof item.produto.insumos,
-            isArrayInsumos: Array.isArray(item.produto.insumos),
-            lengthInsumos: item.produto.insumos?.length || 0,
-            insumos: item.produto.insumos
-          });
-
           // ✅ Verificar se o produto tem insumos configurados
           if (!item.produto.insumos || !Array.isArray(item.produto.insumos) || item.produto.insumos.length === 0) {
-            console.log(`ℹ️ [INSUMOS] Produto sem insumos configurados: ${item.produto.nome}`);
             continue;
           }
 

@@ -42,8 +42,7 @@ export const useCardapioDigitalNotifications = ({
 
   // ✅ DEBUG: Log da configuração de aceitar automaticamente
   useEffect(() => {
-    console.log('🤖 [HOOK-CONFIG] aceitarAutomaticamente mudou para:', aceitarAutomaticamente);
-    console.log('🤖 [HOOK-CONFIG] aceitarAutomaticamenteRef.current:', aceitarAutomaticamenteRef.current);
+    aceitarAutomaticamenteRef.current = aceitarAutomaticamente;
   }, [aceitarAutomaticamente]);
 
   // ✅ INICIALIZAÇÃO APENAS UMA VEZ
@@ -328,22 +327,13 @@ export const useCardapioDigitalNotifications = ({
 
       // ✅ VERIFICAR SE HÁ NOVOS PEDIDOS PARA ACEITAR AUTOMATICAMENTE
       if (currentAceitarAuto && novoContador > contadorAnterior) {
-        console.log('🤖 [POLLING-AUTO] Novos pedidos detectados via polling - Verificando para aceitar automaticamente');
-        console.log('🤖 [POLLING-AUTO] Contador anterior:', contadorAnterior, '→ Novo contador:', novoContador);
 
         // Pegar apenas os novos pedidos (os primeiros da lista, já que está ordenado por data desc)
         const novosPedidos = pedidos.slice(0, novoContador - contadorAnterior);
 
         for (const novoPedido of novosPedidos) {
-          console.log('🤖 [POLLING-AUTO] Processando novo pedido:', {
-            id: novoPedido.id,
-            numero_pedido: novoPedido.numero_pedido,
-            nome_cliente: novoPedido.nome_cliente
-          });
-
           // Aceitar automaticamente após um pequeno delay
           setTimeout(async () => {
-            console.log('🤖 [POLLING-AUTO] Executando aceitação automática via polling para pedido #' + novoPedido.numero_pedido);
             await aceitarPedidoAutomaticamente(novoPedido.id, novoPedido.numero_pedido, novoPedido.nome_cliente);
           }, 500);
         }
@@ -633,7 +623,6 @@ export const useCardapioDigitalNotifications = ({
   // ✅ FUNÇÃO PARA ACEITAR PEDIDO AUTOMATICAMENTE
   const aceitarPedidoAutomaticamente = useCallback(async (pedidoId: string, numeroPedido: string, nomeCliente: string) => {
     try {
-      console.log(`🤖 [AUTO-ACEITAR] Tentando aceitar automaticamente pedido #${numeroPedido} de ${nomeCliente}`);
 
       const sucesso = await aceitarPedido(pedidoId);
 
@@ -686,8 +675,6 @@ export const useCardapioDigitalNotifications = ({
 
           // ✅ VERIFICAR SE DEVE ACEITAR AUTOMATICAMENTE
           const deveAceitarAuto = aceitarAutomaticamenteRef.current;
-          console.log('🤖 [AUTO-CHECK] deveAceitarAuto:', deveAceitarAuto);
-          console.log('🤖 [AUTO-CHECK] status_pedido:', novoPedido.status_pedido);
 
           if (deveAceitarAuto && novoPedido.status_pedido === 'pendente') {
             console.log('✅ [AUTO-CHECK] Condições atendidas - Iniciando aceitação automática');
@@ -696,7 +683,6 @@ export const useCardapioDigitalNotifications = ({
 
             // Aguardar um pouco para garantir que o pedido foi inserido completamente
             setTimeout(async () => {
-              console.log('🤖 [AUTO-TIMEOUT] Executando aceitação automática após timeout');
               await aceitarPedidoAutomaticamente(novoPedido.id, novoPedido.numero_pedido, novoPedido.nome_cliente);
             }, 1000);
           } else {
@@ -799,7 +785,6 @@ export const useCardapioDigitalNotifications = ({
     const interval = setInterval(() => {
       const currentEnabled = enabledRef.current;
       const currentAceitarAuto = aceitarAutomaticamenteRef.current;
-      console.log('🔄 [POLLING] Verificando novos pedidos... enabled:', currentEnabled, 'aceitarAuto:', currentAceitarAuto);
       if (currentEnabled) {
         carregarPedidosPendentes(true); // ✅ SEMPRE CHAMAR CALLBACK NO POLLING
       }
