@@ -15533,7 +15533,8 @@ const PDVPage: React.FC = () => {
            pdvConfig?.comandas ||
            pdvConfig?.mesas ||
            pdvConfig?.exibe_foto_item ||
-           pdvConfig?.solicitar_nome_cliente)
+           pdvConfig?.solicitar_nome_cliente ||
+           pdvConfig?.delivery)
         ) && (
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
@@ -15588,16 +15589,18 @@ const PDVPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Cliente - Aparece se configuração habilitada OU se há pedidos importados OU itens do cardápio digital */}
-              {(pdvConfig?.seleciona_clientes || pedidosImportados.length > 0 || carrinho.some(item => item.cardapio_digital)) && (
+              {/* Cliente - Aparece se configuração habilitada OU se há pedidos importados OU itens do cardápio digital OU delivery habilitado */}
+              {(pdvConfig?.seleciona_clientes || pdvConfig?.delivery || pedidosImportados.length > 0 || carrinho.some(item => item.cardapio_digital)) && (
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2">
-                  {/* Cliente selecionado manualmente */}
-                  {pdvConfig?.seleciona_clientes ? (
+                  {/* Cliente selecionado manualmente - para seleciona_clientes ou delivery */}
+                  {(pdvConfig?.seleciona_clientes || pdvConfig?.delivery) ? (
                     clienteSelecionado ? (
                       <div className="space-y-1">
                         <div className="flex items-center gap-1">
                           <User size={12} className="text-blue-400" />
-                          <div className="text-xs text-blue-400 font-medium">Cliente</div>
+                          <div className="text-xs text-blue-400 font-medium">
+                            {pdvConfig?.delivery && !pdvConfig?.seleciona_clientes ? 'Cliente do Delivery' : 'Cliente'}
+                          </div>
                         </div>
                         <div className="text-white text-xs font-medium truncate">{clienteSelecionado.nome}</div>
                         {clienteSelecionado.telefone && (
@@ -15636,7 +15639,9 @@ const PDVPage: React.FC = () => {
                       >
                         <div className="flex items-center gap-1">
                           <User size={12} className="text-blue-400" />
-                          <div className="text-xs text-blue-400 font-medium">Cliente</div>
+                          <div className="text-xs text-blue-400 font-medium">
+                            {pdvConfig?.delivery && !pdvConfig?.seleciona_clientes ? 'Cliente do Delivery' : 'Cliente'}
+                          </div>
                         </div>
                         <div className="text-white text-xs">Selecionar</div>
                       </button>
