@@ -614,7 +614,7 @@ const PDVPage: React.FC = () => {
     numero_venda: string;
     numero_nfce_reservado: number | null;
     serie_usuario: number | null;
-    status_venda: 'aberta' | 'finalizada' | 'venda_inativa' | 'venda_reaberta';
+    status_venda: 'aberta' | 'finalizada' | 'cancelada' | 'salva';
   } | null>(null);
   const [isEditingVenda, setIsEditingVenda] = useState(false);
   const [criandoVenda, setCriandoVenda] = useState(false); // ✅ Estado para evitar criações duplicadas
@@ -6344,12 +6344,8 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
-    // ✅ NOVO: Verificar se a venda está inativa e forçar exibição dos modais
-    const vendaEstaInativa = vendaEmAndamento?.status_venda === 'venda_inativa';
-    const carrinhoVazio = carrinho.length === 0;
-
     // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa solicitar NOME DO CLIENTE primeiro
-    if (pdvConfig?.solicitar_nome_cliente && (!nomeCliente || vendaEstaInativa) && carrinhoVazio) {
+    if (pdvConfig?.solicitar_nome_cliente && !nomeCliente && carrinho.length === 0) {
       setProdutoAguardandoNomeCliente(produto);
       setQuantidadeAguardandoNomeCliente(quantidadePersonalizada || 1);
       setShowNomeClienteModal(true);
@@ -6357,7 +6353,7 @@ const PDVPage: React.FC = () => {
     }
 
     // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
-    if (pdvConfig?.comandas && (!comandaNumero || vendaEstaInativa) && carrinhoVazio) {
+    if (pdvConfig?.comandas && !comandaNumero && carrinho.length === 0) {
       setProdutoAguardandoComandaMesa(produto);
       setQuantidadeAguardandoComandaMesa(quantidadePersonalizada || 1);
       setShowComandaModal(true);
@@ -6365,7 +6361,7 @@ const PDVPage: React.FC = () => {
     }
 
     // ✅ NOVO: TERCEIRA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
-    if (pdvConfig?.mesas && (!mesaNumero || vendaEstaInativa) && carrinhoVazio) {
+    if (pdvConfig?.mesas && !mesaNumero && carrinho.length === 0) {
       setProdutoAguardandoComandaMesa(produto);
       setQuantidadeAguardandoComandaMesa(quantidadePersonalizada || 1);
       setShowMesaModal(true);
@@ -6839,7 +6835,7 @@ const PDVPage: React.FC = () => {
         .select('id, numero_venda, nome_cliente')
         .eq('empresa_id', usuarioData.empresa_id)
         .eq('comanda_numero', numero)
-        .in('status_venda', ['em_andamento', 'venda_inativa', 'venda_reaberta']); // Vendas salvas/em andamento
+        .in('status_venda', ['aberta', 'salva']); // Vendas abertas ou salvas
 
       // Se há venda em andamento atual, excluir ela da verificação
       if (vendaEmAndamento?.id) {
@@ -7038,26 +7034,22 @@ const PDVPage: React.FC = () => {
 
   // Função para adicionar venda sem produto com verificações de vendedor e quantidade
   const adicionarVendaSemProdutoComVerificacoes = (nome: string, preco: number) => {
-    // ✅ NOVO: Verificar se a venda está inativa e forçar exibição dos modais
-    const vendaEstaInativa = vendaEmAndamento?.status_venda === 'venda_inativa';
-    const carrinhoVazio = carrinho.length === 0;
-
     // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa solicitar NOME DO CLIENTE primeiro
-    if (pdvConfig?.solicitar_nome_cliente && (!nomeCliente || vendaEstaInativa) && carrinhoVazio) {
+    if (pdvConfig?.solicitar_nome_cliente && !nomeCliente && carrinho.length === 0) {
       setVendaSemProdutoAguardandoNomeCliente({ nome, preco });
       setShowNomeClienteModal(true);
       return;
     }
 
     // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
-    if (pdvConfig?.comandas && (!comandaNumero || vendaEstaInativa) && carrinhoVazio) {
+    if (pdvConfig?.comandas && !comandaNumero && carrinho.length === 0) {
       setVendaSemProdutoAguardandoComandaMesa({ nome, preco });
       setShowComandaModal(true);
       return;
     }
 
     // ✅ NOVO: TERCEIRA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
-    if (pdvConfig?.mesas && (!mesaNumero || vendaEstaInativa) && carrinhoVazio) {
+    if (pdvConfig?.mesas && !mesaNumero && carrinho.length === 0) {
       setVendaSemProdutoAguardandoComandaMesa({ nome, preco });
       setShowMesaModal(true);
       return;
@@ -9685,11 +9677,11 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      // ✅ NOVO: Atualizar status da venda para "venda_inativa" (salva)
+      // ✅ NOVO: Atualizar status da venda para "salva"
       const { error: updateStatusError } = await supabase
         .from('pdv')
         .update({
-          status_venda: 'venda_inativa',
+          status_venda: 'salva',
           updated_at: new Date().toISOString()
         })
         .eq('id', vendaEmAndamento.id);
@@ -10098,7 +10090,7 @@ const PDVPage: React.FC = () => {
           observacao_venda
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .in('status_venda', ['aberta', 'venda_inativa', 'venda_reaberta'])
+        .eq('status_venda', 'salva')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -10182,7 +10174,7 @@ const PDVPage: React.FC = () => {
           observacao_venda
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .in('status_venda', ['aberta', 'venda_inativa', 'venda_reaberta'])
+        .eq('status_venda', 'salva')
         .not('mesa_numero', 'is', null)
         .order('mesa_numero', { ascending: true });
 
@@ -10266,7 +10258,7 @@ const PDVPage: React.FC = () => {
           observacao_venda
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .in('status_venda', ['aberta', 'venda_inativa', 'venda_reaberta'])
+        .eq('status_venda', 'salva')
         .not('comanda_numero', 'is', null)
         .order('comanda_numero', { ascending: true });
 
@@ -10314,7 +10306,7 @@ const PDVPage: React.FC = () => {
     try {
       console.log('🔄 Recuperando venda salva:', vendaId);
 
-      // ✅ NOVO: Verificar se a venda já está reaberta por outro terminal
+      // ✅ NOVO: Verificar se a venda já está aberta por outro terminal
       const { data: vendaStatus, error: statusError } = await supabase
         .from('pdv')
         .select('id, numero_venda, status_venda')
@@ -10327,24 +10319,24 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      // ✅ NOVO: Impedir abertura se já está reaberta
-      if (vendaStatus.status_venda === 'venda_reaberta') {
-        toast.error(`❌ Venda ${vendaStatus.numero_venda} já está sendo editada em outro terminal. Aguarde a finalização ou escolha outra venda.`);
+      // ✅ NOVO: Impedir abertura se já está aberta
+      if (vendaStatus.status_venda === 'aberta') {
+        toast.error(`❌ Venda ${vendaStatus.numero_venda} já está aberta em outro terminal. Aguarde a finalização ou escolha outra venda.`);
         return false;
       }
 
-      // ✅ NOVO: Atualizar status para "venda_reaberta" para bloquear outros terminais
+      // ✅ NOVO: Atualizar status para "aberta" para bloquear outros terminais
       const { error: updateStatusError } = await supabase
         .from('pdv')
         .update({
-          status_venda: 'venda_reaberta',
+          status_venda: 'aberta',
           updated_at: new Date().toISOString()
         })
         .eq('id', vendaId);
 
       if (updateStatusError) {
         console.error('❌ Erro ao atualizar status da venda:', updateStatusError);
-        toast.error('Erro ao bloquear venda para edição');
+        toast.error('Erro ao reabrir venda para edição');
         return false;
       }
 
@@ -10479,7 +10471,7 @@ const PDVPage: React.FC = () => {
         numero_venda: venda.numero_venda,
         numero_nfce_reservado: venda.numero_documento,
         serie_usuario: venda.serie_documento,
-        status_venda: 'venda_reaberta'
+        status_venda: 'aberta'
       });
       setIsEditingVenda(true);
 
