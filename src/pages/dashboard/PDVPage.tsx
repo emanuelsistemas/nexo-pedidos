@@ -47,6 +47,7 @@ import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
 import { useAuthSession } from '../../hooks/useAuthSession';
 import { formatarPreco } from '../../utils/formatters';
+import { showMessage } from '../../utils/toast';
 import { EVENT_TYPES, contarPedidosPendentes, PedidoEventData, RecarregarEventData } from '../../utils/eventSystem';
 import { useCardapioDigitalNotifications } from '../../hooks/useCardapioDigitalNotifications';
 import Sidebar from '../../components/dashboard/Sidebar';
@@ -646,6 +647,22 @@ const PDVPage: React.FC = () => {
   const [observacaoTexto, setObservacaoTexto] = useState<string>('');
   const [itemEditandoObservacao, setItemEditandoObservacao] = useState<string | null>(null);
   const [observacaoEditando, setObservacaoEditando] = useState<string>('');
+
+  // ✅ NOVO: Estados para modais de Comanda e Mesa
+  const [showComandaModal, setShowComandaModal] = useState(false);
+  const [showMesaModal, setShowMesaModal] = useState(false);
+  const [comandaNumero, setComandaNumero] = useState('');
+  const [mesaNumero, setMesaNumero] = useState('');
+  const [produtoAguardandoComandaMesa, setProdutoAguardandoComandaMesa] = useState<Produto | null>(null);
+  const [quantidadeAguardandoComandaMesa, setQuantidadeAguardandoComandaMesa] = useState<number>(1);
+  const [vendaSemProdutoAguardandoComandaMesa, setVendaSemProdutoAguardandoComandaMesa] = useState<{nome: string, preco: number} | null>(null);
+  const [rangesConfig, setRangesConfig] = useState<{
+    comandas: { inicio: number; fim: number; configurado: boolean };
+    mesas: { inicio: number; fim: number; configurado: boolean };
+  }>({
+    comandas: { inicio: 1, fim: 100, configurado: false },
+    mesas: { inicio: 1, fim: 50, configurado: false }
+  });
 
   // Estados para seleção de vendedor
   const [showVendedorModal, setShowVendedorModal] = useState(false);
@@ -2166,7 +2183,8 @@ const PDVPage: React.FC = () => {
           loadFormasPagamento(),
           loadVendedores(),
           loadEmpresaData(),
-          loadNfeConfig() // ✅ NOVO: Carregar configuração NFe
+          loadNfeConfig(), // ✅ NOVO: Carregar configuração NFe
+          loadRangesComandaMesa() // ✅ NOVO: Carregar ranges de comandas e mesas
         ]);
       } catch (error) {
         toast.error('Erro ao carregar dados do PDV');
@@ -2174,6 +2192,71 @@ const PDVPage: React.FC = () => {
         setIsLoading(false);
       }
     });
+  };
+
+  // ✅ NOVO: Função para carregar ranges de comandas e mesas
+  const loadRangesComandaMesa = async () => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData) return;
+
+      // Carregar range de mesas
+      const { data: mesasData } = await supabase
+        .from('mesas')
+        .select('numero_inicio, numero_fim')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .single();
+
+      // Carregar range de comandas
+      const { data: comandasData } = await supabase
+        .from('comandas')
+        .select('numero_inicio, numero_fim')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .single();
+
+      // Atualizar estado local
+      setRangesConfig({
+        mesas: {
+          inicio: mesasData?.numero_inicio || 1,
+          fim: mesasData?.numero_fim || 50,
+          configurado: !!mesasData
+        },
+        comandas: {
+          inicio: comandasData?.numero_inicio || 1,
+          fim: comandasData?.numero_fim || 100,
+          configurado: !!comandasData
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Erro ao carregar ranges:', error);
+    }
+  };
+
+  // ✅ NOVO: Função para validar número da comanda
+  const validarComanda = (numero: string): boolean => {
+    const numeroInt = parseInt(numero);
+    if (isNaN(numeroInt)) return false;
+
+    return numeroInt >= rangesConfig.comandas.inicio && numeroInt <= rangesConfig.comandas.fim;
+  };
+
+  // ✅ NOVO: Função para validar número da mesa
+  const validarMesa = (numero: string): boolean => {
+    const numeroInt = parseInt(numero);
+    if (isNaN(numeroInt)) return false;
+
+    return numeroInt >= rangesConfig.mesas.inicio && numeroInt <= rangesConfig.mesas.fim;
   };
 
   const loadProdutos = async () => {
@@ -3544,12 +3627,7 @@ const PDVPage: React.FC = () => {
               text-transform: uppercase;
             }
 
-            .item-quantidade {
-              font-weight: bold;
-              font-size: ${usarImpressao50mm ? '14px' : '18px'};
-              margin-top: 5px;
-              color: #000;
-            }
+
 
             .observacao {
               font-size: ${usarImpressao50mm ? '11px' : '13px'};
@@ -3587,9 +3665,6 @@ const PDVPage: React.FC = () => {
               .item-nome {
                 font-size: ${usarImpressao50mm ? '13pt' : '15pt'} !important;
               }
-              .item-quantidade {
-                font-size: ${usarImpressao50mm ? '14pt' : '16pt'} !important;
-              }
               .observacao {
                 font-size: ${usarImpressao50mm ? '11pt' : '13pt'} !important;
               }
@@ -3601,7 +3676,7 @@ const PDVPage: React.FC = () => {
         </head>
         <body>
           <div class="header">
-            🏭 PRODUÇÃO
+            PRODUÇÃO
           </div>
 
           <div class="grupo-titulo">
@@ -3618,10 +3693,7 @@ const PDVPage: React.FC = () => {
 
           ${grupoData.itens.map(item => `
             <div class="item">
-              <div class="item-nome">${item.produto_nome || item.nome || 'Item sem nome'}</div>
-              <div class="item-quantidade">Quantidade: ${item.quantidade || 1}</div>
-
-              ${item.observacao ? `<div class="observacao">Obs: ${item.observacao}</div>` : ''}
+              <div class="item-nome">${item.quantidade || 1}x ${item.produto_nome || item.nome || 'Item sem nome'}</div>
 
               ${item.sabores && item.sabores.length > 0 ? `
                 <div class="observacao">
@@ -3637,6 +3709,8 @@ const PDVPage: React.FC = () => {
                   `).join('<br>')}
                 </div>
               ` : ''}
+
+              ${item.observacao ? `<div class="observacao">Obs: ${item.observacao}</div>` : ''}
             </div>
           `).join('')}
 
@@ -6079,6 +6153,22 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
+    // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
+    if (pdvConfig?.comandas && !comandaNumero && carrinho.length === 0) {
+      setProdutoAguardandoComandaMesa(produto);
+      setQuantidadeAguardandoComandaMesa(quantidadePersonalizada || 1);
+      setShowComandaModal(true);
+      return;
+    }
+
+    // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
+    if (pdvConfig?.mesas && !mesaNumero && carrinho.length === 0) {
+      setProdutoAguardandoComandaMesa(produto);
+      setQuantidadeAguardandoComandaMesa(quantidadePersonalizada || 1);
+      setShowMesaModal(true);
+      return;
+    }
+
     // ✅ Verificar opções adicionais ANTES de qualquer outro fluxo
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
 
@@ -6401,6 +6491,81 @@ const PDVPage: React.FC = () => {
     setVendaSemProdutoAguardando(null); // Limpar venda sem produto aguardando
   };
 
+  // ✅ NOVO: Funções para modais de Comanda e Mesa
+  const confirmarComanda = () => {
+    const numero = comandaNumero.trim();
+
+    // Validar se é um número inteiro
+    if (!/^\d+$/.test(numero)) {
+      showMessage('error', 'Digite apenas números inteiros para a comanda');
+      return;
+    }
+
+    // Validar se está no range configurado
+    if (!validarComanda(numero)) {
+      showMessage('error', `Comanda ${numero} não existe. Range válido: ${rangesConfig.comandas.inicio} a ${rangesConfig.comandas.fim}`);
+      return;
+    }
+
+    // Fechar modal e continuar fluxo
+    setShowComandaModal(false);
+
+    // Continuar com o produto ou venda sem produto
+    if (produtoAguardandoComandaMesa) {
+      adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
+      setProdutoAguardandoComandaMesa(null);
+      setQuantidadeAguardandoComandaMesa(1);
+    } else if (vendaSemProdutoAguardandoComandaMesa) {
+      adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoComandaMesa.nome, vendaSemProdutoAguardandoComandaMesa.preco);
+      setVendaSemProdutoAguardandoComandaMesa(null);
+    }
+  };
+
+  const confirmarMesa = () => {
+    const numero = mesaNumero.trim();
+
+    // Validar se é um número inteiro
+    if (!/^\d+$/.test(numero)) {
+      showMessage('error', 'Digite apenas números inteiros para a mesa');
+      return;
+    }
+
+    // Validar se está no range configurado
+    if (!validarMesa(numero)) {
+      showMessage('error', `Mesa ${numero} não existe. Range válido: ${rangesConfig.mesas.inicio} a ${rangesConfig.mesas.fim}`);
+      return;
+    }
+
+    // Fechar modal e continuar fluxo
+    setShowMesaModal(false);
+
+    // Continuar com o produto ou venda sem produto
+    if (produtoAguardandoComandaMesa) {
+      adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
+      setProdutoAguardandoComandaMesa(null);
+      setQuantidadeAguardandoComandaMesa(1);
+    } else if (vendaSemProdutoAguardandoComandaMesa) {
+      adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoComandaMesa.nome, vendaSemProdutoAguardandoComandaMesa.preco);
+      setVendaSemProdutoAguardandoComandaMesa(null);
+    }
+  };
+
+  const cancelarComanda = () => {
+    setShowComandaModal(false);
+    setComandaNumero('');
+    setProdutoAguardandoComandaMesa(null);
+    setQuantidadeAguardandoComandaMesa(1);
+    setVendaSemProdutoAguardandoComandaMesa(null);
+  };
+
+  const cancelarMesa = () => {
+    setShowMesaModal(false);
+    setMesaNumero('');
+    setProdutoAguardandoComandaMesa(null);
+    setQuantidadeAguardandoComandaMesa(1);
+    setVendaSemProdutoAguardandoComandaMesa(null);
+  };
+
   // ✅ NOVO: Funções para modal de quantidade
   const confirmarQuantidade = () => {
     // Verificar se é venda sem produto ou produto normal
@@ -6444,6 +6609,20 @@ const PDVPage: React.FC = () => {
 
   // Função para adicionar venda sem produto com verificações de vendedor e quantidade
   const adicionarVendaSemProdutoComVerificacoes = (nome: string, preco: number) => {
+    // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
+    if (pdvConfig?.comandas && !comandaNumero && carrinho.length === 0) {
+      setVendaSemProdutoAguardandoComandaMesa({ nome, preco });
+      setShowComandaModal(true);
+      return;
+    }
+
+    // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
+    if (pdvConfig?.mesas && !mesaNumero && carrinho.length === 0) {
+      setVendaSemProdutoAguardandoComandaMesa({ nome, preco });
+      setShowMesaModal(true);
+      return;
+    }
+
     // ✅ VERIFICAR: Se é o primeiro item no carrinho e precisa selecionar vendedor
     if (carrinho.length === 0 && pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
       setVendaSemProdutoAguardando({ nome, preco });
@@ -20943,6 +21122,140 @@ const PDVPage: React.FC = () => {
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Seleção de Comanda */}
+      <AnimatePresence>
+        {showComandaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4"
+            >
+              <h3 className="text-xl font-bold text-white mb-4 text-center">
+                📋 Selecionar Comanda
+              </h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Número da Comanda
+                  </label>
+                  <input
+                    type="number"
+                    value={comandaNumero}
+                    onChange={(e) => setComandaNumero(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        confirmarComanda();
+                      } else if (e.key === 'Escape') {
+                        cancelarComanda();
+                      }
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg py-3 px-4 text-white text-center text-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder={`${rangesConfig.comandas.inicio} a ${rangesConfig.comandas.fim}`}
+                    autoFocus
+                    min={rangesConfig.comandas.inicio}
+                    max={rangesConfig.comandas.fim}
+                  />
+                  <p className="text-xs text-gray-400 mt-1 text-center">
+                    Range válido: {rangesConfig.comandas.inicio} a {rangesConfig.comandas.fim}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={cancelarComanda}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarComanda}
+                  disabled={!comandaNumero.trim()}
+                  className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Seleção de Mesa */}
+      <AnimatePresence>
+        {showMesaModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4"
+            >
+              <h3 className="text-xl font-bold text-white mb-4 text-center">
+                🏢 Selecionar Mesa
+              </h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Número da Mesa
+                  </label>
+                  <input
+                    type="number"
+                    value={mesaNumero}
+                    onChange={(e) => setMesaNumero(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        confirmarMesa();
+                      } else if (e.key === 'Escape') {
+                        cancelarMesa();
+                      }
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg py-3 px-4 text-white text-center text-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder={`${rangesConfig.mesas.inicio} a ${rangesConfig.mesas.fim}`}
+                    autoFocus
+                    min={rangesConfig.mesas.inicio}
+                    max={rangesConfig.mesas.fim}
+                  />
+                  <p className="text-xs text-gray-400 mt-1 text-center">
+                    Range válido: {rangesConfig.mesas.inicio} a {rangesConfig.mesas.fim}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={cancelarMesa}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarMesa}
+                  disabled={!mesaNumero.trim()}
+                  className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Confirmar
                 </button>
               </div>
             </motion.div>

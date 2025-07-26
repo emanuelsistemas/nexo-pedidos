@@ -202,6 +202,7 @@ const FormCadastro: React.FC = () => {
             desconto_no_item: false,
             editar_nome_produto: false,
             fiado: false,
+            solicitar_nome_cliente: false,
             venda_sem_produto: false,
             venda_sem_produto_ncm: '22021000',
             venda_sem_produto_cfop: '5405',

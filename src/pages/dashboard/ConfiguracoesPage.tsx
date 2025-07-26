@@ -253,6 +253,7 @@ const ConfiguracoesPage: React.FC = () => {
     desconto_no_total: false,
     vendas_itens_multiplicacao: false,
     exibir_dados_fiscais_venda: false,
+    solicitar_nome_cliente: false,
     ocultar_finalizar_com_impressao: false,
     ocultar_finalizar_sem_impressao: false,
     ocultar_nfce_com_impressao: false,
@@ -3061,6 +3062,8 @@ const ConfiguracoesPage: React.FC = () => {
           editar_nome_produto: config.editar_nome_produto || false,
           fiado: config.fiado || false,
           vendas_itens_multiplicacao: config.vendas_itens_multiplicacao || false,
+          exibir_dados_fiscais_venda: config.exibir_dados_fiscais_venda || false,
+          solicitar_nome_cliente: config.solicitar_nome_cliente || false,
           ocultar_finalizar_com_impressao: config.ocultar_finalizar_com_impressao || false,
           ocultar_finalizar_sem_impressao: config.ocultar_finalizar_sem_impressao || false,
           ocultar_nfce_com_impressao: config.ocultar_nfce_com_impressao || false,
@@ -3125,6 +3128,8 @@ const ConfiguracoesPage: React.FC = () => {
           fiado: false,
           desconto_no_total: false,
           vendas_itens_multiplicacao: false,
+          exibir_dados_fiscais_venda: false,
+          solicitar_nome_cliente: false,
           ocultar_finalizar_com_impressao: false,
           ocultar_finalizar_sem_impressao: false,
           ocultar_nfce_com_impressao: false,
@@ -3183,6 +3188,8 @@ const ConfiguracoesPage: React.FC = () => {
         editar_nome_produto: false,
         fiado: false,
         vendas_itens_multiplicacao: false,
+        exibir_dados_fiscais_venda: false,
+        solicitar_nome_cliente: false,
         ocultar_finalizar_com_impressao: false,
         ocultar_finalizar_sem_impressao: false,
         ocultar_nfce_com_impressao: false,
@@ -6262,6 +6269,22 @@ const ConfiguracoesPage: React.FC = () => {
                           <h4 className="text-white font-medium">Exibir dados Fiscais na Venda</h4>
                           <p className="text-sm text-gray-400 mt-1">
                             Mostra informações fiscais detalhadas (NCM, CFOP, CST/CSOSN, CEST, etc.) abaixo de cada item no carrinho do PDV para debug e conferência.
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={pdvConfig.solicitar_nome_cliente}
+                          onChange={(e) => handlePdvConfigChange('solicitar_nome_cliente', e.target.checked)}
+                          className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
+                          style={{ borderRadius: '50%' }}
+                        />
+                        <div>
+                          <h4 className="text-white font-medium">Solicitar Nome do Cliente</h4>
+                          <p className="text-sm text-gray-400 mt-1">
+                            Torna obrigatório informar o nome do cliente antes de finalizar qualquer venda no PDV.
                           </p>
                         </div>
                       </label>
