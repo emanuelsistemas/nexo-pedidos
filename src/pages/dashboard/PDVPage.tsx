@@ -3601,7 +3601,7 @@ const PDVPage: React.FC = () => {
             .grupo-titulo {
               text-align: center;
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '13px' : '16px'};
+              font-size: ${usarImpressao50mm ? '14px' : '18px'};
               margin: 12px 0;
               padding: 8px;
               background: #000;
@@ -3654,7 +3654,7 @@ const PDVPage: React.FC = () => {
                 font-size: ${usarImpressao50mm ? '14pt' : '16pt'} !important;
               }
               .grupo-titulo {
-                font-size: ${usarImpressao50mm ? '13pt' : '15pt'} !important;
+                font-size: ${usarImpressao50mm ? '14pt' : '16pt'} !important;
               }
               .info-pedido {
                 font-size: ${usarImpressao50mm ? '11pt' : '13pt'} !important;
@@ -3693,7 +3693,7 @@ const PDVPage: React.FC = () => {
 
           ${grupoData.itens.map(item => `
             <div class="item">
-              <div class="item-nome">${item.quantidade || 1}x ${item.produto_nome || item.nome || 'Item sem nome'}</div>
+              <div class="item-nome">${item.quantidade || 1}x - ${item.produto_nome || item.nome || 'Item sem nome'}</div>
 
               ${item.sabores && item.sabores.length > 0 ? `
                 <div class="observacao">
