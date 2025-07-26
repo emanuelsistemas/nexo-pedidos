@@ -289,6 +289,20 @@ const ConfiguracoesPage: React.FC = () => {
     retirada_balcao_cardapio: false
   });
 
+  // Estados para controle de ranges de mesas e comandas
+  const [rangeConfig, setRangeConfig] = useState({
+    mesas: {
+      inicio: 1,
+      fim: 50,
+      configurado: false
+    },
+    comandas: {
+      inicio: 1,
+      fim: 100,
+      configurado: false
+    }
+  });
+
   // Estado para controlar as abas do PDV
   const [pdvActiveTab, setPdvActiveTab] = useState<'geral' | 'botoes' | 'impressoes' | 'venda-sem-produto' | 'cardapio-digital' | 'formas-pagamento'>('geral');
 
@@ -697,6 +711,8 @@ const ConfiguracoesPage: React.FC = () => {
   useEffect(() => {
     const loadDataWithLoading = async () => {
       await loadData();
+      // Carregar ranges de mesas e comandas
+      await carregarRanges();
       // Desativa o loading após carregar os dados
       setSectionLoading(false);
       // Marca que não é mais o primeiro carregamento
@@ -4132,6 +4148,143 @@ const ConfiguracoesPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para salvar range de mesas
+  const salvarRangeMesas = async (inicio: number, fim: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData) return;
+
+      // Desativar range anterior (se existir)
+      await supabase
+        .from('mesas')
+        .update({ ativo: false })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      // Inserir novo range
+      const { error } = await supabase
+        .from('mesas')
+        .insert({
+          empresa_id: usuarioData.empresa_id,
+          numero_inicio: inicio,
+          numero_fim: fim,
+          ativo: true
+        });
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setRangeConfig(prev => ({
+        ...prev,
+        mesas: { inicio, fim, configurado: true }
+      }));
+
+      showMessage('success', `Range de mesas configurado: ${inicio} a ${fim}`);
+    } catch (error: any) {
+      showMessage('error', 'Erro ao salvar range de mesas: ' + error.message);
+    }
+  };
+
+  // ✅ NOVA: Função para salvar range de comandas
+  const salvarRangeComandas = async (inicio: number, fim: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData) return;
+
+      // Desativar range anterior (se existir)
+      await supabase
+        .from('comandas')
+        .update({ ativo: false })
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      // Inserir novo range
+      const { error } = await supabase
+        .from('comandas')
+        .insert({
+          empresa_id: usuarioData.empresa_id,
+          numero_inicio: inicio,
+          numero_fim: fim,
+          ativo: true
+        });
+
+      if (error) throw error;
+
+      // Atualizar estado local
+      setRangeConfig(prev => ({
+        ...prev,
+        comandas: { inicio, fim, configurado: true }
+      }));
+
+      showMessage('success', `Range de comandas configurado: ${inicio} a ${fim}`);
+    } catch (error: any) {
+      showMessage('error', 'Erro ao salvar range de comandas: ' + error.message);
+    }
+  };
+
+  // ✅ NOVA: Função para carregar ranges existentes
+  const carregarRanges = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!usuarioData) return;
+
+      // Carregar range de mesas
+      const { data: mesasData } = await supabase
+        .from('mesas')
+        .select('numero_inicio, numero_fim')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .single();
+
+      // Carregar range de comandas
+      const { data: comandasData } = await supabase
+        .from('comandas')
+        .select('numero_inicio, numero_fim')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('ativo', true)
+        .single();
+
+      // Atualizar estado local
+      setRangeConfig(prev => ({
+        mesas: {
+          inicio: mesasData?.numero_inicio || 1,
+          fim: mesasData?.numero_fim || 50,
+          configurado: !!mesasData
+        },
+        comandas: {
+          inicio: comandasData?.numero_inicio || 1,
+          fim: comandasData?.numero_fim || 100,
+          configurado: !!comandasData
+        }
+      }));
+
+    } catch (error: any) {
+      console.error('Erro ao carregar ranges:', error);
+    }
+  };
+
   // ✅ NOVA: Função para lidar com tipos de impressão (apenas um pode estar ativo)
   const handleTipoImpressaoChange = async (tipo: 'tipo_impressao_80mm' | 'tipo_impressao_50mm', value: boolean) => {
     if (!value) return; // Não permitir desativar sem ativar outro
@@ -5692,43 +5845,133 @@ const ConfiguracoesPage: React.FC = () => {
                     {/* Comandas e Mesas */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="relative">
-                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                           <input
                             type="checkbox"
-                            checked={false}
-                            disabled={true}
-                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            checked={pdvConfig.comandas}
+                            onChange={(e) => handlePdvConfigChange('comandas', e.target.checked)}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
                             style={{ borderRadius: '50%' }}
                           />
-                          <div>
-                            <h4 className="text-gray-400 font-medium">Comandas</h4>
-                            <p className="text-sm text-gray-500 mt-1">
+                          <div className="flex-1">
+                            <h4 className="text-white font-medium">Comandas</h4>
+                            <p className="text-sm text-gray-400 mt-1">
                               Permite controlar vendas por comandas numeradas para organização de pedidos.
                             </p>
-                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
-                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
-                            </div>
+
+                            {/* Campos de range quando comandas estiver habilitada */}
+                            {pdvConfig.comandas && (
+                              <div className="mt-4 p-3 bg-gray-700/50 rounded-lg border border-gray-600">
+                                <h5 className="text-sm font-medium text-white mb-3">📋 Configurar Range de Comandas</h5>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-xs text-gray-400 mb-1">Número Inicial</label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={rangeConfig.comandas.inicio}
+                                      onChange={(e) => setRangeConfig(prev => ({
+                                        ...prev,
+                                        comandas: { ...prev.comandas, inicio: parseInt(e.target.value) || 1 }
+                                      }))}
+                                      className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-primary-500"
+                                      placeholder="1"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-400 mb-1">Número Final</label>
+                                    <input
+                                      type="number"
+                                      min={rangeConfig.comandas.inicio}
+                                      value={rangeConfig.comandas.fim}
+                                      onChange={(e) => setRangeConfig(prev => ({
+                                        ...prev,
+                                        comandas: { ...prev.comandas, fim: parseInt(e.target.value) || 100 }
+                                      }))}
+                                      className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-primary-500"
+                                      placeholder="100"
+                                    />
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => salvarRangeComandas(rangeConfig.comandas.inicio, rangeConfig.comandas.fim)}
+                                  className="mt-3 px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded transition-colors"
+                                >
+                                  {rangeConfig.comandas.configurado ? 'Atualizar Range' : 'Salvar Range'}
+                                </button>
+                                {rangeConfig.comandas.configurado && (
+                                  <p className="text-xs text-green-400 mt-2">
+                                    ✅ Range configurado: {rangeConfig.comandas.inicio} a {rangeConfig.comandas.fim}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </label>
                       </div>
 
                       <div className="relative">
-                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                           <input
                             type="checkbox"
-                            checked={false}
-                            disabled={true}
-                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            checked={pdvConfig.mesas}
+                            onChange={(e) => handlePdvConfigChange('mesas', e.target.checked)}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
                             style={{ borderRadius: '50%' }}
                           />
-                          <div>
-                            <h4 className="text-gray-400 font-medium">Mesas</h4>
-                            <p className="text-sm text-gray-500 mt-1">
+                          <div className="flex-1">
+                            <h4 className="text-white font-medium">Mesas</h4>
+                            <p className="text-sm text-gray-400 mt-1">
                               Habilita o controle de mesas para restaurantes e estabelecimentos com atendimento no local.
                             </p>
-                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
-                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
-                            </div>
+
+                            {/* Campos de range quando mesas estiver habilitada */}
+                            {pdvConfig.mesas && (
+                              <div className="mt-4 p-3 bg-gray-700/50 rounded-lg border border-gray-600">
+                                <h5 className="text-sm font-medium text-white mb-3">🏢 Configurar Range de Mesas</h5>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-xs text-gray-400 mb-1">Número Inicial</label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={rangeConfig.mesas.inicio}
+                                      onChange={(e) => setRangeConfig(prev => ({
+                                        ...prev,
+                                        mesas: { ...prev.mesas, inicio: parseInt(e.target.value) || 1 }
+                                      }))}
+                                      className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-primary-500"
+                                      placeholder="1"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-400 mb-1">Número Final</label>
+                                    <input
+                                      type="number"
+                                      min={rangeConfig.mesas.inicio}
+                                      value={rangeConfig.mesas.fim}
+                                      onChange={(e) => setRangeConfig(prev => ({
+                                        ...prev,
+                                        mesas: { ...prev.mesas, fim: parseInt(e.target.value) || 50 }
+                                      }))}
+                                      className="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-primary-500"
+                                      placeholder="50"
+                                    />
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => salvarRangeMesas(rangeConfig.mesas.inicio, rangeConfig.mesas.fim)}
+                                  className="mt-3 px-3 py-1 bg-primary-600 hover:bg-primary-700 text-white text-xs rounded transition-colors"
+                                >
+                                  {rangeConfig.mesas.configurado ? 'Atualizar Range' : 'Salvar Range'}
+                                </button>
+                                {rangeConfig.mesas.configurado && (
+                                  <p className="text-xs text-green-400 mt-2">
+                                    ✅ Range configurado: {rangeConfig.mesas.inicio} a {rangeConfig.mesas.fim}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </label>
                       </div>

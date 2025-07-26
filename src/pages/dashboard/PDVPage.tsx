@@ -3420,12 +3420,21 @@ const PDVPage: React.FC = () => {
                 }
                 html {
                   width: 1.97in !important;
-                  font-size: 24pt !important;
+                  font-size: 12pt !important;
                 }
                 body {
                   width: 1.97in !important;
                   padding: 0.08in !important;
-                  font-size: 20px !important;
+                  font-size: 12pt !important;
+                  transform: scale(1) !important;
+                  zoom: 1 !important;
+                }
+                * {
+                  max-width: none !important;
+                  overflow: visible !important;
+                  -webkit-text-size-adjust: none !important;
+                  -moz-text-size-adjust: none !important;
+                  -ms-text-size-adjust: none !important;
                 }
               }
               @media screen {
@@ -3438,7 +3447,7 @@ const PDVPage: React.FC = () => {
                 margin: 0;
                 padding: 8px;
                 width: 48mm;
-                font-size: 20px;
+                font-size: 12px;
                 line-height: 1.4;
                 font-weight: bold;
                 color: #000000;
@@ -3453,12 +3462,21 @@ const PDVPage: React.FC = () => {
                 }
                 html {
                   width: 3.15in !important;
-                  font-size: 32pt !important;
+                  font-size: 14pt !important;
                 }
                 body {
                   width: 3.15in !important;
                   padding: 0.15in !important;
-                  font-size: 24px !important;
+                  font-size: 14pt !important;
+                  transform: scale(1) !important;
+                  zoom: 1 !important;
+                }
+                * {
+                  max-width: none !important;
+                  overflow: visible !important;
+                  -webkit-text-size-adjust: none !important;
+                  -moz-text-size-adjust: none !important;
+                  -ms-text-size-adjust: none !important;
                 }
               }
               @media screen {
@@ -3471,7 +3489,7 @@ const PDVPage: React.FC = () => {
                 margin: 0;
                 padding: 15px;
                 width: 78mm;
-                font-size: 24px;
+                font-size: 14px;
                 line-height: 1.5;
                 font-weight: bold;
                 color: #000000;
@@ -3491,92 +3509,92 @@ const PDVPage: React.FC = () => {
             .header {
               text-align: center;
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '24px' : '32px'};
-              margin-bottom: 20px;
-              border-bottom: 4px solid #000;
-              padding-bottom: 10px;
+              font-size: ${usarImpressao50mm ? '14px' : '18px'};
+              margin-bottom: 12px;
+              border-bottom: 3px solid #000;
+              padding-bottom: 6px;
             }
 
             .grupo-titulo {
               text-align: center;
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '22px' : '28px'};
-              margin: 20px 0;
-              padding: 12px;
+              font-size: ${usarImpressao50mm ? '13px' : '16px'};
+              margin: 12px 0;
+              padding: 8px;
               background: #000;
               color: #fff;
             }
 
             .info-pedido {
-              margin-bottom: 20px;
-              font-size: ${usarImpressao50mm ? '18px' : '24px'};
+              margin-bottom: 12px;
+              font-size: ${usarImpressao50mm ? '11px' : '14px'};
               font-weight: bold;
             }
 
             .item {
-              margin-bottom: 18px;
-              font-size: ${usarImpressao50mm ? '20px' : '26px'};
-              border-bottom: 3px dashed #333;
-              padding-bottom: 12px;
+              margin-bottom: 10px;
+              font-size: ${usarImpressao50mm ? '12px' : '15px'};
+              border-bottom: 2px dashed #333;
+              padding-bottom: 8px;
             }
 
             .item-nome {
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '22px' : '30px'};
+              font-size: ${usarImpressao50mm ? '13px' : '16px'};
               text-transform: uppercase;
             }
 
             .item-quantidade {
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '24px' : '32px'};
-              margin-top: 8px;
+              font-size: ${usarImpressao50mm ? '14px' : '18px'};
+              margin-top: 5px;
               color: #000;
             }
 
             .observacao {
-              font-size: ${usarImpressao50mm ? '18px' : '22px'};
+              font-size: ${usarImpressao50mm ? '11px' : '13px'};
               color: #000;
-              margin-top: 8px;
+              margin-top: 5px;
               font-style: italic;
               font-weight: bold;
               background-color: #f0f0f0;
-              padding: 8px;
-              border-left: 4px solid #000;
+              padding: 5px;
+              border-left: 3px solid #000;
             }
 
             .adicionais {
-              margin-left: ${usarImpressao50mm ? '15px' : '20px'};
-              font-size: ${usarImpressao50mm ? '18px' : '22px'};
+              margin-left: ${usarImpressao50mm ? '12px' : '15px'};
+              font-size: ${usarImpressao50mm ? '11px' : '13px'};
               color: #000;
-              margin-top: 8px;
+              margin-top: 5px;
               font-weight: bold;
             }
 
-            /* REGRAS ESPECÍFICAS PARA IMPRESSÃO - FORÇAR TAMANHOS GRANDES */
+            /* REGRAS ESPECÍFICAS PARA IMPRESSÃO - USAR PONTOS (PT) PARA IMPRESSÃO FÍSICA */
             @media print {
               .header {
-                font-size: ${usarImpressao50mm ? '24px' : '32px'} !important;
+                font-size: ${usarImpressao50mm ? '14pt' : '16pt'} !important;
               }
               .grupo-titulo {
-                font-size: ${usarImpressao50mm ? '22px' : '28px'} !important;
+                font-size: ${usarImpressao50mm ? '13pt' : '15pt'} !important;
               }
               .info-pedido {
-                font-size: ${usarImpressao50mm ? '18px' : '24px'} !important;
+                font-size: ${usarImpressao50mm ? '11pt' : '13pt'} !important;
               }
               .item {
-                font-size: ${usarImpressao50mm ? '20px' : '26px'} !important;
+                font-size: ${usarImpressao50mm ? '12pt' : '14pt'} !important;
               }
               .item-nome {
-                font-size: ${usarImpressao50mm ? '22px' : '30px'} !important;
+                font-size: ${usarImpressao50mm ? '13pt' : '15pt'} !important;
               }
               .item-quantidade {
-                font-size: ${usarImpressao50mm ? '24px' : '32px'} !important;
+                font-size: ${usarImpressao50mm ? '14pt' : '16pt'} !important;
               }
               .observacao {
-                font-size: ${usarImpressao50mm ? '18px' : '22px'} !important;
+                font-size: ${usarImpressao50mm ? '11pt' : '13pt'} !important;
               }
               .adicionais {
-                font-size: ${usarImpressao50mm ? '18px' : '22px'} !important;
+                font-size: ${usarImpressao50mm ? '11pt' : '13pt'} !important;
               }
             }
           </style>
