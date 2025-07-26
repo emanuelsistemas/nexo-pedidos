@@ -1058,6 +1058,25 @@ const CardapioPublicoPage: React.FC = () => {
     },
   });
 
+  // ✅ NOVA FUNÇÃO: Verificar se promoção está vencida (igual ao PDV e página de produtos)
+  const verificarPromocaoVencida = (produto: any) => {
+    if (!produto.promocao_data_habilitada || !produto.promocao_data_fim) {
+      return false; // Sem data definida, promoção não vence
+    }
+
+    // ✅ CORREÇÃO: Usar split para evitar problemas de fuso horário
+    const [ano, mes, dia] = produto.promocao_data_fim.split('-');
+    const dataFim = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+
+    const hoje = new Date();
+
+    // Zerar as horas para comparar apenas as datas
+    hoje.setHours(0, 0, 0, 0);
+    dataFim.setHours(23, 59, 59, 999);
+
+    return hoje > dataFim;
+  };
+
   // Função para calcular valor final com desconto
   const calcularValorFinal = (preco: number, tipoDesconto: string, valorDesconto: number): number => {
     if (tipoDesconto === 'percentual') {
@@ -1093,12 +1112,13 @@ const CardapioPublicoPage: React.FC = () => {
     // 2. Aplicar promoção sobre o preço base (se houver)
     let precoFinal = precoBase;
 
-    // Verificar promoção tradicional
+    // ✅ CORRIGIDO: Verificar promoção tradicional E se não está vencida
     const temPromocaoTradicional = produto.promocao &&
       produto.exibir_promocao_cardapio &&
       produto.tipo_desconto &&
       produto.valor_desconto !== undefined &&
-      produto.valor_desconto > 0;
+      produto.valor_desconto > 0 &&
+      !verificarPromocaoVencida(produto);
 
     if (temPromocaoTradicional) {
       precoFinal = calcularValorFinal(precoBase, produto.tipo_desconto!, produto.valor_desconto!);
@@ -6411,12 +6431,13 @@ const CardapioPublicoPage: React.FC = () => {
       }
     }
 
-    // Primeiro aplicar promoção tradicional se houver
+    // ✅ CORRIGIDO: Primeiro aplicar promoção tradicional se houver E se não estiver vencida
     const temPromocaoTradicional = produto.promocao &&
       produto.exibir_promocao_cardapio &&
       produto.tipo_desconto &&
       produto.valor_desconto !== undefined &&
-      produto.valor_desconto > 0;
+      produto.valor_desconto > 0 &&
+      !verificarPromocaoVencida(produto);
 
     if (temPromocaoTradicional) {
       precoFinal = calcularValorFinal(produto.preco, produto.tipo_desconto!, produto.valor_desconto!);
@@ -7840,8 +7861,8 @@ const CardapioPublicoPage: React.FC = () => {
                 >
                   {/* Todas as tags no canto superior direito */}
                   <div className="absolute top-3 right-3 z-10 flex flex-row gap-1 flex-nowrap items-center">
-                    {/* Badge de promoção tradicional */}
-                    {produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto && (
+                    {/* ✅ CORRIGIDO: Badge de promoção tradicional (só se não estiver vencida) */}
+                    {produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto && !verificarPromocaoVencida(produto) && (
                       <div className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg whitespace-nowrap">
                         🔥 {produto.tipo_desconto === 'percentual'
                           ? `${produto.valor_desconto}% OFF`
@@ -7979,8 +8000,8 @@ const CardapioPublicoPage: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           {/* Nome do produto - agora com espaço completo */}
                           <h3 className={`text-lg font-bold leading-tight truncate ${config.modo_escuro ? 'text-white' : 'text-gray-800'} ${(() => {
-                            // Verificar se tem alguma tag para adicionar margin-top no nome
-                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto;
+                            // ✅ CORRIGIDO: Verificar se tem alguma tag para adicionar margin-top no nome
+                            const temPromocao = produto.promocao && produto.exibir_promocao_cardapio && produto.tipo_desconto && produto.valor_desconto && !verificarPromocaoVencida(produto);
                             const temDescontoQtd = produto.desconto_quantidade && produto.exibir_desconto_qtd_minimo_no_cardapio_digital && produto.quantidade_minima;
                             const temEstoque = produto.controla_estoque_cardapio && produto.estoque_atual !== undefined && produto.estoque_atual !== null;
 
@@ -8000,12 +8021,13 @@ const CardapioPublicoPage: React.FC = () => {
                               if (tabelasComPrecos.length > 0 && tabelaSelecionadaId) {
                                 const tabelaEscolhida = tabelasComPrecos.find(t => t.id === tabelaSelecionadaId);
                                 if (tabelaEscolhida) {
-                                  // ✅ VERIFICAR SE PRODUTO TEM PROMOÇÃO PARA APLICAR SOBRE PREÇO DA TABELA
+                                  // ✅ CORRIGIDO: VERIFICAR SE PRODUTO TEM PROMOÇÃO E SE NÃO ESTÁ VENCIDA
                                   const temPromocao = produto.promocao &&
                                     produto.exibir_promocao_cardapio &&
                                     produto.tipo_desconto &&
                                     produto.valor_desconto !== undefined &&
-                                    produto.valor_desconto > 0;
+                                    produto.valor_desconto > 0 &&
+                                    !verificarPromocaoVencida(produto);
 
                                   if (temPromocao) {
                                     // Calcular valor final aplicando promoção sobre preço da tabela
@@ -8038,12 +8060,13 @@ const CardapioPublicoPage: React.FC = () => {
 
                               // Se não há tabelas de preços, mostrar preço normal
                               if (tabelasComPrecos.length === 0) {
-                              // Verificar se produto está em promoção
+                              // ✅ CORRIGIDO: Verificar se produto está em promoção E se não está vencida
                               const temPromocao = produto.promocao &&
                                                 produto.exibir_promocao_cardapio &&
                                                 produto.tipo_desconto &&
                                                 produto.valor_desconto !== undefined &&
-                                                produto.valor_desconto > 0;
+                                                produto.valor_desconto > 0 &&
+                                                !verificarPromocaoVencida(produto);
 
                               if (temPromocao) {
                                 // Calcular valor final e desconto
