@@ -3832,6 +3832,8 @@ const PDVPage: React.FC = () => {
           <div class="info-pedido">
             <div><strong>Pedido:</strong> ${pedido.numero_pedido}</div>
             <div><strong>Cliente:</strong> ${pedido.nome_cliente}</div>
+            ${pedido.mesa_numero ? `<div><strong>Mesa:</strong> ${pedido.mesa_numero}</div>` : ''}
+            ${pedido.comanda_numero ? `<div><strong>Comanda:</strong> ${pedido.comanda_numero}</div>` : ''}
             <div><strong>Horário:</strong> ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
           </div>
 
@@ -9639,8 +9641,10 @@ const PDVPage: React.FC = () => {
           // Preparar dados do pedido para impressão
           const pedidoParaImpressao = {
             numero_pedido: numeroVendaSalva,
-            nome_cliente: clienteSelecionado?.nome || 'Cliente não informado',
+            nome_cliente: nomeCliente || clienteSelecionado?.nome || 'Cliente não informado',
             telefone_cliente: clienteSelecionado?.telefone || '',
+            mesa_numero: mesaNumero || null,
+            comanda_numero: comandaNumero || null,
             created_at: new Date().toISOString()
           };
 
