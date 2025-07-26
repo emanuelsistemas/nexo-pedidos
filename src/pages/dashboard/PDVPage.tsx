@@ -9581,19 +9581,20 @@ const PDVPage: React.FC = () => {
         for (const [index, item] of carrinho.entries()) {
           console.log(`🔍 [ITEMDATA DEBUG] ===== PROCESSANDO ITEM ${index + 1} =====`);
           console.log(`🔍 [ITEMDATA DEBUG] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
-          console.log(`🔍 [ITEMDATA DEBUG] itensParaInserir.length:`, itensParaInserir.length);
-          console.log(`🔍 [ITEMDATA DEBUG] index atual:`, index);
-          console.log(`🔍 [ITEMDATA DEBUG] itensParaInserir[${index}]:`, itensParaInserir[index]);
+          console.log(`🔍 [ITEMDATA DEBUG] Item tem pdv_item_id:`, !!item.pdv_item_id);
 
-          const itemData = itensParaInserir[index];
-
-          if (!itemData) {
-            console.error(`🚨 [ITEMDATA DEBUG] ❌ ERRO: itemData é undefined para o item ${index + 1}`);
-            console.error(`🚨 [ITEMDATA DEBUG] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
-            console.error(`🚨 [ITEMDATA DEBUG] itensParaInserir completo:`, itensParaInserir);
-            console.error(`🚨 [ITEMDATA DEBUG] Este é o problema que causa o erro 'Cannot read properties of undefined'`);
+          // ✅ CORREÇÃO: Buscar itemData apenas se o item não foi salvo ainda
+          let itemData = null;
+          if (!item.pdv_item_id) {
+            // Item não salvo - buscar no array itensParaInserir
+            const indexNoArray = itensNaoSalvos.findIndex(itemNaoSalvo =>
+              itemNaoSalvo.produto.id === item.produto.id &&
+              itemNaoSalvo.quantidade === item.quantidade
+            );
+            itemData = itensParaInserir[indexNoArray];
+            console.log(`🔍 [ITEMDATA DEBUG] Item não salvo - indexNoArray: ${indexNoArray}, itemData:`, itemData);
           } else {
-            console.log(`✅ [ITEMDATA DEBUG] itemData encontrado:`, itemData);
+            console.log(`🔍 [ITEMDATA DEBUG] Item já salvo - não precisa de itemData para inserção`);
           }
 
           // ✅ CORREÇÃO: Verificar se item já existe no banco de dados

@@ -3514,6 +3514,33 @@ const ProdutosPage: React.FC = () => {
     });
   };
 
+  // Função para navegar para o próximo campo com Enter
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      // Para textarea, permitir quebra de linha com Shift+Enter
+      if (e.currentTarget.tagName === 'TEXTAREA' && e.shiftKey) {
+        return; // Permite quebra de linha normal
+      }
+
+      e.preventDefault();
+
+      // Encontrar todos os elementos focáveis no formulário
+      const form = e.currentTarget.closest('form');
+      if (!form) return;
+
+      const focusableElements = form.querySelectorAll(
+        'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+      );
+
+      const currentIndex = Array.from(focusableElements).indexOf(e.target as Element);
+      const nextIndex = currentIndex + 1;
+
+      if (nextIndex < focusableElements.length) {
+        (focusableElements[nextIndex] as HTMLElement).focus();
+      }
+    }
+  };
+
   const handleSubmitProduto = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -6509,7 +6536,7 @@ const ProdutosPage: React.FC = () => {
                     </div>
 
                     {activeTab === 'dados' && (
-                      <form onSubmit={handleSubmitProduto} className="space-y-6">
+                      <form onSubmit={handleSubmitProduto} onKeyDown={handleKeyDown} className="space-y-6">
                         <div className="mb-4">
                           <div className="flex items-center">
                             <input
@@ -6577,6 +6604,7 @@ const ProdutosPage: React.FC = () => {
                               }
                               setNovoProduto({ ...novoProduto, codigo: valor });
                             }}
+                            onKeyDown={handleKeyDown}
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                             placeholder="Código do produto"
                             required
@@ -6595,6 +6623,7 @@ const ProdutosPage: React.FC = () => {
                               const valor = e.target.value.replace(/\D/g, '').slice(0, 13);
                               setNovoProduto({ ...novoProduto, codigo_barras: valor });
                             }}
+                            onKeyDown={handleKeyDown}
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                             placeholder="1234567890123 (13 dígitos)"
                             maxLength={13}
@@ -6626,6 +6655,7 @@ const ProdutosPage: React.FC = () => {
                                 }
                               }
                             }}
+                            onKeyDown={handleKeyDown}
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                             placeholder="Digite o nome do produto (sem espaços extras ou caracteres especiais)"
                             maxLength={120}
@@ -6667,6 +6697,7 @@ const ProdutosPage: React.FC = () => {
                                     : novoEstoqueInicial.toString();
                                   setEstoqueInicialInput(valorFormatado);
                                 }}
+                                onKeyDown={handleKeyDown}
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 dark-select"
                                 required
                               >
@@ -6850,6 +6881,7 @@ const ProdutosPage: React.FC = () => {
                                       salvarValorAbaAtualNoEstado();
                                     }
                                   }}
+                                  onKeyDown={handleKeyDown}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-8 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   placeholder={abaPrecoAtiva === 'padrao'
                                     ? '0,00'
@@ -6889,6 +6921,7 @@ const ProdutosPage: React.FC = () => {
                                 }
                               }
                             }}
+                            onKeyDown={handleKeyDown}
                             className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20 resize-none"
                             rows={4}
                             placeholder="Digite a descrição adicional do produto (sem quebras de linha ou caracteres especiais)"
@@ -6963,6 +6996,7 @@ const ProdutosPage: React.FC = () => {
                                   setEstoqueInicialInput(valorFormatado);
                                 }
                               }}
+                              onKeyDown={handleKeyDown}
                               className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                               placeholder="0"
                             />
