@@ -3420,11 +3420,12 @@ const PDVPage: React.FC = () => {
                 }
                 html {
                   width: 1.97in !important;
-                  font-size: 10pt !important;
+                  font-size: 24pt !important;
                 }
                 body {
                   width: 1.97in !important;
                   padding: 0.08in !important;
+                  font-size: 20px !important;
                 }
               }
               @media screen {
@@ -3433,16 +3434,16 @@ const PDVPage: React.FC = () => {
                 }
               }
               body {
-                font-family: 'Courier New', monospace;
+                font-family: 'Arial', 'Helvetica', sans-serif;
                 margin: 0;
-                padding: 5px;
+                padding: 8px;
                 width: 48mm;
-                font-size: 9px;
-                line-height: 1.1;
-                font-weight: 500;
+                font-size: 20px;
+                line-height: 1.4;
+                font-weight: bold;
                 color: #000000;
-                text-shadow: 0.3px 0 0 currentColor;
-                letter-spacing: 0.2px;
+                text-shadow: 0.5px 0 0 currentColor;
+                letter-spacing: 0.3px;
               }
             ` : `
               @media print {
@@ -3452,11 +3453,12 @@ const PDVPage: React.FC = () => {
                 }
                 html {
                   width: 3.15in !important;
-                  font-size: 12pt !important;
+                  font-size: 32pt !important;
                 }
                 body {
                   width: 3.15in !important;
-                  padding: 0.1in !important;
+                  padding: 0.15in !important;
+                  font-size: 24px !important;
                 }
               }
               @media screen {
@@ -3465,16 +3467,16 @@ const PDVPage: React.FC = () => {
                 }
               }
               body {
-                font-family: 'Courier New', monospace;
+                font-family: 'Arial', 'Helvetica', sans-serif;
                 margin: 0;
-                padding: 10px;
+                padding: 15px;
                 width: 78mm;
-                font-size: 12px;
-                line-height: 1.2;
-                font-weight: 500;
+                font-size: 24px;
+                line-height: 1.5;
+                font-weight: bold;
                 color: #000000;
-                text-shadow: 0.3px 0 0 currentColor;
-                letter-spacing: 0.2px;
+                text-shadow: 0.5px 0 0 currentColor;
+                letter-spacing: 0.3px;
               }
             `}
 
@@ -3489,57 +3491,93 @@ const PDVPage: React.FC = () => {
             .header {
               text-align: center;
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '11px' : '14px'};
-              margin-bottom: 10px;
-              border-bottom: 2px solid #000;
-              padding-bottom: 5px;
+              font-size: ${usarImpressao50mm ? '24px' : '32px'};
+              margin-bottom: 20px;
+              border-bottom: 4px solid #000;
+              padding-bottom: 10px;
             }
 
             .grupo-titulo {
               text-align: center;
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '10px' : '13px'};
-              margin: 8px 0;
-              padding: 3px;
+              font-size: ${usarImpressao50mm ? '22px' : '28px'};
+              margin: 20px 0;
+              padding: 12px;
               background: #000;
               color: #fff;
             }
 
             .info-pedido {
-              margin-bottom: 10px;
-              font-size: ${usarImpressao50mm ? '9px' : '11px'};
+              margin-bottom: 20px;
+              font-size: ${usarImpressao50mm ? '18px' : '24px'};
+              font-weight: bold;
             }
 
             .item {
-              margin-bottom: 8px;
-              font-size: ${usarImpressao50mm ? '9px' : '11px'};
-              border-bottom: 1px dashed #ccc;
-              padding-bottom: 5px;
+              margin-bottom: 18px;
+              font-size: ${usarImpressao50mm ? '20px' : '26px'};
+              border-bottom: 3px dashed #333;
+              padding-bottom: 12px;
             }
 
             .item-nome {
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '10px' : '12px'};
+              font-size: ${usarImpressao50mm ? '22px' : '30px'};
+              text-transform: uppercase;
             }
 
             .item-quantidade {
               font-weight: bold;
-              font-size: ${usarImpressao50mm ? '11px' : '14px'};
-              margin-top: 2px;
+              font-size: ${usarImpressao50mm ? '24px' : '32px'};
+              margin-top: 8px;
+              color: #000;
             }
 
             .observacao {
-              font-size: ${usarImpressao50mm ? '8px' : '10px'};
-              color: #666;
-              margin-top: 2px;
+              font-size: ${usarImpressao50mm ? '18px' : '22px'};
+              color: #000;
+              margin-top: 8px;
               font-style: italic;
+              font-weight: bold;
+              background-color: #f0f0f0;
+              padding: 8px;
+              border-left: 4px solid #000;
             }
 
             .adicionais {
-              margin-left: ${usarImpressao50mm ? '8px' : '12px'};
-              font-size: ${usarImpressao50mm ? '8px' : '10px'};
-              color: #333;
-              margin-top: 2px;
+              margin-left: ${usarImpressao50mm ? '15px' : '20px'};
+              font-size: ${usarImpressao50mm ? '18px' : '22px'};
+              color: #000;
+              margin-top: 8px;
+              font-weight: bold;
+            }
+
+            /* REGRAS ESPECÍFICAS PARA IMPRESSÃO - FORÇAR TAMANHOS GRANDES */
+            @media print {
+              .header {
+                font-size: ${usarImpressao50mm ? '24px' : '32px'} !important;
+              }
+              .grupo-titulo {
+                font-size: ${usarImpressao50mm ? '22px' : '28px'} !important;
+              }
+              .info-pedido {
+                font-size: ${usarImpressao50mm ? '18px' : '24px'} !important;
+              }
+              .item {
+                font-size: ${usarImpressao50mm ? '20px' : '26px'} !important;
+              }
+              .item-nome {
+                font-size: ${usarImpressao50mm ? '22px' : '30px'} !important;
+              }
+              .item-quantidade {
+                font-size: ${usarImpressao50mm ? '24px' : '32px'} !important;
+              }
+              .observacao {
+                font-size: ${usarImpressao50mm ? '18px' : '22px'} !important;
+              }
+              .adicionais {
+                font-size: ${usarImpressao50mm ? '18px' : '22px'} !important;
+              }
             }
           </style>
         </head>
