@@ -11707,6 +11707,27 @@ const PDVPage: React.FC = () => {
           // ✅ NOVO: Limpar observação da venda
           setObservacaoVenda('');
 
+          // ✅ NOVO: Limpar TODOS os estados dos modais mesmo em caso de erro
+          setNomeCliente('');
+          setComandaNumero('');
+          setMesaNumero('');
+          setNomeClienteTemp('');
+          setComandaNumeroTemp('');
+          setMesaNumeroTemp('');
+          setProdutoAguardandoNomeCliente(null);
+          setQuantidadeAguardandoNomeCliente(1);
+          setVendaSemProdutoAguardandoNomeCliente(null);
+          setProdutoAguardandoComandaMesa(null);
+          setQuantidadeAguardandoComandaMesa(1);
+          setVendaSemProdutoAguardandoComandaMesa(null);
+          setProdutoAguardandoVendedor(null);
+          setQuantidadeAguardandoVendedor(1);
+          setVendaSemProdutoAguardando(null);
+          setAguardandoSelecaoVendedor(false);
+          setProdutoParaQuantidade(null);
+          setQuantidadeModal(1);
+          setQuantidadeModalInput('1');
+
           // ✅ CORREÇÃO: Limpar venda em andamento se houver erro
           if (vendaEmAndamento) {
             setVendaEmAndamento(null);
@@ -11994,6 +12015,35 @@ const PDVPage: React.FC = () => {
 
       // ✅ NOVO: Limpar observação da venda
       setObservacaoVenda('');
+
+      // ✅ NOVO: Limpar TODOS os estados dos modais para nova venda
+      setNomeCliente('');
+      setComandaNumero('');
+      setMesaNumero('');
+
+      // Limpar estados temporários dos modais
+      setNomeClienteTemp('');
+      setComandaNumeroTemp('');
+      setMesaNumeroTemp('');
+
+      // Limpar produtos aguardando modais
+      setProdutoAguardandoNomeCliente(null);
+      setQuantidadeAguardandoNomeCliente(1);
+      setVendaSemProdutoAguardandoNomeCliente(null);
+      setProdutoAguardandoComandaMesa(null);
+      setQuantidadeAguardandoComandaMesa(1);
+      setVendaSemProdutoAguardandoComandaMesa(null);
+
+      // Limpar estados do modal de vendedor
+      setProdutoAguardandoVendedor(null);
+      setQuantidadeAguardandoVendedor(1);
+      setVendaSemProdutoAguardando(null);
+      setAguardandoSelecaoVendedor(false);
+
+      // Limpar estados do modal de quantidade
+      setProdutoParaQuantidade(null);
+      setQuantidadeModal(1);
+      setQuantidadeModalInput('1');
 
       clearPDVState();
 
