@@ -3233,12 +3233,430 @@ const PDVPage: React.FC = () => {
         itens: itens
       };
 
-      // Gerar e imprimir cupom
+      // 1. GERAR E IMPRIMIR CUPOM PRINCIPAL (todos os itens)
+      console.log('🖨️ [CARDAPIO-PRINT] Imprimindo cupom principal...');
       await gerarEImprimirCupomCardapio(dadosImpressao, usarImpressao50mm);
+
+      // 2. AGUARDAR UM POUCO PARA GARANTIR QUE O PRIMEIRO CUPOM FOI PROCESSADO
+      console.log('🖨️ [CARDAPIO-PRINT] Aguardando conclusão do cupom principal...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 3. VERIFICAR SE HÁ ITENS DE PRODUÇÃO E IMPRIMIR CUPONS SEPARADOS POR GRUPO
+      console.log('🖨️ [CARDAPIO-PRINT] Iniciando verificação de cupons de produção...');
+      await imprimirCuponsProducaoPorGrupo(pedido, itens, usarImpressao50mm);
 
     } catch (error) {
       console.error('❌ [CARDAPIO-PRINT] Erro ao imprimir pedido:', error);
       toast.error('Erro ao imprimir pedido');
+    }
+  };
+
+  // ✅ FUNÇÃO PARA IMPRIMIR CUPONS DE PRODUÇÃO SEPARADOS POR GRUPO
+  const imprimirCuponsProducaoPorGrupo = async (pedido: any, itens: any[], usarImpressao50mm: boolean) => {
+    try {
+      console.log('🏭 [PRODUCAO-PRINT] ===== INICIANDO VERIFICAÇÃO DE PRODUÇÃO =====');
+      console.log('🏭 [PRODUCAO-PRINT] Pedido:', pedido.numero_pedido);
+      console.log('🏭 [PRODUCAO-PRINT] Total de itens:', itens.length);
+      console.log('🏭 [PRODUCAO-PRINT] Itens recebidos:', itens);
+
+      // 1. BUSCAR DADOS DOS PRODUTOS PARA VERIFICAR CAMPO 'producao' E 'grupo'
+      const produtoIds = itens.map(item => item.produto_id).filter(Boolean);
+
+      console.log('🏭 [PRODUCAO-PRINT] Produto IDs extraídos:', produtoIds);
+
+      if (produtoIds.length === 0) {
+        console.log('🏭 [PRODUCAO-PRINT] ❌ Nenhum produto_id encontrado nos itens');
+        console.log('🏭 [PRODUCAO-PRINT] Estrutura dos itens:', itens.map(item => ({
+          produto_id: item.produto_id,
+          nome: item.produto_nome || item.nome,
+          keys: Object.keys(item)
+        })));
+        return;
+      }
+
+      console.log('🏭 [PRODUCAO-PRINT] Buscando dados dos produtos no banco...');
+      const { data: produtosData, error: produtosError } = await supabase
+        .from('produtos')
+        .select(`
+          id,
+          nome,
+          codigo,
+          producao,
+          grupo_id,
+          grupo:grupos(id, nome)
+        `)
+        .in('id', produtoIds);
+
+      if (produtosError) {
+        console.error('🏭 [PRODUCAO-PRINT] ❌ Erro ao buscar dados dos produtos:', produtosError);
+        return;
+      }
+
+      console.log('🏭 [PRODUCAO-PRINT] ✅ Produtos encontrados no banco:', produtosData?.length || 0);
+      console.log('🏭 [PRODUCAO-PRINT] Detalhes dos produtos:', produtosData?.map(p => ({
+        id: p.id,
+        nome: p.nome,
+        producao: p.producao,
+        grupo: p.grupo?.nome
+      })));
+
+      // 2. FILTRAR APENAS ITENS QUE TÊM PRODUÇÃO = TRUE
+      console.log('🏭 [PRODUCAO-PRINT] Filtrando itens de produção...');
+      const itensProducao = itens.filter(item => {
+        const produto = produtosData?.find(p => p.id === item.produto_id);
+        const temProducao = produto?.producao === true;
+        console.log(`🏭 [PRODUCAO-PRINT] Item ${item.produto_nome || item.nome}: producao=${produto?.producao}, incluir=${temProducao}`);
+        return temProducao;
+      });
+
+      console.log('🏭 [PRODUCAO-PRINT] ===== RESULTADO DA FILTRAGEM =====');
+      console.log('🏭 [PRODUCAO-PRINT] Total de itens de produção:', itensProducao.length);
+
+      if (itensProducao.length === 0) {
+        console.log('🏭 [PRODUCAO-PRINT] ❌ Nenhum item de produção encontrado - finalizando');
+        console.log('🏭 [PRODUCAO-PRINT] Motivo: Nenhum produto tem campo producao = TRUE');
+        return;
+      }
+
+      console.log('🏭 [PRODUCAO-PRINT] ✅ Itens que serão impressos:', itensProducao.map(item => ({
+        nome: item.produto_nome || item.nome,
+        quantidade: item.quantidade
+      })));
+
+      // 3. AGRUPAR ITENS POR GRUPO
+      console.log('🏭 [PRODUCAO-PRINT] ===== AGRUPANDO POR GRUPOS =====');
+      const itensPorGrupo = new Map();
+
+      itensProducao.forEach(item => {
+        const produto = produtosData?.find(p => p.id === item.produto_id);
+        console.log(`🏭 [PRODUCAO-PRINT] Processando item: ${item.produto_nome || item.nome}`);
+        console.log(`🏭 [PRODUCAO-PRINT] Produto encontrado:`, produto);
+
+        if (produto?.grupo) {
+          const grupoNome = produto.grupo.nome;
+          const grupoId = produto.grupo.id;
+
+          console.log(`🏭 [PRODUCAO-PRINT] Adicionando ao grupo: ${grupoNome} (ID: ${grupoId})`);
+
+          if (!itensPorGrupo.has(grupoId)) {
+            itensPorGrupo.set(grupoId, {
+              nome: grupoNome,
+              itens: []
+            });
+            console.log(`🏭 [PRODUCAO-PRINT] ✅ Novo grupo criado: ${grupoNome}`);
+          }
+
+          itensPorGrupo.get(grupoId).itens.push({
+            ...item,
+            produto_nome: produto.nome,
+            produto_codigo: produto.codigo
+          });
+        } else {
+          console.log(`🏭 [PRODUCAO-PRINT] ⚠️ Item sem grupo válido: ${item.produto_nome || item.nome}`);
+        }
+      });
+
+      console.log('🏭 [PRODUCAO-PRINT] ===== RESULTADO DO AGRUPAMENTO =====');
+      console.log('🏭 [PRODUCAO-PRINT] Total de grupos:', itensPorGrupo.size);
+
+      for (const [grupoId, grupoData] of itensPorGrupo) {
+        console.log(`🏭 [PRODUCAO-PRINT] Grupo "${grupoData.nome}": ${grupoData.itens.length} itens`);
+      }
+
+      if (itensPorGrupo.size === 0) {
+        console.log('🏭 [PRODUCAO-PRINT] ❌ Nenhum grupo válido encontrado - finalizando');
+        return;
+      }
+
+      // 4. IMPRIMIR UM CUPOM PARA CADA GRUPO
+      console.log('🏭 [PRODUCAO-PRINT] ===== INICIANDO IMPRESSÕES =====');
+      let grupoAtual = 1;
+
+      for (const [grupoId, grupoData] of itensPorGrupo) {
+        console.log(`🏭 [PRODUCAO-PRINT] [${grupoAtual}/${itensPorGrupo.size}] Imprimindo cupom para grupo: ${grupoData.nome}`);
+
+        try {
+          await imprimirCupomProducaoGrupo(pedido, grupoData, usarImpressao50mm);
+          console.log(`🏭 [PRODUCAO-PRINT] ✅ Cupom do grupo "${grupoData.nome}" enviado para impressão`);
+        } catch (error) {
+          console.error(`🏭 [PRODUCAO-PRINT] ❌ Erro ao imprimir grupo "${grupoData.nome}":`, error);
+        }
+
+        // Pausa entre impressões para evitar conflitos
+        if (grupoAtual < itensPorGrupo.size) {
+          console.log(`🏭 [PRODUCAO-PRINT] Aguardando 2 segundos antes do próximo cupom...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        grupoAtual++;
+      }
+
+      console.log('🏭 [PRODUCAO-PRINT] ===== TODOS OS CUPONS ENVIADOS =====');
+
+    } catch (error) {
+      console.error('❌ [PRODUCAO-PRINT] Erro ao imprimir cupons de produção:', error);
+      // NÃO INTERROMPER o fluxo principal - apenas logar o erro
+    }
+  };
+
+  // ✅ FUNÇÃO PARA IMPRIMIR CUPOM DE PRODUÇÃO DE UM GRUPO ESPECÍFICO
+  const imprimirCupomProducaoGrupo = async (pedido: any, grupoData: any, usarImpressao50mm: boolean) => {
+    try {
+      console.log(`🖨️ [GRUPO-PRINT] ===== IMPRIMINDO GRUPO: ${grupoData.nome} =====`);
+      console.log(`🖨️ [GRUPO-PRINT] Itens no grupo:`, grupoData.itens.length);
+      console.log(`🖨️ [GRUPO-PRINT] Tipo de impressão:`, usarImpressao50mm ? '50MM' : '80MM');
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+          <style>
+            ${usarImpressao50mm ? `
+              @media print {
+                @page {
+                  margin: 0;
+                  size: 1.97in auto; /* 50mm = 1.97 polegadas */
+                }
+                html {
+                  width: 1.97in !important;
+                  font-size: 10pt !important;
+                }
+                body {
+                  width: 1.97in !important;
+                  padding: 0.08in !important;
+                }
+              }
+              @media screen {
+                body {
+                  width: 1.97in !important;
+                }
+              }
+              body {
+                font-family: 'Courier New', monospace;
+                margin: 0;
+                padding: 5px;
+                width: 48mm;
+                font-size: 9px;
+                line-height: 1.1;
+                font-weight: 500;
+                color: #000000;
+                text-shadow: 0.3px 0 0 currentColor;
+                letter-spacing: 0.2px;
+              }
+            ` : `
+              @media print {
+                @page {
+                  margin: 0;
+                  size: 3.15in auto; /* 80mm = 3.15 polegadas */
+                }
+                html {
+                  width: 3.15in !important;
+                  font-size: 12pt !important;
+                }
+                body {
+                  width: 3.15in !important;
+                  padding: 0.1in !important;
+                }
+              }
+              @media screen {
+                body {
+                  width: 3.15in !important;
+                }
+              }
+              body {
+                font-family: 'Courier New', monospace;
+                margin: 0;
+                padding: 10px;
+                width: 78mm;
+                font-size: 12px;
+                line-height: 1.2;
+                font-weight: 500;
+                color: #000000;
+                text-shadow: 0.3px 0 0 currentColor;
+                letter-spacing: 0.2px;
+              }
+            `}
+
+            * {
+              max-width: none !important;
+              overflow: visible !important;
+              -webkit-text-size-adjust: none !important;
+              -moz-text-size-adjust: none !important;
+              -ms-text-size-adjust: none !important;
+            }
+
+            .header {
+              text-align: center;
+              font-weight: bold;
+              font-size: ${usarImpressao50mm ? '11px' : '14px'};
+              margin-bottom: 10px;
+              border-bottom: 2px solid #000;
+              padding-bottom: 5px;
+            }
+
+            .grupo-titulo {
+              text-align: center;
+              font-weight: bold;
+              font-size: ${usarImpressao50mm ? '10px' : '13px'};
+              margin: 8px 0;
+              padding: 3px;
+              background: #000;
+              color: #fff;
+            }
+
+            .info-pedido {
+              margin-bottom: 10px;
+              font-size: ${usarImpressao50mm ? '9px' : '11px'};
+            }
+
+            .item {
+              margin-bottom: 8px;
+              font-size: ${usarImpressao50mm ? '9px' : '11px'};
+              border-bottom: 1px dashed #ccc;
+              padding-bottom: 5px;
+            }
+
+            .item-nome {
+              font-weight: bold;
+              font-size: ${usarImpressao50mm ? '10px' : '12px'};
+            }
+
+            .item-quantidade {
+              font-weight: bold;
+              font-size: ${usarImpressao50mm ? '11px' : '14px'};
+              margin-top: 2px;
+            }
+
+            .observacao {
+              font-size: ${usarImpressao50mm ? '8px' : '10px'};
+              color: #666;
+              margin-top: 2px;
+              font-style: italic;
+            }
+
+            .adicionais {
+              margin-left: ${usarImpressao50mm ? '8px' : '12px'};
+              font-size: ${usarImpressao50mm ? '8px' : '10px'};
+              color: #333;
+              margin-top: 2px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            🏭 PRODUÇÃO
+          </div>
+
+          <div class="grupo-titulo">
+            ${grupoData.nome.toUpperCase()}
+          </div>
+
+          <div class="info-pedido">
+            <div><strong>Pedido:</strong> ${pedido.numero_pedido}</div>
+            <div><strong>Cliente:</strong> ${pedido.nome_cliente}</div>
+            <div><strong>Horário:</strong> ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+
+          <div style="border-bottom: 1px dashed #000; margin-bottom: 10px;"></div>
+
+          ${grupoData.itens.map(item => `
+            <div class="item">
+              <div class="item-nome">${item.produto_nome || item.nome || 'Item sem nome'}</div>
+              <div class="item-quantidade">Quantidade: ${item.quantidade || 1}</div>
+
+              ${item.observacao ? `<div class="observacao">Obs: ${item.observacao}</div>` : ''}
+
+              ${item.sabores && item.sabores.length > 0 ? `
+                <div class="observacao">
+                  Sabores: ${item.sabores.map(sabor => sabor.produto?.nome || sabor.nome || 'Sabor').join(', ')}
+                </div>
+              ` : ''}
+
+              ${item.adicionais && item.adicionais.length > 0 ? `
+                <div class="adicionais">
+                  <strong>Adicionais:</strong><br>
+                  ${item.adicionais.map(adicional => `
+                    • ${adicional.quantidade || 1}x ${adicional.nome}
+                  `).join('<br>')}
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+
+          <div style="text-align: center; margin-top: 15px; font-size: ${usarImpressao50mm ? '8px' : '10px'};">
+            ═══════════════════════════
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Abrir nova janela para impressão
+      console.log(`🖨️ [GRUPO-PRINT] Tentando abrir janela de impressão para grupo: ${grupoData.nome}`);
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        console.error(`🖨️ [GRUPO-PRINT] ❌ Falha ao abrir janela de impressão para grupo: ${grupoData.nome}`);
+        console.error(`🖨️ [GRUPO-PRINT] Possível causa: Bloqueador de pop-ups ativo`);
+        throw new Error(`Não foi possível abrir janela de impressão para o grupo ${grupoData.nome}. Verifique se o bloqueador de pop-ups está desabilitado.`);
+      }
+
+      console.log(`🖨️ [GRUPO-PRINT] ✅ Janela de impressão aberta para grupo: ${grupoData.nome}`);
+
+      // Escrever conteúdo HTML
+      console.log(`🖨️ [GRUPO-PRINT] Escrevendo conteúdo HTML na janela...`);
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+
+      // Aguardar carregamento e imprimir
+      console.log(`🖨️ [GRUPO-PRINT] Configurando evento de impressão...`);
+
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          console.error(`🖨️ [GRUPO-PRINT] ❌ Timeout na impressão do grupo: ${grupoData.nome}`);
+          printWindow.close();
+          reject(new Error(`Timeout na impressão do grupo ${grupoData.nome}`));
+        }, 10000); // 10 segundos de timeout
+
+        printWindow.onload = () => {
+          console.log(`🖨️ [GRUPO-PRINT] Janela carregada, iniciando impressão...`);
+          clearTimeout(timeout);
+
+          try {
+            printWindow.print();
+            console.log(`🖨️ [GRUPO-PRINT] ✅ Comando de impressão enviado para grupo: ${grupoData.nome}`);
+
+            // Aguardar um pouco antes de fechar
+            setTimeout(() => {
+              printWindow.close();
+              console.log(`🖨️ [GRUPO-PRINT] ✅ Janela fechada para grupo: ${grupoData.nome}`);
+              resolve(true);
+            }, 1000);
+
+          } catch (printError) {
+            console.error(`🖨️ [GRUPO-PRINT] ❌ Erro ao executar print():`, printError);
+            printWindow.close();
+            reject(printError);
+          }
+        };
+
+        // Fallback caso onload não seja chamado
+        setTimeout(() => {
+          if (printWindow.document.readyState === 'complete') {
+            console.log(`🖨️ [GRUPO-PRINT] Fallback: Documento já carregado, iniciando impressão...`);
+            clearTimeout(timeout);
+            printWindow.print();
+            setTimeout(() => {
+              printWindow.close();
+              resolve(true);
+            }, 1000);
+          }
+        }, 2000);
+      });
+
+    } catch (error) {
+      console.error(`❌ [PRODUCAO-PRINT] Erro ao imprimir cupom do grupo ${grupoData.nome}:`, error);
+      throw error;
     }
   };
 
