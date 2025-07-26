@@ -637,6 +637,28 @@ const PDVPage: React.FC = () => {
   const [filtroDataInicioVendas, setFiltroDataInicioVendas] = useState('');
   const [filtroDataFimVendas, setFiltroDataFimVendas] = useState('');
 
+  // ✅ NOVO: Estados para modal de Mesas
+  const [vendasMesas, setVendasMesas] = useState<any[]>([]);
+  const [contadorVendasMesas, setContadorVendasMesas] = useState(0);
+  const [carregandoVendasMesas, setCarregandoVendasMesas] = useState(false);
+  const [vendasMesasExpandidas, setVendasMesasExpandidas] = useState<Set<string>>(new Set());
+  const [showFiltrosMesas, setShowFiltrosMesas] = useState(false);
+  const [filtroMesaNumero, setFiltroMesaNumero] = useState('');
+  const [filtroClienteMesa, setFiltroClienteMesa] = useState('');
+  const [filtroDataInicioMesas, setFiltroDataInicioMesas] = useState('');
+  const [filtroDataFimMesas, setFiltroDataFimMesas] = useState('');
+
+  // ✅ NOVO: Estados para modal de Comandas
+  const [vendasComandas, setVendasComandas] = useState<any[]>([]);
+  const [contadorVendasComandas, setContadorVendasComandas] = useState(0);
+  const [carregandoVendasComandas, setCarregandoVendasComandas] = useState(false);
+  const [vendasComandasExpandidas, setVendasComandasExpandidas] = useState<Set<string>>(new Set());
+  const [showFiltrosComandas, setShowFiltrosComandas] = useState(false);
+  const [filtroComandaNumero, setFiltroComandaNumero] = useState('');
+  const [filtroClienteComanda, setFiltroClienteComanda] = useState('');
+  const [filtroDataInicioComandas, setFiltroDataInicioComandas] = useState('');
+  const [filtroDataFimComandas, setFiltroDataFimComandas] = useState('');
+
   // ✅ NOVO: Estados para observação da venda
   const [observacaoVenda, setObservacaoVenda] = useState<string>('');
   const [showObservacaoVendaModal, setShowObservacaoVendaModal] = useState(false);
