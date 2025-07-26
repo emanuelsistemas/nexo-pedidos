@@ -1790,28 +1790,15 @@ const PDVPage: React.FC = () => {
           e.stopPropagation();
         }
         try {
-          console.log('🚚 Abrindo modal de delivery local...');
+          console.log('🚚 [BOTÃO] Clicado no botão Delivery Local');
           await carregarVendasDelivery();
-          console.log('✅ Vendas de delivery carregadas, abrindo modal...');
+          console.log('✅ [BOTÃO] Vendas carregadas, abrindo modal...');
           setShowDeliveryModal(true);
+          console.log('✅ [BOTÃO] Modal definido como aberto');
         } catch (error) {
-          console.error('❌ Erro ao abrir modal de delivery:', error);
+          console.error('❌ [BOTÃO] Erro ao abrir modal de delivery:', error);
           toast.error('Erro ao carregar deliveries. Tente novamente.');
         }
-      }
-    },
-    {
-      id: 'delivery',
-      icon: Bike,
-      label: 'Delivery',
-      color: 'primary',
-      onClick: (e?: React.MouseEvent) => {
-        if (e) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-        // TODO: Implementar funcionalidade do Delivery
-        toast.info('Funcionalidade do Delivery em desenvolvimento');
       }
     },
     {
