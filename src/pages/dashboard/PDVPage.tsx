@@ -627,6 +627,7 @@ const PDVPage: React.FC = () => {
   const [vendasAbertas, setVendasAbertas] = useState<any[]>([]);
   const [contadorVendasAbertas, setContadorVendasAbertas] = useState(0);
   const [carregandoVendasAbertas, setCarregandoVendasAbertas] = useState(false);
+  const [vendasExpandidas, setVendasExpandidas] = useState<Set<string>>(new Set());
 
   // ✅ NOVO: Estados para observação da venda
   const [observacaoVenda, setObservacaoVenda] = useState<string>('');
@@ -9894,10 +9895,14 @@ const PDVPage: React.FC = () => {
             return { ...venda, itens: [], totalItens: 0 };
           }
 
+          // Calcular total real dos itens
+          const totalCalculado = (itens || []).reduce((acc, item) => acc + (item.valor_total_item || 0), 0);
+
           return {
             ...venda,
             itens: itens || [],
-            totalItens: (itens || []).reduce((acc, item) => acc + item.quantidade, 0)
+            totalItens: (itens || []).reduce((acc, item) => acc + item.quantidade, 0),
+            valor_total: totalCalculado // Sobrescrever com total calculado dos itens
           };
         })
       );
@@ -22503,20 +22508,34 @@ const PDVPage: React.FC = () => {
 
                             {venda.itens && venda.itens.length > 0 && (
                               <div className="mt-3 pt-3 border-t border-gray-700">
-                                <div className="text-xs text-gray-400 mb-2">Produtos:</div>
-                                <div className="space-y-1">
-                                  {venda.itens.slice(0, 3).map((item: any, index: number) => (
-                                    <div key={index} className="text-xs text-gray-300 flex justify-between">
-                                      <span>{item.nome_produto}</span>
-                                      <span>{item.quantidade}x {formatCurrency(item.valor_total_item)}</span>
-                                    </div>
-                                  ))}
-                                  {venda.itens.length > 3 && (
-                                    <div className="text-xs text-gray-400">
-                                      ... e mais {venda.itens.length - 3} item(s)
-                                    </div>
-                                  )}
-                                </div>
+                                <button
+                                  onClick={() => {
+                                    const novasVendasExpandidas = new Set(vendasExpandidas);
+                                    if (novasVendasExpandidas.has(venda.id)) {
+                                      novasVendasExpandidas.delete(venda.id);
+                                    } else {
+                                      novasVendasExpandidas.add(venda.id);
+                                    }
+                                    setVendasExpandidas(novasVendasExpandidas);
+                                  }}
+                                  className="flex items-center justify-between w-full text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                                >
+                                  <span>Produtos ({venda.itens.length})</span>
+                                  <span className="text-lg">
+                                    {vendasExpandidas.has(venda.id) ? '▼' : '▶'}
+                                  </span>
+                                </button>
+
+                                {vendasExpandidas.has(venda.id) && (
+                                  <div className="mt-2 space-y-1">
+                                    {venda.itens.map((item: any, index: number) => (
+                                      <div key={index} className="text-xs text-gray-300 flex justify-between">
+                                        <span>{item.nome_produto}</span>
+                                        <span>{item.quantidade}x {formatCurrency(item.valor_total_item)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
