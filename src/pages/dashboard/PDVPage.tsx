@@ -42,7 +42,8 @@ import {
   Minimize2,
   Camera,
   Save,
-  Copy
+  Copy,
+  Phone
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -187,6 +188,8 @@ const PDVPage: React.FC = () => {
   const [showClienteModal, setShowClienteModal] = useState(false);
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [searchClienteTerm, setSearchClienteTerm] = useState('');
+  const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
   const [showPagamentoModal, setShowPagamentoModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [itemParaRemover, setItemParaRemover] = useState<string | null>(null);
@@ -2157,6 +2160,21 @@ const PDVPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [showMesasModal, showComandasModal, showVendasAbertasModal]);
 
+  // ✅ NOVO: Filtrar clientes quando termo de busca mudar
+  useEffect(() => {
+    if (!searchClienteTerm.trim()) {
+      setFilteredClientes(clientes);
+    } else {
+      const termo = searchClienteTerm.toLowerCase();
+      const clientesFiltrados = clientes.filter(cliente =>
+        cliente.nome.toLowerCase().includes(termo) ||
+        (cliente.telefone && cliente.telefone.includes(termo)) ||
+        (cliente.documento && cliente.documento.includes(termo))
+      );
+      setFilteredClientes(clientesFiltrados);
+    }
+  }, [searchClienteTerm, clientes]);
+
   // Estado para captura automática de código de barras
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
@@ -2889,6 +2907,7 @@ const PDVPage: React.FC = () => {
 
     if (error) throw error;
     setClientes(data || []);
+    setFilteredClientes(data || []); // Inicializar lista filtrada
   };
 
   const loadEstoque = async () => {
@@ -17033,43 +17052,76 @@ const PDVPage: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            onClick={() => setShowClienteModal(false)}
+            onClick={() => {
+              setShowClienteModal(false);
+              setSearchClienteTerm(''); // Limpar busca ao fechar
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-md mx-4"
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-2xl mx-4 h-[90vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
+              {/* Header fixo */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-800">
                 <h3 className="text-lg font-semibold text-white">Selecionar Cliente</h3>
                 <button
-                  onClick={() => setShowClienteModal(false)}
+                  onClick={() => {
+                    setShowClienteModal(false);
+                    setSearchClienteTerm(''); // Limpar busca ao fechar
+                  }}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
-                <button
-                  onClick={() => {
-                    setClienteSelecionado(null);
-                    setShowClienteModal(false);
-                  }}
-                  className="w-full text-left p-2.5 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
-                >
-                  <div className="text-white text-sm">Venda sem cliente</div>
-                  <div className="text-xs text-gray-400">Consumidor final</div>
-                </button>
+              {/* Campo de busca fixo */}
+              <div className="p-6 border-b border-gray-800">
+                <div className="relative">
+                  <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchClienteTerm}
+                    onChange={(e) => setSearchClienteTerm(e.target.value)}
+                    placeholder="Buscar por nome, telefone ou documento..."
+                    className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 pl-10 pr-4 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                    autoFocus
+                  />
+                </div>
+              </div>
 
-                {clientes.map(cliente => (
+              {/* Lista de clientes com scroll */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      setClienteSelecionado(null);
+                      setShowClienteModal(false);
+                      setSearchClienteTerm(''); // Limpar busca
+                    }}
+                    className="w-full text-left p-3 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+                  >
+                    <div className="text-white text-sm font-medium">Venda sem cliente</div>
+                    <div className="text-xs text-gray-400">Consumidor final</div>
+                  </button>
+
+                  {filteredClientes.length === 0 && searchClienteTerm ? (
+                    <div className="text-center py-8 text-gray-400">
+                      <Search size={32} className="mx-auto mb-2 opacity-50" />
+                      <p>Nenhum cliente encontrado</p>
+                      <p className="text-xs">Tente buscar por outro termo</p>
+                    </div>
+                  ) : (
+                    filteredClientes.map(cliente => (
                   <button
                     key={cliente.id}
                     onClick={() => {
                       setClienteSelecionado(cliente);
                       setShowClienteModal(false);
+                      setSearchClienteTerm(''); // Limpar busca
                       // Carregar descontos do cliente selecionado
                       carregarDescontosCliente(cliente.id);
 
@@ -17092,33 +17144,38 @@ const PDVPage: React.FC = () => {
                         setErroValidacao(''); // Limpar qualquer erro anterior
                       }
                     }}
-                    className="w-full text-left p-2.5 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors"
+                    className="w-full text-left p-4 rounded bg-gray-800/50 hover:bg-gray-700/50 transition-colors border border-gray-700/50 hover:border-gray-600"
                   >
-                    {/* Layout em duas colunas - Compacto */}
-                    <div className="flex items-start justify-between gap-3">
-                      {/* Coluna Esquerda - Nome */}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm font-medium truncate">{cliente.nome}</div>
-                        {cliente.email && (
-                          <div className="text-xs text-gray-400 truncate">{cliente.email}</div>
-                        )}
-                      </div>
+                    <div className="space-y-2">
+                      {/* Nome do cliente */}
+                      <div className="text-white text-base font-medium">{cliente.nome}</div>
 
-                      {/* Coluna Direita - Contato */}
-                      <div className="text-right flex-shrink-0">
+                      {/* Informações de contato */}
+                      <div className="flex flex-wrap gap-4 text-sm">
                         {cliente.telefone && (
-                          <div className="text-xs text-gray-400">{cliente.telefone}</div>
+                          <div className="flex items-center gap-1 text-gray-400">
+                            <Phone size={14} />
+                            <span>{cliente.telefone}</span>
+                          </div>
                         )}
-                        {cliente.cpf && (
-                          <div className="text-xs text-gray-500">CPF: {cliente.cpf.slice(-4)}</div>
-                        )}
-                        {cliente.cnpj && (
-                          <div className="text-xs text-gray-500">CNPJ: {cliente.cnpj.slice(-4)}</div>
+                        {cliente.documento && (
+                          <div className="flex items-center gap-1 text-gray-400">
+                            <FileText size={14} />
+                            <span>
+                              {cliente.documento.length === 11 ? 'CPF' : 'CNPJ'}:
+                              {cliente.documento.length === 11
+                                ? cliente.documento.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+                                : cliente.documento.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+                              }
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
                   </button>
-                ))}
+                    ))
+                  )}
+                </div>
               </div>
             </motion.div>
           </motion.div>
