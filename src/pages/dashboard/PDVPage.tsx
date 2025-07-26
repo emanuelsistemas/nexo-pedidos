@@ -3591,68 +3591,32 @@ const PDVPage: React.FC = () => {
         </html>
       `;
 
-      // Abrir nova janela para impressão
-      console.log(`🖨️ [GRUPO-PRINT] Tentando abrir janela de impressão para grupo: ${grupoData.nome}`);
+      // Adicionar script de impressão automática ao HTML (mesmo padrão do cupom principal)
+      const htmlComScript = htmlContent.replace(
+        '</body>',
+        `
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1000);
+            };
+          </script>
+        </body>`
+      );
 
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        console.error(`🖨️ [GRUPO-PRINT] ❌ Falha ao abrir janela de impressão para grupo: ${grupoData.nome}`);
-        console.error(`🖨️ [GRUPO-PRINT] Possível causa: Bloqueador de pop-ups ativo`);
+      // Abrir janela de impressão (EXATAMENTE igual ao cupom principal)
+      console.log(`🖨️ [GRUPO-PRINT] Abrindo janela de impressão para grupo: ${grupoData.nome}`);
+
+      const janelaImpressao = window.open('', '_blank', 'width=400,height=600');
+      if (janelaImpressao) {
+        janelaImpressao.document.write(htmlComScript);
+        janelaImpressao.document.close();
+        console.log(`🖨️ [GRUPO-PRINT] ✅ Cupom de produção do grupo ${grupoData.nome} enviado para impressão!`);
+      } else {
         throw new Error(`Não foi possível abrir janela de impressão para o grupo ${grupoData.nome}. Verifique se o bloqueador de pop-ups está desabilitado.`);
       }
-
-      console.log(`🖨️ [GRUPO-PRINT] ✅ Janela de impressão aberta para grupo: ${grupoData.nome}`);
-
-      // Escrever conteúdo HTML
-      console.log(`🖨️ [GRUPO-PRINT] Escrevendo conteúdo HTML na janela...`);
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-
-      // Aguardar carregamento e imprimir
-      console.log(`🖨️ [GRUPO-PRINT] Configurando evento de impressão...`);
-
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          console.error(`🖨️ [GRUPO-PRINT] ❌ Timeout na impressão do grupo: ${grupoData.nome}`);
-          printWindow.close();
-          reject(new Error(`Timeout na impressão do grupo ${grupoData.nome}`));
-        }, 10000); // 10 segundos de timeout
-
-        printWindow.onload = () => {
-          console.log(`🖨️ [GRUPO-PRINT] Janela carregada, iniciando impressão...`);
-          clearTimeout(timeout);
-
-          try {
-            printWindow.print();
-            console.log(`🖨️ [GRUPO-PRINT] ✅ Comando de impressão enviado para grupo: ${grupoData.nome}`);
-
-            // Aguardar um pouco antes de fechar
-            setTimeout(() => {
-              printWindow.close();
-              console.log(`🖨️ [GRUPO-PRINT] ✅ Janela fechada para grupo: ${grupoData.nome}`);
-              resolve(true);
-            }, 1000);
-
-          } catch (printError) {
-            console.error(`🖨️ [GRUPO-PRINT] ❌ Erro ao executar print():`, printError);
-            printWindow.close();
-            reject(printError);
-          }
-        };
-
-        // Fallback caso onload não seja chamado
-        setTimeout(() => {
-          if (printWindow.document.readyState === 'complete') {
-            console.log(`🖨️ [GRUPO-PRINT] Fallback: Documento já carregado, iniciando impressão...`);
-            clearTimeout(timeout);
-            printWindow.print();
-            setTimeout(() => {
-              printWindow.close();
-              resolve(true);
-            }, 1000);
-          }
-        }, 2000);
-      });
 
     } catch (error) {
       console.error(`❌ [PRODUCAO-PRINT] Erro ao imprimir cupom do grupo ${grupoData.nome}:`, error);
