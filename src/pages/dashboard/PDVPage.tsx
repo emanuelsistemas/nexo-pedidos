@@ -13761,6 +13761,19 @@ const PDVPage: React.FC = () => {
     }
   }, [showVendaSemProdutoModal]);
 
+  // ✅ NOVO: useEffect para resetar filtros quando modal de vendas abertas fechar
+  useEffect(() => {
+    if (!showVendasAbertasModal) {
+      // Resetar todos os filtros quando modal fechar
+      setFiltroNomeCliente('');
+      setFiltroMesa('');
+      setFiltroComanda('');
+      setFiltroDataInicioVendas('');
+      setFiltroDataFimVendas('');
+      setShowFiltrosVendasAbertas(false); // Também fechar o painel de filtros
+    }
+  }, [showVendasAbertasModal]);
+
   if (isLoading) {
     return (
       <LoadingScreen
