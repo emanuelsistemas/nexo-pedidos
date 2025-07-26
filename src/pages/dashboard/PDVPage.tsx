@@ -5868,7 +5868,7 @@ const PDVPage: React.FC = () => {
             ));
           }
         } else {
-          console.log('🔍 DEBUG: Não salvando item porque é venda recuperada (itens já estão salvos)');
+          // Não salvando item porque é venda recuperada (itens já estão salvos)
         }
       } else {
         console.error('❌ DEBUG: Não salvou item porque não há venda em andamento:', {
@@ -6801,17 +6801,7 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA FUNÇÃO: Verificar se promoção está vencida
   const verificarPromocaoVencida = (produto: any) => {
-    // 🔍 LOGS ESPECÍFICOS PARA PRODUTO CÓDIGO 5
-    if (produto.codigo === '5') {
-      console.log('🔍 [PROMOCAO VENCIDA DEBUG] ===== VERIFICANDO PRODUTO X SALADA =====');
-      console.log('🔍 [PROMOCAO VENCIDA DEBUG] produto.promocao_data_habilitada:', produto.promocao_data_habilitada);
-      console.log('🔍 [PROMOCAO VENCIDA DEBUG] produto.promocao_data_fim:', produto.promocao_data_fim);
-    }
-
     if (!produto.promocao_data_habilitada || !produto.promocao_data_fim) {
-      if (produto.codigo === '5') {
-        console.log('🔍 [PROMOCAO VENCIDA DEBUG] ✅ SEM DATA DEFINIDA - PROMOÇÃO NÃO VENCE');
-      }
       return false; // Sem data definida, promoção não vence
     }
 
@@ -6827,13 +6817,7 @@ const PDVPage: React.FC = () => {
 
     const vencida = hoje > dataFim;
 
-    // 🔍 LOGS ESPECÍFICOS PARA PRODUTO CÓDIGO 5
-    if (produto.codigo === '5') {
-      console.log('🔍 [PROMOCAO VENCIDA DEBUG] Data fim parseada:', dataFim);
-      console.log('🔍 [PROMOCAO VENCIDA DEBUG] Data hoje:', hoje);
-      console.log('🔍 [PROMOCAO VENCIDA DEBUG] hoje > dataFim:', vencida);
-      console.log('🔍 [PROMOCAO VENCIDA DEBUG] Resultado final:', vencida ? 'VENCIDA' : 'VÁLIDA');
-    }
+
 
     return vencida;
   };
@@ -6872,34 +6856,7 @@ const PDVPage: React.FC = () => {
   };
 
   const calcularPrecoFinal = (produto: Produto) => {
-    // 🔍 LOGS ESPECÍFICOS PARA PROMOÇÃO
-    if (produto.codigo === '5') {
-      console.log('🔍 [PROMOCAO DEBUG] ===== PRODUTO X SALADA (CÓDIGO 5) =====');
-      console.log('🔍 [PROMOCAO DEBUG] produto.promocao:', produto.promocao);
-      console.log('🔍 [PROMOCAO DEBUG] produto.valor_desconto:', produto.valor_desconto);
-      console.log('🔍 [PROMOCAO DEBUG] produto.tipo_desconto:', produto.tipo_desconto);
-      console.log('🔍 [PROMOCAO DEBUG] produto.promocao_data_habilitada:', produto.promocao_data_habilitada);
-      console.log('🔍 [PROMOCAO DEBUG] produto.promocao_data_inicio:', produto.promocao_data_inicio);
-      console.log('🔍 [PROMOCAO DEBUG] produto.promocao_data_fim:', produto.promocao_data_fim);
-      console.log('🔍 [PROMOCAO DEBUG] produto.promocao_data_cardapio:', produto.promocao_data_cardapio);
 
-      const promocaoVencida = verificarPromocaoVencida(produto);
-      console.log('🔍 [PROMOCAO DEBUG] verificarPromocaoVencida():', promocaoVencida);
-
-      if (promocaoVencida) {
-        console.log('🚨 [PROMOCAO DEBUG] ❌ PROMOÇÃO CONSIDERADA VENCIDA!');
-        console.log('🚨 [PROMOCAO DEBUG] Retornando preço original:', produto.preco);
-      } else {
-        console.log('✅ [PROMOCAO DEBUG] ✅ PROMOÇÃO VÁLIDA!');
-        if (produto.tipo_desconto === 'percentual') {
-          const precoFinal = produto.preco * (1 - produto.valor_desconto / 100);
-          console.log('✅ [PROMOCAO DEBUG] Preço final calculado:', precoFinal);
-        } else {
-          const precoFinal = produto.preco - produto.valor_desconto;
-          console.log('✅ [PROMOCAO DEBUG] Preço final calculado:', precoFinal);
-        }
-      }
-    }
 
     // ✅ VERIFICAR SE PROMOÇÃO ESTÁ VENCIDA
     if (produto.promocao && verificarPromocaoVencida(produto)) {
@@ -9469,23 +9426,8 @@ const PDVPage: React.FC = () => {
       setEtapaProcessamento('Preparando itens da venda...');
 
       // ✅ CORREÇÃO: Filtrar apenas itens que ainda não foram salvos (sem pdv_item_id)
-      console.log('🔍 [FILTRO DEBUG] ===== ANALISANDO FILTRO DE ITENS =====');
-      console.log('🔍 [FILTRO DEBUG] carrinho.length:', carrinho.length);
-
-      carrinho.forEach((item, index) => {
-        console.log(`🔍 [FILTRO DEBUG] Item ${index + 1}: ${item.produto.nome} (Código: ${item.produto.codigo})`);
-        console.log(`🔍 [FILTRO DEBUG] item.pdv_item_id:`, item.pdv_item_id);
-        console.log(`🔍 [FILTRO DEBUG] !item.pdv_item_id:`, !item.pdv_item_id);
-        console.log(`🔍 [FILTRO DEBUG] Será incluído em itensNaoSalvos:`, !item.pdv_item_id);
-      });
-
       const itensNaoSalvos = carrinho.filter(item => !item.pdv_item_id);
       const itensJaSalvos = carrinho.filter(item => item.pdv_item_id);
-
-      console.log('🔍 [FILTRO DEBUG] itensNaoSalvos.length:', itensNaoSalvos.length);
-      console.log('🔍 [FILTRO DEBUG] itensJaSalvos.length:', itensJaSalvos.length);
-      console.log('🔍 [FILTRO DEBUG] itensNaoSalvos:', itensNaoSalvos.map(item => `${item.produto.nome} (${item.produto.codigo})`));
-      console.log('🔍 [FILTRO DEBUG] itensJaSalvos:', itensJaSalvos.map(item => `${item.produto.nome} (${item.produto.codigo})`));
 
       const itensParaInserir = itensNaoSalvos.map(item => {
         const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
@@ -9605,9 +9547,6 @@ const PDVPage: React.FC = () => {
               itemNaoSalvo.quantidade === item.quantidade
             );
             itemData = itensParaInserir[indexNoArray];
-            console.log(`🔍 [ITEMDATA DEBUG] Item não salvo - indexNoArray: ${indexNoArray}, itemData encontrado:`, !!itemData);
-          } else {
-            console.log(`🔍 [ITEMDATA DEBUG] Item já salvo - não precisa de itemData para inserção`);
           }
 
           // ✅ CORREÇÃO: Verificar se item já existe no banco de dados
@@ -9656,9 +9595,6 @@ const PDVPage: React.FC = () => {
                 throw new Error(`Erro ao atualizar item: ${updateError.message}`);
               }
 
-              console.log(`✅ [ITEMDATA DEBUG] Item atualizado: ${item.produto.nome}`);
-            } else {
-              console.log(`⚠️ [ITEMDATA DEBUG] Item já existe no banco e não precisa de atualização: ${item.produto.nome}`);
             }
           } else {
             // ✅ ITEM NÃO EXISTE: Fazer INSERT apenas se temos itemData válido
@@ -9674,9 +9610,8 @@ const PDVPage: React.FC = () => {
                 throw new Error(`Erro ao inserir item: ${insertError.message}`);
               }
 
-              console.log(`✅ [ITEMDATA DEBUG] Item inserido: ${item.produto.nome}`);
             } else {
-              console.error(`🚨 [ITEMDATA DEBUG] ERRO: Tentativa de inserir item sem itemData: ${item.produto.nome}`);
+              console.error(`ERRO: Tentativa de inserir item sem itemData: ${item.produto.nome}`);
               throw new Error(`Erro: Item ${item.produto.nome} não pode ser processado - dados incompletos`);
             }
           }
@@ -9848,33 +9783,23 @@ const PDVPage: React.FC = () => {
 
         // ✅ NOVO: Baixa automática de insumos
         setEtapaProcessamento('Processando baixa de insumos...');
-        console.log('🔍 [INSUMOS] Iniciando baixa automática de insumos...');
 
         for (const item of carrinho) {
           // ✅ EXCEÇÃO: Pular insumos para venda sem produto (código 999999)
           if (item.vendaSemProduto || item.produto.codigo === '999999') {
-            console.log(`⚠️ [INSUMOS] Pulando insumos para venda sem produto: ${item.produto.nome}`);
             continue;
           }
 
           // ✅ Verificar se o produto tem insumos configurados
           if (!item.produto.insumos || !Array.isArray(item.produto.insumos) || item.produto.insumos.length === 0) {
-            console.log(`ℹ️ [INSUMOS] Produto sem insumos configurados: ${item.produto.nome}`);
             continue;
           }
-
-          console.log(`🔍 [INSUMOS] Processando insumos para: ${item.produto.nome} (Qtd: ${item.quantidade})`);
-          console.log(`🔍 [INSUMOS] Insumos encontrados:`, item.produto.insumos);
 
           // ✅ Processar cada insumo do produto
           for (const insumo of item.produto.insumos) {
             try {
               // ✅ Calcular quantidade proporcional do insumo
               const quantidadeInsumo = insumo.quantidade * item.quantidade;
-
-              console.log(`🔍 [INSUMOS] Baixando insumo: ${insumo.nome}`);
-              console.log(`🔍 [INSUMOS] Quantidade por porção: ${insumo.quantidade} ${insumo.unidade_medida}`);
-              console.log(`🔍 [INSUMOS] Quantidade total a baixar: ${quantidadeInsumo} ${insumo.unidade_medida}`);
 
               // ✅ Dar baixa no estoque do insumo
               const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
@@ -9888,8 +9813,6 @@ const PDVPage: React.FC = () => {
                 console.error(`❌ [INSUMOS] Erro ao baixar insumo ${insumo.nome}:`, insumoError);
                 // ✅ NÃO INTERROMPER a venda por erro de insumo - apenas logar
                 console.warn(`⚠️ [INSUMOS] Continuando venda apesar do erro no insumo: ${insumo.nome}`);
-              } else {
-                console.log(`✅ [INSUMOS] Insumo baixado com sucesso: ${insumo.nome} (-${quantidadeInsumo} ${insumo.unidade_medida})`);
               }
 
             } catch (error) {
@@ -9899,94 +9822,9 @@ const PDVPage: React.FC = () => {
           }
         }
 
-        console.log('✅ [INSUMOS] Baixa automática de insumos concluída');
+
         // Baixa de insumos concluída
 
-        // 🔍 LOGS ESPECÍFICOS: Verificar produtos com insumos
-        console.log('🔍 [INSUMOS DEBUG] ===== INICIANDO VERIFICAÇÃO DE INSUMOS =====');
-        setEtapaProcessamento('Verificando produtos com insumos...');
-
-        for (const [index, item] of carrinho.entries()) {
-          console.log(`🔍 [COMPARATIVO DEBUG] ===== ITEM ${index + 1}/${carrinho.length} =====`);
-          console.log(`🔍 [COMPARATIVO DEBUG] Produto: ${item.produto.nome}`);
-          console.log(`🔍 [COMPARATIVO DEBUG] Código: ${item.produto.codigo}`);
-          console.log(`🔍 [COMPARATIVO DEBUG] ID: ${item.produto.id}`);
-          console.log(`🔍 [COMPARATIVO DEBUG] Quantidade: ${item.quantidade}`);
-
-          // 🔬 ANÁLISE COMPLETA DA ESTRUTURA DO ITEM
-          console.log(`🔍 [COMPARATIVO DEBUG] ===== ESTRUTURA COMPLETA DO ITEM =====`);
-          console.log(`🔍 [COMPARATIVO DEBUG] Item completo:`, item);
-          console.log(`🔍 [COMPARATIVO DEBUG] Produto completo:`, item.produto);
-          console.log(`🔍 [COMPARATIVO DEBUG] Propriedades do item:`, Object.keys(item));
-          console.log(`🔍 [COMPARATIVO DEBUG] Propriedades do produto:`, Object.keys(item.produto));
-
-          // Verificar propriedades específicas que podem causar problemas
-          console.log(`🔍 [COMPARATIVO DEBUG] item.pdv_item_id:`, item.pdv_item_id);
-          console.log(`🔍 [COMPARATIVO DEBUG] item.vendaSemProduto:`, item.vendaSemProduto);
-          console.log(`🔍 [COMPARATIVO DEBUG] item.temDesconto:`, item.temDesconto);
-          console.log(`🔍 [COMPARATIVO DEBUG] item.preco:`, item.preco);
-          console.log(`🔍 [COMPARATIVO DEBUG] item.subtotal:`, item.subtotal);
-          console.log(`🔍 [COMPARATIVO DEBUG] item.vendedor:`, item.vendedor);
-          console.log(`🔍 [COMPARATIVO DEBUG] item.vendedor_id:`, item.vendedor_id);
-          console.log(`🔍 [COMPARATIVO DEBUG] item.vendedor_nome:`, item.vendedor_nome);
-
-          // Verificar se é especificamente o item problemático
-          if (item.produto.codigo === '5') {
-            console.log(`🚨 [COMPARATIVO DEBUG] ===== ITEM PROBLEMÁTICO DETECTADO (CÓDIGO 5) =====`);
-            console.log(`🚨 [COMPARATIVO DEBUG] Este é o item que está causando erro!`);
-            console.log(`🚨 [COMPARATIVO DEBUG] Vamos analisar em detalhes...`);
-          } else if (item.produto.codigo === '8') {
-            console.log(`✅ [COMPARATIVO DEBUG] ===== ITEM FUNCIONANDO (CÓDIGO 8) =====`);
-            console.log(`✅ [COMPARATIVO DEBUG] Este item funciona normalmente`);
-            console.log(`✅ [COMPARATIVO DEBUG] Usar como referência...`);
-          }
-
-          // Verificar se o produto tem insumos
-          if (item.produto.insumos) {
-            console.log(`🔍 [INSUMOS DEBUG] ✅ PRODUTO TEM INSUMOS!`);
-            console.log(`🔍 [INSUMOS DEBUG] Tipo de insumos:`, typeof item.produto.insumos);
-            console.log(`🔍 [INSUMOS DEBUG] Insumos (raw):`, item.produto.insumos);
-
-            // Tentar parsear se for string
-            let insumosArray = item.produto.insumos;
-            if (typeof item.produto.insumos === 'string') {
-              try {
-                insumosArray = JSON.parse(item.produto.insumos);
-                console.log(`🔍 [INSUMOS DEBUG] Insumos parseados:`, insumosArray);
-              } catch (error) {
-                console.error(`🔍 [INSUMOS DEBUG] ❌ Erro ao parsear insumos:`, error);
-                continue;
-              }
-            }
-
-            // Verificar se é array válido
-            if (Array.isArray(insumosArray) && insumosArray.length > 0) {
-              console.log(`🔍 [INSUMOS DEBUG] ✅ Array de insumos válido com ${insumosArray.length} insumos`);
-
-              for (const [insumoIndex, insumo] of insumosArray.entries()) {
-                console.log(`🔍 [INSUMOS DEBUG] --- Insumo ${insumoIndex + 1}/${insumosArray.length} ---`);
-                console.log(`🔍 [INSUMOS DEBUG] Insumo completo:`, insumo);
-                console.log(`🔍 [INSUMOS DEBUG] produto_id:`, insumo.produto_id);
-                console.log(`🔍 [INSUMOS DEBUG] nome:`, insumo.nome);
-                console.log(`🔍 [INSUMOS DEBUG] quantidade:`, insumo.quantidade);
-                console.log(`🔍 [INSUMOS DEBUG] unidade_medida:`, insumo.unidade_medida);
-
-                // Calcular quantidade total a ser baixada
-                const quantidadeTotal = insumo.quantidade * item.quantidade;
-                console.log(`🔍 [INSUMOS DEBUG] Quantidade total a baixar: ${quantidadeTotal} (${insumo.quantidade} × ${item.quantidade})`);
-
-                // AQUI SERIA ONDE IMPLEMENTARÍAMOS A BAIXA DE INSUMOS
-                console.log(`🔍 [INSUMOS DEBUG] 🎯 LOCAL PARA IMPLEMENTAR BAIXA DE INSUMOS`);
-              }
-            } else {
-              console.log(`🔍 [INSUMOS DEBUG] ⚠️ Insumos não é um array válido ou está vazio`);
-            }
-          } else {
-            console.log(`🔍 [INSUMOS DEBUG] ℹ️ Produto não tem insumos configurados`);
-          }
-        }
-
-        console.log('🔍 [INSUMOS DEBUG] ===== VERIFICAÇÃO DE INSUMOS CONCLUÍDA =====');
         setEtapaProcessamento('Processamento de insumos concluído');
 
         // Aguardar um pouco para garantir que todas as movimentações foram processadas
@@ -10937,14 +10775,7 @@ const PDVPage: React.FC = () => {
         tipo: 'nfce' // Identificar que é NFC-e
       };
 
-      console.log('🖨️ FRONTEND: Dados preparados para reimpressão da NFC-e');
-      console.log('🧑‍💼 DEBUG VENDEDORES NFC-e:', {
-        vendedor_principal: vendedorData,
-        vendedores_array: vendedoresData,
-        vendedores_ids_venda: venda.vendedores_ids,
-        vendedores_itens_map: Array.from(vendedoresItens.entries()),
-        primeiro_item: dadosImpressaoNfce.itens[0]
-      });
+
 
       // Gerar e imprimir cupom da NFC-e
       await gerarEImprimirCupomNfce(dadosImpressaoNfce);
@@ -11157,23 +10988,7 @@ const PDVPage: React.FC = () => {
         cliente: dadosImpressao.cliente
       });
 
-      // ✅ DEBUG ESPECÍFICO: Verificar observação da venda
-      console.log('📝 DEBUG OBSERVAÇÃO NFC-e:', {
-        'dadosImpressao.venda.observacao_venda': dadosImpressao.venda.observacao_venda,
-        'observacao existe?': !!dadosImpressao.venda.observacao_venda,
-        'observacao trim?': dadosImpressao.venda.observacao_venda?.trim(),
-        'condição final': !!(dadosImpressao.venda.observacao_venda && dadosImpressao.venda.observacao_venda.trim())
-      });
 
-      // ✅ DEBUG ESPECÍFICO: Verificar dados de pagamento
-      console.log('💳 DEBUG PAGAMENTO NFC-e:', {
-        'dadosImpressao.pagamento existe?': !!dadosImpressao.pagamento,
-        'dadosImpressao.pagamento': dadosImpressao.pagamento,
-        'tipo_pagamento': dadosImpressao.pagamento?.tipo_pagamento,
-        'forma_pagamento_id': dadosImpressao.pagamento?.forma_pagamento_id,
-        'formas_pagamento': dadosImpressao.pagamento?.formas_pagamento,
-        'formasPagamento array': formasPagamento
-      });
 
       // Função para formatar moeda
       const formatCurrency = (value: number) => {
@@ -11712,23 +11527,7 @@ const PDVPage: React.FC = () => {
         cliente: dadosImpressao.cliente
       });
 
-      // ✅ DEBUG ESPECÍFICO: Verificar observação da venda
-      console.log('📝 DEBUG OBSERVAÇÃO CUPOM:', {
-        'dadosImpressao.venda.observacao_venda': dadosImpressao.venda.observacao_venda,
-        'observacao existe?': !!dadosImpressao.venda.observacao_venda,
-        'observacao trim?': dadosImpressao.venda.observacao_venda?.trim(),
-        'condição final': !!(dadosImpressao.venda.observacao_venda && dadosImpressao.venda.observacao_venda.trim())
-      });
 
-      // ✅ DEBUG ESPECÍFICO: Verificar dados de pagamento
-      console.log('💳 DEBUG PAGAMENTO CUPOM:', {
-        'dadosImpressao.pagamento existe?': !!dadosImpressao.pagamento,
-        'dadosImpressao.pagamento': dadosImpressao.pagamento,
-        'tipo_pagamento': dadosImpressao.pagamento?.tipo_pagamento,
-        'forma_pagamento_id': dadosImpressao.pagamento?.forma_pagamento_id,
-        'formas_pagamento': dadosImpressao.pagamento?.formas_pagamento,
-        'formasPagamento array': formasPagamento
-      });
 
       // Função para formatar moeda
       const formatCurrency = (value: number) => {
