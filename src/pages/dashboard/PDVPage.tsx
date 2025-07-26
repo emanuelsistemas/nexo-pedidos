@@ -43,7 +43,8 @@ import {
   Camera,
   Save,
   Copy,
-  Phone
+  Phone,
+  Truck
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -693,6 +694,17 @@ const PDVPage: React.FC = () => {
   const [filtroClienteComanda, setFiltroClienteComanda] = useState('');
   const [filtroDataInicioComandas, setFiltroDataInicioComandas] = useState('');
   const [filtroDataFimComandas, setFiltroDataFimComandas] = useState('');
+
+  // ✅ NOVO: Estados para modal de Delivery Local
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [vendasDelivery, setVendasDelivery] = useState<any[]>([]);
+  const [contadorVendasDelivery, setContadorVendasDelivery] = useState(0);
+  const [carregandoVendasDelivery, setCarregandoVendasDelivery] = useState(false);
+  const [vendasDeliveryExpandidas, setVendasDeliveryExpandidas] = useState<Set<string>>(new Set());
+  const [showFiltrosDelivery, setShowFiltrosDelivery] = useState(false);
+  const [filtroClienteDelivery, setFiltroClienteDelivery] = useState('');
+  const [filtroDataInicioDelivery, setFiltroDataInicioDelivery] = useState('');
+  const [filtroDataFimDelivery, setFiltroDataFimDelivery] = useState('');
 
   // ✅ NOVO: Estados para observação da venda
   const [observacaoVenda, setObservacaoVenda] = useState<string>('');
@@ -1767,6 +1779,28 @@ const PDVPage: React.FC = () => {
       }
     },
     {
+      id: 'delivery-local',
+      icon: Truck,
+      label: 'Delivery Local',
+      color: 'orange',
+      count: contadorVendasDelivery,
+      onClick: async (e?: React.MouseEvent) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        try {
+          console.log('🚚 Abrindo modal de delivery local...');
+          await carregarVendasDelivery();
+          console.log('✅ Vendas de delivery carregadas, abrindo modal...');
+          setShowDeliveryModal(true);
+        } catch (error) {
+          console.error('❌ Erro ao abrir modal de delivery:', error);
+          toast.error('Erro ao carregar deliveries. Tente novamente.');
+        }
+      }
+    },
+    {
       id: 'delivery',
       icon: Bike,
       label: 'Delivery',
@@ -1912,6 +1946,10 @@ const PDVPage: React.FC = () => {
       }
       // Se for o item 'delivery', só mostrar se a configuração estiver habilitada
       if (item.id === 'delivery') {
+        return pdvConfig?.delivery === true;
+      }
+      // Se for o item 'delivery-local', só mostrar se a configuração estiver habilitada
+      if (item.id === 'delivery-local') {
         return pdvConfig?.delivery === true;
       }
       // Se for o item 'cardapio-digital', só mostrar se a configuração estiver habilitada
@@ -2177,15 +2215,17 @@ const PDVPage: React.FC = () => {
     carregarVendasAbertas();
     carregarVendasMesas();
     carregarVendasComandas();
+    carregarVendasDelivery();
   }, []); // Executa apenas uma vez ao montar
 
   // ✅ NOVO: Polling inteligente para atualizar contadores de mesas e comandas
   useEffect(() => {
     const interval = setInterval(() => {
       // Só atualizar se não estiver com modais abertos (para não interferir na UX)
-      if (!showMesasModal && !showComandasModal && !showVendasAbertasModal) {
+      if (!showMesasModal && !showComandasModal && !showVendasAbertasModal && !showDeliveryModal) {
         carregarVendasMesas();
         carregarVendasComandas();
+        carregarVendasDelivery();
       }
     }, 5000); // 5 segundos - mesmo intervalo do cardápio
 
@@ -10025,6 +10065,7 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasMesas(),
           carregarVendasComandas(),
+          carregarVendasDelivery(),
           carregarVendasAbertas()
         ]);
         console.log('✅ Contadores atualizados com sucesso');
@@ -10164,6 +10205,7 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasMesas(),
           carregarVendasComandas(),
+          carregarVendasDelivery(),
           carregarVendasAbertas()
         ]);
         console.log('✅ Contadores atualizados com sucesso');
@@ -10562,6 +10604,122 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para carregar vendas de delivery local
+  const carregarVendasDelivery = async (): Promise<void> => {
+    try {
+      console.log('🚚 Iniciando carregamento de vendas de delivery...');
+      setCarregandoVendasDelivery(true);
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.error('❌ Usuário não autenticado');
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      console.log('✅ Usuário autenticado:', userData.user.id);
+
+      const { data: usuarioData, error: usuarioError } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (usuarioError) {
+        console.error('❌ Erro ao buscar dados do usuário:', usuarioError);
+        toast.error('Erro ao buscar dados do usuário');
+        return;
+      }
+
+      if (!usuarioData?.empresa_id) {
+        console.error('❌ Empresa não encontrada');
+        toast.error('Empresa não encontrada');
+        return;
+      }
+
+      console.log('✅ Empresa encontrada:', usuarioData.empresa_id);
+
+      // Buscar vendas de delivery local (delivery_local = true e status_venda = 'salva')
+      console.log('🔍 Buscando vendas de delivery para empresa:', usuarioData.empresa_id);
+      const { data: vendas, error } = await supabase
+        .from('pdv')
+        .select(`
+          id,
+          numero_venda,
+          data_venda,
+          created_at,
+          nome_cliente,
+          telefone_cliente,
+          observacao_venda
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('status_venda', 'salva')
+        .eq('delivery_local', true)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Erro ao carregar vendas de delivery:', error);
+        toast.error('Erro ao carregar vendas de delivery');
+        return;
+      }
+
+      console.log('✅ Vendas de delivery encontradas:', vendas?.length || 0);
+
+      // Para cada venda, buscar a quantidade de itens e calcular total
+      const vendasComItens = await Promise.all(
+        (vendas || []).map(async (venda) => {
+          try {
+            console.log('🔍 Buscando itens para venda:', venda.id);
+            const { data: itens, error: itensError } = await supabase
+              .from('pdv_itens')
+              .select('quantidade, valor_total_item, nome_produto')
+              .eq('pdv_id', venda.id);
+
+            if (itensError) {
+              console.error('❌ Erro ao buscar itens da venda:', venda.id, itensError);
+              // Continuar sem os itens em caso de erro
+              return {
+                ...venda,
+                total_itens: 0,
+                itens: [],
+                valor_total: 0
+              };
+            }
+
+            console.log('✅ Itens encontrados para venda', venda.id, ':', itens?.length || 0);
+
+            const totalItens = itens?.reduce((acc, item) => acc + item.quantidade, 0) || 0;
+            const totalCalculado = itens?.reduce((acc, item) => acc + item.valor_total_item, 0) || 0;
+
+            return {
+              ...venda,
+              total_itens: totalItens,
+              itens: itens || [],
+              valor_total: totalCalculado
+            };
+          } catch (error) {
+            console.error('❌ Erro ao processar venda:', venda.id, error);
+            return {
+              ...venda,
+              total_itens: 0,
+              itens: [],
+              valor_total: 0
+            };
+          }
+        })
+      );
+
+      setVendasDelivery(vendasComItens);
+      setContadorVendasDelivery(vendasComItens.length);
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar vendas de delivery:', error);
+    } finally {
+      setCarregandoVendasDelivery(false);
+    }
+  };
+
   // ✅ NOVA: Função para carregar vendas de comandas
   const carregarVendasComandas = async (): Promise<void> => {
     try {
@@ -10891,7 +11049,8 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasAbertas(),
           carregarVendasMesas(),
-          carregarVendasComandas()
+          carregarVendasComandas(),
+          carregarVendasDelivery()
         ]);
         console.log('✅ Contadores atualizados com sucesso');
       } catch (error) {
@@ -18902,6 +19061,269 @@ const PDVPage: React.FC = () => {
                   </button>
                 </div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Delivery Local */}
+      <AnimatePresence>
+        {showDeliveryModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowDeliveryModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 w-full h-full max-w-none max-h-none overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header compacto para tela cheia */}
+              <div className="border-b border-gray-700 bg-background-card">
+                <div className="flex items-center justify-between px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <Truck size={24} className="text-orange-400" />
+                    <h3 className="text-xl font-semibold text-white">Delivery Local</h3>
+                    {contadorVendasDelivery > 0 && (
+                      <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                        {contadorVendasDelivery}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowFiltrosDelivery(!showFiltrosDelivery)}
+                      className={`px-3 py-1 rounded-lg text-xs transition-colors flex items-center gap-1 relative ${
+                        showFiltrosDelivery
+                          ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      }`}
+                      title="Filtros"
+                    >
+                      <Filter size={14} />
+                      Filtros
+                      {/* Indicador de filtros ativos */}
+                      {(filtroClienteDelivery || filtroDataInicioDelivery || filtroDataFimDelivery) && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </button>
+                    <button
+                      onClick={carregarVendasDelivery}
+                      className="text-gray-400 hover:text-white transition-colors p-1"
+                      title="Atualizar"
+                    >
+                      <ArrowUpDown size={18} />
+                    </button>
+                    <button
+                      onClick={() => setShowDeliveryModal(false)}
+                      className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-lg"
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Painel de Filtros */}
+              <AnimatePresence>
+                {showFiltrosDelivery && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-b border-gray-800 bg-gray-800/30 overflow-hidden"
+                  >
+                    <div className="p-4 space-y-4">
+                      {/* Primeira linha - Filtros de texto */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Nome do Cliente</label>
+                          <input
+                            type="text"
+                            value={filtroClienteDelivery}
+                            onChange={(e) => setFiltroClienteDelivery(e.target.value)}
+                            placeholder="Digite o nome do cliente..."
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-orange-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Segunda linha - Filtros de data */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data Início</label>
+                          <input
+                            type="date"
+                            value={filtroDataInicioDelivery}
+                            onChange={(e) => setFiltroDataInicioDelivery(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-orange-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data Fim</label>
+                          <input
+                            type="date"
+                            value={filtroDataFimDelivery}
+                            onChange={(e) => setFiltroDataFimDelivery(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-orange-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botões de ação dos filtros */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setFiltroClienteDelivery('');
+                            setFiltroDataInicioDelivery('');
+                            setFiltroDataFimDelivery('');
+                          }}
+                          className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-xs transition-colors"
+                        >
+                          Limpar Filtros
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Conteúdo principal */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {carregandoVendasDelivery ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+                    <span className="ml-3 text-gray-400">Carregando deliveries...</span>
+                  </div>
+                ) : (
+                  <>
+                    {(() => {
+                      // Aplicar filtros
+                      let vendasFiltradas = vendasDelivery;
+
+                      if (filtroClienteDelivery) {
+                        vendasFiltradas = vendasFiltradas.filter(venda =>
+                          venda.nome_cliente?.toLowerCase().includes(filtroClienteDelivery.toLowerCase())
+                        );
+                      }
+
+                      if (filtroDataInicioDelivery) {
+                        vendasFiltradas = vendasFiltradas.filter(venda => {
+                          const dataVenda = new Date(venda.data_venda || venda.created_at);
+                          const dataInicio = new Date(filtroDataInicioDelivery);
+                          return dataVenda >= dataInicio;
+                        });
+                      }
+
+                      if (filtroDataFimDelivery) {
+                        vendasFiltradas = vendasFiltradas.filter(venda => {
+                          const dataVenda = new Date(venda.data_venda || venda.created_at);
+                          const dataFim = new Date(filtroDataFimDelivery);
+                          dataFim.setHours(23, 59, 59, 999); // Incluir o dia inteiro
+                          return dataVenda <= dataFim;
+                        });
+                      }
+
+                      if (vendasFiltradas.length === 0) {
+                        return (
+                          <div className="text-center py-12">
+                            <Truck size={48} className="mx-auto mb-4 text-gray-500" />
+                            <p className="text-gray-400 text-lg">
+                              {vendasDelivery.length === 0 ? 'Nenhum delivery encontrado' : 'Nenhum delivery corresponde aos filtros'}
+                            </p>
+                            {vendasDelivery.length === 0 && (
+                              <p className="text-gray-500 text-sm mt-2">
+                                Os deliveries salvos aparecerão aqui
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {vendasFiltradas.map((venda) => (
+                            <div
+                              key={venda.id}
+                              className="bg-gray-800/30 border border-gray-700 rounded-lg p-4 hover:border-orange-500/50 transition-colors cursor-pointer"
+                              onClick={() => recuperarVenda(venda.id)}
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <Truck size={16} className="text-orange-400" />
+                                  <span className="font-medium text-white">#{venda.numero_venda}</span>
+                                </div>
+                                <span className="text-xs text-gray-400">
+                                  {formatarDataHora(venda.data_venda || venda.created_at)}
+                                </span>
+                              </div>
+
+                              <div className="space-y-2">
+                                {venda.nome_cliente && (
+                                  <div className="flex items-center gap-2">
+                                    <User size={14} className="text-gray-400" />
+                                    <span className="text-sm text-gray-300 truncate">{venda.nome_cliente}</span>
+                                  </div>
+                                )}
+
+                                {venda.telefone_cliente && (
+                                  <div className="flex items-center gap-2">
+                                    <Phone size={14} className="text-gray-400" />
+                                    <span className="text-sm text-gray-300">{formatarTelefone(venda.telefone_cliente, venda.telefone_cliente.replace(/\D/g, '').length === 11 ? 'Celular' : 'Fixo')}</span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Package size={14} className="text-gray-400" />
+                                    <span className="text-sm text-gray-300">{venda.total_itens} item(s)</span>
+                                  </div>
+                                  <span className="text-sm font-medium text-orange-400">
+                                    {formatCurrency(venda.valor_total)}
+                                  </span>
+                                </div>
+
+                                {venda.observacao_venda && (
+                                  <div className="flex items-start gap-2">
+                                    <FileText size={14} className="text-gray-400 mt-0.5" />
+                                    <span className="text-xs text-gray-400 line-clamp-2">{venda.observacao_venda}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-3 pt-3 border-t border-gray-700">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-orange-400 font-medium">🚚 DELIVERY LOCAL</span>
+                                  <span className="text-xs text-gray-500">Clique para recuperar</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </>
+                )}
+
+                {vendasDelivery.length > 0 && (
+                  <div className="mt-6 pt-4 border-t border-gray-700 flex justify-between items-center">
+                    <div className="text-sm text-gray-400">
+                      {vendasDelivery.length} delivery(s) salvo(s)
+                    </div>
+                    <button
+                      onClick={carregarVendasDelivery}
+                      className="text-orange-400 hover:text-orange-300 text-sm transition-colors"
+                    >
+                      🔄 Atualizar Lista
+                    </button>
+                  </div>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}
