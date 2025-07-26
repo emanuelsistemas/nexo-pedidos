@@ -153,6 +153,12 @@ interface Cliente {
   id: string;
   nome: string;
   telefone?: string;
+  telefones?: Array<{
+    numero: string;
+    tipo: string;
+    whatsapp: boolean;
+  }>;
+  documento?: string;
 }
 
 interface EstoqueProduto {
@@ -2166,11 +2172,23 @@ const PDVPage: React.FC = () => {
       setFilteredClientes(clientes);
     } else {
       const termo = searchClienteTerm.toLowerCase();
-      const clientesFiltrados = clientes.filter(cliente =>
-        cliente.nome.toLowerCase().includes(termo) ||
-        (cliente.telefone && cliente.telefone.includes(termo)) ||
-        (cliente.documento && cliente.documento.includes(termo))
-      );
+      const clientesFiltrados = clientes.filter(cliente => {
+        // Buscar no nome
+        if (cliente.nome.toLowerCase().includes(termo)) return true;
+
+        // Buscar no telefone principal
+        if (cliente.telefone && cliente.telefone.includes(termo)) return true;
+
+        // Buscar nos múltiplos telefones
+        if (cliente.telefones && cliente.telefones.some(tel =>
+          tel.numero.includes(termo)
+        )) return true;
+
+        // Buscar no documento
+        if (cliente.documento && cliente.documento.includes(termo)) return true;
+
+        return false;
+      });
       setFilteredClientes(clientesFiltrados);
     }
   }, [searchClienteTerm, clientes]);
@@ -2900,7 +2918,7 @@ const PDVPage: React.FC = () => {
 
     const { data, error } = await supabase
       .from('clientes')
-      .select('id, nome, telefone, documento') // ✅ CORREÇÃO: Incluir campo documento para preenchimento automático da Nota Fiscal Paulista
+      .select('id, nome, telefone, telefones, documento') // ✅ INCLUIR: campo telefones para múltiplos telefones
       .eq('empresa_id', usuarioData.empresa_id)
       .order('nome')
       .limit(50);
@@ -17151,13 +17169,28 @@ const PDVPage: React.FC = () => {
                       <div className="text-white text-base font-medium">{cliente.nome}</div>
 
                       {/* Informações de contato */}
-                      <div className="flex flex-wrap gap-4 text-sm">
-                        {cliente.telefone && (
+                      <div className="space-y-2">
+                        {/* Telefones */}
+                        {(cliente.telefones && cliente.telefones.length > 0) ? (
+                          <div className="flex flex-wrap gap-2">
+                            {cliente.telefones.map((telefone, index) => (
+                              <div key={index} className="flex items-center gap-1 text-gray-400 bg-gray-800/30 px-2 py-1 rounded text-sm">
+                                <Phone size={12} />
+                                <span>{telefone.numero}</span>
+                                {telefone.whatsapp && (
+                                  <span className="text-green-400 text-xs">WhatsApp</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : cliente.telefone && (
                           <div className="flex items-center gap-1 text-gray-400">
                             <Phone size={14} />
                             <span>{cliente.telefone}</span>
                           </div>
                         )}
+
+                        {/* Documento */}
                         {cliente.documento && (
                           <div className="flex items-center gap-1 text-gray-400">
                             <FileText size={14} />
