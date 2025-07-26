@@ -629,6 +629,14 @@ const PDVPage: React.FC = () => {
   const [carregandoVendasAbertas, setCarregandoVendasAbertas] = useState(false);
   const [vendasExpandidas, setVendasExpandidas] = useState<Set<string>>(new Set());
 
+  // Estados para filtros de vendas abertas
+  const [showFiltrosVendasAbertas, setShowFiltrosVendasAbertas] = useState(false);
+  const [filtroNomeCliente, setFiltroNomeCliente] = useState('');
+  const [filtroMesa, setFiltroMesa] = useState('');
+  const [filtroComanda, setFiltroComanda] = useState('');
+  const [filtroDataInicioVendas, setFiltroDataInicioVendas] = useState('');
+  const [filtroDataFimVendas, setFiltroDataFimVendas] = useState('');
+
   // ✅ NOVO: Estados para observação da venda
   const [observacaoVenda, setObservacaoVenda] = useState<string>('');
   const [showObservacaoVendaModal, setShowObservacaoVendaModal] = useState(false);
@@ -9831,6 +9839,47 @@ const PDVPage: React.FC = () => {
       toast.error('Erro ao deletar venda. Tente novamente.');
       return false;
     }
+  };
+
+  // ✅ NOVA: Função para filtrar vendas abertas
+  const filtrarVendasAbertas = (vendas: any[]) => {
+    return vendas.filter(venda => {
+      // Filtro por nome do cliente
+      if (filtroNomeCliente && !venda.nome_cliente?.toLowerCase().includes(filtroNomeCliente.toLowerCase())) {
+        return false;
+      }
+
+      // Filtro por mesa
+      if (filtroMesa && venda.mesa_numero?.toString() !== filtroMesa) {
+        return false;
+      }
+
+      // Filtro por comanda
+      if (filtroComanda && venda.comanda_numero?.toString() !== filtroComanda) {
+        return false;
+      }
+
+      // Filtro por data início
+      if (filtroDataInicioVendas) {
+        const dataVenda = new Date(venda.created_at);
+        const dataInicio = new Date(filtroDataInicioVendas);
+        if (dataVenda < dataInicio) {
+          return false;
+        }
+      }
+
+      // Filtro por data fim
+      if (filtroDataFimVendas) {
+        const dataVenda = new Date(venda.created_at);
+        const dataFim = new Date(filtroDataFimVendas);
+        dataFim.setHours(23, 59, 59, 999); // Incluir todo o dia
+        if (dataVenda > dataFim) {
+          return false;
+        }
+      }
+
+      return true;
+    });
   };
 
   // ✅ NOVA: Função para carregar vendas abertas (salvas)
@@ -22433,23 +22482,136 @@ const PDVPage: React.FC = () => {
               className="w-full h-full bg-background-card flex flex-col"
             >
               {/* Header compacto para tela cheia */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 bg-background-card">
-                <div className="flex items-center gap-3">
-                  <FileText size={24} className="text-blue-400" />
-                  <h3 className="text-xl font-semibold text-white">Vendas Abertas</h3>
-                  {contadorVendasAbertas > 0 && (
-                    <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-                      {contadorVendasAbertas}
-                    </span>
-                  )}
+              <div className="border-b border-gray-700 bg-background-card">
+                <div className="flex items-center justify-between px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <FileText size={24} className="text-blue-400" />
+                    <h3 className="text-xl font-semibold text-white">Vendas Abertas</h3>
+                    {contadorVendasAbertas > 0 && (
+                      <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                        {contadorVendasAbertas}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowFiltrosVendasAbertas(!showFiltrosVendasAbertas)}
+                      className={`px-3 py-1 rounded-lg text-xs transition-colors flex items-center gap-1 relative ${
+                        showFiltrosVendasAbertas
+                          ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      }`}
+                      title="Filtros"
+                    >
+                      <Filter size={14} />
+                      Filtros
+                      {/* Indicador de filtros ativos */}
+                      {(filtroNomeCliente || filtroMesa || filtroComanda || filtroDataInicioVendas || filtroDataFimVendas) && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </button>
+                    <button
+                      onClick={carregarVendasAbertas}
+                      className="text-gray-400 hover:text-white transition-colors p-1"
+                      title="Atualizar"
+                    >
+                      <ArrowUpDown size={18} />
+                    </button>
+                    <button
+                      onClick={() => setShowVendasAbertasModal(false)}
+                      className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-lg"
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setShowVendasAbertasModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-lg"
-                >
-                  <X size={24} />
-                </button>
               </div>
+
+              {/* Painel de Filtros */}
+              <AnimatePresence>
+                {showFiltrosVendasAbertas && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-b border-gray-800 bg-gray-800/30 overflow-hidden"
+                  >
+                    <div className="p-4 space-y-4">
+                      {/* Primeira linha - Filtros de texto */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Nome do Cliente</label>
+                          <input
+                            type="text"
+                            value={filtroNomeCliente}
+                            onChange={(e) => setFiltroNomeCliente(e.target.value)}
+                            placeholder="Digite o nome do cliente..."
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Mesa</label>
+                          <input
+                            type="text"
+                            value={filtroMesa}
+                            onChange={(e) => setFiltroMesa(e.target.value)}
+                            placeholder="Número da mesa..."
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Comanda</label>
+                          <input
+                            type="text"
+                            value={filtroComanda}
+                            onChange={(e) => setFiltroComanda(e.target.value)}
+                            placeholder="Número da comanda..."
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Segunda linha - Filtros de data */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data Início</label>
+                          <input
+                            type="date"
+                            value={filtroDataInicioVendas}
+                            onChange={(e) => setFiltroDataInicioVendas(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data Fim</label>
+                          <input
+                            type="date"
+                            value={filtroDataFimVendas}
+                            onChange={(e) => setFiltroDataFimVendas(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botões de ação */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setFiltroNomeCliente('');
+                            setFiltroMesa('');
+                            setFiltroComanda('');
+                            setFiltroDataInicioVendas('');
+                            setFiltroDataFimVendas('');
+                          }}
+                          className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-sm transition-colors"
+                        >
+                          Limpar Filtros
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Conteúdo principal com scroll */}
               <div className="flex-1 overflow-y-auto p-6">
@@ -22457,21 +22619,39 @@ const PDVPage: React.FC = () => {
                   <div className="flex items-center justify-center py-12">
                     <div className="text-gray-400">Carregando vendas...</div>
                   </div>
-                ) : vendasAbertas.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                    <FileText size={48} className="mb-4 opacity-50" />
-                    <p className="text-lg font-medium">Nenhuma venda em aberto</p>
-                    <p className="text-sm">Todas as vendas foram finalizadas</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                    {vendasAbertas.map((venda) => (
+                ) : (() => {
+                  const vendasFiltradas = filtrarVendasAbertas(vendasAbertas);
+                  return vendasFiltradas.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                      <FileText size={48} className="mb-4 opacity-50" />
+                      <p className="text-lg font-medium">
+                        {vendasAbertas.length === 0 ? 'Nenhuma venda em aberto' : 'Nenhuma venda encontrada'}
+                      </p>
+                      <p className="text-sm">
+                        {vendasAbertas.length === 0 ? 'Todas as vendas foram finalizadas' : 'Tente ajustar os filtros de busca'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      {vendasFiltradas.map((venda) => (
                       <div
                         key={venda.id}
                         className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 hover:bg-gray-800/70 transition-colors flex flex-col h-full"
                       >
                         {/* Header do card */}
                         <div className="mb-3">
+                          {/* Mesa e Comanda no topo */}
+                          {(venda.mesa_numero || venda.comanda_numero) && (
+                            <div className="flex gap-2 mb-2">
+                              {venda.mesa_numero && (
+                                <span className="text-blue-400 text-xs bg-blue-500/20 px-2 py-1 rounded">Mesa: {venda.mesa_numero}</span>
+                              )}
+                              {venda.comanda_numero && (
+                                <span className="text-green-400 text-xs bg-green-500/20 px-2 py-1 rounded">Comanda: {venda.comanda_numero}</span>
+                              )}
+                            </div>
+                          )}
+
                           <div className="text-white font-medium mb-1">
                             📋 {venda.numero_venda}
                           </div>
@@ -22496,17 +22676,9 @@ const PDVPage: React.FC = () => {
                             <span className="text-green-400 font-medium">{formatCurrency(venda.valor_total || 0)}</span>
                           </div>
                           {venda.nome_cliente && (
-                            <div>
-                              <div className="text-gray-400 text-xs">Cliente:</div>
-                              <div className="text-gray-300 text-sm">{venda.nome_cliente}</div>
-                              <div className="flex gap-2 mt-1">
-                                {venda.mesa_numero && (
-                                  <span className="text-blue-400 text-xs bg-blue-500/20 px-2 py-1 rounded">Mesa: {venda.mesa_numero}</span>
-                                )}
-                                {venda.comanda_numero && (
-                                  <span className="text-green-400 text-xs bg-green-500/20 px-2 py-1 rounded">Comanda: {venda.comanda_numero}</span>
-                                )}
-                              </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Cliente:</span>
+                              <span className="text-gray-300">{venda.nome_cliente}</span>
                             </div>
                           )}
                         </div>
@@ -22554,9 +22726,10 @@ const PDVPage: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
 
               {vendasAbertas.length > 0 && (
