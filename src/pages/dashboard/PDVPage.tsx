@@ -135,6 +135,9 @@ interface ItemCarrinho {
   vendedor_nome?: string; // Nome do vendedor responsável por este item
   vendaSemProduto?: boolean; // ✅ Indica se é um item de venda sem produto
   nome?: string; // ✅ Nome personalizado para venda sem produto
+  nomeCliente?: string; // ✅ NOVO: Nome do cliente para este item
+  comandaNumero?: string; // ✅ NOVO: Número da comanda para este item
+  mesaNumero?: string; // ✅ NOVO: Número da mesa para este item
   tabela_preco_id?: string | null; // ✅ NOVO: ID da tabela de preços usada neste item
   tabela_preco_nome?: string | null; // ✅ NOVO: Nome da tabela de preços usada neste item
   sabores?: Array<{ // ✅ NOVO: Sabores selecionados para pizza meio a meio
@@ -6511,6 +6514,80 @@ const PDVPage: React.FC = () => {
     setVendaSemProdutoAguardando(null); // Limpar venda sem produto aguardando
   };
 
+  // ✅ NOVO: Função para continuar fluxo após todos os modais obrigatórios
+  const continuarFluxoAposModais = async (produto: Produto, quantidade: number) => {
+    // Verificar se há opções adicionais ANTES de qualquer outro fluxo
+    const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
+
+    // ✅ FLUXO SEQUENCIAL: Verificar se precisa selecionar vendedor
+    if (pdvConfig?.vendedor && !vendedorSelecionado && !aguardandoSelecaoVendedor) {
+      setProdutoAguardandoVendedor(produto);
+      setAguardandoSelecaoVendedor(true);
+      setShowVendedorModal(true);
+      // ✅ NOVO: Se também tem multiplicação ativa, salvar para usar no fluxo sequencial
+      if (pdvConfig?.vendas_itens_multiplicacao && !searchTerm.includes('*')) {
+        setQuantidadeAguardandoVendedor(0); // 0 indica que deve abrir modal de quantidade depois
+      }
+      return;
+    }
+
+    // ✅ VERIFICAR: Modal de quantidade (apenas se não veio do fluxo do vendedor)
+    if (pdvConfig?.vendas_itens_multiplicacao && !searchTerm.includes('*')) {
+      setProdutoParaQuantidade(produto);
+      setQuantidadeModal(quantidade);
+      setQuantidadeModalInput(quantidade.toString());
+      setShowQuantidadeModal(true);
+      return;
+    }
+
+    // Verificar se o produto tem sabores (pizzas)
+    if (produto.trabalha_com_pizzas && produto.tabelas_precos && produto.tabelas_precos.length > 0) {
+      setProdutoSelecionadoSabores(produto);
+      setTabelaPrecoSelecionada(produto.tabelas_precos[0]);
+      setShowSeletorSabores(true);
+      return; // Não continuar com adição normal
+    }
+
+    // ✅ CORRIGIDO: Calcular o preço final considerando promoções E desconto por quantidade
+    const precoFinal = calcularPrecoComDescontoQuantidade(produto, quantidade);
+
+    // Criar o item do carrinho
+    const novoItem: ItemCarrinho = {
+      id: `${produto.id}-${Date.now()}-${Math.random()}`, // ID único
+      produto,
+      quantidade: quantidade,
+      subtotal: precoFinal * quantidade,
+      temOpcoesAdicionais,
+      vendedor_id: vendedorSelecionado?.id,
+      vendedor_nome: vendedorSelecionado?.nome,
+      nomeCliente: nomeCliente || undefined,
+      comandaNumero: comandaNumero || undefined,
+      mesaNumero: mesaNumero || undefined
+    };
+
+    // ✅ VERIFICAR: Se o produto tem opções adicionais, abrir modal
+    if (temOpcoesAdicionais) {
+      setProdutoSelecionado(produto);
+      setQuantidadeSelecionada(quantidade);
+      setItemCarrinhoTemporario(novoItem);
+      setShowAdicionaisModal(true);
+      return;
+    }
+
+    // Adicionar ao carrinho diretamente
+    setCarrinho(prev => [...prev, novoItem]);
+
+    // Limpar busca se necessário
+    if (searchTerm) {
+      setSearchTerm('');
+    }
+
+    // Fechar modal de produtos se estiver aberto
+    if (showAreaProdutos) {
+      setShowAreaProdutos(false);
+    }
+  };
+
   // ✅ NOVO: Funções para modal de Nome do Cliente (PRIMEIRA PRIORIDADE)
   const confirmarNomeCliente = () => {
     const nome = nomeCliente.trim();
@@ -6524,12 +6601,44 @@ const PDVPage: React.FC = () => {
     // Fechar modal e continuar fluxo
     setShowNomeClienteModal(false);
 
-    // Continuar com o produto ou venda sem produto
+    // Verificar próximo modal necessário
+    if (pdvConfig?.comandas && !comandaNumero) {
+      // Transferir dados para comanda
+      if (produtoAguardandoNomeCliente) {
+        setProdutoAguardandoComandaMesa(produtoAguardandoNomeCliente);
+        setQuantidadeAguardandoComandaMesa(quantidadeAguardandoNomeCliente);
+        setProdutoAguardandoNomeCliente(null);
+        setQuantidadeAguardandoNomeCliente(1);
+      } else if (vendaSemProdutoAguardandoNomeCliente) {
+        setVendaSemProdutoAguardandoComandaMesa(vendaSemProdutoAguardandoNomeCliente);
+        setVendaSemProdutoAguardandoNomeCliente(null);
+      }
+      setShowComandaModal(true);
+      return;
+    }
+
+    if (pdvConfig?.mesas && !mesaNumero) {
+      // Transferir dados para mesa
+      if (produtoAguardandoNomeCliente) {
+        setProdutoAguardandoComandaMesa(produtoAguardandoNomeCliente);
+        setQuantidadeAguardandoComandaMesa(quantidadeAguardandoNomeCliente);
+        setProdutoAguardandoNomeCliente(null);
+        setQuantidadeAguardandoNomeCliente(1);
+      } else if (vendaSemProdutoAguardandoNomeCliente) {
+        setVendaSemProdutoAguardandoComandaMesa(vendaSemProdutoAguardandoNomeCliente);
+        setVendaSemProdutoAguardandoNomeCliente(null);
+      }
+      setShowMesaModal(true);
+      return;
+    }
+
+    // Se não há mais modais obrigatórios, continuar fluxo
     if (produtoAguardandoNomeCliente) {
-      adicionarAoCarrinho(produtoAguardandoNomeCliente, quantidadeAguardandoNomeCliente);
+      continuarFluxoAposModais(produtoAguardandoNomeCliente, quantidadeAguardandoNomeCliente);
       setProdutoAguardandoNomeCliente(null);
       setQuantidadeAguardandoNomeCliente(1);
     } else if (vendaSemProdutoAguardandoNomeCliente) {
+      // Para venda sem produto, continuar com verificações normais
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoNomeCliente.nome, vendaSemProdutoAguardandoNomeCliente.preco);
       setVendaSemProdutoAguardandoNomeCliente(null);
     }
@@ -6562,12 +6671,19 @@ const PDVPage: React.FC = () => {
     // Fechar modal e continuar fluxo
     setShowComandaModal(false);
 
-    // Continuar com o produto ou venda sem produto
+    // Verificar próximo modal necessário
+    if (pdvConfig?.mesas && !mesaNumero) {
+      setShowMesaModal(true);
+      return;
+    }
+
+    // Se não há mais modais obrigatórios, continuar fluxo
     if (produtoAguardandoComandaMesa) {
-      adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
+      continuarFluxoAposModais(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
       setProdutoAguardandoComandaMesa(null);
       setQuantidadeAguardandoComandaMesa(1);
     } else if (vendaSemProdutoAguardandoComandaMesa) {
+      // Para venda sem produto, continuar com verificações normais
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoComandaMesa.nome, vendaSemProdutoAguardandoComandaMesa.preco);
       setVendaSemProdutoAguardandoComandaMesa(null);
     }
@@ -6591,12 +6707,13 @@ const PDVPage: React.FC = () => {
     // Fechar modal e continuar fluxo
     setShowMesaModal(false);
 
-    // Continuar com o produto ou venda sem produto
+    // Não há mais modais obrigatórios após mesa, continuar fluxo
     if (produtoAguardandoComandaMesa) {
-      adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
+      continuarFluxoAposModais(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
       setProdutoAguardandoComandaMesa(null);
       setQuantidadeAguardandoComandaMesa(1);
     } else if (vendaSemProdutoAguardandoComandaMesa) {
+      // Para venda sem produto, continuar com verificações normais
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoComandaMesa.nome, vendaSemProdutoAguardandoComandaMesa.preco);
       setVendaSemProdutoAguardandoComandaMesa(null);
     }
