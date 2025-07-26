@@ -3611,8 +3611,9 @@ const PDVPage: React.FC = () => {
               font-size: ${usarImpressao50mm ? '14px' : '18px'};
               margin: 12px 0;
               padding: 8px;
-              background: #000;
-              color: #fff;
+              color: #000;
+              border: 2px solid #000;
+              background: #fff;
             }
 
             .info-pedido {
@@ -3662,6 +3663,10 @@ const PDVPage: React.FC = () => {
               }
               .grupo-titulo {
                 font-size: ${usarImpressao50mm ? '14pt' : '16pt'} !important;
+                color: #000000 !important;
+                background: #ffffff !important;
+                font-weight: bold !important;
+                border: 2px solid #000000 !important;
               }
               .info-pedido {
                 font-size: ${usarImpressao50mm ? '11pt' : '13pt'} !important;
