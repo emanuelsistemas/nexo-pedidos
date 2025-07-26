@@ -6788,7 +6788,17 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVA FUNÇÃO: Verificar se promoção está vencida
   const verificarPromocaoVencida = (produto: any) => {
+    // 🔍 LOGS ESPECÍFICOS PARA PRODUTO CÓDIGO 5
+    if (produto.codigo === '5') {
+      console.log('🔍 [PROMOCAO VENCIDA DEBUG] ===== VERIFICANDO PRODUTO X SALADA =====');
+      console.log('🔍 [PROMOCAO VENCIDA DEBUG] produto.promocao_data_habilitada:', produto.promocao_data_habilitada);
+      console.log('🔍 [PROMOCAO VENCIDA DEBUG] produto.promocao_data_fim:', produto.promocao_data_fim);
+    }
+
     if (!produto.promocao_data_habilitada || !produto.promocao_data_fim) {
+      if (produto.codigo === '5') {
+        console.log('🔍 [PROMOCAO VENCIDA DEBUG] ✅ SEM DATA DEFINIDA - PROMOÇÃO NÃO VENCE');
+      }
       return false; // Sem data definida, promoção não vence
     }
 
@@ -6802,7 +6812,17 @@ const PDVPage: React.FC = () => {
     hoje.setHours(0, 0, 0, 0);
     dataFim.setHours(23, 59, 59, 999);
 
-    return hoje > dataFim;
+    const vencida = hoje > dataFim;
+
+    // 🔍 LOGS ESPECÍFICOS PARA PRODUTO CÓDIGO 5
+    if (produto.codigo === '5') {
+      console.log('🔍 [PROMOCAO VENCIDA DEBUG] Data fim parseada:', dataFim);
+      console.log('🔍 [PROMOCAO VENCIDA DEBUG] Data hoje:', hoje);
+      console.log('🔍 [PROMOCAO VENCIDA DEBUG] hoje > dataFim:', vencida);
+      console.log('🔍 [PROMOCAO VENCIDA DEBUG] Resultado final:', vencida ? 'VENCIDA' : 'VÁLIDA');
+    }
+
+    return vencida;
   };
 
   // ✅ NOVA FUNÇÃO: Calcular dias restantes da promoção
@@ -6839,6 +6859,35 @@ const PDVPage: React.FC = () => {
   };
 
   const calcularPrecoFinal = (produto: Produto) => {
+    // 🔍 LOGS ESPECÍFICOS PARA PROMOÇÃO
+    if (produto.codigo === '5') {
+      console.log('🔍 [PROMOCAO DEBUG] ===== PRODUTO X SALADA (CÓDIGO 5) =====');
+      console.log('🔍 [PROMOCAO DEBUG] produto.promocao:', produto.promocao);
+      console.log('🔍 [PROMOCAO DEBUG] produto.valor_desconto:', produto.valor_desconto);
+      console.log('🔍 [PROMOCAO DEBUG] produto.tipo_desconto:', produto.tipo_desconto);
+      console.log('🔍 [PROMOCAO DEBUG] produto.promocao_data_habilitada:', produto.promocao_data_habilitada);
+      console.log('🔍 [PROMOCAO DEBUG] produto.promocao_data_inicio:', produto.promocao_data_inicio);
+      console.log('🔍 [PROMOCAO DEBUG] produto.promocao_data_fim:', produto.promocao_data_fim);
+      console.log('🔍 [PROMOCAO DEBUG] produto.promocao_data_cardapio:', produto.promocao_data_cardapio);
+
+      const promocaoVencida = verificarPromocaoVencida(produto);
+      console.log('🔍 [PROMOCAO DEBUG] verificarPromocaoVencida():', promocaoVencida);
+
+      if (promocaoVencida) {
+        console.log('🚨 [PROMOCAO DEBUG] ❌ PROMOÇÃO CONSIDERADA VENCIDA!');
+        console.log('🚨 [PROMOCAO DEBUG] Retornando preço original:', produto.preco);
+      } else {
+        console.log('✅ [PROMOCAO DEBUG] ✅ PROMOÇÃO VÁLIDA!');
+        if (produto.tipo_desconto === 'percentual') {
+          const precoFinal = produto.preco * (1 - produto.valor_desconto / 100);
+          console.log('✅ [PROMOCAO DEBUG] Preço final calculado:', precoFinal);
+        } else {
+          const precoFinal = produto.preco - produto.valor_desconto;
+          console.log('✅ [PROMOCAO DEBUG] Preço final calculado:', precoFinal);
+        }
+      }
+    }
+
     // ✅ VERIFICAR SE PROMOÇÃO ESTÁ VENCIDA
     if (produto.promocao && verificarPromocaoVencida(produto)) {
       return produto.preco; // Retorna preço normal se promoção vencida
@@ -9407,8 +9456,23 @@ const PDVPage: React.FC = () => {
       setEtapaProcessamento('Preparando itens da venda...');
 
       // ✅ CORREÇÃO: Filtrar apenas itens que ainda não foram salvos (sem pdv_item_id)
+      console.log('🔍 [FILTRO DEBUG] ===== ANALISANDO FILTRO DE ITENS =====');
+      console.log('🔍 [FILTRO DEBUG] carrinho.length:', carrinho.length);
+
+      carrinho.forEach((item, index) => {
+        console.log(`🔍 [FILTRO DEBUG] Item ${index + 1}: ${item.produto.nome} (Código: ${item.produto.codigo})`);
+        console.log(`🔍 [FILTRO DEBUG] item.pdv_item_id:`, item.pdv_item_id);
+        console.log(`🔍 [FILTRO DEBUG] !item.pdv_item_id:`, !item.pdv_item_id);
+        console.log(`🔍 [FILTRO DEBUG] Será incluído em itensNaoSalvos:`, !item.pdv_item_id);
+      });
+
       const itensNaoSalvos = carrinho.filter(item => !item.pdv_item_id);
       const itensJaSalvos = carrinho.filter(item => item.pdv_item_id);
+
+      console.log('🔍 [FILTRO DEBUG] itensNaoSalvos.length:', itensNaoSalvos.length);
+      console.log('🔍 [FILTRO DEBUG] itensJaSalvos.length:', itensJaSalvos.length);
+      console.log('🔍 [FILTRO DEBUG] itensNaoSalvos:', itensNaoSalvos.map(item => `${item.produto.nome} (${item.produto.codigo})`));
+      console.log('🔍 [FILTRO DEBUG] itensJaSalvos:', itensJaSalvos.map(item => `${item.produto.nome} (${item.produto.codigo})`));
 
       const itensParaInserir = itensNaoSalvos.map(item => {
         const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
@@ -9515,7 +9579,22 @@ const PDVPage: React.FC = () => {
 
         // ✅ CORREÇÃO: Processar cada item do carrinho individualmente
         for (const [index, item] of carrinho.entries()) {
+          console.log(`🔍 [ITEMDATA DEBUG] ===== PROCESSANDO ITEM ${index + 1} =====`);
+          console.log(`🔍 [ITEMDATA DEBUG] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
+          console.log(`🔍 [ITEMDATA DEBUG] itensParaInserir.length:`, itensParaInserir.length);
+          console.log(`🔍 [ITEMDATA DEBUG] index atual:`, index);
+          console.log(`🔍 [ITEMDATA DEBUG] itensParaInserir[${index}]:`, itensParaInserir[index]);
+
           const itemData = itensParaInserir[index];
+
+          if (!itemData) {
+            console.error(`🚨 [ITEMDATA DEBUG] ❌ ERRO: itemData é undefined para o item ${index + 1}`);
+            console.error(`🚨 [ITEMDATA DEBUG] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
+            console.error(`🚨 [ITEMDATA DEBUG] itensParaInserir completo:`, itensParaInserir);
+            console.error(`🚨 [ITEMDATA DEBUG] Este é o problema que causa o erro 'Cannot read properties of undefined'`);
+          } else {
+            console.log(`✅ [ITEMDATA DEBUG] itemData encontrado:`, itemData);
+          }
 
           // ✅ CORREÇÃO: Verificar se item já existe no banco de dados
           let itemExistente = null;
@@ -9749,11 +9828,39 @@ const PDVPage: React.FC = () => {
         setEtapaProcessamento('Verificando produtos com insumos...');
 
         for (const [index, item] of carrinho.entries()) {
-          console.log(`🔍 [INSUMOS DEBUG] ===== ITEM ${index + 1}/${carrinho.length} =====`);
-          console.log(`🔍 [INSUMOS DEBUG] Produto: ${item.produto.nome}`);
-          console.log(`🔍 [INSUMOS DEBUG] Código: ${item.produto.codigo}`);
-          console.log(`🔍 [INSUMOS DEBUG] ID: ${item.produto.id}`);
-          console.log(`🔍 [INSUMOS DEBUG] Quantidade: ${item.quantidade}`);
+          console.log(`🔍 [COMPARATIVO DEBUG] ===== ITEM ${index + 1}/${carrinho.length} =====`);
+          console.log(`🔍 [COMPARATIVO DEBUG] Produto: ${item.produto.nome}`);
+          console.log(`🔍 [COMPARATIVO DEBUG] Código: ${item.produto.codigo}`);
+          console.log(`🔍 [COMPARATIVO DEBUG] ID: ${item.produto.id}`);
+          console.log(`🔍 [COMPARATIVO DEBUG] Quantidade: ${item.quantidade}`);
+
+          // 🔬 ANÁLISE COMPLETA DA ESTRUTURA DO ITEM
+          console.log(`🔍 [COMPARATIVO DEBUG] ===== ESTRUTURA COMPLETA DO ITEM =====`);
+          console.log(`🔍 [COMPARATIVO DEBUG] Item completo:`, item);
+          console.log(`🔍 [COMPARATIVO DEBUG] Produto completo:`, item.produto);
+          console.log(`🔍 [COMPARATIVO DEBUG] Propriedades do item:`, Object.keys(item));
+          console.log(`🔍 [COMPARATIVO DEBUG] Propriedades do produto:`, Object.keys(item.produto));
+
+          // Verificar propriedades específicas que podem causar problemas
+          console.log(`🔍 [COMPARATIVO DEBUG] item.pdv_item_id:`, item.pdv_item_id);
+          console.log(`🔍 [COMPARATIVO DEBUG] item.vendaSemProduto:`, item.vendaSemProduto);
+          console.log(`🔍 [COMPARATIVO DEBUG] item.temDesconto:`, item.temDesconto);
+          console.log(`🔍 [COMPARATIVO DEBUG] item.preco:`, item.preco);
+          console.log(`🔍 [COMPARATIVO DEBUG] item.subtotal:`, item.subtotal);
+          console.log(`🔍 [COMPARATIVO DEBUG] item.vendedor:`, item.vendedor);
+          console.log(`🔍 [COMPARATIVO DEBUG] item.vendedor_id:`, item.vendedor_id);
+          console.log(`🔍 [COMPARATIVO DEBUG] item.vendedor_nome:`, item.vendedor_nome);
+
+          // Verificar se é especificamente o item problemático
+          if (item.produto.codigo === '5') {
+            console.log(`🚨 [COMPARATIVO DEBUG] ===== ITEM PROBLEMÁTICO DETECTADO (CÓDIGO 5) =====`);
+            console.log(`🚨 [COMPARATIVO DEBUG] Este é o item que está causando erro!`);
+            console.log(`🚨 [COMPARATIVO DEBUG] Vamos analisar em detalhes...`);
+          } else if (item.produto.codigo === '8') {
+            console.log(`✅ [COMPARATIVO DEBUG] ===== ITEM FUNCIONANDO (CÓDIGO 8) =====`);
+            console.log(`✅ [COMPARATIVO DEBUG] Este item funciona normalmente`);
+            console.log(`✅ [COMPARATIVO DEBUG] Usar como referência...`);
+          }
 
           // Verificar se o produto tem insumos
           if (item.produto.insumos) {

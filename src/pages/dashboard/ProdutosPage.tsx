@@ -2257,6 +2257,25 @@ const ProdutosPage: React.FC = () => {
     return parseFloat(valorLimpo) || 0;
   };
 
+  // ✅ NOVA FUNÇÃO: Verificar se promoção está vencida (igual ao PDV)
+  const verificarPromocaoVencida = (produto: any) => {
+    if (!produto.promocao_data_habilitada || !produto.promocao_data_fim) {
+      return false; // Sem data definida, promoção não vence
+    }
+
+    // ✅ CORREÇÃO: Usar split para evitar problemas de fuso horário
+    const [ano, mes, dia] = produto.promocao_data_fim.split('-');
+    const dataFim = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia));
+
+    const hoje = new Date();
+
+    // Zerar as horas para comparar apenas as datas
+    hoje.setHours(0, 0, 0, 0);
+    dataFim.setHours(23, 59, 59, 999);
+
+    return hoje > dataFim;
+  };
+
   // Função para calcular o valor final com base no tipo de desconto
   const calcularValorFinal = (preco: number, tipoDesconto: 'percentual' | 'valor', valorDesconto: number): number => {
     if (tipoDesconto === 'percentual') {
@@ -5399,22 +5418,32 @@ const ProdutosPage: React.FC = () => {
     const fotoPrincipal = produtosFotosPrincipais[produto.id];
     const unidadeMedida = unidadesMedida.find(u => u.id === produto.unidade_medida_id);
 
-    // Calcular o valor final se o produto estiver em promoção
+    // ✅ CORRIGIDO: Calcular o valor final considerando se a promoção está vencida
     let valorFinal = produto.preco;
     let descontoExibicao = '';
+    let promocaoVencida = false;
 
-    if (produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined) {
-      valorFinal = calcularValorFinal(
-        produto.preco,
-        produto.tipo_desconto,
-        produto.valor_desconto
-      );
+    // Verificar se produto tem promoção configurada
+    const temPromocao = produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined;
 
-      // Formatar o desconto para exibição
-      if (produto.tipo_desconto === 'percentual') {
-        descontoExibicao = `${produto.valor_desconto}% OFF`;
-      } else {
-        descontoExibicao = `- R$ ${formatarPreco(produto.valor_desconto)}`;
+    if (temPromocao) {
+      // Verificar se a promoção está vencida
+      promocaoVencida = verificarPromocaoVencida(produto);
+
+      if (!promocaoVencida) {
+        // Aplicar promoção apenas se não estiver vencida
+        valorFinal = calcularValorFinal(
+          produto.preco,
+          produto.tipo_desconto,
+          produto.valor_desconto
+        );
+
+        // Formatar o desconto para exibição
+        if (produto.tipo_desconto === 'percentual') {
+          descontoExibicao = `${produto.valor_desconto}% OFF`;
+        } else {
+          descontoExibicao = `- R$ ${formatarPreco(produto.valor_desconto)}`;
+        }
       }
     }
 
@@ -5514,7 +5543,7 @@ const ProdutosPage: React.FC = () => {
 
               {/* Badges */}
               <div className="flex flex-wrap gap-1 mt-1">
-                {produto.promocao && (
+                {temPromocao && !promocaoVencida && (
                   <span className="px-1.5 py-0.5 text-xs font-medium bg-green-500/20 text-green-400 rounded-full">
                     Promoção
                   </span>
@@ -5522,6 +5551,12 @@ const ProdutosPage: React.FC = () => {
                 {produto.ativo === false && (
                   <span className="px-1.5 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
                     Inativo
+                  </span>
+                )}
+                {/* ✅ NOVO: Tag de promoção vencida */}
+                {promocaoVencida && (
+                  <span className="px-1.5 py-0.5 text-xs font-medium bg-red-500/20 text-red-400 rounded-full">
+                    Promoção vencida
                   </span>
                 )}
               </div>
@@ -5532,9 +5567,10 @@ const ProdutosPage: React.FC = () => {
           <div className="flex-1 min-w-0">
             {/* Preços */}
             <div className="flex items-center gap-2 mb-0.5">
-              {/* ✅ OCULTAR PREÇO QUANDO FOR R$ 0,00 (produtos que usam apenas tabelas de preços) */}
+              {/* ✅ CORRIGIDO: Exibir preço considerando promoções vencidas */}
               {produto.preco > 0 ? (
-                produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined ? (
+                temPromocao && !promocaoVencida ? (
+                  // Promoção válida - mostrar preço riscado e desconto
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <p className="text-xs text-gray-400 line-through">
@@ -5551,15 +5587,18 @@ const ProdutosPage: React.FC = () => {
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1">
-                    <p className="text-sm text-primary-400 font-medium">
-                      R$ {produto.preco.toFixed(2)}
-                    </p>
-                    {unidadeMedida && (
-                      <span className="px-1.5 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
-                        {unidadeMedida.sigla}
-                      </span>
-                    )}
+                  // Sem promoção ou promoção vencida - mostrar preço normal
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <p className="text-sm text-primary-400 font-medium">
+                        R$ {produto.preco.toFixed(2)}
+                      </p>
+                      {unidadeMedida && (
+                        <span className="px-1.5 py-0.5 text-xs font-medium bg-primary-500/10 text-primary-400 rounded-full">
+                          {unidadeMedida.sigla}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               ) : (
@@ -5572,7 +5611,8 @@ const ProdutosPage: React.FC = () => {
               )}
             </div>
 
-            {produto.promocao && produto.tipo_desconto && produto.valor_desconto !== undefined && (
+            {/* ✅ CORRIGIDO: Mostrar valor final apenas se promoção for válida */}
+            {temPromocao && !promocaoVencida && (
               <div className="flex items-center gap-1 mb-0.5">
                 <p className="text-sm text-green-400 font-medium">
                   Valor final: R$ {valorFinal.toFixed(2)}
