@@ -10163,14 +10163,55 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      // ✅ NOVO: Atualizar status da venda para "salva" e marcar como delivery_local
+      // ✅ CORREÇÃO: Preparar dados completos do cliente para salvar
+      const clienteData = clienteSelecionado ||
+                         (pedidosImportados.length > 0 ? pedidosImportados[0]?.cliente : null) ||
+                         clienteEncontrado;
+
+      // ✅ NOVO: Atualizar status da venda para "salva", marcar como delivery_local E salvar TODOS os dados do cliente
+      const updateData: any = {
+        status_venda: 'salva',
+        delivery_local: true, // ✅ MARCAR COMO DELIVERY LOCAL
+        updated_at: new Date().toISOString(),
+        // ✅ NOVO: Salvar dados completos do cliente
+        nome_cliente: nomeCliente || clienteData?.nome || null,
+        cliente_id: clienteData?.id || null,
+        observacao_venda: observacaoVenda || null,
+        mesa_numero: mesaNumero || null,
+        comanda_numero: comandaNumero || null
+      };
+
+      // ✅ NOVO: Adicionar dados específicos do cliente se existir
+      if (clienteData) {
+        // Telefone do cliente
+        if (clienteData.telefone) {
+          updateData.telefone_cliente = clienteData.telefone;
+        } else if (clienteData.telefones && clienteData.telefones.length > 0) {
+          updateData.telefone_cliente = clienteData.telefones[0].numero;
+        }
+
+        // Documento do cliente
+        if (clienteData.documento) {
+          updateData.documento_cliente = clienteData.documento;
+          // Determinar tipo de documento baseado no tamanho
+          const docLimpo = clienteData.documento.replace(/\D/g, '');
+          updateData.tipo_documento_cliente = docLimpo.length === 11 ? 'cpf' : 'cnpj';
+        }
+
+        // Endereço do cliente (se disponível)
+        if (clienteData.cep) updateData.cep_entrega = clienteData.cep;
+        if (clienteData.endereco) updateData.rua_entrega = clienteData.endereco;
+        if (clienteData.numero) updateData.numero_entrega = clienteData.numero;
+        if (clienteData.complemento) updateData.complemento_entrega = clienteData.complemento;
+        if (clienteData.bairro) updateData.bairro_entrega = clienteData.bairro;
+        if (clienteData.cidade) updateData.cidade_entrega = clienteData.cidade;
+      }
+
+      console.log('🚚 [DELIVERY] Salvando dados completos do cliente:', updateData);
+
       const { error: updateStatusError } = await supabase
         .from('pdv')
-        .update({
-          status_venda: 'salva',
-          delivery_local: true, // ✅ MARCAR COMO DELIVERY LOCAL
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', vendaEmAndamento.id);
 
       if (updateStatusError) {
@@ -11123,6 +11164,54 @@ const PDVPage: React.FC = () => {
           }
         } catch (error) {
           console.error('❌ Erro ao restaurar vendedor selecionado:', error);
+        }
+      }
+
+      // ✅ NOVO: Restaurar dados específicos do delivery local
+      if (venda.delivery_local) {
+        // Restaurar telefone do cliente
+        if (venda.telefone_cliente) {
+          setTelefoneCliente(venda.telefone_cliente);
+          console.log('✅ Telefone do cliente restaurado:', venda.telefone_cliente);
+        }
+
+        // Restaurar documento do cliente
+        if (venda.documento_cliente) {
+          setDocumentoCliente(venda.documento_cliente);
+          console.log('✅ Documento do cliente restaurado:', venda.documento_cliente);
+        }
+
+        // Restaurar tipo de documento
+        if (venda.tipo_documento_cliente) {
+          setTipoDocumentoCliente(venda.tipo_documento_cliente);
+          console.log('✅ Tipo documento restaurado:', venda.tipo_documento_cliente);
+        }
+
+        // Restaurar endereço de entrega
+        if (venda.cep_entrega || venda.rua_entrega) {
+          const enderecoEntrega = {
+            cep: venda.cep_entrega || '',
+            rua: venda.rua_entrega || '',
+            numero: venda.numero_entrega || '',
+            complemento: venda.complemento_entrega || '',
+            bairro: venda.bairro_entrega || '',
+            cidade: venda.cidade_entrega || '',
+            estado: venda.estado_entrega || ''
+          };
+          setEnderecoEntrega(enderecoEntrega);
+          console.log('✅ Endereço de entrega restaurado:', enderecoEntrega);
+        }
+
+        // Restaurar observação de entrega
+        if (venda.observacao_entrega) {
+          setObservacaoEntrega(venda.observacao_entrega);
+          console.log('✅ Observação de entrega restaurada:', venda.observacao_entrega);
+        }
+
+        // Restaurar valor de entrega
+        if (venda.valor_entrega) {
+          setValorEntrega(venda.valor_entrega);
+          console.log('✅ Valor de entrega restaurado:', venda.valor_entrega);
         }
       }
 
