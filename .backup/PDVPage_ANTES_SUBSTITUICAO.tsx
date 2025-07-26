@@ -9043,7 +9043,6 @@ const PDVPage: React.FC = () => {
   };
 
   // Função principal para finalizar e salvar a venda
-  // ✅ FUNÇÃO FUNCIONAL RESTAURADA (backup do commit funcionando)
   const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_impressao') => {
     if (carrinho.length === 0) {
       toast.error('Carrinho vazio! Adicione itens antes de finalizar.');
@@ -9743,65 +9742,6 @@ const PDVPage: React.FC = () => {
           }
         }
         // Baixa de estoque concluída
-
-        // 🔍 LOGS ESPECÍFICOS: Verificar produtos com insumos
-        console.log('🔍 [INSUMOS DEBUG] ===== INICIANDO VERIFICAÇÃO DE INSUMOS =====');
-        setEtapaProcessamento('Verificando produtos com insumos...');
-
-        for (const [index, item] of carrinho.entries()) {
-          console.log(`🔍 [INSUMOS DEBUG] ===== ITEM ${index + 1}/${carrinho.length} =====`);
-          console.log(`🔍 [INSUMOS DEBUG] Produto: ${item.produto.nome}`);
-          console.log(`🔍 [INSUMOS DEBUG] Código: ${item.produto.codigo}`);
-          console.log(`🔍 [INSUMOS DEBUG] ID: ${item.produto.id}`);
-          console.log(`🔍 [INSUMOS DEBUG] Quantidade: ${item.quantidade}`);
-
-          // Verificar se o produto tem insumos
-          if (item.produto.insumos) {
-            console.log(`🔍 [INSUMOS DEBUG] ✅ PRODUTO TEM INSUMOS!`);
-            console.log(`🔍 [INSUMOS DEBUG] Tipo de insumos:`, typeof item.produto.insumos);
-            console.log(`🔍 [INSUMOS DEBUG] Insumos (raw):`, item.produto.insumos);
-
-            // Tentar parsear se for string
-            let insumosArray = item.produto.insumos;
-            if (typeof item.produto.insumos === 'string') {
-              try {
-                insumosArray = JSON.parse(item.produto.insumos);
-                console.log(`🔍 [INSUMOS DEBUG] Insumos parseados:`, insumosArray);
-              } catch (error) {
-                console.error(`🔍 [INSUMOS DEBUG] ❌ Erro ao parsear insumos:`, error);
-                continue;
-              }
-            }
-
-            // Verificar se é array válido
-            if (Array.isArray(insumosArray) && insumosArray.length > 0) {
-              console.log(`🔍 [INSUMOS DEBUG] ✅ Array de insumos válido com ${insumosArray.length} insumos`);
-
-              for (const [insumoIndex, insumo] of insumosArray.entries()) {
-                console.log(`🔍 [INSUMOS DEBUG] --- Insumo ${insumoIndex + 1}/${insumosArray.length} ---`);
-                console.log(`🔍 [INSUMOS DEBUG] Insumo completo:`, insumo);
-                console.log(`🔍 [INSUMOS DEBUG] produto_id:`, insumo.produto_id);
-                console.log(`🔍 [INSUMOS DEBUG] nome:`, insumo.nome);
-                console.log(`🔍 [INSUMOS DEBUG] quantidade:`, insumo.quantidade);
-                console.log(`🔍 [INSUMOS DEBUG] unidade_medida:`, insumo.unidade_medida);
-
-                // Calcular quantidade total a ser baixada
-                const quantidadeTotal = insumo.quantidade * item.quantidade;
-                console.log(`🔍 [INSUMOS DEBUG] Quantidade total a baixar: ${quantidadeTotal} (${insumo.quantidade} × ${item.quantidade})`);
-
-                // AQUI SERIA ONDE IMPLEMENTARÍAMOS A BAIXA DE INSUMOS
-                console.log(`🔍 [INSUMOS DEBUG] 🎯 LOCAL PARA IMPLEMENTAR BAIXA DE INSUMOS`);
-              }
-            } else {
-              console.log(`🔍 [INSUMOS DEBUG] ⚠️ Insumos não é um array válido ou está vazio`);
-            }
-          } else {
-            console.log(`🔍 [INSUMOS DEBUG] ℹ️ Produto não tem insumos configurados`);
-          }
-        }
-
-        console.log('🔍 [INSUMOS DEBUG] ===== VERIFICAÇÃO DE INSUMOS CONCLUÍDA =====');
-        setEtapaProcessamento('Processamento de insumos concluído');
 
         // Aguardar um pouco para garantir que todas as movimentações foram processadas
         await new Promise(resolve => setTimeout(resolve, 1000));
