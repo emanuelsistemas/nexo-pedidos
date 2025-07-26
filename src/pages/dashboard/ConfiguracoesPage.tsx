@@ -3975,11 +3975,32 @@ const ConfiguracoesPage: React.FC = () => {
     */
   };
 
+  // ✅ NOVA: Função para verificar vendas salvas antes de desabilitar comandas/mesas
+  const verificarVendasSalvas = async (tipo: 'comandas' | 'mesas', empresaId: string): Promise<{ temVendas: boolean; vendas: any[] }> => {
+    try {
+      const campo = tipo === 'comandas' ? 'comanda_numero' : 'mesa_numero';
+
+      const { data: vendas, error } = await supabase
+        .from('pdv')
+        .select(`id, numero_venda, ${campo}, nome_cliente`)
+        .eq('empresa_id', empresaId)
+        .eq('status_venda', 'salva')
+        .not(campo, 'is', null);
+
+      if (error && error.code !== 'PGRST116') {
+        console.error(`Erro ao verificar vendas salvas de ${tipo}:`, error);
+        return { temVendas: false, vendas: [] };
+      }
+
+      return { temVendas: (vendas?.length || 0) > 0, vendas: vendas || [] };
+    } catch (error) {
+      console.error(`Erro ao verificar vendas salvas de ${tipo}:`, error);
+      return { temVendas: false, vendas: [] };
+    }
+  };
+
   const handlePdvConfigChange = async (field: string, value: boolean) => {
     try {
-      // Atualizar o estado local primeiro
-      setPdvConfig(prev => ({ ...prev, [field]: value }));
-
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -3993,6 +4014,32 @@ const ConfiguracoesPage: React.FC = () => {
       if (!usuarioData?.empresa_id) {
         throw new Error('Empresa não encontrada');
       }
+
+      // ✅ NOVA: Verificar vendas salvas antes de desabilitar comandas ou mesas
+      if (!value && (field === 'comandas' || field === 'mesas')) {
+        const { temVendas, vendas } = await verificarVendasSalvas(field, usuarioData.empresa_id);
+
+        if (temVendas) {
+          const tipo = field === 'comandas' ? 'comandas' : 'mesas';
+          const tipoSingular = field === 'comandas' ? 'comanda' : 'mesa';
+
+          // Criar lista das vendas pendentes
+          const listaVendas = vendas.map(venda => {
+            const numero = field === 'comandas' ? venda.comanda_numero : venda.mesa_numero;
+            const cliente = venda.nome_cliente ? ` (${venda.nome_cliente})` : '';
+            return `• ${tipoSingular.charAt(0).toUpperCase() + tipoSingular.slice(1)} ${numero} - Venda ${venda.numero_venda}${cliente}`;
+          }).join('\n');
+
+          // Mostrar modal de erro
+          const mensagem = `❌ Não é possível desabilitar ${tipo} pois existem vendas salvas pendentes:\n\n${listaVendas}\n\nFinalize ou cancele essas vendas antes de desabilitar ${tipo}.`;
+
+          showMessage('error', mensagem);
+          return; // Não prosseguir com a desabilitação
+        }
+      }
+
+      // Atualizar o estado local primeiro
+      setPdvConfig(prev => ({ ...prev, [field]: value }));
 
       // Verificar se já existe uma configuração
       const { data: existingConfig } = await supabase

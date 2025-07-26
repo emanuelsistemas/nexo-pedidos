@@ -10534,12 +10534,61 @@ const PDVPage: React.FC = () => {
       // Restaurar carrinho
       setCarrinho(itensCarrinho);
 
-      // Restaurar outros dados se existirem
+      // ✅ CORREÇÃO: Restaurar TODOS os dados dos modais
       if (venda.nome_cliente) {
-        // Aqui poderia restaurar dados do cliente se necessário
+        setNomeCliente(venda.nome_cliente);
+        console.log('✅ Nome do cliente restaurado:', venda.nome_cliente);
       }
+
+      if (venda.comanda_numero) {
+        setComandaNumero(venda.comanda_numero.toString());
+        console.log('✅ Comanda restaurada:', venda.comanda_numero);
+      }
+
+      if (venda.mesa_numero) {
+        setMesaNumero(venda.mesa_numero.toString());
+        console.log('✅ Mesa restaurada:', venda.mesa_numero);
+      }
+
       if (venda.observacao_venda) {
         setObservacaoVenda(venda.observacao_venda);
+        console.log('✅ Observação restaurada:', venda.observacao_venda);
+      }
+
+      // ✅ NOVO: Restaurar cliente selecionado se existir
+      if (venda.cliente_id) {
+        try {
+          const { data: clienteData } = await supabase
+            .from('clientes')
+            .select('id, nome, telefone, email')
+            .eq('id', venda.cliente_id)
+            .single();
+
+          if (clienteData) {
+            setClienteSelecionado(clienteData);
+            console.log('✅ Cliente selecionado restaurado:', clienteData.nome);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao restaurar cliente selecionado:', error);
+        }
+      }
+
+      // ✅ NOVO: Restaurar vendedor selecionado se existir
+      if (venda.vendedor_id) {
+        try {
+          const { data: vendedorData } = await supabase
+            .from('vendedores')
+            .select('id, nome')
+            .eq('id', venda.vendedor_id)
+            .single();
+
+          if (vendedorData) {
+            setVendedorSelecionado(vendedorData);
+            console.log('✅ Vendedor selecionado restaurado:', vendedorData.nome);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao restaurar vendedor selecionado:', error);
+        }
       }
 
       // Fechar modais e atualizar contadores
