@@ -368,9 +368,11 @@ const ProdutosPage: React.FC = () => {
   const [editingProduto, setEditingProduto] = useState<Produto | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean;
-    type: 'grupo' | 'produto' | 'foto';
+    type: 'grupo' | 'produto' | 'foto' | 'adicional';
     id: string;
     grupoId?: string;
+    produtoId?: string;
+    opcaoId?: string;
     title: string;
     message: string;
     fotoPath?: string;
@@ -4478,6 +4480,9 @@ const ProdutosPage: React.FC = () => {
         showMessage('success', 'Produto excluído com sucesso!');
       } else if (deleteConfirmation.type === 'foto') {
         await handleDeleteFoto();
+      } else if (deleteConfirmation.type === 'adicional') {
+        // ✅ NOVO: Remover adicional do produto
+        await handleRemoveAdicional(deleteConfirmation.produtoId!, deleteConfirmation.opcaoId!);
       }
     } catch (error: any) {
       showMessage('error', `Erro ao excluir ${deleteConfirmation.type}: ` + error.message);
@@ -4486,6 +4491,19 @@ const ProdutosPage: React.FC = () => {
       setDeleteLoading(false);
       setDeleteConfirmation(prev => ({ ...prev, isOpen: false }));
     }
+  };
+
+  // ✅ NOVA FUNÇÃO: Abrir modal de confirmação para remoção de adicional
+  const handleConfirmRemoveAdicional = (produtoId: string, opcaoId: string, nomeAdicional: string) => {
+    setDeleteConfirmation({
+      isOpen: true,
+      type: 'adicional',
+      id: opcaoId,
+      produtoId,
+      opcaoId,
+      title: 'Remover Adicional',
+      message: `Tem certeza que deseja remover o adicional "${nomeAdicional}" deste produto? Esta ação não pode ser desfeita.`,
+    });
   };
 
   const handleRemoveAdicional = async (produtoId: string, opcaoId: string) => {
@@ -5026,9 +5044,10 @@ const ProdutosPage: React.FC = () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleRemoveAdicional(produto.id, opcao.id);
+                      handleConfirmRemoveAdicional(produto.id, opcao.id, opcao.nome);
                     }}
                     className="text-red-400 hover:text-red-300 p-0.5"
+                    title="Remover adicional"
                   >
                     <X size={12} />
                   </button>
