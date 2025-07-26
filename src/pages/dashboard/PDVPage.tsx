@@ -21598,7 +21598,7 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={confirmarNomeCliente}
-                  disabled={!nomeCliente.trim()}
+                  disabled={!nomeClienteTemp.trim()}
                   className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Confirmar
@@ -21673,7 +21673,7 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={confirmarComanda}
-                  disabled={!comandaNumero.trim()}
+                  disabled={!comandaNumeroTemp.trim()}
                   className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Confirmar
@@ -21748,7 +21748,7 @@ const PDVPage: React.FC = () => {
                 </button>
                 <button
                   onClick={confirmarMesa}
-                  disabled={!mesaNumero.trim()}
+                  disabled={!mesaNumeroTemp.trim()}
                   className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Confirmar
