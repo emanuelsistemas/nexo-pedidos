@@ -2202,7 +2202,7 @@ const PDVPage: React.FC = () => {
     carregarVendasAbertas();
     carregarVendasMesas();
     carregarVendasComandas();
-    // ✅ CORREÇÃO: Delivery carregado apenas quando modal abrir
+    carregarContadorDelivery(); // ✅ Carrega apenas contador (otimizado)
   }, []); // Executa apenas uma vez ao montar
 
   // ✅ NOVO: Polling inteligente para atualizar contadores de mesas e comandas
@@ -2212,7 +2212,7 @@ const PDVPage: React.FC = () => {
       if (!showMesasModal && !showComandasModal && !showVendasAbertasModal && !showDeliveryModal) {
         carregarVendasMesas();
         carregarVendasComandas();
-        // ✅ CORREÇÃO: Não carregar delivery automaticamente (só quando modal abrir)
+        carregarContadorDelivery(); // ✅ Carrega apenas contador (otimizado)
       }
     }, 5000); // 5 segundos - mesmo intervalo do cardápio
 
@@ -10052,7 +10052,7 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasMesas(),
           carregarVendasComandas(),
-          // ✅ CORREÇÃO: Delivery carregado apenas quando modal abrir
+          carregarContadorDelivery(), // ✅ Atualiza contador após salvar
           carregarVendasAbertas()
         ]);
         console.log('✅ Contadores atualizados com sucesso');
@@ -10192,7 +10192,7 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasMesas(),
           carregarVendasComandas(),
-          // ✅ CORREÇÃO: Delivery carregado apenas quando modal abrir
+          carregarContadorDelivery(), // ✅ Atualiza contador após recuperar
           carregarVendasAbertas()
         ]);
         console.log('✅ Contadores atualizados com sucesso');
@@ -10591,7 +10591,38 @@ const PDVPage: React.FC = () => {
     }
   };
 
-  // ✅ NOVA: Função para carregar vendas de delivery local
+  // ✅ NOVA: Função para carregar apenas contador de delivery local (otimizada)
+  const carregarContadorDelivery = async (): Promise<void> => {
+    try {
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) return;
+
+      // Buscar apenas a contagem de vendas de delivery local
+      const { count, error } = await supabase
+        .from('pdv')
+        .select('id', { count: 'exact' })
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('status_venda', 'salva')
+        .eq('delivery_local', true);
+
+      if (!error && count !== null) {
+        setContadorVendasDelivery(count);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar contador de delivery:', error);
+    }
+  };
+
+  // ✅ NOVA: Função para carregar vendas de delivery local (completa)
   const carregarVendasDelivery = async (): Promise<void> => {
     try {
       console.log('🚚 Iniciando carregamento de vendas de delivery...');
@@ -11036,8 +11067,8 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasAbertas(),
           carregarVendasMesas(),
-          carregarVendasComandas()
-          // ✅ CORREÇÃO: Delivery carregado apenas quando modal abrir
+          carregarVendasComandas(),
+          carregarContadorDelivery() // ✅ Atualiza contador após salvar delivery
         ]);
         console.log('✅ Contadores atualizados com sucesso');
       } catch (error) {
