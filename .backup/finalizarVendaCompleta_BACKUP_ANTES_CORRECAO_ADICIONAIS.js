@@ -1,7 +1,7 @@
 // ✅ BACKUP COMPLETO DA FUNÇÃO finalizarVendaCompleta
-// Data: 26/07/2025 - Antes da correção do problema com adicionais
-// Problema: Erro "Cannot read properties of undefined (reading 'quantidade')" 
-// quando produto tem vínculo com adicionais (mesmo sem selecionar adicionais)
+// Data: 26/07/2025 - Antes da implementação da baixa automática de insumos
+// Status: Função funcionando após correção do problema com adicionais
+// Próximo: Implementar baixa automática de insumos usando campo JSONB
 
 const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_impressao') => {
   if (carrinho.length === 0) {

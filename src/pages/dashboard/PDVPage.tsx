@@ -9846,6 +9846,62 @@ const PDVPage: React.FC = () => {
         }
         // Baixa de estoque concluída
 
+        // ✅ NOVO: Baixa automática de insumos
+        setEtapaProcessamento('Processando baixa de insumos...');
+        console.log('🔍 [INSUMOS] Iniciando baixa automática de insumos...');
+
+        for (const item of carrinho) {
+          // ✅ EXCEÇÃO: Pular insumos para venda sem produto (código 999999)
+          if (item.vendaSemProduto || item.produto.codigo === '999999') {
+            console.log(`⚠️ [INSUMOS] Pulando insumos para venda sem produto: ${item.produto.nome}`);
+            continue;
+          }
+
+          // ✅ Verificar se o produto tem insumos configurados
+          if (!item.produto.insumos || !Array.isArray(item.produto.insumos) || item.produto.insumos.length === 0) {
+            console.log(`ℹ️ [INSUMOS] Produto sem insumos configurados: ${item.produto.nome}`);
+            continue;
+          }
+
+          console.log(`🔍 [INSUMOS] Processando insumos para: ${item.produto.nome} (Qtd: ${item.quantidade})`);
+          console.log(`🔍 [INSUMOS] Insumos encontrados:`, item.produto.insumos);
+
+          // ✅ Processar cada insumo do produto
+          for (const insumo of item.produto.insumos) {
+            try {
+              // ✅ Calcular quantidade proporcional do insumo
+              const quantidadeInsumo = insumo.quantidade * item.quantidade;
+
+              console.log(`🔍 [INSUMOS] Baixando insumo: ${insumo.nome}`);
+              console.log(`🔍 [INSUMOS] Quantidade por porção: ${insumo.quantidade} ${insumo.unidade_medida}`);
+              console.log(`🔍 [INSUMOS] Quantidade total a baixar: ${quantidadeInsumo} ${insumo.unidade_medida}`);
+
+              // ✅ Dar baixa no estoque do insumo
+              const { error: insumoError } = await supabase.rpc('atualizar_estoque_produto', {
+                p_produto_id: insumo.produto_id,
+                p_quantidade: -quantidadeInsumo, // Quantidade negativa para baixa
+                p_tipo_operacao: 'consumo_insumo',
+                p_observacao: `Consumo de insumo - Venda PDV #${numeroVenda} - Produto: ${item.produto.nome}`
+              });
+
+              if (insumoError) {
+                console.error(`❌ [INSUMOS] Erro ao baixar insumo ${insumo.nome}:`, insumoError);
+                // ✅ NÃO INTERROMPER a venda por erro de insumo - apenas logar
+                console.warn(`⚠️ [INSUMOS] Continuando venda apesar do erro no insumo: ${insumo.nome}`);
+              } else {
+                console.log(`✅ [INSUMOS] Insumo baixado com sucesso: ${insumo.nome} (-${quantidadeInsumo} ${insumo.unidade_medida})`);
+              }
+
+            } catch (error) {
+              console.error(`❌ [INSUMOS] Erro inesperado ao processar insumo ${insumo.nome}:`, error);
+              // ✅ Continuar processamento mesmo com erro
+            }
+          }
+        }
+
+        console.log('✅ [INSUMOS] Baixa automática de insumos concluída');
+        // Baixa de insumos concluída
+
         // 🔍 LOGS ESPECÍFICOS: Verificar produtos com insumos
         console.log('🔍 [INSUMOS DEBUG] ===== INICIANDO VERIFICAÇÃO DE INSUMOS =====');
         setEtapaProcessamento('Verificando produtos com insumos...');
