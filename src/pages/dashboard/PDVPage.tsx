@@ -2232,6 +2232,7 @@ const PDVPage: React.FC = () => {
         promocao_data_inicio,
         promocao_data_fim,
         promocao_data_cardapio,
+        insumos,
         grupo:grupos(nome),
         unidade_medida:unidade_medida_id (
           id,
@@ -4574,7 +4575,6 @@ const PDVPage: React.FC = () => {
       }
 
       // ✅ SIMPLIFICADO: Usar número já validado e salvo anteriormente
-      console.log('🔍 REPROCESSAMENTO: Usando número já validado:', vendaParaEditarNfce.numero_documento);
       toast.success('Iniciando retransmissão...');
 
       // Preparar dados atualizados dos itens
@@ -4681,7 +4681,6 @@ const PDVPage: React.FC = () => {
       };
 
       // ✅ NOVO: Validações antes do envio
-      console.log('🔍 REPROCESSAMENTO - Validando dados obrigatórios...');
 
       // Validar dados da empresa
       if (!empresaData.razao_social) throw new Error('Razão social da empresa não encontrada');
@@ -7313,9 +7312,7 @@ const PDVPage: React.FC = () => {
 
         const totalAdicionaisInseridos = adicionaisData?.length || 0;
 
-        // ✅ LOGS DETALHADOS: Para debug
-        console.log('🔍 VERIFICAÇÃO DE ADICIONAIS:');
-        console.log('  - Itens com adicionais no carrinho:', itensComAdicionais.length);
+
         console.log('  - Total adicionais esperados:', totalAdicionaisEsperados);
         console.log('  - Total adicionais inseridos (não deletados):', totalAdicionaisInseridos);
         console.log('  - Adicionais encontrados no banco:', adicionaisData?.map(a => `${a.nome_adicional} (item: ${a.pdv_item_id})`));
@@ -7943,14 +7940,7 @@ const PDVPage: React.FC = () => {
     const valorFormatado = valor.toFixed(2);
     const nomeFormatado = nomeRecebedor.toUpperCase().replace(/[^A-Z0-9\s]/g, '').substring(0, 25);
 
-    console.log('🔍 DADOS FORMATADOS BR CODE:', {
-      chaveOriginal: chave,
-      tipoChave,
-      chaveFormatada,
-      valorFormatado,
-      nomeFormatado,
-      chaveLength: chaveFormatada.length
-    });
+
 
     // Construir payload PIX conforme padrão BR Code EMV
     let payload = '';
@@ -8033,17 +8023,11 @@ const PDVPage: React.FC = () => {
     // Encontrar o primeiro pagamento PIX nos pagamentos parciais
     const pagamentoPix = pagamentosParciais.find(pagamento => {
       const forma = formasPagamento.find(f => f.id === pagamento.forma);
-      console.log('🔍 VERIFICANDO PAGAMENTO:', {
-        pagamento_id: pagamento.forma,
-        pagamento_valor: pagamento.valor,
-        forma_nome: forma?.nome,
-        forma_tipo: forma?.tipo,
-        e_pix: forma?.tipo === 'pix'
-      });
+
       return forma && forma.tipo === 'pix' && forma.utilizar_chave_pix && forma.chave_pix;
     });
 
-    console.log('💰 PAGAMENTO PIX ENCONTRADO:', pagamentoPix);
+
 
     if (pagamentoPix) {
       const forma = formasPagamento.find(f => f.id === pagamentoPix.forma);
@@ -8490,8 +8474,7 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
-      console.log('🔄 SINCRONIZANDO itens da venda:', vendaEmAndamento.numero_venda);
-      console.log('🔍 Itens no carrinho:', carrinho.length);
+
 
       // Obter dados do usuário
       const { data: userData } = await supabase.auth.getUser();
@@ -8557,7 +8540,6 @@ const PDVPage: React.FC = () => {
 
         // ✅ NOVO: Atualizar adicionais do item se existirem
         if (item.adicionais && item.adicionais.length > 0) {
-          console.log('🔍 ATUALIZANDO adicionais do item existente:', item.produto.nome, item.adicionais.length, 'adicionais');
 
           // Converter adicionais do carrinho para o formato esperado
           const adicionaisFormatados = item.adicionais.map(adicional => ({
@@ -9534,9 +9516,6 @@ const PDVPage: React.FC = () => {
 
         // ✅ CORREÇÃO: Processar cada item do carrinho individualmente
         for (const [index, item] of carrinho.entries()) {
-          console.log(`🔍 [ITEMDATA DEBUG] ===== PROCESSANDO ITEM ${index + 1} =====`);
-          console.log(`🔍 [ITEMDATA DEBUG] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
-          console.log(`🔍 [ITEMDATA DEBUG] Item tem pdv_item_id:`, !!item.pdv_item_id);
 
           // ✅ CORREÇÃO CIRÚRGICA: Buscar itemData apenas se o item não foi salvo ainda
           let itemData = null;
@@ -9640,7 +9619,6 @@ const PDVPage: React.FC = () => {
       const itensComAdicionais = carrinho.filter(item => item.adicionais && item.adicionais.length > 0);
       if (itensComAdicionais.length > 0) {
         setEtapaProcessamento('Salvando opções adicionais...');
-        console.log('🔍 FRONTEND: Processando adicionais para', itensComAdicionais.length, 'itens');
 
         for (const [index, item] of itensComAdicionais.entries()) {
           // ✅ CORREÇÃO: Buscar item considerando venda sem produto
@@ -9664,7 +9642,6 @@ const PDVPage: React.FC = () => {
             .maybeSingle();
 
           if (itemInserido && item.adicionais) {
-            console.log(`🔍 FRONTEND: Processando ${item.adicionais.length} adicionais para item: ${item.produto.nome} (ID: ${itemInserido.id})`);
 
             // ✅ CORREÇÃO: Abordagem simplificada - sempre remover e reinserir adicionais
             if (vendaEmAndamento) {
@@ -9783,15 +9760,35 @@ const PDVPage: React.FC = () => {
 
         // ✅ NOVO: Baixa automática de insumos
         setEtapaProcessamento('Processando baixa de insumos...');
+        console.log('🔍 [INSUMOS] Iniciando baixa automática de insumos...');
+        console.log('🔍 [INSUMOS] Total de itens no carrinho:', carrinho.length);
 
-        for (const item of carrinho) {
+        for (const [index, item] of carrinho.entries()) {
+          console.log(`🔍 [INSUMOS] ===== PROCESSANDO ITEM ${index + 1}/${carrinho.length} =====`);
+          console.log(`🔍 [INSUMOS] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
+          console.log(`🔍 [INSUMOS] Quantidade vendida: ${item.quantidade}`);
+
           // ✅ EXCEÇÃO: Pular insumos para venda sem produto (código 999999)
           if (item.vendaSemProduto || item.produto.codigo === '999999') {
+            console.log(`⚠️ [INSUMOS] Pulando insumos para venda sem produto: ${item.produto.nome}`);
             continue;
           }
 
+          // ✅ DEBUG: Verificar estrutura completa do produto
+          console.log(`🔍 [INSUMOS] Estrutura do produto:`, {
+            id: item.produto.id,
+            nome: item.produto.nome,
+            codigo: item.produto.codigo,
+            temInsumos: !!item.produto.insumos,
+            tipoInsumos: typeof item.produto.insumos,
+            isArrayInsumos: Array.isArray(item.produto.insumos),
+            lengthInsumos: item.produto.insumos?.length || 0,
+            insumos: item.produto.insumos
+          });
+
           // ✅ Verificar se o produto tem insumos configurados
           if (!item.produto.insumos || !Array.isArray(item.produto.insumos) || item.produto.insumos.length === 0) {
+            console.log(`ℹ️ [INSUMOS] Produto sem insumos configurados: ${item.produto.nome}`);
             continue;
           }
 
@@ -10501,11 +10498,9 @@ const PDVPage: React.FC = () => {
 
       // ✅ CORREÇÃO: Não sobrescrever erros específicos da NFC-e
       const mensagemErro = (error as Error).message;
-      console.log('🔍 FRONTEND: Erro capturado no catch externo:', mensagemErro);
 
       // Se o erro já foi tratado pela NFC-e, não sobrescrever
       if (statusProcessamento === 'erro') {
-        console.log('🔍 FRONTEND: Erro já tratado pela NFC-e, não sobrescrevendo');
         return;
       }
 
