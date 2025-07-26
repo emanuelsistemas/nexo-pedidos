@@ -22417,42 +22417,42 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* ✅ NOVO: Modal de Vendas Abertas */}
+      {/* ✅ NOVO: Modal de Vendas Abertas - Tela Cheia */}
       <AnimatePresence>
         {showVendasAbertasModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={() => setShowVendasAbertasModal(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-4xl max-h-[80vh] overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
+              className="w-full h-full bg-background-card flex flex-col"
             >
-              <div className="flex items-center justify-between mb-6">
+              {/* Header compacto para tela cheia */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 bg-background-card">
                 <div className="flex items-center gap-3">
                   <FileText size={24} className="text-blue-400" />
                   <h3 className="text-xl font-semibold text-white">Vendas Abertas</h3>
                   {contadorVendasAbertas > 0 && (
-                    <span className="bg-blue-600 text-white px-2 py-1 rounded-full text-sm font-medium">
+                    <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
                       {contadorVendasAbertas}
                     </span>
                   )}
                 </div>
                 <button
                   onClick={() => setShowVendasAbertasModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
+                  className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-lg"
                 >
-                  <X size={20} />
+                  <X size={24} />
                 </button>
               </div>
 
-              <div className="overflow-y-auto max-h-[60vh]">
+              {/* Conteúdo principal com scroll */}
+              <div className="flex-1 overflow-y-auto p-6">
                 {carregandoVendasAbertas ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="text-gray-400">Carregando vendas...</div>
