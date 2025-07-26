@@ -196,6 +196,32 @@ const PDVPage: React.FC = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [searchClienteTerm, setSearchClienteTerm] = useState('');
   const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
+
+  // ✅ NOVO: Função para formatar telefone com máscara
+  const formatarTelefone = (numero: string, tipo: string) => {
+    if (!numero) return '';
+
+    // Remove todos os caracteres não numéricos
+    const numeroLimpo = numero.replace(/\D/g, '');
+
+    if (tipo === 'Celular' && numeroLimpo.length === 11) {
+      // Formato: (XX) X XXXX-XXXX
+      return numeroLimpo.replace(/(\d{2})(\d{1})(\d{4})(\d{4})/, '($1) $2 $3-$4');
+    } else if (tipo === 'Fixo' && numeroLimpo.length === 10) {
+      // Formato: (XX) XXXX-XXXX
+      return numeroLimpo.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    } else if (numeroLimpo.length === 11) {
+      // Assume celular se tem 11 dígitos
+      return numeroLimpo.replace(/(\d{2})(\d{1})(\d{4})(\d{4})/, '($1) $2 $3-$4');
+    } else if (numeroLimpo.length === 10) {
+      // Assume fixo se tem 10 dígitos
+      return numeroLimpo.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    }
+
+    // Retorna o número original se não conseguir formatar
+    return numero;
+  };
+
   const [showPagamentoModal, setShowPagamentoModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [itemParaRemover, setItemParaRemover] = useState<string | null>(null);
@@ -17176,7 +17202,7 @@ const PDVPage: React.FC = () => {
                             {cliente.telefones.map((telefone, index) => (
                               <div key={index} className="flex items-center gap-1 text-gray-400 bg-gray-800/30 px-2 py-1 rounded text-sm">
                                 <Phone size={12} />
-                                <span>{telefone.numero}</span>
+                                <span>{formatarTelefone(telefone.numero, telefone.tipo)}</span>
                                 {telefone.whatsapp && (
                                   <span className="text-green-400 text-xs">WhatsApp</span>
                                 )}
@@ -17186,7 +17212,7 @@ const PDVPage: React.FC = () => {
                         ) : cliente.telefone && (
                           <div className="flex items-center gap-1 text-gray-400">
                             <Phone size={14} />
-                            <span>{cliente.telefone}</span>
+                            <span>{formatarTelefone(cliente.telefone, cliente.telefone.replace(/\D/g, '').length === 11 ? 'Celular' : 'Fixo')}</span>
                           </div>
                         )}
 
