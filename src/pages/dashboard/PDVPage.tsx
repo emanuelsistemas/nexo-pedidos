@@ -2057,6 +2057,19 @@ const PDVPage: React.FC = () => {
     carregarVendasComandas();
   }, []); // Executa apenas uma vez ao montar
 
+  // ✅ NOVO: Polling inteligente para atualizar contadores de mesas e comandas
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Só atualizar se não estiver com modais abertos (para não interferir na UX)
+      if (!showMesasModal && !showComandasModal && !showVendasAbertasModal) {
+        carregarVendasMesas();
+        carregarVendasComandas();
+      }
+    }, 5000); // 5 segundos - mesmo intervalo do cardápio
+
+    return () => clearInterval(interval);
+  }, [showMesasModal, showComandasModal, showVendasAbertasModal]);
+
   // Estado para captura automática de código de barras
   const [codigoBarrasBuffer, setCodigoBarrasBuffer] = useState('');
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
@@ -9784,6 +9797,35 @@ const PDVPage: React.FC = () => {
       // Limpar vendedor selecionado
       setVendedorSelecionado(null);
 
+      // ✅ NOVO: Limpar TODOS os estados dos modais para nova venda
+      setNomeCliente('');
+      setComandaNumero('');
+      setMesaNumero('');
+
+      // Limpar estados temporários dos modais
+      setNomeClienteTemp('');
+      setComandaNumeroTemp('');
+      setMesaNumeroTemp('');
+
+      // Limpar produtos aguardando modais
+      setProdutoAguardandoNomeCliente(null);
+      setQuantidadeAguardandoNomeCliente(1);
+      setVendaSemProdutoAguardandoNomeCliente(null);
+      setProdutoAguardandoComandaMesa(null);
+      setQuantidadeAguardandoComandaMesa(1);
+      setVendaSemProdutoAguardandoComandaMesa(null);
+
+      // Limpar estados do modal de vendedor
+      setProdutoAguardandoVendedor(null);
+      setQuantidadeAguardandoVendedor(1);
+      setVendaSemProdutoAguardando(null);
+      setAguardandoSelecaoVendedor(false);
+
+      // Limpar estados do modal de quantidade
+      setProdutoParaQuantidade(null);
+      setQuantidadeModal(1);
+      setQuantidadeModalInput('1');
+
       // Limpar pedidos importados
       setPedidosImportados([]);
 
@@ -9826,6 +9868,20 @@ const PDVPage: React.FC = () => {
 
       console.log('✅ Venda salva e PDV limpo:', numeroVendaSalva);
       toast.success(`Venda ${numeroVendaSalva} salva com sucesso! PDV limpo para nova venda.`);
+
+      // ✅ NOVO: Atualizar contadores imediatamente após salvar
+      console.log('🔄 Atualizando contadores após salvar venda...');
+      try {
+        await Promise.all([
+          carregarVendasMesas(),
+          carregarVendasComandas(),
+          carregarVendasAbertas()
+        ]);
+        console.log('✅ Contadores atualizados com sucesso');
+      } catch (error) {
+        console.error('❌ Erro ao atualizar contadores:', error);
+        // Não interromper o fluxo por erro na atualização dos contadores
+      }
 
       return true;
 
@@ -10486,9 +10542,24 @@ const PDVPage: React.FC = () => {
         setObservacaoVenda(venda.observacao_venda);
       }
 
-      // Fechar modal e atualizar contador
+      // Fechar modais e atualizar contadores
       setShowVendasAbertasModal(false);
-      await carregarVendasAbertas(); // Atualizar lista
+      setShowMesasModal(false);
+      setShowComandasModal(false);
+
+      // ✅ NOVO: Atualizar todos os contadores após recuperar venda
+      console.log('🔄 Atualizando contadores após recuperar venda...');
+      try {
+        await Promise.all([
+          carregarVendasAbertas(),
+          carregarVendasMesas(),
+          carregarVendasComandas()
+        ]);
+        console.log('✅ Contadores atualizados com sucesso');
+      } catch (error) {
+        console.error('❌ Erro ao atualizar contadores:', error);
+        // Não interromper o fluxo por erro na atualização dos contadores
+      }
 
       toast.success(`Venda ${venda.numero_venda} recuperada com sucesso!`);
       console.log('✅ Venda recuperada:', venda.numero_venda);
