@@ -348,6 +348,8 @@ const ProdutosPage: React.FC = () => {
     promocao_data_cardapio: false,
     // Campo para matéria-prima
     materia_prima: false,
+    // Campo para produção
+    producao: false,
     // Campo para insumos
     insumos: [],
   });
@@ -2759,6 +2761,8 @@ const ProdutosPage: React.FC = () => {
       promocao_data_cardapio: (produto as any).promocao_data_cardapio || false,
       // Campo para matéria-prima
       materia_prima: produto.materia_prima || false,
+      // Campo para produção
+      producao: produto.producao || false,
       // Campo para insumos
       insumos: produto.insumos || [],
     };
@@ -3856,6 +3860,8 @@ const ProdutosPage: React.FC = () => {
           promocao_data_cardapio: novoProduto.promocao_data_cardapio || false,
           // ✅ NOVO CAMPO: Matéria prima
           materia_prima: novoProduto.materia_prima || false,
+          // ✅ NOVO CAMPO: Produção
+          producao: novoProduto.producao || false,
           // ✅ NOVO CAMPO: Insumos
           insumos: novoProduto.insumos || [],
           empresa_id: usuarioData.empresa_id
@@ -3919,6 +3925,8 @@ const ProdutosPage: React.FC = () => {
           ordenacao_cardapio_digital: produtoOrdenacaoCardapioHabilitada ? Number(produtoOrdenacaoCardapioDigital) : null,
           // ✅ NOVO CAMPO: Matéria prima
           materia_prima: novoProduto.materia_prima || false,
+          // ✅ NOVO CAMPO: Produção
+          producao: novoProduto.producao || false,
           // ✅ NOVO CAMPO: Insumos
           insumos: novoProduto.insumos || [],
         };
@@ -4186,8 +4194,9 @@ const ProdutosPage: React.FC = () => {
         cardapio_digital: produtoOriginal.cardapio_digital || false,
         exibir_promocao_cardapio: produtoOriginal.exibir_promocao_cardapio || false,
         controla_estoque_cardapio: produtoOriginal.controla_estoque_cardapio || false,
-        // ✅ NOVOS CAMPOS: Matéria prima e insumos
+        // ✅ NOVOS CAMPOS: Matéria prima, produção e insumos
         materia_prima: produtoOriginal.materia_prima || false,
+        producao: produtoOriginal.producao || false,
         insumos: produtoOriginal.insumos || [],
         // Campos obrigatórios
         grupo_id: grupo.id,
@@ -7628,6 +7637,30 @@ const ProdutosPage: React.FC = () => {
                           </div>
                           <p className="text-sm text-gray-400 mt-2 ml-6">
                             📦 Marque esta opção se este produto pode ser usado como insumo/matéria-prima para outros produtos
+                          </p>
+                        </div>
+
+                        {/* Campo Produção */}
+                        <div className="mb-6 border border-gray-700 rounded-lg p-4 bg-gray-800/30">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="producao"
+                              checked={novoProduto.producao}
+                              onChange={(e) => {
+                                setNovoProduto(prev => ({
+                                  ...prev,
+                                  producao: e.target.checked
+                                }));
+                              }}
+                              className="mr-3 rounded border-gray-700 text-primary-500 focus:ring-primary-500/20"
+                            />
+                            <label htmlFor="producao" className="text-sm font-medium text-white cursor-pointer">
+                              Produção
+                            </label>
+                          </div>
+                          <p className="text-sm text-gray-400 mt-2 ml-6">
+                            🖨️ Marque esta opção se este produto deve aparecer na impressão de funções que tenham impressão para produção deste item selecionado
                           </p>
                         </div>
 
