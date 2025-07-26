@@ -6661,7 +6661,7 @@ const PDVPage: React.FC = () => {
 
 
   // ✅ NOVO: Funções para modal de Nome do Cliente (PRIMEIRA PRIORIDADE)
-  const confirmarNomeCliente = () => {
+  const confirmarNomeCliente = async () => {
     const nome = nomeClienteTemp.trim();
 
     // Validar se o nome foi preenchido
@@ -6672,6 +6672,22 @@ const PDVPage: React.FC = () => {
 
     // ✅ Atualizar estado real com valor temporário
     setNomeCliente(nome);
+
+    // ✅ NOVO: Atualizar venda em andamento se existir
+    if (vendaEmAndamento) {
+      try {
+        const { error } = await supabase
+          .from('pdv')
+          .update({ nome_cliente: nome })
+          .eq('id', vendaEmAndamento.id);
+
+        if (error) {
+          console.error('Erro ao atualizar nome do cliente na venda:', error);
+        }
+      } catch (error) {
+        console.error('Erro ao atualizar nome do cliente:', error);
+      }
+    }
 
     // Fechar modal
     setShowNomeClienteModal(false);
@@ -6758,6 +6774,23 @@ const PDVPage: React.FC = () => {
     // ✅ Atualizar estado real com valor temporário
     setComandaNumero(numero);
 
+    // ✅ NOVO: Atualizar venda em andamento se existir
+    if (vendaEmAndamento) {
+      try {
+        supabase
+          .from('pdv')
+          .update({ comanda_numero: numero })
+          .eq('id', vendaEmAndamento.id)
+          .then(({ error }) => {
+            if (error) {
+              console.error('Erro ao atualizar comanda na venda:', error);
+            }
+          });
+      } catch (error) {
+        console.error('Erro ao atualizar comanda:', error);
+      }
+    }
+
     // Fechar modal
     setShowComandaModal(false);
 
@@ -6806,6 +6839,23 @@ const PDVPage: React.FC = () => {
 
     // ✅ Atualizar estado real com valor temporário
     setMesaNumero(numero);
+
+    // ✅ NOVO: Atualizar venda em andamento se existir
+    if (vendaEmAndamento) {
+      try {
+        supabase
+          .from('pdv')
+          .update({ mesa_numero: numero })
+          .eq('id', vendaEmAndamento.id)
+          .then(({ error }) => {
+            if (error) {
+              console.error('Erro ao atualizar mesa na venda:', error);
+            }
+          });
+      } catch (error) {
+        console.error('Erro ao atualizar mesa:', error);
+      }
+    }
 
     // Fechar modal
     setShowMesaModal(false);
@@ -9209,6 +9259,10 @@ const PDVPage: React.FC = () => {
         valor_desconto_itens: 0,
         valor_desconto_total: 0,
         observacao_venda: observacaoVenda || null, // ✅ NOVO: Incluir observação da venda
+        // ✅ NOVO: Incluir informações de nome do cliente, mesa e comanda
+        nome_cliente: nomeCliente || null,
+        mesa_numero: mesaNumero || null,
+        comanda_numero: comandaNumero || null,
         // ✅ Reservar numeração NFC-e desde o início
         numero_documento: numeroNfceReservado,
         serie_documento: serieUsuario,
@@ -10268,6 +10322,10 @@ const PDVPage: React.FC = () => {
         desconto_prazo_id: descontoPrazoSelecionado,
         pedidos_importados: pedidosImportados.length > 0 ? pedidosImportados.map(p => p.id) : null,
         observacao_venda: observacaoVenda || null, // ✅ NOVO: Incluir observação da venda
+        // ✅ NOVO: Incluir informações de nome do cliente, mesa e comanda
+        nome_cliente: nomeCliente || null,
+        mesa_numero: mesaNumero || null,
+        comanda_numero: comandaNumero || null,
         finalizada_em: new Date().toISOString(),
         // ✅ NOVO: Marcar tentativa de NFC-e e salvar número reservado
         tentativa_nfce: tipoFinalizacao.startsWith('nfce_'),
