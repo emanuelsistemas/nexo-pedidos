@@ -664,6 +664,130 @@ const PDVPage: React.FC = () => {
   const [showMesaModal, setShowMesaModal] = useState(false);
   const [comandaNumero, setComandaNumero] = useState('');
   const [mesaNumero, setMesaNumero] = useState('');
+
+  // ✅ NOVO: Estados temporários para edição (para não perder valor ao cancelar)
+  const [nomeClienteTemp, setNomeClienteTemp] = useState('');
+  const [comandaNumeroTemp, setComandaNumeroTemp] = useState('');
+  const [mesaNumeroTemp, setMesaNumeroTemp] = useState('');
+
+  // ✅ NOVO: Efeito para desabilitar interação com fundo quando modais estão abertos
+  useEffect(() => {
+    const anyModalOpen = showNomeClienteModal || showComandaModal || showMesaModal;
+
+    if (anyModalOpen) {
+      // Desabilitar scroll e interação com o fundo
+      document.body.style.overflow = 'hidden';
+      document.body.style.pointerEvents = 'none';
+
+      // ✅ NOVO: Remover foco de qualquer elemento ativo (campo de busca)
+      if (document.activeElement && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    } else {
+      // Restaurar scroll e interação
+      document.body.style.overflow = '';
+      document.body.style.pointerEvents = '';
+    }
+
+    // Cleanup ao desmontar componente
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.pointerEvents = '';
+    };
+  }, [showNomeClienteModal, showComandaModal, showMesaModal]);
+
+  // ✅ NOVO: Efeito para focar no campo do modal quando abre
+  useEffect(() => {
+    if (showNomeClienteModal) {
+      // ✅ GARANTIR: Inicializar estado temporário apenas uma vez quando modal abre
+      if (nomeClienteTemp === '' && nomeCliente !== '') {
+        setNomeClienteTemp(nomeCliente);
+      }
+
+      // Aguardar um tick para garantir que o modal foi renderizado
+      setTimeout(() => {
+        const input = document.querySelector('input[placeholder="Digite o nome do cliente"]') as HTMLInputElement;
+        if (input) {
+          input.focus();
+          input.select(); // Selecionar texto se houver
+        }
+      }, 100);
+    }
+  }, [showNomeClienteModal]); // ✅ REMOVIDO: nomeCliente, nomeClienteTemp das dependências
+
+  useEffect(() => {
+    if (showComandaModal) {
+      // ✅ GARANTIR: Inicializar estado temporário apenas uma vez quando modal abre
+      if (comandaNumeroTemp === '' && comandaNumero !== '') {
+        setComandaNumeroTemp(comandaNumero);
+      }
+
+      setTimeout(() => {
+        const input = document.querySelector('input[type="number"]') as HTMLInputElement;
+        if (input && input.placeholder.includes('a')) {
+          input.focus();
+          input.select();
+        }
+      }, 100);
+    }
+  }, [showComandaModal]); // ✅ REMOVIDO: comandaNumero, comandaNumeroTemp das dependências
+
+  useEffect(() => {
+    if (showMesaModal) {
+      // ✅ GARANTIR: Inicializar estado temporário apenas uma vez quando modal abre
+      if (mesaNumeroTemp === '' && mesaNumero !== '') {
+        setMesaNumeroTemp(mesaNumero);
+      }
+
+      setTimeout(() => {
+        const inputs = document.querySelectorAll('input[type="number"]') as NodeListOf<HTMLInputElement>;
+        // Pegar o último input number (que seria o da mesa)
+        const mesaInput = Array.from(inputs).find(input => input.placeholder.includes('a') && input.min);
+        if (mesaInput) {
+          mesaInput.focus();
+          mesaInput.select();
+        }
+      }, 100);
+    }
+  }, [showMesaModal]); // ✅ REMOVIDO: mesaNumero, mesaNumeroTemp das dependências
+
+  // ✅ NOVO: Efeito para focar no campo do modal quando abre
+  useEffect(() => {
+    if (showNomeClienteModal) {
+      // Aguardar um tick para garantir que o modal foi renderizado
+      setTimeout(() => {
+        const input = document.querySelector('input[placeholder="Digite o nome do cliente"]') as HTMLInputElement;
+        if (input) {
+          input.focus();
+          input.select(); // Selecionar texto se houver
+        }
+      }, 100);
+    }
+  }, [showNomeClienteModal]);
+
+  useEffect(() => {
+    if (showComandaModal) {
+      setTimeout(() => {
+        const input = document.querySelector('input[type="number"][placeholder*="a"]') as HTMLInputElement;
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }, 100);
+    }
+  }, [showComandaModal]);
+
+  useEffect(() => {
+    if (showMesaModal) {
+      setTimeout(() => {
+        const input = document.querySelector('input[type="number"][min]') as HTMLInputElement;
+        if (input && input.placeholder.includes('a')) {
+          input.focus();
+          input.select();
+        }
+      }, 100);
+    }
+  }, [showMesaModal]);
   const [produtoAguardandoComandaMesa, setProdutoAguardandoComandaMesa] = useState<Produto | null>(null);
   const [quantidadeAguardandoComandaMesa, setQuantidadeAguardandoComandaMesa] = useState<number>(1);
   const [vendaSemProdutoAguardandoComandaMesa, setVendaSemProdutoAguardandoComandaMesa] = useState<{nome: string, preco: number} | null>(null);
@@ -6525,13 +6649,16 @@ const PDVPage: React.FC = () => {
 
   // ✅ NOVO: Funções para modal de Nome do Cliente (PRIMEIRA PRIORIDADE)
   const confirmarNomeCliente = () => {
-    const nome = nomeCliente.trim();
+    const nome = nomeClienteTemp.trim();
 
     // Validar se o nome foi preenchido
     if (!nome) {
       showMessage('error', 'Por favor, informe o nome do cliente');
       return;
     }
+
+    // ✅ Atualizar estado real com valor temporário
+    setNomeCliente(nome);
 
     // Fechar modal
     setShowNomeClienteModal(false);
@@ -6588,15 +6715,20 @@ const PDVPage: React.FC = () => {
 
   const cancelarNomeCliente = () => {
     setShowNomeClienteModal(false);
-    setNomeCliente('');
-    setProdutoAguardandoNomeCliente(null);
-    setQuantidadeAguardandoNomeCliente(1);
-    setVendaSemProdutoAguardandoNomeCliente(null);
+
+    // ✅ VERIFICAR: Se há produto aguardando (fluxo inicial), limpar tudo
+    if (produtoAguardandoNomeCliente || vendaSemProdutoAguardandoNomeCliente) {
+      setNomeCliente('');
+      setProdutoAguardandoNomeCliente(null);
+      setQuantidadeAguardandoNomeCliente(1);
+      setVendaSemProdutoAguardandoNomeCliente(null);
+    }
+    // Se não há produto aguardando, é apenas edição - manter valor original
   };
 
   // ✅ NOVO: Funções para modais de Comanda e Mesa
   const confirmarComanda = () => {
-    const numero = comandaNumero.trim();
+    const numero = comandaNumeroTemp.trim();
 
     // Validar se é um número inteiro
     if (!/^\d+$/.test(numero)) {
@@ -6609,6 +6741,9 @@ const PDVPage: React.FC = () => {
       showMessage('error', `Comanda ${numero} não existe. Range válido: ${rangesConfig.comandas.inicio} a ${rangesConfig.comandas.fim}`);
       return;
     }
+
+    // ✅ Atualizar estado real com valor temporário
+    setComandaNumero(numero);
 
     // Fechar modal
     setShowComandaModal(false);
@@ -6642,7 +6777,7 @@ const PDVPage: React.FC = () => {
   };
 
   const confirmarMesa = () => {
-    const numero = mesaNumero.trim();
+    const numero = mesaNumeroTemp.trim();
 
     // Validar se é um número inteiro
     if (!/^\d+$/.test(numero)) {
@@ -6655,6 +6790,9 @@ const PDVPage: React.FC = () => {
       showMessage('error', `Mesa ${numero} não existe. Range válido: ${rangesConfig.mesas.inicio} a ${rangesConfig.mesas.fim}`);
       return;
     }
+
+    // ✅ Atualizar estado real com valor temporário
+    setMesaNumero(numero);
 
     // Fechar modal
     setShowMesaModal(false);
@@ -6675,18 +6813,28 @@ const PDVPage: React.FC = () => {
 
   const cancelarComanda = () => {
     setShowComandaModal(false);
-    setComandaNumero('');
-    setProdutoAguardandoComandaMesa(null);
-    setQuantidadeAguardandoComandaMesa(1);
-    setVendaSemProdutoAguardandoComandaMesa(null);
+
+    // ✅ VERIFICAR: Se há produto aguardando (fluxo inicial), limpar tudo
+    if (produtoAguardandoComandaMesa || vendaSemProdutoAguardandoComandaMesa) {
+      setComandaNumero('');
+      setProdutoAguardandoComandaMesa(null);
+      setQuantidadeAguardandoComandaMesa(1);
+      setVendaSemProdutoAguardandoComandaMesa(null);
+    }
+    // Se não há produto aguardando, é apenas edição - manter valor original
   };
 
   const cancelarMesa = () => {
     setShowMesaModal(false);
-    setMesaNumero('');
-    setProdutoAguardandoComandaMesa(null);
-    setQuantidadeAguardandoComandaMesa(1);
-    setVendaSemProdutoAguardandoComandaMesa(null);
+
+    // ✅ VERIFICAR: Se há produto aguardando (fluxo inicial), limpar tudo
+    if (produtoAguardandoComandaMesa || vendaSemProdutoAguardandoComandaMesa) {
+      setMesaNumero('');
+      setProdutoAguardandoComandaMesa(null);
+      setQuantidadeAguardandoComandaMesa(1);
+      setVendaSemProdutoAguardandoComandaMesa(null);
+    }
+    // Se não há produto aguardando, é apenas edição - manter valor original
   };
 
   // ✅ NOVO: Funções para modal de quantidade
@@ -14741,7 +14889,8 @@ const PDVPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => {
-                          // Abrir modal personalizado para editar nome
+                          // ✅ Inicializar estado temporário com valor atual
+                          setNomeClienteTemp(nomeCliente);
                           setShowNomeClienteModal(true);
                         }}
                         className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
@@ -14790,7 +14939,8 @@ const PDVPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => {
-                          // Abrir modal personalizado para editar comanda
+                          // ✅ Inicializar estado temporário com valor atual
+                          setComandaNumeroTemp(comandaNumero);
                           setShowComandaModal(true);
                         }}
                         className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
@@ -14816,7 +14966,8 @@ const PDVPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => {
-                          // Abrir modal personalizado para editar mesa
+                          // ✅ Inicializar estado temporário com valor atual
+                          setMesaNumeroTemp(mesaNumero);
                           setShowMesaModal(true);
                         }}
                         className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
@@ -21392,6 +21543,14 @@ const PDVPage: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            style={{ pointerEvents: 'auto' }}
+            onMouseDown={(e) => {
+              // Bloquear cliques no fundo
+              if (e.target === e.currentTarget) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -21410,8 +21569,8 @@ const PDVPage: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={nomeCliente}
-                    onChange={(e) => setNomeCliente(e.target.value)}
+                    value={nomeClienteTemp}
+                    onChange={(e) => setNomeClienteTemp(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         confirmarNomeCliente();
@@ -21458,6 +21617,14 @@ const PDVPage: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            style={{ pointerEvents: 'auto' }}
+            onMouseDown={(e) => {
+              // Bloquear cliques no fundo
+              if (e.target === e.currentTarget) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -21476,8 +21643,8 @@ const PDVPage: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={comandaNumero}
-                    onChange={(e) => setComandaNumero(e.target.value)}
+                    value={comandaNumeroTemp}
+                    onChange={(e) => setComandaNumeroTemp(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         confirmarComanda();
@@ -21525,6 +21692,14 @@ const PDVPage: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            style={{ pointerEvents: 'auto' }}
+            onMouseDown={(e) => {
+              // Bloquear cliques no fundo
+              if (e.target === e.currentTarget) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -21543,8 +21718,8 @@ const PDVPage: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={mesaNumero}
-                    onChange={(e) => setMesaNumero(e.target.value)}
+                    value={mesaNumeroTemp}
+                    onChange={(e) => setMesaNumeroTemp(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         confirmarMesa();
