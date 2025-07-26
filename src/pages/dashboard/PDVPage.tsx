@@ -1780,7 +1780,7 @@ const PDVPage: React.FC = () => {
     },
     {
       id: 'delivery-local',
-      icon: Truck,
+      icon: Bike,
       label: 'Delivery Local',
       color: 'orange',
       count: contadorVendasDelivery,
@@ -19074,7 +19074,7 @@ const PDVPage: React.FC = () => {
               <div className="border-b border-gray-700 bg-background-card">
                 <div className="flex items-center justify-between px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <Truck size={24} className="text-orange-400" />
+                    <Bike size={24} className="text-orange-400" />
                     <h3 className="text-xl font-semibold text-white">Delivery Local</h3>
                     {contadorVendasDelivery > 0 && (
                       <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-medium">
@@ -19219,7 +19219,7 @@ const PDVPage: React.FC = () => {
                       if (vendasFiltradas.length === 0) {
                         return (
                           <div className="text-center py-12">
-                            <Truck size={48} className="mx-auto mb-4 text-gray-500" />
+                            <Bike size={48} className="mx-auto mb-4 text-gray-500" />
                             <p className="text-gray-400 text-lg">
                               {vendasDelivery.length === 0 ? 'Nenhum delivery encontrado' : 'Nenhum delivery corresponde aos filtros'}
                             </p>
@@ -19242,7 +19242,7 @@ const PDVPage: React.FC = () => {
                             >
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
-                                  <Truck size={16} className="text-orange-400" />
+                                  <Bike size={16} className="text-orange-400" />
                                   <span className="font-medium text-white">#{venda.numero_venda}</span>
                                 </div>
                                 <span className="text-xs text-gray-400">
@@ -19285,7 +19285,7 @@ const PDVPage: React.FC = () => {
 
                               <div className="mt-3 pt-3 border-t border-gray-700">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-xs text-orange-400 font-medium">🚚 DELIVERY LOCAL</span>
+                                  <span className="text-xs text-orange-400 font-medium">🚴 DELIVERY LOCAL</span>
                                   <span className="text-xs text-gray-500">Clique para recuperar</span>
                                 </div>
                               </div>
