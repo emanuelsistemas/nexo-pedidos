@@ -15,6 +15,7 @@ import {
   User,
   Package,
   Grid3X3,
+  Utensils,
   Filter,
   X,
   ChevronLeft,
@@ -6535,15 +6536,54 @@ const PDVPage: React.FC = () => {
     // Fechar modal
     setShowNomeClienteModal(false);
 
-    // Continuar fluxo - chamar adicionarAoCarrinho novamente (mesmo padrão do modal de quantidade)
+    // ✅ VERIFICAR: Se há produto aguardando (fluxo inicial) ou se é apenas edição
     if (produtoAguardandoNomeCliente) {
+      // ✅ VERIFICAR: Se há próximos modais obrigatórios
+      if (pdvConfig?.comandas && !comandaNumero) {
+        // Transferir dados para comanda
+        setProdutoAguardandoComandaMesa(produtoAguardandoNomeCliente);
+        setQuantidadeAguardandoComandaMesa(quantidadeAguardandoNomeCliente);
+        setProdutoAguardandoNomeCliente(null);
+        setQuantidadeAguardandoNomeCliente(1);
+        setShowComandaModal(true);
+        return;
+      }
+
+      if (pdvConfig?.mesas && !mesaNumero) {
+        // Transferir dados para mesa
+        setProdutoAguardandoComandaMesa(produtoAguardandoNomeCliente);
+        setQuantidadeAguardandoComandaMesa(quantidadeAguardandoNomeCliente);
+        setProdutoAguardandoNomeCliente(null);
+        setQuantidadeAguardandoNomeCliente(1);
+        setShowMesaModal(true);
+        return;
+      }
+
+      // Se não há mais modais obrigatórios, continuar fluxo normal
       adicionarAoCarrinho(produtoAguardandoNomeCliente, quantidadeAguardandoNomeCliente);
       setProdutoAguardandoNomeCliente(null);
       setQuantidadeAguardandoNomeCliente(1);
     } else if (vendaSemProdutoAguardandoNomeCliente) {
+      // ✅ VERIFICAR: Se há próximos modais obrigatórios para venda sem produto
+      if (pdvConfig?.comandas && !comandaNumero) {
+        setVendaSemProdutoAguardandoComandaMesa(vendaSemProdutoAguardandoNomeCliente);
+        setVendaSemProdutoAguardandoNomeCliente(null);
+        setShowComandaModal(true);
+        return;
+      }
+
+      if (pdvConfig?.mesas && !mesaNumero) {
+        setVendaSemProdutoAguardandoComandaMesa(vendaSemProdutoAguardandoNomeCliente);
+        setVendaSemProdutoAguardandoNomeCliente(null);
+        setShowMesaModal(true);
+        return;
+      }
+
+      // Se não há mais modais obrigatórios, continuar fluxo normal
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoNomeCliente.nome, vendaSemProdutoAguardandoNomeCliente.preco);
       setVendaSemProdutoAguardandoNomeCliente(null);
     }
+    // Se não há produto aguardando, é apenas edição - nome já foi atualizado no estado
   };
 
   const cancelarNomeCliente = () => {
@@ -6573,15 +6613,32 @@ const PDVPage: React.FC = () => {
     // Fechar modal
     setShowComandaModal(false);
 
-    // Continuar fluxo - chamar adicionarAoCarrinho novamente (mesmo padrão do modal de quantidade)
+    // ✅ VERIFICAR: Se há produto aguardando (fluxo inicial) ou se é apenas edição
     if (produtoAguardandoComandaMesa) {
+      // ✅ VERIFICAR: Se há próximo modal obrigatório (mesa)
+      if (pdvConfig?.mesas && !mesaNumero) {
+        // Continuar para mesa - dados já estão em produtoAguardandoComandaMesa
+        setShowMesaModal(true);
+        return;
+      }
+
+      // Se não há mais modais obrigatórios, continuar fluxo normal
       adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
       setProdutoAguardandoComandaMesa(null);
       setQuantidadeAguardandoComandaMesa(1);
     } else if (vendaSemProdutoAguardandoComandaMesa) {
+      // ✅ VERIFICAR: Se há próximo modal obrigatório (mesa) para venda sem produto
+      if (pdvConfig?.mesas && !mesaNumero) {
+        // Continuar para mesa - dados já estão em vendaSemProdutoAguardandoComandaMesa
+        setShowMesaModal(true);
+        return;
+      }
+
+      // Se não há mais modais obrigatórios, continuar fluxo normal
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoComandaMesa.nome, vendaSemProdutoAguardandoComandaMesa.preco);
       setVendaSemProdutoAguardandoComandaMesa(null);
     }
+    // Se não há produto aguardando, é apenas edição - número já foi atualizado no estado
   };
 
   const confirmarMesa = () => {
@@ -6602,15 +6659,18 @@ const PDVPage: React.FC = () => {
     // Fechar modal
     setShowMesaModal(false);
 
-    // Continuar fluxo - chamar adicionarAoCarrinho novamente (mesmo padrão do modal de quantidade)
+    // ✅ VERIFICAR: Se há produto aguardando (fluxo inicial) ou se é apenas edição
     if (produtoAguardandoComandaMesa) {
+      // Fluxo inicial - continuar com adição do produto
       adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
       setProdutoAguardandoComandaMesa(null);
       setQuantidadeAguardandoComandaMesa(1);
     } else if (vendaSemProdutoAguardandoComandaMesa) {
+      // Fluxo inicial - continuar com venda sem produto
       adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoComandaMesa.nome, vendaSemProdutoAguardandoComandaMesa.preco);
       setVendaSemProdutoAguardandoComandaMesa(null);
     }
+    // Se não há produto aguardando, é apenas edição - número já foi atualizado no estado
   };
 
   const cancelarComanda = () => {
@@ -14681,10 +14741,8 @@ const PDVPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => {
-                          const novoNome = prompt('Digite o nome do cliente:', nomeCliente);
-                          if (novoNome !== null) {
-                            setNomeCliente(novoNome.trim());
-                          }
+                          // Abrir modal personalizado para editar nome
+                          setShowNomeClienteModal(true);
                         }}
                         className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                       >
@@ -14732,19 +14790,8 @@ const PDVPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => {
-                          const novoNumero = prompt('Digite o número da comanda:', comandaNumero);
-                          if (novoNumero !== null) {
-                            const numero = novoNumero.trim();
-                            if (!/^\d+$/.test(numero)) {
-                              alert('Digite apenas números inteiros para a comanda');
-                              return;
-                            }
-                            if (!validarComanda(numero)) {
-                              alert(`Comanda ${numero} não existe. Range válido: ${rangesConfig.comandas.inicio} a ${rangesConfig.comandas.fim}`);
-                              return;
-                            }
-                            setComandaNumero(numero);
-                          }
+                          // Abrir modal personalizado para editar comanda
+                          setShowComandaModal(true);
                         }}
                         className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
                       >
@@ -14760,7 +14807,7 @@ const PDVPage: React.FC = () => {
                 <div className="bg-purple-500/10 border border-purple-500/30 rounded p-2">
                   <div className="space-y-1">
                     <div className="flex items-center gap-1">
-                      <Grid3X3 size={12} className="text-purple-400" />
+                      <Utensils size={12} className="text-purple-400" />
                       <div className="text-xs text-purple-400 font-medium">Mesa</div>
                     </div>
                     <div className="flex items-center justify-between">
@@ -14769,19 +14816,8 @@ const PDVPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => {
-                          const novoNumero = prompt('Digite o número da mesa:', mesaNumero);
-                          if (novoNumero !== null) {
-                            const numero = novoNumero.trim();
-                            if (!/^\d+$/.test(numero)) {
-                              alert('Digite apenas números inteiros para a mesa');
-                              return;
-                            }
-                            if (!validarMesa(numero)) {
-                              alert(`Mesa ${numero} não existe. Range válido: ${rangesConfig.mesas.inicio} a ${rangesConfig.mesas.fim}`);
-                              return;
-                            }
-                            setMesaNumero(numero);
-                          }
+                          // Abrir modal personalizado para editar mesa
+                          setShowMesaModal(true);
                         }}
                         className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
                       >
