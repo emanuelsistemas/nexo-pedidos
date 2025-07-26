@@ -9868,6 +9868,8 @@ const PDVPage: React.FC = () => {
           created_at,
           updated_at,
           nome_cliente,
+          mesa_numero,
+          comanda_numero,
           observacao_venda
         `)
         .eq('empresa_id', usuarioData.empresa_id)
@@ -22489,6 +22491,12 @@ const PDVPage: React.FC = () => {
                               {venda.nome_cliente && (
                                 <div>
                                   <span className="text-gray-400">Cliente:</span> {venda.nome_cliente}
+                                  {venda.mesa_numero && (
+                                    <span className="text-blue-400 ml-2">Mesa: {venda.mesa_numero}</span>
+                                  )}
+                                  {venda.comanda_numero && (
+                                    <span className="text-green-400 ml-2">Comanda: {venda.comanda_numero}</span>
+                                  )}
                                 </div>
                               )}
                             </div>
