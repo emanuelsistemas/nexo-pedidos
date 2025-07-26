@@ -334,3 +334,254 @@ const finalizarVendaCompleta = async (tipoFinalizacao: string = 'finalizar_sem_i
 
     const vendaId = vendaInserida.id;
     setVendaProcessadaId(vendaId);
+
+    // ✅ CORREÇÃO: Buscar configurações PDV para venda sem produto
+    let configVendaSemProduto = null;
+    if (carrinho.some(item => item.produto.codigo === '999999')) {
+      const { data: pdvConfigData } = await supabase
+        .from('pdv_config')
+        .select(`
+          venda_sem_produto_ncm,
+          venda_sem_produto_cfop,
+          venda_sem_produto_origem,
+          venda_sem_produto_situacao_tributaria,
+          venda_sem_produto_cest,
+          venda_sem_produto_margem_st,
+          venda_sem_produto_aliquota_icms,
+          venda_sem_produto_aliquota_pis,
+          venda_sem_produto_aliquota_cofins,
+          venda_sem_produto_peso_liquido,
+          venda_sem_produto_cst,
+          venda_sem_produto_csosn
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .single();
+
+      configVendaSemProduto = pdvConfigData;
+    }
+
+    // Preparar itens para inserção
+    setEtapaProcessamento('Preparando itens da venda...');
+
+    // ✅ CORREÇÃO: Filtrar apenas itens que ainda não foram salvos (sem pdv_item_id)
+    console.log('🔍 [FILTRO DEBUG] ===== ANALISANDO FILTRO DE ITENS =====');
+    console.log('🔍 [FILTRO DEBUG] carrinho.length:', carrinho.length);
+
+    carrinho.forEach((item, index) => {
+      console.log(`🔍 [FILTRO DEBUG] Item ${index + 1}: ${item.produto.nome} (Código: ${item.produto.codigo})`);
+      console.log(`🔍 [FILTRO DEBUG] item.pdv_item_id:`, item.pdv_item_id);
+      console.log(`🔍 [FILTRO DEBUG] !item.pdv_item_id:`, !item.pdv_item_id);
+      console.log(`🔍 [FILTRO DEBUG] Será incluído em itensNaoSalvos:`, !item.pdv_item_id);
+    });
+
+    const itensNaoSalvos = carrinho.filter(item => !item.pdv_item_id);
+    const itensJaSalvos = carrinho.filter(item => item.pdv_item_id);
+
+    console.log('🔍 [FILTRO DEBUG] itensNaoSalvos.length:', itensNaoSalvos.length);
+    console.log('🔍 [FILTRO DEBUG] itensJaSalvos.length:', itensJaSalvos.length);
+    console.log('🔍 [FILTRO DEBUG] itensNaoSalvos:', itensNaoSalvos.map(item => `${item.produto.nome} (${item.produto.codigo})`));
+    console.log('🔍 [FILTRO DEBUG] itensJaSalvos:', itensJaSalvos.map(item => `${item.produto.nome} (${item.produto.codigo})`));
+
+    const itensParaInserir = itensNaoSalvos.map(item => {
+      const precoUnitario = item.desconto ? item.desconto.precoComDesconto : (item.subtotal / item.quantidade);
+
+      // ✅ CORREÇÃO: Para venda sem produto, produto_id deve ser null
+      const produtoId = item.vendaSemProduto ? null : item.produto.id;
+
+      // ✅ CORREÇÃO: Dados fiscais - usar configuração PDV para produto 999999
+      let dadosFiscais = {};
+      if (item.produto.codigo === '999999' && configVendaSemProduto) {
+        // Aplicar dados fiscais da configuração PDV
+        const situacaoTributaria = configVendaSemProduto.venda_sem_produto_situacao_tributaria;
+        const cstIcms = configVendaSemProduto.venda_sem_produto_cst;
+        const csosnIcms = configVendaSemProduto.venda_sem_produto_csosn;
+
+        dadosFiscais = {
+          // ✅ SEM FALLBACK: Usar dados diretos da configuração PDV
+          ncm: configVendaSemProduto.venda_sem_produto_ncm,
+          cfop: configVendaSemProduto.venda_sem_produto_cfop,
+          origem_produto: configVendaSemProduto.venda_sem_produto_origem,
+          cst_icms: configVendaSemProduto.venda_sem_produto_cst,
+          csosn_icms: configVendaSemProduto.venda_sem_produto_csosn,
+          cest: configVendaSemProduto.venda_sem_produto_cest,
+          margem_st: configVendaSemProduto.venda_sem_produto_margem_st,
+          aliquota_icms: configVendaSemProduto.venda_sem_produto_aliquota_icms,
+          aliquota_pis: configVendaSemProduto.venda_sem_produto_aliquota_pis,
+          aliquota_cofins: configVendaSemProduto.venda_sem_produto_aliquota_cofins,
+          cst_pis: configVendaSemProduto.venda_sem_produto_cst_pis,
+          cst_cofins: configVendaSemProduto.venda_sem_produto_cst_cofins
+        };
+      } else {
+        // ✅ Dados fiscais do produto normal - todos os campos da tabela pdv_itens
+        dadosFiscais = {
+          ncm: item.produto.ncm || null,
+          cfop: item.produto.cfop || null,
+          origem_produto: item.produto.origem_produto || null,
+          cst_icms: item.produto.cst_icms || null,
+          csosn_icms: item.produto.csosn_icms || null,
+          cest: item.produto.cest || null,
+          margem_st: item.produto.margem_st || null,
+          aliquota_icms: item.produto.aliquota_icms || null,
+          aliquota_pis: item.produto.aliquota_pis || null,
+          aliquota_cofins: item.produto.aliquota_cofins || null,
+          cst_pis: item.produto.cst_pis || null,
+          cst_cofins: item.produto.cst_cofins || null
+        };
+      }
+
+      return {
+        empresa_id: usuarioData.empresa_id,
+        usuario_id: userData.user.id,
+        pdv_id: vendaId,
+        produto_id: produtoId,
+        codigo_produto: item.produto.codigo,
+        nome_produto: item.produto.nome,
+        descricao_produto: item.produto.descricao,
+        quantidade: item.quantidade,
+        valor_unitario: precoUnitario,
+        valor_subtotal: item.subtotal,
+        valor_total_item: item.subtotal,
+        tem_desconto: !!item.desconto,
+        tipo_desconto: item.desconto?.tipo || null,
+        percentual_desconto: item.desconto?.percentualDesconto || null,
+        valor_desconto_aplicado: item.desconto?.valorDesconto || 0,
+        origem_desconto: item.desconto ? 'manual' : null,
+        origem_item: item.pedido_origem_numero ? 'pedido_importado' : 'manual',
+        pedido_origem_id: item.pedido_origem_id || null,
+        pedido_origem_numero: item.pedido_origem_numero || null,
+        // ✅ NOVO: Incluir dados do vendedor do item
+        vendedor_id: item.vendedor_id || null,
+        vendedor_nome: item.vendedor_nome || null,
+        observacao_item: item.observacao || null,
+        // ✅ NOVO: Incluir dados da tabela de preços
+        tabela_preco_id: item.tabela_preco_id || null,
+        tabela_preco_nome: item.tabela_preco_nome || null,
+        // ✅ CORREÇÃO: Incluir dados fiscais
+        ...dadosFiscais
+      };
+    });
+
+    // ✅ CORREÇÃO: Verificar itens existentes e fazer UPDATE/INSERT conforme necessário
+    setEtapaProcessamento('Salvando itens da venda...');
+
+    if (vendaEmAndamento) {
+      // ✅ VENDA EM ANDAMENTO: Sempre verificar itens existentes para UPDATE/INSERT
+      // Verificando itens existentes na venda em andamento
+
+      // Buscar itens já salvos na venda
+      const { data: itensExistentes, error: buscarError } = await supabase
+        .from('pdv_itens')
+        .select('id, codigo_produto, produto_id, quantidade, valor_total_item')
+        .eq('pdv_id', vendaEmAndamento.id);
+
+      if (buscarError) {
+        console.error('❌ Erro ao buscar itens existentes:', buscarError);
+        setEtapaProcessamento('Erro ao verificar itens: ' + buscarError.message);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        setShowProcessandoVenda(false);
+        toast.error('Erro ao verificar itens: ' + buscarError.message);
+        return;
+      }
+
+      // Itens encontrados para processamento
+
+      // ✅ CORREÇÃO: Processar cada item do carrinho individualmente
+      for (const [index, item] of carrinho.entries()) {
+        console.log(`🔍 [ITEMDATA DEBUG] ===== PROCESSANDO ITEM ${index + 1} =====`);
+        console.log(`🔍 [ITEMDATA DEBUG] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
+        console.log(`🔍 [ITEMDATA DEBUG] itensParaInserir.length:`, itensParaInserir.length);
+        console.log(`🔍 [ITEMDATA DEBUG] index atual:`, index);
+        console.log(`🔍 [ITEMDATA DEBUG] itensParaInserir[${index}]:`, itensParaInserir[index]);
+
+        const itemData = itensParaInserir[index];
+
+        if (!itemData) {
+          console.error(`🚨 [ITEMDATA DEBUG] ❌ ERRO: itemData é undefined para o item ${index + 1}`);
+          console.error(`🚨 [ITEMDATA DEBUG] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
+          console.error(`🚨 [ITEMDATA DEBUG] itensParaInserir completo:`, itensParaInserir);
+          console.error(`🚨 [ITEMDATA DEBUG] Este é o problema que causa o erro 'Cannot read properties of undefined'`);
+        } else {
+          console.log(`✅ [ITEMDATA DEBUG] itemData encontrado:`, itemData);
+        }
+
+        // ✅ CORREÇÃO: Verificar se item já existe no banco de dados
+        let itemExistente = null;
+
+        if (item.pdv_item_id) {
+          // Item tem pdv_item_id - verificar se ainda existe no banco
+          itemExistente = itensExistentes?.find(existente => existente.id === item.pdv_item_id);
+          // Item verificado no banco
+        } else {
+          // Item sem pdv_item_id - verificar se já existe por código/produto_id
+          if (item.vendaSemProduto) {
+            // Para venda sem produto, verificar por código 999999
+            itemExistente = itensExistentes?.find(existente => existente.codigo_produto === '999999');
+          } else {
+            // Para produto normal, verificar por produto_id
+            itemExistente = itensExistentes?.find(existente => existente.produto_id === item.produto.id);
+          }
+          // Item verificado por produto
+        }
+
+        if (itemExistente) {
+          // ✅ ITEM EXISTE: Fazer UPDATE apenas se veio de venda recuperada
+          // Atualizando item existente
+
+          const { error: updateError } = await supabase
+            .from('pdv_itens')
+            .update({
+              quantidade: itemData.quantidade,
+              valor_unitario: itemData.valor_unitario,
+              valor_total_item: itemData.valor_total_item,
+              tem_desconto: itemData.tem_desconto,
+              valor_desconto_aplicado: itemData.valor_desconto_aplicado,
+              vendedor_id: itemData.vendedor_id,
+              vendedor_nome: itemData.vendedor_nome,
+              observacao_item: itemData.observacao_item,
+              tabela_preco_id: itemData.tabela_preco_id,
+              tabela_preco_nome: itemData.tabela_preco_nome,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', itemExistente.id);
+
+          if (updateError) {
+            console.error(`❌ Erro ao atualizar item ${item.produto.nome}:`, updateError);
+            throw new Error(`Erro ao atualizar item: ${updateError.message}`);
+          }
+
+          // Item atualizado com sucesso
+        } else {
+          // ✅ ITEM NÃO EXISTE OU É NOVO: Sempre fazer INSERT
+          // Inserindo novo item
+
+          const { error: insertError } = await supabase
+            .from('pdv_itens')
+            .insert(itemData);
+
+          if (insertError) {
+            console.error(`❌ Erro ao inserir item ${item.produto.nome}:`, insertError);
+            throw new Error(`Erro ao inserir item: ${insertError.message}`);
+          }
+
+          // Item inserido com sucesso
+        }
+      }
+
+      // Todos os itens processados
+    } else {
+      // ✅ VENDA NOVA: Inserir apenas itens que ainda não foram salvos
+      if (itensParaInserir.length > 0) {
+        const { error: itensError } = await supabase
+          .from('pdv_itens')
+          .insert(itensParaInserir);
+
+        if (itensError) {
+          console.error('❌ Erro ao inserir itens:', itensError);
+          setEtapaProcessamento('Erro ao salvar itens: ' + itensError.message);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          setShowProcessandoVenda(false);
+          toast.error('Erro ao salvar itens: ' + itensError.message);
+          return;
+        }
+      }
+    }

@@ -9583,7 +9583,7 @@ const PDVPage: React.FC = () => {
           console.log(`🔍 [ITEMDATA DEBUG] Produto: ${item.produto.nome} (Código: ${item.produto.codigo})`);
           console.log(`🔍 [ITEMDATA DEBUG] Item tem pdv_item_id:`, !!item.pdv_item_id);
 
-          // ✅ CORREÇÃO: Buscar itemData apenas se o item não foi salvo ainda
+          // ✅ CORREÇÃO CIRÚRGICA: Buscar itemData apenas se o item não foi salvo ainda
           let itemData = null;
           if (!item.pdv_item_id) {
             // Item não salvo - buscar no array itensParaInserir
@@ -9592,7 +9592,7 @@ const PDVPage: React.FC = () => {
               itemNaoSalvo.quantidade === item.quantidade
             );
             itemData = itensParaInserir[indexNoArray];
-            console.log(`🔍 [ITEMDATA DEBUG] Item não salvo - indexNoArray: ${indexNoArray}, itemData:`, itemData);
+            console.log(`🔍 [ITEMDATA DEBUG] Item não salvo - indexNoArray: ${indexNoArray}, itemData encontrado:`, !!itemData);
           } else {
             console.log(`🔍 [ITEMDATA DEBUG] Item já salvo - não precisa de itemData para inserção`);
           }
@@ -9617,46 +9617,55 @@ const PDVPage: React.FC = () => {
           }
 
           if (itemExistente) {
-            // ✅ ITEM EXISTE: Fazer UPDATE apenas se veio de venda recuperada
-            // Atualizando item existente
+            // ✅ ITEM EXISTE: Fazer UPDATE apenas se temos itemData válido
+            if (itemData) {
+              // Atualizando item existente com dados do carrinho
 
-            const { error: updateError } = await supabase
-              .from('pdv_itens')
-              .update({
-                quantidade: itemData.quantidade,
-                valor_unitario: itemData.valor_unitario,
-                valor_total_item: itemData.valor_total_item,
-                tem_desconto: itemData.tem_desconto,
-                valor_desconto_aplicado: itemData.valor_desconto_aplicado,
-                vendedor_id: itemData.vendedor_id,
-                vendedor_nome: itemData.vendedor_nome,
-                observacao_item: itemData.observacao_item,
-                tabela_preco_id: itemData.tabela_preco_id,
-                tabela_preco_nome: itemData.tabela_preco_nome,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', itemExistente.id);
+              const { error: updateError } = await supabase
+                .from('pdv_itens')
+                .update({
+                  quantidade: itemData.quantidade,
+                  valor_unitario: itemData.valor_unitario,
+                  valor_total_item: itemData.valor_total_item,
+                  tem_desconto: itemData.tem_desconto,
+                  valor_desconto_aplicado: itemData.valor_desconto_aplicado,
+                  vendedor_id: itemData.vendedor_id,
+                  vendedor_nome: itemData.vendedor_nome,
+                  observacao_item: itemData.observacao_item,
+                  tabela_preco_id: itemData.tabela_preco_id,
+                  tabela_preco_nome: itemData.tabela_preco_nome,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', itemExistente.id);
 
-            if (updateError) {
-              console.error(`❌ Erro ao atualizar item ${item.produto.nome}:`, updateError);
-              throw new Error(`Erro ao atualizar item: ${updateError.message}`);
+              if (updateError) {
+                console.error(`❌ Erro ao atualizar item ${item.produto.nome}:`, updateError);
+                throw new Error(`Erro ao atualizar item: ${updateError.message}`);
+              }
+
+              console.log(`✅ [ITEMDATA DEBUG] Item atualizado: ${item.produto.nome}`);
+            } else {
+              console.log(`⚠️ [ITEMDATA DEBUG] Item já existe no banco e não precisa de atualização: ${item.produto.nome}`);
             }
-
-            // Item atualizado com sucesso
           } else {
-            // ✅ ITEM NÃO EXISTE OU É NOVO: Sempre fazer INSERT
-            // Inserindo novo item
+            // ✅ ITEM NÃO EXISTE: Fazer INSERT apenas se temos itemData válido
+            if (itemData) {
+              // Inserindo novo item
 
-            const { error: insertError } = await supabase
-              .from('pdv_itens')
-              .insert(itemData);
+              const { error: insertError } = await supabase
+                .from('pdv_itens')
+                .insert(itemData);
 
-            if (insertError) {
-              console.error(`❌ Erro ao inserir item ${item.produto.nome}:`, insertError);
-              throw new Error(`Erro ao inserir item: ${insertError.message}`);
+              if (insertError) {
+                console.error(`❌ Erro ao inserir item ${item.produto.nome}:`, insertError);
+                throw new Error(`Erro ao inserir item: ${insertError.message}`);
+              }
+
+              console.log(`✅ [ITEMDATA DEBUG] Item inserido: ${item.produto.nome}`);
+            } else {
+              console.error(`🚨 [ITEMDATA DEBUG] ERRO: Tentativa de inserir item sem itemData: ${item.produto.nome}`);
+              throw new Error(`Erro: Item ${item.produto.nome} não pode ser processado - dados incompletos`);
             }
-
-            // Item inserido com sucesso
           }
         }
 
