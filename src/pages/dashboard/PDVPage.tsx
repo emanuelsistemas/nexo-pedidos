@@ -2202,7 +2202,7 @@ const PDVPage: React.FC = () => {
     carregarVendasAbertas();
     carregarVendasMesas();
     carregarVendasComandas();
-    carregarVendasDelivery();
+    // ✅ CORREÇÃO: Delivery carregado apenas quando modal abrir
   }, []); // Executa apenas uma vez ao montar
 
   // ✅ NOVO: Polling inteligente para atualizar contadores de mesas e comandas
@@ -2212,7 +2212,7 @@ const PDVPage: React.FC = () => {
       if (!showMesasModal && !showComandasModal && !showVendasAbertasModal && !showDeliveryModal) {
         carregarVendasMesas();
         carregarVendasComandas();
-        carregarVendasDelivery();
+        // ✅ CORREÇÃO: Não carregar delivery automaticamente (só quando modal abrir)
       }
     }, 5000); // 5 segundos - mesmo intervalo do cardápio
 
@@ -10052,7 +10052,7 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasMesas(),
           carregarVendasComandas(),
-          carregarVendasDelivery(),
+          // ✅ CORREÇÃO: Delivery carregado apenas quando modal abrir
           carregarVendasAbertas()
         ]);
         console.log('✅ Contadores atualizados com sucesso');
@@ -10192,7 +10192,7 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasMesas(),
           carregarVendasComandas(),
-          carregarVendasDelivery(),
+          // ✅ CORREÇÃO: Delivery carregado apenas quando modal abrir
           carregarVendasAbertas()
         ]);
         console.log('✅ Contadores atualizados com sucesso');
@@ -11036,8 +11036,8 @@ const PDVPage: React.FC = () => {
         await Promise.all([
           carregarVendasAbertas(),
           carregarVendasMesas(),
-          carregarVendasComandas(),
-          carregarVendasDelivery()
+          carregarVendasComandas()
+          // ✅ CORREÇÃO: Delivery carregado apenas quando modal abrir
         ]);
         console.log('✅ Contadores atualizados com sucesso');
       } catch (error) {
