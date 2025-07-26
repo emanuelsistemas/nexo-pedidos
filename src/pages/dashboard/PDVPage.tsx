@@ -10042,6 +10042,145 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para salvar delivery (baseada em salvarVendaEmAndamento)
+  const salvarDelivery = async (tipoDelivery: 'delivery_com_impressao' | 'delivery_sem_impressao'): Promise<boolean> => {
+    try {
+      if (!vendaEmAndamento) {
+        console.error('❌ Nenhuma venda em andamento para salvar como delivery');
+        return false;
+      }
+
+      if (!clienteSelecionado && !clienteEncontrado && !(pedidosImportados.length > 0 && pedidosImportados[0]?.cliente)) {
+        toast.error('É necessário selecionar um cliente para delivery');
+        return false;
+      }
+
+      console.log('🚚 SALVANDO delivery:', vendaEmAndamento.numero_venda, 'Tipo:', tipoDelivery);
+
+      // ✅ NOVO: Sincronizar todos os itens do carrinho com a base de dados
+      const sucesso = await sincronizarItensVenda();
+      if (!sucesso) {
+        console.error('❌ Erro ao sincronizar itens do delivery');
+        toast.error('Erro ao salvar itens do delivery');
+        return false;
+      }
+
+      // ✅ NOVO: Atualizar status da venda para "salva" e marcar como delivery_local
+      const { error: updateStatusError } = await supabase
+        .from('pdv')
+        .update({
+          status_venda: 'salva',
+          delivery_local: true, // ✅ MARCAR COMO DELIVERY LOCAL
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', vendaEmAndamento.id);
+
+      if (updateStatusError) {
+        console.error('❌ Erro ao atualizar status do delivery:', updateStatusError);
+        toast.error('Erro ao salvar status do delivery');
+        return false;
+      }
+
+      const numeroDeliverySalvo = vendaEmAndamento.numero_venda;
+
+      // ✅ NOVO: Se for delivery com impressão, imprimir cupom
+      if (tipoDelivery === 'delivery_com_impressao') {
+        try {
+          console.log('🖨️ [DELIVERY] Imprimindo cupom de delivery...');
+
+          // Preparar dados do pedido para impressão
+          const pedidoParaImpressao = {
+            numero_pedido: numeroDeliverySalvo,
+            nome_cliente: nomeCliente || clienteSelecionado?.nome || 'Cliente não informado',
+            telefone_cliente: clienteSelecionado?.telefone || '',
+            mesa_numero: mesaNumero || null,
+            comanda_numero: comandaNumero || null,
+            created_at: new Date().toISOString(),
+            delivery: true // ✅ MARCAR COMO DELIVERY
+          };
+
+          // Usar configuração de impressão 50mm ou 80mm
+          const usarImpressao50mm = pdvConfig?.tipo_impressao_50mm || false;
+
+          // Imprimir cupom de delivery
+          await imprimirCuponsProducaoPorGrupo(pedidoParaImpressao, carrinho, usarImpressao50mm);
+
+          console.log('🖨️ [DELIVERY] ✅ Cupom de delivery enviado para impressão');
+        } catch (errorImpressao) {
+          console.error('❌ [DELIVERY] Erro ao imprimir cupom:', errorImpressao);
+          // Não interromper o salvamento por erro de impressão
+        }
+      }
+
+      // ✅ CORREÇÃO: Limpar PDV após salvar o delivery
+      console.log('🧹 Limpando PDV após salvar delivery:', numeroDeliverySalvo);
+
+      // Limpar estados da venda em andamento
+      setVendaEmAndamento(null);
+      setIsEditingVenda(false);
+
+      // Limpar carrinho
+      setCarrinho([]);
+
+      // Limpar cliente selecionado
+      setClienteSelecionado(null);
+      setVendedorSelecionado(null);
+      setPedidosImportados([]);
+      setDescontoPrazoSelecionado(null);
+      setDescontosCliente({ prazo: [], valor: [] });
+
+      // Limpar dados de finalização
+      setCpfCnpjNota('');
+      setClienteEncontrado(null);
+      setTipoDocumento('cpf');
+      setErroValidacao('');
+      limparPagamentosParciaisSilencioso();
+
+      // Limpar observação da venda
+      setObservacaoVenda('');
+
+      // Limpar dados de mesa/comanda
+      setMesaNumero('');
+      setComandaNumero('');
+      setNomeCliente('');
+
+      // Limpar localStorage
+      clearPDVState();
+
+      // ✅ CORREÇÃO: Forçar retorno ao menu do PDV
+      setShowFinalizacaoFinal(false);
+      setShowProcessandoVenda(false);
+
+      console.log('✅ Delivery salvo e PDV limpo:', numeroDeliverySalvo);
+      const mensagem = tipoDelivery === 'delivery_com_impressao'
+        ? `🚚 Delivery ${numeroDeliverySalvo} salvo e cupom impresso!`
+        : `🚚 Delivery ${numeroDeliverySalvo} salvo com sucesso!`;
+
+      toast.success(mensagem);
+
+      // ✅ NOVO: Atualizar contadores imediatamente após salvar
+      console.log('🔄 Atualizando contadores após salvar delivery...');
+      try {
+        await Promise.all([
+          carregarVendasMesas(),
+          carregarVendasComandas(),
+          carregarVendasAbertas()
+        ]);
+        console.log('✅ Contadores atualizados com sucesso');
+      } catch (error) {
+        console.error('❌ Erro ao atualizar contadores:', error);
+        // Não interromper o fluxo por erro na atualização dos contadores
+      }
+
+      return true;
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar delivery:', error);
+      toast.error('Erro ao salvar delivery. Tente novamente.');
+      return false;
+    }
+  };
+
   // ✅ NOVA: Função para deletar venda em andamento completamente
   const deletarVendaEmAndamento = async (): Promise<boolean> => {
     try {
@@ -11033,6 +11172,8 @@ const PDVPage: React.FC = () => {
         modelo_documento: tipoFinalizacao.startsWith('nfce_') ? 65 : null,
         numero_documento: numeroDocumentoNfce,
         serie_documento: tipoFinalizacao.startsWith('nfce_') ? serieDocumentoReservado : null,
+        // ✅ NOVO: Marcar como delivery local quando tipo de finalização for delivery
+        delivery_local: tipoFinalizacao.startsWith('delivery_'),
         ...clienteData,
         ...pagamentoData
       };
@@ -17044,7 +17185,53 @@ const PDVPage: React.FC = () => {
                       )}
                     </button>
                   )}
+                </div>
 
+                {/* Grupo: Delivery Local - Aparece apenas se configuração habilitada E há cliente */}
+                {pdvConfig?.delivery && (clienteSelecionado || (pedidosImportados.length > 0 && pedidosImportados[0]?.cliente) || clienteEncontrado) && (
+                  <div className="space-y-2">
+                    {/* Delivery com Impressão */}
+                    <button
+                      onClick={async () => {
+                        // Proteção contra duplo clique
+                        if (showProcessandoVenda) {
+                          return;
+                        }
+                        await salvarDelivery('delivery_com_impressao');
+                      }}
+                      disabled={showProcessandoVenda}
+                      className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
+                        showProcessandoVenda
+                          ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
+                          : 'bg-orange-900/20 hover:bg-orange-800/30 text-orange-300 border-orange-800/30'
+                      }`}
+                    >
+                      <div>🚚 Delivery com Impressão ({obterTextoTipoImpressao()})</div>
+                    </button>
+
+                    {/* Delivery sem Impressão */}
+                    <button
+                      onClick={async () => {
+                        // Proteção contra duplo clique
+                        if (showProcessandoVenda) {
+                          return;
+                        }
+                        await salvarDelivery('delivery_sem_impressao');
+                      }}
+                      disabled={showProcessandoVenda}
+                      className={`w-full py-2.5 px-3 rounded transition-colors border text-sm font-medium ${
+                        showProcessandoVenda
+                          ? 'bg-gray-600/20 border-gray-600/30 text-gray-500 cursor-not-allowed'
+                          : 'bg-orange-800/20 hover:bg-orange-700/30 text-orange-400 border-orange-700/30'
+                      }`}
+                    >
+                      <div>🚚 Delivery sem Impressão</div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Grupo: NFC-e + Produção */}
+                <div className="space-y-2">
                   {/* NFC-e + Produção - OCULTO POR PADRÃO */}
                   {false && !pdvConfig?.ocultar_nfce_producao && (
                     <button
