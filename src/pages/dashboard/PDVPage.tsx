@@ -2217,7 +2217,77 @@ const PDVPage: React.FC = () => {
     }, 5000); // 5 segundos - mesmo intervalo do cardápio
 
     return () => clearInterval(interval);
-  }, [showMesasModal, showComandasModal, showVendasAbertasModal]);
+  }, [showMesasModal, showComandasModal, showVendasAbertasModal, showDeliveryModal]);
+
+  // ✅ NOVO: Sistema Realtime para monitorar mudanças na tabela PDV (delivery local)
+  useEffect(() => {
+    let deliverySubscription: any = null;
+
+    const setupDeliveryRealtime = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) return;
+
+        const { data: usuarioData } = await supabase
+          .from('usuarios')
+          .select('empresa_id')
+          .eq('id', userData.user.id)
+          .single();
+
+        if (!usuarioData?.empresa_id) return;
+
+        const channelName = `pdv-delivery-realtime-${usuarioData.empresa_id}`;
+
+        deliverySubscription = supabase
+          .channel(channelName)
+          .on('postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'pdv',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              // Se for uma nova venda de delivery local, atualizar contador
+              if (payload.new && payload.new.delivery_local === true) {
+                console.log('🚚 [REALTIME] Nova venda delivery local detectada:', payload.new);
+                carregarContadorDelivery();
+              }
+            }
+          )
+          .on('postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'pdv',
+              filter: `empresa_id=eq.${usuarioData.empresa_id}`
+            },
+            (payload) => {
+              // Se mudou o status de delivery_local, atualizar contador
+              if (payload.new && (
+                payload.new.delivery_local !== payload.old?.delivery_local ||
+                payload.new.status_venda !== payload.old?.status_venda
+              )) {
+                console.log('🚚 [REALTIME] Mudança em venda delivery detectada:', payload.new);
+                carregarContadorDelivery();
+              }
+            }
+          )
+          .subscribe();
+
+      } catch (error) {
+        console.error('❌ Erro ao configurar realtime para delivery:', error);
+      }
+    };
+
+    setupDeliveryRealtime();
+
+    return () => {
+      if (deliverySubscription) {
+        deliverySubscription.unsubscribe();
+      }
+    };
+  }, []); // Executar apenas uma vez
 
   // ✅ NOVO: Filtrar clientes quando termo de busca mudar
   useEffect(() => {
@@ -11060,6 +11130,7 @@ const PDVPage: React.FC = () => {
       setShowVendasAbertasModal(false);
       setShowMesasModal(false);
       setShowComandasModal(false);
+      setShowDeliveryModal(false); // ✅ NOVO: Fechar modal de delivery local
 
       // ✅ NOVO: Atualizar todos os contadores após recuperar venda
       console.log('🔄 Atualizando contadores após recuperar venda...');
@@ -15876,6 +15947,12 @@ const PDVPage: React.FC = () => {
                                 {contadorVendasComandas > 99 ? '99+' : contadorVendasComandas}
                               </div>
                             )}
+                            {/* ✅ NOVO: Contador de delivery local - só aparece no botão Delivery Local */}
+                            {item.id === 'delivery-local' && contadorVendasDelivery > 0 && (
+                              <div className="absolute -top-3 -right-10 bg-orange-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
+                                {contadorVendasDelivery > 99 ? '99+' : contadorVendasDelivery}
+                              </div>
+                            )}
                           </div>
                           <div className="flex items-center gap-1 mt-0.5">
                             <span className="text-xs whitespace-nowrap">{item.label}</span>
@@ -19269,7 +19346,7 @@ const PDVPage: React.FC = () => {
                             <div
                               key={venda.id}
                               className="bg-gray-800/30 border border-gray-700 rounded-lg p-4 hover:border-orange-500/50 transition-colors cursor-pointer"
-                              onClick={() => recuperarVenda(venda.id)}
+                              onClick={() => recuperarVendaSalva(venda.id)}
                             >
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
