@@ -6298,6 +6298,12 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVO: Função auxiliar para adicionar produto sem verificar modais obrigatórios
+  const adicionarProdutoSemVerificarModais = async (produto: Produto, quantidadePersonalizada?: number) => {
+    // Esta função pula as verificações de modais obrigatórios e vai direto para o fluxo de adição
+    return await processarAdicaoProduto(produto, quantidadePersonalizada);
+  };
+
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
     // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa solicitar NOME DO CLIENTE primeiro
     if (pdvConfig?.solicitar_nome_cliente && !nomeCliente && carrinho.length === 0) {
@@ -6322,6 +6328,13 @@ const PDVPage: React.FC = () => {
       setShowMesaModal(true);
       return;
     }
+
+    // Se chegou aqui, todos os modais obrigatórios foram preenchidos
+    return await processarAdicaoProduto(produto, quantidadePersonalizada);
+  };
+
+  // ✅ NOVO: Função que processa a adição do produto (extraída da função original)
+  const processarAdicaoProduto = async (produto: Produto, quantidadePersonalizada?: number) => {
 
     // ✅ Verificar opções adicionais ANTES de qualquer outro fluxo
     const temOpcoesAdicionais = await verificarOpcoesAdicionais(produto.id);
@@ -6687,7 +6700,7 @@ const PDVPage: React.FC = () => {
       }
 
       // Se não há mais modais obrigatórios, continuar fluxo normal
-      adicionarAoCarrinho(produtoAguardandoNomeCliente, quantidadeAguardandoNomeCliente);
+      adicionarProdutoSemVerificarModais(produtoAguardandoNomeCliente, quantidadeAguardandoNomeCliente);
       setProdutoAguardandoNomeCliente(null);
       setQuantidadeAguardandoNomeCliente(1);
     } else if (vendaSemProdutoAguardandoNomeCliente) {
@@ -6758,7 +6771,7 @@ const PDVPage: React.FC = () => {
       }
 
       // Se não há mais modais obrigatórios, continuar fluxo normal
-      adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
+      adicionarProdutoSemVerificarModais(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
       setProdutoAguardandoComandaMesa(null);
       setQuantidadeAguardandoComandaMesa(1);
     } else if (vendaSemProdutoAguardandoComandaMesa) {
@@ -6800,7 +6813,7 @@ const PDVPage: React.FC = () => {
     // ✅ VERIFICAR: Se há produto aguardando (fluxo inicial) ou se é apenas edição
     if (produtoAguardandoComandaMesa) {
       // Fluxo inicial - continuar com adição do produto
-      adicionarAoCarrinho(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
+      adicionarProdutoSemVerificarModais(produtoAguardandoComandaMesa, quantidadeAguardandoComandaMesa);
       setProdutoAguardandoComandaMesa(null);
       setQuantidadeAguardandoComandaMesa(1);
     } else if (vendaSemProdutoAguardandoComandaMesa) {
