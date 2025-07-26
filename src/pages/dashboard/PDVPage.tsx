@@ -21183,6 +21183,72 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* ✅ NOVO: Modal de Nome do Cliente (PRIMEIRA PRIORIDADE) */}
+      <AnimatePresence>
+        {showNomeClienteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-gray-800 rounded-lg p-6 w-full max-w-md mx-4"
+            >
+              <h3 className="text-xl font-bold text-white mb-4 text-center">
+                👤 Nome do Cliente
+              </h3>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Informe o nome do cliente
+                  </label>
+                  <input
+                    type="text"
+                    value={nomeCliente}
+                    onChange={(e) => setNomeCliente(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        confirmarNomeCliente();
+                      } else if (e.key === 'Escape') {
+                        cancelarNomeCliente();
+                      }
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 rounded-lg py-3 px-4 text-white text-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    placeholder="Digite o nome do cliente"
+                    autoFocus
+                    maxLength={100}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Este nome será usado para identificar o pedido
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={cancelarNomeCliente}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarNomeCliente}
+                  disabled={!nomeCliente.trim()}
+                  className="flex-1 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ✅ NOVO: Modal de Seleção de Comanda */}
       <AnimatePresence>
         {showComandaModal && (
