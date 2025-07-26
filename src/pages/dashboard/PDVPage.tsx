@@ -6304,6 +6304,19 @@ const PDVPage: React.FC = () => {
         setVendaEmAndamento(null);
         setIsEditingVenda(false);
       }
+
+      // ✅ CORREÇÃO: Fechar modal de processamento se estiver aberto (caso de erro)
+      if (showProcessandoVenda) {
+        setShowProcessandoVenda(false);
+        setStatusProcessamento('processando');
+        setErroProcessamento('');
+      }
+
+      // ✅ CORREÇÃO: Limpar observação da venda
+      setObservacaoVenda('');
+
+      // ✅ CORREÇÃO: Limpar localStorage para garantir estado limpo
+      clearPDVState();
     }
 
     setShowConfirmModal(false);
@@ -10288,6 +10301,12 @@ const PDVPage: React.FC = () => {
 
           // ✅ NOVO: Limpar observação da venda
           setObservacaoVenda('');
+
+          // ✅ CORREÇÃO: Limpar venda em andamento se houver erro
+          if (vendaEmAndamento) {
+            setVendaEmAndamento(null);
+            setIsEditingVenda(false);
+          }
 
           clearPDVState();
 
@@ -19693,9 +19712,22 @@ const PDVPage: React.FC = () => {
                     {/* Botão Fechar */}
                     <button
                       onClick={() => {
+                        // ✅ CORREÇÃO: Limpar completamente todos os estados quando há erro
                         setShowProcessandoVenda(false);
                         setStatusProcessamento('processando');
                         setErroProcessamento('');
+
+                        // ✅ GARANTIR: Fechar tela de finalização para mostrar menu PDV
+                        setShowFinalizacaoFinal(false);
+
+                        // ✅ GARANTIR: Limpar venda em andamento se houver
+                        if (vendaEmAndamento) {
+                          setVendaEmAndamento(null);
+                          setIsEditingVenda(false);
+                        }
+
+                        // ✅ GARANTIR: Limpar localStorage para evitar estados inconsistentes
+                        clearPDVState();
                       }}
                       className="w-full bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg transition-colors font-medium"
                     >
