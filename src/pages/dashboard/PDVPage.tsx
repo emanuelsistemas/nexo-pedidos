@@ -648,6 +648,13 @@ const PDVPage: React.FC = () => {
   const [itemEditandoObservacao, setItemEditandoObservacao] = useState<string | null>(null);
   const [observacaoEditando, setObservacaoEditando] = useState<string>('');
 
+  // ✅ NOVO: Estados para modal de Nome do Cliente (PRIMEIRA PRIORIDADE)
+  const [showNomeClienteModal, setShowNomeClienteModal] = useState(false);
+  const [nomeCliente, setNomeCliente] = useState('');
+  const [produtoAguardandoNomeCliente, setProdutoAguardandoNomeCliente] = useState<Produto | null>(null);
+  const [quantidadeAguardandoNomeCliente, setQuantidadeAguardandoNomeCliente] = useState<number>(1);
+  const [vendaSemProdutoAguardandoNomeCliente, setVendaSemProdutoAguardandoNomeCliente] = useState<{nome: string, preco: number} | null>(null);
+
   // ✅ NOVO: Estados para modais de Comanda e Mesa
   const [showComandaModal, setShowComandaModal] = useState(false);
   const [showMesaModal, setShowMesaModal] = useState(false);
@@ -6153,7 +6160,15 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
-    // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
+    // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa solicitar NOME DO CLIENTE primeiro
+    if (pdvConfig?.solicitar_nome_cliente && !nomeCliente && carrinho.length === 0) {
+      setProdutoAguardandoNomeCliente(produto);
+      setQuantidadeAguardandoNomeCliente(quantidadePersonalizada || 1);
+      setShowNomeClienteModal(true);
+      return;
+    }
+
+    // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
     if (pdvConfig?.comandas && !comandaNumero && carrinho.length === 0) {
       setProdutoAguardandoComandaMesa(produto);
       setQuantidadeAguardandoComandaMesa(quantidadePersonalizada || 1);
@@ -6161,7 +6176,7 @@ const PDVPage: React.FC = () => {
       return;
     }
 
-    // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
+    // ✅ NOVO: TERCEIRA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
     if (pdvConfig?.mesas && !mesaNumero && carrinho.length === 0) {
       setProdutoAguardandoComandaMesa(produto);
       setQuantidadeAguardandoComandaMesa(quantidadePersonalizada || 1);
@@ -6491,6 +6506,38 @@ const PDVPage: React.FC = () => {
     setVendaSemProdutoAguardando(null); // Limpar venda sem produto aguardando
   };
 
+  // ✅ NOVO: Funções para modal de Nome do Cliente (PRIMEIRA PRIORIDADE)
+  const confirmarNomeCliente = () => {
+    const nome = nomeCliente.trim();
+
+    // Validar se o nome foi preenchido
+    if (!nome) {
+      showMessage('error', 'Por favor, informe o nome do cliente');
+      return;
+    }
+
+    // Fechar modal e continuar fluxo
+    setShowNomeClienteModal(false);
+
+    // Continuar com o produto ou venda sem produto
+    if (produtoAguardandoNomeCliente) {
+      adicionarAoCarrinho(produtoAguardandoNomeCliente, quantidadeAguardandoNomeCliente);
+      setProdutoAguardandoNomeCliente(null);
+      setQuantidadeAguardandoNomeCliente(1);
+    } else if (vendaSemProdutoAguardandoNomeCliente) {
+      adicionarVendaSemProdutoComVerificacoes(vendaSemProdutoAguardandoNomeCliente.nome, vendaSemProdutoAguardandoNomeCliente.preco);
+      setVendaSemProdutoAguardandoNomeCliente(null);
+    }
+  };
+
+  const cancelarNomeCliente = () => {
+    setShowNomeClienteModal(false);
+    setNomeCliente('');
+    setProdutoAguardandoNomeCliente(null);
+    setQuantidadeAguardandoNomeCliente(1);
+    setVendaSemProdutoAguardandoNomeCliente(null);
+  };
+
   // ✅ NOVO: Funções para modais de Comanda e Mesa
   const confirmarComanda = () => {
     const numero = comandaNumero.trim();
@@ -6609,14 +6656,21 @@ const PDVPage: React.FC = () => {
 
   // Função para adicionar venda sem produto com verificações de vendedor e quantidade
   const adicionarVendaSemProdutoComVerificacoes = (nome: string, preco: number) => {
-    // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
+    // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa solicitar NOME DO CLIENTE primeiro
+    if (pdvConfig?.solicitar_nome_cliente && !nomeCliente && carrinho.length === 0) {
+      setVendaSemProdutoAguardandoNomeCliente({ nome, preco });
+      setShowNomeClienteModal(true);
+      return;
+    }
+
+    // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
     if (pdvConfig?.comandas && !comandaNumero && carrinho.length === 0) {
       setVendaSemProdutoAguardandoComandaMesa({ nome, preco });
       setShowComandaModal(true);
       return;
     }
 
-    // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
+    // ✅ NOVO: TERCEIRA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
     if (pdvConfig?.mesas && !mesaNumero && carrinho.length === 0) {
       setVendaSemProdutoAguardandoComandaMesa({ nome, preco });
       setShowMesaModal(true);
