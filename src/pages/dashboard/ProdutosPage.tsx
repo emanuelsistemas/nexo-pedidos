@@ -7238,6 +7238,7 @@ const ProdutosPage: React.FC = () => {
                                         type="date"
                                         value={novoProduto.promocao_data_inicio || ''}
                                         onChange={(e) => setNovoProduto({ ...novoProduto, promocao_data_inicio: e.target.value })}
+                                        onKeyDown={handleKeyDown}
                                         className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                                         required={novoProduto.promocao_data_habilitada}
                                       />
@@ -7250,6 +7251,7 @@ const ProdutosPage: React.FC = () => {
                                         type="date"
                                         value={novoProduto.promocao_data_fim || ''}
                                         onChange={(e) => setNovoProduto({ ...novoProduto, promocao_data_fim: e.target.value })}
+                                        onKeyDown={handleKeyDown}
                                         className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                                         required={novoProduto.promocao_data_habilitada}
                                       />
@@ -8536,6 +8538,7 @@ const ProdutosPage: React.FC = () => {
                               <select
                                 value={novoProduto.origem_produto || 0}
                                 onChange={(e) => setNovoProduto({ ...novoProduto, origem_produto: parseInt(e.target.value) })}
+                                onKeyDown={handleKeyDown}
                                 className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                 style={{
                                   maxWidth: '100%',
@@ -8697,6 +8700,7 @@ const ProdutosPage: React.FC = () => {
                                   type="number"
                                   value={novoProduto.aliquota_icms || 0}
                                   onChange={(e) => setNovoProduto({ ...novoProduto, aliquota_icms: parseFloat(e.target.value) || 0 })}
+                                  onKeyDown={handleKeyDown}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   placeholder="18.00"
                                   step="0.01"
@@ -8717,6 +8721,7 @@ const ProdutosPage: React.FC = () => {
                                   type="number"
                                   value={novoProduto.aliquota_pis || 1.65}
                                   onChange={(e) => setNovoProduto({ ...novoProduto, aliquota_pis: parseFloat(e.target.value) || 0 })}
+                                  onKeyDown={handleKeyDown}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   placeholder="1.65"
                                   step="0.01"
@@ -8732,6 +8737,7 @@ const ProdutosPage: React.FC = () => {
                                   type="number"
                                   value={novoProduto.aliquota_cofins || 7.60}
                                   onChange={(e) => setNovoProduto({ ...novoProduto, aliquota_cofins: parseFloat(e.target.value) || 0 })}
+                                  onKeyDown={handleKeyDown}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   placeholder="7.60"
                                   step="0.01"
@@ -8829,6 +8835,7 @@ const ProdutosPage: React.FC = () => {
                                   type="number"
                                   value={novoProduto.peso_liquido || 0}
                                   onChange={(e) => setNovoProduto({ ...novoProduto, peso_liquido: parseFloat(e.target.value) || 0 })}
+                                  onKeyDown={handleKeyDown}
                                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
                                   placeholder="0.000"
                                   step="0.001"
