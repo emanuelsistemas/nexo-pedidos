@@ -614,7 +614,7 @@ const PDVPage: React.FC = () => {
     numero_venda: string;
     numero_nfce_reservado: number | null;
     serie_usuario: number | null;
-    status_venda: 'aberta' | 'finalizada';
+    status_venda: 'aberta' | 'finalizada' | 'venda_inativa' | 'venda_reaberta';
   } | null>(null);
   const [isEditingVenda, setIsEditingVenda] = useState(false);
   const [criandoVenda, setCriandoVenda] = useState(false); // ✅ Estado para evitar criações duplicadas
@@ -1619,11 +1619,13 @@ const PDVPage: React.FC = () => {
       icon: Table,
       label: 'Mesas',
       color: 'primary',
-      onClick: (e?: React.MouseEvent) => {
+      count: contadorVendasMesas,
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
+        await carregarVendasMesas();
         setShowMesasModal(true);
       }
     },
@@ -1632,11 +1634,13 @@ const PDVPage: React.FC = () => {
       icon: FileText,
       label: 'Comandas',
       color: 'primary',
-      onClick: (e?: React.MouseEvent) => {
+      count: contadorVendasComandas,
+      onClick: async (e?: React.MouseEvent) => {
         if (e) {
           e.preventDefault();
           e.stopPropagation();
         }
+        await carregarVendasComandas();
         setShowComandasModal(true);
       }
     },
@@ -2049,6 +2053,8 @@ const PDVPage: React.FC = () => {
   // ✅ NOVO: useEffect para carregar vendas abertas ao montar o componente
   useEffect(() => {
     carregarVendasAbertas();
+    carregarVendasMesas();
+    carregarVendasComandas();
   }, []); // Executa apenas uma vez ao montar
 
   // Estado para captura automática de código de barras
@@ -6338,8 +6344,12 @@ const PDVPage: React.FC = () => {
   };
 
   const adicionarAoCarrinho = async (produto: Produto, quantidadePersonalizada?: number) => {
+    // ✅ NOVO: Verificar se a venda está inativa e forçar exibição dos modais
+    const vendaEstaInativa = vendaEmAndamento?.status_venda === 'venda_inativa';
+    const carrinhoVazio = carrinho.length === 0;
+
     // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa solicitar NOME DO CLIENTE primeiro
-    if (pdvConfig?.solicitar_nome_cliente && !nomeCliente && carrinho.length === 0) {
+    if (pdvConfig?.solicitar_nome_cliente && (!nomeCliente || vendaEstaInativa) && carrinhoVazio) {
       setProdutoAguardandoNomeCliente(produto);
       setQuantidadeAguardandoNomeCliente(quantidadePersonalizada || 1);
       setShowNomeClienteModal(true);
@@ -6347,7 +6357,7 @@ const PDVPage: React.FC = () => {
     }
 
     // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
-    if (pdvConfig?.comandas && !comandaNumero && carrinho.length === 0) {
+    if (pdvConfig?.comandas && (!comandaNumero || vendaEstaInativa) && carrinhoVazio) {
       setProdutoAguardandoComandaMesa(produto);
       setQuantidadeAguardandoComandaMesa(quantidadePersonalizada || 1);
       setShowComandaModal(true);
@@ -6355,7 +6365,7 @@ const PDVPage: React.FC = () => {
     }
 
     // ✅ NOVO: TERCEIRA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
-    if (pdvConfig?.mesas && !mesaNumero && carrinho.length === 0) {
+    if (pdvConfig?.mesas && (!mesaNumero || vendaEstaInativa) && carrinhoVazio) {
       setProdutoAguardandoComandaMesa(produto);
       setQuantidadeAguardandoComandaMesa(quantidadePersonalizada || 1);
       setShowMesaModal(true);
@@ -6789,7 +6799,7 @@ const PDVPage: React.FC = () => {
   };
 
   // ✅ NOVO: Funções para modais de Comanda e Mesa
-  const confirmarComanda = () => {
+  const confirmarComanda = async () => {
     const numero = comandaNumeroTemp.trim();
 
     // Validar se é um número inteiro
@@ -6801,6 +6811,58 @@ const PDVPage: React.FC = () => {
     // Validar se está no range configurado
     if (!validarComanda(numero)) {
       showMessage('error', `Comanda ${numero} não existe. Range válido: ${rangesConfig.comandas.inicio} a ${rangesConfig.comandas.fim}`);
+      return;
+    }
+
+    // ✅ NOVO: Verificar se a comanda já está sendo usada por outra venda salva
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        showMessage('error', 'Erro de autenticação');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        showMessage('error', 'Erro ao obter dados da empresa');
+        return;
+      }
+
+      // Verificar se existe venda salva com esta comanda (excluindo a venda atual se existir)
+      let query = supabase
+        .from('pdv')
+        .select('id, numero_venda, nome_cliente')
+        .eq('empresa_id', usuarioData.empresa_id)
+        .eq('comanda_numero', numero)
+        .in('status_venda', ['em_andamento', 'venda_inativa', 'venda_reaberta']); // Vendas salvas/em andamento
+
+      // Se há venda em andamento atual, excluir ela da verificação
+      if (vendaEmAndamento?.id) {
+        query = query.neq('id', vendaEmAndamento.id);
+      }
+
+      const { data: vendaExistente, error } = await query.single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found (ok)
+        console.error('Erro ao verificar comanda:', error);
+        showMessage('error', 'Erro ao verificar disponibilidade da comanda');
+        return;
+      }
+
+      if (vendaExistente) {
+        const clienteInfo = vendaExistente.nome_cliente ? ` (Cliente: ${vendaExistente.nome_cliente})` : '';
+        showMessage('error', `❌ Comanda ${numero} já está sendo usada na venda ${vendaExistente.numero_venda}${clienteInfo}. Escolha outra comanda.`);
+        return;
+      }
+
+    } catch (error) {
+      console.error('Erro ao verificar comanda:', error);
+      showMessage('error', 'Erro ao verificar disponibilidade da comanda');
       return;
     }
 
@@ -6976,22 +7038,26 @@ const PDVPage: React.FC = () => {
 
   // Função para adicionar venda sem produto com verificações de vendedor e quantidade
   const adicionarVendaSemProdutoComVerificacoes = (nome: string, preco: number) => {
+    // ✅ NOVO: Verificar se a venda está inativa e forçar exibição dos modais
+    const vendaEstaInativa = vendaEmAndamento?.status_venda === 'venda_inativa';
+    const carrinhoVazio = carrinho.length === 0;
+
     // ✅ NOVO: PRIMEIRA PRIORIDADE - Verificar se precisa solicitar NOME DO CLIENTE primeiro
-    if (pdvConfig?.solicitar_nome_cliente && !nomeCliente && carrinho.length === 0) {
+    if (pdvConfig?.solicitar_nome_cliente && (!nomeCliente || vendaEstaInativa) && carrinhoVazio) {
       setVendaSemProdutoAguardandoNomeCliente({ nome, preco });
       setShowNomeClienteModal(true);
       return;
     }
 
     // ✅ NOVO: SEGUNDA PRIORIDADE - Verificar se precisa selecionar COMANDA primeiro
-    if (pdvConfig?.comandas && !comandaNumero && carrinho.length === 0) {
+    if (pdvConfig?.comandas && (!comandaNumero || vendaEstaInativa) && carrinhoVazio) {
       setVendaSemProdutoAguardandoComandaMesa({ nome, preco });
       setShowComandaModal(true);
       return;
     }
 
     // ✅ NOVO: TERCEIRA PRIORIDADE - Verificar se precisa selecionar MESA primeiro
-    if (pdvConfig?.mesas && !mesaNumero && carrinho.length === 0) {
+    if (pdvConfig?.mesas && (!mesaNumero || vendaEstaInativa) && carrinhoVazio) {
       setVendaSemProdutoAguardandoComandaMesa({ nome, preco });
       setShowMesaModal(true);
       return;
@@ -9619,6 +9685,21 @@ const PDVPage: React.FC = () => {
         return false;
       }
 
+      // ✅ NOVO: Atualizar status da venda para "venda_inativa" (salva)
+      const { error: updateStatusError } = await supabase
+        .from('pdv')
+        .update({
+          status_venda: 'venda_inativa',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', vendaEmAndamento.id);
+
+      if (updateStatusError) {
+        console.error('❌ Erro ao atualizar status da venda:', updateStatusError);
+        toast.error('Erro ao salvar status da venda');
+        return false;
+      }
+
       const numeroVendaSalva = vendaEmAndamento.numero_venda;
 
       // ✅ NOVO: Verificar se há itens de produção e imprimir cupons
@@ -9904,6 +9985,78 @@ const PDVPage: React.FC = () => {
     });
   };
 
+  // ✅ NOVA: Função para filtrar vendas de mesas
+  const filtrarVendasMesas = (vendas: any[]) => {
+    return vendas.filter(venda => {
+      // Filtro por número da mesa
+      if (filtroMesaNumero && venda.mesa_numero?.toString() !== filtroMesaNumero) {
+        return false;
+      }
+
+      // Filtro por nome do cliente
+      if (filtroClienteMesa && !venda.nome_cliente?.toLowerCase().includes(filtroClienteMesa.toLowerCase())) {
+        return false;
+      }
+
+      // Filtro por data início
+      if (filtroDataInicioMesas) {
+        const dataVenda = new Date(venda.created_at);
+        const dataInicio = new Date(filtroDataInicioMesas);
+        if (dataVenda < dataInicio) {
+          return false;
+        }
+      }
+
+      // Filtro por data fim
+      if (filtroDataFimMesas) {
+        const dataVenda = new Date(venda.created_at);
+        const dataFim = new Date(filtroDataFimMesas);
+        dataFim.setHours(23, 59, 59, 999);
+        if (dataVenda > dataFim) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  };
+
+  // ✅ NOVA: Função para filtrar vendas de comandas
+  const filtrarVendasComandas = (vendas: any[]) => {
+    return vendas.filter(venda => {
+      // Filtro por número da comanda
+      if (filtroComandaNumero && venda.comanda_numero?.toString() !== filtroComandaNumero) {
+        return false;
+      }
+
+      // Filtro por nome do cliente
+      if (filtroClienteComanda && !venda.nome_cliente?.toLowerCase().includes(filtroClienteComanda.toLowerCase())) {
+        return false;
+      }
+
+      // Filtro por data início
+      if (filtroDataInicioComandas) {
+        const dataVenda = new Date(venda.created_at);
+        const dataInicio = new Date(filtroDataInicioComandas);
+        if (dataVenda < dataInicio) {
+          return false;
+        }
+      }
+
+      // Filtro por data fim
+      if (filtroDataFimComandas) {
+        const dataVenda = new Date(venda.created_at);
+        const dataFim = new Date(filtroDataFimComandas);
+        dataFim.setHours(23, 59, 59, 999);
+        if (dataVenda > dataFim) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  };
+
   // ✅ NOVA: Função para carregar vendas abertas (salvas)
   const carregarVendasAbertas = async (): Promise<void> => {
     try {
@@ -9945,7 +10098,7 @@ const PDVPage: React.FC = () => {
           observacao_venda
         `)
         .eq('empresa_id', usuarioData.empresa_id)
-        .eq('status_venda', 'aberta')
+        .in('status_venda', ['aberta', 'venda_inativa', 'venda_reaberta'])
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -9988,10 +10141,212 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // ✅ NOVA: Função para carregar vendas de mesas
+  const carregarVendasMesas = async (): Promise<void> => {
+    try {
+      setCarregandoVendasMesas(true);
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.error('❌ Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        console.error('❌ Empresa não encontrada');
+        return;
+      }
+
+      // Buscar vendas abertas com mesa da empresa
+      const { data: vendas, error } = await supabase
+        .from('pdv')
+        .select(`
+          id,
+          numero_venda,
+          numero_documento,
+          serie_documento,
+          valor_total,
+          valor_subtotal,
+          created_at,
+          updated_at,
+          nome_cliente,
+          mesa_numero,
+          comanda_numero,
+          observacao_venda
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .in('status_venda', ['aberta', 'venda_inativa', 'venda_reaberta'])
+        .not('mesa_numero', 'is', null)
+        .order('mesa_numero', { ascending: true });
+
+      if (error) {
+        console.error('❌ Erro ao carregar vendas de mesas:', error);
+        return;
+      }
+
+      // Para cada venda, buscar a quantidade de itens
+      const vendasComItens = await Promise.all(
+        (vendas || []).map(async (venda) => {
+          const { data: itens, error: itensError } = await supabase
+            .from('pdv_itens')
+            .select('id, nome_produto, quantidade, valor_total_item')
+            .eq('pdv_id', venda.id);
+
+          if (itensError) {
+            console.error('❌ Erro ao carregar itens da venda:', itensError);
+            return { ...venda, itens: [], totalItens: 0 };
+          }
+
+          const totalCalculado = (itens || []).reduce((acc, item) => acc + (item.valor_total_item || 0), 0);
+
+          return {
+            ...venda,
+            itens: itens || [],
+            totalItens: (itens || []).reduce((acc, item) => acc + item.quantidade, 0),
+            valor_total: totalCalculado
+          };
+        })
+      );
+
+      setVendasMesas(vendasComItens);
+      setContadorVendasMesas(vendasComItens.length);
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar vendas de mesas:', error);
+    } finally {
+      setCarregandoVendasMesas(false);
+    }
+  };
+
+  // ✅ NOVA: Função para carregar vendas de comandas
+  const carregarVendasComandas = async (): Promise<void> => {
+    try {
+      setCarregandoVendasComandas(true);
+
+      // Obter dados do usuário
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        console.error('❌ Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        console.error('❌ Empresa não encontrada');
+        return;
+      }
+
+      // Buscar vendas abertas com comanda da empresa
+      const { data: vendas, error } = await supabase
+        .from('pdv')
+        .select(`
+          id,
+          numero_venda,
+          numero_documento,
+          serie_documento,
+          valor_total,
+          valor_subtotal,
+          created_at,
+          updated_at,
+          nome_cliente,
+          mesa_numero,
+          comanda_numero,
+          observacao_venda
+        `)
+        .eq('empresa_id', usuarioData.empresa_id)
+        .in('status_venda', ['aberta', 'venda_inativa', 'venda_reaberta'])
+        .not('comanda_numero', 'is', null)
+        .order('comanda_numero', { ascending: true });
+
+      if (error) {
+        console.error('❌ Erro ao carregar vendas de comandas:', error);
+        return;
+      }
+
+      // Para cada venda, buscar a quantidade de itens
+      const vendasComItens = await Promise.all(
+        (vendas || []).map(async (venda) => {
+          const { data: itens, error: itensError } = await supabase
+            .from('pdv_itens')
+            .select('id, nome_produto, quantidade, valor_total_item')
+            .eq('pdv_id', venda.id);
+
+          if (itensError) {
+            console.error('❌ Erro ao carregar itens da venda:', itensError);
+            return { ...venda, itens: [], totalItens: 0 };
+          }
+
+          const totalCalculado = (itens || []).reduce((acc, item) => acc + (item.valor_total_item || 0), 0);
+
+          return {
+            ...venda,
+            itens: itens || [],
+            totalItens: (itens || []).reduce((acc, item) => acc + item.quantidade, 0),
+            valor_total: totalCalculado
+          };
+        })
+      );
+
+      setVendasComandas(vendasComItens);
+      setContadorVendasComandas(vendasComItens.length);
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar vendas de comandas:', error);
+    } finally {
+      setCarregandoVendasComandas(false);
+    }
+  };
+
   // ✅ NOVA: Função para recuperar uma venda salva
   const recuperarVendaSalva = async (vendaId: string): Promise<boolean> => {
     try {
       console.log('🔄 Recuperando venda salva:', vendaId);
+
+      // ✅ NOVO: Verificar se a venda já está reaberta por outro terminal
+      const { data: vendaStatus, error: statusError } = await supabase
+        .from('pdv')
+        .select('id, numero_venda, status_venda')
+        .eq('id', vendaId)
+        .single();
+
+      if (statusError || !vendaStatus) {
+        console.error('❌ Erro ao verificar status da venda:', statusError);
+        toast.error('Erro ao verificar status da venda');
+        return false;
+      }
+
+      // ✅ NOVO: Impedir abertura se já está reaberta
+      if (vendaStatus.status_venda === 'venda_reaberta') {
+        toast.error(`❌ Venda ${vendaStatus.numero_venda} já está sendo editada em outro terminal. Aguarde a finalização ou escolha outra venda.`);
+        return false;
+      }
+
+      // ✅ NOVO: Atualizar status para "venda_reaberta" para bloquear outros terminais
+      const { error: updateStatusError } = await supabase
+        .from('pdv')
+        .update({
+          status_venda: 'venda_reaberta',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', vendaId);
+
+      if (updateStatusError) {
+        console.error('❌ Erro ao atualizar status da venda:', updateStatusError);
+        toast.error('Erro ao bloquear venda para edição');
+        return false;
+      }
 
       // Buscar dados da venda
       const { data: venda, error: vendaError } = await supabase
@@ -10124,7 +10479,7 @@ const PDVPage: React.FC = () => {
         numero_venda: venda.numero_venda,
         numero_nfce_reservado: venda.numero_documento,
         serie_usuario: venda.serie_documento,
-        status_venda: 'aberta'
+        status_venda: 'venda_reaberta'
       });
       setIsEditingVenda(true);
 
@@ -13796,6 +14151,28 @@ const PDVPage: React.FC = () => {
     }
   }, [showVendasAbertasModal]);
 
+  // ✅ NOVO: useEffect para resetar filtros quando modal de mesas fechar
+  useEffect(() => {
+    if (!showMesasModal) {
+      setFiltroMesaNumero('');
+      setFiltroClienteMesa('');
+      setFiltroDataInicioMesas('');
+      setFiltroDataFimMesas('');
+      setShowFiltrosMesas(false);
+    }
+  }, [showMesasModal]);
+
+  // ✅ NOVO: useEffect para resetar filtros quando modal de comandas fechar
+  useEffect(() => {
+    if (!showComandasModal) {
+      setFiltroComandaNumero('');
+      setFiltroClienteComanda('');
+      setFiltroDataInicioComandas('');
+      setFiltroDataFimComandas('');
+      setShowFiltrosComandas(false);
+    }
+  }, [showComandasModal]);
+
   if (isLoading) {
     return (
       <LoadingScreen
@@ -14855,6 +15232,18 @@ const PDVPage: React.FC = () => {
                             {item.id === 'movimentos' && contadorNfcePendentes > 0 && (
                               <div className="absolute -top-3 -right-10 bg-yellow-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
                                 {contadorNfcePendentes > 99 ? '99+' : contadorNfcePendentes}
+                              </div>
+                            )}
+                            {/* Contador de mesas abertas - só aparece no botão Mesas */}
+                            {item.id === 'mesas' && contadorVendasMesas > 0 && (
+                              <div className="absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
+                                {contadorVendasMesas > 99 ? '99+' : contadorVendasMesas}
+                              </div>
+                            )}
+                            {/* Contador de comandas abertas - só aparece no botão Comandas */}
+                            {item.id === 'comandas' && contadorVendasComandas > 0 && (
+                              <div className="absolute -top-3 -right-10 bg-red-500 text-white text-sm rounded-full min-w-[22px] h-[22px] flex items-center justify-center font-bold border-2 border-background-card shadow-lg z-[60]">
+                                {contadorVendasComandas > 99 ? '99+' : contadorVendasComandas}
                               </div>
                             )}
                           </div>
@@ -17394,107 +17783,537 @@ const PDVPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Modal de Mesas */}
+      {/* ✅ NOVO: Modal de Mesas - Tela Cheia */}
       <AnimatePresence>
         {showMesasModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            onClick={() => setShowMesasModal(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-4xl mx-4 max-h-[80vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
+              className="w-full h-full bg-background-card flex flex-col"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Controle de Mesas</h3>
-                <button
-                  onClick={() => setShowMesasModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Grid de Mesas */}
-                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-                  {Array.from({ length: 24 }, (_, i) => i + 1).map((numeroMesa) => (
-                    <div
-                      key={numeroMesa}
-                      className="aspect-square bg-gray-800/50 hover:bg-gray-700/50 border border-gray-700 hover:border-gray-600 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all group"
-                    >
-                      <Table size={24} className="text-gray-400 group-hover:text-white mb-1" />
-                      <span className="text-sm font-medium text-gray-300 group-hover:text-white">
-                        Mesa {numeroMesa}
+              {/* Header compacto para tela cheia */}
+              <div className="border-b border-gray-700 bg-background-card">
+                <div className="flex items-center justify-between px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <Table size={24} className="text-purple-400" />
+                    <h3 className="text-xl font-semibold text-white">Mesas Abertas</h3>
+                    {contadorVendasMesas > 0 && (
+                      <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                        {contadorVendasMesas}
                       </span>
-                      <span className="text-xs text-green-400">Livre</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Legenda */}
-                <div className="flex items-center justify-center gap-6 pt-4 border-t border-gray-800">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                    <span className="text-sm text-gray-400">Livre</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-                    <span className="text-sm text-gray-400">Ocupada</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-                    <span className="text-sm text-gray-400">Reservada</span>
+                    <button
+                      onClick={() => setShowFiltrosMesas(!showFiltrosMesas)}
+                      className={`px-3 py-1 rounded-lg text-xs transition-colors flex items-center gap-1 relative ${
+                        showFiltrosMesas
+                          ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      }`}
+                      title="Filtros"
+                    >
+                      <Filter size={14} />
+                      Filtros
+                      {/* Indicador de filtros ativos */}
+                      {(filtroMesaNumero || filtroClienteMesa || filtroDataInicioMesas || filtroDataFimMesas) && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </button>
+                    <button
+                      onClick={carregarVendasMesas}
+                      className="text-gray-400 hover:text-white transition-colors p-1"
+                      title="Atualizar"
+                    >
+                      <ArrowUpDown size={18} />
+                    </button>
+                    <button
+                      onClick={() => setShowMesasModal(false)}
+                      className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-lg"
+                    >
+                      <X size={24} />
+                    </button>
                   </div>
                 </div>
               </div>
+
+              {/* Painel de Filtros */}
+              <AnimatePresence>
+                {showFiltrosMesas && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-b border-gray-800 bg-gray-800/30 overflow-hidden"
+                  >
+                    <div className="p-4 space-y-4">
+                      {/* Primeira linha - Filtros de texto */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Número da Mesa</label>
+                          <input
+                            type="text"
+                            value={filtroMesaNumero}
+                            onChange={(e) => setFiltroMesaNumero(e.target.value)}
+                            placeholder="Digite o número da mesa..."
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Nome do Cliente</label>
+                          <input
+                            type="text"
+                            value={filtroClienteMesa}
+                            onChange={(e) => setFiltroClienteMesa(e.target.value)}
+                            placeholder="Digite o nome do cliente..."
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Segunda linha - Filtros de data */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data Início</label>
+                          <input
+                            type="date"
+                            value={filtroDataInicioMesas}
+                            onChange={(e) => setFiltroDataInicioMesas(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data Fim</label>
+                          <input
+                            type="date"
+                            value={filtroDataFimMesas}
+                            onChange={(e) => setFiltroDataFimMesas(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botões de ação */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setFiltroMesaNumero('');
+                            setFiltroClienteMesa('');
+                            setFiltroDataInicioMesas('');
+                            setFiltroDataFimMesas('');
+                          }}
+                          className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-sm transition-colors"
+                        >
+                          Limpar Filtros
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Conteúdo principal com scroll */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {carregandoVendasMesas ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-gray-400">Carregando mesas...</div>
+                  </div>
+                ) : (() => {
+                  const mesasFiltradas = filtrarVendasMesas(vendasMesas);
+                  return mesasFiltradas.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                      <Table size={48} className="mb-4 opacity-50" />
+                      <p className="text-lg font-medium">
+                        {vendasMesas.length === 0 ? 'Nenhuma mesa ocupada' : 'Nenhuma mesa encontrada'}
+                      </p>
+                      <p className="text-sm">
+                        {vendasMesas.length === 0 ? 'Todas as mesas estão livres' : 'Tente ajustar os filtros de busca'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      {mesasFiltradas.map((venda) => (
+                        <div
+                          key={venda.id}
+                          className="bg-purple-800/20 border border-purple-700/50 rounded-lg p-4 hover:bg-purple-800/30 transition-colors flex flex-col h-full"
+                        >
+                          {/* Header do card */}
+                          <div className="mb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Table size={16} className="text-purple-400" />
+                              <span className="text-purple-400 text-sm font-medium bg-purple-500/20 px-2 py-1 rounded">
+                                Mesa {venda.mesa_numero}
+                              </span>
+                            </div>
+
+                            <div className="text-white font-medium mb-1">
+                              📋 {venda.numero_venda}
+                            </div>
+                            {venda.numero_documento && venda.serie_documento && (
+                              <div className="text-blue-400 text-xs">
+                                🧾 NFC-e #{venda.numero_documento} Série {venda.serie_documento}
+                              </div>
+                            )}
+                            <div className="text-gray-400 text-xs mt-1">
+                              {new Date(venda.created_at).toLocaleString('pt-BR')}
+                            </div>
+                          </div>
+
+                          {/* Informações principais */}
+                          <div className="space-y-2 text-sm flex-1">
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Itens:</span>
+                              <span className="text-gray-300">{venda.totalItens}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Total:</span>
+                              <span className="text-green-400 font-medium">{formatCurrency(venda.valor_total || 0)}</span>
+                            </div>
+                            {venda.nome_cliente && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Cliente:</span>
+                                <span className="text-gray-300">{venda.nome_cliente}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {venda.itens && venda.itens.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-700">
+                              <button
+                                onClick={() => {
+                                  const novasVendasExpandidas = new Set(vendasMesasExpandidas);
+                                  if (novasVendasExpandidas.has(venda.id)) {
+                                    novasVendasExpandidas.delete(venda.id);
+                                  } else {
+                                    novasVendasExpandidas.add(venda.id);
+                                  }
+                                  setVendasMesasExpandidas(novasVendasExpandidas);
+                                }}
+                                className="flex items-center justify-between w-full text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                              >
+                                <span>Produtos ({venda.itens.length})</span>
+                                <span className="text-lg">
+                                  {vendasMesasExpandidas.has(venda.id) ? '▼' : '▶'}
+                                </span>
+                              </button>
+
+                              {vendasMesasExpandidas.has(venda.id) && (
+                                <div className="mt-2 space-y-1">
+                                  {venda.itens.map((item: any, index: number) => (
+                                    <div key={index} className="text-xs text-gray-300 flex justify-between">
+                                      <span>{item.nome_produto}</span>
+                                      <span>{item.quantidade}x {formatCurrency(item.valor_total_item)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Botão de recuperar */}
+                          <div className="mt-4 pt-3 border-t border-gray-700">
+                            <button
+                              onClick={() => recuperarVendaSalva(venda.id)}
+                              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition-colors font-medium text-sm"
+                            >
+                              🔄 Recuperar Mesa
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {vendasMesas.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-gray-700 flex justify-between items-center">
+                  <div className="text-sm text-gray-400">
+                    {vendasMesas.length} mesa(s) ocupada(s)
+                  </div>
+                  <button
+                    onClick={carregarVendasMesas}
+                    className="text-purple-400 hover:text-purple-300 text-sm transition-colors"
+                  >
+                    🔄 Atualizar Lista
+                  </button>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Modal de Comandas/Mesas */}
+      {/* ✅ NOVO: Modal de Comandas - Tela Cheia */}
       <AnimatePresence>
         {showComandasModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-            onClick={() => setShowComandasModal(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-background-card rounded-lg border border-gray-800 p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
+              className="w-full h-full bg-background-card flex flex-col"
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Comandas/Mesas Abertas</h3>
-                <button
-                  onClick={() => setShowComandasModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="text-center py-8">
-                  <FileText size={48} className="mx-auto mb-4 text-gray-500" />
-                  <p className="text-gray-400">Nenhuma comanda ou mesa aberta no momento</p>
-                  <button className="mt-4 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">
-                    Nova Comanda
-                  </button>
+              {/* Header compacto para tela cheia */}
+              <div className="border-b border-gray-700 bg-background-card">
+                <div className="flex items-center justify-between px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <FileText size={24} className="text-yellow-400" />
+                    <h3 className="text-xl font-semibold text-white">Comandas Abertas</h3>
+                    {contadorVendasComandas > 0 && (
+                      <span className="bg-yellow-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+                        {contadorVendasComandas}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowFiltrosComandas(!showFiltrosComandas)}
+                      className={`px-3 py-1 rounded-lg text-xs transition-colors flex items-center gap-1 relative ${
+                        showFiltrosComandas
+                          ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                          : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                      }`}
+                      title="Filtros"
+                    >
+                      <Filter size={14} />
+                      Filtros
+                      {/* Indicador de filtros ativos */}
+                      {(filtroComandaNumero || filtroClienteComanda || filtroDataInicioComandas || filtroDataFimComandas) && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                      )}
+                    </button>
+                    <button
+                      onClick={carregarVendasComandas}
+                      className="text-gray-400 hover:text-white transition-colors p-1"
+                      title="Atualizar"
+                    >
+                      <ArrowUpDown size={18} />
+                    </button>
+                    <button
+                      onClick={() => setShowComandasModal(false)}
+                      className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-lg"
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Painel de Filtros */}
+              <AnimatePresence>
+                {showFiltrosComandas && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="border-b border-gray-800 bg-gray-800/30 overflow-hidden"
+                  >
+                    <div className="p-4 space-y-4">
+                      {/* Primeira linha - Filtros de texto */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Número da Comanda</label>
+                          <input
+                            type="text"
+                            value={filtroComandaNumero}
+                            onChange={(e) => setFiltroComandaNumero(e.target.value)}
+                            placeholder="Digite o número da comanda..."
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-yellow-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Nome do Cliente</label>
+                          <input
+                            type="text"
+                            value={filtroClienteComanda}
+                            onChange={(e) => setFiltroClienteComanda(e.target.value)}
+                            placeholder="Digite o nome do cliente..."
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-yellow-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Segunda linha - Filtros de data */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data Início</label>
+                          <input
+                            type="date"
+                            value={filtroDataInicioComandas}
+                            onChange={(e) => setFiltroDataInicioComandas(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-yellow-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-400 mb-1">Data Fim</label>
+                          <input
+                            type="date"
+                            value={filtroDataFimComandas}
+                            onChange={(e) => setFiltroDataFimComandas(e.target.value)}
+                            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-yellow-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Botões de ação */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setFiltroComandaNumero('');
+                            setFiltroClienteComanda('');
+                            setFiltroDataInicioComandas('');
+                            setFiltroDataFimComandas('');
+                          }}
+                          className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white rounded-lg text-sm transition-colors"
+                        >
+                          Limpar Filtros
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Conteúdo principal com scroll */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {carregandoVendasComandas ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-gray-400">Carregando comandas...</div>
+                  </div>
+                ) : (() => {
+                  const comandasFiltradas = filtrarVendasComandas(vendasComandas);
+                  return comandasFiltradas.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                      <FileText size={48} className="mb-4 opacity-50" />
+                      <p className="text-lg font-medium">
+                        {vendasComandas.length === 0 ? 'Nenhuma comanda aberta' : 'Nenhuma comanda encontrada'}
+                      </p>
+                      <p className="text-sm">
+                        {vendasComandas.length === 0 ? 'Todas as comandas foram finalizadas' : 'Tente ajustar os filtros de busca'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                      {comandasFiltradas.map((venda) => (
+                        <div
+                          key={venda.id}
+                          className="bg-yellow-800/20 border border-yellow-700/50 rounded-lg p-4 hover:bg-yellow-800/30 transition-colors flex flex-col h-full"
+                        >
+                          {/* Header do card */}
+                          <div className="mb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText size={16} className="text-yellow-400" />
+                              <span className="text-yellow-400 text-sm font-medium bg-yellow-500/20 px-2 py-1 rounded">
+                                Comanda {venda.comanda_numero}
+                              </span>
+                            </div>
+
+                            <div className="text-white font-medium mb-1">
+                              📋 {venda.numero_venda}
+                            </div>
+                            {venda.numero_documento && venda.serie_documento && (
+                              <div className="text-blue-400 text-xs">
+                                🧾 NFC-e #{venda.numero_documento} Série {venda.serie_documento}
+                              </div>
+                            )}
+                            <div className="text-gray-400 text-xs mt-1">
+                              {new Date(venda.created_at).toLocaleString('pt-BR')}
+                            </div>
+                          </div>
+
+                          {/* Informações principais */}
+                          <div className="space-y-2 text-sm flex-1">
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Itens:</span>
+                              <span className="text-gray-300">{venda.totalItens}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Total:</span>
+                              <span className="text-green-400 font-medium">{formatCurrency(venda.valor_total || 0)}</span>
+                            </div>
+                            {venda.nome_cliente && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-400">Cliente:</span>
+                                <span className="text-gray-300">{venda.nome_cliente}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {venda.itens && venda.itens.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-700">
+                              <button
+                                onClick={() => {
+                                  const novasVendasExpandidas = new Set(vendasComandasExpandidas);
+                                  if (novasVendasExpandidas.has(venda.id)) {
+                                    novasVendasExpandidas.delete(venda.id);
+                                  } else {
+                                    novasVendasExpandidas.add(venda.id);
+                                  }
+                                  setVendasComandasExpandidas(novasVendasExpandidas);
+                                }}
+                                className="flex items-center justify-between w-full text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                              >
+                                <span>Produtos ({venda.itens.length})</span>
+                                <span className="text-lg">
+                                  {vendasComandasExpandidas.has(venda.id) ? '▼' : '▶'}
+                                </span>
+                              </button>
+
+                              {vendasComandasExpandidas.has(venda.id) && (
+                                <div className="mt-2 space-y-1">
+                                  {venda.itens.map((item: any, index: number) => (
+                                    <div key={index} className="text-xs text-gray-300 flex justify-between">
+                                      <span>{item.nome_produto}</span>
+                                      <span>{item.quantidade}x {formatCurrency(item.valor_total_item)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Botão de recuperar */}
+                          <div className="mt-4 pt-3 border-t border-gray-700">
+                            <button
+                              onClick={() => recuperarVendaSalva(venda.id)}
+                              className="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded-lg transition-colors font-medium text-sm"
+                            >
+                              🔄 Recuperar Comanda
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {vendasComandas.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-gray-700 flex justify-between items-center">
+                  <div className="text-sm text-gray-400">
+                    {vendasComandas.length} comanda(s) aberta(s)
+                  </div>
+                  <button
+                    onClick={carregarVendasComandas}
+                    className="text-yellow-400 hover:text-yellow-300 text-sm transition-colors"
+                  >
+                    🔄 Atualizar Lista
+                  </button>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
