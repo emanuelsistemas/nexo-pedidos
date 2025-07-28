@@ -44,7 +44,8 @@ import {
   Save,
   Copy,
   Phone,
-  Truck
+  Truck,
+  MapPin
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { toast } from 'react-toastify';
@@ -197,6 +198,26 @@ const PDVPage: React.FC = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [searchClienteTerm, setSearchClienteTerm] = useState('');
   const [filteredClientes, setFilteredClientes] = useState<Cliente[]>([]);
+
+  // Estados para modal de cadastro rápido de cliente
+  const [showCadastroClienteModal, setShowCadastroClienteModal] = useState(false);
+  const [cadastroClienteData, setCadastroClienteData] = useState({
+    nome: '',
+    telefones: [] as Array<{numero: string, tipo: 'Celular' | 'Fixo', whatsapp: boolean}>,
+    cep: '',
+    endereco: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    estado: ''
+  });
+  const [novoTelefoneCliente, setNovoTelefoneCliente] = useState({
+    numero: '',
+    tipo: 'Celular' as 'Celular' | 'Fixo',
+    whatsapp: false
+  });
+  const [salvandoCliente, setSalvandoCliente] = useState(false);
 
   // ✅ NOVO: Função para formatar telefone com máscara
   const formatarTelefone = (numero: string, tipo: string) => {
@@ -8761,6 +8782,233 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Funções para cadastro rápido de cliente
+  const formatarTelefoneCliente = (value: string, tipo: 'Celular' | 'Fixo') => {
+    const numbers = value.replace(/\D/g, '');
+
+    if (tipo === 'Celular') {
+      // Formato: (00) 0 0000-0000
+      if (numbers.length <= 11) {
+        return numbers
+          .replace(/(\d{2})(\d)/, '($1) $2')
+          .replace(/(\d{4})(\d)/, '$1-$2');
+      }
+    } else {
+      // Formato: (00) 0000-0000
+      if (numbers.length <= 10) {
+        return numbers
+          .replace(/(\d{2})(\d)/, '($1) $2')
+          .replace(/(\d{4})(\d)/, '$1-$2');
+      }
+    }
+
+    return value;
+  };
+
+  const handleNovoTelefoneClienteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatarTelefoneCliente(e.target.value, novoTelefoneCliente.tipo);
+    setNovoTelefoneCliente({
+      ...novoTelefoneCliente,
+      numero: formatted
+    });
+  };
+
+  const adicionarTelefoneCliente = () => {
+    if (!novoTelefoneCliente.numero) {
+      toast.error('Digite um número de telefone');
+      return;
+    }
+
+    // Validar o número de telefone
+    const numeroLimpo = novoTelefoneCliente.numero.replace(/\D/g, '');
+    if ((novoTelefoneCliente.tipo === 'Fixo' && numeroLimpo.length !== 10) ||
+        (novoTelefoneCliente.tipo === 'Celular' && numeroLimpo.length !== 11)) {
+      toast.error(`Número de ${novoTelefoneCliente.tipo.toLowerCase()} inválido`);
+      return;
+    }
+
+    // Adicionar à lista de telefones
+    setCadastroClienteData({
+      ...cadastroClienteData,
+      telefones: [...cadastroClienteData.telefones, { ...novoTelefoneCliente }]
+    });
+
+    // Limpar o campo para adicionar outro telefone
+    setNovoTelefoneCliente({
+      numero: '',
+      tipo: 'Celular',
+      whatsapp: false
+    });
+  };
+
+  const removerTelefoneCliente = (index: number) => {
+    const novosTelefones = cadastroClienteData.telefones.filter((_, i) => i !== index);
+    setCadastroClienteData({
+      ...cadastroClienteData,
+      telefones: novosTelefones
+    });
+  };
+
+  const buscarCEP = async (cep: string) => {
+    const cepLimpo = cep.replace(/\D/g, '');
+    if (cepLimpo.length !== 8) return;
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const data = await response.json();
+
+      if (!data.erro) {
+        setCadastroClienteData({
+          ...cadastroClienteData,
+          endereco: data.logradouro || '',
+          bairro: data.bairro || '',
+          cidade: data.localidade || '',
+          estado: data.uf || ''
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+    }
+  };
+
+  const formatarCEP = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    return numbers.replace(/(\d{5})(\d)/, '$1-$2');
+  };
+
+  const handleCEPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatarCEP(e.target.value);
+    setCadastroClienteData({
+      ...cadastroClienteData,
+      cep: formatted
+    });
+
+    // Buscar automaticamente quando CEP estiver completo
+    const cepLimpo = formatted.replace(/\D/g, '');
+    if (cepLimpo.length === 8) {
+      buscarCEP(formatted);
+    }
+  };
+
+  const salvarNovoCliente = async () => {
+    if (!cadastroClienteData.nome.trim()) {
+      toast.error('Nome é obrigatório');
+      return;
+    }
+
+    if (cadastroClienteData.telefones.length === 0) {
+      toast.error('Adicione pelo menos um telefone');
+      return;
+    }
+
+    setSalvandoCliente(true);
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data: usuarioData } = await supabase
+        .from('usuarios')
+        .select('empresa_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!usuarioData?.empresa_id) {
+        toast.error('Empresa não encontrada');
+        return;
+      }
+
+      // Preparar dados do cliente
+      const clienteData = {
+        nome: cadastroClienteData.nome.trim(),
+        telefones: cadastroClienteData.telefones,
+        telefone: cadastroClienteData.telefones[0]?.numero || '', // Telefone principal para compatibilidade
+        cep: cadastroClienteData.cep.replace(/\D/g, '') || null,
+        endereco: cadastroClienteData.endereco.trim() || null,
+        numero: cadastroClienteData.numero.trim() || null,
+        complemento: cadastroClienteData.complemento.trim() || null,
+        bairro: cadastroClienteData.bairro.trim() || null,
+        cidade: cadastroClienteData.cidade.trim() || null,
+        estado: cadastroClienteData.estado.trim() || null,
+        empresa_id: usuarioData.empresa_id
+      };
+
+      // Salvar cliente
+      const { data: novoCliente, error } = await supabase
+        .from('clientes')
+        .insert([clienteData])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro ao salvar cliente:', error);
+        toast.error('Erro ao salvar cliente');
+        return;
+      }
+
+      // Sucesso
+      toast.success('Cliente cadastrado com sucesso!');
+
+      // Selecionar o cliente recém-criado
+      setClienteSelecionado(novoCliente);
+
+      // Recarregar lista de clientes
+      await carregarClientes();
+
+      // Fechar modais
+      setShowCadastroClienteModal(false);
+      setShowClienteModal(false);
+
+      // Limpar formulário
+      setCadastroClienteData({
+        nome: '',
+        telefones: [],
+        cep: '',
+        endereco: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        cidade: '',
+        estado: ''
+      });
+      setNovoTelefoneCliente({
+        numero: '',
+        tipo: 'Celular',
+        whatsapp: false
+      });
+
+    } catch (error) {
+      console.error('Erro ao salvar cliente:', error);
+      toast.error('Erro inesperado ao salvar cliente');
+    } finally {
+      setSalvandoCliente(false);
+    }
+  };
+
+  const cancelarCadastroCliente = () => {
+    setShowCadastroClienteModal(false);
+    // Limpar formulário
+    setCadastroClienteData({
+      nome: '',
+      telefones: [],
+      cep: '',
+      endereco: '',
+      numero: '',
+      complemento: '',
+      bairro: '',
+      cidade: '',
+      estado: ''
+    });
+    setNovoTelefoneCliente({
+      numero: '',
+      tipo: 'Celular',
+      whatsapp: false
+    });
+  };
+
   const handleCpfCnpjChange = (value: string) => {
     const formatted = formatDocumento(value);
     setCpfCnpjNota(formatted);
@@ -10190,15 +10438,18 @@ const PDVPage: React.FC = () => {
           updateData.telefone_cliente = clienteData.telefones[0].numero;
         }
 
-        // Documento do cliente
+        // Documento do cliente (salvar mesmo se for null)
+        updateData.documento_cliente = clienteData.documento;
         if (clienteData.documento) {
-          updateData.documento_cliente = clienteData.documento;
           // Determinar tipo de documento baseado no tamanho
           const docLimpo = clienteData.documento.replace(/\D/g, '');
           updateData.tipo_documento_cliente = docLimpo.length === 11 ? 'cpf' : 'cnpj';
+        } else {
+          // Se não tem documento, usar o tipo_documento da tabela clientes
+          updateData.tipo_documento_cliente = clienteData.tipo_documento || null;
         }
 
-        // Endereço do cliente (se disponível)
+        // ✅ CORREÇÃO: Endereço do cliente (salvar sempre que disponível, independente do documento)
         if (clienteData.cep) updateData.cep_entrega = clienteData.cep;
         if (clienteData.endereco) updateData.rua_entrega = clienteData.endereco;
         if (clienteData.numero) updateData.numero_entrega = clienteData.numero;
@@ -11167,27 +11418,22 @@ const PDVPage: React.FC = () => {
         }
       }
 
-      // ✅ NOVO: Restaurar dados específicos do delivery local
+      // ✅ CORREÇÃO: Log dos dados específicos do delivery local (sem tentar setar estados que não existem)
       if (venda.delivery_local) {
-        // Restaurar telefone do cliente
+        console.log('🚚 [DELIVERY] Dados do delivery local restaurados:');
+
         if (venda.telefone_cliente) {
-          setTelefoneCliente(venda.telefone_cliente);
-          console.log('✅ Telefone do cliente restaurado:', venda.telefone_cliente);
+          console.log('✅ Telefone do cliente:', venda.telefone_cliente);
         }
 
-        // Restaurar documento do cliente
         if (venda.documento_cliente) {
-          setDocumentoCliente(venda.documento_cliente);
-          console.log('✅ Documento do cliente restaurado:', venda.documento_cliente);
+          console.log('✅ Documento do cliente:', venda.documento_cliente);
         }
 
-        // Restaurar tipo de documento
         if (venda.tipo_documento_cliente) {
-          setTipoDocumentoCliente(venda.tipo_documento_cliente);
-          console.log('✅ Tipo documento restaurado:', venda.tipo_documento_cliente);
+          console.log('✅ Tipo documento:', venda.tipo_documento_cliente);
         }
 
-        // Restaurar endereço de entrega
         if (venda.cep_entrega || venda.rua_entrega) {
           const enderecoEntrega = {
             cep: venda.cep_entrega || '',
@@ -11198,20 +11444,15 @@ const PDVPage: React.FC = () => {
             cidade: venda.cidade_entrega || '',
             estado: venda.estado_entrega || ''
           };
-          setEnderecoEntrega(enderecoEntrega);
-          console.log('✅ Endereço de entrega restaurado:', enderecoEntrega);
+          console.log('✅ Endereço de entrega:', enderecoEntrega);
         }
 
-        // Restaurar observação de entrega
         if (venda.observacao_entrega) {
-          setObservacaoEntrega(venda.observacao_entrega);
-          console.log('✅ Observação de entrega restaurada:', venda.observacao_entrega);
+          console.log('✅ Observação de entrega:', venda.observacao_entrega);
         }
 
-        // Restaurar valor de entrega
         if (venda.valor_entrega) {
-          setValorEntrega(venda.valor_entrega);
-          console.log('✅ Valor de entrega restaurado:', venda.valor_entrega);
+          console.log('✅ Valor de entrega:', venda.valor_entrega);
         }
       }
 
@@ -17672,15 +17913,24 @@ const PDVPage: React.FC = () => {
               {/* Header fixo */}
               <div className="flex items-center justify-between p-6 border-b border-gray-800">
                 <h3 className="text-lg font-semibold text-white">Selecionar Cliente</h3>
-                <button
-                  onClick={() => {
-                    setShowClienteModal(false);
-                    setSearchClienteTerm(''); // Limpar busca ao fechar
-                  }}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X size={20} />
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowCadastroClienteModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm"
+                  >
+                    <Plus size={16} />
+                    Cadastrar Cliente
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowClienteModal(false);
+                      setSearchClienteTerm(''); // Limpar busca ao fechar
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
               {/* Campo de busca fixo */}
@@ -23705,6 +23955,319 @@ const PDVPage: React.FC = () => {
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded-lg transition-colors"
                 >
                   Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Cadastro Rápido de Cliente */}
+      <AnimatePresence>
+        {showCadastroClienteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => cancelarCadastroCliente()}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background-card rounded-lg border border-gray-800 w-full max-w-4xl mx-4 h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-800">
+                <h3 className="text-lg font-semibold text-white">Cadastrar Novo Cliente</h3>
+                <button
+                  onClick={cancelarCadastroCliente}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Conteúdo com scroll */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                <div className="space-y-6">
+                  {/* Nome */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Nome <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={cadastroClienteData.nome}
+                      onChange={(e) => setCadastroClienteData({
+                        ...cadastroClienteData,
+                        nome: e.target.value
+                      })}
+                      className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-3 px-4 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                      placeholder="Digite o nome do cliente"
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Telefones */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Telefones <span className="text-red-500">*</span>
+                    </label>
+
+                    {/* Lista de telefones adicionados */}
+                    {cadastroClienteData.telefones.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        {cadastroClienteData.telefones.map((telefone, index) => (
+                          <div key={index} className="flex items-center justify-between bg-gray-800/30 p-3 rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <Phone size={16} className="text-gray-400" />
+                              <span className="text-white">{telefone.numero}</span>
+                              <span className="text-xs text-gray-400 bg-gray-700 px-2 py-1 rounded">
+                                {telefone.tipo}
+                              </span>
+                              {telefone.whatsapp && (
+                                <span className="text-xs text-green-400 bg-green-500/20 px-2 py-1 rounded">
+                                  WhatsApp
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => removerTelefoneCliente(index)}
+                              className="text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Adicionar novo telefone */}
+                    <div className="space-y-3 bg-gray-800/20 p-4 rounded-lg">
+                      <div className="text-sm font-medium text-gray-300">Adicionar telefone</div>
+
+                      {/* Tipo de telefone */}
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 text-sm text-gray-300">
+                          <input
+                            type="radio"
+                            name="tipoTelefone"
+                            checked={novoTelefoneCliente.tipo === 'Celular'}
+                            onChange={() => setNovoTelefoneCliente({
+                              ...novoTelefoneCliente,
+                              tipo: 'Celular'
+                            })}
+                            className="text-primary-500"
+                          />
+                          Celular
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-gray-300">
+                          <input
+                            type="radio"
+                            name="tipoTelefone"
+                            checked={novoTelefoneCliente.tipo === 'Fixo'}
+                            onChange={() => setNovoTelefoneCliente({
+                              ...novoTelefoneCliente,
+                              tipo: 'Fixo'
+                            })}
+                            className="text-primary-500"
+                          />
+                          Fixo
+                        </label>
+                      </div>
+
+                      {/* WhatsApp */}
+                      <label className="flex items-center gap-2 text-sm text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={novoTelefoneCliente.whatsapp}
+                          onChange={(e) => setNovoTelefoneCliente({
+                            ...novoTelefoneCliente,
+                            whatsapp: e.target.checked
+                          })}
+                          className="text-primary-500"
+                        />
+                        Este número tem WhatsApp
+                      </label>
+
+                      {/* Campo de telefone */}
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Phone size={18} className="text-gray-500" />
+                          </div>
+                          <input
+                            type="text"
+                            value={novoTelefoneCliente.numero}
+                            onChange={handleNovoTelefoneClienteChange}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder={novoTelefoneCliente.tipo === 'Celular' ? "(00) 0 0000-0000" : "(00) 0000-0000"}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={adicionarTelefoneCliente}
+                          className="bg-primary-500 hover:bg-primary-600 text-white px-3 py-2 rounded-lg transition-colors"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Endereço */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Endereço (opcional)
+                    </label>
+
+                    <div className="space-y-4">
+                      {/* CEP */}
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">CEP (opcional)</label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <MapPin size={16} className="text-gray-500" />
+                          </div>
+                          <input
+                            type="text"
+                            value={cadastroClienteData.cep}
+                            onChange={handleCEPChange}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="00000-000"
+                            maxLength={9}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Endereço */}
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Endereço (opcional)</label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <MapPin size={16} className="text-gray-500" />
+                          </div>
+                          <input
+                            type="text"
+                            value={cadastroClienteData.endereco}
+                            onChange={(e) => setCadastroClienteData({
+                              ...cadastroClienteData,
+                              endereco: e.target.value
+                            })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Avenida, rua"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Número e Complemento */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Número (opcional)</label>
+                          <input
+                            type="text"
+                            value={cadastroClienteData.numero}
+                            onChange={(e) => setCadastroClienteData({
+                              ...cadastroClienteData,
+                              numero: e.target.value
+                            })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Número"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Complemento (opcional)</label>
+                          <input
+                            type="text"
+                            value={cadastroClienteData.complemento}
+                            onChange={(e) => setCadastroClienteData({
+                              ...cadastroClienteData,
+                              complemento: e.target.value
+                            })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Apto, sala, etc."
+                          />
+                        </div>
+                      </div>
+
+                      {/* Bairro */}
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Bairro (opcional)</label>
+                        <input
+                          type="text"
+                          value={cadastroClienteData.bairro}
+                          onChange={(e) => setCadastroClienteData({
+                            ...cadastroClienteData,
+                            bairro: e.target.value
+                          })}
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                          placeholder="Bairro"
+                        />
+                      </div>
+
+                      {/* Cidade e Estado */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Cidade (opcional)</label>
+                          <input
+                            type="text"
+                            value={cadastroClienteData.cidade}
+                            onChange={(e) => setCadastroClienteData({
+                              ...cadastroClienteData,
+                              cidade: e.target.value
+                            })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="Cidade"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Estado (opcional)</label>
+                          <input
+                            type="text"
+                            value={cadastroClienteData.estado}
+                            onChange={(e) => setCadastroClienteData({
+                              ...cadastroClienteData,
+                              estado: e.target.value.toUpperCase()
+                            })}
+                            className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
+                            placeholder="UF"
+                            maxLength={2}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer com botões */}
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-800">
+                <button
+                  onClick={cancelarCadastroCliente}
+                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                  disabled={salvandoCliente}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={salvarNovoCliente}
+                  disabled={salvandoCliente || !cadastroClienteData.nome.trim() || cadastroClienteData.telefones.length === 0}
+                  className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {salvandoCliente ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} />
+                      Salvar Cliente
+                    </>
+                  )}
                 </button>
               </div>
             </motion.div>
