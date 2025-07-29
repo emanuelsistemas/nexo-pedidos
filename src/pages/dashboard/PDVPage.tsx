@@ -3817,12 +3817,34 @@ const PDVPage: React.FC = () => {
           numero: pedido.numero_pedido,
           data: new Date(pedido.data_pedido).toLocaleString('pt-BR'),
           valor_total: pedido.valor_total,
+          valor_produtos: pedido.valor_produtos,
+          valor_taxa_entrega: pedido.valor_taxa_entrega,
           status: pedido.status_pedido,
-          tipo_entrega: pedido.tipo_entrega
+          tipo_entrega: pedido.tipo_entrega,
+          tem_entrega: pedido.tem_entrega
         },
         cliente: {
           nome_cliente: pedido.nome_cliente,
           telefone_cliente: pedido.telefone_cliente
+        },
+        pagamento: {
+          forma_pagamento_nome: pedido.forma_pagamento_nome,
+          forma_pagamento_tipo: pedido.forma_pagamento_tipo
+        },
+        entrega: {
+          tem_entrega: pedido.tem_entrega,
+          endereco_entrega: pedido.endereco_entrega,
+          numero_entrega: pedido.numero_entrega,
+          complemento_entrega: pedido.complemento_entrega,
+          bairro_entrega: pedido.bairro_entrega,
+          cidade_entrega: pedido.cidade_entrega,
+          estado_entrega: pedido.estado_entrega,
+          cep_entrega: pedido.cep_entrega,
+          tipo_endereco: pedido.tipo_endereco,
+          nome_condominio: pedido.nome_condominio,
+          bloco_endereco: pedido.bloco_endereco,
+          proximo_a: pedido.proximo_a,
+          observacao_entrega: pedido.observacao_entrega
         },
         itens: itens
       };
@@ -14958,6 +14980,27 @@ const PDVPage: React.FC = () => {
               border-bottom: 1px solid #000;
               padding: 3px 0;
             }
+
+            .pagamento-section {
+              font-size: ${usarImpressao50mm ? '11px' : '12px'} !important;
+              margin: 5px 0;
+            }
+
+            .endereco-section {
+              font-size: ${usarImpressao50mm ? '13px' : '15px'} !important;
+              font-weight: 900;
+              border: 2px solid #000;
+              padding: 8px;
+              margin: 8px 0;
+              background-color: #f0f0f0;
+            }
+
+            .endereco-title {
+              font-size: ${usarImpressao50mm ? '14px' : '16px'} !important;
+              font-weight: 900;
+              text-align: center;
+              margin-bottom: 5px;
+            }
           </style>
         </head>
         <body>
@@ -15012,10 +15055,73 @@ const PDVPage: React.FC = () => {
 
           <div class="linha"></div>
 
+          <!-- Subtotal e Taxa de Entrega -->
+          ${dadosImpressao.pedido.valor_produtos && dadosImpressao.pedido.valor_taxa_entrega ? `
+            <div class="item-linha">
+              <span>Subtotal Produtos:</span>
+              <span class="valor-monetario">${formatCurrency(dadosImpressao.pedido.valor_produtos)}</span>
+            </div>
+            <div class="item-linha">
+              <span>Taxa de Entrega:</span>
+              <span class="valor-monetario">${formatCurrency(dadosImpressao.pedido.valor_taxa_entrega)}</span>
+            </div>
+            <div class="linha"></div>
+          ` : ''}
+
           <div class="item-linha bold total-section">
             <span>TOTAL:</span>
             <span class="valor-monetario">${formatCurrency(dadosImpressao.pedido.valor_total)}</span>
           </div>
+
+          <!-- Forma de Pagamento -->
+          ${dadosImpressao.pagamento?.forma_pagamento_nome ? `
+            <div class="pagamento-section">
+              <div class="center bold">FORMA DE PAGAMENTO</div>
+              <div class="center">${dadosImpressao.pagamento.forma_pagamento_nome}</div>
+              ${dadosImpressao.pagamento.forma_pagamento_tipo ? `<div class="center" style="font-size: 10px; color: #666;">(${dadosImpressao.pagamento.forma_pagamento_tipo})</div>` : ''}
+            </div>
+          ` : ''}
+
+          <!-- Endereço de Entrega -->
+          ${dadosImpressao.entrega?.tem_entrega ? `
+            <div class="endereco-section">
+              <div class="endereco-title">🚚 ENDEREÇO DE ENTREGA</div>
+
+              ${dadosImpressao.entrega.endereco_entrega ? `
+                <div class="bold">${dadosImpressao.entrega.endereco_entrega}${dadosImpressao.entrega.numero_entrega ? `, ${dadosImpressao.entrega.numero_entrega}` : ''}</div>
+              ` : ''}
+
+              ${dadosImpressao.entrega.complemento_entrega ? `
+                <div>${dadosImpressao.entrega.complemento_entrega}</div>
+              ` : ''}
+
+              ${dadosImpressao.entrega.bairro_entrega || dadosImpressao.entrega.cidade_entrega ? `
+                <div>${dadosImpressao.entrega.bairro_entrega ? `${dadosImpressao.entrega.bairro_entrega}` : ''}${dadosImpressao.entrega.bairro_entrega && dadosImpressao.entrega.cidade_entrega ? ' - ' : ''}${dadosImpressao.entrega.cidade_entrega ? `${dadosImpressao.entrega.cidade_entrega}` : ''}${dadosImpressao.entrega.estado_entrega ? `/${dadosImpressao.entrega.estado_entrega}` : ''}</div>
+              ` : ''}
+
+              ${dadosImpressao.entrega.cep_entrega ? `
+                <div>CEP: ${dadosImpressao.entrega.cep_entrega}</div>
+              ` : ''}
+
+              ${dadosImpressao.entrega.tipo_endereco === 'condominio' ? `
+                ${dadosImpressao.entrega.nome_condominio ? `<div>Condomínio: ${dadosImpressao.entrega.nome_condominio}</div>` : ''}
+                ${dadosImpressao.entrega.bloco_endereco ? `<div>Bloco: ${dadosImpressao.entrega.bloco_endereco}</div>` : ''}
+              ` : ''}
+
+              ${dadosImpressao.entrega.proximo_a ? `
+                <div>Próximo a: ${dadosImpressao.entrega.proximo_a}</div>
+              ` : ''}
+
+              ${dadosImpressao.entrega.observacao_entrega ? `
+                <div style="margin-top: 5px; font-style: italic;">Obs: ${dadosImpressao.entrega.observacao_entrega}</div>
+              ` : ''}
+            </div>
+          ` : dadosImpressao.pedido.tem_entrega === false ? `
+            <div class="endereco-section">
+              <div class="endereco-title">🏪 RETIRADA NO BALCÃO</div>
+              <div class="center">Cliente irá retirar no estabelecimento</div>
+            </div>
+          ` : ''}
 
           <div class="linha"></div>
 
