@@ -3829,7 +3829,8 @@ const PDVPage: React.FC = () => {
         },
         pagamento: {
           forma_pagamento_nome: pedido.forma_pagamento_nome,
-          forma_pagamento_tipo: pedido.forma_pagamento_tipo
+          forma_pagamento_tipo: pedido.forma_pagamento_tipo,
+          forma_pagamento_detalhes: pedido.forma_pagamento_detalhes
         },
         entrega: {
           tem_entrega: pedido.tem_entrega,
@@ -8253,6 +8254,27 @@ const PDVPage: React.FC = () => {
 
   const formatCurrency = (value: number) => {
     return formatarPreco(value);
+  };
+
+  // Função para converter porcentagem em fração
+  const converterPorcentagemParaFracao = (porcentagem: number, totalSabores: number) => {
+    // Se há apenas 1 sabor, não mostrar fração
+    if (totalSabores === 1) {
+      return '';
+    }
+
+    // Para sabores com porcentagens iguais, usar frações simples
+    if (totalSabores === 2 && porcentagem === 50) {
+      return '1/2';
+    } else if (totalSabores === 3 && porcentagem === 33) {
+      return '1/3';
+    } else if (totalSabores === 4 && porcentagem === 25) {
+      return '1/4';
+    } else {
+      // Para casos especiais ou porcentagens diferentes, calcular fração aproximada
+      const fracao = Math.round(porcentagem / (100 / totalSabores));
+      return `${fracao}/${totalSabores}`;
+    }
   };
 
   const formatCurrencyWithoutSymbol = (value: number) => {
@@ -27219,12 +27241,14 @@ const PDVPage: React.FC = () => {
                                         {item.sabores && item.sabores.length > 0 && (
                                           <div className="mt-2">
                                             <p className="text-xs text-gray-400 mb-1">Sabores:</p>
-                                            {item.sabores.map((sabor: any, idx: number) => (
-                                              <p key={idx} className="text-xs text-blue-400">
-                                                • {sabor.nome || sabor.produto_nome || 'Sabor'}
-                                                {sabor.porcentagem && ` (${sabor.porcentagem}%)`}
-                                              </p>
-                                            ))}
+                                            {item.sabores.map((sabor: any, idx: number) => {
+                                              const fracao = converterPorcentagemParaFracao(sabor.porcentagem || 0, item.sabores.length);
+                                              return (
+                                                <p key={idx} className="text-xs text-blue-400">
+                                                  {fracao && `🍕 ${fracao} `}{sabor.nome || sabor.produto_nome || 'Sabor'}
+                                                </p>
+                                              );
+                                            })}
                                           </div>
                                         )}
 
@@ -27297,8 +27321,22 @@ const PDVPage: React.FC = () => {
                           {pedidoSelecionado.forma_pagamento_nome && (
                             <div className="bg-gray-700/50 rounded-lg p-4">
                               <h3 className="text-sm font-semibold text-gray-300 mb-2">💳 Pagamento</h3>
-                              <p className="text-white">{pedidoSelecionado.forma_pagamento_nome}</p>
-                              {pedidoSelecionado.forma_pagamento_tipo && (
+                              <p className="text-white">
+                                {pedidoSelecionado.forma_pagamento_nome}
+                                {(() => {
+                                  // Se for dinheiro, mostrar informações de troco
+                                  if (pedidoSelecionado.forma_pagamento_tipo === 'dinheiro' && pedidoSelecionado.forma_pagamento_detalhes) {
+                                    const detalhes = pedidoSelecionado.forma_pagamento_detalhes;
+                                    if (detalhes.precisa_troco === false) {
+                                      return ' (SEM TROCO)';
+                                    } else if (detalhes.precisa_troco === true && detalhes.troco > 0) {
+                                      return ` (Troco ${formatCurrency(detalhes.troco)})`;
+                                    }
+                                  }
+                                  return '';
+                                })()}
+                              </p>
+                              {pedidoSelecionado.forma_pagamento_tipo && pedidoSelecionado.forma_pagamento_tipo !== 'dinheiro' && (
                                 <p className="text-gray-400 text-sm">Tipo: {pedidoSelecionado.forma_pagamento_tipo}</p>
                               )}
                             </div>
