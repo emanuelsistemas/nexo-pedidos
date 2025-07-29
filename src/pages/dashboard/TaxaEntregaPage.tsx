@@ -67,6 +67,7 @@ const TaxaEntregaPage: React.FC = () => {
   const [taxas, setTaxas] = useState<any[]>([]);
   const [editingTaxa, setEditingTaxa] = useState<any>(null);
   const [taxaMode, setTaxaMode] = useState<'bairro' | 'distancia'>('bairro');
+  const [taxaConfigHabilitada, setTaxaConfigHabilitada] = useState(false);
   const [formData, setFormData] = useState({
     cep: '',
     bairro: '',
@@ -91,11 +92,17 @@ const TaxaEntregaPage: React.FC = () => {
   });
 
   useEffect(() => {
-    loadTaxas();
-    loadTaxaMode();
+    loadTaxaConfig();
   }, []);
 
-  const loadTaxaMode = async () => {
+  // Recarregar taxas quando o modo mudar
+  useEffect(() => {
+    if (taxaMode) {
+      loadTaxas();
+    }
+  }, [taxaMode]);
+
+  const loadTaxaConfig = async () => {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
@@ -108,21 +115,27 @@ const TaxaEntregaPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
+      // Buscar configuração da taxa de entrega na tabela taxa_entrega_config
       const { data: configData, error } = await supabase
-        .from('configuracoes')
-        .select('taxa_modo')
+        .from('taxa_entrega_config')
+        .select('habilitado, tipo')
         .eq('empresa_id', usuarioData.empresa_id)
         .single();
 
-      console.log('Config data:', configData);
-      console.log('Config error:', error);
+      console.log('Taxa entrega config:', configData);
+      console.log('Taxa entrega error:', error);
 
       if (configData) {
-        setTaxaMode(configData.taxa_modo);
+        setTaxaMode(configData.tipo || 'bairro');
+        setTaxaConfigHabilitada(configData.habilitado || false);
+      } else {
+        // Se não existe configuração, usar valores padrão
+        setTaxaMode('bairro');
+        setTaxaConfigHabilitada(false);
       }
     } catch (error) {
-      console.error('Error loading taxa mode:', error);
-      showMessage('error', 'Erro ao carregar configurações');
+      console.error('Error loading taxa config:', error);
+      showMessage('error', 'Erro ao carregar configurações de taxa');
     }
   };
 
@@ -142,11 +155,20 @@ const TaxaEntregaPage: React.FC = () => {
 
       if (!usuarioData?.empresa_id) return;
 
-      const { data: taxasData } = await supabase
+      // Filtrar taxas baseado no tipo configurado
+      let query = supabase
         .from('taxa_entrega')
         .select('*')
-        .eq('empresa_id', usuarioData.empresa_id)
-        .order('created_at', { ascending: false });
+        .eq('empresa_id', usuarioData.empresa_id);
+
+      // Aplicar filtro baseado no modo de taxa
+      if (taxaMode === 'bairro') {
+        query = query.not('bairro', 'is', null);
+      } else if (taxaMode === 'distancia') {
+        query = query.not('km', 'is', null);
+      }
+
+      const { data: taxasData } = await query.order('created_at', { ascending: false });
 
       setTaxas(taxasData || []);
     } catch (error: any) {
@@ -331,12 +353,34 @@ const TaxaEntregaPage: React.FC = () => {
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Taxa de Entrega</h1>
-          <p className="text-gray-400 mt-1">Gerencie suas taxas de entrega</p>
+          <div className="flex items-center gap-3 mb-2">
+            <h1 className="text-2xl font-semibold text-white">Taxa de Entrega</h1>
+            {taxaConfigHabilitada && (
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                taxaMode === 'bairro'
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                  : 'bg-green-500/20 text-green-400 border border-green-500/30'
+              }`}>
+                {taxaMode === 'bairro' ? 'Por Bairro' : 'Por Distância'}
+              </span>
+            )}
+            {!taxaConfigHabilitada && (
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
+                Desabilitada
+              </span>
+            )}
+          </div>
+          <p className="text-gray-400">
+            {taxaConfigHabilitada
+              ? `Gerencie suas taxas de entrega ${taxaMode === 'bairro' ? 'por bairro' : 'por distância'}`
+              : 'Configure a taxa de entrega nas configurações para começar'
+            }
+          </p>
         </div>
         <Button
           type="button"
           variant="primary"
+          disabled={!taxaConfigHabilitada}
           onClick={() => {
             setEditingTaxa(null);
             setFormData({ cep: '', bairro: '', valor: '', km: '', tempo_entrega: '' });
@@ -418,23 +462,31 @@ const TaxaEntregaPage: React.FC = () => {
                   <MapPin size={24} className="text-primary-400" />
                 </div>
                 <h3 className="text-lg font-medium text-white mb-2">
-                  Nenhuma taxa cadastrada
+                  {taxaConfigHabilitada
+                    ? `Nenhuma taxa ${taxaMode === 'bairro' ? 'de bairro' : 'de distância'} cadastrada`
+                    : 'Taxa de entrega desabilitada'
+                  }
                 </h3>
                 <p className="text-gray-400 mb-6">
-                  Cadastre sua primeira taxa de entrega para começar.
+                  {taxaConfigHabilitada
+                    ? `Cadastre sua primeira taxa ${taxaMode === 'bairro' ? 'por bairro' : 'por distância'} para começar.`
+                    : 'Habilite a taxa de entrega nas configurações para começar a cadastrar taxas.'
+                  }
                 </p>
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="mx-auto"
-                  onClick={() => {
-                    setEditingTaxa(null);
-                    setFormData({ cep: '', bairro: '', valor: '', km: '', tempo_entrega: '' });
-                    setShowSidebar(true);
-                  }}
-                >
-                  + Adicionar Taxa
-                </Button>
+                {taxaConfigHabilitada && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="mx-auto"
+                    onClick={() => {
+                      setEditingTaxa(null);
+                      setFormData({ cep: '', bairro: '', valor: '', km: '', tempo_entrega: '' });
+                      setShowSidebar(true);
+                    }}
+                  >
+                    + Adicionar Taxa
+                  </Button>
+                )}
               </div>
             )}
           </>

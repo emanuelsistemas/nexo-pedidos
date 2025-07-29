@@ -6082,22 +6082,19 @@ const ConfiguracoesPage: React.FC = () => {
                       </label>
 
                       <div className="relative">
-                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                           <input
                             type="checkbox"
-                            checked={false}
-                            disabled={true}
-                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            checked={pdvConfig.controla_caixa}
+                            onChange={(e) => handlePdvConfigChange('controla_caixa', e.target.checked)}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
                             style={{ borderRadius: '50%' }}
                           />
                           <div>
-                            <h4 className="text-gray-400 font-medium">Controla Caixa</h4>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <h4 className="text-white font-medium">Controla Caixa</h4>
+                            <p className="text-sm text-gray-400 mt-1">
                               Habilita controle de abertura e fechamento de caixa com relatórios financeiros.
                             </p>
-                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
-                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
-                            </div>
                           </div>
                         </label>
                       </div>
@@ -6252,22 +6249,19 @@ const ConfiguracoesPage: React.FC = () => {
                       </label>
 
                       <div className="relative">
-                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-not-allowed opacity-60 transition-colors">
+                        <label className="flex items-start p-4 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800/70 transition-colors">
                           <input
                             type="checkbox"
-                            checked={false}
-                            disabled={true}
-                            className="w-5 h-5 text-gray-500 bg-gray-700 border-gray-600 rounded-full cursor-not-allowed mt-0.5 mr-3"
+                            checked={pdvConfig.fiado}
+                            onChange={(e) => handlePdvConfigChange('fiado', e.target.checked)}
+                            className="w-5 h-5 text-primary-500 bg-gray-800 border-gray-600 rounded-full focus:ring-primary-500 focus:ring-2 mt-0.5 mr-3"
                             style={{ borderRadius: '50%' }}
                           />
                           <div>
-                            <h4 className="text-gray-400 font-medium">Fiado</h4>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <h4 className="text-white font-medium">Fiado</h4>
+                            <p className="text-sm text-gray-400 mt-1">
                               Habilita a opção de venda fiado no PDV.
                             </p>
-                            <div className="mt-2 text-xs text-yellow-400 flex items-center">
-                              🚧 Em desenvolvimento - Funcionalidade temporariamente desabilitada
-                            </div>
                           </div>
                         </label>
                       </div>
