@@ -224,6 +224,8 @@ const PDVPage: React.FC = () => {
   const [bairrosDisponiveis, setBairrosDisponiveis] = useState<any[]>([]);
   const [bairroSelecionado, setBairroSelecionado] = useState('');
   const [showBairrosDropdown, setShowBairrosDropdown] = useState(false);
+  const [searchBairro, setSearchBairro] = useState('');
+  const [bairrosFiltrados, setBairrosFiltrados] = useState<any[]>([]);
   const [validandoAreaEntrega, setValidandoAreaEntrega] = useState(false);
   const [areaEntregaValida, setAreaEntregaValida] = useState<boolean | null>(null);
   const [mensagemAreaEntrega, setMensagemAreaEntrega] = useState('');
@@ -3260,7 +3262,7 @@ const PDVPage: React.FC = () => {
       if (error) throw error;
 
       // Transformar dados para o formato esperado pelo PDV
-      const formasTransformadas = (data || []).map(forma => ({
+      let formasTransformadas = (data || []).map(forma => ({
         id: forma.id,
         nome: forma.forma_pagamento_opcoes?.nome || 'Forma de Pagamento',
         tipo: forma.forma_pagamento_opcoes?.tipo || 'outros',
@@ -3273,6 +3275,32 @@ const PDVPage: React.FC = () => {
         tipo_chave_pix: forma.tipo_chave_pix,
         chave_pix: forma.chave_pix
       }));
+
+      // ✅ ADICIONAR FIADO: Se habilitado na configuração PDV, buscar da tabela genérica
+      if (pdvConfig?.fiado) {
+        const { data: fiadoData, error: fiadoError } = await supabase
+          .from('forma_pagamento_opcoes')
+          .select('id, nome, tipo')
+          .eq('nome', 'Fiado')
+          .eq('ativo', true)
+          .single();
+
+        if (!fiadoError && fiadoData) {
+          // Adicionar Fiado como opção genérica
+          formasTransformadas.push({
+            id: `fiado_${fiadoData.id}`, // ID único para evitar conflitos
+            nome: fiadoData.nome,
+            tipo: fiadoData.tipo,
+            ativo: true,
+            cardapio_digital: false,
+            max_parcelas: 1,
+            juros_por_parcela: 0,
+            utilizar_chave_pix: false,
+            tipo_chave_pix: null,
+            chave_pix: null
+          });
+        }
+      }
 
       setFormasPagamento(formasTransformadas);
 
@@ -4306,6 +4334,21 @@ const PDVPage: React.FC = () => {
       carregarTaxaEntregaConfig();
     }
   }, [showCadastroClienteModal]);
+
+  // Fechar dropdown de bairros ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showBairrosDropdown && !target.closest('.bairro-dropdown-container')) {
+        setShowBairrosDropdown(false);
+      }
+    };
+
+    if (showBairrosDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showBairrosDropdown]);
 
   // ✅ USEEFFECT DUPLICADO REMOVIDO - JÁ EXISTE UM ACIMA
 
@@ -9043,6 +9086,8 @@ const PDVPage: React.FC = () => {
     setMensagemAreaEntrega('');
     setBairroSelecionado('');
     setShowBairrosDropdown(false);
+    setSearchBairro('');
+    setBairrosFiltrados([]);
   };
 
   // Carregar configuração de taxa de entrega
@@ -9088,9 +9133,20 @@ const PDVPage: React.FC = () => {
             .from('taxa_entrega')
             .select('bairro, valor, tempo_entrega')
             .eq('empresa_id', usuarioData.empresa_id)
+            .not('bairro', 'is', null)
+            .neq('bairro', '')
             .order('bairro');
 
-          setBairrosDisponiveis(bairrosData || []);
+          // Filtrar bairros válidos no frontend também (dupla proteção)
+          const bairrosValidos = (bairrosData || []).filter(b =>
+            b.bairro &&
+            b.bairro.trim() !== '' &&
+            b.valor !== null &&
+            b.valor !== undefined
+          );
+
+          setBairrosDisponiveis(bairrosValidos);
+          setBairrosFiltrados(bairrosValidos);
         }
       } else {
         setTaxaEntregaConfig(null);
@@ -9123,8 +9179,8 @@ const PDVPage: React.FC = () => {
           setShowBairrosDropdown(false);
         } else {
           setAreaEntregaValida(false);
-          setMensagemAreaEntrega('Bairro não atendido. Veja os bairros disponíveis abaixo:');
-          setShowBairrosDropdown(true);
+          setMensagemAreaEntrega('Bairro não atendido. Clique no campo bairro para selecionar um bairro disponível.');
+          setShowBairrosDropdown(false);
         }
       } else if (taxaEntregaConfig.tipo === 'distancia') {
         // Validação por distância usando o serviço existente
@@ -9160,6 +9216,28 @@ const PDVPage: React.FC = () => {
     }
   };
 
+  // Filtrar bairros baseado na pesquisa
+  const filtrarBairros = (termo: string) => {
+    setSearchBairro(termo);
+
+    // Sempre filtrar bairros válidos primeiro
+    const bairrosValidos = bairrosDisponiveis.filter(bairro =>
+      bairro.bairro &&
+      bairro.bairro.trim() !== '' &&
+      bairro.valor !== null &&
+      bairro.valor !== undefined
+    );
+
+    if (!termo.trim()) {
+      setBairrosFiltrados(bairrosValidos);
+    } else {
+      const filtrados = bairrosValidos.filter(bairro =>
+        bairro.bairro.toLowerCase().includes(termo.toLowerCase())
+      );
+      setBairrosFiltrados(filtrados);
+    }
+  };
+
   // Selecionar bairro do dropdown
   const selecionarBairro = (bairro: string) => {
     setBairroSelecionado(bairro);
@@ -9168,12 +9246,20 @@ const PDVPage: React.FC = () => {
       bairro: bairro
     });
     setShowBairrosDropdown(false);
+    setSearchBairro('');
     setAreaEntregaValida(true);
 
     const bairroData = bairrosDisponiveis.find(b => b.bairro === bairro);
     if (bairroData) {
       setMensagemAreaEntrega(`Entrega disponível para ${bairro} - R$ ${bairroData.valor.toFixed(2)}`);
     }
+  };
+
+  // Abrir dropdown de bairros
+  const abrirDropdownBairros = () => {
+    setShowBairrosDropdown(true);
+    setBairrosFiltrados(bairrosDisponiveis);
+    setSearchBairro('');
   };
 
   const handleCpfCnpjChange = (value: string) => {
@@ -24369,41 +24455,105 @@ const PDVPage: React.FC = () => {
                           )}
                         </label>
                         {taxaEntregaConfig?.tipo === 'bairro' ? (
-                          <div className="relative">
-                            <input
-                              type="text"
-                              value={bairroSelecionado || cadastroClienteData.bairro}
-                              onChange={(e) => {
-                                setCadastroClienteData({
-                                  ...cadastroClienteData,
-                                  bairro: e.target.value
-                                });
-                                setBairroSelecionado('');
-                                setAreaEntregaValida(null);
-                                setMensagemAreaEntrega('');
-                              }}
-                              className={`w-full border rounded-lg py-2 px-3 text-white placeholder-gray-400 focus:outline-none focus:ring-1 ${
+                          <div className="relative bairro-dropdown-container">
+                            {/* Campo de input/dropdown */}
+                            <div
+                              onClick={abrirDropdownBairros}
+                              className={`w-full border rounded-lg py-2 px-3 text-white cursor-pointer flex items-center justify-between ${
                                 areaEntregaValida === true
-                                  ? 'bg-green-900/30 border-green-500 focus:border-green-400 focus:ring-green-500/20'
+                                  ? 'bg-green-900/30 border-green-500'
                                   : areaEntregaValida === false
-                                  ? 'bg-red-900/30 border-red-500 focus:border-red-400 focus:ring-red-500/20'
-                                  : 'bg-gray-800/50 border-gray-700 focus:border-primary-500 focus:ring-primary-500/20'
+                                  ? 'bg-red-900/30 border-red-500'
+                                  : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
                               }`}
-                              placeholder="Digite ou selecione o bairro"
-                              readOnly={!!bairroSelecionado}
-                            />
-                            {bairroSelecionado && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setBairroSelecionado('');
-                                  setAreaEntregaValida(null);
-                                  setMensagemAreaEntrega('');
-                                }}
-                                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
-                              >
-                                <X size={16} />
-                              </button>
+                            >
+                              <span className={bairroSelecionado ? 'text-white' : 'text-gray-400'}>
+                                {bairroSelecionado || 'Selecione o bairro'}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                {bairroSelecionado && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setBairroSelecionado('');
+                                      setCadastroClienteData({
+                                        ...cadastroClienteData,
+                                        bairro: ''
+                                      });
+                                      setAreaEntregaValida(null);
+                                      setMensagemAreaEntrega('');
+                                    }}
+                                    className="text-gray-400 hover:text-white"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                )}
+                                <Search size={16} className="text-gray-400" />
+                              </div>
+                            </div>
+
+                            {/* Dropdown com pesquisa */}
+                            {showBairrosDropdown && (
+                              <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50 max-h-80 overflow-hidden">
+                                {/* Campo de pesquisa */}
+                                <div className="p-3 border-b border-gray-700">
+                                  <div className="relative">
+                                    <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                                    <input
+                                      type="text"
+                                      value={searchBairro}
+                                      onChange={(e) => filtrarBairros(e.target.value)}
+                                      className="w-full bg-gray-700 border border-gray-600 rounded-lg py-2 pl-10 pr-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                                      placeholder="Pesquisar bairro..."
+                                      autoFocus
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Lista de bairros */}
+                                <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                  {bairrosFiltrados.length > 0 ? (
+                                    bairrosFiltrados.map((bairro, index) => (
+                                      <button
+                                        key={index}
+                                        type="button"
+                                        onClick={() => selecionarBairro(bairro.bairro)}
+                                        className="w-full text-left p-3 hover:bg-gray-700 transition-colors border-b border-gray-700/50 last:border-b-0"
+                                      >
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-white font-medium">{bairro.bairro}</span>
+                                          <div className="text-right">
+                                            <div className="text-green-400 font-medium">
+                                              R$ {bairro.valor.toFixed(2)}
+                                            </div>
+                                            {bairro.tempo_entrega && (
+                                              <div className="text-xs text-gray-400">
+                                                {bairro.tempo_entrega} min
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <div className="p-4 text-center text-gray-400">
+                                      {searchBairro ? 'Nenhum bairro encontrado' : 'Carregando bairros...'}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Botão fechar */}
+                                <div className="p-2 border-t border-gray-700">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowBairrosDropdown(false)}
+                                    className="w-full py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                                  >
+                                    Fechar
+                                  </button>
+                                </div>
+                              </div>
                             )}
                           </div>
                         ) : (
@@ -24478,38 +24628,7 @@ const PDVPage: React.FC = () => {
                           </div>
                         )}
 
-                        {/* Dropdown de bairros disponíveis */}
-                        {showBairrosDropdown && bairrosDisponiveis.length > 0 && (
-                          <div className="space-y-2">
-                            <div className="text-sm text-gray-400 mb-2">
-                              Bairros disponíveis para entrega:
-                            </div>
-                            <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1">
-                              {bairrosDisponiveis.map((bairro, index) => (
-                                <button
-                                  key={index}
-                                  type="button"
-                                  onClick={() => selecionarBairro(bairro.bairro)}
-                                  className="w-full text-left p-3 bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-colors border border-gray-600 hover:border-gray-500"
-                                >
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-white font-medium">{bairro.bairro}</span>
-                                    <div className="text-right">
-                                      <div className="text-green-400 font-medium">
-                                        R$ {bairro.valor.toFixed(2)}
-                                      </div>
-                                      {bairro.tempo_entrega && (
-                                        <div className="text-xs text-gray-400">
-                                          {bairro.tempo_entrega} min
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+
 
                         {/* Informações sobre o tipo de validação */}
                         <div className="text-xs text-gray-500 mt-3">
