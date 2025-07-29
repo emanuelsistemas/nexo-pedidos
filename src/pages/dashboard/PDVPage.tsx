@@ -15124,8 +15124,21 @@ const PDVPage: React.FC = () => {
               </div>
               ${item.observacao ? `<div style="font-size: 10px; color: #666; margin-top: 1px;">Obs: ${item.observacao}</div>` : ''}
               ${item.sabores && item.sabores.length > 0 ? `
-                <div style="font-size: 10px; color: #666; margin-top: 1px;">
-                  Sabores: ${item.sabores.map(sabor => sabor.produto?.nome || sabor.nome || 'Sabor').join(', ')}
+                <div style="font-size: ${usarImpressao50mm ? '8px' : '10px'}; color: #333; margin-top: 2px;">
+                  ${item.sabores.length > 1 ? 'Sabores:' : 'Sabor:'}
+                  ${item.sabores.map(sabor => {
+                    const nomeSabor = sabor.produto?.nome || sabor.nome || 'Sabor';
+                    if (item.sabores.length > 1) {
+                      // Para múltiplos sabores, mostrar fração baseada na porcentagem
+                      const fracao = sabor.porcentagem === 50 ? '1/2' :
+                                   sabor.porcentagem === 33 ? '1/3' :
+                                   sabor.porcentagem === 25 ? '1/4' :
+                                   `${sabor.porcentagem}%`;
+                      return `<div style="margin-left: 10px; margin-top: 1px;">• ${fracao} ${nomeSabor}</div>`;
+                    } else {
+                      return `<div style="margin-left: 10px; margin-top: 1px;">• ${nomeSabor}</div>`;
+                    }
+                  }).join('')}
                 </div>
               ` : ''}
               ${item.adicionais && item.adicionais.length > 0 ? `
