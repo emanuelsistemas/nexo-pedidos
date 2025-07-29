@@ -746,6 +746,24 @@ const PDVPage: React.FC = () => {
   const [observacaoVenda, setObservacaoVenda] = useState<string>('');
   const [showObservacaoVendaModal, setShowObservacaoVendaModal] = useState(false);
 
+  // ✅ NOVO: Estados para modal de aviso do Fiado
+  const [showFiadoSemClienteModal, setShowFiadoSemClienteModal] = useState(false);
+
+  // ✅ FUNÇÃO: Verificar se a forma de pagamento selecionada é Fiado
+  const isFormaPagamentoFiado = () => {
+    if (!formaPagamentoSelecionada) return false;
+
+    const formaSelecionada = formasPagamento.find(forma => forma.id === formaPagamentoSelecionada);
+    return formaSelecionada?.nome?.toLowerCase() === 'fiado';
+  };
+
+  // ✅ FUNÇÃO: Verificar se há cliente selecionado
+  const hasClienteSelecionado = () => {
+    return !!(clienteSelecionado ||
+             (pedidosImportados.length > 0 && pedidosImportados[0]?.cliente) ||
+             carrinho.some(item => item.cardapio_digital));
+  };
+
   // Estados para modal de opções adicionais
   const [showOpcoesAdicionaisModal, setShowOpcoesAdicionaisModal] = useState(false);
   const [produtoParaAdicionais, setProdutoParaAdicionais] = useState<Produto | null>(null);
@@ -4390,6 +4408,13 @@ const PDVPage: React.FC = () => {
       carregarTaxaEntregaConfig();
     }
   }, [showCadastroClienteModal]);
+
+  // Carregar configuração de taxa de entrega quando modal de seleção de cliente abrir
+  useEffect(() => {
+    if (showClienteModal) {
+      carregarTaxaEntregaConfig();
+    }
+  }, [showClienteModal]);
 
   // Fechar dropdown de bairros ao clicar fora
   useEffect(() => {
@@ -16988,7 +17013,21 @@ const PDVPage: React.FC = () => {
                         <div className="flex items-center gap-1">
                           <User size={12} className="text-blue-400" />
                           <div className="text-xs text-blue-400 font-medium">
-                            {pdvConfig?.delivery && !pdvConfig?.seleciona_clientes ? 'Cliente do Delivery' : 'Cliente'}
+                            {(() => {
+                              let texto = '';
+                              if (pdvConfig?.delivery && !pdvConfig?.seleciona_clientes) {
+                                texto = 'Cliente do Delivery';
+                              } else {
+                                texto = 'Cliente';
+                              }
+
+                              // Adicionar "/ Fiado" se estiver habilitado
+                              if (pdvConfig?.fiado) {
+                                texto += ' / Fiado';
+                              }
+
+                              return texto;
+                            })()}
                           </div>
                         </div>
                         <div className="text-white text-xs font-medium truncate">{clienteSelecionado.nome}</div>
@@ -17044,7 +17083,21 @@ const PDVPage: React.FC = () => {
                         <div className="flex items-center gap-1">
                           <User size={12} className="text-blue-400" />
                           <div className="text-xs text-blue-400 font-medium">
-                            {pdvConfig?.delivery && !pdvConfig?.seleciona_clientes ? 'Cliente do Delivery' : 'Cliente'}
+                            {(() => {
+                              let texto = '';
+                              if (pdvConfig?.delivery && !pdvConfig?.seleciona_clientes) {
+                                texto = 'Cliente do Delivery';
+                              } else {
+                                texto = 'Cliente';
+                              }
+
+                              // Adicionar "/ Fiado" se estiver habilitado
+                              if (pdvConfig?.fiado) {
+                                texto += ' / Fiado';
+                              }
+
+                              return texto;
+                            })()}
                           </div>
                         </div>
                         <div className="text-white text-xs">Selecionar</div>
@@ -18022,6 +18075,12 @@ const PDVPage: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
+                      // ✅ VALIDAÇÃO FIADO: Verificar se é fiado e se há cliente selecionado
+                      if (tipoPagamento === 'vista' && isFormaPagamentoFiado() && !hasClienteSelecionado()) {
+                        setShowFiadoSemClienteModal(true);
+                        return;
+                      }
+
                       // Validação para pagamento à vista
                       if (tipoPagamento === 'vista') {
                         if (!formaPagamentoSelecionada) {
@@ -18031,6 +18090,17 @@ const PDVPage: React.FC = () => {
                         // Avança para a tela de finalização final
                         setShowFinalizacaoFinal(true);
                       } else {
+                        // ✅ VALIDAÇÃO FIADO: Para pagamentos parciais, verificar se algum é fiado
+                        const temFiadoNosParciais = pagamentosParciais.some(pagamento => {
+                          const forma = formasPagamento.find(f => f.id === pagamento.forma_pagamento_id);
+                          return forma?.nome?.toLowerCase() === 'fiado';
+                        });
+
+                        if (temFiadoNosParciais && !hasClienteSelecionado()) {
+                          setShowFiadoSemClienteModal(true);
+                          return;
+                        }
+
                         // Validação para pagamentos parciais
                         if (pagamentosParciais.length === 0) {
                           toast.error('Adicione pelo menos uma forma de pagamento');
@@ -27586,6 +27656,65 @@ const PDVPage: React.FC = () => {
                   </span>
                 </div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ NOVO: Modal de Aviso - Fiado sem Cliente */}
+      <AnimatePresence>
+        {showFiadoSemClienteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              className="bg-gray-800/95 backdrop-blur-md border border-gray-600/50 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            >
+              {/* Ícone de Aviso */}
+              <div className="flex items-center justify-center mb-4">
+                <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Título */}
+              <h3 className="text-xl font-bold text-white text-center mb-3">
+                Cliente Obrigatório para Fiado
+              </h3>
+
+              {/* Mensagem */}
+              <p className="text-gray-300 text-center mb-6 leading-relaxed">
+                Para realizar uma venda <span className="text-yellow-400 font-semibold">fiado</span>, é necessário selecionar um cliente.
+                Isso é obrigatório para controle e cobrança posterior.
+              </p>
+
+              {/* Botões */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowFiadoSemClienteModal(false)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFiadoSemClienteModal(false);
+                    // Abrir modal de seleção de cliente
+                    setShowClienteModal(true);
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+                >
+                  Selecionar Cliente
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
