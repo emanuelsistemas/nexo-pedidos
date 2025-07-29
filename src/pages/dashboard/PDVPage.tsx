@@ -3593,6 +3593,7 @@ const PDVPage: React.FC = () => {
           proximo_a,
           forma_pagamento_nome,
           forma_pagamento_tipo,
+          forma_pagamento_detalhes,
           observacao_pedido,
           observacao_entrega,
           valor_produtos,
@@ -27243,9 +27244,10 @@ const PDVPage: React.FC = () => {
                                             <p className="text-xs text-gray-400 mb-1">Sabores:</p>
                                             {item.sabores.map((sabor: any, idx: number) => {
                                               const fracao = converterPorcentagemParaFracao(sabor.porcentagem || 0, item.sabores.length);
+                                              const nomeSabor = sabor.produto?.nome || sabor.nome || sabor.produto_nome || 'Sabor';
                                               return (
                                                 <p key={idx} className="text-xs text-blue-400">
-                                                  {fracao && `🍕 ${fracao} `}{sabor.nome || sabor.produto_nome || 'Sabor'}
+                                                  {fracao && `🍕 ${fracao} `}{nomeSabor}
                                                 </p>
                                               );
                                             })}
