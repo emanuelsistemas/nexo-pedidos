@@ -27242,15 +27242,19 @@ const PDVPage: React.FC = () => {
                                         {item.sabores && item.sabores.length > 0 && (
                                           <div className="mt-2">
                                             <p className="text-xs text-gray-400 mb-1">Sabores:</p>
-                                            {item.sabores.map((sabor: any, idx: number) => {
-                                              const fracao = converterPorcentagemParaFracao(sabor.porcentagem || 0, item.sabores.length);
-                                              const nomeSabor = sabor.produto?.nome || sabor.nome || sabor.produto_nome || 'Sabor';
-                                              return (
-                                                <p key={idx} className="text-xs text-blue-400">
-                                                  {fracao && `🍕 ${fracao} `}{nomeSabor}
-                                                </p>
-                                              );
-                                            })}
+                                            <div className="space-y-1">
+                                              {item.sabores.map((sabor: any, idx: number) => {
+                                                const fracao = converterPorcentagemParaFracao(sabor.porcentagem || 0, item.sabores.length);
+                                                const nomeSabor = sabor.produto?.nome || sabor.nome || sabor.produto_nome || 'Sabor';
+                                                return (
+                                                  <div key={idx} className="text-xs text-gray-800 dark:text-gray-200">
+                                                    <span className="font-bold">
+                                                      {fracao && `• ${fracao} `}{nomeSabor}
+                                                    </span>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
                                           </div>
                                         )}
 
